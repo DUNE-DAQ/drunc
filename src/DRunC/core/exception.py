@@ -1,0 +1,4 @@
+
+class DuneRunControlError(Exception):
+    pass
+
