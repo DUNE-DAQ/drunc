@@ -1,0 +1,13 @@
+{
+    "subcontroller": {
+        "name": "top"
+    },
+    "plugins": {
+        "logger": {
+            "name": "stdouterr",
+            "conf": {
+                "loglevel": 10
+            }
+        }
+    }
+}
