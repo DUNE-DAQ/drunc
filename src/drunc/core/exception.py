@@ -1,4 +1,4 @@
 
-class DuneRunControlError(Exception):
+class DruncError(Exception):
     pass
 

@@ -1,11 +1,12 @@
-from .core.status import Status
-from .core.config import Configuration
-from .plugins.pluginfactory import PluginFactory
+from .status import Status
+from drunc.plugins.pluginfactory import PluginFactory
 
 
 class SubController:
-    def __init__(self, subcontroller_name, configuration):
-        self.configuration = SubControllerConfiguration.get_from_jsonfile(configuration)
+    def __init__(self, configuration, console):
+        self.console = console
+        self.name = configuration.subcontroller_name
+        self.configuration = configuration
         self.status = Status()
 
         ## All the plugins...
@@ -14,6 +15,16 @@ class SubController:
         for plugin in plugins:
             self.plugins[plugin] = PluginFactory.get(self.configuration.get_plugin_conf(plugin), self)
 
+    def run(self):
+        while True:
+            self.console.print('.')
+            from time import sleep
+            sleep(1)
+        # What it should actually do:
+        # self.plugins['commandhandler'].run()
+
+    def get_plugin(self, plugin_name):
+        return self.plugin[plugin_name]
 
     def status_callback(self):
         for plugin_name, plugin in self.plugins.items():
