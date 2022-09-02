@@ -1,0 +1,13 @@
+{
+    "subcontroller": {
+        "name": "top"
+    },
+    "plugins": {
+        "run_number": {
+            "name": "user_prompt"
+        },
+        "logging": {
+            "name": "stdout"
+        }
+    }
+}
