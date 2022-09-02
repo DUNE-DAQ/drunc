@@ -8,6 +8,8 @@ def main():
     from rich.logging import RichHandler
     import logging
     from rich.console import Console
+    from drunc.cli.cli import cli
+    from drunc.cli.context import RCContext
 
     logging.basicConfig(
         level="INFO",
@@ -17,16 +19,13 @@ def main():
     )
     
     console = Console()
-    obj = RCContext(console)
+    context = RCContext(console)
 
     try:
-        cli(obj=obj, show_default=True)
+        cli(obj=context, show_default=True)
     except Exception as e:
         console.log("[bold red]Exception caught[/bold red]")
-        if not obj.print_traceback:
-            console.log(e)
-        else:
-            console.print_exception()
+        console.print_exception()
 
 if __name__ == '__main__':
     main()
