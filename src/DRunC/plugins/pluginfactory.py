@@ -3,25 +3,30 @@ class PluginFactory:
     @staticmethod
     def get(configuration, instance):
         pt = configuration.plugin_type
-        if   pt == 'configuration':
-            from duneruncontrol.plugins.configurationpluginfactory import ConfigurationPluginFactory
-            return ConfigurationPluginFactory.get(configuration)
+
+        if pt == 'logger':
+            from duneruncontrol.plugins.logger.plugin import LoggerPluginFactory
+            return LoggerPluginFactory.get(configuration, instance)
+
+        elif pt == 'configuration':
+            from duneruncontrol.plugins.configuration.pluginfactory import ConfigurationPluginFactory
+            return ConfigurationPluginFactory.get(configuration, instance)
 
         elif pt == 'fsm':
-            from duneruncontrol.plugins.fsmpluginfactory import FSMPluginFactory
-            return FSMPluginFactory.get(configuration)
+            from duneruncontrol.plugins.fsm.pluginfactory import FSMPluginFactory
+            return FSMPluginFactory.get(configuration, instance)
 
         elif pt == 'childcontrol':
-            from duneruncontrol.plugins.childcontrolpluginfactory import ChildControlPluginFactory
-            return ChildControlPluginFactory.get(configuration)
+            from duneruncontrol.plugins.childcontrol.pluginfactory import ChildControlPluginFactory
+            return ChildControlPluginFactory.get(configuration, instance)
 
-        elif pt == 'control':
-            from duneruncontrol.plugins.controlpluginfactory import ControlPluginFactory
-            return ControlPluginFactory.get(configuration, instance)
+        elif pt == 'commandhandler':
+            from duneruncontrol.plugins.commandhandler.pluginfactory import CommandHandlerPluginFactory
+            return CommandHandlerPluginFactory.get(configuration, instance)
 
         elif pt == 'processmanager':
-            from duneruncontrol.plugins.processmanagerpluginfactory import ProcessManagerPluginFactory
-            return ProcessManagerPluginFactory.get(configuration)
+            from duneruncontrol.plugins.processmanager.pluginfactory import ProcessManagerPluginFactory
+            return ProcessManagerPluginFactory.get(configuration, instance)
 
         else:
             from duneruncontrol.plugins.exceptions import PluginCreationError()

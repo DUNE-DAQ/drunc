@@ -4,7 +4,7 @@ from .plugins.pluginfactory import PluginFactory
 
 
 class SubController:
-    def __init__(self, configuration):
+    def __init__(self, subcontroller_name, configuration):
         self.configuration = SubControllerConfiguration.get_from_jsonfile(configuration)
         self.status = Status()
 
