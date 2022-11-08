@@ -1,4 +1,0 @@
-
-class DruncError(Exception):
-    pass
-
