@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package DUNEProcessManager;
+
+service ProcessManager {
+  rpc Boot      (BootRequest) returns (ProcessUUID) {}
+  rpc Resurrect (ProcessUUID) returns (ProcessInstance) {}
+  rpc IsAlive   (ProcessUUID) returns (ProcessInstance) {}
+  rpc Kill      (ProcessUUID) returns (ProcessInstance) {}
+  rpc Poll      (ProcessUUID) returns (stream ProcessInstance) {}
+}
+
+message ProcessRestriction {
+  repeated string allowed_hosts = 1;
+  repeated string allowed_host_types = 2;
+}
+
+message ProcessUUID {
+  string uuid = 1;
+}
+
+message ProcessDescription {
+  string user = 1;
+  map<string,string> env = 2;
+  string executable = 3;
+  repeated string arguments = 4;
+  map<string,string> runtime_environment = 5;
+}
+
+message ProcessInstance {
+  ProcessDescription description = 1;
+  ProcessRestriction restriction = 2;
+  enum StatusCode {
+    RUNNING = 0;
+    DEAD = 1;
+  };
+  StatusCode status_code = 3;
+  ProcessUUID uuid = 4;
+}
+
+message BootRequest {
+  ProcessDescription process_description = 1;
+  ProcessRestriction process_restriction = 2;
+}
