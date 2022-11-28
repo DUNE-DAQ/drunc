@@ -26,10 +26,11 @@ def rc_shell(obj:RCContext) -> None:
 @coroutine
 async def some_command(obj:RCContext) -> None:
     import json
+    import random
     results = obj.rc.execute_command(
         command = Command (
             command_name = 'some-command',
-            command_data = json.dumps({}),
+            command_data = json.dumps({'wait_for': random.random()*2.}),
             controlled_name = "",
             controller_name = obj.rc.name,
             datetime = now_str()
