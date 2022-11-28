@@ -1,7 +1,7 @@
 import asyncio
 import grpc
 from typing import Optional
-from drunc.communication.command_pb2 import Command, CommandResponse
+from drunc.communication.command_pb2 import Command, CommandResponse, Ping
 from drunc.communication.command_pb2_grpc import CommandProcessorStub
 
 class ChildChannel():
@@ -10,11 +10,11 @@ class ChildChannel():
         # self.sender_uri = sender_uri
         # self.user = user
         self.cmd_address = cmd_address # TODO Multiplex
-        # self.status_address = status_address
+        self.status_address = status_address
         self.command_channel = grpc.aio.insecure_channel(self.cmd_address)
         # self.status_channel = grpc.aio.insecure_channel(self.status_address)
         self.command_stub = CommandProcessorStub(self.command_channel)
-        # self.status_stub = RetrieveStatusStub(self.command_channel)
+        self.status_stub = RetrieveStatusStub(self.command_channel)
 
     def close(self):
         print('Closing the connection')
@@ -25,3 +25,7 @@ class ChildChannel():
 
         async for response in self.command_stub.execute_command(command):
             yield response
+
+    async def ping(self, ping:Ping) -> Ping:
+        print(f'pinging state of the channel {self.command_channel.get_state()}')
+        yield self.ping(ping)

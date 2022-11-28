@@ -15,7 +15,7 @@ class CommandProcessorStub(object):
             channel: A grpc.Channel.
         """
         self.execute_command = channel.unary_stream(
-                '/DruncCommands.CommandProcessor/execute_command',
+                '/Drunc.CommandProcessor/execute_command',
                 request_serializer=command__pb2.Command.SerializeToString,
                 response_deserializer=command__pb2.CommandResponse.FromString,
                 )
@@ -40,7 +40,7 @@ def add_CommandProcessorServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'DruncCommands.CommandProcessor', rpc_method_handlers)
+            'Drunc.CommandProcessor', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
 
 
@@ -59,8 +59,69 @@ class CommandProcessor(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/DruncCommands.CommandProcessor/execute_command',
+        return grpc.experimental.unary_stream(request, target, '/Drunc.CommandProcessor/execute_command',
             command__pb2.Command.SerializeToString,
             command__pb2.CommandResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+
+class PingProcessorStub(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.ping = channel.unary_stream(
+                '/Drunc.PingProcessor/ping',
+                request_serializer=command__pb2.Ping.SerializeToString,
+                response_deserializer=command__pb2.Ping.FromString,
+                )
+
+
+class PingProcessorServicer(object):
+    """Missing associated documentation comment in .proto file."""
+
+    def ping(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_PingProcessorServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'ping': grpc.unary_stream_rpc_method_handler(
+                    servicer.ping,
+                    request_deserializer=command__pb2.Ping.FromString,
+                    response_serializer=command__pb2.Ping.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'Drunc.PingProcessor', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+
+
+ # This class is part of an EXPERIMENTAL API.
+class PingProcessor(object):
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ping(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(request, target, '/Drunc.PingProcessor/ping',
+            command__pb2.Ping.SerializeToString,
+            command__pb2.Ping.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

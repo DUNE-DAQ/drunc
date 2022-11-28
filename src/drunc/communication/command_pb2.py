@@ -13,19 +13,23 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rcommand.proto\x12\rDruncCommands\"y\n\x07\x43ommand\x12\x14\n\x0c\x63ommand_name\x18\x01 \x01(\t\x12\x14\n\x0c\x63ommand_data\x18\x02 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x03 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x04 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x05 \x01(\t\"\x8b\x02\n\x0f\x43ommandResponse\x12\x42\n\rresponse_code\x18\x01 \x01(\x0e\x32+.DruncCommands.CommandResponse.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12\x14\n\x0c\x63ommand_name\x18\x03 \x01(\t\x12\x14\n\x0c\x63ommand_data\x18\x04 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x05 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x06 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x07 \x01(\t\"-\n\x0cResponseCode\x12\x07\n\x03\x41\x43K\x10\x00\x12\x08\n\x04\x44ONE\x10\x01\x12\n\n\x06\x46\x41ILED\x10\x02\x32\x61\n\x10\x43ommandProcessor\x12M\n\x0f\x65xecute_command\x12\x16.DruncCommands.Command\x1a\x1e.DruncCommands.CommandResponse\"\x00\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\rcommand.proto\x12\x05\x44runc\"J\n\x04Ping\x12\x17\n\x0f\x63ontrolled_name\x18\x01 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x02 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x03 \x01(\t\"y\n\x07\x43ommand\x12\x14\n\x0c\x63ommand_name\x18\x01 \x01(\t\x12\x14\n\x0c\x63ommand_data\x18\x02 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x03 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x04 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x05 \x01(\t\"\x83\x02\n\x0f\x43ommandResponse\x12:\n\rresponse_code\x18\x01 \x01(\x0e\x32#.Drunc.CommandResponse.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12\x14\n\x0c\x63ommand_name\x18\x03 \x01(\t\x12\x14\n\x0c\x63ommand_data\x18\x04 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x05 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x06 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x07 \x01(\t\"-\n\x0cResponseCode\x12\x07\n\x03\x41\x43K\x10\x00\x12\x08\n\x04\x44ONE\x10\x01\x12\n\n\x06\x46\x41ILED\x10\x02\x32Q\n\x10\x43ommandProcessor\x12=\n\x0f\x65xecute_command\x12\x0e.Drunc.Command\x1a\x16.Drunc.CommandResponse\"\x00\x30\x01\x32\x35\n\rPingProcessor\x12$\n\x04ping\x12\x0b.Drunc.Ping\x1a\x0b.Drunc.Ping\"\x00\x30\x01\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'command_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _COMMAND._serialized_start=32
-  _COMMAND._serialized_end=153
-  _COMMANDRESPONSE._serialized_start=156
-  _COMMANDRESPONSE._serialized_end=423
-  _COMMANDRESPONSE_RESPONSECODE._serialized_start=378
-  _COMMANDRESPONSE_RESPONSECODE._serialized_end=423
-  _COMMANDPROCESSOR._serialized_start=425
-  _COMMANDPROCESSOR._serialized_end=522
+  _PING._serialized_start=24
+  _PING._serialized_end=98
+  _COMMAND._serialized_start=100
+  _COMMAND._serialized_end=221
+  _COMMANDRESPONSE._serialized_start=224
+  _COMMANDRESPONSE._serialized_end=483
+  _COMMANDRESPONSE_RESPONSECODE._serialized_start=438
+  _COMMANDRESPONSE_RESPONSECODE._serialized_end=483
+  _COMMANDPROCESSOR._serialized_start=485
+  _COMMANDPROCESSOR._serialized_end=566
+  _PINGPROCESSOR._serialized_start=568
+  _PINGPROCESSOR._serialized_end=621
 # @@protoc_insertion_point(module_scope)

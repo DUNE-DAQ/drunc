@@ -1,21 +1,32 @@
 import asyncio
 import grpc
-from drunc.communication.command_pb2 import Command, CommandResponse
-from drunc.communication.command_pb2_grpc import CommandProcessorServicer
+from drunc.communication.command_pb2 import Command, CommandResponse, Ping
+from drunc.communication.command_pb2_grpc import CommandProcessorServicer, PingProcessorServicer
 from drunc.communication.child_channel import ChildChannel
 from drunc.utils.utils import now_str
 from typing import Optional
 import aiostream
 
-class Controller(CommandProcessorServicer):
+class Controller(CommandProcessorServicer, PingProcessorServicer):
     def __init__(self, name:str):
         super().__init__()
         self.name = name
         self.parent_ports = [] # type: list[int]
         self.children = {} # type: dict[str, ChildChannel]
+        self.pinging = True
+
+        # asyncio.create_task(self.ping_children())
+
+    def __del__(self) -> None:
+        self.pinging = False
 
     def wait_for_commands(self) -> None:
         pass
+
+    async def ping_thread(self) -> None:
+        while self.pinging:
+            p = await self.ping_children()
+            await asyncio.sleep(0.5)
 
     def add_spectator(self, port:int) -> None:
         pass
@@ -31,14 +42,37 @@ class Controller(CommandProcessorServicer):
         self.children[name].close()
         del self.children[name]
 
-    # @aiostream.core.operator
-    async def execute_command_one_child(self, command:Command, child) -> list[CommandResponse]:
-        # ret = []
-        return child.send_command(command)
-            # yield i
-        #     ret += [i]
-        # return ret
+    async def ping_children(self) -> None:
+        # yield Ping(
+        #     controller_name = ping.controller_name,
+        #     controlled_name = self.name,
+        #     datetime = now_str(),
+        #     # propagate = False
+        # )
+        # if ping.propagate:
+        from aiostream import stream
 
+        child_ping_stream = stream.combine.merge( # BOOOH! this combines the async generators, pretty sweet
+            *[
+                child.ping(
+                    Ping(
+                        controller_name = self.name,
+                        controlled_name = name,
+                        datetime = now_str(),
+                    )
+                ) for name, child in self.children.items()
+            ]
+        )
+        async with child_ping_stream.stream() as streamer:
+            async for s in streamer:
+                yield s
+
+    async def ping(self, ping:Ping) -> Ping:
+        yield Ping(
+            controller_name = ping.controller_name,
+            controlled_name = self.name,
+            datetime = now_str(),
+        )
 
     async def execute_command(self, command:Command, context: grpc.aio.ServicerContext=None) -> CommandResponse:
         print(f'{self.name} executing {command}')
