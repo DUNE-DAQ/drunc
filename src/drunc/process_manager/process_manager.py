@@ -1,35 +1,36 @@
 import asyncio
 import grpc
-from drunc.communication.process_manager_pb2 import BootRequest, ProcessUUID, ProcessStatus
+from drunc.communication.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance
 from drunc.communication.process_manager_pb2_grpc import ProcessManagerServicer
-from abc import ABC
+import abc
 
-class ProcessManager(ABC, ProcessManagerServicer):
+class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     def __init__(self):
         pass
 
 
-    @abstractmethod
+    @abc.abstractmethod
     def boot(self, boot_request:BootRequest) -> ProcessUUID:
         pass
-        
 
-    @abstractmethod
-    def resurrect(self, uuid:ProcessUUID) -> ProcessStatus:
+
+    @abc.abstractmethod
+    def resurrect(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
-        
-    @abstractmethod
-    def is_alive(self, uuid:ProcessUUID) -> ProcessStatus:
+
+    @abc.abstractmethod
+    def restart(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
-        
-    @abstractmethod
-    def kill(self, uuid:ProcessUUID) -> ProcessStatus:
+
+    @abc.abstractmethod
+    def is_alive(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
-        
-    @abstractmethod
-    def poll(self, uuid:ProcessUUID) -> ProcessStatus:
+
+    @abc.abstractmethod
+    def kill(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
-    
-    
-        
+
+    @abc.abstractmethod
+    def poll(self, uuid:ProcessUUID) -> ProcessInstance:
+        pass

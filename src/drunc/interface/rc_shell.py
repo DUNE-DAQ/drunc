@@ -1,6 +1,6 @@
 import click
 import click_shell
-from drunc.controller.controller import Controller
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.communication.command_pb2 import Command
 from drunc.utils.utils import now_str
 import asyncio
