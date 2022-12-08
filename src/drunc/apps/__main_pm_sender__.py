@@ -3,6 +3,8 @@ def main():
     import nest_asyncio
     nest_asyncio.apply()
     from drunc.interface.pm_shell import pm_shell, PMContext
+    from rich.console import Console
+    console = Console()
     context = PMContext()
     try:
         pm_shell(obj = context)

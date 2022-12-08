@@ -1,0 +1,5 @@
+{
+    "address": "[::]:100",
+    "type": "ssh",
+    "name": "SSHProcessManager"
+}

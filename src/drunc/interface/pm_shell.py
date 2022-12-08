@@ -30,39 +30,32 @@ class PMContext:
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
-@click.argument('pm-address', type=str)
+@click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
 @click.pass_obj
-def pm_shell(obj:PMContext, pm_address:str, log_level:str, traceback:bool) -> None:
-    from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-    obj.pmd = ProcessManagerDriver(pm_address)
+def pm_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:bool) -> None:
     obj.print_traceback = traceback
+    
+    pm_conf_data = {}
+    with open(pm_conf) as f:
+        import json
+        pm_conf_data = json.loads(f.read())
+
+    from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+    obj.pmd = ProcessManagerDriver(pm_conf_data)
+    
+    
     update_log_level(log_level)
 
 @pm_shell.command('boot')
 @click.option('-p','--partition', type=str, default=None, help='Select the processes on a particular partition')
-@click.option('-n','--name'     , type=str, default=None, help='Select the process of a particular name')
 @click.option('-u','--user'     , type=str, default=os.getlogin(), help='Select the process of a particular user (default $USER)')
+@click.argument('boot-configuration', type=click.Path(exists=True))
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, name:str, user:str, partition:str) -> None:
-    result = await obj.pmd.boot(
-        BootRequest(
-            process_description = ProcessDescription(
-                metadata = ProcessMetadata(
-                    user = user,
-                    partition = partition,
-                    name = name,
-                ),
-                executable_and_arguments = {
-                    'sleep': ProcessDescription.StringList(values = ['3600'])
-                }
-            ),
-            process_restriction = ProcessRestriction(
-                allowed_hosts = ['localhost']
-            )
-        )
-    )
-    obj.print(result)
+async def boot(obj:PMContext, user:str, partition:str, boot_configuration:str) -> None:
+    results = obj.pmd.boot(boot_configuration, user, partition)
+    async for result in results:
+        print(result)
 
 @pm_shell.command('kill')
 @click.argument('uuid', type=str)

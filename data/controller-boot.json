@@ -1,0 +1,59 @@
+{
+    "instances": {
+        "controller0": {
+            "port": 100,
+            "host": "controller0-host",
+            "type": "drunc-controller"
+        },
+        "controller1": {
+            "port": 101,
+            "host": "controller1-host",
+            "type": "drunc-controller"
+        },
+        "controller2": {
+            "port": 102,
+            "host": "controller2-host",
+            "type": "drunc-controller"
+        },
+        "controller3": {
+            "port": 103,
+            "host": "controller3",
+            "type": "drunc-controller"
+        }
+    },
+    "executable":{
+        "drunc-controller": {
+            "executable_and_arguments": [
+                {
+                    "source": [
+                        "~/Documents/Imperial-Postdoc/drunc/venv/bin/activate"
+                    ]
+                },
+                {
+                    "drunc_rcv" : [
+                        "${PORT}",
+                        "${NAME}"
+                    ]
+                }
+            ],
+            "environment":{
+                "NAME": "{NAME}",
+                "PORT": "{PORT}"
+            }
+        }
+    },
+    "restriction": {
+        "controller0": {
+            "hosts": ["localhost"]
+        },
+        "controller1": {
+            "hosts": ["localhost"]
+        },
+        "controller2": {
+            "hosts": ["localhost"]
+        },
+        "controller3": {
+            "hosts": ["localhost"]
+        }
+    }
+}
