@@ -11,7 +11,6 @@ class ProcessManagerDriver:
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
         
-
     async def boot(self, boot_request:BootRequest) -> ProcessUUID:
         return await self.pm_stub.boot(boot_request)
 
@@ -20,3 +19,9 @@ class ProcessManagerDriver:
 
     async def list_process(self, selector:ProcessMetadata) -> ProcessInstanceList:
         return await self.pm_stub.list_process(selector)
+
+    async def is_alive(self, selector:ProcessUUID) -> ProcessInstance:
+        return await self.pm_stub.is_alive(selector)
+
+    async def restart(self, selector:ProcessUUID) -> ProcessInstance:
+        return await self.pm_stub.restart(selector)

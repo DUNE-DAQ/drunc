@@ -7,9 +7,8 @@ from drunc.process_manager.process_manager import ProcessManager
 
 class SSHProcessManager(ProcessManager):
     def __init__(self):
-        self.process_store       = {} # dict[str, sh.RunningCommand]
-        self.process_description = {} # dict[str, ProcessDescription]
-        self.process_restriction = {} # dict[str, ProcessRestriction]
+        self.process_store = {} # dict[str, sh.RunningCommand]
+        self.boot_request = {} # dict[str, BootRequest]
 
         from drunc.utils.utils import setup_fancy_logging
         self.log = setup_fancy_logging('ssh-process-manager')
@@ -19,13 +18,10 @@ class SSHProcessManager(ProcessManager):
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
-            self.log.warning(f'Killing {self.process_metadata[uuid]}')
+            self.log.warning(f'Killing {self.boot_request.process_description.metadata[uuid].name}')
             process.terminate()
 
-
-    def boot(self, boot_request:BootRequest, context: grpc.aio.ServicerContext=None) -> ProcessUUID:
-        import uuid
-        this_uuid = str(uuid.uuid4())
+    def _boot(self, boot_request:BootRequest, uuid:str) -> ProcessUUID:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
 
         def process_output(line):
@@ -56,7 +52,7 @@ class SSHProcessManager(ProcessManager):
 
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", cmd]
 
-                self.process_store[this_uuid] = sh.ssh (
+                self.process_store[uuid] = sh.ssh (
                     *arguments,
                     _out=process_output,
                     _bg=True,
@@ -69,15 +65,15 @@ class SSHProcessManager(ProcessManager):
                 print(f'\nTrying on a different host')
                 continue
 
-        self.process_description[this_uuid] = ProcessDescription()
-        self.process_description[this_uuid].CopyFrom(boot_request.process_description)
-        self.process_description[this_uuid].metadata.uuid.uuid = this_uuid
-        self.process_restriction[this_uuid] = ProcessRestriction()
-        self.process_restriction[this_uuid].CopyFrom(boot_request.process_restriction)
+        self.boot_request[uuid] = BootRequest()
+        self.boot_request[uuid].CopyFrom(boot_request)
+        # self.process_description[uuid].metadata.uuid.uuid = this_uuid
+        # self.process_restriction[uuid] = ProcessRestriction()
+        # self.process_restriction[uuid].CopyFrom(boot_request.process_restriction)
 
-        self.log.info(f'Booted {boot_request.process_description.metadata.name} uuid: {this_uuid}')
+        self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
         uid = ProcessUUID(
-            uuid = this_uuid
+            uuid = uuid
         )
         return uid
 
@@ -92,22 +88,28 @@ class SSHProcessManager(ProcessManager):
         for uuid, process in self.process_store.items():
 
             if not re.search(uuid_selector, uuid): continue
-            if not re.search(part_selector, self.process_description[uuid].metadata.partition): continue
-            if not re.search(user_selector, self.process_description[uuid].metadata.user): continue
-            if not re.search(name_selector, self.process_description[uuid].metadata.name): continue
+            if not re.search(part_selector, self.boot_request[uuid].process_description.metadata.partition): continue
+            if not re.search(user_selector, self.boot_request[uuid].process_description.metadata.user): continue
+            if not re.search(name_selector, self.boot_request[uuid].process_description.metadata.name): continue
 
             pd = ProcessDescription()
-            pd.CopyFrom(self.process_description[uuid])
+            pd.CopyFrom(self.boot_request[uuid].process_description)
             pr = ProcessRestriction()
-            pr.CopyFrom(self.process_restriction[uuid])
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
             pu = ProcessUUID(uuid=uuid)
+            return_code = 0
+            if not process.is_alive():
+                try:
+                    return_code = process.exit_code
+                except Exception as e:
+                    return_code = e.exit_code
             pi = ProcessInstance(
                 process_description = pd,
                 process_restriction = pr,
                 status_code = ProcessInstance.StatusCode.RUNNING if process.is_alive() else ProcessInstance.StatusCode.DEAD,
+                return_code = return_code,
                 uuid = pu
             )
-
             ret += [pi]
 
         pil = ProcessInstanceList(
@@ -116,14 +118,45 @@ class SSHProcessManager(ProcessManager):
 
         return pil
 
-    def resurrect(self, uuid:ProcessUUID, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
-        pass
+
+    def boot(self, boot_request:BootRequest, context: grpc.aio.ServicerContext=None) -> ProcessUUID:
+        import uuid
+        this_uuid = str(uuid.uuid4())
+        return self._boot(boot_request, this_uuid)
 
     def restart(self, uuid:ProcessUUID, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
-        pass
+        this_uuid = uuid.uuid
+        br = self.boot_request[this_uuid]
+
+        if not uuid.uuid in self.process_store:
+            raise RuntimeError(f'The process {uuid.uuid} doesn\'t exist!')
+
+        process = self.process_store[uuid.uuid]
+        if not process.is_alive():
+            process.terminate()
+
+        return self._boot(br, this_uuid)
 
     def is_alive(self, uuid:ProcessUUID, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
-        pass
+        process = self.process_store[uuid.uuid]
+        is_alive = process.is_alive()
+        return_code = process.exit_code if not is_alive else 0
+
+        pd = ProcessDescription()
+        pd.CopyFrom(self.boot_request[uuid.uuid].process_description)
+        pr = ProcessRestriction()
+        pr.CopyFrom(self.boot_request[uuid.uuid].process_restriction)
+        pu = ProcessUUID()
+        pu.CopyFrom(uuid)
+
+        pi = ProcessInstance(
+            process_description = pd,
+            process_restriction = pr,
+            status_code = ProcessInstance.StatusCode.RUNNING if is_alive else ProcessInstance.StatusCode.DEAD,
+            return_code = return_code,
+            uuid = pu,
+        )
+        return pi
 
     def kill(self, uuid:ProcessUUID, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
         self.log.info(f'Killing {uuid.uuid}')
@@ -149,6 +182,3 @@ class SSHProcessManager(ProcessManager):
             uuid = pu
         )
         return pi
-
-    def poll(self, uuid:ProcessUUID, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
-        pass

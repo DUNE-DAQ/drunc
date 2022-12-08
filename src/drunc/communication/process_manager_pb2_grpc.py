@@ -19,11 +19,6 @@ class ProcessManagerStub(object):
                 request_serializer=process__manager__pb2.BootRequest.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessUUID.FromString,
                 )
-        self.resurrect = channel.unary_unary(
-                '/DUNEProcessManager.ProcessManager/resurrect',
-                request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
-                response_deserializer=process__manager__pb2.ProcessInstance.FromString,
-                )
         self.restart = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/restart',
                 request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
@@ -39,11 +34,6 @@ class ProcessManagerStub(object):
                 request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessInstance.FromString,
                 )
-        self.poll = channel.unary_stream(
-                '/DUNEProcessManager.ProcessManager/poll',
-                request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
-                response_deserializer=process__manager__pb2.ProcessInstance.FromString,
-                )
         self.list_process = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/list_process',
                 request_serializer=process__manager__pb2.ProcessMetadata.SerializeToString,
@@ -55,12 +45,6 @@ class ProcessManagerServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def boot(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def resurrect(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -84,14 +68,9 @@ class ProcessManagerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def poll(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def list_process(self, request, context):
-        """Missing associated documentation comment in .proto file."""
+        """rpc poll         (ProcessUUID)     returns (stream ProcessInstance) {}
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -103,11 +82,6 @@ def add_ProcessManagerServicer_to_server(servicer, server):
                     servicer.boot,
                     request_deserializer=process__manager__pb2.BootRequest.FromString,
                     response_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
-            ),
-            'resurrect': grpc.unary_unary_rpc_method_handler(
-                    servicer.resurrect,
-                    request_deserializer=process__manager__pb2.ProcessUUID.FromString,
-                    response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
             ),
             'restart': grpc.unary_unary_rpc_method_handler(
                     servicer.restart,
@@ -121,11 +95,6 @@ def add_ProcessManagerServicer_to_server(servicer, server):
             ),
             'kill': grpc.unary_unary_rpc_method_handler(
                     servicer.kill,
-                    request_deserializer=process__manager__pb2.ProcessUUID.FromString,
-                    response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
-            ),
-            'poll': grpc.unary_stream_rpc_method_handler(
-                    servicer.poll,
                     request_deserializer=process__manager__pb2.ProcessUUID.FromString,
                     response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
             ),
@@ -158,23 +127,6 @@ class ProcessManager(object):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/boot',
             process__manager__pb2.BootRequest.SerializeToString,
             process__manager__pb2.ProcessUUID.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def resurrect(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/resurrect',
-            process__manager__pb2.ProcessUUID.SerializeToString,
-            process__manager__pb2.ProcessInstance.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -224,23 +176,6 @@ class ProcessManager(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/kill',
-            process__manager__pb2.ProcessUUID.SerializeToString,
-            process__manager__pb2.ProcessInstance.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def poll(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/DUNEProcessManager.ProcessManager/poll',
             process__manager__pb2.ProcessUUID.SerializeToString,
             process__manager__pb2.ProcessInstance.FromString,
             options, channel_credentials,

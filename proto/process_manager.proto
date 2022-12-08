@@ -4,11 +4,10 @@ package DUNEProcessManager;
 
 service ProcessManager {
   rpc boot         (BootRequest)     returns (ProcessUUID)            {}
-  rpc resurrect    (ProcessUUID)     returns (ProcessInstance)        {}
   rpc restart      (ProcessUUID)     returns (ProcessInstance)        {}
   rpc is_alive     (ProcessUUID)     returns (ProcessInstance)        {}
   rpc kill         (ProcessUUID)     returns (ProcessInstance)        {}
-  rpc poll         (ProcessUUID)     returns (stream ProcessInstance) {}
+  // rpc poll         (ProcessUUID)     returns (stream ProcessInstance) {}
   rpc list_process (ProcessMetadata) returns (ProcessInstanceList)    {}
 }
 
@@ -45,7 +44,8 @@ message ProcessInstance {
     DEAD = 1;
   };
   StatusCode status_code = 3;
-  ProcessUUID uuid = 4;
+  int32 return_code = 4;
+  ProcessUUID uuid = 5;
 }
 
 message ProcessInstanceList{

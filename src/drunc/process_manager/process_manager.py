@@ -9,14 +9,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def __init__(self):
         pass
 
-
     @abc.abstractmethod
     def boot(self, boot_request:BootRequest) -> ProcessUUID:
-        pass
-
-
-    @abc.abstractmethod
-    def resurrect(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
 
     @abc.abstractmethod
@@ -29,8 +23,4 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     @abc.abstractmethod
     def kill(self, uuid:ProcessUUID) -> ProcessInstance:
-        pass
-
-    @abc.abstractmethod
-    def poll(self, uuid:ProcessUUID) -> ProcessInstance:
         pass
