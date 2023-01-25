@@ -25,7 +25,11 @@ _et voila._
 
 
 ### How to run me
+
+#### Vol. 1 The Process Manager
+
 There are a couple of presteps before running `drunc`:
+
 ```bash
 ./generate_protos.sh                             # OPTIONAL: this generates gRPC stubs and messages
 cd data && python generate-boot-conf.py && cd .. # This generates the configuration for the process manager
@@ -41,7 +45,7 @@ And in another window (after `source setup.sh`):
 drunc-process-manager-shell
 ```
 
-You then end up in a shell on which you can execute stuff like:
+You then end up in a shell on which you can execute commands like:
 ```
 pm > boot data/controller-boot-many.json # Boot everything (top controller, controller and fake daq applications)
 pm > ps                                  # List all the processes
@@ -59,3 +63,7 @@ Two important notes:
 
 So, if like me, you start and stop every 2.5 minutes the process manager, first do `killall -f`, otherwise you'll have to use `htop` or similar tool to kill the processes manually.
 
+
+#### Vol. 2 The Controller
+
+By now you know how to spawn controllers and applications with the process manager. Now, as you know, the controllers are responsible for sending commands and retrieving status of their children (controllers or applications). This is still work in progress so check back here soon!
