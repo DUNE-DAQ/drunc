@@ -2,12 +2,12 @@
 def main():
     import nest_asyncio
     nest_asyncio.apply()
-    from drunc.interface.pm_shell import pm_shell, PMContext
+    from drunc.interface.process_manager_shell import process_manager_shell, PMContext
     from rich.console import Console
     console = Console()
     context = PMContext()
     try:
-        pm_shell(obj = context)
+        process_manager_shell(obj = context)
     except Exception as e:
         console.log("[bold red]Exception caught[/bold red]")
         if not context.print_traceback:

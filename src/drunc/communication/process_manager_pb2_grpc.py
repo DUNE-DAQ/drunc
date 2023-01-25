@@ -21,18 +21,28 @@ class ProcessManagerStub(object):
                 )
         self.restart = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/restart',
-                request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
+                request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessInstance.FromString,
                 )
         self.is_alive = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/is_alive',
-                request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
+                request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessInstance.FromString,
                 )
         self.kill = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/kill',
-                request_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
+                request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessInstance.FromString,
+                )
+        self.killall = channel.unary_unary(
+                '/DUNEProcessManager.ProcessManager/killall',
+                request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
+                response_deserializer=process__manager__pb2.ProcessInstanceList.FromString,
+                )
+        self.logs = channel.unary_stream(
+                '/DUNEProcessManager.ProcessManager/logs',
+                request_serializer=process__manager__pb2.LogRequest.SerializeToString,
+                response_deserializer=process__manager__pb2.LogLine.FromString,
                 )
         self.list_process = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/list_process',
@@ -68,9 +78,20 @@ class ProcessManagerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def killall(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def logs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def list_process(self, request, context):
-        """rpc poll         (ProcessUUID)     returns (stream ProcessInstance) {}
-        """
+        """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -85,18 +106,28 @@ def add_ProcessManagerServicer_to_server(servicer, server):
             ),
             'restart': grpc.unary_unary_rpc_method_handler(
                     servicer.restart,
-                    request_deserializer=process__manager__pb2.ProcessUUID.FromString,
+                    request_deserializer=process__manager__pb2.ProcessQuery.FromString,
                     response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
             ),
             'is_alive': grpc.unary_unary_rpc_method_handler(
                     servicer.is_alive,
-                    request_deserializer=process__manager__pb2.ProcessUUID.FromString,
+                    request_deserializer=process__manager__pb2.ProcessQuery.FromString,
                     response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
             ),
             'kill': grpc.unary_unary_rpc_method_handler(
                     servicer.kill,
-                    request_deserializer=process__manager__pb2.ProcessUUID.FromString,
+                    request_deserializer=process__manager__pb2.ProcessQuery.FromString,
                     response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
+            ),
+            'killall': grpc.unary_unary_rpc_method_handler(
+                    servicer.killall,
+                    request_deserializer=process__manager__pb2.ProcessQuery.FromString,
+                    response_serializer=process__manager__pb2.ProcessInstanceList.SerializeToString,
+            ),
+            'logs': grpc.unary_stream_rpc_method_handler(
+                    servicer.logs,
+                    request_deserializer=process__manager__pb2.LogRequest.FromString,
+                    response_serializer=process__manager__pb2.LogLine.SerializeToString,
             ),
             'list_process': grpc.unary_unary_rpc_method_handler(
                     servicer.list_process,
@@ -142,7 +173,7 @@ class ProcessManager(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/restart',
-            process__manager__pb2.ProcessUUID.SerializeToString,
+            process__manager__pb2.ProcessQuery.SerializeToString,
             process__manager__pb2.ProcessInstance.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
@@ -159,7 +190,7 @@ class ProcessManager(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/is_alive',
-            process__manager__pb2.ProcessUUID.SerializeToString,
+            process__manager__pb2.ProcessQuery.SerializeToString,
             process__manager__pb2.ProcessInstance.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
@@ -176,8 +207,42 @@ class ProcessManager(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/kill',
-            process__manager__pb2.ProcessUUID.SerializeToString,
+            process__manager__pb2.ProcessQuery.SerializeToString,
             process__manager__pb2.ProcessInstance.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def killall(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/killall',
+            process__manager__pb2.ProcessQuery.SerializeToString,
+            process__manager__pb2.ProcessInstanceList.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def logs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(request, target, '/DUNEProcessManager.ProcessManager/logs',
+            process__manager__pb2.LogRequest.SerializeToString,
+            process__manager__pb2.LogLine.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

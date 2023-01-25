@@ -5,22 +5,19 @@ import os
 
 @click.command()
 @click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
-def pm_command(pm_conf:str):
+def process_manager_cli(pm_conf:str):
     from rich.console import Console
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
-    pm_conf_data = {}
-    
+    pm_conf_data = None
+
     with open(pm_conf) as f:
         import json
         pm_conf_data = json.loads(f.read())
-    pm = None
-    
-    if pm_conf_data['type'] == 'ssh':
-        from drunc.process_manager.ssh_process_manager import SSHProcessManager
-        pm = SSHProcessManager()
-    else:
-        raise RuntimeError(f'ProcessManager type {pm_conf_data["type"]} is unsupported!')
+
+    from drunc.process_manager.process_manager import ProcessManager
+    pm = ProcessManager.get(pm_conf_data)
+
 
     async def serve(address:str) -> None:
         if not address:
@@ -36,4 +33,3 @@ def pm_command(pm_conf:str):
         asyncio.run(serve(pm_conf_data['address']))
     except Exception as e:
         console.print_exception()
-
