@@ -53,6 +53,9 @@ pm > exit                                # When you've had enough
 ```
 You can also do more complex things like selecting with partition etc.
 
-Note that if you exit the `drunc-process-manager-shell`, the processes are _not_ killed, this is of course a desired feature.
-Similarly if you exit the `drunc-process-manager` (with `ctrl-C`), the processes are _not_ killed, I think we would want to kill everything here, but I'm not sure.
+Two important notes:
+ - If you exit the `drunc-process-manager-shell`, the processes are _not_ killed, this is of course a desired feature.
+ - Similarly, if you stop the `drunc-process-manager` (with `ctrl-C`), the processes are _not_ killed, I think we would want to kill everything here, but I'm not sure.
+
+So, if like me, you start and stop every 2.5 minutes the process manager, first do `killall -f`, otherwise you'll have to use `htop` or similar tool to kill the processes manually.
 
