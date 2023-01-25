@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package Drunc;
+
+service Controller {
+  rpc get_control_tree(Ping) returns (ControlTree) {}
+  rpc get_available_commands(Ping) returns (ListOfCommands) {}
+  rpc execute_command(Command) returns (stream CommandResponse) {}
+  rpc execute_command_on_child(ChildCommand) returns (stream CommandResponse) {}
+  rpc request_broadcast(Client) returns (stream BroadcastMessage) {}
+}
+
+service PingProcessor {
+  rpc ping (Ping) returns (stream Ping) {}
+}
+
+message Ping {
+  string controlled_name = 1;
+  string controller_name = 2;
+  string datetime = 3;
+}
+
+message Client {
+  string address = 1;
+}
+
+message BroadcastMessage {
+  string text = 1;
+}
+
+message Node {
+  string name = 1;
+  string uuid = 2;
+  repeated Node children = 3;
+}
+
+message ControlTree {
+  Node top_node = 1;
+}
+
+message Argument {
+  enum ArgumentType{
+    MANDATORY = 0;
+    OPTIONAL = 1;
+  }
+  string name = 1;
+  ArgumentType type = 2;
+  string deflt = 3;
+  string help = 4;
+}
+
+message CommandSpecification {
+  string name = 1;
+  repeated Argument arguments = 2;
+  string help = 3;
+}
+
+message ListOfCommands {
+  repeated CommandSpecification command = 1;
+}
+
+message Command {
+  CommandSpecification command = 1;
+  string command_data = 2;
+  string controlled_name = 3;
+  string controller_name = 4;
+  string datetime = 5;
+}
+message ChildCommand {
+  Command command = 1;
+  Node child = 2;
+}
+
+message CommandResponse {
+  enum ResponseCode {
+    ACK = 0;
+    DONE = 1;
+    FAILED = 2;
+    NOT_AUTHORISED = 3;
+  };
+  
+  ResponseCode response_code = 1;
+  string response_text = 2;
+  CommandSpecification command = 3;
+  string command_data = 4;
+  string controlled_name = 5;
+  string controller_name = 6;
+  string datetime = 7;
+}
