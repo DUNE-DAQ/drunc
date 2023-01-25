@@ -1,21 +1,27 @@
 import asyncio
 import grpc
-from drunc.communication.command_pb2 import Command, CommandResponse, Ping
-from drunc.communication.command_pb2_grpc import CommandProcessorServicer, PingProcessorServicer
+from drunc.communication.controller_pb2 import Command, CommandResponse, Ping
+from drunc.communication.controller_pb2_grpc import ControllerServicer
 from drunc.communication.child_channel import ChildChannel
 from drunc.utils.utils import now_str
 from typing import Optional
 import aiostream
 
-class Controller(CommandProcessorServicer, PingProcessorServicer):
-    def __init__(self, name:str):
+
+class Controller(ControllerServicer):
+    def __init__(self, name:str, configuration:str):
         super().__init__()
         self.name = name
-        self.parent_ports = [] # type: list[int]
+        self.configuration_loc = configuration
+        from drunc.controller.configuration import ConfigurationManager
+        self.configuration = ConfigurationManager(configuration)
+
         self.children = {} # type: dict[str, ChildChannel]
+        for child_name, child_conf in self.configuration['children'].items():
+            self.children[name] = ChildChannel(child_conf)
+
         self.pinging = True
 
-        # asyncio.create_task(self.ping_children())
 
     def __del__(self) -> None:
         self.pinging = False
@@ -43,13 +49,6 @@ class Controller(CommandProcessorServicer, PingProcessorServicer):
         del self.children[name]
 
     async def ping_children(self) -> None:
-        # yield Ping(
-        #     controller_name = ping.controller_name,
-        #     controlled_name = self.name,
-        #     datetime = now_str(),
-        #     # propagate = False
-        # )
-        # if ping.propagate:
         from aiostream import stream
 
         child_ping_stream = stream.combine.merge( # BOOOH! this combines the async generators, pretty sweet
@@ -87,7 +86,6 @@ class Controller(CommandProcessorServicer, PingProcessorServicer):
             datetime = now_str()
         )
 
-        # import time
         import random
         import json
         await asyncio.sleep(json.loads(command.command_data)['wait_for'])

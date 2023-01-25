@@ -1,7 +1,7 @@
 import click
 import click_shell
 from drunc.controller.controller import Controller
-from drunc.communication.command_pb2 import Command
+from drunc.communication.controller_pb2 import Command
 from drunc.utils.utils import now_str
 import asyncio
 from functools import wraps
@@ -13,13 +13,17 @@ def coroutine(f):
     return wrapper
 
 class RCContext:
-    def __init__(self, rc:Controller) -> None:
+    def __init__(self, rc:Controller, name:str) -> None:
         self.rc = rc
+        self.name = name
 
-@click_shell.shell(prompt='drunc > ', chain=True)
+@click_shell.shell(prompt='drunc-controller > ', chain=True)
+@click.argument('configuration', type=str)
 @click.pass_obj
-def rc_shell(obj:RCContext) -> None:
-    pass
+def rc_shell(obj:RCContext, configuration:str) -> None:
+    from drunc.controller.controller import Controller
+    ctrlr = Controller(obj.name, configuration)
+    obj.rc = ctrlr
 
 @rc_shell.command('some-command')
 @click.pass_obj
@@ -38,5 +42,3 @@ async def some_command(obj:RCContext) -> None:
     )
     async for result in results:
         print(result)
-    # asyncio.run(
-    # )
