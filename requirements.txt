@@ -1,2 +1,7 @@
-rich
+click
+click_shell
 grpcio
+grpcio_tools
+nest_asyncio
+rich
+sh
