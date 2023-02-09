@@ -22,12 +22,14 @@ def get_daq_app_instance(name, port):
 
 instances = [get_controller_instance(f'topcontroller', 3600)]
 
-from random import randint
+import random
+random.seed(10)
 nsystem = 4
+
 for i in range(nsystem):
     instances.append(get_controller_instance(f'controller{i}', 3601+i))
 
-    napps = randint(1,7)
+    napps = random.randint(1,7)
     instances += [get_daq_app_instance(f'app{i}{i2}', 7200+i*1000+i2) for i2 in range(napps)]
 
 
@@ -36,7 +38,12 @@ executables = {
         "executable_and_arguments": [
             {
                 "source": [
-                    "~/Documents/Imperial-Postdoc/drunc/venv/bin/activate"
+                    "${DRUNC_DIR}/setup.sh"
+                ]
+            },
+            {
+                "cd" : [
+                    "${WORKDIR}"
                 ]
             },
             {
@@ -49,15 +56,22 @@ executables = {
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",
+            "DRUNC_DIR": "getenv",
             "NAME": "{name}",
-            "PORT": "{port}"
+            "PORT": "{port}",
+            "WORKDIR": "getenv"
         }
     },
     "fake-daq-application": {
         "executable_and_arguments": [
             {
                 "source": [
-                    "~/Documents/Imperial-Postdoc/drunc/venv/bin/activate"
+                    "${DRUNC_DIR}/setup.sh"
+                ]
+            },
+            {
+                "cd" : [
+                    "${WORKDIR}"
                 ]
             },
             {
@@ -70,8 +84,10 @@ executables = {
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",
+            "DRUNC_DIR": "getenv",
             "NAME": "{name}",
-            "PORT": "{port}"
+            "PORT": "{port}",
+            "WORKDIR": "{getenv}"
         }
     }
 }

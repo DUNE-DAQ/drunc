@@ -50,20 +50,6 @@
             "configuration": "data/app04-conf.json"
         },
         {
-            "name": "app05",
-            "port": 7205,
-            "restriction": "localhost",
-            "type": "fake-daq-application",
-            "configuration": "data/app05-conf.json"
-        },
-        {
-            "name": "app06",
-            "port": 7206,
-            "restriction": "localhost",
-            "type": "fake-daq-application",
-            "configuration": "data/app06-conf.json"
-        },
-        {
             "name": "controller1",
             "port": 3602,
             "restriction": "localhost",
@@ -97,6 +83,20 @@
             "restriction": "localhost",
             "type": "fake-daq-application",
             "configuration": "data/app21-conf.json"
+        },
+        {
+            "name": "app22",
+            "port": 9202,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "data/app22-conf.json"
+        },
+        {
+            "name": "app23",
+            "port": 9203,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "data/app23-conf.json"
         },
         {
             "name": "controller3",
@@ -139,7 +139,12 @@
             "executable_and_arguments": [
                 {
                     "source": [
-                        "~/Documents/Imperial-Postdoc/drunc/venv/bin/activate"
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${WORKDIR}"
                     ]
                 },
                 {
@@ -152,15 +157,22 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
                 "NAME": "{name}",
-                "PORT": "{port}"
+                "PORT": "{port}",
+                "WORKDIR": "getenv"
             }
         },
         "fake-daq-application": {
             "executable_and_arguments": [
                 {
                     "source": [
-                        "~/Documents/Imperial-Postdoc/drunc/venv/bin/activate"
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${WORKDIR}"
                     ]
                 },
                 {
@@ -176,8 +188,10 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
                 "NAME": "{name}",
-                "PORT": "{port}"
+                "PORT": "{port}",
+                "WORKDIR": "{getenv}"
             }
         }
     },
