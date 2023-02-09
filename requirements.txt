@@ -1,3 +1,4 @@
+aiostream
 click
 click_shell
 grpcio
