@@ -138,13 +138,16 @@
         "drunc-controller": {
             "executable_and_arguments": [
                 {
+                    "env": []
+                },
+                {
                     "source": [
                         "${DRUNC_DIR}/setup.sh"
                     ]
                 },
                 {
                     "cd": [
-                        "${WORKDIR}"
+                        "${DRUNC_DIR}"
                     ]
                 },
                 {
@@ -153,18 +156,23 @@
                         "${PORT}",
                         "${NAME}"
                     ]
+                },
+                {
+                    "env": []
                 }
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
                 "DRUNC_DIR": "getenv",
                 "NAME": "{name}",
-                "PORT": "{port}",
-                "WORKDIR": "getenv"
+                "PORT": "{port}"
             }
         },
         "fake-daq-application": {
             "executable_and_arguments": [
+                {
+                    "env": []
+                },
                 {
                     "source": [
                         "${DRUNC_DIR}/setup.sh"
@@ -172,7 +180,7 @@
                 },
                 {
                     "cd": [
-                        "${WORKDIR}"
+                        "${DRUNC_DIR}"
                     ]
                 },
                 {
@@ -184,14 +192,16 @@
                         "-c",
                         "rest://localhost:${PORT}"
                     ]
+                },
+                {
+                    "env": []
                 }
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
                 "DRUNC_DIR": "getenv",
                 "NAME": "{name}",
-                "PORT": "{port}",
-                "WORKDIR": "{getenv}"
+                "PORT": "{port}"
             }
         }
     },

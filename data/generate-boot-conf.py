@@ -37,13 +37,16 @@ executables = {
     "drunc-controller": {
         "executable_and_arguments": [
             {
+                "env":[]
+            },
+            {
                 "source": [
                     "${DRUNC_DIR}/setup.sh"
                 ]
             },
             {
                 "cd" : [
-                    "${WORKDIR}"
+                    "${DRUNC_DIR}"
                 ]
             },
             {
@@ -52,18 +55,23 @@ executables = {
                     "${PORT}",
                     "${NAME}"
                 ]
-            }
+            },
+            {
+                "env":[]
+            },
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",
             "DRUNC_DIR": "getenv",
             "NAME": "{name}",
-            "PORT": "{port}",
-            "WORKDIR": "getenv"
+            "PORT": "{port}"
         }
     },
     "fake-daq-application": {
         "executable_and_arguments": [
+            {
+                "env":[]
+            },
             {
                 "source": [
                     "${DRUNC_DIR}/setup.sh"
@@ -71,7 +79,7 @@ executables = {
             },
             {
                 "cd" : [
-                    "${WORKDIR}"
+                    "${DRUNC_DIR}"
                 ]
             },
             {
@@ -80,14 +88,17 @@ executables = {
                     "-d", "${CONFIGURATION}",
                     "-c", "rest://localhost:${PORT}",
                 ]
-            }
+            },
+            {
+                "env":[]
+            },
+
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",
             "DRUNC_DIR": "getenv",
             "NAME": "{name}",
             "PORT": "{port}",
-            "WORKDIR": "{getenv}"
         }
     }
 }
