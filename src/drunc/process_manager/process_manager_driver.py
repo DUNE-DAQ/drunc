@@ -34,9 +34,16 @@ class ProcessManagerDriver:
 
             old_env = boot_configuration['executables'][app['type']]['environment']
             new_env = {}
-
+            print('whatever')
             for k, v in old_env.items():
-                new_env[k] = v.format(**app)
+                if v == 'getenv':
+                    import os
+                    try:
+                        new_env[k] = os.getenv(k)
+                    except:
+                        print(f'Variable {k} is not in the environment, so won\'t be set.')
+                else:
+                    new_env[k] = v.format(**app)
 
             br = BootRequest(
                 process_description = ProcessDescription(
@@ -67,6 +74,9 @@ class ProcessManagerDriver:
 
     async def list_process(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.pm_stub.list_process(query)
+
+    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
+        return await self.pm_stub.flush(query)
 
     async def is_alive(self, query:ProcessQuery) -> ProcessInstance:
         return await self.pm_stub.is_alive(query)

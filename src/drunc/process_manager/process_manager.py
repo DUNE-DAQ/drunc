@@ -30,6 +30,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         pass
 
     @abc.abstractmethod
+    def flush(self, query:ProcessQuery) -> ProcessInstance:
+        pass
+
+    @abc.abstractmethod
     def logs(self, query:LogRequest) -> LogLine:
         pass
 

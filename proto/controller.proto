@@ -3,28 +3,39 @@ syntax = "proto3";
 package Drunc;
 
 service Controller {
-  rpc get_control_tree(Ping) returns (ControlTree) {}
-  rpc get_available_commands(Ping) returns (ListOfCommands) {}
-  rpc execute_command(Command) returns (stream CommandResponse) {}
-  rpc execute_command_on_child(ChildCommand) returns (stream CommandResponse) {}
-  rpc request_broadcast(Client) returns (stream BroadcastMessage) {}
+  rpc add_to_broadcast_list(BroadcastRequest) returns (ServerResponse) {}
+  rpc get_command_list(Token) returns (ListOfCommandsResponse) {}
+  rpc execute_command(CommandExecutionRequest) returns (CommandResponse) {}
+  rpc take_control(Token) returns (ServerResponse) {}
+  rpc surrender_control(Token) returns (ServerResponse) {}
 }
 
-service PingProcessor {
-  rpc ping (Ping) returns (stream Ping) {}
+service Broadcast {
+  rpc broadcast(stream BroadcastMessage) returns (stream BroadcastMessage) {}
+}
+
+message Token {
+  string text = 1;
+}
+
+enum ResponseCode {
+  ACK = 0;
+  DONE = 1;
+  FAILED = 2;
+  NOT_AUTHORISED = 3;
+}
+
+message ServerResponse {
+  ResponseCode response_code = 1;
+  string response_text = 2;
+}
+
+message BroadcastRequest {
+  Token token = 1;
+  string address_status_endpoint = 2;
 }
 
 message Ping {
-  string controlled_name = 1;
-  string controller_name = 2;
-  string datetime = 3;
-}
-
-message Client {
-  string address = 1;
-}
-
-message BroadcastMessage {
   string text = 1;
 }
 
@@ -34,9 +45,6 @@ message Node {
   repeated Node children = 3;
 }
 
-message ControlTree {
-  Node top_node = 1;
-}
 
 message Argument {
   enum ArgumentType{
@@ -53,37 +61,34 @@ message CommandSpecification {
   string name = 1;
   repeated Argument arguments = 2;
   string help = 3;
+  repeated Node locality = 4;
 }
 
-message ListOfCommands {
-  repeated CommandSpecification command = 1;
+message ListOfCommandsResponse {
+  ServerResponse server_response = 1;
+  repeated CommandSpecification command = 2;
+}
+
+message CommandExecutionRequest {
+  Token token = 1;
+  repeated Node node = 2;
+  Command command = 3;
+}
+
+message CommandResponse {
+  ResponseCode response_code = 1;
+  string response_text = 2;
+  CommandSpecification command = 3;
+  string command_data = 4;
 }
 
 message Command {
   CommandSpecification command = 1;
   string command_data = 2;
-  string controlled_name = 3;
-  string controller_name = 4;
-  string datetime = 5;
-}
-message ChildCommand {
-  Command command = 1;
-  Node child = 2;
 }
 
-message CommandResponse {
-  enum ResponseCode {
-    ACK = 0;
-    DONE = 1;
-    FAILED = 2;
-    NOT_AUTHORISED = 3;
-  };
-  
-  ResponseCode response_code = 1;
-  string response_text = 2;
-  CommandSpecification command = 3;
-  string command_data = 4;
-  string controlled_name = 5;
-  string controller_name = 6;
-  string datetime = 7;
+message BroadcastMessage {
+  string emitter = 1;
+  int32 level = 2;
+  string payload = 3;
 }

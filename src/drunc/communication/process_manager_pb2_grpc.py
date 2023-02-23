@@ -39,6 +39,11 @@ class ProcessManagerStub(object):
                 request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
                 response_deserializer=process__manager__pb2.ProcessInstanceList.FromString,
                 )
+        self.flush = channel.unary_unary(
+                '/DUNEProcessManager.ProcessManager/flush',
+                request_serializer=process__manager__pb2.ProcessQuery.SerializeToString,
+                response_deserializer=process__manager__pb2.ProcessInstanceList.FromString,
+                )
         self.logs = channel.unary_stream(
                 '/DUNEProcessManager.ProcessManager/logs',
                 request_serializer=process__manager__pb2.LogRequest.SerializeToString,
@@ -84,6 +89,12 @@ class ProcessManagerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def flush(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def logs(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -121,6 +132,11 @@ def add_ProcessManagerServicer_to_server(servicer, server):
             ),
             'killall': grpc.unary_unary_rpc_method_handler(
                     servicer.killall,
+                    request_deserializer=process__manager__pb2.ProcessQuery.FromString,
+                    response_serializer=process__manager__pb2.ProcessInstanceList.SerializeToString,
+            ),
+            'flush': grpc.unary_unary_rpc_method_handler(
+                    servicer.flush,
                     request_deserializer=process__manager__pb2.ProcessQuery.FromString,
                     response_serializer=process__manager__pb2.ProcessInstanceList.SerializeToString,
             ),
@@ -224,6 +240,23 @@ class ProcessManager(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/killall',
+            process__manager__pb2.ProcessQuery.SerializeToString,
+            process__manager__pb2.ProcessInstanceList.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def flush(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/flush',
             process__manager__pb2.ProcessQuery.SerializeToString,
             process__manager__pb2.ProcessInstanceList.FromString,
             options, channel_credentials,

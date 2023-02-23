@@ -42,7 +42,7 @@ class PMContext:
     def __init__(self, pmd:Optional[ProcessManagerDriver]=None) -> None:
         self.pmd = pmd
         from rich.console import Console
-        from drunc.utils.utils import CONSOLE_THEMES
+3        from drunc.utils.utils import CONSOLE_THEMES
         self._console = Console(theme=CONSOLE_THEMES)
         self.print_traceback = False
 
@@ -100,6 +100,14 @@ async def killall(obj:PMContext, name:str, user:str, query:ProcessQuery, partiti
     result = await obj.pmd.killall(query = query)
     obj.print(result)
 
+@process_manager_shell.command('flush')
+@process_query_option()
+@click.pass_obj
+@coroutine
+async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+    result = await obj.pmd.flush(query = query)
+    obj.print("Flushed processes:")
+    obj.print(result)
 
 @process_manager_shell.command('logs')
 @process_query_option()

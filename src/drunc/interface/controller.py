@@ -15,7 +15,7 @@ def controller_cli(configuration:str, port:int, name:str, log_level:str):
     update_log_level(log_level)
     
     from drunc.controller.controller import Controller
-    from drunc.communication.controller_pb2_grpc import ControllerServicer, add_ControllerServicer_to_server
+    from drunc.communication.controller_pb2_grpc import add_ControllerServicer_to_server#, add_BroadcastServicer_to_server
     import asyncio
     import grpc
 
@@ -26,6 +26,7 @@ def controller_cli(configuration:str, port:int, name:str, log_level:str):
             raise RuntimeError('The port on which to expect commands/send status wasn\'t specified')
         server = grpc.aio.server()
         add_ControllerServicer_to_server(ctrlr, server)
+        # add_BroadcastServicer_to_server(ctrlr, server)
         listen_addr = f'[::]:{port}'
         server.add_insecure_port(listen_addr)
         await server.start()

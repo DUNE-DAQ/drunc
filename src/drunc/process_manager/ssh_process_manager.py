@@ -60,7 +60,35 @@ class SSHProcessManager(ProcessManager):
             self.children_logs[uuid].popleft()
 
         self.children_logs[uuid].append(line)
+        
+    def flush(self, query:ProcessQuery,  context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+        ret = []
 
+        for uuid in self._get_process_uid(query):
+
+            pd = ProcessDescription()
+            pd.CopyFrom(self.boot_request[uuid].process_description)
+            pr = ProcessRestriction()
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
+            pu = ProcessUUID(uuid=uuid)
+            return_code = 0
+            if not self.process_store[uuid].is_alive():
+                pi = ProcessInstance(
+                    process_description = pd,
+                    process_restriction = pr,
+                    status_code = ProcessInstance.StatusCode.RUNNING if self.process_store[uuid].is_alive() else ProcessInstance.StatusCode.DEAD,
+                    return_code = return_code,
+                    uuid = pu
+                )
+                del self.process_store[uuid] 
+                ret += [pi]
+
+        pil = ProcessInstanceList(
+            values=ret
+        )
+        
+        
+        
     def logs(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         cursor = -log_request.how_far

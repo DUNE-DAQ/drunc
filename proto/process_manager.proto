@@ -8,6 +8,7 @@ service ProcessManager {
   rpc is_alive (ProcessQuery) returns (ProcessInstance) {}
   rpc kill (ProcessQuery) returns (ProcessInstance) {}
   rpc killall (ProcessQuery) returns (ProcessInstanceList) {}
+  rpc flush (ProcessQuery) returns (ProcessInstanceList) {}
   rpc logs (LogRequest) returns (stream LogLine) {} 
   rpc list_process (ProcessMetadata) returns (ProcessInstanceList) {}
 }
