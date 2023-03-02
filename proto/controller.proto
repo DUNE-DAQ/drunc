@@ -19,6 +19,13 @@ service Broadcast {
 message Token {
   string text = 1;
 }
+enum Level {
+  DEBUG = 0;
+  INFO = 1;
+  WARNING = 2;
+  ERROR = 3;
+  CRITICAL = 4;
+}
 
 enum ResponseCode {
   ACK = 0;
@@ -91,6 +98,6 @@ message Command {
 
 message BroadcastMessage {
   string emitter = 1;
-  int32 level = 2;
+  Level level = 2;
   string payload = 3;
 }
