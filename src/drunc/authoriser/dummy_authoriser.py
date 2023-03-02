@@ -1,15 +1,16 @@
 from drunc.core.pylogger import PyLogger
-from drunc.communication.controller_pb2 import Token, ServerResponse
+from drunc.communication.controller_pb2 import Token
+from drunc.utils.utils import setup_fancy_logging
 
 
 
 # TODO: Should be communicating over network
 
 # The Rolls Royce of the authoriser systems
-class DummyAuthoriser(PyLogger):
+class DummyAuthoriser:
     def __init__(self):
-        super(DummyAuthoriser, self).__init__('DummyAuthoriser')
-        self.log.info(f'Ready')
+        self.log = setup_fancy_logging("Controller")
+        self.log.info(f'DummyAuthoriser ready')
 
     
     def is_authorised(self, token:Token, action:str) -> bool:
