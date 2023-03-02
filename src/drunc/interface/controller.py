@@ -1,5 +1,6 @@
 import click
-
+import signal
+import sys
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 
 @click.command()
@@ -10,31 +11,43 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 def controller_cli(configuration:str, port:int, name:str, log_level:str):
     from rich.console import Console
     console = Console()
-    # console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
-    
+
     update_log_level(log_level)
-    
+
     from drunc.controller.controller import Controller
-    from drunc.communication.controller_pb2_grpc import add_ControllerServicer_to_server#, add_BroadcastServicer_to_server
-    import asyncio
+    from drunc.communication.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
     ctrlr = Controller(name, configuration)
 
-    async def serve(port:int) -> None:
+    def serve(port:int) -> None:
         if not port:
             raise RuntimeError('The port on which to expect commands/send status wasn\'t specified')
-        server = grpc.aio.server()
+
+        from concurrent import futures
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+
         add_ControllerServicer_to_server(ctrlr, server)
-        # add_BroadcastServicer_to_server(ctrlr, server)
+
         listen_addr = f'[::]:{port}'
         server.add_insecure_port(listen_addr)
-        await server.start()
+
+        server.start()
         console.print(f'{ctrlr.name} was started on {listen_addr}')
-        await server.wait_for_termination()
+
+        def signal_handler(sig, frame):
+            print('Requested termination')
+            server.stop(0)
+            ctrlr.stop()
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        server.wait_for_termination()
+        console.print(f'{ctrlr.name} was terminated')
 
     try:
-        asyncio.run(serve(port))
+        serve(port)
     except Exception as e:
         console.print_exception()
-

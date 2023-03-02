@@ -1,167 +1,111 @@
-import asyncio
 import grpc
-from drunc.communication.controller_pb2 import BroadcastRequest, ServerResponse, BroadcastMessage
-from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastServicer
-from drunc.core.pylogger import PyLogger
-# from drunc.communication.child_channel import ChildChannel
+from drunc.communication.controller_pb2 import BroadcastRequest, GenericResponse, BroadcastMessage, Level, Token, ResponseCode
+from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
 from drunc.utils.utils import now_str
 from typing import Optional
-import aiostream
+import threading
+from drunc.utils.utils import setup_fancy_logging
+import time
 
 
-class Controller(PyLogger, ControllerServicer, BroadcastServicer):
+class Controller(ControllerServicer):
     def __init__(self, name:str, configuration:str):
-        # back to basics
-        PyLogger.__init__(self, name)
-        ControllerServicer.__init__(self)
-        BroadcastServicer.__init__(self)
-        
+        self.log = setup_fancy_logging("Controller")
+        super(Controller, self).__init__()
+        self.name = name
         self.configuration_loc = configuration
-        from drunc.controller.configuration import ConfigurationManager
-        # self.configuration = ConfigurationManager(configuration)
 
-        # self.children = {} # type: dict[str, ChildChannel]
-        # for child_name, child_conf in self.configuration.children.items():
-        #     self.children[name] = ChildChannel(child_conf)
+        from drunc.controller.broadcaster import Broadcaster
+        self.broadcaster = Broadcaster()
 
-        import queue
-        self.broadcast_queue = queue.Queue()
-        self.listener = []
-        self.broadcasting = True
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-        self.authorizer = DummyAuthoriser()
-    # def stop_broadcasting(self):
-        
-        
-    async def broadcast_responder(self, bm:BroadcastMessage, context: grpc.aio.ServicerContext=None) -> BroadcastMessage:
-        yield BroadcastMessage(
-            level = 100,
-            payload = 'message received',
-            emitter = self.name
-        )
-        self.log(bm.level, message=bm.payload, emitter=bm.emitter)
-        
-    def broadcast_to_all(self):
-        while self.broadcasting:
-            message = self.broadcast_queue.pop()
-            for listener in self.listeners:
-                listener.broadcast(message)
-            self.broadcast_queue.task_done()
-                
-    
-    def add_to_broadcast_list(self, br:BroadcastRequest, context: grpc.aio.ServicerContext=None) -> ServerResponse:
-        self.broadcast_queue.put(
+        self.authoriser = DummyAuthoriser()
+
+    def stop(self):
+        self.broadcaster.new_broadcast(
             BroadcastMessage(
-                level = 10,
-                payload = f'Attempting to add {br.address_status_endpoint} to my broadcast list.',
+                level = Level.INFO,
+                payload = f'over_and_out',
                 emitter = self.name
             )
         )
-        # if 
-    # def __del__(self) -> None:
-    #     self.pinging = False
+        #self.broadcaster.stop()
 
-    # def wait_for_commands(self) -> None:
-    #     pass
+    def generic_user_command(self, request, command):
+        """
+        A generic way to execute the controller commands from a user.
+        1. Check if the command is authorised
+        2. Broadcast that the command is being executed
+        3. Execute the command
+        4. Broadcast that the command has been executed successfully or not
+        5. Return the result
+        """
+        self.log.info(f'Attempting to execute {command}')
 
-    # async def ping_thread(self) -> None:
-    #     while self.pinging:
-    #         p = await self.ping_children()
-    #         await asyncio.sleep(0.5)
+        if not self.authoriser.is_authorised(request.token, command):
+            return GenericResponse(
+                response_code = ResponseCode.UNAUTHORIZED,
+                response_text = 'Unauthorized'
+            )
 
-    # def add_spectator(self, port:int) -> None:
-    #     pass
+        self.broadcaster.new_broadcast(
+            BroadcastMessage(
+                level = Level.INFO,
+                payload = f'Attempting to execute {command}',
+                emitter = self.name
+            )
+        )
 
-    def add_controlled_children(self, name:str, address:str) -> None:
-        if name in self.children:
-            raise RuntimeError(f'Child {name} already exists!')
-        self.children[name] = ChildChannel(address)
+        try:
+            result = getattr(self, command+"_impl")(request)
+        except Exception as e: # Maybe better to let the exception propagate? gRPC is pretty good for this
+            self.broadcaster.new_broadcast(
+                BroadcastMessage(
+                    level = Level.INFO,
+                    payload = f'Failed to execute {command}: {e}',
+                    emitter = self.name
+                )
+            )
+            return GenericResponse(
+                response_code = ResponseCode.FAILED,
+                response_text = f'Failed to execute {command}: {e}'
+            )
 
-    def rm_controlled_children(self, name:str) -> None:
-        if name not in self.children:
-            raise RuntimeError(f'Child {name} doesn\'t exists!')
-        self.children[name].close()
-        del self.children[name]
+        self.broadcaster.new_broadcast(
+            BroadcastMessage(
+                level = Level.INFO,
+                payload = f'Successfully executed {command}',
+                emitter = self.name
+            )
+        )
+        self.log.info(f'Successfully executed {command}')
+        return GenericResponse(
+            response_code = ResponseCode.DONE,
+            response_text = f'Successfully executed {command}',
+        )
 
-    # async def ping_children(self) -> None:
-    #     from aiostream import stream
+    def add_to_broadcast_list(self, br:BroadcastRequest, context) -> GenericResponse:
+        return self.generic_user_command(br, 'add_to_broadcast_list')
 
-    #     child_ping_stream = stream.combine.merge( # BOOOH! this combines the async generators, pretty sweet
-    #         *[
-    #             child.ping(
-    #                 Ping(
-    #                     controller_name = self.name,
-    #                     controlled_name = name,
-    #                     datetime = now_str(),
-    #                 )
-    #             ) for name, child in self.children.items()
-    #         ]
-    #     )
-    #     async with child_ping_stream.stream() as streamer:
-    #         async for s in streamer:
-    #             yield s
+    def add_to_broadcast_list_impl(self, br:BroadcastRequest):
+        if not self.broadcaster.add_listener(br.address_status_endpoint):
+            raise Exception(f'Failed to add {br.address_status_endpoint} to broadcast list')
 
-    # async def ping(self, ping:Ping) -> Ping:
-    #     yield Ping(
-    #         controller_name = ping.controller_name,
-    #         controlled_name = self.name,
-    #         datetime = now_str(),
-    #     )
+    def remove_from_broadcast_list(self, br:BroadcastRequest, context) -> GenericResponse:
+        return self.generic_user_command(br, 'remove_from_broadcast_list')
 
-    # async def execute_command(self, command:Command, context: grpc.aio.ServicerContext=None) -> CommandResponse:
-    #     print(f'{self.name} executing {command}')
+    def remove_from_broadcast_list_impl(self, br:BroadcastRequest):
+        if not self.broadcaster.rm_listener(br.address_status_endpoint):
+            raise Exception(f'Failed to remove {br.address_status_endpoint} from broadcast list')
 
-    #     yield CommandResponse(
-    #         response_code = CommandResponse.ACK,
-    #         response_text = 'ACK',
-    #         command_name  = command.command_name,
-    #         command_data  = command.command_data,
-    #         controller_name = command.controller_name,
-    #         controlled_name = self.name,
-    #         datetime = now_str()
-    #     )
+    def take_control(self, br:Token, context) -> GenericResponse:
+        return self.generic_user_command(br, 'take_control')
 
-    #     import random
-    #     import json
-    #     await asyncio.sleep(json.loads(command.command_data)['wait_for'])
+    def take_control_impl(self, br:Token):
+        self.broadcaster.rm_listener(br.address_status_endpoint)
 
-    #     if self.children:
-    #         tasks = []
+    def surrender_control(self, br:Token, context) -> GenericResponse:
+        return self.generic_user_command(br, 'surrender_control')
 
-    #         print('Propagating to children...')
-    #         commands_data = {
-    #             'child1': Command(
-    #                 command_name = 'some-command-for-child1',
-    #                 command_data = json.dumps({'wait_for': 4}),
-    #                 controlled_name = "",
-    #                 controller_name = self.name,
-    #                 datetime = now_str()
-    #             ),
-    #             'child2': Command(
-    #                 command_name = 'some-command-for-child2',
-    #                 command_data = json.dumps({'wait_for': 5}),
-    #                 controlled_name = "",
-    #                 controller_name = self.name,
-    #                 datetime = now_str()
-    #             ),
-    #         }
-    #         print(commands_data.values())
-    #         from aiostream import stream
-
-    #         child_command_stream = stream.combine.merge( # BOOOH! this combines the async generators, pretty sweet
-    #             *[child.send_command(commands_data[name]) for name, child in self.children.items()]
-    #         )
-    #         print('start streaming')
-    #         async with child_command_stream.stream() as streamer:
-    #             async for s in streamer:
-    #                 yield s
-
-    #     yield CommandResponse(
-    #         response_code = CommandResponse.DONE,
-    #         response_text = 'DONE',
-    #         command_name  = command.command_name,
-    #         command_data  = command.command_data,
-    #         controller_name = command.controller_name,
-    #         controlled_name = self.name,
-    #         datetime = now_str()
-    #     )
+    def surrender_control_impl(self, br:Token):
+        self.broadcaster.rm_listener(br.address_status_endpoint)

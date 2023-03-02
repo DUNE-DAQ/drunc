@@ -1,11 +1,9 @@
 
 def main() -> None:
-    import nest_asyncio
-    nest_asyncio.apply()
-    from drunc.interface.controller_shell import controller_shell, RCContext
+    from drunc.interface.controller_shell import controller_shell, ControllerContext
     from rich.console import Console
     console = Console()
-    context = RCContext()
+    context = ControllerContext()
     try:
         controller_shell(obj = context)
     except Exception as e:
@@ -15,6 +13,6 @@ def main() -> None:
         else:
             console.print_exception()
 
-    
+
 if __name__ == '__main__':
     main()
