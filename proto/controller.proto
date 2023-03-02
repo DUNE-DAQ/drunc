@@ -3,15 +3,17 @@ syntax = "proto3";
 package Drunc;
 
 service Controller {
-  rpc add_to_broadcast_list(BroadcastRequest) returns (ServerResponse) {}
+  rpc add_to_broadcast_list(BroadcastRequest) returns (GenericResponse) {}
+  rpc remove_from_broadcast_list(BroadcastRequest) returns (GenericResponse) {}
+  // list broadcasted?
   rpc get_command_list(Token) returns (ListOfCommandsResponse) {}
   rpc execute_command(CommandExecutionRequest) returns (CommandResponse) {}
-  rpc take_control(Token) returns (ServerResponse) {}
-  rpc surrender_control(Token) returns (ServerResponse) {}
+  rpc take_control(Token) returns (GenericResponse) {}
+  rpc surrender_control(Token) returns (GenericResponse) {}
 }
 
 service Broadcast {
-  rpc broadcast(stream BroadcastMessage) returns (stream BroadcastMessage) {}
+  rpc handle_broadcast(BroadcastMessage) returns (GenericResponse) {}
 }
 
 message Token {
@@ -25,7 +27,7 @@ enum ResponseCode {
   NOT_AUTHORISED = 3;
 }
 
-message ServerResponse {
+message GenericResponse {
   ResponseCode response_code = 1;
   string response_text = 2;
 }
@@ -65,7 +67,7 @@ message CommandSpecification {
 }
 
 message ListOfCommandsResponse {
-  ServerResponse server_response = 1;
+  GenericResponse server_response = 1;
   repeated CommandSpecification command = 2;
 }
 
