@@ -17,7 +17,12 @@ class ControllerStub(object):
         self.add_to_broadcast_list = channel.unary_unary(
                 '/Drunc.Controller/add_to_broadcast_list',
                 request_serializer=controller__pb2.BroadcastRequest.SerializeToString,
-                response_deserializer=controller__pb2.ServerResponse.FromString,
+                response_deserializer=controller__pb2.GenericResponse.FromString,
+                )
+        self.remove_from_broadcast_list = channel.unary_unary(
+                '/Drunc.Controller/remove_from_broadcast_list',
+                request_serializer=controller__pb2.BroadcastRequest.SerializeToString,
+                response_deserializer=controller__pb2.GenericResponse.FromString,
                 )
         self.get_command_list = channel.unary_unary(
                 '/Drunc.Controller/get_command_list',
@@ -32,12 +37,12 @@ class ControllerStub(object):
         self.take_control = channel.unary_unary(
                 '/Drunc.Controller/take_control',
                 request_serializer=controller__pb2.Token.SerializeToString,
-                response_deserializer=controller__pb2.ServerResponse.FromString,
+                response_deserializer=controller__pb2.GenericResponse.FromString,
                 )
         self.surrender_control = channel.unary_unary(
                 '/Drunc.Controller/surrender_control',
                 request_serializer=controller__pb2.Token.SerializeToString,
-                response_deserializer=controller__pb2.ServerResponse.FromString,
+                response_deserializer=controller__pb2.GenericResponse.FromString,
                 )
 
 
@@ -50,8 +55,15 @@ class ControllerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def get_command_list(self, request, context):
+    def remove_from_broadcast_list(self, request, context):
         """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def get_command_list(self, request, context):
+        """list broadcasted?
+        """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -80,7 +92,12 @@ def add_ControllerServicer_to_server(servicer, server):
             'add_to_broadcast_list': grpc.unary_unary_rpc_method_handler(
                     servicer.add_to_broadcast_list,
                     request_deserializer=controller__pb2.BroadcastRequest.FromString,
-                    response_serializer=controller__pb2.ServerResponse.SerializeToString,
+                    response_serializer=controller__pb2.GenericResponse.SerializeToString,
+            ),
+            'remove_from_broadcast_list': grpc.unary_unary_rpc_method_handler(
+                    servicer.remove_from_broadcast_list,
+                    request_deserializer=controller__pb2.BroadcastRequest.FromString,
+                    response_serializer=controller__pb2.GenericResponse.SerializeToString,
             ),
             'get_command_list': grpc.unary_unary_rpc_method_handler(
                     servicer.get_command_list,
@@ -95,12 +112,12 @@ def add_ControllerServicer_to_server(servicer, server):
             'take_control': grpc.unary_unary_rpc_method_handler(
                     servicer.take_control,
                     request_deserializer=controller__pb2.Token.FromString,
-                    response_serializer=controller__pb2.ServerResponse.SerializeToString,
+                    response_serializer=controller__pb2.GenericResponse.SerializeToString,
             ),
             'surrender_control': grpc.unary_unary_rpc_method_handler(
                     servicer.surrender_control,
                     request_deserializer=controller__pb2.Token.FromString,
-                    response_serializer=controller__pb2.ServerResponse.SerializeToString,
+                    response_serializer=controller__pb2.GenericResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -125,7 +142,24 @@ class Controller(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/add_to_broadcast_list',
             controller__pb2.BroadcastRequest.SerializeToString,
-            controller__pb2.ServerResponse.FromString,
+            controller__pb2.GenericResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def remove_from_broadcast_list(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/remove_from_broadcast_list',
+            controller__pb2.BroadcastRequest.SerializeToString,
+            controller__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -176,7 +210,7 @@ class Controller(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/take_control',
             controller__pb2.Token.SerializeToString,
-            controller__pb2.ServerResponse.FromString,
+            controller__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -193,7 +227,7 @@ class Controller(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/surrender_control',
             controller__pb2.Token.SerializeToString,
-            controller__pb2.ServerResponse.FromString,
+            controller__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -207,17 +241,17 @@ class BroadcastStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.broadcast = channel.stream_stream(
-                '/Drunc.Broadcast/broadcast',
+        self.handle_broadcast = channel.unary_unary(
+                '/Drunc.Broadcast/handle_broadcast',
                 request_serializer=controller__pb2.BroadcastMessage.SerializeToString,
-                response_deserializer=controller__pb2.BroadcastMessage.FromString,
+                response_deserializer=controller__pb2.GenericResponse.FromString,
                 )
 
 
 class BroadcastServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def broadcast(self, request_iterator, context):
+    def handle_broadcast(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -226,10 +260,10 @@ class BroadcastServicer(object):
 
 def add_BroadcastServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'broadcast': grpc.stream_stream_rpc_method_handler(
-                    servicer.broadcast,
+            'handle_broadcast': grpc.unary_unary_rpc_method_handler(
+                    servicer.handle_broadcast,
                     request_deserializer=controller__pb2.BroadcastMessage.FromString,
-                    response_serializer=controller__pb2.BroadcastMessage.SerializeToString,
+                    response_serializer=controller__pb2.GenericResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -242,7 +276,7 @@ class Broadcast(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def broadcast(request_iterator,
+    def handle_broadcast(request,
             target,
             options=(),
             channel_credentials=None,
@@ -252,8 +286,8 @@ class Broadcast(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.stream_stream(request_iterator, target, '/Drunc.Broadcast/broadcast',
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Broadcast/handle_broadcast',
             controller__pb2.BroadcastMessage.SerializeToString,
-            controller__pb2.BroadcastMessage.FromString,
+            controller__pb2.GenericResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

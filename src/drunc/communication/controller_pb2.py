@@ -13,43 +13,45 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x63ontroller.proto\x12\x05\x44runc\"\x15\n\x05Token\x12\x0c\n\x04text\x18\x01 \x01(\t\"S\n\x0eServerResponse\x12*\n\rresponse_code\x18\x01 \x01(\x0e\x32\x13.Drunc.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\"P\n\x10\x42roadcastRequest\x12\x1b\n\x05token\x18\x01 \x01(\x0b\x32\x0c.Drunc.Token\x12\x1f\n\x17\x61\x64\x64ress_status_endpoint\x18\x02 \x01(\t\"\x14\n\x04Ping\x12\x0c\n\x04text\x18\x01 \x01(\t\"A\n\x04Node\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04uuid\x18\x02 \x01(\t\x12\x1d\n\x08\x63hildren\x18\x03 \x03(\x0b\x32\x0b.Drunc.Node\"\x8e\x01\n\x08\x41rgument\x12\x0c\n\x04name\x18\x01 \x01(\t\x12*\n\x04type\x18\x02 \x01(\x0e\x32\x1c.Drunc.Argument.ArgumentType\x12\r\n\x05\x64\x65\x66lt\x18\x03 \x01(\t\x12\x0c\n\x04help\x18\x04 \x01(\t\"+\n\x0c\x41rgumentType\x12\r\n\tMANDATORY\x10\x00\x12\x0c\n\x08OPTIONAL\x10\x01\"u\n\x14\x43ommandSpecification\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\"\n\targuments\x18\x02 \x03(\x0b\x32\x0f.Drunc.Argument\x12\x0c\n\x04help\x18\x03 \x01(\t\x12\x1d\n\x08locality\x18\x04 \x03(\x0b\x32\x0b.Drunc.Node\"v\n\x16ListOfCommandsResponse\x12.\n\x0fserver_response\x18\x01 \x01(\x0b\x32\x15.Drunc.ServerResponse\x12,\n\x07\x63ommand\x18\x02 \x03(\x0b\x32\x1b.Drunc.CommandSpecification\"r\n\x17\x43ommandExecutionRequest\x12\x1b\n\x05token\x18\x01 \x01(\x0b\x32\x0c.Drunc.Token\x12\x19\n\x04node\x18\x02 \x03(\x0b\x32\x0b.Drunc.Node\x12\x1f\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x0e.Drunc.Command\"\x98\x01\n\x0f\x43ommandResponse\x12*\n\rresponse_code\x18\x01 \x01(\x0e\x32\x13.Drunc.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12,\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x04 \x01(\t\"M\n\x07\x43ommand\x12,\n\x07\x63ommand\x18\x01 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x02 \x01(\t\"C\n\x10\x42roadcastMessage\x12\x0f\n\x07\x65mitter\x18\x01 \x01(\t\x12\r\n\x05level\x18\x02 \x01(\x05\x12\x0f\n\x07payload\x18\x03 \x01(\t*A\n\x0cResponseCode\x12\x07\n\x03\x41\x43K\x10\x00\x12\x08\n\x04\x44ONE\x10\x01\x12\n\n\x06\x46\x41ILED\x10\x02\x12\x12\n\x0eNOT_AUTHORISED\x10\x03\x32\xda\x02\n\nController\x12I\n\x15\x61\x64\x64_to_broadcast_list\x12\x17.Drunc.BroadcastRequest\x1a\x15.Drunc.ServerResponse\"\x00\x12\x41\n\x10get_command_list\x12\x0c.Drunc.Token\x1a\x1d.Drunc.ListOfCommandsResponse\"\x00\x12K\n\x0f\x65xecute_command\x12\x1e.Drunc.CommandExecutionRequest\x1a\x16.Drunc.CommandResponse\"\x00\x12\x35\n\x0ctake_control\x12\x0c.Drunc.Token\x1a\x15.Drunc.ServerResponse\"\x00\x12:\n\x11surrender_control\x12\x0c.Drunc.Token\x1a\x15.Drunc.ServerResponse\"\x00\x32P\n\tBroadcast\x12\x43\n\tbroadcast\x12\x17.Drunc.BroadcastMessage\x1a\x17.Drunc.BroadcastMessage\"\x00(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x63ontroller.proto\x12\x05\x44runc\"\x15\n\x05Token\x12\x0c\n\x04text\x18\x01 \x01(\t\"T\n\x0fGenericResponse\x12*\n\rresponse_code\x18\x01 \x01(\x0e\x32\x13.Drunc.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\"P\n\x10\x42roadcastRequest\x12\x1b\n\x05token\x18\x01 \x01(\x0b\x32\x0c.Drunc.Token\x12\x1f\n\x17\x61\x64\x64ress_status_endpoint\x18\x02 \x01(\t\"\x14\n\x04Ping\x12\x0c\n\x04text\x18\x01 \x01(\t\"A\n\x04Node\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04uuid\x18\x02 \x01(\t\x12\x1d\n\x08\x63hildren\x18\x03 \x03(\x0b\x32\x0b.Drunc.Node\"\x8e\x01\n\x08\x41rgument\x12\x0c\n\x04name\x18\x01 \x01(\t\x12*\n\x04type\x18\x02 \x01(\x0e\x32\x1c.Drunc.Argument.ArgumentType\x12\r\n\x05\x64\x65\x66lt\x18\x03 \x01(\t\x12\x0c\n\x04help\x18\x04 \x01(\t\"+\n\x0c\x41rgumentType\x12\r\n\tMANDATORY\x10\x00\x12\x0c\n\x08OPTIONAL\x10\x01\"u\n\x14\x43ommandSpecification\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\"\n\targuments\x18\x02 \x03(\x0b\x32\x0f.Drunc.Argument\x12\x0c\n\x04help\x18\x03 \x01(\t\x12\x1d\n\x08locality\x18\x04 \x03(\x0b\x32\x0b.Drunc.Node\"w\n\x16ListOfCommandsResponse\x12/\n\x0fserver_response\x18\x01 \x01(\x0b\x32\x16.Drunc.GenericResponse\x12,\n\x07\x63ommand\x18\x02 \x03(\x0b\x32\x1b.Drunc.CommandSpecification\"r\n\x17\x43ommandExecutionRequest\x12\x1b\n\x05token\x18\x01 \x01(\x0b\x32\x0c.Drunc.Token\x12\x19\n\x04node\x18\x02 \x03(\x0b\x32\x0b.Drunc.Node\x12\x1f\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x0e.Drunc.Command\"\x98\x01\n\x0f\x43ommandResponse\x12*\n\rresponse_code\x18\x01 \x01(\x0e\x32\x13.Drunc.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12,\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x04 \x01(\t\"M\n\x07\x43ommand\x12,\n\x07\x63ommand\x18\x01 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x02 \x01(\t\"Q\n\x10\x42roadcastMessage\x12\x0f\n\x07\x65mitter\x18\x01 \x01(\t\x12\x1b\n\x05level\x18\x02 \x01(\x0e\x32\x0c.Drunc.Level\x12\x0f\n\x07payload\x18\x03 \x01(\t*B\n\x05Level\x12\t\n\x05\x44\x45\x42UG\x10\x00\x12\x08\n\x04INFO\x10\x01\x12\x0b\n\x07WARNING\x10\x02\x12\t\n\x05\x45RROR\x10\x03\x12\x0c\n\x08\x43RITICAL\x10\x04*A\n\x0cResponseCode\x12\x07\n\x03\x41\x43K\x10\x00\x12\x08\n\x04\x44ONE\x10\x01\x12\n\n\x06\x46\x41ILED\x10\x02\x12\x12\n\x0eNOT_AUTHORISED\x10\x03\x32\xae\x03\n\nController\x12J\n\x15\x61\x64\x64_to_broadcast_list\x12\x17.Drunc.BroadcastRequest\x1a\x16.Drunc.GenericResponse\"\x00\x12O\n\x1aremove_from_broadcast_list\x12\x17.Drunc.BroadcastRequest\x1a\x16.Drunc.GenericResponse\"\x00\x12\x41\n\x10get_command_list\x12\x0c.Drunc.Token\x1a\x1d.Drunc.ListOfCommandsResponse\"\x00\x12K\n\x0f\x65xecute_command\x12\x1e.Drunc.CommandExecutionRequest\x1a\x16.Drunc.CommandResponse\"\x00\x12\x36\n\x0ctake_control\x12\x0c.Drunc.Token\x1a\x16.Drunc.GenericResponse\"\x00\x12;\n\x11surrender_control\x12\x0c.Drunc.Token\x1a\x16.Drunc.GenericResponse\"\x00\x32R\n\tBroadcast\x12\x45\n\x10handle_broadcast\x12\x17.Drunc.BroadcastMessage\x1a\x16.Drunc.GenericResponse\"\x00\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'controller_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _RESPONSECODE._serialized_start=1109
-  _RESPONSECODE._serialized_end=1174
+  _LEVEL._serialized_start=1125
+  _LEVEL._serialized_end=1191
+  _RESPONSECODE._serialized_start=1193
+  _RESPONSECODE._serialized_end=1258
   _TOKEN._serialized_start=27
   _TOKEN._serialized_end=48
-  _SERVERRESPONSE._serialized_start=50
-  _SERVERRESPONSE._serialized_end=133
-  _BROADCASTREQUEST._serialized_start=135
-  _BROADCASTREQUEST._serialized_end=215
-  _PING._serialized_start=217
-  _PING._serialized_end=237
-  _NODE._serialized_start=239
-  _NODE._serialized_end=304
-  _ARGUMENT._serialized_start=307
-  _ARGUMENT._serialized_end=449
-  _ARGUMENT_ARGUMENTTYPE._serialized_start=406
-  _ARGUMENT_ARGUMENTTYPE._serialized_end=449
-  _COMMANDSPECIFICATION._serialized_start=451
-  _COMMANDSPECIFICATION._serialized_end=568
-  _LISTOFCOMMANDSRESPONSE._serialized_start=570
-  _LISTOFCOMMANDSRESPONSE._serialized_end=688
-  _COMMANDEXECUTIONREQUEST._serialized_start=690
-  _COMMANDEXECUTIONREQUEST._serialized_end=804
-  _COMMANDRESPONSE._serialized_start=807
-  _COMMANDRESPONSE._serialized_end=959
-  _COMMAND._serialized_start=961
-  _COMMAND._serialized_end=1038
-  _BROADCASTMESSAGE._serialized_start=1040
-  _BROADCASTMESSAGE._serialized_end=1107
-  _CONTROLLER._serialized_start=1177
-  _CONTROLLER._serialized_end=1523
-  _BROADCAST._serialized_start=1525
-  _BROADCAST._serialized_end=1605
+  _GENERICRESPONSE._serialized_start=50
+  _GENERICRESPONSE._serialized_end=134
+  _BROADCASTREQUEST._serialized_start=136
+  _BROADCASTREQUEST._serialized_end=216
+  _PING._serialized_start=218
+  _PING._serialized_end=238
+  _NODE._serialized_start=240
+  _NODE._serialized_end=305
+  _ARGUMENT._serialized_start=308
+  _ARGUMENT._serialized_end=450
+  _ARGUMENT_ARGUMENTTYPE._serialized_start=407
+  _ARGUMENT_ARGUMENTTYPE._serialized_end=450
+  _COMMANDSPECIFICATION._serialized_start=452
+  _COMMANDSPECIFICATION._serialized_end=569
+  _LISTOFCOMMANDSRESPONSE._serialized_start=571
+  _LISTOFCOMMANDSRESPONSE._serialized_end=690
+  _COMMANDEXECUTIONREQUEST._serialized_start=692
+  _COMMANDEXECUTIONREQUEST._serialized_end=806
+  _COMMANDRESPONSE._serialized_start=809
+  _COMMANDRESPONSE._serialized_end=961
+  _COMMAND._serialized_start=963
+  _COMMAND._serialized_end=1040
+  _BROADCASTMESSAGE._serialized_start=1042
+  _BROADCASTMESSAGE._serialized_end=1123
+  _CONTROLLER._serialized_start=1261
+  _CONTROLLER._serialized_end=1691
+  _BROADCAST._serialized_start=1693
+  _BROADCAST._serialized_end=1775
 # @@protoc_insertion_point(module_scope)
