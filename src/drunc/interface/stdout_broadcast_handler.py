@@ -3,7 +3,7 @@ from drunc.communication.controller_pb2 import BroadcastMessage, GenericResponse
 import grpc
 
 
-class BroadcastReceiver(BroadcastServicer):
+class StdoutBroadcastHandler(BroadcastServicer):
     def __init__(self, port) -> None:
         BroadcastServicer.__init__(self)
         self.ready = False
