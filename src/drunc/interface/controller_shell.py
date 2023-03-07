@@ -129,9 +129,9 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
             ctx.obj.server_thread.join()
             return
 
-        response = _send_command(ctx.obj, 'who_is_in_charge', None)
         from drunc.utils.grpc_utils import unpack_any
         try:
+            response = _send_command(ctx.obj, 'who_is_in_charge', None, rethrow=True)
             pt = unpack_any(response.data, PlainText)
         except Exception as e:
             ctx.obj.log.error('Could not understand who is in charge from the controller.')
@@ -142,7 +142,7 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
         if pt.text == ctx.obj.token.user_name:
             ctx.obj.log.info('You are in control. Surrendering control.')
             try:
-                response = _send_command(ctx.obj, 'surrender_control', None)
+                response = _send_command(ctx.obj, 'surrender_control', None, rethrow=True)
             except Exception as e:
                 ctx.obj.log.error('Could not surrender control.')
                 ctx.obj.log.error(e)
