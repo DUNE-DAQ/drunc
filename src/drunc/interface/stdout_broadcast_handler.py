@@ -1,5 +1,5 @@
 from drunc.communication.controller_pb2_grpc import BroadcastServicer
-from drunc.communication.controller_pb2 import BroadcastMessage, GenericResponse, ResponseCode, Level
+from drunc.communication.controller_pb2 import BroadcastMessage, BroadcastResponse, Level, BroadcastResponseCode
 import grpc
 
 
@@ -29,7 +29,7 @@ class StdoutBroadcastHandler(BroadcastServicer):
         self._server.wait_for_termination()
         self.ready = False
 
-    def handle_broadcast(self, bm: BroadcastMessage, context: grpc.aio.ServicerContext=None) -> GenericResponse:
+    def handle_broadcast(self, bm: BroadcastMessage, context: grpc.aio.ServicerContext=None) -> BroadcastResponse:
         message = f'{bm.emitter}: {bm.payload}' if bm.emitter else bm.payload
         level = bm.level
         if   level == Level.DEBUG   : self._log.debug   (message)
@@ -38,7 +38,6 @@ class StdoutBroadcastHandler(BroadcastServicer):
         elif level == Level.ERROR   : self._log.error   (message)
         elif level == Level.CRITICAL: self._log.critical(message)
         else                        : self._log.info    (message)
-        return GenericResponse(
-            response_code = ResponseCode.DONE,
-            response_text = 'OK'
+        return BroadcastResponse(
+            code = BroadcastResponseCode.ACKNOWLEDGED
         )

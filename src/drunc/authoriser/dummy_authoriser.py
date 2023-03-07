@@ -11,12 +11,12 @@ class DummyAuthoriser:
 
 
     def is_authorised(self, token:Token, action:str) -> bool:
-        self.log.info(f'Authorising {token.text} to {action}')
+        self.log.info(f'Authorising {token.token} to {action}')
         return True
 
 
     def authorised_actions(self, token:Token) -> list[str]:
-        self.log.info(f'Grabbing authorisations for {token.text}')
+        self.log.info(f'Grabbing authorisations for {token.token}')
         return []
 
 

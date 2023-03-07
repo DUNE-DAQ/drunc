@@ -1,24 +1,53 @@
 syntax = "proto3";
 
+import "google/protobuf/any.proto";
+
 package Drunc;
 
 service Controller {
-  rpc add_to_broadcast_list(BroadcastRequest) returns (GenericResponse) {}
-  rpc remove_from_broadcast_list(BroadcastRequest) returns (GenericResponse) {}
-  // list broadcasted?
-  rpc get_command_list(Token) returns (ListOfCommandsResponse) {}
-  rpc execute_command(CommandExecutionRequest) returns (CommandResponse) {}
-  rpc take_control(Token) returns (GenericResponse) {}
-  rpc surrender_control(Token) returns (GenericResponse) {}
+  rpc add_to_broadcast_list      (Request) returns (Response) {}
+  rpc remove_from_broadcast_list (Request) returns (Response) {}
+  rpc get_broadcast_list         (Request) returns (Response) {}
+
+  rpc get_command_list           (Request) returns (Response) {}
+  rpc execute_command            (Request) returns (Response) {}
+
+  rpc take_control               (Request) returns (Response) {}
+  rpc surrender_control          (Request) returns (Response) {}
+  rpc who_is_in_charge           (Request) returns (Response) {}
 }
 
 service Broadcast {
-  rpc handle_broadcast(BroadcastMessage) returns (GenericResponse) {}
+  rpc handle_broadcast (BroadcastMessage) returns (BroadcastResponse) {}
+}
+
+message BroadcastResponse {
+  BroadcastResponseCode code = 1;
+}
+
+enum BroadcastResponseCode {
+  ACKNOWLEDGED = 0;
+  REJECT = 1;
 }
 
 message Token {
-  string text = 1;
+  string token = 1;
+  string user_name = 2;
 }
+
+message Response {
+  google.protobuf.Any data = 1;
+}
+
+message Request {
+  Token token = 1;
+  optional google.protobuf.Any data = 2;
+}
+
+message BroadcastRequest {
+  string broadcast_receiver_address = 1;
+}
+
 enum Level {
   DEBUG = 0;
   INFO = 1;
@@ -27,26 +56,17 @@ enum Level {
   CRITICAL = 4;
 }
 
-enum ResponseCode {
-  ACK = 0;
-  DONE = 1;
-  FAILED = 2;
-  NOT_AUTHORISED = 3;
+message BroadcastMessage {
+  string emitter = 1;
+  Level level = 2;
+  string payload = 3; // could be "any" here, and we use a schema
 }
 
-message GenericResponse {
-  ResponseCode response_code = 1;
-  string response_text = 2;
-}
 
-message BroadcastRequest {
-  Token token = 1;
-  string address_status_endpoint = 2;
-}
-
-message Ping {
+message PlainText {
   string text = 1;
 }
+
 
 message Node {
   string name = 1;
@@ -74,7 +94,6 @@ message CommandSpecification {
 }
 
 message ListOfCommandsResponse {
-  GenericResponse server_response = 1;
   repeated CommandSpecification command = 2;
 }
 
@@ -85,7 +104,6 @@ message CommandExecutionRequest {
 }
 
 message CommandResponse {
-  ResponseCode response_code = 1;
   string response_text = 2;
   CommandSpecification command = 3;
   string command_data = 4;
@@ -96,8 +114,3 @@ message Command {
   string command_data = 2;
 }
 
-message BroadcastMessage {
-  string emitter = 1;
-  Level level = 2;
-  string payload = 3;
-}
