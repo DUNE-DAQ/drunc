@@ -10,11 +10,12 @@ from drunc.communication.controller_pb2 import Request, Response, BroadcastMessa
 from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
 from drunc.utils.utils import now_str, setup_fancy_logging
 import drunc.controller.exceptions as ctler_excpt
-
+from drunc.utils.grpc_utils import unpack_any
 import threading
 import time
 import threading
 from typing import Optional
+
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
@@ -48,6 +49,7 @@ class ControllerActor:
 
         self._update_actor(token)
 
+
 class Controller(ControllerServicer):
     def __init__(self, name:str, configuration:str):
         self.log = setup_fancy_logging("Controller")
@@ -55,13 +57,39 @@ class Controller(ControllerServicer):
         self.name = name
         self.configuration_loc = configuration
 
-        from drunc.controller.broadcaster import Broadcaster
-        self.broadcaster = Broadcaster()
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         self.authoriser = DummyAuthoriser()
 
         self.actor = ControllerActor(None)
+
+        from drunc.controller.configuration import ControllerConfiguration
+        self.configuration = ControllerConfiguration(self.configuration_loc)
+        self.children_controllers = []
+        self.apps = []
+
+        if self.children_controllers:
+            self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
+            from threading import Thread
+            self.server_thread = Thread(target=self.status_receiver.serve, name=f'broadcast_serve_thread')
+            self.server_thread.start()
+
+        self.controller_token = Token(
+            user_name = f'{self.name}_controller',
+            token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
+        )
+
+        from drunc.communication.child_controller import ChildControllerChannel
+        for child_controller_cfg in self.configuration.children_controllers:
+            self.children_controllers.append(ChildControllerChannel(child_controller_cfg, self.configuration.broadcast_receiving_port, self.controller_token))
+
+        from drunc.communication.app_controller import AppController
+        for app_cfg in self.configuration.applications:
+            self.apps.append(AppController(app_cfg))
+
+        # do this at the end, otherwise we need to self.stop() if an exception is raised
+        from drunc.controller.broadcaster import Broadcaster
+        self.broadcaster = Broadcaster()
 
     def stop(self):
         self.broadcaster.new_broadcast(
@@ -72,21 +100,13 @@ class Controller(ControllerServicer):
             )
         )
 
-    def _unpack(self, data, format):
-        if not data.Is(format.DESCRIPTOR):
-            self.log.error(f'Cannot unpack {data} into {format}')
-            raise ctler_excpt.MalformedMessage()
-        req = format()
-        data.Unpack(req)
-        return req
-
 
     def _generic_user_command(self, request:Request, command:str, context):
         """
         A generic way to execute the controller commands from a user.
         1. Check if the command is authorised
         2. Broadcast that the command is being executed
-        3. Execute the command
+        3. Execute the command on children controller, app, and self
         4. Broadcast that the command has been executed successfully or not
         5. Return the result
         """
@@ -107,15 +127,26 @@ class Controller(ControllerServicer):
         self.broadcaster.new_broadcast(
             BroadcastMessage(
                 level = Level.INFO,
-                payload = f'Attempting to execute {command}',
+                payload = f'{request.token.user_name} is attempting to execute {command}',
                 emitter = self.name
             )
         )
+        data = request.data if request.data else None
+        self.log.debug(f'{command} data: {request.data}')
 
         try:
-            data = request.data if request.data else None
-            self.log.debug(f'{command} data: {request.data}')
-            result = getattr(self, command+"_impl")(data, request.token)
+            self.log.debug(f'Propagating to command to children')
+
+            for child_controller in self.children_controllers: # we probably want something smarter here, and propagate to right child, if given a path in the command
+                child_controller.propagate_command(command, data, request.token) # use the token of the user who sent the command
+
+            for app in self.apps:
+                app.propagate_command(command, data, request.token)
+
+            token = Token()
+            token.CopyFrom(request.token)
+            self.log.info(f'{token} executing {command}')
+            result = getattr(self, command+"_impl")(data, token)
 
         except ctler_excpt.ControllerException as e:
             self.log.error(f'ControllerException when executing {command}: {e}')
@@ -173,7 +204,7 @@ class Controller(ControllerServicer):
         return self._generic_user_command(request, '_add_to_broadcast_list', context)
 
     def _add_to_broadcast_list_impl(self, data, _) -> PlainText:
-        r = self._unpack(data, BroadcastRequest)
+        r = unpack_any(data, BroadcastRequest)
         self.log.info(f'Adding {r.broadcast_receiver_address} to broadcast list')
         if not self.broadcaster.add_listener(r.broadcast_receiver_address):
             raise ctler_excpt.ControllerException(f'Failed to add {r.broadcast_receiver_address} to broadcast list')
@@ -185,7 +216,7 @@ class Controller(ControllerServicer):
         return self._generic_user_command(request, '_remove_from_broadcast_list', context)
 
     def _remove_from_broadcast_list_impl(self, data, _) -> PlainText:
-        r = self._unpack(data, BroadcastRequest)
+        r = unpack_any(data, BroadcastRequest)
         if not self.broadcaster.rm_listener(r.broadcast_receiver_address):
             raise ctler_excpt.ControllerException(f'Failed to remove {r.broadcast_receiver_address} from broadcast list')
         return PlainText(text = f'Removed {r.broadcast_receiver_address} to broadcast list')
@@ -197,6 +228,7 @@ class Controller(ControllerServicer):
 
     def _take_control_impl(self, _, token) -> PlainText:
         self.actor.take_control(token)
+        self.log.info(f'User {token.user_name} took control')
         return PlainText(text = f'User {token.user_name} took control')
 
 

@@ -42,7 +42,7 @@ class PMContext:
     def __init__(self, pmd:Optional[ProcessManagerDriver]=None) -> None:
         self.pmd = pmd
         from rich.console import Console
-3        from drunc.utils.utils import CONSOLE_THEMES
+        from drunc.utils.utils import CONSOLE_THEMES
         self._console = Console(theme=CONSOLE_THEMES)
         self.print_traceback = False
 
@@ -127,7 +127,7 @@ async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuer
             obj.print(f'\n\n\'{uuid}\' logs start:')
         obj.print(result.line[:-1]) # knock the return carriage at the end of the line
     obj.print(f'\'{uuid}\' logs end\n\n')
-    
+
 
 @process_manager_shell.command('restart')
 @process_query_option()
@@ -144,7 +144,7 @@ async def restart(obj:PMContext, name:str, user:str, query:ProcessQuery, partiti
 @coroutine
 async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
     result = await obj.pmd.is_alive(query = query)
-    
+
     if result.status_code == ProcessInstance.StatusCode.RUNNING:
         obj.print(f'Process {uuid} (name: {result.process_description.metadata.name}) is alive')
     else:
