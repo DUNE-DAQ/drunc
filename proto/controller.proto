@@ -21,13 +21,19 @@ service Broadcast {
   rpc handle_broadcast (BroadcastMessage) returns (BroadcastResponse) {}
 }
 
+message BroadcastMessage {
+  string emitter = 1;
+  Level level = 2;
+  string payload = 3; // could be "any" here, and we use a schema
+}
+
 message BroadcastResponse {
   BroadcastResponseCode code = 1;
 }
 
 enum BroadcastResponseCode {
   ACKNOWLEDGED = 0;
-  REJECT = 1;
+  REJECTED = 1;
 }
 
 message Token {
@@ -56,11 +62,6 @@ enum Level {
   CRITICAL = 4;
 }
 
-message BroadcastMessage {
-  string emitter = 1;
-  Level level = 2;
-  string payload = 3; // could be "any" here, and we use a schema
-}
 
 
 message PlainText {

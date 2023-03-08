@@ -3,13 +3,13 @@ syntax = "proto3";
 package DUNEProcessManager;
 
 service ProcessManager {
-  rpc boot (BootRequest) returns (ProcessUUID) {}
-  rpc restart (ProcessQuery) returns (ProcessInstance) {}
-  rpc is_alive (ProcessQuery) returns (ProcessInstance) {}
-  rpc kill (ProcessQuery) returns (ProcessInstance) {}
-  rpc killall (ProcessQuery) returns (ProcessInstanceList) {}
-  rpc flush (ProcessQuery) returns (ProcessInstanceList) {}
-  rpc logs (LogRequest) returns (stream LogLine) {} 
+  rpc boot         (BootRequest)     returns (ProcessUUID)         {}
+  rpc restart      (ProcessQuery)    returns (ProcessInstance)     {}
+  rpc is_alive     (ProcessQuery)    returns (ProcessInstance)     {}
+  rpc kill         (ProcessQuery)    returns (ProcessInstance)     {}
+  rpc killall      (ProcessQuery)    returns (ProcessInstanceList) {}
+  rpc flush        (ProcessQuery)    returns (ProcessInstanceList) {}
+  rpc logs         (LogRequest)      returns (stream LogLine)      {}
   rpc list_process (ProcessMetadata) returns (ProcessInstanceList) {}
 }
 
@@ -71,11 +71,12 @@ message ProcessInstance {
   ProcessUUID uuid = 5;
 }
 
-message ProcessInstanceList{
-  repeated ProcessInstance values = 1;
-}
-
 message BootRequest {
   ProcessDescription process_description = 1;
   ProcessRestriction process_restriction = 2;
+}
+
+
+message ProcessInstanceList{
+  repeated ProcessInstance values = 1;
 }
