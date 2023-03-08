@@ -5,10 +5,10 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 
 @click.command()
 @click.argument('configuration', type=str)
-@click.argument('port', type=int)
+@click.argument('control-port', type=int)
 @click.argument('name', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, port:int, name:str, log_level:str):
+def controller_cli(configuration:str, control_port:int, name:str, log_level:str):
     from rich.console import Console
     console = Console()
 
@@ -48,6 +48,6 @@ def controller_cli(configuration:str, port:int, name:str, log_level:str):
         console.print(f'{ctrlr.name} was terminated')
 
     try:
-        serve(port)
+        serve(control_port)
     except Exception as e:
         console.print_exception()
