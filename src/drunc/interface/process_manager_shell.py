@@ -32,7 +32,7 @@ def generate_query(ctx, param, uuid):
 
 def process_query_option():
     def wrapper(f0):
-        f1 = click.option('-p','--session', type=str, default=None, help='Select the processes on a particular session')(f0)
+        f1 = click.option('-s','--session', type=str, default=None, help='Select the processes on a particular session')(f0)
         f2 = click.option('-n','--name'   , type=str, default=None, help='Select the process of a particular name')(f1)
         f3 = click.option('-u','--user'   , type=str, default=None, help='Select the process of a particular user')(f2)
         return click.option('--uuid',  'query', type=str, default=None, help='Select the process of a particular UUID', callback=generate_query)(f3)
@@ -78,7 +78,7 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
 async def boot(obj:PMContext, user:str, session:str, boot_configuration:str) -> None:
     results = obj.pmd.boot(boot_configuration, user, session)
     async for result in results:
-        print(result)
+        obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 
 
 @process_manager_shell.command('kill')
@@ -111,7 +111,7 @@ async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, session:s
 
 @process_manager_shell.command('logs')
 @process_query_option()
-@click.option('--how-far', type=int, default=10, help='How many lines one wants')
+@click.option('--how-far', type=int, default=100, help='How many lines one wants')
 @click.pass_obj
 @coroutine
 async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuery, session:str) -> None:

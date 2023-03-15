@@ -3,7 +3,7 @@ syntax = "proto3";
 package DUNEProcessManager;
 
 service ProcessManager {
-  rpc boot         (BootRequest)     returns (ProcessUUID)         {}
+  rpc boot         (BootRequest)     returns (ProcessInstance)     {}
   rpc restart      (ProcessQuery)    returns (ProcessInstance)     {}
   rpc is_alive     (ProcessQuery)    returns (ProcessInstance)     {}
   rpc kill         (ProcessQuery)    returns (ProcessInstance)     {}
@@ -33,14 +33,14 @@ message ProcessUUID {
 message ProcessMetadata {
   ProcessUUID uuid = 1;
   string user = 2;
-  string partition = 3;
+  string session = 3;
   string name = 4;
 }
 
 message ProcessQuery {
   optional ProcessUUID uuid = 1;
   optional string user = 2;
-  optional string partition = 3;
+  optional string session = 3;
   optional string name = 4;
   bool force = 5;
 }
@@ -67,7 +67,7 @@ message ProcessInstance {
     DEAD = 1;
   };
   StatusCode status_code = 3;
-  int32 return_code = 4;
+  optional int32 return_code = 4;
   ProcessUUID uuid = 5;
 }
 

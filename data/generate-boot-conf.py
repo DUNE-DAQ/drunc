@@ -16,7 +16,7 @@ def get_daq_app_instance(name, port):
         "port": port,
         "restriction": "localhost",
         "type": "fake-daq-application",
-        "configuration": f"data/{name}-conf.json",
+        "configuration": f"file://data/{name}-conf.json",
     }
 
 
@@ -50,15 +50,17 @@ executables = {
                 ]
             },
             {
+                "echo":[
+                    "${PATH}"
+                ]
+            },
+            {
                 "drunc-controller" : [
                     "${CONFIGURATION}",
                     "${PORT}",
                     "${NAME}"
                 ]
-            },
-            {
-                "env":[]
-            },
+            }
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",
@@ -83,16 +85,17 @@ executables = {
                 ]
             },
             {
+                "echo":[
+                    "${PATH}"
+                ]
+            },
+            {
                 "fake_daq_application" : [
                     "-n", "${NAME}",
                     "-d", "${CONFIGURATION}",
                     "-c", "rest://localhost:${PORT}",
                 ]
-            },
-            {
-                "env":[]
-            },
-
+            }
         ],
         "environment": {
             "CONFIGURATION": "{configuration}",

@@ -1,6 +1,6 @@
 import asyncio
 import grpc
-from drunc.communication.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessInstance, LogLine, LogRequest
+from drunc.communication.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, LogLine, LogRequest
 from drunc.communication.process_manager_pb2_grpc import ProcessManagerServicer
 import abc
 
@@ -10,7 +10,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         pass
 
     @abc.abstractmethod
-    def boot(self, boot_request:BootRequest) -> ProcessUUID:
+    def boot(self, boot_request:BootRequest) -> ProcessInstance:
         pass
 
     @abc.abstractmethod
@@ -49,4 +49,4 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         else:
             raise RuntimeError(f'ProcessManager type {pm_conf_data["type"]} is unsupported!')
 
-        
+

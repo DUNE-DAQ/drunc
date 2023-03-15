@@ -17,7 +17,7 @@ class ProcessManagerStub(object):
         self.boot = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/boot',
                 request_serializer=process__manager__pb2.BootRequest.SerializeToString,
-                response_deserializer=process__manager__pb2.ProcessUUID.FromString,
+                response_deserializer=process__manager__pb2.ProcessInstance.FromString,
                 )
         self.restart = channel.unary_unary(
                 '/DUNEProcessManager.ProcessManager/restart',
@@ -113,7 +113,7 @@ def add_ProcessManagerServicer_to_server(servicer, server):
             'boot': grpc.unary_unary_rpc_method_handler(
                     servicer.boot,
                     request_deserializer=process__manager__pb2.BootRequest.FromString,
-                    response_serializer=process__manager__pb2.ProcessUUID.SerializeToString,
+                    response_serializer=process__manager__pb2.ProcessInstance.SerializeToString,
             ),
             'restart': grpc.unary_unary_rpc_method_handler(
                     servicer.restart,
@@ -173,7 +173,7 @@ class ProcessManager(object):
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/DUNEProcessManager.ProcessManager/boot',
             process__manager__pb2.BootRequest.SerializeToString,
-            process__manager__pb2.ProcessUUID.FromString,
+            process__manager__pb2.ProcessInstance.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 

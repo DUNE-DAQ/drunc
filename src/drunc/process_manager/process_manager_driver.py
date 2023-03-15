@@ -11,7 +11,7 @@ class ProcessManagerDriver:
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
-    async def boot(self, boot_configuration_file:str, user:str, partition:str) -> ProcessUUID:
+    async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessUUID:
         boot_configuration = {}
         with open(boot_configuration_file) as f:
             import json
@@ -48,7 +48,7 @@ class ProcessManagerDriver:
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
                         user = user,
-                        partition = partition,
+                        session = session,
                         name = app['name'],
                     ),
                     executable_and_arguments = executable_and_arguments,

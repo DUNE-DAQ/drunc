@@ -71,7 +71,14 @@ class SSHProcessManager(ProcessManager):
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[uuid].process_restriction)
             pu = ProcessUUID(uuid=uuid)
-            return_code = 0
+
+            return_code = None
+            try:
+                if not self.process_store[uuid].is_alive():
+                    return_code = self.process_store[uuid].exit_code
+            except Exception as e:
+                pass
+
             if not self.process_store[uuid].is_alive():
                 pi = ProcessInstance(
                     process_description = pd,
@@ -86,7 +93,7 @@ class SSHProcessManager(ProcessManager):
         pil = ProcessInstanceList(
             values=ret
         )
-
+        return pil
 
 
     def logs(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
@@ -109,7 +116,7 @@ class SSHProcessManager(ProcessManager):
             yield ll
 
 
-    def _boot(self, boot_request:BootRequest, uuid:str) -> ProcessUUID:
+    def _boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
 
         if len(boot_request.process_restriction.allowed_hosts) < 1:
@@ -136,6 +143,9 @@ class SSHProcessManager(ProcessManager):
                         cmd += f' {arg}'
                     cmd += ';'
 
+                if cmd[-1] == ';':
+                    cmd = cmd[:-1]
+
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", cmd]
 
                 self.process_store[uuid] = sh.ssh (
@@ -158,10 +168,27 @@ class SSHProcessManager(ProcessManager):
             self.boot_request[uuid].CopyFrom(boot_request)
 
             self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
-            uid = ProcessUUID(
-                uuid = uuid
+            pd = ProcessDescription()
+            pd.CopyFrom(self.boot_request[uuid].process_description)
+            pr = ProcessRestriction()
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
+            pu = ProcessUUID(uuid=uuid)
+
+            return_code = None
+            try:
+                if not self.process_store[uuid].is_alive():
+                    return_code = self.process_store[uuid].exit_code
+            except Exception as e:
+                pass
+
+            pi = ProcessInstance(
+                process_description = pd,
+                process_restriction = pr,
+                status_code = ProcessInstance.StatusCode.RUNNING if self.process_store[uuid].is_alive() else ProcessInstance.StatusCode.DEAD,
+                return_code = return_code,
+                uuid = pu
             )
-            return uid
+            return pi
         else:
             raise RuntimeError(f'Couldn\'t boot {boot_request.process_description.metadata.name}, reason: {error}')
 
@@ -175,12 +202,14 @@ class SSHProcessManager(ProcessManager):
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[uuid].process_restriction)
             pu = ProcessUUID(uuid=uuid)
-            return_code = 0
+
+            return_code = None
             if not self.process_store[uuid].is_alive():
                 try:
                     return_code = self.process_store[uuid].exit_code
                 except Exception as e:
-                    return_code = e.exit_code
+                    pass
+
             pi = ProcessInstance(
                 process_description = pd,
                 process_restriction = pr,
@@ -233,7 +262,7 @@ class SSHProcessManager(ProcessManager):
 
         process = self.process_store[uuid]
         is_alive = process.is_alive()
-        return_code = process.exit_code if not is_alive else 0
+        return_code = process.exit_code if not is_alive else None
 
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)

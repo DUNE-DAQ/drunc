@@ -19,35 +19,35 @@
             "port": 7200,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app00-conf.json"
+            "configuration": "file://data/app00-conf.json"
         },
         {
             "name": "app01",
             "port": 7201,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app01-conf.json"
+            "configuration": "file://data/app01-conf.json"
         },
         {
             "name": "app02",
             "port": 7202,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app02-conf.json"
+            "configuration": "file://data/app02-conf.json"
         },
         {
             "name": "app03",
             "port": 7203,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app03-conf.json"
+            "configuration": "file://data/app03-conf.json"
         },
         {
             "name": "app04",
             "port": 7204,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app04-conf.json"
+            "configuration": "file://data/app04-conf.json"
         },
         {
             "name": "controller1",
@@ -61,7 +61,7 @@
             "port": 8200,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app10-conf.json"
+            "configuration": "file://data/app10-conf.json"
         },
         {
             "name": "controller2",
@@ -75,28 +75,28 @@
             "port": 9200,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app20-conf.json"
+            "configuration": "file://data/app20-conf.json"
         },
         {
             "name": "app21",
             "port": 9201,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app21-conf.json"
+            "configuration": "file://data/app21-conf.json"
         },
         {
             "name": "app22",
             "port": 9202,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app22-conf.json"
+            "configuration": "file://data/app22-conf.json"
         },
         {
             "name": "app23",
             "port": 9203,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app23-conf.json"
+            "configuration": "file://data/app23-conf.json"
         },
         {
             "name": "controller3",
@@ -110,28 +110,28 @@
             "port": 10200,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app30-conf.json"
+            "configuration": "file://data/app30-conf.json"
         },
         {
             "name": "app31",
             "port": 10201,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app31-conf.json"
+            "configuration": "file://data/app31-conf.json"
         },
         {
             "name": "app32",
             "port": 10202,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app32-conf.json"
+            "configuration": "file://data/app32-conf.json"
         },
         {
             "name": "app33",
             "port": 10203,
             "restriction": "localhost",
             "type": "fake-daq-application",
-            "configuration": "data/app33-conf.json"
+            "configuration": "file://data/app33-conf.json"
         }
     ],
     "executables": {
@@ -151,14 +151,16 @@
                     ]
                 },
                 {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
                     "drunc-controller": [
                         "${CONFIGURATION}",
                         "${PORT}",
                         "${NAME}"
                     ]
-                },
-                {
-                    "env": []
                 }
             ],
             "environment": {
@@ -184,6 +186,11 @@
                     ]
                 },
                 {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
                     "fake_daq_application": [
                         "-n",
                         "${NAME}",
@@ -192,9 +199,6 @@
                         "-c",
                         "rest://localhost:${PORT}"
                     ]
-                },
-                {
-                    "env": []
                 }
             ],
             "environment": {
