@@ -48,7 +48,8 @@ class PMContext:
 
     def print(self, text):
         self._console.print(text)
-
+    def rule(self, text):
+        self._console.rule(text)
 
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
@@ -115,18 +116,39 @@ async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, session:s
 @click.pass_obj
 @coroutine
 async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuery, session:str) -> None:
+
     log_req = LogRequest(
         how_far = how_far,
         query = query,
     )
 
     uuid = None
+    from rich.markup import escape
+
     async for result in obj.pmd.logs(log_req):
         if uuid is None:
             uuid = result.uuid.uuid
-            obj.print(f'\n\n\'{uuid}\' logs start:')
-        obj.print(result.line[:-1]) # knock the return carriage at the end of the line
-    obj.print(f'\'{uuid}\' logs end\n\n')
+            obj.rule(f'[yellow]{uuid}[/yellow] logs')
+
+        line = result.line
+
+        if line[-1] == '\n':
+            line = line[:-1]
+
+        line = escape(line)
+
+        console_print = True
+        for c in ['[',']']: # If these are here, it probably means that this is already a rich formatted string
+            if c in line:
+                console_print = False
+                break
+
+        if console_print:
+            obj.print(line)
+        else:
+            print(line)
+
+    obj.rule(f'End')
 
 
 @process_manager_shell.command('restart')
