@@ -2,7 +2,7 @@ import click
 import click_shell
 from drunc.controller.controller import Controller
 from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-from drunc.communication.controller_pb2 import Command, Token, Request, Response, BroadcastRequest, PlainText
+from drunc.communication.controller_pb2 import Command, Token, Request, Response, BroadcastRequest, PlainText, LocationList
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import send_command
 
@@ -59,14 +59,35 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
     channel = grpc.insecure_channel(controller_address)
 
     ctx.obj.controller = ControllerStub(channel)
+
+    try:
+        response = send_command(
+            controller = ctx.obj.controller,
+            token = ctx.obj.token,
+            command = 'ls',
+            rethrow = True
+        )
+        # this command returns a response with a plain text message
+        ll = LocationList()
+        response.data.Unpack(ll)
+        ctx.obj.log.info(ll.locations)
+    except Exception as e:
+        ctx.obj.log.error('Could not list this controller\'s contents')
+        ctx.obj.log.error(e)
+        ctx.obj.log.error('Exiting.')
+        ctx.obj.status_receiver.stop()
+        ctx.obj.server_thread.join()
+        raise e
+
     ctx.obj.log.info('Adding this shell to the broadcast list.')
 
     try:
         response = send_command(
-            ctx.obj.controller,
-            ctx.obj.token,
-            'add_to_broadcast_list',
-            BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}')
+            controller = ctx.obj.controller,
+            token = ctx.obj.token,
+            command = 'add_to_broadcast_list',
+            data = BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}'),
+            rethrow = True
         )
         # this command returns a response with a plain text message
         pt = PlainText()
@@ -89,11 +110,11 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
             ctx.obj.log.debug('Removing this shell from the broadcast list.')
             try:
                 response = send_command(
-                    ctx.obj.controller,
-                    ctx.obj.token,
-                    'remove_from_broadcast_list',
-                    BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}'),
-                    rethrow=True
+                    controller = ctx.obj.controller,
+                    token = ctx.obj.token,
+                    command = 'remove_from_broadcast_list',
+                    data = BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}'),
+                    rethrow = True
                 )
                 ctx.obj.log.debug('Removed this shell from the broadcast list.')
             except grpc.RpcError as e:
@@ -111,11 +132,10 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
         from drunc.utils.grpc_utils import unpack_any
         try:
             response = send_command(
-                ctx.obj.controller,
-                ctx.obj.token,
-                'who_is_in_charge',
-                None,
-                rethrow=True
+                controller = ctx.obj.controller,
+                token = ctx.obj.token,
+                command = 'who_is_in_charge',
+                rethrow = True
             )
             pt = unpack_any(response.data, PlainText)
         except Exception as e:
@@ -128,11 +148,10 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
             ctx.obj.log.info('You are in control. Surrendering control.')
             try:
                 response = send_command(
-                    ctx.obj.controller,
-                    ctx.obj.token,
-                    'surrender_control',
-                    None,
-                    rethrow=True
+                    controller = ctx.obj.controller,
+                    token = ctx.obj.token,
+                    command = 'surrender_control',
+                    rethrow = True
                 )
             except Exception as e:
                 ctx.obj.log.error('Could not surrender control.')
@@ -152,10 +171,10 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
     ctx.obj.log.info(f'Taking control of the controller as {ctx.obj.token}')
     try:
         response = send_command(
-            ctx.obj.controller,
-            ctx.obj.token,
-            'take_control',
-            None
+            controller = ctx.obj.controller,
+            token = ctx.obj.token,
+            command = 'take_control',
+            rethrow = True
         )
     except Exception as e:
         ctx.obj.log.error('You NOT are in control.')

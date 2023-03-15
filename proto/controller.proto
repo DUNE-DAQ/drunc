@@ -5,6 +5,8 @@ import "google/protobuf/any.proto";
 package Drunc;
 
 service Controller {
+  rpc ls                         (Request) returns (Response) {}
+
   rpc add_to_broadcast_list      (Request) returns (Response) {}
   rpc remove_from_broadcast_list (Request) returns (Response) {}
   rpc get_broadcast_list         (Request) returns (Response) {}
@@ -45,9 +47,19 @@ message Response {
   google.protobuf.Any data = 1;
 }
 
+message Location {
+  repeated string path = 1;
+  bool recursive = 2;
+}
+
+message LocationList {
+  repeated Location locations = 1;
+}
+
 message Request {
   Token token = 1;
   optional google.protobuf.Any data = 2;
+  repeated Location locations = 3;
 }
 
 message BroadcastRequest {
@@ -62,17 +74,28 @@ enum Level {
   CRITICAL = 4;
 }
 
-
+message StringStringMap {
+  map<string,string> map = 1;
+}
 
 message PlainText {
   string text = 1;
 }
 
+message CommandResponse {
+  Command command = 1;
+  int32 command_code = 2;
+  google.protobuf.Any payload = 3;
+}
 
-message Node {
+message Command {
   string name = 1;
-  string uuid = 2;
-  repeated Node children = 3;
+  repeated Argument arguments = 2;
+  string help = 3;
+}
+
+message ListOfCommandsResponse {
+  repeated Command command = 2;
 }
 
 
@@ -83,35 +106,8 @@ message Argument {
   }
   string name = 1;
   ArgumentType type = 2;
-  string deflt = 3;
-  string help = 4;
-}
-
-message CommandSpecification {
-  string name = 1;
-  repeated Argument arguments = 2;
-  string help = 3;
-  repeated Node locality = 4;
-}
-
-message ListOfCommandsResponse {
-  repeated CommandSpecification command = 2;
-}
-
-message CommandExecutionRequest {
-  Token token = 1;
-  repeated Node node = 2;
-  Command command = 3;
-}
-
-message CommandResponse {
-  string response_text = 2;
-  CommandSpecification command = 3;
-  string command_data = 4;
-}
-
-message Command {
-  CommandSpecification command = 1;
-  string command_data = 2;
+  google.protobuf.Any def = 3;
+  google.protobuf.Any value = 4;
+  string help = 5;
 }
 

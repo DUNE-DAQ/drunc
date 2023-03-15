@@ -19,16 +19,24 @@ class Broadcaster:
         from drunc.utils.utils import setup_fancy_logging
         self._log = setup_fancy_logging("Broadcaster")
         self._listeners = {}
+        self._listeners_name = {}
         self._listener_lock = Lock()
         self._message_queue = Queue()
         self._consumer_thread = Thread(target=self._consumer, name='broadcast_consumer')
         self._consumer_thread.start()
         self._log.info('Broadcaster started')
 
+    def get_listeners(self):
+        import copy as cp
+        self._listener_lock.acquire()
+        ret = cp.deepcopy(self._listeners_name)
+        self._listener_lock.release()
+        return self._listeners_name
+
     def new_broadcast(self, message):
         return self._message_queue.put(message)
 
-    def add_listener(self, address):
+    def add_listener(self, address, name):
         self._listener_lock.acquire()
         if address in self._listeners.keys():
             self._log.error(f'Listener {address} already exists')
@@ -36,6 +44,7 @@ class Broadcaster:
             return False
         self._log.info(f'Adding listener {address}')
         self._listeners[address] = ListenerRepresentation(address)
+        self._listeners_name[address] = name
         self._listener_lock.release()
         return True
 
@@ -48,6 +57,7 @@ class Broadcaster:
             return False
         self._log.info(f'Removing listener {address}')
         del self._listeners[address]
+        del self._listeners_name[address]
         self._listener_lock.release()
         return True
 

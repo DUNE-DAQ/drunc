@@ -3,7 +3,6 @@ import grpc
 from google.protobuf import any_pb2
 
 
-
 def unpack_any(data, format):
     if not data.Is(format.DESCRIPTOR):
         print(f'Cannot unpack {data} into {format}')
@@ -16,7 +15,7 @@ def unpack_any(data, format):
 
 
 
-def send_command(controller, token:Token, command:str, data, rethrow=False) -> Response:
+def send_command(controller, token:Token, command:str, data=None, paths=[], recursive=False, rethrow=False) -> Response:
     from drunc.utils.utils import setup_fancy_logging
 
     log = setup_fancy_logging("SendCommand")
@@ -33,7 +32,18 @@ def send_command(controller, token:Token, command:str, data, rethrow=False) -> R
     token.CopyFrom(token) # some protobuf magic
 
     try:
-        request = Request(token = token)
+        locs = [
+            Location(
+                path = path,
+                recursive = recursive
+            ) for path in paths
+        ]
+
+        request = Request(
+            token = token,
+            locations = locs
+        )
+
         if data:
             data_detail = any_pb2.Any()
             data_detail.Pack(data)
@@ -45,7 +55,12 @@ def send_command(controller, token:Token, command:str, data, rethrow=False) -> R
 
     except grpc.RpcError as e:
         log.error(f'Error sending command {command} to controller: {e.code().name}')
-        log.error(e.details())
+        log.error(e)
+        try:
+            log.error(e.details())
+        except:
+            pass
+
         if rethrow:
             raise e
         return None

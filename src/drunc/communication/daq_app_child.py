@@ -1,12 +1,13 @@
 import asyncio
 import grpc
 from typing import Optional
-# from drunc.communication.controller_pb2 import Command, CommandResponse
+from drunc.communication.child_node import ChildNode, ChildNodeType
 # from drunc.communication.controller_pb2_grpc import ControllerStub
 
-class AppController():
-    # def __init__(self, cmd_address:str, status_address:str):
+class DAQAppChild(ChildNode):
+
     def __init__(self, config:dict):
+        super().__init__(ChildNodeType.kDAQApplication, config['name'])
         # self.sender_uri = sender_uri
         # self.user = user
         self.cmd_address = config['cmd_address'] # TODO Multiplex
@@ -16,7 +17,11 @@ class AppController():
         self.controller_stub = ControllerStub(self.command_channel)
         self.status_stub = RetrieveStatusStub(self.command_channel)
 
+    def propagate_command(self, command, data, token):
+        self.log.info(f'Sending command {command} to {self.name}')
+        #raise NotImplementedError('TODO')
+
     def close(self):
-        print('Closing the connection')
+        self.log.info('Closing the connection')
         self.command_channel.close()
 

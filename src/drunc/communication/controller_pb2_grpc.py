@@ -14,6 +14,11 @@ class ControllerStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.ls = channel.unary_unary(
+                '/Drunc.Controller/ls',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
+                )
         self.add_to_broadcast_list = channel.unary_unary(
                 '/Drunc.Controller/add_to_broadcast_list',
                 request_serializer=controller__pb2.Request.SerializeToString,
@@ -58,6 +63,12 @@ class ControllerStub(object):
 
 class ControllerServicer(object):
     """Missing associated documentation comment in .proto file."""
+
+    def ls(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def add_to_broadcast_list(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -110,6 +121,11 @@ class ControllerServicer(object):
 
 def add_ControllerServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'ls': grpc.unary_unary_rpc_method_handler(
+                    servicer.ls,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
+            ),
             'add_to_broadcast_list': grpc.unary_unary_rpc_method_handler(
                     servicer.add_to_broadcast_list,
                     request_deserializer=controller__pb2.Request.FromString,
@@ -159,6 +175,23 @@ def add_ControllerServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class Controller(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ls(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/ls',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
     def add_to_broadcast_list(request,

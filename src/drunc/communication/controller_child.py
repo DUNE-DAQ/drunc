@@ -1,17 +1,21 @@
 import asyncio
 import grpc
 from typing import Optional
-# from drunc.communication.controller_pb2 import Command, CommandResponse
-# from drunc.communication.controller_pb2_grpc import ControllerStub
+from drunc.communication.child_node import ChildNode, ChildNodeType
+from drunc.communication.controller_pb2_grpc import ControllerStub
 from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest
 
-class ChildControllerChannel():
+class ControllerChild(ChildNode):
+
     def __init__(self, config:dict, broadcasting_port:int, controller_token:Token):
-        self.log = setup_fancy_logging("Controller")
+        super().__init__(
+            node_type = ChildNodeType.kController,
+            name = config['name']
+        )
         self.token = controller_token
         self.cmd_address = config['cmd_address']
         self.command_channel = grpc.insecure_channel(self.cmd_address)
-        self.controller = ControllerStub(channel)
+        self.controller = ControllerStub(self.command_channel)
         self.broadcasting_port = broadcasting_port
 
         # setup the broadcasting
@@ -33,14 +37,14 @@ class ChildControllerChannel():
             self.broadcasted_to = False
 
     def propagate_command(self, command, data, token):
+        self.log.info(f'Sending command {command} to {self.name}')
         request = Request()
         request.token.CopyFrom(token)
         request.data.CopyFrom(data)
         return getattr(self, command)(request)
 
-
     def close(self):
-        print('Closing the connection')
+        self.log.info('Closing the connection')
         self.command_channel.close()
         if self.broadcasted_to:
             self.log.debug(f'Removing this {self.controller_token.user_name} from {self.cmd_address}\'s broadcast list.')
@@ -66,3 +70,5 @@ class ChildControllerChannel():
             self.status_receiver.stop()
             self.server_thread.join()
             return
+
+

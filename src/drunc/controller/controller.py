@@ -6,22 +6,24 @@ from google.rpc import error_details_pb2
 from google.rpc import status_pb2
 from grpc_status import rpc_status
 
-from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest
+from drunc.communication.child_node import ChildNode
+from drunc.communication.daq_app_child import DAQAppChild
+from drunc.communication.controller_child import ControllerChild
+from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
 from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
 from drunc.utils.utils import now_str, setup_fancy_logging
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import unpack_any
-import threading
+from threading import Lock, Thread
 import time
-import threading
-from typing import Optional
+from typing import Optional, Dict, List
 
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
         self._log = setup_fancy_logging("ControllerActor")
         self._token = Token()
-        self._lock = threading.Lock()
+        self._lock = Lock()
 
     def get_token(self) -> Token:
         return self._token
@@ -50,13 +52,14 @@ class ControllerActor:
         self._update_actor(token)
 
 
+
 class Controller(ControllerServicer):
     def __init__(self, name:str, configuration:str):
-        self.log = setup_fancy_logging("Controller")
         super(Controller, self).__init__()
+
+        self.log = setup_fancy_logging("Controller")
         self.name = name
         self.configuration_loc = configuration
-
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         self.authoriser = DummyAuthoriser()
@@ -65,40 +68,153 @@ class Controller(ControllerServicer):
 
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(self.configuration_loc)
-        self.children_controllers = []
-        self.apps = []
+        self.children_nodes = [] # type: List[ChildNode]
 
-        if self.children_controllers:
-            self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
-            from threading import Thread
-            self.server_thread = Thread(target=self.status_receiver.serve, name=f'broadcast_serve_thread')
-            self.server_thread.start()
+        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
+        self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
+        self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
+        self.broadcast_server_thread.start()
 
         self.controller_token = Token(
             user_name = f'{self.name}_controller',
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
         )
 
-        from drunc.communication.child_controller import ChildControllerChannel
         for child_controller_cfg in self.configuration.children_controllers:
-            self.children_controllers.append(ChildControllerChannel(child_controller_cfg, self.configuration.broadcast_receiving_port, self.controller_token))
+            self.children_nodes.append(ControllerChild(child_controller_cfg, self.configuration.broadcast_receiving_port, self.controller_token))
 
-        from drunc.communication.app_controller import AppController
         for app_cfg in self.configuration.applications:
-            self.apps.append(AppController(app_cfg))
+            self.children_nodes.append(DAQAppChild(app_cfg))
+        print(self.children_nodes)
 
         # do this at the end, otherwise we need to self.stop() if an exception is raised
         from drunc.controller.broadcaster import Broadcaster
         self.broadcaster = Broadcaster()
 
+
     def stop(self):
+        self.log.info(f'Stopping controller {self.name}')
+
+        if self.broadcaster:
+            self.log.info('Stopping broadcaster')
+            self.broadcaster.new_broadcast(
+                BroadcastMessage(
+                    level = Level.INFO,
+                    payload = 'over_and_out',
+                    emitter = self.name
+                )
+            )
+
+        if self.broadcast_server_thread:
+            self.log.info('Stopping broadcast receiver thread')
+            self.broadcast_handler.stop()
+            self.broadcast_server_thread.join()
+
+        self.log.info('Stopping children')
+        for child in self.children_nodes:
+            self.log.debug(f'Stopping {child.name}')
+            child.stop()
+
+
+
+    def _propagate_to_list(self, request:Request, command:str, context, node_to_execute:Dict[ChildNode, str]):
+
         self.broadcaster.new_broadcast(
             BroadcastMessage(
                 level = Level.INFO,
-                payload = 'over_and_out',
+                payload = f'Propagating {command} to children',
                 emitter = self.name
             )
         )
+
+        def propagate_to_child(child, command, data, token, location_override):
+
+            self.broadcaster.new_broadcast(
+                BroadcastMessage(
+                    level = Level.DEBUG,
+                    payload = f'Propagating {command} to children ({child.node_type.name})',
+                    emitter = self.name
+                )
+            )
+
+            try:
+                child.propagate_command(command, data, token, location)
+                self.broadcaster.new_broadcast(
+                    BroadcastMessage(
+                        level = Level.DEBUG,
+                        payload = f'Propagating {command} to children ({child.node_type.name})',
+                        emitter = self.name
+                    )
+                )
+            except:
+                self.log.error(f'Failed to propagate {command} to {child.name} ({child.node_type.name})')
+                self.broadcaster.new_broadcast(
+                    BroadcastMessage(
+                        level = Level.ERROR,
+                        payload = f'Failed to propagate {command} to {child.name} ({child.node_type.name})',
+                        emitter = self.name
+                    )
+                )
+
+        threads = []
+        for child, location in node_to_execute.items():
+            self.log.debug(f'Propagating to {child.name}')
+            t = Thread(target=propagate_to_child, args=(child, command, request.data, request.token, location))
+            t.start()
+            threads.append(t)
+
+        for thread in threads:
+            thread.join()
+
+        self.broadcaster.new_broadcast(
+            BroadcastMessage(
+                level = Level.INFO,
+                payload = f'Propagated {command} to children',
+                emitter = self.name
+            )
+        )
+
+    def _should_execute_on_self(self, node_path) -> bool:
+        if node_path == []:
+            return True
+
+        for node in node_path:
+            if node == [self.name]:
+                return True
+        return False
+
+    def _resolve(self, paths) -> dict[ChildNode, Location]:
+
+        ret = {}
+        from drunc.utils.utils import regex_match
+        for loc in paths:
+
+            if loc.nodes[0] != self.name:
+                continue
+
+            elif loc.nodes == [self.name] and loc.recursive:
+                for node in self.nodes:
+                    if node in ret: # TODO my own error here please
+                        raise RuntimeError(f'Mutliple command paths for the same node! \'{node.name}\' should propagate to \'{ret[node]}\' and to \'{loc}\'')
+                    ret[node] = Location(
+                        nodes = [node.name],
+                        recursive = True
+                    )
+
+            elif loc.nodes == [self.name] and not loc.recursive:
+                continue
+
+            else:
+                for cn in self.children_nodes:
+                    if regex_match(cn.name, node):
+                        if node in ret: # TODO my own error here please
+                            raise RuntimeError(f'Mutliple command paths for the same node! \'{node.name}\' should propagate to \'{ret[node]}\' and to \'{loc}\'')
+                        ret[cn] = Location(
+                            nodes = [cn.name] + loc.nodes[2:] if len(loc.nodes)>2 else [],
+                            recursive = loc.recursive
+                        )
+
+        return ret
 
 
     def _generic_user_command(self, request:Request, command:str, context):
@@ -134,54 +250,52 @@ class Controller(ControllerServicer):
         data = request.data if request.data else None
         self.log.debug(f'{command} data: {request.data}')
 
-        try:
-            self.log.debug(f'Propagating to command to children')
+        node_to_execute = self._resolve(request.locations)
 
-            for child_controller in self.children_controllers: # we probably want something smarter here, and propagate to right child, if given a path in the command
-                child_controller.propagate_command(command, data, request.token) # use the token of the user who sent the command
+        if node_to_execute:
+            self.propagate_to_list(request, command, node_to_execute) # TODO this function needs to bundle the results
 
-            for app in self.apps:
-                app.propagate_command(command, data, request.token)
+        if self._should_execute_on_self(request.locations):
+            try:
+                token = Token()
+                token.CopyFrom(request.token)
+                self.log.info(f'{token} executing {command}')
+                result = getattr(self, command+"_impl")(data, token)
 
-            token = Token()
-            token.CopyFrom(request.token)
-            self.log.info(f'{token} executing {command}')
-            result = getattr(self, command+"_impl")(data, token)
+            except ctler_excpt.ControllerException as e:
+                self.log.error(f'ControllerException when executing {command}: {e}')
 
-        except ctler_excpt.ControllerException as e:
-            self.log.error(f'ControllerException when executing {command}: {e}')
-
-            self.broadcaster.new_broadcast(
-                BroadcastMessage(
-                    level = Level.INFO,
-                    payload = f'ControllerException when executing {command}: {e}',
-                    emitter = self.name
-                )
-            )
-
-            detail = any_pb2.Any()
-            detail.Pack(PlainText(text = f'ControllerException when executing {command}: {e}'))
-
-            self.log.error(f'Aborting {command}')
-
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.INTERNAL,
-                        message='Exception thrown while executing the command',
-                        details=[detail],
+                self.broadcaster.new_broadcast(
+                    BroadcastMessage(
+                        level = Level.INFO,
+                        payload = f'ControllerException when executing {command}: {e}',
+                        emitter = self.name
                     )
                 )
-            )
-        except Exception as e:
-            self.broadcaster.new_broadcast(
-                BroadcastMessage(
-                    level = Level.INFO,
-                    payload = f'Unhandled exception when executing {command}: {e}',
-                    emitter = self.name
+
+                detail = any_pb2.Any()
+                detail.Pack(PlainText(text = f'ControllerException when executing {command}: {e}'))
+
+                self.log.error(f'Aborting {command}')
+
+                context.abort_with_status(
+                    rpc_status.to_status(
+                        status_pb2.Status(
+                            code=code_pb2.INTERNAL,
+                            message='Exception thrown while executing the command',
+                            details=[detail],
+                        )
+                    )
                 )
-            )
-            raise e # let gRPC handle it
+            except Exception as e:
+                self.broadcaster.new_broadcast(
+                    BroadcastMessage(
+                        level = Level.INFO,
+                        payload = f'Unhandled exception when executing {command}: {e}',
+                        emitter = self.name
+                    )
+                )
+                raise e # let gRPC handle it
 
 
         self.broadcaster.new_broadcast(
@@ -198,6 +312,31 @@ class Controller(ControllerServicer):
         self.log.info(f'Successfully executed {command}, response: {response}')
         return response
 
+
+
+    def ls(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, '_ls', context)
+
+    def _ls_impl(self, _, dummy) -> LocationList:
+        self.log.info(f'Listing children nodes')
+        locs = [
+            Location(
+                path = [self.name],
+                recursive = False
+            )
+        ]+[
+            Location(
+                path = [self.name, node.name],
+                recursive = False
+            ) for node in self.children_nodes
+        ]
+        print(self.children_nodes)
+
+        self.log.info(f'All the paths accessible: {locs}')
+        return LocationList(
+            locations = locs
+
+        )
 
 
     def add_to_broadcast_list(self, request:Request, context) -> Response:
@@ -221,6 +360,17 @@ class Controller(ControllerServicer):
             raise ctler_excpt.ControllerException(f'Failed to remove {r.broadcast_receiver_address} from broadcast list')
         return PlainText(text = f'Removed {r.broadcast_receiver_address} to broadcast list')
 
+
+
+    def get_broadcast_list(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, '_get_broadcast_list', context)
+
+    def _get_broadcast_list_impl(self, dummy, _) -> PlainText:
+        ret = StringStringMap()
+        listeners = self.broadcaster.get_listeners()
+        for k, v in listeners.items():
+            ret[k] = v
+        return
 
 
     def take_control(self, request:Request, context) -> Response:

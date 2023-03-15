@@ -1,3 +1,4 @@
+from typing import Optional, Dict, List
 
 
 class ControllerConfiguration:
@@ -32,3 +33,4 @@ class ControllerConfiguration:
         self.children_controllers = conf_data.get('children_controllers', [])
         self.applications = conf_data.get('apps', [])
         self.broadcast_receiving_port = conf_data.get('broadcast_receiving_port', 50051)
+
