@@ -34,7 +34,6 @@ class ProcessManagerDriver:
 
             old_env = boot_configuration['executables'][app['type']]['environment']
             new_env = {}
-            print('whatever')
             for k, v in old_env.items():
                 if v == 'getenv':
                     import os
@@ -64,10 +63,10 @@ class ProcessManagerDriver:
 
     async def kill(self, query:ProcessQuery) -> ProcessInstance:
         return await self.pm_stub.kill(query)
-    
+
     async def killall(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.pm_stub.killall(query)
-    
+
     async def logs(self, req:LogRequest) -> LogLine:
         async for ll in self.pm_stub.logs(req):
             yield ll

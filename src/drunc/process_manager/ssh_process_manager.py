@@ -16,7 +16,7 @@ class SSHProcessManager(ProcessManager):
         self.log = setup_fancy_logging('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
-        
+
     def __del__(self):
         self.log.warning('Killing all the known processes before exiting')
         for uuid, process in self.process_store.items():
@@ -27,7 +27,7 @@ class SSHProcessManager(ProcessManager):
 
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False) -> [str]:
         import re
-        
+
         uuid_selector = '.*'
         name_selector = '.*'
         user_selector = '.*'
@@ -36,21 +36,21 @@ class SSHProcessManager(ProcessManager):
         if query.HasField('uuid'): uuid_selector = query.uuid.uuid
         if query.name != '': name_selector = query.name
         if query.user != '': user_selector = query.user
-        if query.partition != '': part_selector = query.partition
+        if query.session != '': part_selector = query.session
 
         processes = []
         all_the_uuids = self.process_store.keys() if not in_boot_request else self.boot_request.keys()
         for uuid in all_the_uuids:
 
             if not re.search(uuid_selector, uuid): continue
-            if not re.search(part_selector, self.boot_request[uuid].process_description.metadata.partition): continue
+            if not re.search(part_selector, self.boot_request[uuid].process_description.metadata.session): continue
             if not re.search(user_selector, self.boot_request[uuid].process_description.metadata.user): continue
             if not re.search(name_selector, self.boot_request[uuid].process_description.metadata.name): continue
 
             processes.append(uuid)
 
         return processes
-    
+
     def _process_children_logs(self, uuid, line):
         if not uuid in self.children_logs:
             from collections import deque
@@ -60,7 +60,7 @@ class SSHProcessManager(ProcessManager):
             self.children_logs[uuid].popleft()
 
         self.children_logs[uuid].append(line)
-        
+
     def flush(self, query:ProcessQuery,  context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         ret = []
 
@@ -80,19 +80,19 @@ class SSHProcessManager(ProcessManager):
                     return_code = return_code,
                     uuid = pu
                 )
-                del self.process_store[uuid] 
+                del self.process_store[uuid]
                 ret += [pi]
 
         pil = ProcessInstanceList(
             values=ret
         )
-        
-        
-        
+
+
+
     def logs(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         cursor = -log_request.how_far
-        
+
         if uid in self.children_logs:
             if -cursor > len(self.children_logs[uid]):
                 cursor = -len(self.children_logs[uid])
@@ -107,8 +107,8 @@ class SSHProcessManager(ProcessManager):
         else:
             ll = LogLine(line='empty')
             yield ll
-        
-        
+
+
     def _boot(self, boot_request:BootRequest, uuid:str) -> ProcessUUID:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
 
@@ -156,7 +156,7 @@ class SSHProcessManager(ProcessManager):
         if uuid in self.process_store and self.process_store[uuid].is_alive():
             self.boot_request[uuid] = BootRequest()
             self.boot_request[uuid].CopyFrom(boot_request)
-            
+
             self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
             uid = ProcessUUID(
                 uuid = uuid
@@ -215,7 +215,7 @@ class SSHProcessManager(ProcessManager):
             if not uuids[0] in self.process_store:
                 raise RuntimeError(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the process store')
         return uuids[0]
-    
+
     def restart(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
@@ -230,7 +230,7 @@ class SSHProcessManager(ProcessManager):
     def is_alive(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         uuid = self._ensure_one_process(uuids)
-        
+
         process = self.process_store[uuid]
         is_alive = process.is_alive()
         return_code = process.exit_code if not is_alive else 0
@@ -240,7 +240,7 @@ class SSHProcessManager(ProcessManager):
         pr = ProcessRestriction()
         pr.CopyFrom(self.boot_request[uuid].process_restriction)
         pu = ProcessUUID(uuid=uuid)
-    
+
         pi = ProcessInstance(
             process_description = pd,
             process_restriction = pr,
@@ -274,7 +274,7 @@ class SSHProcessManager(ProcessManager):
         del self.process_store[uuid]
         return pi
 
-    
+
     def killall(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         ret = []

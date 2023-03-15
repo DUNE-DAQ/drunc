@@ -22,7 +22,7 @@ def generate_query(ctx, param, uuid):
         uuid=uuid
     )
     query = ProcessQuery(
-        partition = ctx.params.get('partition'),
+        session = ctx.params.get('session'),
         name = ctx.params.get('name'),
         user = ctx.params.get('user'),
         uuid = uid if uuid else None,
@@ -32,9 +32,9 @@ def generate_query(ctx, param, uuid):
 
 def process_query_option():
     def wrapper(f0):
-        f1 = click.option('-p','--partition', type=str, default=None, help='Select the processes on a particular partition')(f0)
-        f2 = click.option('-n','--name'     , type=str, default=None, help='Select the process of a particular name')(f1)
-        f3 = click.option('-u','--user'     , type=str, default=None, help='Select the process of a particular user')(f2)
+        f1 = click.option('-p','--session', type=str, default=None, help='Select the processes on a particular session')(f0)
+        f2 = click.option('-n','--name'   , type=str, default=None, help='Select the process of a particular name')(f1)
+        f3 = click.option('-u','--user'   , type=str, default=None, help='Select the process of a particular user')(f2)
         return click.option('--uuid',  'query', type=str, default=None, help='Select the process of a particular UUID', callback=generate_query)(f3)
     return wrapper
 
@@ -70,13 +70,13 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
 
 
 @process_manager_shell.command('boot')
-@click.option('-p','--partition', type=str, default=None, help='Select the processes on a particular partition')
-@click.option('-u','--user'     , type=str, default=os.getlogin(), help='Select the process of a particular user (default $USER)')
+@click.option('-p','--session', type=str, default=None, help='Select the processes on a particular session')
+@click.option('-u','--user'   , type=str, default=os.getlogin(), help='Select the process of a particular user (default $USER)')
 @click.argument('boot-configuration', type=click.Path(exists=True))
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, user:str, partition:str, boot_configuration:str) -> None:
-    results = obj.pmd.boot(boot_configuration, user, partition)
+async def boot(obj:PMContext, user:str, session:str, boot_configuration:str) -> None:
+    results = obj.pmd.boot(boot_configuration, user, session)
     async for result in results:
         print(result)
 
@@ -85,7 +85,7 @@ async def boot(obj:PMContext, user:str, partition:str, boot_configuration:str) -
 @process_query_option()
 @click.pass_obj
 @coroutine
-async def kill(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+async def kill(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
     result = await obj.pmd.kill(query = query)
     obj.print(result)
 
@@ -95,7 +95,7 @@ async def kill(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:
 @click.option('-f', '--force', is_flag=True, default=False)
 @click.pass_obj
 @coroutine
-async def killall(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str, force:bool) -> None:
+async def killall(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str, force:bool) -> None:
     query.force = force
     result = await obj.pmd.killall(query = query)
     obj.print(result)
@@ -104,7 +104,7 @@ async def killall(obj:PMContext, name:str, user:str, query:ProcessQuery, partiti
 @process_query_option()
 @click.pass_obj
 @coroutine
-async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
     result = await obj.pmd.flush(query = query)
     obj.print("Flushed processes:")
     obj.print(result)
@@ -114,7 +114,7 @@ async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, partition
 @click.option('--how-far', type=int, default=10, help='How many lines one wants')
 @click.pass_obj
 @coroutine
-async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuery, session:str) -> None:
     log_req = LogRequest(
         how_far = how_far,
         query = query,
@@ -133,7 +133,7 @@ async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuer
 @process_query_option()
 @click.pass_obj
 @coroutine
-async def restart(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+async def restart(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
     result = await obj.pmd.restart(query = query)
     obj.print(result)
 
@@ -142,7 +142,7 @@ async def restart(obj:PMContext, name:str, user:str, query:ProcessQuery, partiti
 @process_query_option()
 @click.pass_obj
 @coroutine
-async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str) -> None:
+async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
     result = await obj.pmd.is_alive(query = query)
 
     if result.status_code == ProcessInstance.StatusCode.RUNNING:
@@ -156,12 +156,12 @@ async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, partit
 @click.option('-l','--long-format', is_flag=True, type=bool, default=False, help='Whether to have a long output')
 @click.pass_obj
 @coroutine
-async def ps(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:str, long_format:bool) -> None:
+async def ps(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str, long_format:bool) -> None:
     results = await obj.pmd.list_process(query=query)
 
     from rich.table import Table
     t = Table(title='Processes running')
-    t.add_column('partition')
+    t.add_column('session')
     t.add_column('user')
     t.add_column('friendly name')
     t.add_column('uuid')
@@ -172,7 +172,7 @@ async def ps(obj:PMContext, name:str, user:str, query:ProcessQuery, partition:st
 
     for result in results.values:
         m = result.process_description.metadata
-        row = [m.partition, m.user, m.name, result.uuid.uuid]
+        row = [m.session, m.user, m.name, result.uuid.uuid]
         alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
         row += [alive, f'{result.return_code}']
         if long_format:
