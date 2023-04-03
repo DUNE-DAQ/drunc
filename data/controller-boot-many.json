@@ -1,0 +1,219 @@
+{
+    "instances": [
+        {
+            "name": "topcontroller",
+            "port": 3600,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/topcontroller-conf.json"
+        },
+        {
+            "name": "controller0",
+            "port": 3601,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/controller0-conf.json"
+        },
+        {
+            "name": "app00",
+            "port": 7200,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app00-conf.json"
+        },
+        {
+            "name": "app01",
+            "port": 7201,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app01-conf.json"
+        },
+        {
+            "name": "app02",
+            "port": 7202,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app02-conf.json"
+        },
+        {
+            "name": "app03",
+            "port": 7203,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app03-conf.json"
+        },
+        {
+            "name": "app04",
+            "port": 7204,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app04-conf.json"
+        },
+        {
+            "name": "controller1",
+            "port": 3602,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/controller1-conf.json"
+        },
+        {
+            "name": "app10",
+            "port": 8200,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app10-conf.json"
+        },
+        {
+            "name": "controller2",
+            "port": 3603,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/controller2-conf.json"
+        },
+        {
+            "name": "app20",
+            "port": 9200,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app20-conf.json"
+        },
+        {
+            "name": "app21",
+            "port": 9201,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app21-conf.json"
+        },
+        {
+            "name": "app22",
+            "port": 9202,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app22-conf.json"
+        },
+        {
+            "name": "app23",
+            "port": 9203,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app23-conf.json"
+        },
+        {
+            "name": "controller3",
+            "port": 3604,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/controller3-conf.json"
+        },
+        {
+            "name": "app30",
+            "port": 10200,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app30-conf.json"
+        },
+        {
+            "name": "app31",
+            "port": 10201,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app31-conf.json"
+        },
+        {
+            "name": "app32",
+            "port": 10202,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app32-conf.json"
+        },
+        {
+            "name": "app33",
+            "port": 10203,
+            "restriction": "localhost",
+            "type": "fake-daq-application",
+            "configuration": "file://data/app33-conf.json"
+        }
+    ],
+    "executables": {
+        "drunc-controller": {
+            "executable_and_arguments": [
+                {
+                    "env": []
+                },
+                {
+                    "source": [
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${DRUNC_DIR}"
+                    ]
+                },
+                {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
+                    "drunc-controller": [
+                        "${CONFIGURATION}",
+                        "${PORT}",
+                        "${NAME}"
+                    ]
+                }
+            ],
+            "environment": {
+                "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
+                "NAME": "{name}",
+                "PORT": "{port}"
+            }
+        },
+        "fake-daq-application": {
+            "executable_and_arguments": [
+                {
+                    "env": []
+                },
+                {
+                    "source": [
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${DRUNC_DIR}"
+                    ]
+                },
+                {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
+                    "fake_daq_application": [
+                        "-n",
+                        "${NAME}",
+                        "-d",
+                        "${CONFIGURATION}",
+                        "-c",
+                        "rest://localhost:${PORT}"
+                    ]
+                }
+            ],
+            "environment": {
+                "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
+                "NAME": "{name}",
+                "PORT": "{port}"
+            }
+        }
+    },
+    "restrictions": {
+        "localhost": {
+            "hosts": [
+                "localhost"
+            ]
+        }
+    }
+}

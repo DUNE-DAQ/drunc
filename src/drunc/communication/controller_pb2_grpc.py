@@ -14,43 +14,81 @@ class ControllerStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.get_control_tree = channel.unary_unary(
-                '/Drunc.Controller/get_control_tree',
-                request_serializer=controller__pb2.Ping.SerializeToString,
-                response_deserializer=controller__pb2.ControlTree.FromString,
+        self.ls = channel.unary_unary(
+                '/Drunc.Controller/ls',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
                 )
-        self.get_available_commands = channel.unary_unary(
-                '/Drunc.Controller/get_available_commands',
-                request_serializer=controller__pb2.Ping.SerializeToString,
-                response_deserializer=controller__pb2.ListOfCommands.FromString,
+        self.add_to_broadcast_list = channel.unary_unary(
+                '/Drunc.Controller/add_to_broadcast_list',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
                 )
-        self.execute_command = channel.unary_stream(
+        self.remove_from_broadcast_list = channel.unary_unary(
+                '/Drunc.Controller/remove_from_broadcast_list',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
+                )
+        self.get_broadcast_list = channel.unary_unary(
+                '/Drunc.Controller/get_broadcast_list',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
+                )
+        self.get_command_list = channel.unary_unary(
+                '/Drunc.Controller/get_command_list',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
+                )
+        self.execute_command = channel.unary_unary(
                 '/Drunc.Controller/execute_command',
-                request_serializer=controller__pb2.Command.SerializeToString,
-                response_deserializer=controller__pb2.CommandResponse.FromString,
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
                 )
-        self.execute_command_on_child = channel.unary_stream(
-                '/Drunc.Controller/execute_command_on_child',
-                request_serializer=controller__pb2.ChildCommand.SerializeToString,
-                response_deserializer=controller__pb2.CommandResponse.FromString,
+        self.take_control = channel.unary_unary(
+                '/Drunc.Controller/take_control',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
                 )
-        self.request_broadcast = channel.unary_stream(
-                '/Drunc.Controller/request_broadcast',
-                request_serializer=controller__pb2.Client.SerializeToString,
-                response_deserializer=controller__pb2.BroadcastMessage.FromString,
+        self.surrender_control = channel.unary_unary(
+                '/Drunc.Controller/surrender_control',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
+                )
+        self.who_is_in_charge = channel.unary_unary(
+                '/Drunc.Controller/who_is_in_charge',
+                request_serializer=controller__pb2.Request.SerializeToString,
+                response_deserializer=controller__pb2.Response.FromString,
                 )
 
 
 class ControllerServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def get_control_tree(self, request, context):
+    def ls(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def get_available_commands(self, request, context):
+    def add_to_broadcast_list(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def remove_from_broadcast_list(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def get_broadcast_list(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def get_command_list(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -62,13 +100,19 @@ class ControllerServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def execute_command_on_child(self, request, context):
+    def take_control(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def request_broadcast(self, request, context):
+    def surrender_control(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def who_is_in_charge(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -77,30 +121,50 @@ class ControllerServicer(object):
 
 def add_ControllerServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'get_control_tree': grpc.unary_unary_rpc_method_handler(
-                    servicer.get_control_tree,
-                    request_deserializer=controller__pb2.Ping.FromString,
-                    response_serializer=controller__pb2.ControlTree.SerializeToString,
+            'ls': grpc.unary_unary_rpc_method_handler(
+                    servicer.ls,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
             ),
-            'get_available_commands': grpc.unary_unary_rpc_method_handler(
-                    servicer.get_available_commands,
-                    request_deserializer=controller__pb2.Ping.FromString,
-                    response_serializer=controller__pb2.ListOfCommands.SerializeToString,
+            'add_to_broadcast_list': grpc.unary_unary_rpc_method_handler(
+                    servicer.add_to_broadcast_list,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
             ),
-            'execute_command': grpc.unary_stream_rpc_method_handler(
+            'remove_from_broadcast_list': grpc.unary_unary_rpc_method_handler(
+                    servicer.remove_from_broadcast_list,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
+            ),
+            'get_broadcast_list': grpc.unary_unary_rpc_method_handler(
+                    servicer.get_broadcast_list,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
+            ),
+            'get_command_list': grpc.unary_unary_rpc_method_handler(
+                    servicer.get_command_list,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
+            ),
+            'execute_command': grpc.unary_unary_rpc_method_handler(
                     servicer.execute_command,
-                    request_deserializer=controller__pb2.Command.FromString,
-                    response_serializer=controller__pb2.CommandResponse.SerializeToString,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
             ),
-            'execute_command_on_child': grpc.unary_stream_rpc_method_handler(
-                    servicer.execute_command_on_child,
-                    request_deserializer=controller__pb2.ChildCommand.FromString,
-                    response_serializer=controller__pb2.CommandResponse.SerializeToString,
+            'take_control': grpc.unary_unary_rpc_method_handler(
+                    servicer.take_control,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
             ),
-            'request_broadcast': grpc.unary_stream_rpc_method_handler(
-                    servicer.request_broadcast,
-                    request_deserializer=controller__pb2.Client.FromString,
-                    response_serializer=controller__pb2.BroadcastMessage.SerializeToString,
+            'surrender_control': grpc.unary_unary_rpc_method_handler(
+                    servicer.surrender_control,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
+            ),
+            'who_is_in_charge': grpc.unary_unary_rpc_method_handler(
+                    servicer.who_is_in_charge,
+                    request_deserializer=controller__pb2.Request.FromString,
+                    response_serializer=controller__pb2.Response.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -113,7 +177,7 @@ class Controller(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def get_control_tree(request,
+    def ls(request,
             target,
             options=(),
             channel_credentials=None,
@@ -123,14 +187,14 @@ class Controller(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/get_control_tree',
-            controller__pb2.Ping.SerializeToString,
-            controller__pb2.ControlTree.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/ls',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def get_available_commands(request,
+    def add_to_broadcast_list(request,
             target,
             options=(),
             channel_credentials=None,
@@ -140,9 +204,60 @@ class Controller(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/get_available_commands',
-            controller__pb2.Ping.SerializeToString,
-            controller__pb2.ListOfCommands.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/add_to_broadcast_list',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def remove_from_broadcast_list(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/remove_from_broadcast_list',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def get_broadcast_list(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/get_broadcast_list',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def get_command_list(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/get_command_list',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -157,14 +272,14 @@ class Controller(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/Drunc.Controller/execute_command',
-            controller__pb2.Command.SerializeToString,
-            controller__pb2.CommandResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/execute_command',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def execute_command_on_child(request,
+    def take_control(request,
             target,
             options=(),
             channel_credentials=None,
@@ -174,14 +289,14 @@ class Controller(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/Drunc.Controller/execute_command_on_child',
-            controller__pb2.ChildCommand.SerializeToString,
-            controller__pb2.CommandResponse.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/take_control',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def request_broadcast(request,
+    def surrender_control(request,
             target,
             options=(),
             channel_credentials=None,
@@ -191,14 +306,31 @@ class Controller(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/Drunc.Controller/request_broadcast',
-            controller__pb2.Client.SerializeToString,
-            controller__pb2.BroadcastMessage.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/surrender_control',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def who_is_in_charge(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Controller/who_is_in_charge',
+            controller__pb2.Request.SerializeToString,
+            controller__pb2.Response.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
 
-class PingProcessorStub(object):
+class BroadcastStub(object):
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -207,42 +339,42 @@ class PingProcessorStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.ping = channel.unary_stream(
-                '/Drunc.PingProcessor/ping',
-                request_serializer=controller__pb2.Ping.SerializeToString,
-                response_deserializer=controller__pb2.Ping.FromString,
+        self.handle_broadcast = channel.unary_unary(
+                '/Drunc.Broadcast/handle_broadcast',
+                request_serializer=controller__pb2.BroadcastMessage.SerializeToString,
+                response_deserializer=controller__pb2.BroadcastResponse.FromString,
                 )
 
 
-class PingProcessorServicer(object):
+class BroadcastServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def ping(self, request, context):
+    def handle_broadcast(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
 
-def add_PingProcessorServicer_to_server(servicer, server):
+def add_BroadcastServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'ping': grpc.unary_stream_rpc_method_handler(
-                    servicer.ping,
-                    request_deserializer=controller__pb2.Ping.FromString,
-                    response_serializer=controller__pb2.Ping.SerializeToString,
+            'handle_broadcast': grpc.unary_unary_rpc_method_handler(
+                    servicer.handle_broadcast,
+                    request_deserializer=controller__pb2.BroadcastMessage.FromString,
+                    response_serializer=controller__pb2.BroadcastResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'Drunc.PingProcessor', rpc_method_handlers)
+            'Drunc.Broadcast', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
 
 
  # This class is part of an EXPERIMENTAL API.
-class PingProcessor(object):
+class Broadcast(object):
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod
-    def ping(request,
+    def handle_broadcast(request,
             target,
             options=(),
             channel_credentials=None,
@@ -252,8 +384,8 @@ class PingProcessor(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/Drunc.PingProcessor/ping',
-            controller__pb2.Ping.SerializeToString,
-            controller__pb2.Ping.FromString,
+        return grpc.experimental.unary_unary(request, target, '/Drunc.Broadcast/handle_broadcast',
+            controller__pb2.BroadcastMessage.SerializeToString,
+            controller__pb2.BroadcastResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

@@ -1,39 +1,55 @@
 import click
-
+import signal
+import sys
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 
 @click.command()
 @click.argument('configuration', type=str)
-@click.argument('port', type=int)
+@click.argument('control-port', type=int)
 @click.argument('name', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, port:int, name:str, log_level:str):
+def controller_cli(configuration:str, control_port:int, name:str, log_level:str):
     from rich.console import Console
     console = Console()
-    # console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
-    
+
     update_log_level(log_level)
-    
+
     from drunc.controller.controller import Controller
-    from drunc.communication.controller_pb2_grpc import ControllerServicer, add_ControllerServicer_to_server
-    import asyncio
+    from drunc.communication.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
     ctrlr = Controller(name, configuration)
 
-    async def serve(port:int) -> None:
+    def serve(port:int) -> None:
         if not port:
             raise RuntimeError('The port on which to expect commands/send status wasn\'t specified')
-        server = grpc.aio.server()
+
+        from concurrent import futures
+        server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+
         add_ControllerServicer_to_server(ctrlr, server)
+
         listen_addr = f'[::]:{port}'
         server.add_insecure_port(listen_addr)
-        await server.start()
+
+        server.start()
         console.print(f'{ctrlr.name} was started on {listen_addr}')
-        await server.wait_for_termination()
+
+        def signal_handler(sig, frame):
+            console.print('Requested termination')
+            server.stop(0)
+            console.print('Server stopped')
+            ctrlr.stop()
+            console.print('Controller stopped')
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+
+        server.wait_for_termination()
+        console.print(f'{ctrlr.name} was terminated')
 
     try:
-        asyncio.run(serve(port))
+        serve(control_port)
     except Exception as e:
         console.print_exception()
-

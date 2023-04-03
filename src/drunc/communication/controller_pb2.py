@@ -11,43 +11,56 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x63ontroller.proto\x12\x05\x44runc\"J\n\x04Ping\x12\x17\n\x0f\x63ontrolled_name\x18\x01 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x02 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x03 \x01(\t\"\x19\n\x06\x43lient\x12\x0f\n\x07\x61\x64\x64ress\x18\x01 \x01(\t\" \n\x10\x42roadcastMessage\x12\x0c\n\x04text\x18\x01 \x01(\t\"A\n\x04Node\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x0c\n\x04uuid\x18\x02 \x01(\t\x12\x1d\n\x08\x63hildren\x18\x03 \x03(\x0b\x32\x0b.Drunc.Node\",\n\x0b\x43ontrolTree\x12\x1d\n\x08top_node\x18\x01 \x01(\x0b\x32\x0b.Drunc.Node\"\x8e\x01\n\x08\x41rgument\x12\x0c\n\x04name\x18\x01 \x01(\t\x12*\n\x04type\x18\x02 \x01(\x0e\x32\x1c.Drunc.Argument.ArgumentType\x12\r\n\x05\x64\x65\x66lt\x18\x03 \x01(\t\x12\x0c\n\x04help\x18\x04 \x01(\t\"+\n\x0c\x41rgumentType\x12\r\n\tMANDATORY\x10\x00\x12\x0c\n\x08OPTIONAL\x10\x01\"V\n\x14\x43ommandSpecification\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\"\n\targuments\x18\x02 \x03(\x0b\x32\x0f.Drunc.Argument\x12\x0c\n\x04help\x18\x03 \x01(\t\">\n\x0eListOfCommands\x12,\n\x07\x63ommand\x18\x01 \x03(\x0b\x32\x1b.Drunc.CommandSpecification\"\x91\x01\n\x07\x43ommand\x12,\n\x07\x63ommand\x18\x01 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x02 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x03 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x04 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x05 \x01(\t\"K\n\x0c\x43hildCommand\x12\x1f\n\x07\x63ommand\x18\x01 \x01(\x0b\x32\x0e.Drunc.Command\x12\x1a\n\x05\x63hild\x18\x02 \x01(\x0b\x32\x0b.Drunc.Node\"\xaf\x02\n\x0f\x43ommandResponse\x12:\n\rresponse_code\x18\x01 \x01(\x0e\x32#.Drunc.CommandResponse.ResponseCode\x12\x15\n\rresponse_text\x18\x02 \x01(\t\x12,\n\x07\x63ommand\x18\x03 \x01(\x0b\x32\x1b.Drunc.CommandSpecification\x12\x14\n\x0c\x63ommand_data\x18\x04 \x01(\t\x12\x17\n\x0f\x63ontrolled_name\x18\x05 \x01(\t\x12\x17\n\x0f\x63ontroller_name\x18\x06 \x01(\t\x12\x10\n\x08\x64\x61tetime\x18\x07 \x01(\t\"A\n\x0cResponseCode\x12\x07\n\x03\x41\x43K\x10\x00\x12\x08\n\x04\x44ONE\x10\x01\x12\n\n\x06\x46\x41ILED\x10\x02\x12\x12\n\x0eNOT_AUTHORISED\x10\x03\x32\xd0\x02\n\nController\x12\x35\n\x10get_control_tree\x12\x0b.Drunc.Ping\x1a\x12.Drunc.ControlTree\"\x00\x12>\n\x16get_available_commands\x12\x0b.Drunc.Ping\x1a\x15.Drunc.ListOfCommands\"\x00\x12=\n\x0f\x65xecute_command\x12\x0e.Drunc.Command\x1a\x16.Drunc.CommandResponse\"\x00\x30\x01\x12K\n\x18\x65xecute_command_on_child\x12\x13.Drunc.ChildCommand\x1a\x16.Drunc.CommandResponse\"\x00\x30\x01\x12?\n\x11request_broadcast\x12\r.Drunc.Client\x1a\x17.Drunc.BroadcastMessage\"\x00\x30\x01\x32\x35\n\rPingProcessor\x12$\n\x04ping\x12\x0b.Drunc.Ping\x1a\x0b.Drunc.Ping\"\x00\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10\x63ontroller.proto\x12\x05\x44runc\x1a\x19google/protobuf/any.proto\"Q\n\x10\x42roadcastMessage\x12\x0f\n\x07\x65mitter\x18\x01 \x01(\t\x12\x1b\n\x05level\x18\x02 \x01(\x0e\x32\x0c.Drunc.Level\x12\x0f\n\x07payload\x18\x03 \x01(\t\"?\n\x11\x42roadcastResponse\x12*\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x1c.Drunc.BroadcastResponseCode\")\n\x05Token\x12\r\n\x05token\x18\x01 \x01(\t\x12\x11\n\tuser_name\x18\x02 \x01(\t\".\n\x08Response\x12\"\n\x04\x64\x61ta\x18\x01 \x01(\x0b\x32\x14.google.protobuf.Any\"+\n\x08Location\x12\x0c\n\x04path\x18\x01 \x03(\t\x12\x11\n\trecursive\x18\x02 \x01(\x08\"2\n\x0cLocationList\x12\"\n\tlocations\x18\x01 \x03(\x0b\x32\x0f.Drunc.Location\"|\n\x07Request\x12\x1b\n\x05token\x18\x01 \x01(\x0b\x32\x0c.Drunc.Token\x12\'\n\x04\x64\x61ta\x18\x02 \x01(\x0b\x32\x14.google.protobuf.AnyH\x00\x88\x01\x01\x12\"\n\tlocations\x18\x03 \x03(\x0b\x32\x0f.Drunc.LocationB\x07\n\x05_data\"6\n\x10\x42roadcastRequest\x12\"\n\x1a\x62roadcast_receiver_address\x18\x01 \x01(\t\"k\n\x0fStringStringMap\x12,\n\x03map\x18\x01 \x03(\x0b\x32\x1f.Drunc.StringStringMap.MapEntry\x1a*\n\x08MapEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\x19\n\tPlainText\x12\x0c\n\x04text\x18\x01 \x01(\t\"o\n\x0f\x43ommandResponse\x12\x1f\n\x07\x63ommand\x18\x01 \x01(\x0b\x32\x0e.Drunc.Command\x12\x14\n\x0c\x63ommand_code\x18\x02 \x01(\x05\x12%\n\x07payload\x18\x03 \x01(\x0b\x32\x14.google.protobuf.Any\"I\n\x07\x43ommand\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\"\n\targuments\x18\x02 \x03(\x0b\x32\x0f.Drunc.Argument\x12\x0c\n\x04help\x18\x03 \x01(\t\"9\n\x16ListOfCommandsResponse\x12\x1f\n\x07\x63ommand\x18\x02 \x03(\x0b\x32\x0e.Drunc.Command\"\xc7\x01\n\x08\x41rgument\x12\x0c\n\x04name\x18\x01 \x01(\t\x12*\n\x04type\x18\x02 \x01(\x0e\x32\x1c.Drunc.Argument.ArgumentType\x12!\n\x03\x64\x65\x66\x18\x03 \x01(\x0b\x32\x14.google.protobuf.Any\x12#\n\x05value\x18\x04 \x01(\x0b\x32\x14.google.protobuf.Any\x12\x0c\n\x04help\x18\x05 \x01(\t\"+\n\x0c\x41rgumentType\x12\r\n\tMANDATORY\x10\x00\x12\x0c\n\x08OPTIONAL\x10\x01*7\n\x15\x42roadcastResponseCode\x12\x10\n\x0c\x41\x43KNOWLEDGED\x10\x00\x12\x0c\n\x08REJECTED\x10\x01*B\n\x05Level\x12\t\n\x05\x44\x45\x42UG\x10\x00\x12\x08\n\x04INFO\x10\x01\x12\x0b\n\x07WARNING\x10\x02\x12\t\n\x05\x45RROR\x10\x03\x12\x0c\n\x08\x43RITICAL\x10\x04\x32\xfa\x03\n\nController\x12\'\n\x02ls\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12:\n\x15\x61\x64\x64_to_broadcast_list\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12?\n\x1aremove_from_broadcast_list\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x37\n\x12get_broadcast_list\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x35\n\x10get_command_list\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x34\n\x0f\x65xecute_command\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x31\n\x0ctake_control\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x36\n\x11surrender_control\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x12\x35\n\x10who_is_in_charge\x12\x0e.Drunc.Request\x1a\x0f.Drunc.Response\"\x00\x32T\n\tBroadcast\x12G\n\x10handle_broadcast\x12\x17.Drunc.BroadcastMessage\x1a\x18.Drunc.BroadcastResponse\"\x00\x62\x06proto3')
 
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'controller_pb2', globals())
 if _descriptor._USE_C_DESCRIPTORS == False:
 
   DESCRIPTOR._options = None
-  _PING._serialized_start=27
-  _PING._serialized_end=101
-  _CLIENT._serialized_start=103
-  _CLIENT._serialized_end=128
-  _BROADCASTMESSAGE._serialized_start=130
-  _BROADCASTMESSAGE._serialized_end=162
-  _NODE._serialized_start=164
-  _NODE._serialized_end=229
-  _CONTROLTREE._serialized_start=231
-  _CONTROLTREE._serialized_end=275
-  _ARGUMENT._serialized_start=278
-  _ARGUMENT._serialized_end=420
-  _ARGUMENT_ARGUMENTTYPE._serialized_start=377
-  _ARGUMENT_ARGUMENTTYPE._serialized_end=420
-  _COMMANDSPECIFICATION._serialized_start=422
-  _COMMANDSPECIFICATION._serialized_end=508
-  _LISTOFCOMMANDS._serialized_start=510
-  _LISTOFCOMMANDS._serialized_end=572
-  _COMMAND._serialized_start=575
-  _COMMAND._serialized_end=720
-  _CHILDCOMMAND._serialized_start=722
-  _CHILDCOMMAND._serialized_end=797
-  _COMMANDRESPONSE._serialized_start=800
-  _COMMANDRESPONSE._serialized_end=1103
-  _COMMANDRESPONSE_RESPONSECODE._serialized_start=1038
-  _COMMANDRESPONSE_RESPONSECODE._serialized_end=1103
-  _CONTROLLER._serialized_start=1106
-  _CONTROLLER._serialized_end=1442
-  _PINGPROCESSOR._serialized_start=1444
-  _PINGPROCESSOR._serialized_end=1497
+  _STRINGSTRINGMAP_MAPENTRY._options = None
+  _STRINGSTRINGMAP_MAPENTRY._serialized_options = b'8\001'
+  _BROADCASTRESPONSECODE._serialized_start=1157
+  _BROADCASTRESPONSECODE._serialized_end=1212
+  _LEVEL._serialized_start=1214
+  _LEVEL._serialized_end=1280
+  _BROADCASTMESSAGE._serialized_start=54
+  _BROADCASTMESSAGE._serialized_end=135
+  _BROADCASTRESPONSE._serialized_start=137
+  _BROADCASTRESPONSE._serialized_end=200
+  _TOKEN._serialized_start=202
+  _TOKEN._serialized_end=243
+  _RESPONSE._serialized_start=245
+  _RESPONSE._serialized_end=291
+  _LOCATION._serialized_start=293
+  _LOCATION._serialized_end=336
+  _LOCATIONLIST._serialized_start=338
+  _LOCATIONLIST._serialized_end=388
+  _REQUEST._serialized_start=390
+  _REQUEST._serialized_end=514
+  _BROADCASTREQUEST._serialized_start=516
+  _BROADCASTREQUEST._serialized_end=570
+  _STRINGSTRINGMAP._serialized_start=572
+  _STRINGSTRINGMAP._serialized_end=679
+  _STRINGSTRINGMAP_MAPENTRY._serialized_start=637
+  _STRINGSTRINGMAP_MAPENTRY._serialized_end=679
+  _PLAINTEXT._serialized_start=681
+  _PLAINTEXT._serialized_end=706
+  _COMMANDRESPONSE._serialized_start=708
+  _COMMANDRESPONSE._serialized_end=819
+  _COMMAND._serialized_start=821
+  _COMMAND._serialized_end=894
+  _LISTOFCOMMANDSRESPONSE._serialized_start=896
+  _LISTOFCOMMANDSRESPONSE._serialized_end=953
+  _ARGUMENT._serialized_start=956
+  _ARGUMENT._serialized_end=1155
+  _ARGUMENT_ARGUMENTTYPE._serialized_start=1112
+  _ARGUMENT_ARGUMENTTYPE._serialized_end=1155
+  _CONTROLLER._serialized_start=1283
+  _CONTROLLER._serialized_end=1789
+  _BROADCAST._serialized_start=1791
+  _BROADCAST._serialized_end=1875
 # @@protoc_insertion_point(module_scope)

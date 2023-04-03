@@ -1,2 +1,8 @@
+aiostream
+click
+click_shell
+grpcio
+grpcio_tools
+nest_asyncio
 rich
-grpc
+sh

@@ -15,6 +15,11 @@ log_levels = {
     'NOTSET'  : logging.NOTSET,
 }
 
+
+def regex_match(regex, string):
+    import re
+    return re.match(regex, string) is not None
+
 def update_log_level(loglevel):
     import sh
     level = log_levels[loglevel]

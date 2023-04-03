@@ -11,7 +11,7 @@ class ProcessManagerDriver:
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
-    async def boot(self, boot_configuration_file:str, user:str, partition:str) -> ProcessUUID:
+    async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessUUID:
         boot_configuration = {}
         with open(boot_configuration_file) as f:
             import json
@@ -34,15 +34,21 @@ class ProcessManagerDriver:
 
             old_env = boot_configuration['executables'][app['type']]['environment']
             new_env = {}
-
             for k, v in old_env.items():
-                new_env[k] = v.format(**app)
+                if v == 'getenv':
+                    import os
+                    try:
+                        new_env[k] = os.getenv(k)
+                    except:
+                        print(f'Variable {k} is not in the environment, so won\'t be set.')
+                else:
+                    new_env[k] = v.format(**app)
 
             br = BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
                         user = user,
-                        partition = partition,
+                        session = session,
                         name = app['name'],
                     ),
                     executable_and_arguments = executable_and_arguments,
@@ -57,16 +63,19 @@ class ProcessManagerDriver:
 
     async def kill(self, query:ProcessQuery) -> ProcessInstance:
         return await self.pm_stub.kill(query)
-    
+
     async def killall(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.pm_stub.killall(query)
-    
+
     async def logs(self, req:LogRequest) -> LogLine:
         async for ll in self.pm_stub.logs(req):
             yield ll
 
     async def list_process(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.pm_stub.list_process(query)
+
+    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
+        return await self.pm_stub.flush(query)
 
     async def is_alive(self, query:ProcessQuery) -> ProcessInstance:
         return await self.pm_stub.is_alive(query)

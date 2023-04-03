@@ -2,6 +2,7 @@ __pycache__
 .vscode
 *~
 *.egg-info
-#.*
+*.#*
+venv/
 build
 data/*.json
