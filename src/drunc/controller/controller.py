@@ -70,11 +70,6 @@ class Controller(ControllerServicer):
         self.configuration = ControllerConfiguration(self.configuration_loc)
         self.children_nodes = [] # type: List[ChildNode]
 
-        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-        self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
-        self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
-        self.broadcast_server_thread.start()
-
         self.controller_token = Token(
             user_name = f'{self.name}_controller',
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
@@ -85,12 +80,17 @@ class Controller(ControllerServicer):
 
         for app_cfg in self.configuration.applications:
             self.children_nodes.append(DAQAppChild(app_cfg))
-        print(self.children_nodes)
+
+        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
+        self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
+        self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
+        self.broadcast_server_thread.start()
 
         # do this at the end, otherwise we need to self.stop() if an exception is raised
         from drunc.controller.broadcaster import Broadcaster
         self.broadcaster = Broadcaster()
 
+        self.log.info('Controller initialised')
 
     def stop(self):
         self.log.info(f'Stopping controller {self.name}')

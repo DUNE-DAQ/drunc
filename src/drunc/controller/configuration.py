@@ -1,12 +1,14 @@
 from typing import Optional, Dict, List
+from drunc.utils.utils import setup_fancy_logging
 
 
 class ControllerConfiguration:
     def __init__(self, configuration_loc:str):
+        self.log = setup_fancy_logging("Controller Configuration")
         self.configuration_loc = configuration_loc
         conf_data = self.validate_configuration_location(configuration_loc)
         self.parse_configuration(conf_data)
-
+        self.log.info('Configured')
     def validate_configuration_location(self, configuration_loc:str) -> dict:
         from urllib.parse import urlparse
         loc = urlparse(configuration_loc)
