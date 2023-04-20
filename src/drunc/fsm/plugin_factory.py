@@ -1,4 +1,4 @@
-## import plugins.PluginA
+## from plugins.PluginA import PluginA
 ## import plugins.pluginB
 
 
