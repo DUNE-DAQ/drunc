@@ -58,8 +58,17 @@ class FSM:
     def get_plugins(self, name) -> FSMPlugin:
         pass
 
-    def execute_transition(self, data) -> bool:
-        self.pre_transition_sequence(data)
+    def get_transition_arguments(self, transition) -> data:
+        data = {}
+        for plugin in self.plugins:
+            data[plugin_namne] = plugin.get_transition_arguments(transition)
+        return data
+
+
+    def execute_transition(self, transition, data) -> bool:
+        #check first that the transition is valid
+
+        self.pre_transition_sequence(transition, data)
         # transition, update the state etc.
         # There should be a hook to the controller here, something like:
         # controlled_object.execute_transition()...
@@ -69,7 +78,7 @@ class FSM:
     def pre_transition_sequence(self, data) -> None:
         for plugin in self.plugins:
             try:
-                data = plugin.pre_transition(data)
+                data = plugin.pre_transition(transition,data)
             except Exception as e:
                 # log exception
                 pass
