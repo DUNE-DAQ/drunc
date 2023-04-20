@@ -1,17 +1,17 @@
-## from plugins.PluginA import PluginA
-## import plugins.pluginB
+## from interfaces.InterfaceA import InterfaceA
+## import interfaces.interfaceB
 
 
-class FSMPluginFactory:
+class FSMInterfaceFactory:
     def __init__(self):
         pass
 
-    def get(self, plugin_name, configuration):
-        if plugin_name == 'pluginA':
-            return pluginA(configuration)
-        elif plugin_name == 'pluginB':
-            return pluginA(configuration)
-        raise RuntimeError(f'{plugin_name} is not recognised!')
+    def get(self, interface_name, configuration):
+        if interface_name == 'interfaceA':
+            return interfaceA(configuration)
+        elif interface_name == 'interfaceB':
+            return interfaceA(configuration)
+        raise RuntimeError(f'{interface_name} is not recognised!')
 
 
-FSMPluginsFact = FSMPluginFactory()
+FSMInterfacesFact = FSMInterfaceFactory()

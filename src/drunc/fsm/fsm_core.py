@@ -23,6 +23,10 @@ class FSMPlugin:
     def post_transition(self):
         pass
 
+class FSMConfig:
+    def __init__(self, config_data):
+        pass
+
 class FSM:
     def __init__(self, controlled_object, configuration):
         self.current_state = State.NONE
