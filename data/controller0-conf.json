@@ -1,9 +1,4 @@
 {
-    "children": [
-        "app00",
-        "app01",
-        "app02",
-        "app03",
-        "app04"
-    ]
+    "children_controllers": [],
+    "apps": []
 }

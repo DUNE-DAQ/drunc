@@ -1,5 +1,4 @@
 {
-    "children": [
-        "app10"
-    ]
+    "children_controllers": [],
+    "apps": []
 }
