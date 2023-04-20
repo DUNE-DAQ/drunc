@@ -4,6 +4,7 @@ from typing import Optional
 from drunc.communication.child_node import ChildNode, ChildNodeType
 from drunc.communication.controller_pb2_grpc import ControllerStub
 from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest
+from drunc.utils.grpc_utils import send_command
 
 class ControllerChild(ChildNode):
 
@@ -22,7 +23,7 @@ class ControllerChild(ChildNode):
         try:
             response = send_command(
                 self.controller,
-                self.controller_token,
+                self.token,
                 'add_to_broadcast_list',
                 BroadcastRequest(broadcast_receiver_address =  f'[::]:{broadcasting_port}')
             )
@@ -47,7 +48,7 @@ class ControllerChild(ChildNode):
         self.log.info('Closing the connection')
         self.command_channel.close()
         if self.broadcasted_to:
-            self.log.debug(f'Removing this {self.controller_token.user_name} from {self.cmd_address}\'s broadcast list.')
+            self.log.debug(f'Removing this {self.token.user_name} from {self.cmd_address}\'s broadcast list.')
             dead = False
             try:
                 response = send_command(
@@ -62,7 +63,7 @@ class ControllerChild(ChildNode):
             except grpc.RpcError as e:
                 dead = grpc.StatusCode.UNAVAILABLE == e.code()
             except Exception as e:
-                self.log.error(f'Could not remove {self.controller_token.user_name} from {self.cmd_address}\'s broadcast list.')
+                self.log.error(f'Could not remove {self.token.user_name} from {self.cmd_address}\'s broadcast list.')
                 self.log.error(e)
 
         if dead:

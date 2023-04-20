@@ -1,0 +1,21 @@
+{
+    "children_controllers": [
+        {
+            "name": "controller0",
+            "cmd_address": "localhost:3601"
+        },
+        {
+            "name": "controller1",
+            "cmd_address": "localhost:3602"
+        },
+        {
+            "name": "controller2",
+            "cmd_address": "localhost:3603"
+        },
+        {
+            "name": "controller3",
+            "cmd_address": "localhost:3604"
+        }
+    ],
+    "apps": []
+}

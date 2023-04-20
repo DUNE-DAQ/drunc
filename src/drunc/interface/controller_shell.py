@@ -54,20 +54,22 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
     # first add the shell to the controller broadcast list
     from drunc.communication.controller_pb2_grpc import ControllerStub
     import grpc
-    ctx.obj.log.info('Connecting to controller')
 
     channel = grpc.insecure_channel(controller_address)
 
     ctx.obj.controller = ControllerStub(channel)
 
+    ctx.obj.log.info('Connected to the controller')
+
     try:
+        ctx.obj.log.info('Attempting to list this controller\'s children')
+
         response = send_command(
             controller = ctx.obj.controller,
             token = ctx.obj.token,
             command = 'ls',
             rethrow = True
         )
-        # this command returns a response with a plain text message
         ll = LocationList()
         response.data.Unpack(ll)
         ctx.obj.log.info(ll.locations)

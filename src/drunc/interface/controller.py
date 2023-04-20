@@ -35,16 +35,14 @@ def controller_cli(configuration:str, control_port:int, name:str, log_level:str)
         server.start()
         console.print(f'{ctrlr.name} was started on {listen_addr}')
 
-        def signal_handler(sig, frame):
+        def sigint(sig, frame):
             console.print('Requested termination')
             server.stop(0)
             console.print('Server stopped')
             ctrlr.stop()
             console.print('Controller stopped')
 
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGHUP, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, sigint)
 
         server.wait_for_termination()
         console.print(f'{ctrlr.name} was terminated')
