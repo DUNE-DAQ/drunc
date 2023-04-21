@@ -10,7 +10,7 @@ do
     # echo "CLASS_NAME       " $CLASS_NAME
     # echo "PY_OUT_FILE_NAME " $PY_OUT_FILE_NAME
     # echo "s/import ${CLASS_NAME}_pb2/import drunc.communication.${CLASS_NAME}_pb2/"
-    sed -i '' "s/import ${CLASS_NAME}_pb2/import drunc.communication.${CLASS_NAME}_pb2/" ${PY_OUT_FILE_NAME}
+    sed -i "s/import ${CLASS_NAME}_pb2/import drunc.communication.${CLASS_NAME}_pb2/" ${PY_OUT_FILE_NAME}
 done
 
 
