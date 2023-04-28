@@ -39,6 +39,15 @@
     },
     "plugins": {
         "run-number": {"port":5000, "route": "host/asdsa/getnum"},
-        "logbook": {"port":5015, "route": "host/nasdasf/start_run"}
+        "logbook": {"port":5015, "route": "host/nasdasf/start_run"},
+        "test-plugin": {"port":6666, "route": "host/jhsdbjbh/test"}
+    },
+    "pre_transitions": {
+        "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
+        "stop": {"order": ["logbook", "run-number"], "mandatory": []}
+    },
+    "post_transitions": {
+        "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
+        "stop": {"order": ["logbook", "run-number"], "mandatory": []}
     }
 }

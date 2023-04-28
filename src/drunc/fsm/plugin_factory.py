@@ -1,5 +1,4 @@
-## from interfaces.InterfaceA import InterfaceA
-## import interfaces.interfaceB
+from fsm_errors import *
 
 
 class FSMInterfaceFactory:
@@ -7,11 +6,22 @@ class FSMInterfaceFactory:
         pass
 
     def get(self, interface_name, configuration):
-        if interface_name == 'interfaceA':
-            return interfaceA(configuration)
-        elif interface_name == 'interfaceB':
-            return interfaceA(configuration)
-        raise RuntimeError(f'{interface_name} is not recognised!')
+        '''
+        match interface_name:
+            case "run_number"
+                return RunNumberPlugin(configuration)               #Must be Defined in /plugins
+        '''
+        if interface_name == "run-number":
+            from plugins.RunNumberPlugin import RunNumberPlugin
+            return RunNumberPlugin(configuration) 
+        elif interface_name == 'test-plugin':
+            from plugins.TestPlugin import TestPlugin
+            return TestPlugin(configuration)
+        elif interface_name == "logbook":
+            from plugins.TestPlugin import TestPlugin
+            return TestPlugin(configuration)
+        else:
+            raise UnknownPlugin(interface_name)
 
 
 FSMInterfacesFact = FSMInterfaceFactory()
