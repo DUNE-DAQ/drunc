@@ -11,6 +11,7 @@ class FSMInterfaceFactory:
             case "run_number"
                 return RunNumberPlugin(configuration)               #Must be Defined in /plugins
         '''
+        #TODO replace with match case at some point
         if interface_name == "run-number":
             from plugins.RunNumberPlugin import RunNumberPlugin
             return RunNumberPlugin(configuration) 
@@ -18,8 +19,8 @@ class FSMInterfaceFactory:
             from plugins.TestPlugin import TestPlugin
             return TestPlugin(configuration)
         elif interface_name == "logbook":
-            from plugins.TestPlugin import TestPlugin
-            return TestPlugin(configuration)
+            from plugins.LogbookPlugin import LogbookPlugin
+            return LogbookPlugin(configuration)
         else:
             raise UnknownPlugin(interface_name)
 

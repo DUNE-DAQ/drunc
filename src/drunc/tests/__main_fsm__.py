@@ -11,7 +11,7 @@ class FakeController:
     def __init__(self, config):
         self.name = "controller"
         self.fsm = FSM(configuration=config)
-        cmd = ["boot", "conf", "scrap", "terminate"]
+        cmd = ["boot", "conf", "start", "scrap", "terminate"]
         for command in cmd:
             self.fsm.register_transition(command, getattr(self, command))
     
@@ -27,6 +27,9 @@ class FakeController:
     def conf(self, data):
         pass
 
+    def start(self, data):
+        pass
+
     def scrap(self, data):
         pass
 
@@ -38,7 +41,7 @@ def main():
     f = open(filename, 'r')
     config = json.loads(f.read())
     controller = FakeController(config)
-    commands = ["boot", "conf", "scrap", "asdasd", "terminate"]
+    commands = ["boot", "conf", "start"]
 
     print(f"Current state is {controller.get_state()}")
     for c in commands:
@@ -47,7 +50,6 @@ def main():
             controller.do_command(c, None)
         except Exception as e:
             print(e)
-        print(f"Current state is {controller.get_state()}")
 
 
 if __name__ == '__main__':

@@ -3,17 +3,6 @@ import plugin_factory
 from typing import List, Set, Dict, Tuple
 from fsm_errors import *
 
-'''
-class State(Enum):
-    #An abstraction for the states available
-    NONE = 0 # the only one we are guaranteed to have
-
-class Transition(Enum):
-    #An abstraction for the transitions available
-    BOOT = 0
-    TERMINATE = 1
-'''
-
 class FSMPlugin:
     '''Abstract class defining a generic plugin'''
     def __init__(self, name):
@@ -38,12 +27,15 @@ class FSMConfig:
         '''
         Takes a config.json describing the FSM, and stores it as a class object
         '''
-        self.states = config_data['states']
-        self.transitions = config_data['transitions']
-        self.sequences = config_data['command_sequences']
-        self.plugins = []
+        self.states           = config_data['states']
+        self.transitions      = config_data['transitions']
+        self.sequences        = config_data['command_sequences']
+        self.pre_transitions  = config_data['pre_transitions']
+        self.post_transitions = config_data['post_transitions']
+        self.plugins = {}
         for name, data in config_data['plugins'].items():
-            self.plugins.append(plugin_factory.FSMInterfacesFact.get(name, data))
+            self.plugins[name] = plugin_factory.FSMInterfacesFact.get(name, data)
+        
 
 class FSM:
     def __init__(self, configuration):
@@ -96,7 +88,7 @@ class FSM:
                 return True
         return False
 
-    def execute_transition(self, transition, data) -> bool:
+    def execute_transition(self, transition, data):
         #check first that the transition is valid
         if not self.can_execute_transition(transition):
             raise InvalidTransition(transition, self.current_state)
@@ -110,6 +102,7 @@ class FSM:
         func(data)
         #Assuming it worked, update our state
         self.current_state = self.get_destination(transition)
+        print(f"Current state is {self.current_state}")
 
         self.post_transition_sequence(transition, data)
            
@@ -125,22 +118,32 @@ class FSM:
 
     def get_transition_arguments(self, transition) -> dict:
         data = {}
-        for plugin in self.config.plugins:
+        for plugin_name in self.config.plugins:
             data[plugin_name] = plugin.get_transition_arguments(transition)
         return data
 
     def pre_transition_sequence(self, transition, data) -> None:
-        for plugin in self.config.plugins:
-            try:
-                response = plugin.pre_transition(transition,data)   #TODO sometimes the plugins need to know an order to be called in
-            except Exception as e:              #TODO some plugins can fail, some must stop execution if they do
-                # log exception
-                pass
+        if transition in self.config.pre_transitions:
+            pre_data = self.config.pre_transitions[transition]          #Information relating to this pre-transition
+            for name in pre_data['order']:                              #A list of all plugins to be tried, in the right order
+                plugin = self.config.plugins[name]
+                try:
+                    response = plugin.pre_transition(transition,data)   
+                except Exception as e:
+                    if name in pre_data['mandatory']:                   #If the transition is required, raise an error
+                        raise e
+                    else:
+                        self.log(e)
 
     def post_transition_sequence(self, transition, data) -> None:
-        for plugin in self.config.plugins:
-            try:
-                response = plugin.post_transition(data)
-            except Exception as e:
-                # log exception
-                pass
+        if transition in self.config.post_transitions:
+            post_data = self.config.post_transitions[transition]  
+            for name in post_data['order']:
+                plugin = self.config.plugins[name]
+                try:
+                    response = plugin.post_transition(transition,data)   
+                except Exception as e:
+                    if name in post_data['mandatory']:
+                        raise e
+                    else:
+                        self.log(e)

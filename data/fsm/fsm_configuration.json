@@ -43,6 +43,7 @@
         "test-plugin": {"port":6666, "route": "host/jhsdbjbh/test"}
     },
     "pre_transitions": {
+        "conf": {"order": ["test-plugin"], "mandatory": ["test-plugin"]},
         "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
         "stop": {"order": ["logbook", "run-number"], "mandatory": []}
     },

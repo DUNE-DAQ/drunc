@@ -5,3 +5,6 @@ class TestPlugin(FSMPlugin):
         super().__init__("test-plugin")
         self.port = configuration['port']
         self.route = configuration['route']
+
+    def pre_conf(self, data):
+        print(f"Running pre_conf of {self.name}")
