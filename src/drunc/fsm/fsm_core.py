@@ -1,10 +1,10 @@
-#TODO Fix type indicators
-import plugin_factory
+import logging
+import interface_factory
 from typing import List, Set, Dict, Tuple
 from fsm_errors import *
 
-class FSMPlugin:
-    '''Abstract class defining a generic plugin'''
+class FSMInterface:
+    '''Abstract class defining a generic interface'''
     def __init__(self, name):
         self.name = name
 
@@ -32,9 +32,9 @@ class FSMConfig:
         self.sequences        = config_data['command_sequences']
         self.pre_transitions  = config_data['pre_transitions']
         self.post_transitions = config_data['post_transitions']
-        self.plugins = {}
-        for name, data in config_data['plugins'].items():
-            self.plugins[name] = plugin_factory.FSMInterfacesFact.get(name, data)
+        self.interfaces = {}
+        for name, data in config_data['interfaces'].items():
+            self.interfaces[name] = interface_factory.FSMInterfacesFact.get(name, data)
         
 
 class FSM:
@@ -42,6 +42,7 @@ class FSM:
         self.current_state = "none"
         self.config = FSMConfig(configuration)
         self.transition_functions = {}
+        self.log = logging.getLogger(self.__class__.__name__)
 
     def get_all_states(self) -> List[str]:
         '''
@@ -107,8 +108,15 @@ class FSM:
         self.post_transition_sequence(transition, data)
            
 
-    def get_plugins(self, name) -> List[str]:
-        return self.config.plugins.keys()
+    def get_interfaces(self, name) -> List[str]:
+        return self.config.interfaces.keys()
+
+    def process_responces(self, responses):
+        '''
+        A dictionary of all the responses from the interfaces, for this pre/post transition.
+        '''
+        for name, response in responses:
+            pass
 
     def register_transition(self, name, func) -> None:
         '''
@@ -118,17 +126,19 @@ class FSM:
 
     def get_transition_arguments(self, transition) -> dict:
         data = {}
-        for plugin_name in self.config.plugins:
-            data[plugin_name] = plugin.get_transition_arguments(transition)
+        for interface_name in self.config.interfaces:
+            data[interface_name] = interface.get_transition_arguments(transition)
         return data
 
     def pre_transition_sequence(self, transition, data) -> None:
         if transition in self.config.pre_transitions:
-            pre_data = self.config.pre_transitions[transition]          #Information relating to this pre-transition
-            for name in pre_data['order']:                              #A list of all plugins to be tried, in the right order
-                plugin = self.config.plugins[name]
+            responses = {}
+            pre_data = self.config.pre_transitions[transition]      #Information relating to this pre-transition
+            for name in pre_data['order']:                          #A list of all interfaces to be tried (in order)
+                interface = self.config.interfaces[name]
                 try:
-                    response = plugin.pre_transition(transition,data)   
+                    response = interface.pre_transition(transition,data)
+                    responses[name] = response
                 except Exception as e:
                     if name in pre_data['mandatory']:                   #If the transition is required, raise an error
                         raise e
@@ -137,11 +147,13 @@ class FSM:
 
     def post_transition_sequence(self, transition, data) -> None:
         if transition in self.config.post_transitions:
+            responses = {}
             post_data = self.config.post_transitions[transition]  
             for name in post_data['order']:
-                plugin = self.config.plugins[name]
+                interface = self.config.interfaces[name]
                 try:
-                    response = plugin.post_transition(transition,data)   
+                    response = interface.post_transition(transition,data)
+                    responses[name] = response
                 except Exception as e:
                     if name in post_data['mandatory']:
                         raise e

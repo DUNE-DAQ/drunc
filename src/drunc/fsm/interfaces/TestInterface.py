@@ -1,6 +1,6 @@
-from drunc.fsm.fsm_core import FSMPlugin
+from drunc.fsm.fsm_core import FSMInterface
 
-class TestPlugin(FSMPlugin):
+class TestInterface(FSMInterface):
     def __init__(self, configuration):
         super().__init__("test-plugin")
         self.port = configuration['port']

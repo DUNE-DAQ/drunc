@@ -1,6 +1,6 @@
-from drunc.fsm.fsm_core import FSMPlugin
+from drunc.fsm.fsm_core import FSMInterface
 
-class RunNumberPlugin(FSMPlugin):
+class RunNumberInterface(FSMInterface):
     def __init__(self, configuration):
         super().__init__("run-number")
 

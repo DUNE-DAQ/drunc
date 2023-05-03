@@ -10,7 +10,7 @@ class UnregisteredTransition(Exception):
         self.message = f"Implementation of {transition} not found."
         super().__init__(self.message)
 
-class UnknownPlugin(Exception):
+class UnknownInterface(Exception):
     '''Raised when a plugin name is provided that does not correspond to any files in /plugins'''
     def __init__(self, name):
         self.message = f"\"{name}\" is not a known plugin."
