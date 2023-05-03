@@ -1,12 +1,3 @@
-import sys
-import os
-import json
-
-this_dir = os.path.dirname(__file__)
-fsm_dir = os.path.join(this_dir, '..', 'fsm')
-sys.path.append(fsm_dir)
-from fsm_core import FSM
-
 class FakeController:
     def __init__(self, config):
         self.name = "controller"
@@ -15,6 +6,7 @@ class FakeController:
         unmangled= [m for m in methods if m[0] != '_']                          #Filters out methods starting with a _
         unwanted = ["do_command", "get_state"]
         cmds = [c for c in unmangled if c not in unwanted]                      #Filters out non-FSM methods
+        print(cmds)
         for command in cmds:
             self.fsm.register_transition(command, getattr(self, command))       #Passes every command to the FSM
     
@@ -56,21 +48,3 @@ class FakeController:
 
     def abort(self, data):
         pass
-
-def main():
-    filename = sys.argv[1]
-    f = open(filename, 'r')
-    config = json.loads(f.read())
-    f.close()
-    controller = FakeController(config)
-    commands = sys.argv[2:]     #Args should be drunc-fsm-tests, then the config filename, then a list of commands
-
-    for c in commands:
-        try:
-            print(f"Trying {c}")
-            controller.do_command(c, None)
-        except Exception as e:
-            print(e)
-
-if __name__ == '__main__':
-    main()

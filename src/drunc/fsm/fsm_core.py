@@ -90,7 +90,16 @@ class FSM:
         return False
 
     def execute_transition(self, transition, data):
-        #check first that the transition is valid
+        if transition in self.config.sequences: 
+            for command in self.config.sequences[transition]:   #Format is {"cmd": "conf", "optional": true }
+                try:                                            #Attempt every transition in the sequence
+                    self.execute_transition(command['cmd'], data)
+                except Exception as e:
+                    if not command["optional"]:                 #If it fails and isn't optional
+                        raise e                                 #Pass the error up and stop
+            return
+
+        #Check that the transition is valid from our state
         if not self.can_execute_transition(transition):
             raise InvalidTransition(transition, self.current_state)
 
