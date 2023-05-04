@@ -71,13 +71,13 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
 
 
 @process_manager_shell.command('boot')
-@click.option('-p','--session', type=str, default=None, help='Select the processes on a particular session')
 @click.option('-u','--user'   , type=str, default=os.getlogin(), help='Select the process of a particular user (default $USER)')
 @click.argument('boot-configuration', type=click.Path(exists=True))
+@click.argument('session-name', type=str)
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, user:str, session:str, boot_configuration:str) -> None:
-    results = obj.pmd.boot(boot_configuration, user, session)
+async def boot(obj:PMContext, user:str, session_name:str, boot_configuration:str) -> None:
+    results = obj.pmd.boot(boot_configuration, user, session_name)
     async for result in results:
         obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 

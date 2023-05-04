@@ -18,7 +18,8 @@ class SSHProcessManager(ProcessManager):
         self.children_logs = {}
 
     def __del__(self):
-        self.log.warning('Killing all the known processes before exiting')
+        if self.process_store:
+            self.log.warning('Killing all the known processes before exiting')
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
