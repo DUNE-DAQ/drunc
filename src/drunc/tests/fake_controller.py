@@ -1,3 +1,10 @@
+import os
+import sys
+this_dir = os.path.dirname(__file__)
+fsm_dir = os.path.join(this_dir, '..', 'fsm')
+sys.path.append(fsm_dir)
+from fsm_core import FSM
+
 class FakeController:
     def __init__(self, config):
         self.name = "controller"
