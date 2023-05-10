@@ -1,5 +1,5 @@
-from drunc.communication.controller_pb2_grpc import BroadcastServicer
-from drunc.communication.controller_pb2 import BroadcastMessage, BroadcastResponse, Level, BroadcastResponseCode
+from druncschema.controller_pb2_grpc import BroadcastServicer
+from druncschema.controller_pb2 import BroadcastMessage, BroadcastResponse, Level, BroadcastResponseCode
 import grpc
 
 
@@ -8,8 +8,8 @@ class StdoutBroadcastHandler(BroadcastServicer):
         BroadcastServicer.__init__(self)
         self.ready = False
 
-        from drunc.utils.utils import setup_fancy_logging
-        self._log = setup_fancy_logging("Controller Status Receiver")
+        from drunc.utils.utils import get_logger
+        self._log = get_logger("Controller Status Receiver")
         self._address = f'[::]:{port}'
         self._log.debug('Broadcast receiver initialised')
 
@@ -20,7 +20,7 @@ class StdoutBroadcastHandler(BroadcastServicer):
     def serve(self) -> None:
         from concurrent import futures
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-        from drunc.communication.controller_pb2_grpc import add_BroadcastServicer_to_server
+        from druncschema.controller_pb2_grpc import add_BroadcastServicer_to_server
         add_BroadcastServicer_to_server(self, self._server)
         self._server.add_insecure_port(self._address)
         self._server.start()
