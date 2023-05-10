@@ -3,6 +3,8 @@ click
 click_shell
 grpcio
 grpcio_tools
+googleapis-common-protos
+grpcio-status
 nest_asyncio
 rich
 sh
