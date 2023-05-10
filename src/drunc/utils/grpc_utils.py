@@ -1,13 +1,11 @@
-from drunc.communication.controller_pb2 import Request, Response, Token
-import grpc
-from google.protobuf import any_pb2
-
+class MalformedMessage(Exception):
+    pass
 
 def unpack_any(data, format):
     if not data.Is(format.DESCRIPTOR):
         print(f'Cannot unpack {data} into {format}')
-        from drunc.communication import controller_pb2 as ctler_excpt
-        raise ctler_excpt.MalformedMessage()
+        from druncschema import controller_pb2 as ctler_excpt
+        raise MalformedMessage
     req = format()
     data.Unpack(req)
     return req
@@ -15,10 +13,14 @@ def unpack_any(data, format):
 
 
 
-def send_command(controller, token:Token, command:str, data=None, paths=[], recursive=False, rethrow=False) -> Response:
-    from drunc.utils.utils import setup_fancy_logging
+def send_command(controller, token, command:str, data=None, paths=[], recursive=False, rethrow=False):
+    from druncschema.controller_pb2 import Request, Response, Token
+    import grpc
+    from google.protobuf import any_pb2
 
-    log = setup_fancy_logging("SendCommand")
+    from drunc.utils.utils import get_logger
+
+    log = get_logger("send_command")
     # Grab the command from the controller stub in the context
     # Add the token to the data (which can be of any protobuf type)
     # Send the command to the controller
