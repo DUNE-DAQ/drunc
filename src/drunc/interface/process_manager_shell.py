@@ -5,10 +5,12 @@ import os
 from functools import wraps
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.communication.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery, LogRequest
+from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery, LogRequest
+from druncschema.token_pb2 import Token
 from drunc.utils.utils import now_str
 from typing import Optional
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from functools import update_wrapper
 
 def coroutine(f):
     @wraps(f)
@@ -17,25 +19,33 @@ def coroutine(f):
     return wrapper
 
 
-def generate_query(ctx, param, uuid):
-    uid = ProcessUUID(
-        uuid=uuid
-    )
-    query = ProcessQuery(
-        session = ctx.params.get('session'),
-        name = ctx.params.get('name'),
-        user = ctx.params.get('user'),
-        uuid = uid if uuid else None,
-        force = False,
-    )
-    return query
+def generate_query(f,at_least_one):
+    @click.pass_context
+    def new_func(ctx, session, name, user, uuid, **kwargs):
+        if uuid is None and session is None and name is None and user is None and at_least_one:
+            raise click.BadParameter('You need to provide at least a \'--uuid\', \'--session\', \'--user\' or \'--name\'!')
 
-def process_query_option():
+        puuid = ProcessUUID(
+            uuid=uuid
+        )
+        query = ProcessQuery(
+            session = session,
+            name = name,
+            user = user,
+            uuid = puuid if uuid else None,
+            force = False,
+        )
+
+        return ctx.invoke(f, query=query,**kwargs)
+    return update_wrapper(new_func, f)
+
+def add_query_options(at_least_one):
     def wrapper(f0):
         f1 = click.option('-s','--session', type=str, default=None, help='Select the processes on a particular session')(f0)
         f2 = click.option('-n','--name'   , type=str, default=None, help='Select the process of a particular name')(f1)
         f3 = click.option('-u','--user'   , type=str, default=None, help='Select the process of a particular user')(f2)
-        return click.option('--uuid',  'query', type=str, default=None, help='Select the process of a particular UUID', callback=generate_query)(f3)
+        f4 = click.option('--uuid'        , type=str, default=None, help='Select the process of a particular UUID')(f3)
+        return generate_query(f4,at_least_one)
     return wrapper
 
 class PMContext:
@@ -64,8 +74,7 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
         import json
         pm_conf_data = json.loads(f.read())
 
-    from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-    obj.pmd = ProcessManagerDriver(pm_conf_data)
+    obj.pmd = ProcessManagerDriver(pm_conf_data, token = Token(token='123', user_name=os.getlogin()))
 
     update_log_level(log_level)
 
@@ -77,45 +86,46 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
 @click.pass_obj
 @coroutine
 async def boot(obj:PMContext, user:str, session_name:str, boot_configuration:str) -> None:
+
     results = obj.pmd.boot(boot_configuration, user, session_name)
     async for result in results:
         obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 
 
 @process_manager_shell.command('kill')
-@process_query_option()
+@add_query_options(at_least_one=True)
 @click.pass_obj
 @coroutine
-async def kill(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
+async def kill(obj:PMContext, query:ProcessQuery) -> None:
     result = await obj.pmd.kill(query = query)
     obj.print(result)
 
 
 @process_manager_shell.command('killall')
-@process_query_option()
+@add_query_options(at_least_one=False)
 @click.option('-f', '--force', is_flag=True, default=False)
 @click.pass_obj
 @coroutine
-async def killall(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str, force:bool) -> None:
+async def killall(obj:PMContext, query:ProcessQuery, force:bool) -> None:
     query.force = force
     result = await obj.pmd.killall(query = query)
     obj.print(result)
 
 @process_manager_shell.command('flush')
-@process_query_option()
+@add_query_options(at_least_one=False)
 @click.pass_obj
 @coroutine
-async def flush(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
+async def flush(obj:PMContext, query:ProcessQuery) -> None:
     result = await obj.pmd.flush(query = query)
     obj.print("Flushed processes:")
     obj.print(result)
 
 @process_manager_shell.command('logs')
-@process_query_option()
+@add_query_options(at_least_one=True)
 @click.option('--how-far', type=int, default=100, help='How many lines one wants')
 @click.pass_obj
 @coroutine
-async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuery, session:str) -> None:
+async def logs(obj:PMContext, how_far:int, query:ProcessQuery) -> None:
 
     log_req = LogRequest(
         how_far = how_far,
@@ -152,19 +162,19 @@ async def logs(obj:PMContext, how_far:int, name:str, user:str, query:ProcessQuer
 
 
 @process_manager_shell.command('restart')
-@process_query_option()
+@add_query_options(at_least_one=True)
 @click.pass_obj
 @coroutine
-async def restart(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
+async def restart(obj:PMContext, query:ProcessQuery) -> None:
     result = await obj.pmd.restart(query = query)
     obj.print(result)
 
 
 @process_manager_shell.command('is-alive')
-@process_query_option()
+@add_query_options(at_least_one=True)
 @click.pass_obj
 @coroutine
-async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str) -> None:
+async def is_alive(obj:PMContext, query:ProcessQuery) -> None:
     result = await obj.pmd.is_alive(query = query)
 
     if result.status_code == ProcessInstance.StatusCode.RUNNING:
@@ -174,11 +184,11 @@ async def is_alive(obj:PMContext, name:str, user:str, query:ProcessQuery, sessio
 
 
 @process_manager_shell.command('ps')
-@process_query_option()
+@add_query_options(at_least_one=False)
 @click.option('-l','--long-format', is_flag=True, type=bool, default=False, help='Whether to have a long output')
 @click.pass_obj
 @coroutine
-async def ps(obj:PMContext, name:str, user:str, query:ProcessQuery, session:str, long_format:bool) -> None:
+async def ps(obj:PMContext, query:ProcessQuery, long_format:bool) -> None:
     results = await obj.pmd.list_process(query=query)
 
     from rich.table import Table
