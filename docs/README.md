@@ -1,6 +1,5 @@
 # DUNE Run Control (drunc)
 
-
 This is a skeleton of a run control to be used in DUNE. The project is still in its "fundation stage", which basically means it doesn't work for other than experimental purposes.
 
 ## Install
@@ -14,7 +13,7 @@ To start using this code, you need to:
 python -m venv venv             # create a python venv
 source setup.sh                 # enter the venv and setup the env variable DRUNC_DATA
 pip install -r requirements.txt # ... install rich and gRPC
-pip install -e ./               # ... install this package
+pip install .                # ... install this package if you are planning to modify you can use `pip install -e .`
 ```
 
 Next time you loggin:
@@ -27,20 +26,13 @@ _et voila._
 ### How to run me
 
 #### Vol. 1 The Process Manager
-
-There are a couple of presteps before running `drunc`:
-
-```bash
-./generate_protos.sh                             # OPTIONAL: this generates gRPC stubs and messages
-cd data && python generate-boot-conf.py && cd .. # This generates the configuration for the process manager
-```
-
 Then:
 ```bash
 drunc-process-manager
 ```
 
 And in another window (after `source setup.sh`):
+
 ```bash
 drunc-process-manager-shell
 ```
