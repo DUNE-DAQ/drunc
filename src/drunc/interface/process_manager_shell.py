@@ -5,7 +5,7 @@ import os
 from functools import wraps
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
-from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery, LogRequest
+from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery
 from druncschema.token_pb2 import Token
 from drunc.utils.utils import now_str
 from typing import Optional
@@ -126,6 +126,7 @@ async def flush(obj:PMContext, query:ProcessQuery) -> None:
 @click.pass_obj
 @coroutine
 async def logs(obj:PMContext, how_far:int, query:ProcessQuery) -> None:
+    from druncschema.process_manager_pb2 import LogRequest, LogLine
 
     log_req = LogRequest(
         how_far = how_far,
@@ -134,8 +135,10 @@ async def logs(obj:PMContext, how_far:int, query:ProcessQuery) -> None:
 
     uuid = None
     from rich.markup import escape
+    from drunc.utils.grpc_utils import unpack_any
 
     async for result in obj.pmd.logs(log_req):
+
         if uuid is None:
             uuid = result.uuid.uuid
             obj.rule(f'[yellow]{uuid}[/yellow] logs')

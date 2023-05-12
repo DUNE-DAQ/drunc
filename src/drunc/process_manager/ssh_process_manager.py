@@ -41,32 +41,26 @@ class SSHProcessManager(ProcessManager):
 
 
     async def _logs_impl(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
-        self.log.info('starting logs')
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
-        self.log.info('starting logs1')
         cursor = -log_request.how_far
-        self.log.info('starting logs2')
 
         if uid not in self.children_logs:
             ll = LogLine(
                 uuid = ProcessUUID(uuid=uid),
-                line='empty'
+                line='<empty>'
             )
             yield ll
-            StopAsyncIteration
+        else:
+            if -cursor > len(self.children_logs[uid]):
+                cursor = -len(self.children_logs[uid])
 
-        self.log.info('uid')
-        if -cursor > len(self.children_logs[uid]):
-            cursor = -len(self.children_logs[uid])
-
-        while cursor != 0:
-            print(self.children_logs[uid][cursor])
-            ll = LogLine(
-                uuid = ProcessUUID(uuid=uid),
-                line = self.children_logs[uid][cursor]
-            )
-            yield ll
-            cursor += 1
+            while cursor != 0:
+                ll = LogLine(
+                    uuid = ProcessUUID(uuid=uid),
+                    line = self.children_logs[uid][cursor]
+                )
+                yield ll
+                cursor += 1
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')

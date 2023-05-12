@@ -97,7 +97,6 @@ class ProcessManagerDriver:
 
     async def logs(self, req:LogRequest) -> LogLine:
         async for stream in self.pm_stub.logs(self._create_request(payload = req)):
-            print(stream)
             ll = unpack_any(stream.data, LogLine)
             yield ll
 

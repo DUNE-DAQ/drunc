@@ -46,16 +46,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data = data
         )
     def _create_stream(self, payload, token):
-        print(payload)
-        print(token)
-
         new_token = Token()
         new_token.CopyFrom(token)
         data = Any()
         data.Pack(payload)
         return Stream(
             token = new_token,
-            data = payload
+            data = data
         )
 
     def _generic_command(self, request:Request, command:str, req_format, context):
@@ -107,9 +104,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
             f = getattr(self, command)
             async for r in f(formatted_data, context):
-                self.log.info(f'f: {r}')
                 s = self._create_stream(r,request.token)
-                self.log.info(f'f: {s}')
                 yield s
 
             self.log.info(f'\'{type(self).__name__}.{command}\' executed')
@@ -219,7 +214,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     async def logs(self, req:Request, context) -> Stream:
         async for r in self._generic_command_async(req, '_logs_impl', LogRequest, context):
-            self.log.info(r)
             yield r
 
 
