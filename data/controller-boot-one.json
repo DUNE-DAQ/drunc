@@ -1,0 +1,93 @@
+{
+    "instances": [
+        {
+            "name": "topcontroller",
+            "port": 3600,
+            "restriction": "localhost",
+            "type": "drunc-controller",
+            "configuration": "file://data/topcontroller-conf.json"
+        }
+    ],
+    "executables": {
+        "drunc-controller": {
+            "executable_and_arguments": [
+                {
+                    "env": []
+                },
+                {
+                    "source": [
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${DRUNC_DIR}"
+                    ]
+                },
+                {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
+                    "drunc-controller": [
+                        "${CONFIGURATION}",
+                        "${PORT}",
+                        "${NAME}"
+                    ]
+                }
+            ],
+            "environment": {
+                "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
+                "NAME": "{name}",
+                "PORT": "{port}"
+            }
+        },
+        "fake-daq-application": {
+            "executable_and_arguments": [
+                {
+                    "env": []
+                },
+                {
+                    "source": [
+                        "${DRUNC_DIR}/setup.sh"
+                    ]
+                },
+                {
+                    "cd": [
+                        "${DRUNC_DIR}"
+                    ]
+                },
+                {
+                    "echo": [
+                        "${PATH}"
+                    ]
+                },
+                {
+                    "fake_daq_application": [
+                        "-n",
+                        "${NAME}",
+                        "-d",
+                        "${CONFIGURATION}",
+                        "-c",
+                        "rest://localhost:${PORT}"
+                    ]
+                }
+            ],
+            "environment": {
+                "CONFIGURATION": "{configuration}",
+                "DRUNC_DIR": "getenv",
+                "NAME": "{name}",
+                "PORT": "{port}"
+            }
+        }
+    },
+    "restrictions": {
+        "localhost": {
+            "hosts": [
+                "localhost"
+            ]
+        }
+    }
+}
