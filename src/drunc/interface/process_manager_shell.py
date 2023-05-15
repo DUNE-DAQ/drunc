@@ -2,6 +2,7 @@ import asyncio
 import click
 import click_shell
 import os
+import getpass
 from functools import wraps
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
@@ -74,13 +75,13 @@ def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:b
         import json
         pm_conf_data = json.loads(f.read())
 
-    obj.pmd = ProcessManagerDriver(pm_conf_data, token = Token(token='123', user_name=os.getlogin()))
+    obj.pmd = ProcessManagerDriver(pm_conf_data, token = Token(token='123', user_name=getpass.getuser()))
 
     update_log_level(log_level)
 
 
 @process_manager_shell.command('boot')
-@click.option('-u','--user'   , type=str, default=os.getlogin(), help='Select the process of a particular user (default $USER)')
+@click.option('-u','--user'   , type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
 @click.argument('boot-configuration', type=click.Path(exists=True))
 @click.argument('session-name', type=str)
 @click.pass_obj
