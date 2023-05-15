@@ -7,7 +7,7 @@ This is a skeleton of a run control to be used in DUNE. The project is still in 
 ### Requirements
 This python code uses `rich`, `gRPC`.
 
-### How to install me
+### How to install me on your machine
 To start using this code, you need to:
 ```bash
 python -m venv venv             # create a python venv
@@ -22,16 +22,30 @@ source setup.sh # enter the venv and setup the env variable DRUNC_DATA
 ```
 _et voila._
 
+### How to use the Docker image
+You need to build the image:
+```bash
+docker build . -t drunc-image
+```
+
+Then:
+```bash
+you@your-machine $ docker run --rm -it --entrypoint bash drunc-image
+root@07ea4b58b97d:/#
+```
+
+You can add a `-p 100:100` to the last `docker run` command to expose the port 100 to your localhost, for example.
+
 
 ### How to run me
 
 #### Vol. 1 The Process Manager
-Then:
+Once you've followed the Install section, you can, on your host or on inside the container:
 ```bash
 drunc-process-manager
 ```
 
-And in another window (after `source setup.sh`):
+And in another window (after `source setup.sh`), another container (if you've opened the correct port) or the same container as above:
 
 ```bash
 drunc-process-manager-shell
