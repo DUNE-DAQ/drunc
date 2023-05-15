@@ -7,7 +7,6 @@ setup(
         'drunc': []
     },
     install_requires=[
-        "aiostream",
         "click",
         "click_shell",
         "grpcio",
