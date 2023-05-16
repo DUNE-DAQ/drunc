@@ -174,6 +174,18 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         for uuid in self._get_process_uid(query):
 
+            if uuid not in self.boot_request:
+                pu = ProcessUUID(uuid=uuid)
+                pi = ProcessInstance(
+                    process_description = ProcessDescription(),
+                    process_restriction = ProcessRestriction(),
+                    status_code = ProcessInstance.StatusCode.DEAD,
+                    return_code = None,
+                    uuid = pu
+                )
+                ret += [pi]
+                continue
+
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
             pr = ProcessRestriction()
