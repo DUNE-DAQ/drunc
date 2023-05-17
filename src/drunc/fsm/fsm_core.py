@@ -1,4 +1,5 @@
 import logging
+import
 import interface_factory
 from typing import List, Set, Dict, Tuple
 from fsm_errors import *
@@ -91,6 +92,7 @@ class FSM:
 
     def execute_transition(self, transition, data):
         if transition in self.config.sequences: 
+            #TODO check nanorc.common_commands.py, should be like that
             for command in self.config.sequences[transition]:   #Format is {"cmd": "conf", "optional": true }
                 try:                                            #Attempt every transition in the sequence
                     self.execute_transition(command['cmd'], data)
