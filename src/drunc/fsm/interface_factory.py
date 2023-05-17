@@ -7,13 +7,13 @@ class FSMInterfaceFactory:
     def get(self, interface_name, configuration):
         match interface_name:
             case "run-number":
-                from interfaces.RunNumberInterface import RunNumberInterface
+                from interfaces.DummyRunNumberInterface import RunNumberInterface
                 return RunNumberInterface(configuration) 
             case 'test-interface':
                 from interfaces.TestInterface import TestInterface
                 return TestInterface(configuration)
             case "logbook":
-                from interfaces.LogbookInterface import LogbookInterface
+                from interfaces.DummyLogbookInterface import LogbookInterface
                 return LogbookInterface(configuration)
             case _:
                 raise UnknownInterface(interface_name)
