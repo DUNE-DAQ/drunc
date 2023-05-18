@@ -9,8 +9,10 @@ from grpc_status import rpc_status
 from drunc.communication.child_node import ChildNode
 from drunc.communication.daq_app_child import DAQAppChild
 from drunc.communication.controller_child import ControllerChild
-from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
-from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
+from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
+from druncschema.controller_pb2_grpc import ControllerServicer, BroadcastStub
 from drunc.utils.utils import get_logger
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import unpack_any
@@ -66,6 +68,7 @@ class Controller(ControllerServicer):
         self.children_nodes = [] # type: List[ChildNode]
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
+        self.log.info(configuration)
         self.authoriser = DummyAuthoriser(configuration['authoriser'])
 
         self.actor = ControllerActor(None)

@@ -2,8 +2,11 @@ import asyncio
 import grpc
 from typing import Optional
 from drunc.communication.child_node import ChildNode, ChildNodeType
-from drunc.communication.controller_pb2_grpc import ControllerStub
-from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest
+from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, BroadcastRequest
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
+
 from drunc.utils.grpc_utils import send_command
 
 class ControllerChild(ChildNode):

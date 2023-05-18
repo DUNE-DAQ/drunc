@@ -15,7 +15,7 @@ def controller_cli(configuration:str, control_port:int, name:str, log_level:str)
     update_log_level(log_level)
 
     from drunc.controller.controller import Controller
-    from drunc.communication.controller_pb2_grpc import add_ControllerServicer_to_server
+    from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
     ctrlr = Controller(name, configuration)
