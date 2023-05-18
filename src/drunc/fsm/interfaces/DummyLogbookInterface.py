@@ -1,5 +1,4 @@
 from drunc.fsm.fsm_core import FSMInterface
-import requests
 
 
 class LogbookInterface(FSMInterface):
