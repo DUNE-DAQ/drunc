@@ -120,7 +120,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def boot(self, req:Request, context) -> Response:
-        self.log.info(req)
+        self.log.debug(f'received \'boot\' request \'{req}\'')
         return self._generic_command(req, '_boot_impl', BootRequest, context)
 
 
@@ -130,6 +130,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def restart(self, req:Request, context)-> Response:
+        self.log.debug(f'received \'restart\' request \'{req}\'')
         return self._generic_command(req, '_restart_impl', ProcessQuery, context)
 
 
@@ -139,6 +140,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def is_alive(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'is_alive\' request \'{req}\'')
         return self._generic_command(req, '_is_alive_impl', ProcessQuery, context)
 
 
@@ -148,6 +150,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def kill(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'kill\' request \'{req}\'')
         return self._generic_command(req, '_kill_impl', ProcessQuery, context)
 
 
@@ -157,6 +160,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def killall(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'killall\' request \'{req}\'')
         return self._generic_command(req, '_killall_impl', ProcessQuery, context)
 
 
@@ -166,6 +170,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     def list_process(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'list_process\' request \'{req}\'')
         return self._generic_command(req, '_list_process_impl', ProcessQuery, context)
 
 
@@ -216,6 +221,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return pil
 
     def flush(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'flush\' request \'{req}\'')
         return self._generic_command(req, '_flush_impl', ProcessQuery, context)
 
 
@@ -225,6 +231,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         raise NotImplementedError
 
     async def logs(self, req:Request, context) -> Stream:
+        self.log.debug(f'received \'logs\' request \'{req}\'')
         async for r in self._generic_command_async(req, '_logs_impl', LogRequest, context):
             yield r
 
