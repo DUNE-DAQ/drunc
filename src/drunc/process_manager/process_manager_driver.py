@@ -1,17 +1,32 @@
 import asyncio
-
-from drunc.communication.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
-from drunc.communication.process_manager_pb2_grpc import ProcessManagerStub
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
+from druncschema.process_manager_pb2_grpc import ProcessManagerStub
+from druncschema.token_pb2 import Token
+from google.protobuf.any_pb2 import Any
+from drunc.utils.grpc_utils import unpack_any
 
 
 class ProcessManagerDriver:
-    def __init__(self, pm_conf:dict):
+    def __init__(self, pm_conf:dict, token):
         import grpc
+        self.token = Token()
+        self.token.CopyFrom(token)
         self.pm_address = pm_conf['address']
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
-    async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessUUID:
+    def _create_request(self, payload):
+        token = Token()
+        token.CopyFrom(self.token)
+        data = Any()
+        data.Pack(payload)
+        return Request(
+            token = token,
+            data = data
+        )
+
+    async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessInstance:
         boot_configuration = {}
         with open(boot_configuration_file) as f:
             import json
@@ -44,41 +59,71 @@ class ProcessManagerDriver:
                 else:
                     new_env[k] = v.format(**app)
 
-            br = BootRequest(
-                process_description = ProcessDescription(
-                    metadata = ProcessMetadata(
-                        user = user,
-                        session = session,
-                        name = app['name'],
-                    ),
-                    executable_and_arguments = executable_and_arguments,
-                    env = new_env
-
-                ),
-                process_restriction = ProcessRestriction(
-                    allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
+            answer = await self.pm_stub.boot(
+                self._create_request(
+                    BootRequest(
+                        process_description = ProcessDescription(
+                            metadata = ProcessMetadata(
+                                user = user,
+                                session = session,
+                                name = app['name'],
+                            ),
+                            executable_and_arguments = executable_and_arguments,
+                            env = new_env
+                        ),
+                        process_restriction = ProcessRestriction(
+                            allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
+                        )
+                    )
                 )
             )
-            yield await self.pm_stub.boot(br)
+            pd = unpack_any(answer.data,ProcessInstance)
+            yield pd
+
 
     async def kill(self, query:ProcessQuery) -> ProcessInstance:
-        return await self.pm_stub.kill(query)
+        answer = await self.pm_stub.kill(
+            self._create_request(payload = query)
+        )
+        pi = unpack_any(answer.data, ProcessInstance)
+        return pi
 
     async def killall(self, query:ProcessQuery) -> ProcessInstanceList:
-        return await self.pm_stub.killall(query)
+        answer = await self.pm_stub.killall(
+            self._create_request(payload = query)
+        )
+        pil = unpack_any(answer.data, ProcessInstanceList)
+        return pil
 
     async def logs(self, req:LogRequest) -> LogLine:
-        async for ll in self.pm_stub.logs(req):
+        async for stream in self.pm_stub.logs(self._create_request(payload = req)):
+            ll = unpack_any(stream.data, LogLine)
             yield ll
 
     async def list_process(self, query:ProcessQuery) -> ProcessInstanceList:
-        return await self.pm_stub.list_process(query)
+        answer = await self.pm_stub.list_process(
+            self._create_request(payload = query)
+        )
+        pil = unpack_any(answer.data, ProcessInstanceList)
+        return pil
 
     async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
-        return await self.pm_stub.flush(query)
+        answer = await self.pm_stub.flush(
+            self._create_request(payload = query)
+        )
+        pil = unpack_any(answer.data, ProcessInstanceList)
+        return pil
 
     async def is_alive(self, query:ProcessQuery) -> ProcessInstance:
-        return await self.pm_stub.is_alive(query)
+        answer = await self.pm_stub.is_alive(
+            self._create_request(payload = query)
+        )
+        pi = unpack_any(answer.data, ProcessInstance)
+        return pi
 
     async def restart(self, query:ProcessQuery) -> ProcessInstance:
-        return await self.pm_stub.restart(query)
+        answer = await self.pm_stub.restart(
+            self._create_request(payload = query)
+        )
+        pi = unpack_any(answer.data, ProcessInstance)
+        return pi

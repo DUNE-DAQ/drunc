@@ -2,55 +2,32 @@ import grpc
 import sh
 from functools import partial
 
-from drunc.communication.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
+from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from drunc.process_manager.process_manager import ProcessManager
 
 
 class SSHProcessManager(ProcessManager):
     def __init__(self, conf):
-        self.process_store = {} # dict[str, sh.RunningCommand]
-        self.boot_request = {} # dict[str, BootRequest]
-        # use conf if needed
+        super().__init__(conf)
 
-        from drunc.utils.utils import setup_fancy_logging
-        self.log = setup_fancy_logging('ssh-process-manager')
+        from drunc.utils.utils import get_logger
+        self.log = get_logger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
 
-    def __del__(self):
+    def _terminate(self):
+        self.log.info('Terminating')
+
         if self.process_store:
             self.log.warning('Killing all the known processes before exiting')
+        else:
+            self.log.info('No known process to kill before exiting')
+
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
             self.log.warning(f'Killing {self.boot_request.process_description.metadata[uuid].name}')
             process.terminate()
-
-    def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False) -> [str]:
-        import re
-
-        uuid_selector = '.*'
-        name_selector = '.*'
-        user_selector = '.*'
-        part_selector = '.*'
-        # relevant reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
-        if query.HasField('uuid'): uuid_selector = query.uuid.uuid
-        if query.name != '': name_selector = query.name
-        if query.user != '': user_selector = query.user
-        if query.session != '': part_selector = query.session
-
-        processes = []
-        all_the_uuids = self.process_store.keys() if not in_boot_request else self.boot_request.keys()
-        for uuid in all_the_uuids:
-
-            if not re.search(uuid_selector, uuid): continue
-            if not re.search(part_selector, self.boot_request[uuid].process_description.metadata.session): continue
-            if not re.search(user_selector, self.boot_request[uuid].process_description.metadata.user): continue
-            if not re.search(name_selector, self.boot_request[uuid].process_description.metadata.name): continue
-
-            processes.append(uuid)
-
-        return processes
 
     def _process_children_logs(self, uuid, line):
         if not uuid in self.children_logs:
@@ -62,46 +39,21 @@ class SSHProcessManager(ProcessManager):
 
         self.children_logs[uuid].append(line)
 
-    def flush(self, query:ProcessQuery,  context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
-        ret = []
+    #def __is_alive_ret_code(uuid):
+    # try:
+    # etc...
 
-        for uuid in self._get_process_uid(query):
-
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
-
-            return_code = None
-            try:
-                if not self.process_store[uuid].is_alive():
-                    return_code = self.process_store[uuid].exit_code
-            except Exception as e:
-                pass
-
-            if not self.process_store[uuid].is_alive():
-                pi = ProcessInstance(
-                    process_description = pd,
-                    process_restriction = pr,
-                    status_code = ProcessInstance.StatusCode.RUNNING if self.process_store[uuid].is_alive() else ProcessInstance.StatusCode.DEAD,
-                    return_code = return_code,
-                    uuid = pu
-                )
-                del self.process_store[uuid]
-                ret += [pi]
-
-        pil = ProcessInstanceList(
-            values=ret
-        )
-        return pil
-
-
-    def logs(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
+    async def _logs_impl(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         cursor = -log_request.how_far
 
-        if uid in self.children_logs:
+        if uid not in self.children_logs:
+            ll = LogLine(
+                uuid = ProcessUUID(uuid=uid),
+                line='<empty>'
+            )
+            yield ll
+        else:
             if -cursor > len(self.children_logs[uid]):
                 cursor = -len(self.children_logs[uid])
 
@@ -112,18 +64,20 @@ class SSHProcessManager(ProcessManager):
                 )
                 yield ll
                 cursor += 1
-        else:
-            ll = LogLine(line='empty')
-            yield ll
 
-
-    def _boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
+    def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
 
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise RuntimeError('No allowed host provided! bailing')
 
         error = ''
+
+        if uuid in self.boot_request:
+            raise RuntimeError(f'Process {uuid} already exists!')
+
+        self.boot_request[uuid] = BootRequest()
+        self.boot_request[uuid].CopyFrom(boot_request)
 
         for host in boot_request.process_restriction.allowed_hosts:
             try:
@@ -158,45 +112,68 @@ class SSHProcessManager(ProcessManager):
                 )
                 self.log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
                 break
+
             except Exception as e:
-                error = str(e)
+                error += str(e)
                 print(f'Couldn\'t start on host {host}, reason:\n{str(e)}')
                 print(f'\nTrying on a different host')
                 continue
 
-        if uuid in self.process_store and self.process_store[uuid].is_alive():
-            self.boot_request[uuid] = BootRequest()
-            self.boot_request[uuid].CopyFrom(boot_request)
+        self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
+        pd = ProcessDescription()
+        pd.CopyFrom(self.boot_request[uuid].process_description)
+        pr = ProcessRestriction()
+        pr.CopyFrom(self.boot_request[uuid].process_restriction)
+        pu = ProcessUUID(uuid=uuid)
 
-            self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
+        return_code = None
+        alive = False
 
-            return_code = None
-            try:
-                if not self.process_store[uuid].is_alive():
-                    return_code = self.process_store[uuid].exit_code
-            except Exception as e:
-                pass
-
+        if uuid not in self.process_store:
             pi = ProcessInstance(
                 process_description = pd,
                 process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if self.process_store[uuid].is_alive() else ProcessInstance.StatusCode.DEAD,
+                status_code = ProcessInstance.StatusCode.DEAD, ## should be unknown
                 return_code = return_code,
                 uuid = pu
             )
             return pi
-        else:
-            raise RuntimeError(f'Couldn\'t boot {boot_request.process_description.metadata.name}, reason: {error}')
+
+        try:
+            if not self.process_store[uuid].is_alive():
+                return_code = self.process_store[uuid].exit_code
+            else:
+                alive = True
+
+        except Exception as e:
+            pass
+
+        pi = ProcessInstance(
+            process_description = pd,
+            process_restriction = pr,
+            status_code = ProcessInstance.StatusCode.RUNNING if alive else ProcessInstance.StatusCode.DEAD,
+            return_code = return_code,
+            uuid = pu
+        )
+        return pi
 
 
-    def list_process(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _list_process_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         ret = []
+
         for uuid in self._get_process_uid(query):
+
+            if uuid not in self.process_store:
+                pu = ProcessUUID(uuid=uuid)
+                pi = ProcessInstance(
+                    process_description = ProcessDescription(),
+                    process_restriction = ProcessRestriction(),
+                    status_code = ProcessInstance.StatusCode.DEAD, # should be unknown
+                    return_code = None,
+                    uuid = pu
+                )
+                ret += [pi]
+                continue
 
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -220,6 +197,7 @@ class SSHProcessManager(ProcessManager):
             )
             ret += [pi]
 
+
         pil = ProcessInstanceList(
             values=ret
         )
@@ -227,26 +205,14 @@ class SSHProcessManager(ProcessManager):
         return pil
 
 
-    def boot(self, boot_request:BootRequest, context: grpc.aio.ServicerContext=None) -> ProcessUUID:
+    def _boot_impl(self, boot_request:BootRequest, context: grpc.aio.ServicerContext=None) -> ProcessUUID:
         import uuid
         this_uuid = str(uuid.uuid4())
-        return self._boot(boot_request, this_uuid)
+        return self.__boot(boot_request, this_uuid)
 
-    def _ensure_one_process(self, uuids:[str], in_boot_request:bool=False) -> str:
-        if uuids == []:
-            raise RuntimeError(f'The process corresponding to the query doesn\'t exist')
-        elif len(uuids)>1:
-            raise RuntimeError(f'There are more than 1 processes corresponding to the query')
 
-        if in_boot_request:
-            if not uuids[0] in self.boot_request:
-                raise RuntimeError(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the boot requests')
-        else:
-            if not uuids[0] in self.process_store:
-                raise RuntimeError(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the process store')
-        return uuids[0]
 
-    def restart(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _restart_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
@@ -255,32 +221,59 @@ class SSHProcessManager(ProcessManager):
             if process.is_alive():
                 process.terminate()
 
-        return self._boot(self.boot_request[uuid], uuid)
+        return self.__boot(self.boot_request[uuid], uuid)
 
-    def is_alive(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _is_alive_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         uuid = self._ensure_one_process(uuids)
 
-        process = self.process_store[uuid]
-        is_alive = process.is_alive()
-        return_code = process.exit_code if not is_alive else None
+        if uuid in self.process_store and uuid in self.boot_request:
+            process = self.process_store[uuid]
 
-        pd = ProcessDescription()
-        pd.CopyFrom(self.boot_request[uuid].process_description)
-        pr = ProcessRestriction()
-        pr.CopyFrom(self.boot_request[uuid].process_restriction)
-        pu = ProcessUUID(uuid=uuid)
+            alive = False
+            return_code = None
 
-        pi = ProcessInstance(
-            process_description = pd,
-            process_restriction = pr,
-            status_code = ProcessInstance.StatusCode.RUNNING if is_alive else ProcessInstance.StatusCode.DEAD,
-            return_code = return_code,
-            uuid = pu,
-        )
-        return pi
+            try:
+                if not process.is_alive():
+                    return_code = process.exit_code
+                else:
+                    alive = True
+            except Exception as e:
+                pass
 
-    def kill(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
+            pd = ProcessDescription()
+            pd.CopyFrom(self.boot_request[uuid].process_description)
+            pr = ProcessRestriction()
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
+            pu = ProcessUUID(uuid=uuid)
+
+            pi = ProcessInstance(
+                process_description = pd,
+                process_restriction = pr,
+                status_code = ProcessInstance.StatusCode.RUNNING if alive else ProcessInstance.StatusCode.DEAD,
+                return_code = return_code,
+                uuid = pu,
+            )
+            return pi
+
+        else:
+            pd = ProcessDescription()
+            pr = ProcessRestriction()
+            pu = ProcessUUID(uuid=uuid)
+            if uuid in self.boot_request:
+                pd.CopyFrom(self.boot_request[uuid].process_description)
+                pr.CopyFrom(self.boot_request[uuid].process_restriction)
+
+            pi = ProcessInstance(
+                process_description = pd,
+                process_restriction = pr,
+                status_code = ProcessInstance.StatusCode.RUNNING if is_alive else ProcessInstance.StatusCode.DEAD,
+                return_code = return_code,
+                uuid = pu,
+            )
+            return pi
+
+    def _kill_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
         uuids = self._get_process_uid(query)
         uuid = self._ensure_one_process(uuids)
 
@@ -305,7 +298,7 @@ class SSHProcessManager(ProcessManager):
         return pi
 
 
-    def killall(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _killall_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         ret = []
 

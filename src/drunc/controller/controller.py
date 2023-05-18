@@ -11,7 +11,7 @@ from drunc.communication.daq_app_child import DAQAppChild
 from drunc.communication.controller_child import ControllerChild
 from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
 from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
-from drunc.utils.utils import now_str, setup_fancy_logging
+from drunc.utils.utils import get_logger
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import unpack_any
 from threading import Lock, Thread
@@ -21,7 +21,7 @@ from typing import Optional, Dict, List
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
-        self._log = setup_fancy_logging("ControllerActor")
+        self._log = get_logger("ControllerActor")
         self._token = Token()
         self._lock = Lock()
 
@@ -57,18 +57,18 @@ class Controller(ControllerServicer):
     def __init__(self, name:str, configuration:str):
         super(Controller, self).__init__()
 
-        self.log = setup_fancy_logging("Controller")
+        self.log = get_logger("Controller")
         self.name = name
         self.configuration_loc = configuration
-
-        from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-        self.authoriser = DummyAuthoriser()
-
-        self.actor = ControllerActor(None)
 
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(self.configuration_loc)
         self.children_nodes = [] # type: List[ChildNode]
+
+        from drunc.authoriser.dummy_authoriser import DummyAuthoriser
+        self.authoriser = DummyAuthoriser(configuration['authoriser'])
+
+        self.actor = ControllerActor(None)
 
         self.controller_token = Token(
             user_name = f'{self.name}_controller',

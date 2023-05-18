@@ -7,7 +7,7 @@ class ListenerRepresentation:
     def __init__(self, address):
         self.address = address
         self.channel = grpc.insecure_channel(address)
-        from drunc.communication.controller_pb2_grpc import BroadcastStub
+        from druncschema_pb2_grpc import BroadcastStub
         self.stub = BroadcastStub(self.channel)
 
     def handle_broadcast(self, message):
@@ -16,8 +16,8 @@ class ListenerRepresentation:
 class Broadcaster:
 
     def __init__(self):
-        from drunc.utils.utils import setup_fancy_logging
-        self._log = setup_fancy_logging("Broadcaster")
+        from drunc.utils.utils import get_logger
+        self._log = get_logger("Broadcaster")
         self._listeners = {}
         self._listeners_name = {}
         self._listener_lock = Lock()

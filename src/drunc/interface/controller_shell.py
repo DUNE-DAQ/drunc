@@ -10,11 +10,11 @@ import grpc
 import google.protobuf.any_pb2 as any_pb2
 from grpc_status import rpc_status
 
-from drunc.utils.utils import now_str, setup_fancy_logging
+from drunc.utils.utils import get_logger
 
 class ControllerContext:
     def __init__(self, status_receiver_port:str=None) -> None:
-        self.log = setup_fancy_logging("Controller Shell")
+        self.log = get_logger("ControllerShell")
         self.print_traceback = True
         self.controller = None
 

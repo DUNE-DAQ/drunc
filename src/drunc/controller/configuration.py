@@ -1,10 +1,10 @@
 from typing import Optional, Dict, List
-from drunc.utils.utils import setup_fancy_logging
+from drunc.utils.utils import get_logger
 
 
 class ControllerConfiguration:
     def __init__(self, configuration_loc:str):
-        self.log = setup_fancy_logging("Controller Configuration")
+        self.log = get_logger("child-node")
         self.configuration_loc = configuration_loc
         conf_data = self.validate_configuration_location(configuration_loc)
         self.parse_configuration(conf_data)

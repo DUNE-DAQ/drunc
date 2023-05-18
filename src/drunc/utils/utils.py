@@ -1,5 +1,6 @@
 import logging
 from rich.theme import Theme
+
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 CONSOLE_THEMES = Theme({
     "info": "dim cyan",
@@ -37,16 +38,21 @@ def update_log_level(loglevel):
     for handler in sh_command_logger.handlers:
         handler.setLevel(sh_command_level)
 
-def setup_fancy_logging(module_name):
-    import logging
+def setup_fancy_logging():
     from rich.logging import RichHandler
 
     logging.basicConfig(
         level="INFO",
         format="%(message)s",
         datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True)]
+        handlers=[
+            #logging.StreamHandler(),
+            RichHandler(rich_tracebacks=False) # Make this True, and everything crashes on exceptions (no clue why)
+        ]
     )
+
+
+def get_logger(module_name):
     return logging.getLogger(module_name)
 
 
