@@ -25,7 +25,7 @@ class FakeController:
     def boot(self, data):
         pass
 
-    def conf(self, data):
+    def conf(self, data, a_number:int):
         pass
 
     def start(self, data):

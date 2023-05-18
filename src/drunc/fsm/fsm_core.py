@@ -4,6 +4,33 @@ from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 from fsm_errors import *
 
+def validate_arguments(obj, func_name, arguments) -> None:
+    '''
+    Checks that each argument of the function is provided if required,
+    and has the correct type if there is an annotation.
+    An exception is raised otherwise.
+    We also extract arguments from FSM.run_data here
+    '''
+    sig = obj.get_transition_arguments(func_name)
+    for p in sig.parameters.keys():
+        if p in ("self", "data"):           #ignore these
+            continue
+        fsm = False                         #Whether we got data from the FSM
+        default = sig.parameters[p].default
+        typing = sig.parameters[p].annotation
+        #If there is no default, an arg must be provided
+        if default == Parameter.empty and p not in arguments: 
+            raise MissingArgument(p, func_name)
+        #We should obey any annotations, assuming a value was provided
+        if p in arguments:
+            if typing != Parameter.empty and type(arguments[p]) != typing:
+                message = f"{type(arguments[p]).__name__} is the wrong type for {p} (should be {typing.__name__})"
+                raise TypeError(message)
+    for arg in arguments:
+        #We shouldn't be providing any arguments that the function doesn't ask for
+        if arg not in sig.parameters.keys():
+            raise UnknownArgument(arg, func_name)
+
 class FSMInterface:
     '''Abstract class defining a generic interface'''
     def __init__(self, name):
@@ -16,33 +43,6 @@ class FSMInterface:
         sig = signature(func)
         return sig
 
-    def validate_arguments(self, func_name, arguments) -> None:
-        '''
-        Checks that each argument of the function is provided if required,
-        and has the correct type if there is an annotation.
-        An exception is raised otherwise.
-        We also extract arguments from FSM.run_data here
-        '''
-        sig = self.get_transition_arguments(func_name)
-        for p in sig.parameters.keys():
-            if p in ("self", "data"):           #ignore these
-                continue
-            fsm = False                         #Whether we got data from the FSM
-            default = sig.parameters[p].default
-            typing = sig.parameters[p].annotation
-            #If there is no default, an arg must be provided
-            if default == Parameter.empty and p not in arguments: 
-                raise MissingArgument(p, func_name)
-            #We should obey any annotations, assuming a value was provided
-            if p in arguments:
-                if typing != Parameter.empty and type(arguments[p]) != typing:
-                    message = f"{type(arguments[p]).__name__} is the wrong type for {p} (should be {typing.__name__})"
-                    raise TypeError(message)
-        for arg in arguments:
-            #We shouldn't be providing any arguments that the function doesn't ask for
-            if arg not in sig.parameters.keys():
-                raise UnknownArgument(arg, func_name)
-
     def pre_transition(self, transition, run_data, arguments):
         '''
         For the given transition, check if we have anything to do before it, then do it.
@@ -50,7 +50,7 @@ class FSMInterface:
         name = "pre_"+transition
         func = getattr(self, "pre_"+transition, None)
         if func:
-            self.validate_arguments(name, arguments)  #This will raise an error if something is wrong
+            validate_arguments(self, name, arguments)  #This will raise an error if something is wrong
             return func(run_data, **arguments)              #The run_data is passed as a dictionary, whereas arguments are unpacked
         else:
             return None
@@ -63,7 +63,7 @@ class FSMInterface:
         name = "post_"+transition
         func = getattr(self, "post_"+transition, None)
         if func:
-            self.validate_arguments(name, arguments)
+            validate_arguments(self, name, arguments)
             return func(run_data, **arguments)
         else:
             return None
@@ -165,7 +165,7 @@ class FSM:
         self.pre_transition_sequence(transition, pre_data)
         #Look for the correctly named method of the controller, then call it
         tr_data = transition_data['tr']
-        self.validate_arguments(transition, tr_data)
+        validate_arguments(self, transition, tr_data)
         func(self.run_data, **tr_data)
         #Assuming it worked, update our state
         self.current_state = self.get_destination(transition)
@@ -236,29 +236,3 @@ class FSM:
                     else:
                         self.log(e)
     
-    def validate_arguments(self, func_name, arguments) -> None:
-        '''
-        Checks that each argument of the function is provided if required,
-        and has the correct type if there is an annotation.
-        An exception is raised otherwise.
-        We also extract arguments from FSM.run_data here
-        '''
-        sig = self.get_transition_arguments(func_name)
-        for p in sig.parameters.keys():
-            if p in ("self", "data"):           #ignore these
-                continue
-            fsm = False                         #Whether we got data from the FSM
-            default = sig.parameters[p].default
-            typing = sig.parameters[p].annotation
-            #If there is no default, an arg must be provided
-            if default == Parameter.empty and p not in arguments: 
-                raise MissingArgument(p, func_name)
-            #We should obey any annotations, assuming a value was provided
-            if p in arguments:
-                if typing != Parameter.empty and type(arguments[p]) != typing:
-                    message = f"{type(arguments[p]).__name__} is the wrong type for {p} (should be {typing.__name__})"
-                    raise TypeError(message)
-        for arg in arguments:
-            #We shouldn't be providing any arguments that the function doesn't ask for
-            if arg not in sig.parameters.keys():
-                raise UnknownArgument(arg, func_name)

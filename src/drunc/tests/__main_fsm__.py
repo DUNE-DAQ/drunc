@@ -2,17 +2,26 @@ import sys
 import os
 import json
 from .fake_controller import FakeController
+#fsm_dir = os.path.join(this_dir, '..', 'fsm')
+#sys.path.append(fsm_dir)
+#from fsm_core import validate_arguments
 
-def request_args(controller, name, i_name):
-    interface = controller.fsm.config.interfaces[i_name]
-    sig = interface.get_transition_arguments(name)          #The signature of the function
+def request_args(controller, name, i_name=None):
+    if i_name:
+        interface = controller.fsm.config.interfaces[i_name]
+        sig = interface.get_transition_arguments(name)          #The signature of the function
+    else:
+        sig = controller.fsm.get_transition_arguments(name)
     p_list = []
     for p in sig.parameters.keys():
         if p not in ("self", "data"):
             p_list.append(p)
     if p_list == []:
         return None
-    print(f"Enter the following parameters for {name} of {i_name}:")
+    if i_name:
+        print(f"Enter the following parameters for {name} of {i_name}:")
+    else:
+        print(f"Enter the following parameters for {name}:")
     print(*p_list)
     inp = input("|DRUNC> ")
     return dict(zip(p_list, inp.split()))
@@ -38,18 +47,9 @@ def main():
         if not controller.fsm.can_execute_transition(cmd):
             print(f"\"{cmd}\" is not allowed")
             continue
-
-        sig = controller.fsm.get_transition_arguments(cmd)
-        p_list = []
-        for p in sig.parameters.keys():
-            if p not in ("self", "data"):
-                p_list.append(p)
-        if p_list != []:
-            print(f"Enter the following parameters in order for {cmd}:")
-            print(*p_list)
-            inp = input("|DRUNC> ")
-            data = inp.split()
-            all_args = {'tr':process_args(p_list, data)}
+        tr_args = request_args(controller, cmd)
+        if tr_args:
+            all_args = {'tr':tr_args}
         else:
             all_args = {'tr':{}}
 
