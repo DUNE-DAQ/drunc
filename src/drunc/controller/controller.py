@@ -68,8 +68,9 @@ class Controller(ControllerServicer):
         self.children_nodes = [] # type: List[ChildNode]
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-        self.log.info(configuration)
-        self.authoriser = DummyAuthoriser(configuration['authoriser'])
+        from druncschema.authoriser_pb2 import SystemType
+
+        self.authoriser = DummyAuthoriser(self.configuration.authoriser, SystemType.CONTROLLER)
 
         self.actor = ControllerActor(None)
 
