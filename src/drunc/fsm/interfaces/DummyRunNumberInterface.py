@@ -6,4 +6,5 @@ class RunNumberInterface(FSMInterface):
 
     def post_start(self, data):
         print(f"Running post-start of {self.name}")
+        return {"run_num":22, "user":"fooUsr"}
 

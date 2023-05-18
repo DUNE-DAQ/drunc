@@ -13,12 +13,11 @@ class FakeController:
         unmangled= [m for m in methods if m[0] != '_']                          #Filters out methods starting with a _
         unwanted = ["do_command", "get_state"]
         cmds = [c for c in unmangled if c not in unwanted]                      #Filters out non-FSM methods
-        print(cmds)
         for command in cmds:
             self.fsm.register_transition(command, getattr(self, command))       #Passes every command to the FSM
     
-    def do_command(self, transition, data):
-        self.fsm.execute_transition(transition, data)
+    def do_command(self, transition, transition_data):
+        self.fsm.execute_transition(transition, transition_data)
 
     def get_state(self):
         return self.fsm.get_current_state()

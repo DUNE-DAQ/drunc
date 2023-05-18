@@ -43,12 +43,10 @@
         "test-interface": {"port":6666, "route": "host/jhsdbjbh/test"}
     },
     "pre_transitions": {
-        "conf":  {"order": ["test-interface"],        "mandatory": ["test-interface"]},
-        "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
-        "stop":  {"order": ["logbook", "run-number"], "mandatory": []}
+        "conf":  {"order": ["test-interface"],        "mandatory": ["test-interface"]}
     },
     "post_transitions": {
         "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
-        "stop":  {"order": ["logbook", "run-number"], "mandatory": []}
+        "stop":  {"order": ["logbook"], "mandatory": []}
     }
 }

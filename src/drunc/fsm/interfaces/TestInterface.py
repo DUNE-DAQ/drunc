@@ -2,7 +2,7 @@ from drunc.fsm.fsm_core import FSMInterface
 
 class TestInterface(FSMInterface):
     def __init__(self, configuration):
-        super().__init__("test-plugin")
+        super().__init__("test-interface")
         self.port = configuration['port']
         self.route = configuration['route']
 

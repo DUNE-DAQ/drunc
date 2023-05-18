@@ -15,3 +15,15 @@ class UnknownInterface(Exception):
     def __init__(self, name):
         self.message = f"\"{name}\" is not a known plugin."
         super().__init__(self.message)
+
+class MissingArgument(Exception):
+    '''Raised when a mandatory argument is not provided for a transition'''
+    def __init__(self, param, name):
+        self.message = f"The mandatory argument \"{param}\" was not provided to the transition {name}"
+        super().__init__(self.message)
+
+class UnknownArgument(Exception):
+    '''Raised when an unwanted argument is given to a transition'''
+    def __init__(self, param, name):
+        self.message = f"The mandatory argument \"{param}\" is not required by transition {name}"
+        super().__init__(self.message)
