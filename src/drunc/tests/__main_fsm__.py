@@ -2,9 +2,6 @@ import sys
 import os
 import json
 from .fake_controller import FakeController
-#fsm_dir = os.path.join(this_dir, '..', 'fsm')
-#sys.path.append(fsm_dir)
-#from fsm_core import validate_arguments
 
 def request_args(controller, name, i_name=None):
     if i_name:
@@ -75,7 +72,6 @@ def main():
             controller.do_command(cmd, all_args)
         except Exception as e:
             print(e)
-
 
 if __name__ == '__main__':
     main()
