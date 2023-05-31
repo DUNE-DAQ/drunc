@@ -7,7 +7,7 @@ from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, Broad
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 
-from drunc.utils.grpc_utils import send_command
+from drunc.controller.utils import send_command
 
 class ControllerChild(ChildNode):
 
