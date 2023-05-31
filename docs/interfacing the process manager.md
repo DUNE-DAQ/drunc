@@ -41,15 +41,88 @@ The Process Manager can also stream data out. In this case it consumes a `druncs
 ## Interactions
 In this section we go over all the interactions implemented and describe them.
 
-### Boot
+### boot
 Request/response type.
 
-The request's payload should be of the form
+The request's payload should be of the form [`druncschema.BootRequest`](https://github.com/DUNE-DAQ/druncschema/blob/develop/proto/process_manager.proto#L76).
+This `BootRequest` has 2 entries:
+- process_description (ProcessDescription)
+- process_restriction (ProcessRestriction)
 
-  rpc restart      (Request) returns (Response) {}
-  rpc is_alive     (Request) returns (Response) {}
-  rpc kill         (Request) returns (Response) {}
-  rpc killall      (Request) returns (Response) {}
-  rpc flush        (Request) returns (Response) {}
-  rpc list_process (Request) returns (Response) {}
-  rpc logs         (Request) returns (stream LogLine) {}
+The process description is a `druncschema.ProcessDescription` object, that contains:
+- a string to string map of the `env`,
+- an `executable_and_arguments` vector (themselves in an protobuf object),
+- process metadata.
+
+`druncschema.ProcessMetadata` objects hold the following information:
+- the name of the user who started the process: `user`,
+- the name of the session which the process belongs to: `session`,
+- a friendly name for the process (that the user provided): `name`,
+- the `uuid` which is a unique identifier for any process.
+
+`druncschema.ProcessRestriction` hold two entries:
+- `allowed_hosts`, a vector of allowed hostnames,
+- `allowed_host_types`, a vector of allowed host types, which for now isn't used.
+
+The response from a boot RPC is of the form `druncschema.Response` with the payload being `druncschema.ProcessUUID`. This uuid is used to uniquely identify a process, right now, it is a very simple object holding a list of random characters.
+
+The RPC will raise an error if the process manager couldn't boot the application.
+
+### restart
+Request/response type.
+
+The request's payload is a [`druncschema.ProcessQuery`](https://github.com/DUNE-DAQ/druncschema/blob/develop/proto/process_manager.proto#L42).
+It is used to query the processes in the process manager.
+
+A query takes the following arguments:
+- `uuid`
+- `user`
+- `session`
+- `name`
+- and `force` (which has no place here, so should be removed).
+
+`uuid` is the unique identifier for the process as described earlier, `user` is the user who started the process, `session` is the which the process belongs to, `name` is the friendly name in the metadata.
+Restart will check that the query you have formulated corresponds to one an only one process, and restart the process.
+
+### is_alive
+Request/response type.
+
+This request payload again uses a `druncschema.ProcessQuery` described earlier. This time however the query can correspond to many processes.
+The answer's payload is of the form `druncschema.ProcessInstanceList`. This is a list of `druncschema.ProcessInstance`. Each of them hold the following information:
+- `process_description` described earlier,
+- `process_restriction` described earlier too,
+- `status_code` which is an enum (running=0, dead=1),
+- `return_code` the code with which the process exited, optionally,
+- `uuid` the process unique identifier.
+
+
+### kill
+Request/response type.
+
+This request payload again uses a `druncschema.ProcessQuery` described earlier. The query should only match one process
+The answer's payload is of the form `druncschema.ProcessInstance` (described earlier), which is returned after the process is killed.
+
+### kill_all
+Request/response type.
+
+This request payload again uses a `druncschema.ProcessQuery` described earlier. The query can match more than one process.
+The answer's payload is of the form `druncschema.ProcessInstanceList` (described earlier), which is returned after the processes are killed.
+
+
+### flush
+Request/response type.
+
+This request payload again uses a `druncschema.ProcessQuery` described earlier. The query can match more than one process.
+The answer's payload is of the form `druncschema.ProcessInstanceList` (described earlier), which is returned after the dead processes are flushed from process manager's memory. This command is useful to remove the old dead process that still appear in the "list_process" command.
+
+### list_process
+This is basically the same as the "is alive" command (and probably needs to be removed).
+
+### logs
+Request/stream type.
+
+This request payload again uses a `druncschema.LogRequest`, it contains:
+- `query` a process query, which must match one and only one process
+- `how_far`, an int32, which governs how far back we want the logs.
+
+The answer's payload is of the form `druncschema.LogLine` (just a string containing a line), that is streamed for all the lines of the log.
