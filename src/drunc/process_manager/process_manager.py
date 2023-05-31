@@ -134,17 +134,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return self._generic_command(req, '_restart_impl', ProcessQuery, context)
 
 
-
-    @abc.abstractmethod
-    def _is_alive_impl(self, process, context) -> Response:
-        raise NotImplementedError
-
-    def is_alive(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'is_alive\' request \'{req}\'')
-        return self._generic_command(req, '_is_alive_impl', ProcessQuery, context)
-
-
-
     @abc.abstractmethod
     def _kill_impl(self, process, context) -> Response:
         raise NotImplementedError
@@ -166,12 +155,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
 
     @abc.abstractmethod
-    def _list_process_impl(self, req, context) -> Response:
+    def _ps_impl(self, req, context) -> Response:
         raise NotImplementedError
 
-    def list_process(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'list_process\' request \'{req}\'')
-        return self._generic_command(req, '_list_process_impl', ProcessQuery, context)
+    def ps(self, req:Request, context) -> Response:
+        self.log.debug(f'received \'ps\' request \'{req}\'')
+        return self._generic_command(req, '_ps_impl', ProcessQuery, context)
 
 
     def _flush_impl(self, query, context) -> Response:
@@ -199,7 +188,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             return_code = None
             try:
-                if not self.process_store[uuid].is_alive():
+                if not self.process_store[uuid].is_alive(): # OMG!! remove this implementation code
                     return_code = self.process_store[uuid].exit_code
             except Exception as e:
                 pass

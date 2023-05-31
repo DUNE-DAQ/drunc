@@ -198,26 +198,13 @@ async def restart(obj:PMContext, query:ProcessQuery) -> None:
     obj.print(result)
 
 
-@process_manager_shell.command('is-alive')
-@add_query_options(at_least_one=True)
-@click.pass_obj
-@coroutine
-async def is_alive(obj:PMContext, query:ProcessQuery) -> None:
-    result = await obj.pmd.is_alive(query = query)
-
-    if result.status_code == ProcessInstance.StatusCode.RUNNING:
-        obj.print(f'Process {uuid} (name: {result.process_description.metadata.name}) is alive')
-    else:
-        obj.print(f'[danger]Process {uuid} (name: {result.process_description.metadata.name}) is dead, error code: {result.return_code}[/danger]')
-
-
 @process_manager_shell.command('ps')
 @add_query_options(at_least_one=False)
 @click.option('-l','--long-format', is_flag=True, type=bool, default=False, help='Whether to have a long output')
 @click.pass_obj
 @coroutine
 async def ps(obj:PMContext, query:ProcessQuery, long_format:bool) -> None:
-    results = await obj.pmd.list_process(query=query)
+    results = await obj.pmd.ps(query=query)
     obj.print(tabulate_process_instance_list(results, title='Processes running', long=long_format))
 
 

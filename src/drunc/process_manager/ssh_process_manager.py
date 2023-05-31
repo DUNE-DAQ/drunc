@@ -158,7 +158,7 @@ class SSHProcessManager(ProcessManager):
         return pi
 
 
-    def _list_process_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _ps_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
         ret = []
 
         for uuid in self._get_process_uid(query):
@@ -223,55 +223,6 @@ class SSHProcessManager(ProcessManager):
 
         return self.__boot(self.boot_request[uuid], uuid)
 
-    def _is_alive_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
-        uuids = self._get_process_uid(query)
-        uuid = self._ensure_one_process(uuids)
-
-        if uuid in self.process_store and uuid in self.boot_request:
-            process = self.process_store[uuid]
-
-            alive = False
-            return_code = None
-
-            try:
-                if not process.is_alive():
-                    return_code = process.exit_code
-                else:
-                    alive = True
-            except Exception as e:
-                pass
-
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
-
-            pi = ProcessInstance(
-                process_description = pd,
-                process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if alive else ProcessInstance.StatusCode.DEAD,
-                return_code = return_code,
-                uuid = pu,
-            )
-            return pi
-
-        else:
-            pd = ProcessDescription()
-            pr = ProcessRestriction()
-            pu = ProcessUUID(uuid=uuid)
-            if uuid in self.boot_request:
-                pd.CopyFrom(self.boot_request[uuid].process_description)
-                pr.CopyFrom(self.boot_request[uuid].process_restriction)
-
-            pi = ProcessInstance(
-                process_description = pd,
-                process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if is_alive else ProcessInstance.StatusCode.DEAD,
-                return_code = return_code,
-                uuid = pu,
-            )
-            return pi
 
     def _kill_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstance:
         uuids = self._get_process_uid(query)
