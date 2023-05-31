@@ -9,11 +9,13 @@ from grpc_status import rpc_status
 from drunc.communication.child_node import ChildNode
 from drunc.communication.daq_app_child import DAQAppChild
 from drunc.communication.controller_child import ControllerChild
-from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
+from druncschema.controller_pb2 import BroadcastMessage, ControllerRequest, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.controller_pb2_grpc import ControllerServicer, BroadcastStub
 from drunc.utils.utils import get_logger
+from drunc.utils.grpc_utils import MalformedMessage
+
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import unpack_any
 from threading import Lock, Thread
@@ -244,6 +246,11 @@ class Controller(ControllerServicer):
             )
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
+        try:
+            creq = unpack_any(request.data, ControllerRequest)
+        except MalformedMessage as e:
+            self.log.error(f'Cannot unpack data in request to \'ControllerRequest\': {e}')
+
         self.broadcaster.new_broadcast(
             BroadcastMessage(
                 level = Level.INFO,
@@ -251,20 +258,20 @@ class Controller(ControllerServicer):
                 emitter = self.name
             )
         )
-        data = request.data if request.data else None
-        self.log.debug(f'{command} data: {request.data}')
 
-        node_to_execute = self._resolve(request.locations)
+        self.log.debug(f'{command} data: {creq.data}')
+
+        node_to_execute = self._resolve(creq.locations)
 
         if node_to_execute:
-            self.propagate_to_list(request, command, node_to_execute) # TODO this function needs to bundle the results
+            self.propagate_to_list(creq, command, node_to_execute) # TODO this function needs to bundle the results
 
-        if self._should_execute_on_self(request.locations):
+        if self._should_execute_on_self(creq.locations):
             try:
                 token = Token()
                 token.CopyFrom(request.token)
                 self.log.info(f'{token} executing {command}')
-                result = getattr(self, command+"_impl")(data, token)
+                result = getattr(self, command+"_impl")(creq.data, token)
 
             except ctler_excpt.ControllerException as e:
                 self.log.error(f'ControllerException when executing {command}: {e}')
@@ -319,6 +326,7 @@ class Controller(ControllerServicer):
 
 
     def ls(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'ls\' request: {request}')
         return self._generic_user_command(request, '_ls', context)
 
     def _ls_impl(self, _, dummy) -> LocationList:
@@ -344,6 +352,7 @@ class Controller(ControllerServicer):
 
 
     def add_to_broadcast_list(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'add_to_broadcast_list\' request: {request}')
         return self._generic_user_command(request, '_add_to_broadcast_list', context)
 
     def _add_to_broadcast_list_impl(self, data, _) -> PlainText:
@@ -356,6 +365,7 @@ class Controller(ControllerServicer):
 
 
     def remove_from_broadcast_list(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'remove_from_broadcast_list\' request: {request}')
         return self._generic_user_command(request, '_remove_from_broadcast_list', context)
 
     def _remove_from_broadcast_list_impl(self, data, _) -> PlainText:
@@ -367,6 +377,7 @@ class Controller(ControllerServicer):
 
 
     def get_broadcast_list(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'get_broadcast_list\' request: {request}')
         return self._generic_user_command(request, '_get_broadcast_list', context)
 
     def _get_broadcast_list_impl(self, dummy, _) -> PlainText:
@@ -378,6 +389,7 @@ class Controller(ControllerServicer):
 
 
     def take_control(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'take_control\' request: {request}')
         return self._generic_user_command(request, '_take_control', context)
 
     def _take_control_impl(self, _, token) -> PlainText:
@@ -388,6 +400,7 @@ class Controller(ControllerServicer):
 
 
     def surrender_control(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'surrender_control\' request: {request}')
         return self._generic_user_command(request, '_surrender_control', context)
 
     def _surrender_control_impl(self, _, token) -> PlainText:
@@ -398,6 +411,7 @@ class Controller(ControllerServicer):
 
 
     def who_is_in_charge(self, request:Request, context) -> Response:
+        self.log.debug(f'Received \'who_is_in_charge\' request: {request}')
         return self._generic_user_command(request, '_who_is_in_charge', context)
 
     def _who_is_in_charge_impl(self, *args) -> PlainText:

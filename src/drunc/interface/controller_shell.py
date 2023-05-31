@@ -2,9 +2,11 @@ import click
 import click_shell
 from drunc.controller.controller import Controller
 from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-from drunc.communication.controller_pb2 import Command, Token, Request, Response, BroadcastRequest, PlainText, LocationList
+from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
 import drunc.controller.exceptions as ctler_excpt
-from drunc.utils.grpc_utils import send_command
+from drunc.controller.utils import send_command
 
 import grpc
 import google.protobuf.any_pb2 as any_pb2
@@ -52,7 +54,7 @@ def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool
         time.sleep(0.1)
 
     # first add the shell to the controller broadcast list
-    from drunc.communication.controller_pb2_grpc import ControllerStub
+    from druncschema.controller_pb2_grpc import ControllerStub
     import grpc
 
     channel = grpc.insecure_channel(controller_address)
