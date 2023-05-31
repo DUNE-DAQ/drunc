@@ -33,7 +33,9 @@
                     "drunc-controller": [
                         "${CONFIGURATION}",
                         "${PORT}",
-                        "${NAME}"
+                        "${NAME}",
+                        "--log-level",
+                        "debug"
                     ]
                 }
             ],
