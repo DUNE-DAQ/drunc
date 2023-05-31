@@ -1,4 +1,4 @@
-from druncschema.request_response_pb2 import Request, Response, Stream
+from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest
@@ -50,7 +50,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         new_token.CopyFrom(token)
         data = Any()
         data.Pack(payload)
-        return Stream(
+        return Response(
             token = new_token,
             data = data
         )
@@ -227,10 +227,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
 
     @abc.abstractmethod
-    async def _logs_impl(self, req:Request, context) -> Stream:
+    async def _logs_impl(self, req:Request, context) -> Response:
         raise NotImplementedError
 
-    async def logs(self, req:Request, context) -> Stream:
+    async def logs(self, req:Request, context) -> Response:
         self.log.debug(f'received \'logs\' request \'{req}\'')
         async for r in self._generic_command_async(req, '_logs_impl', LogRequest, context):
             yield r
