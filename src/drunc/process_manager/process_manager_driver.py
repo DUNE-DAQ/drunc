@@ -85,15 +85,9 @@ class ProcessManagerDriver:
         answer = await self.pm_stub.kill(
             self._create_request(payload = query)
         )
-        pi = unpack_any(answer.data, ProcessInstance)
+        pi = unpack_any(answer.data, ProcessInstanceList)
         return pi
 
-    async def killall(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.killall(
-            self._create_request(payload = query)
-        )
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
     async def logs(self, req:LogRequest) -> LogLine:
         async for stream in self.pm_stub.logs(self._create_request(payload = req)):

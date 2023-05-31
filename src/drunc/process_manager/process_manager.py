@@ -143,17 +143,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return self._generic_command(req, '_kill_impl', ProcessQuery, context)
 
 
-
-    @abc.abstractmethod
-    def _killall_impl(self, req, context) -> Response:
-        raise NotImplementedError
-
-    def killall(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'killall\' request \'{req}\'')
-        return self._generic_command(req, '_killall_impl', ProcessQuery, context)
-
-
-
     @abc.abstractmethod
     def _ps_impl(self, req, context) -> Response:
         raise NotImplementedError
