@@ -71,8 +71,8 @@ arglist = {
 @pytest.fixture(params = filelist)
 def make_controller(request):
     '''Generate a controller for each config provided.'''
-    this_dir = os.path.dirname(__file__)
-    path = os.path.join(this_dir, '..', '..', '..', 'data', 'fsm')
+    top_dir = os.environ['DRUNC_DIR']
+    path = os.path.join(top_dir, 'data', 'fsm')
     filename = f"{request.param}.json"
     filepath = path + '/' + filename
     print(filepath)
