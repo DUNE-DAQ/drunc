@@ -11,72 +11,27 @@ sequences = ["boot", "start_run", "stop_run", "shutdown"]
 #A list of config files that the test should be run on
 filelist = ["fsm_configuration", "no_interfaces"]
 
-#We define the argument dicts up here to avoid repetiton
-no_args   =  {'tr': {}}
-fsm_conf  =  {'tr': {'a_number':77}, 'pre_test-interface': {}}
-noint_conf = {'tr': {'a_number':77}}
-fsm_start =  {'tr': {}, 'post_run-number': {}, 'post_logbook': {'message': "hello!"}}
-fsm_stop  =  {'tr': {}, 'post_logbook': {}}
-#This dict maps commands to the arguments that should be provided.
-#The sequences make this very big, so there is hopefully a better way of doing it.
-arglist = {
-    'fsm_configuration': {
-        'conf':                     fsm_conf,
-        'start':                    fsm_start,
-        'stop':                     fsm_stop,
-        'start_run': {
-            'conf':                 fsm_conf,
-            'start':                fsm_start,
-            'enable_triggers':      no_args
-        },
-        'stop_run': {
-            'disable_triggers':     no_args,
-            'drain_dataflow':       no_args,
-            'stop_trigger_sources': no_args,
-            'stop':                 fsm_stop
-        },
-        'shutdown': {
-            'disable_triggers':     no_args,
-            'drain_dataflow':       no_args,
-            'stop_trigger_sources': no_args,
-            'stop':                 fsm_stop,
-            'scrap':                no_args,
-            'terminate':            no_args
-        }
-    },
-    'no_interfaces': {
-        'conf': noint_conf,
-        'start_run': {
-            'conf':                 noint_conf,
-            'start':                no_args,
-            'enable_triggers':      no_args
-        },
-        'stop_run': {
-            'disable_triggers':     no_args,
-            'drain_dataflow':       no_args,
-            'stop_trigger_sources': no_args,
-            'stop':                 no_args
-            },
-        'shutdown': {
-            'disable_triggers':     no_args,
-            'drain_dataflow':       no_args,
-            'stop_trigger_sources': no_args,
-            'stop':                 no_args,
-            'scrap':                no_args,
-            'terminate':            no_args
-        }
-    }
+#Sets of arguments are defined here to avoid repetition
+argsets = {
+    "no_args":    {"tr": {}},
+    "fsm_conf":   {"tr": {"a_number":77}, "pre_test-interface": {}},
+    "noint_conf": {"tr": {"a_number":77}},
+    "fsm_start":  {"tr": {}, "post_run-number": {}, "post_logbook": {"message": "hello!"}},
+    "fsm_stop":   {"tr": {}, "post_logbook": {}}
 }
+
+path = os.path.join(os.environ['DRUNC_DIR'], 'data', 'fsm')
+args_filepath = path + '/fsm_test_args.json'
+f = open(args_filepath, 'r')
+all_args_data = json.loads(f.read())
+f.close()
 
 @pytest.fixture(params = filelist)
 def make_controller(request):
     '''Generate a controller for each config provided.'''
-    top_dir = os.environ['DRUNC_DIR']
-    path = os.path.join(top_dir, 'data', 'fsm')
-    filename = f"{request.param}.json"
-    filepath = path + '/' + filename
-    print(filepath)
-    f = open(filepath, 'r')
+    conf_filename = f"{request.param}.json"
+    conf_filepath = path + '/' + conf_filename
+    f = open(conf_filepath, 'r')
     config = json.loads(f.read())
     f.close()
     return FakeController(config), request.param
@@ -86,12 +41,19 @@ def run_commands(make_controller, request):
     err_list = []
     controller = make_controller[0]
     this_conf = make_controller[1]
+    config_args_data = all_args_data[this_conf]
     for cmd in request.param:
         try:
-            if cmd in arglist[this_conf]:
-                controller.do_command(cmd, arglist[this_conf][cmd])
+            if cmd in config_args_data:
+                to_send = config_args_data[cmd]
+                if type(to_send) == str:                            #If the value for the listed command is a string...
+                    controller.do_command(cmd, argsets[to_send])    #...send the relevent data.
+                else:                                               #Otherwise, it must be a sequence.
+                    #Take the dict and replace the names of the argsets with the actual values.
+                    sequence_data = {k:argsets[v] for (k,v) in to_send.items()} 
+                    controller.do_command(cmd, sequence_data)
             else:
-                controller.do_command(cmd, no_args)
+                controller.do_command(cmd, argsets['no_args'])
         except Exception as e:
             err_list.append(e)
     return err_list
