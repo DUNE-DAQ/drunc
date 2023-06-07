@@ -85,23 +85,17 @@ class ProcessManagerDriver:
         answer = await self.pm_stub.kill(
             self._create_request(payload = query)
         )
-        pi = unpack_any(answer.data, ProcessInstance)
+        pi = unpack_any(answer.data, ProcessInstanceList)
         return pi
 
-    async def killall(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.killall(
-            self._create_request(payload = query)
-        )
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
     async def logs(self, req:LogRequest) -> LogLine:
         async for stream in self.pm_stub.logs(self._create_request(payload = req)):
             ll = unpack_any(stream.data, LogLine)
             yield ll
 
-    async def list_process(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.list_process(
+    async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
+        answer = await self.pm_stub.ps(
             self._create_request(payload = query)
         )
         pil = unpack_any(answer.data, ProcessInstanceList)
@@ -113,13 +107,6 @@ class ProcessManagerDriver:
         )
         pil = unpack_any(answer.data, ProcessInstanceList)
         return pil
-
-    async def is_alive(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.pm_stub.is_alive(
-            self._create_request(payload = query)
-        )
-        pi = unpack_any(answer.data, ProcessInstance)
-        return pi
 
     async def restart(self, query:ProcessQuery) -> ProcessInstance:
         answer = await self.pm_stub.restart(
