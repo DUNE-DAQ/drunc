@@ -7,4 +7,4 @@ grpcio-status
 nest_asyncio
 rich
 sh
-druncschema @ git+https://github.com/DUNE-DAQ/druncschema.git@plasorak/pm-simplification#egg=druncschema
+druncschema @ git+https://github.com/DUNE-DAQ/druncschema.git
