@@ -9,7 +9,7 @@ from grpc_status import rpc_status
 from drunc.communication.child_node import ChildNode
 from drunc.communication.daq_app_child import DAQAppChild
 from drunc.communication.controller_child import ControllerChild
-from druncschema.controller_pb2 import BroadcastMessage, ControllerRequest, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
+from druncschema.controller_pb2 import BroadcastMessage, Level, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.controller_pb2_grpc import ControllerServicer, BroadcastStub
@@ -247,9 +247,9 @@ class Controller(ControllerServicer):
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
         try:
-            creq = unpack_any(request.data, ControllerRequest)
+            creq = unpack_any(request.data, Request)
         except MalformedMessage as e:
-            self.log.error(f'Cannot unpack data in request to \'ControllerRequest\': {e}')
+            self.log.error(f'Cannot unpack data in request to \'Request\': {e}')
 
         self.broadcaster.new_broadcast(
             BroadcastMessage(
