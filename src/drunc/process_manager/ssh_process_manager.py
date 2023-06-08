@@ -231,10 +231,7 @@ class SSHProcessManager(ProcessManager):
         for uuid in uuids:
             process = self.process_store[uuid]
             if not process.is_alive():
-                if query.force:
-                    continue
-                else:
-                    raise RuntimeError(f'The process {uuid} is already dead!')
+                continue
 
             process.terminate()
 

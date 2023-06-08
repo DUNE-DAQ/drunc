@@ -233,26 +233,33 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False) -> [str]:
         import re
 
-        uuid_selector = '.*'
-        name_selector = '.*'
-        user_selector = '.*'
-        part_selector = '.*'
+        uuid_selector = []
+        name_selector = query.names
+        user_selector = query.user
+        session_selector = query.session
         # relevant reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
-        if query.HasField('uuid'): uuid_selector = query.uuid.uuid
-        if query.name != '': name_selector = query.name
-        if query.user != '': user_selector = query.user
-        if query.session != '': part_selector = query.session
+
+        for uid in query.uuids:
+            uuid_selector += [uid.uuid]
 
         processes = []
         all_the_uuids = self.process_store.keys() if not in_boot_request else self.boot_request.keys()
+
         for uuid in all_the_uuids:
+            accepted = False
+            meta = self.boot_request[uuid].process_description.metadata
 
-            if not re.search(uuid_selector, uuid): continue
-            if not re.search(part_selector, self.boot_request[uuid].process_description.metadata.session): continue
-            if not re.search(user_selector, self.boot_request[uuid].process_description.metadata.user): continue
-            if not re.search(name_selector, self.boot_request[uuid].process_description.metadata.name): continue
+            if uuid in uuid_selector: accepted = True
 
-            processes.append(uuid)
+            for name_reg in name_selector:
+                if re.search(name_reg, meta.name):
+                    accepted = True
+
+            if session_selector == meta.session: accepted = True
+
+            if user_selector == meta.user: accepted = True
+
+            if accepted: processes.append(uuid)
 
         return processes
 
@@ -267,6 +274,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
             return SSHProcessManager(conf)
         else:
-            raise RuntimeError(f'ProcessManager type {pm_conf_data["type"]} is unsupported!')
+            raise RuntimeError(f'ProcessManager type {conf["type"]} is unsupported!')
 
 
