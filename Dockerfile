@@ -10,8 +10,9 @@ RUN apt update && apt install -y --no-install-recommends \
     openssh-server \
     openssh-client
 
+# Branch applied
 # Clone the repository and install the required Python packages
-RUN git clone -b plasorak/better-process-queries https://github.com/DUNE-DAQ/drunc.git && \ # Branch applied
+RUN git clone -b plasorak/better-process-queries https://github.com/DUNE-DAQ/drunc.git && \
     cd drunc && \
     pip install -r requirements.txt && \
     pip install .
