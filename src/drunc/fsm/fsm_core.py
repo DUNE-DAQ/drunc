@@ -145,9 +145,9 @@ class FSM:
         '''
         if transition in self.config.sequences: 
             #TODO check nanorc.common_commands.py, should be like that
-            for command in self.config.sequences[transition]:   #Format is {"cmd": "conf", "optional": true }
+            for command in self.config.sequences[transition]:   #"command" has format {"cmd": "conf", "optional": true }
                 try:                                            #Attempt every transition in the sequence
-                    self.execute_transition(command['cmd'], transition_data[command])
+                    self.execute_transition(command['cmd'], transition_data[command['cmd']])
                 except Exception as e:
                     if not command["optional"]:                 #If it fails and isn't optional
                         raise e                                 #Pass the error up and stop

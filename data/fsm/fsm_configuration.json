@@ -47,6 +47,6 @@
     },
     "post_transitions": {
         "start": {"order": ["run-number", "logbook"], "mandatory": ["run-number"]},
-        "stop":  {"order": ["logbook"], "mandatory": []}
+        "stop":  {"order": ["logbook"],               "mandatory": []}
     }
 }
