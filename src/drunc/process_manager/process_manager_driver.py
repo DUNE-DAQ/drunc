@@ -6,7 +6,6 @@ from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 from drunc.utils.grpc_utils import unpack_any
 
-
 class ProcessManagerDriver:
     def __init__(self, pm_conf:dict, token):
         import grpc
@@ -16,15 +15,23 @@ class ProcessManagerDriver:
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
-    def _create_request(self, payload):
+
+    def _create_request(self, payload=None):
         token = Token()
         token.CopyFrom(self.token)
         data = Any()
-        data.Pack(payload)
-        return Request(
-            token = token,
-            data = data
-        )
+        if payload:
+            data.Pack(payload)
+
+        if payload:
+            return Request(
+                token = token,
+                data = data
+            )
+        else:
+            return Request(
+                token = token
+            )
 
     async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessInstance:
         boot_configuration = {}

@@ -5,110 +5,91 @@ import os
 import getpass
 from functools import wraps
 
-from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
+from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery
 from druncschema.token_pb2 import Token
 from drunc.utils.utils import now_str
+from drunc.process_manager.utils import generate_query, add_query_options, tabulate_process_instance_list
 from typing import Optional
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from functools import update_wrapper
 
 def coroutine(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return asyncio.run(f(*args, **kwargs))
+        return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
+        #return asyncio.run(f(*args, **kwargs))
     return wrapper
-
-
-def generate_query(f, at_least_one:bool, all_processes_by_default:bool=False):
-    @click.pass_context
-    def new_func(ctx, session, name, user, uuid, **kwargs):
-        is_trivial_query = bool((len(uuid) == 0) and (session is None) and (len(name) == 0) and (user is None))
-        print(f'is_trivial_query={is_trivial_query} ({type(is_trivial_query)}): uuid={uuid} ({type(uuid)}), session={session} ({type(session)}), name={name} ({type(name)}), user={user} ({type(user)})')
-
-        if is_trivial_query and at_least_one:
-            raise click.BadParameter('You need to provide at least a \'--uuid\', \'--session\', \'--user\' or \'--name\'!')
-
-        if all_processes_by_default and is_trivial_query:
-            name = ['.*']
-
-        uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
-
-        query = ProcessQuery(
-            session = session,
-            names = name,
-            user = user,
-            uuids = uuids,
-        )
-        print(query)
-        return ctx.invoke(f, query=query,**kwargs)
-    return update_wrapper(new_func, f)
-
-
-def add_query_options(at_least_one:bool, all_processes_by_default:bool=False):
-    def wrapper(f0):
-        f1 = click.option('-s','--session', type=str, default=None, help='Select the processes on a particular session')(f0)
-        f2 = click.option('-n','--name'   , type=str, default=None, multiple=True,help='Select the process of a particular names')(f1)
-        f3 = click.option('-u','--user'   , type=str, default=None, help='Select the process of a particular user')(f2)
-        f4 = click.option('--uuid'        , type=str, default=None, multiple=True, help='Select the process of a particular UUIDs')(f3)
-        return generate_query(f4, at_least_one, all_processes_by_default)
-    return wrapper
-
-
-def tabulate_process_instance_list(pil, title, long=False):
-    from rich.table import Table
-    t = Table(title=title)
-    t.add_column('session')
-    t.add_column('user')
-    t.add_column('friendly name')
-    t.add_column('uuid')
-    t.add_column('alive')
-    t.add_column('exit-code')
-    if long:
-        t.add_column('executable')
-
-    for result in pil.values:
-        m = result.process_description.metadata
-        row = [m.session, m.user, m.name, result.uuid.uuid]
-        alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-        row += [alive, f'{result.return_code}']
-        if long:
-            executables = [e.exec for e in result.process_description.executable_and_arguments]
-            row += ['; '.join(executables)]
-        t.add_row(*row)
-
-    return t
 
 
 class PMContext:
-    def __init__(self, pmd:Optional[ProcessManagerDriver]=None) -> None:
-        self.pmd = pmd
+    def __init__(self, pm_conf:str=None, shell_notif_port:int=None, print_traceback:bool=False) -> None:
+        print('whopjasdf')
+        self.print_traceback = True
         from rich.console import Console
-        from drunc.utils.utils import CONSOLE_THEMES
+        from drunc.utils.utils import CONSOLE_THEMES,get_logger
         self._console = Console(theme=CONSOLE_THEMES)
-        self.print_traceback = False
+        self._log = get_logger("PMContext")
+        self._log.info('initialising PMContext')
+        if pm_conf is None:
+            return
+
+        pm_conf_data = {}
+        with open(pm_conf) as f:
+            import json
+            pm_conf_data = json.loads(f.read())
+
+        user=getpass.getuser()
+        self.token = Token(token=f'{user}-token', user_name=user)
+        self.pmd = ProcessManagerDriver(
+            pm_conf_data,
+            self.token
+        )
+
+        self.print_traceback = print_traceback
+
+        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
+        self.status_receiver = StdoutBroadcastHandler(
+            port = shell_notif_port,
+            stub = self.pmd.pm_stub,
+            token = self.token
+        )
+        from threading import Thread
+        self.server_thread = Thread(target=self.status_receiver.serve, name=f'serve_thread')
+        self.server_thread.start()
+
+        self.status_receiver.connect()
+
 
     def print(self, text):
         self._console.print(text)
     def rule(self, text):
         self._console.rule(text)
 
+
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
+@click.argument('this-port', type=int)#, help='Which port to use for receiving status')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
+@click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
 @click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
-@click.pass_obj
-def process_manager_shell(obj:PMContext, pm_conf:str, log_level:str, traceback:bool) -> None:
-    obj.print_traceback = traceback
-
-    pm_conf_data = {}
-    with open(pm_conf) as f:
-        import json
-        pm_conf_data = json.loads(f.read())
-
-    obj.pmd = ProcessManagerDriver(pm_conf_data, token = Token(token='123', user_name=getpass.getuser()))
-
+@click.pass_context
+def process_manager_shell(ctx, this_port:int, pm_conf:str, log_level:str, traceback:bool) -> None:
+    from drunc.utils.utils import update_log_level, get_logger
     update_log_level(log_level)
+    log = get_logger('shell')
+    log.debug('debug message')
+    log.info ('info message')
+    log.warning('warning message')
+    log.error('error message')
+    log.critical('critical message')
+
+    print('whoooo')
+    ctx.obj = PMContext(
+        pm_conf = pm_conf,
+        shell_notif_port = this_port,
+        print_traceback = traceback
+    )
+    print('whoooo2')
+
 
 
 @process_manager_shell.command('boot')
@@ -201,6 +182,7 @@ async def restart(obj:PMContext, query:ProcessQuery) -> None:
 @coroutine
 async def ps(obj:PMContext, query:ProcessQuery, long_format:bool) -> None:
     results = await obj.pmd.ps(query=query)
+
     obj.print(tabulate_process_instance_list(results, title='Processes running', long=long_format))
 
 

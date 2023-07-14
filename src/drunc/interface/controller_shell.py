@@ -13,7 +13,7 @@ from grpc_status import rpc_status
 from drunc.utils.utils import get_logger
 
 class ControllerContext:
-    def __init__(self, status_receiver_port:str=None) -> None:
+    def __init__(self, status_receiver_port:int=None) -> None:
         self.log = get_logger("ControllerShell")
         self.print_traceback = True
         self.controller = None
@@ -22,7 +22,7 @@ class ControllerContext:
         user = os.getlogin()
 
         self.token = Token ( # fake token, but should be figured out from the environment/authoriser
-            token = 'abc',
+            token = f'{user}-token',
             user_name = user
         )
 
@@ -38,6 +38,10 @@ class ControllerContext:
         self.server_thread = Thread(target=self.status_receiver.serve, name=f'serve_thread')
         self.server_thread.start()
 
+        import time
+        while self.status_receiver.ready is False:
+            time.sleep(0.1)
+
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True)
 @click.argument('controller-address', type=str)#, help='Which address the controller is running on')
@@ -47,9 +51,6 @@ class ControllerContext:
 def controller_shell(ctx, controller_address:str, this_port:int, just_watch:bool) -> None:
     ctx.obj = ControllerContext(this_port)
 
-    import time
-    while ctx.obj.status_receiver.ready is False:
-        time.sleep(0.1)
 
     # first add the shell to the controller broadcast list
     from drunc.communication.controller_pb2_grpc import ControllerStub

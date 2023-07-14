@@ -1,20 +1,23 @@
-class MalformedMessage(Exception):
-    pass
+
+
+class UnpackingError(Exception):
+    def __init__(self, data, format):
+        self.data = data
+        self.format = format
+        super().__init__(f'Cannot unpack {data} to {format.DESCRIPTOR}')
+
 
 def unpack_any(data, format):
     if not data.Is(format.DESCRIPTOR):
-        print(f'Cannot unpack {data} into {format}')
-        from druncschema import controller_pb2 as ctler_excpt
-        raise MalformedMessage
+        raise UnpackingError(data, format)
     req = format()
     data.Unpack(req)
     return req
 
 
-
-
 def send_command(controller, token, command:str, data=None, paths=[], recursive=False, rethrow=False):
-    from druncschema.controller_pb2 import Request, Response, Token
+    from druncschema.request_response_pb2 import Request
+    from druncschema.token_pb2 import Token
     import grpc
     from google.protobuf import any_pb2
 
@@ -34,16 +37,8 @@ def send_command(controller, token, command:str, data=None, paths=[], recursive=
     token.CopyFrom(token) # some protobuf magic
 
     try:
-        locs = [
-            Location(
-                path = path,
-                recursive = recursive
-            ) for path in paths
-        ]
-
         request = Request(
-            token = token,
-            locations = locs
+            token = token
         )
 
         if data:
@@ -51,12 +46,12 @@ def send_command(controller, token, command:str, data=None, paths=[], recursive=
             data_detail.Pack(data)
             request.data.CopyFrom(data_detail)
 
-        log.debug(f'Sending: {command} to the controller, with {request}')
+        log.debug(f'Sending: {command} with {request}')
 
         response = cmd(request)
 
     except grpc.RpcError as e:
-        log.error(f'Error sending command {command} to controller: {e.code().name}')
+        log.error(f'Error sending command {command}: {e.code().name}')
         log.error(e)
         try:
             log.error(e.details())

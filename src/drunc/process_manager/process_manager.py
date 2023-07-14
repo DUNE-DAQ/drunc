@@ -3,6 +3,7 @@ from druncschema.token_pb2 import Token
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
+from drunc.utils.broadcast_sender import BroadcastSender
 import abc
 
 from drunc.utils.grpc_utils import unpack_any
@@ -14,9 +15,13 @@ from google.rpc import status_pb2
 from grpc_status import rpc_status
 from google.protobuf.any_pb2 import Any
 
-class ProcessManager(abc.ABC, ProcessManagerServicer):
+class ProcessManager(abc.ABC, ProcessManagerServicer,BroadcastSender):
 
     def __init__(self, configuration_loc):
+        ProcessManagerServicer.__init__(self)
+        BroadcastSender.__init__(self)
+        self.name = 'ProcessManager'
+
         from drunc.process_manager.configuration import ProcessManagerConfiguration
         self.configuration = ProcessManagerConfiguration(configuration_loc)
 
@@ -27,7 +32,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self.process_store = {} # dict[str, sh.RunningCommand]
         self.boot_request = {} # dict[str, BootRequest]
-        # use conf if needed
 
     def terminate(self):
         self._terminate()
@@ -141,6 +145,42 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def kill(self, req:Request, context) -> Response:
         self.log.debug(f'received \'kill\' request \'{req}\'')
         return self._generic_command(req, '_kill_impl', ProcessQuery, context)
+
+    def broadcast_command_unauthorised(self, user, command):
+        from druncschema import BroadcastMessage, CommandNotificationMessage
+        nm = CommandNotificationMessage(
+            user = user,
+            command = command
+        )
+        data = Any()
+        data.Pack(nm)
+
+        bm = BroadcastMessage(
+            type = BroadcastMessage.NotificationType.COMMAND_EXECUTION_NOT_AUTHORISED,
+            data = data
+        )
+
+        for bl in self.broadcast_message.values():
+            b = BroadcastMessage().CopyFrom(bm)
+            bl.put(b)
+
+    def broadcast_command_fail(self, user, command):
+        from druncschema import BroadcastMessage, CommandNotificationMessage
+        nm = CommandNotificationMessage(
+            user = user,
+            command = command
+        )
+        data = Any()
+        data.Pack(nm)
+
+        bm = BroadcastMessage(
+            type = BroadcastMessage.NotificationType.COMMAND_FAILED,
+            data = data
+        )
+
+        for bl in self.broadcast_message.values():
+            b = BroadcastMessage().CopyFrom(bm)
+            bl.put(b)
 
 
     @abc.abstractmethod
