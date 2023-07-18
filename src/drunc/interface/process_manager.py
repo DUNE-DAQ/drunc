@@ -15,8 +15,7 @@ def process_manager_cli(pm_conf:str, loglevel):
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
     pm_conf_data = None
-    from drunc.utils.utils import setup_fancy_logging, update_log_level
-    setup_fancy_logging()
+    from drunc.utils.utils import update_log_level
     update_log_level(loglevel)
 
     with open(pm_conf) as f:

@@ -9,9 +9,8 @@ from drunc.process_manager.process_manager import ProcessManager
 class SSHProcessManager(ProcessManager):
     def __init__(self, conf):
         super().__init__(conf)
-
-        from drunc.utils.utils import get_logger
-        self.log = get_logger('ssh-process-manager')
+        import logging
+        self.log = logging.getLogger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
 

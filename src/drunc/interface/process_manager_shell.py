@@ -22,13 +22,13 @@ def coroutine(f):
 
 
 class PMContext:
-    def __init__(self, pm_conf:str=None, shell_notif_port:int=None, print_traceback:bool=False) -> None:
-        print('whopjasdf')
+    def __init__(self, pm_conf:str=None, print_traceback:bool=False) -> None:
         self.print_traceback = True
         from rich.console import Console
-        from drunc.utils.utils import CONSOLE_THEMES,get_logger
+        from drunc.utils.utils import CONSOLE_THEMES
         self._console = Console(theme=CONSOLE_THEMES)
-        self._log = get_logger("PMContext")
+        import logging
+        self._log = logging.getLogger("PMContext")
         self._log.info('initialising PMContext')
         if pm_conf is None:
             return
@@ -47,17 +47,17 @@ class PMContext:
 
         self.print_traceback = print_traceback
 
-        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-        self.status_receiver = StdoutBroadcastHandler(
-            port = shell_notif_port,
-            stub = self.pmd.pm_stub,
-            token = self.token
-        )
-        from threading import Thread
-        self.server_thread = Thread(target=self.status_receiver.serve, name=f'serve_thread')
-        self.server_thread.start()
+        # from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
+        # self.status_receiver = StdoutBroadcastHandler(
+        #     port = shell_notif_port,
+        #     stub = self.pmd.pm_stub,
+        #     token = self.token
+        # )
+        # from threading import Thread
+        # self.server_thread = Thread(target=self.status_receiver.serve, name=f'serve_thread')
+        # self.server_thread.start()
 
-        self.status_receiver.connect()
+        # self.status_receiver.connect()
 
 
     def print(self, text):
@@ -67,28 +67,18 @@ class PMContext:
 
 
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
-@click.argument('this-port', type=int)#, help='Which port to use for receiving status')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
 @click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
 @click.pass_context
-def process_manager_shell(ctx, this_port:int, pm_conf:str, log_level:str, traceback:bool) -> None:
-    from drunc.utils.utils import update_log_level, get_logger
+def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> None:
+    from drunc.utils.utils import update_log_level
     update_log_level(log_level)
-    log = get_logger('shell')
-    log.debug('debug message')
-    log.info ('info message')
-    log.warning('warning message')
-    log.error('error message')
-    log.critical('critical message')
 
-    print('whoooo')
     ctx.obj = PMContext(
         pm_conf = pm_conf,
-        shell_notif_port = this_port,
         print_traceback = traceback
     )
-    print('whoooo2')
 
 
 
