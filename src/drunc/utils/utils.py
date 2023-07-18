@@ -24,12 +24,11 @@ def regex_match(regex, string):
 log_level = logging.INFO
 
 def update_log_level(loglevel):
-    global log_level
     import sh
     log_level = log_levels[loglevel]
-
+    #logging.basicConfig(level=log_level)
     # Update log level for root logger
-    logger = logging.getLogger()
+    logger = logging.getLogger('drunc')
     logger.setLevel(log_level)
     for handler in logger.handlers:
         handler.setLevel(log_level)
@@ -41,11 +40,10 @@ def update_log_level(loglevel):
     for handler in sh_command_logger.handlers:
         handler.setLevel(sh_command_level)
 
-def setup_fancy_logging():
     from rich.logging import RichHandler
 
     logging.basicConfig(
-        level="INFO",
+        level=log_level,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[
@@ -53,15 +51,19 @@ def setup_fancy_logging():
             RichHandler(rich_tracebacks=False) # Make this True, and everything crashes on exceptions (no clue why)
         ]
     )
+# def setup_fancy_logging():
+#     from rich.logging import RichHandler
 
 
-def get_logger(module_name):
-    global log_level
-    logger = logging.getLogger(module_name)
-    logger.setLevel(log_level)
-    for handler in logger.handlers:
-        handler.setLevel(log_level)
-    return logger#logging.getLogger(module_name)
+
+
+# def get_logger(module_name):
+#     global log_level
+#     logger = logging.getLogger(module_name)
+#     logger.setLevel(log_level)
+#     for handler in logger.handlers:
+#         handler.setLevel(log_level)
+#     return logger#logging.getLogger(module_name)
 
 
 def get_new_port():
