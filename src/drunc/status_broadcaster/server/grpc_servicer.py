@@ -20,7 +20,7 @@ class ListenerRepresentation:
         return self.stub.handle_broadcast(message)
 
 
-class BroadcastSender(BroadcastSenderServicer):
+class GRCPBroadcastSender(BroadcastSenderServicer):
 
     def __init__(self):
         from drunc.utils.utils import get_logger
