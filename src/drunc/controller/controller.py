@@ -9,9 +9,11 @@ from grpc_status import rpc_status
 from drunc.communication.child_node import ChildNode
 from drunc.communication.daq_app_child import DAQAppChild
 from drunc.communication.controller_child import ControllerChild
-from drunc.communication.controller_pb2 import Request, Response, BroadcastMessage, Level, Token, PlainText, BroadcastRequest, StringStringMap, Location, LocationList
-from drunc.communication.controller_pb2_grpc import ControllerServicer, BroadcastStub
-from drunc.utils.utils import get_logger
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
+from druncschema.generic_pb2 import PlainText, PlainTextVector
+from druncschema.controller_pb2_grpc import ControllerServicer
+from drunc.status_broadcaster.broadcast_sender import BroadcastSender
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import unpack_any
 from threading import Lock, Thread
@@ -21,7 +23,8 @@ from typing import Optional, Dict, List
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
-        self._log = get_logger("ControllerActor")
+        from logging import getLogger
+        self._log = getLogger("ControllerActor")
         self._token = Token()
         self._lock = Lock()
 
@@ -53,11 +56,12 @@ class ControllerActor:
 
 
 
-class Controller(ControllerServicer):
+class Controller(ControllerServicer, BroadcastSender):
     def __init__(self, name:str, configuration:str):
         super(Controller, self).__init__()
 
-        self.log = get_logger("Controller")
+        from logging import getLogger
+        self._log = getLogger("Controller")
         self.name = name
         self.configuration_loc = configuration
 
@@ -81,14 +85,14 @@ class Controller(ControllerServicer):
         for app_cfg in self.configuration.applications:
             self.children_nodes.append(DAQAppChild(app_cfg))
 
-        from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-        self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
-        self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
-        self.broadcast_server_thread.start()
+        # from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
+        # self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
+        # self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
+        # self.broadcast_server_thread.start()
 
-        # do this at the end, otherwise we need to self.stop() if an exception is raised
-        from drunc.controller.broadcaster import Broadcaster
-        self.broadcaster = Broadcaster()
+        # # do this at the end, otherwise we need to self.stop() if an exception is raised
+        # from drunc.controller.broadcaster import Broadcaster
+        # self.broadcaster = Broadcaster()
 
         self.log.info('Controller initialised')
 
@@ -240,13 +244,11 @@ class Controller(ControllerServicer):
             )
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
-        self.broadcaster.new_broadcast(
-            BroadcastMessage(
-                level = Level.INFO,
-                payload = f'{request.token.user_name} is attempting to execute {command}',
-                emitter = self.name
-            )
+        self.broadcast(
+            level = Level.INFO,
+            text = f'{request.token.user_name} is attempting to execute {command}',
         )
+
         data = request.data if request.data else None
         self.log.debug(f'{command} data: {request.data}')
 
@@ -264,13 +266,9 @@ class Controller(ControllerServicer):
 
             except ctler_excpt.ControllerException as e:
                 self.log.error(f'ControllerException when executing {command}: {e}')
-
-                self.broadcaster.new_broadcast(
-                    BroadcastMessage(
-                        level = Level.INFO,
-                        payload = f'ControllerException when executing {command}: {e}',
-                        emitter = self.name
-                    )
+                self.broadcast(
+                    level = Level.INFO,
+                    text = f'ControllerException when executing {command}: {e}'
                 )
 
                 detail = any_pb2.Any()
@@ -288,22 +286,16 @@ class Controller(ControllerServicer):
                     )
                 )
             except Exception as e:
-                self.broadcaster.new_broadcast(
-                    BroadcastMessage(
-                        level = Level.INFO,
-                        payload = f'Unhandled exception when executing {command}: {e}',
-                        emitter = self.name
-                    )
+                self.broadcast(
+                    level = Level.INFO,
+                    text = f'Unhandled exception when executing {command}: {e}'
                 )
                 raise e # let gRPC handle it
 
 
-        self.broadcaster.new_broadcast(
-            BroadcastMessage(
-                level = Level.INFO,
-                payload = f'Successfully executed {command}: {result}',
-                emitter = self.name
-            )
+        self.broadcast(
+            level = Level.INFO,
+            text = f'Successfully executed {command}: {result}'
         )
 
         result_any = any_pb2.Any()
@@ -317,60 +309,12 @@ class Controller(ControllerServicer):
     def ls(self, request:Request, context) -> Response:
         return self._generic_user_command(request, '_ls', context)
 
-    def _ls_impl(self, _, dummy) -> LocationList:
-        self.log.info(f'Listing children nodes')
-        locs = [
-            Location(
-                path = [self.name],
-                recursive = False
-            )
-        ]+[
-            Location(
-                path = [self.name, node.name],
-                recursive = False
-            ) for node in self.children_nodes
-        ]
-        print(self.children_nodes)
-
-        self.log.info(f'All the paths accessible: {locs}')
-        return LocationList(
-            locations = locs
-
+    def _ls_impl(self, _, dummy) -> PlainTextVector:
+        nodes = [node.name for node in self.children_nodes]
+        self.log.info(f'Listing children nodes: {nodes}')
+        return PlainTextVector(
+            text = nodes
         )
-
-
-    def add_to_broadcast_list(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_add_to_broadcast_list', context)
-
-    def _add_to_broadcast_list_impl(self, data, _) -> PlainText:
-        r = unpack_any(data, BroadcastRequest)
-        self.log.info(f'Adding {r.broadcast_receiver_address} to broadcast list')
-        if not self.broadcaster.add_listener(r.broadcast_receiver_address):
-            raise ctler_excpt.ControllerException(f'Failed to add {r.broadcast_receiver_address} to broadcast list')
-        return PlainText(text = f'Added {r.broadcast_receiver_address} to broadcast list')
-
-
-
-    def remove_from_broadcast_list(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_remove_from_broadcast_list', context)
-
-    def _remove_from_broadcast_list_impl(self, data, _) -> PlainText:
-        r = unpack_any(data, BroadcastRequest)
-        if not self.broadcaster.rm_listener(r.broadcast_receiver_address):
-            raise ctler_excpt.ControllerException(f'Failed to remove {r.broadcast_receiver_address} from broadcast list')
-        return PlainText(text = f'Removed {r.broadcast_receiver_address} to broadcast list')
-
-
-
-    def get_broadcast_list(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_get_broadcast_list', context)
-
-    def _get_broadcast_list_impl(self, dummy, _) -> PlainText:
-        ret = StringStringMap()
-        listeners = self.broadcaster.get_listeners()
-        for k, v in listeners.items():
-            ret[k] = v
-        return
 
 
     def take_control(self, request:Request, context) -> Response:

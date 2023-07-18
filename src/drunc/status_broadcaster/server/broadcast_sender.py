@@ -9,3 +9,7 @@ class BroadcastSender:
         elif impl == 'grpc':
             from drunc.status_broadcaster.server.grpc_servicer import GRCPBroadcastSender
             self.implementation = GRCPBroadcastSender()
+
+    def broadcast(self, message, level):
+        self.implementation
+        pass

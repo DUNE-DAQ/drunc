@@ -1,5 +1,4 @@
 from enum import Enum
-from drunc.utils.utils import get_logger
 
 class ChildNodeType(Enum):
     kUnknown = 0
@@ -10,7 +9,8 @@ class ChildNodeType(Enum):
 class ChildNode:
     def __init__(self, node_type:ChildNodeType=ChildNodeType.kUnknown, name:str='') -> None:
         self.node_type = node_type
-        self.log = get_logger("child-node")
+        import logging
+        self.log = logging.getLogger("child-node")
         self.name = name
 
     def close(self):

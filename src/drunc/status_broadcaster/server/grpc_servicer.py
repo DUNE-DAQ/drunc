@@ -23,9 +23,9 @@ class ListenerRepresentation:
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
     def __init__(self):
-        from drunc.utils.utils import get_logger
+        from logging import getLogger
         self.name = 'broadcast_sender'
-        self._log = get_logger("Broadcast Sender")
+        self._log = getLogger("Broadcast Sender")
         self._listeners = {}
         self._listener_lock = Lock()
         self._message_queue = Queue()

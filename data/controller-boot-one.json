@@ -12,22 +12,12 @@
         "drunc-controller": {
             "executable_and_arguments": [
                 {
-                    "env": []
-                },
-                {
                     "source": [
-                        "${DRUNC_DIR}/setup.sh"
+                        "${DBT_INSTALL_DIR}/daq_app_rte.sh"
                     ]
                 },
                 {
-                    "cd": [
-                        "${DRUNC_DIR}"
-                    ]
-                },
-                {
-                    "echo": [
-                        "${PATH}"
-                    ]
+                    "env": []
                 },
                 {
                     "drunc-controller": [
@@ -39,7 +29,7 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
-                "DRUNC_DIR": "getenv",
+                "DBT_INSTALL_DIR": "getenv",
                 "NAME": "{name}",
                 "PORT": "{port}"
             }
@@ -47,22 +37,12 @@
         "fake-daq-application": {
             "executable_and_arguments": [
                 {
-                    "env": []
-                },
-                {
                     "source": [
-                        "${DRUNC_DIR}/setup.sh"
+                        "${DBT_INSTALL_DIR}/daq_app_rte.sh"
                     ]
                 },
                 {
-                    "cd": [
-                        "${DRUNC_DIR}"
-                    ]
-                },
-                {
-                    "echo": [
-                        "${PATH}"
-                    ]
+                    "env": []
                 },
                 {
                     "fake_daq_application": [
@@ -77,7 +57,7 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
-                "DRUNC_DIR": "getenv",
+                "DBT_INSTALL_DIR": "getenv",
                 "NAME": "{name}",
                 "PORT": "{port}"
             }

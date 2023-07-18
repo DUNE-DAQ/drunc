@@ -51,20 +51,6 @@ def update_log_level(loglevel):
             RichHandler(rich_tracebacks=False) # Make this True, and everything crashes on exceptions (no clue why)
         ]
     )
-# def setup_fancy_logging():
-#     from rich.logging import RichHandler
-
-
-
-
-# def get_logger(module_name):
-#     global log_level
-#     logger = logging.getLogger(module_name)
-#     logger.setLevel(log_level)
-#     for handler in logger.handlers:
-#         handler.setLevel(log_level)
-#     return logger#logging.getLogger(module_name)
-
 
 def get_new_port():
     import socket

@@ -21,9 +21,8 @@ def send_command(controller, token, command:str, data=None, paths=[], recursive=
     import grpc
     from google.protobuf import any_pb2
 
-    from drunc.utils.utils import get_logger
-
-    log = get_logger("send_command")
+    import logging
+    log = logging.getLogger("send_command")
     # Grab the command from the controller stub in the context
     # Add the token to the data (which can be of any protobuf type)
     # Send the command to the controller

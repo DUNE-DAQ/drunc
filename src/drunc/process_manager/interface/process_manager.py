@@ -8,7 +8,7 @@ from drunc.utils.utils import log_levels
 _cleanup_coroutines = []
 
 @click.command()
-@click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
+@click.argument('pm-conf', type=click.Path(exists=True))
 @click.option('-l', '--loglevel', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 def process_manager_cli(pm_conf:str, loglevel):
     from rich.console import Console

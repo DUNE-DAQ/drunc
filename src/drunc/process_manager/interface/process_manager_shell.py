@@ -6,11 +6,10 @@ import getpass
 from functools import wraps
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
-from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessInstance, ProcessDescription, ProcessRestriction, ProcessMetadata, ProcessQuery
+from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
-from drunc.utils.utils import now_str
-from drunc.process_manager.utils import generate_query, add_query_options, tabulate_process_instance_list
-from typing import Optional
+from drunc.process_manager.interface.cli_argument import accept_configuration_type, add_query_options
+from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 def coroutine(f):
@@ -69,7 +68,7 @@ class PMContext:
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
-@click.option('--pm-conf', type=click.Path(exists=True), default=os.getenv('DRUNC_DATA')+'/process-manager.json', help='Where the process-manager configuration is')
+@click.argument('pm-conf', type=click.Path(exists=True))
 @click.pass_context
 def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
@@ -83,14 +82,15 @@ def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> No
 
 
 @process_manager_shell.command('boot')
-@click.option('-u','--user'   , type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
+@click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
+@accept_configuration_type()
 @click.argument('boot-configuration', type=click.Path(exists=True))
 @click.argument('session-name', type=str)
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, user:str, session_name:str, boot_configuration:str) -> None:
+async def boot(obj:PMContext, user:str, conf_type:str, session_name:str, boot_configuration:str) -> None:
 
-    results = obj.pmd.boot(boot_configuration, user, session_name)
+    results = obj.pmd.boot(boot_configuration, user, session_name, conf_type)
     async for result in results:
         obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 

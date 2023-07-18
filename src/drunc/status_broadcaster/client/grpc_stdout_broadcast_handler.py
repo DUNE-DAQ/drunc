@@ -3,14 +3,14 @@ from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
 from druncschema.generic_pb2 import Empty
 import grpc
 
-class StdoutBroadcastHandler(BroadcastReceiverServicer):
+class GRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
     def __init__(self, port, stub, token) -> None:
         BroadcastReceiverServicer.__init__(self)
         self.ready = False
         self.stub = stub
         self.token = token
-        from drunc.utils.utils import get_logger
-        self._log = get_logger("BroadcastReceiver")
+        from logging import getLogger
+        self._log = getLogger("BroadcastReceiver")
         self._address = f'[::]:{port}'
         self._log.debug('Broadcast receiver initialised')
 
