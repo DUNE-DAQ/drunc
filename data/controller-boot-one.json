@@ -6,6 +6,20 @@
             "restriction": "localhost",
             "type": "drunc-controller",
             "configuration": "file:///nfs/home/plasorak/dd-N23-07-17/swdir/drunc/data/topcontroller-conf.json"
+        },
+        {
+            "name": "app00",
+            "port": 7200,
+            "restriction": "localhost",
+            "type": "daq-application",
+            "configuration": "file://data/app00-conf.json"
+        },
+        {
+            "name": "app01",
+            "port": 7201,
+            "restriction": "localhost",
+            "type": "daq-application",
+            "configuration": "file://data/app00-conf.json"
         }
     ],
     "executables": {
@@ -34,7 +48,7 @@
                 "PORT": "{port}"
             }
         },
-        "fake-daq-application": {
+        "daq-application": {
             "executable_and_arguments": [
                 {
                     "source": [
@@ -45,7 +59,7 @@
                     "env": []
                 },
                 {
-                    "fake_daq_application": [
+                    "daq_application": [
                         "-n",
                         "${NAME}",
                         "-d",
