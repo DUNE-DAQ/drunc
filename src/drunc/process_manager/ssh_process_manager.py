@@ -25,7 +25,7 @@ class SSHProcessManager(ProcessManager):
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
-            self.log.warning(f'Killing {self.boot_request.process_description.metadata[uuid].name}')
+            self.log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
             process.terminate()
 
     def _process_children_logs(self, uuid, line):
