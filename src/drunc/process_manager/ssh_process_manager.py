@@ -9,9 +9,8 @@ from drunc.process_manager.process_manager import ProcessManager
 class SSHProcessManager(ProcessManager):
     def __init__(self, conf):
         super().__init__(conf)
-
-        from drunc.utils.utils import get_logger
-        self.log = get_logger('ssh-process-manager')
+        import logging
+        self.log = logging.getLogger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
 
@@ -26,7 +25,7 @@ class SSHProcessManager(ProcessManager):
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
-            self.log.warning(f'Killing {self.boot_request.process_description.metadata[uuid].name}')
+            self.log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
             process.terminate()
 
     def _process_children_logs(self, uuid, line):
@@ -231,10 +230,7 @@ class SSHProcessManager(ProcessManager):
         for uuid in uuids:
             process = self.process_store[uuid]
             if not process.is_alive():
-                if query.force:
-                    continue
-                else:
-                    raise RuntimeError(f'The process {uuid} is already dead!')
+                continue
 
             process.terminate()
 

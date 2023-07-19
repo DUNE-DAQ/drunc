@@ -5,29 +5,33 @@
             "port": 3600,
             "restriction": "localhost",
             "type": "drunc-controller",
-            "configuration": "file://data/topcontroller-conf.json"
+            "configuration": "file:///nfs/home/plasorak/dd-N23-07-17/swdir/drunc/data/topcontroller-conf.json"
+        },
+        {
+            "name": "app00",
+            "port": 7200,
+            "restriction": "localhost",
+            "type": "daq-application",
+            "configuration": "file://data/app00-conf.json"
+        },
+        {
+            "name": "app01",
+            "port": 7201,
+            "restriction": "localhost",
+            "type": "daq-application",
+            "configuration": "file://data/app00-conf.json"
         }
     ],
     "executables": {
         "drunc-controller": {
             "executable_and_arguments": [
                 {
-                    "env": []
-                },
-                {
                     "source": [
-                        "${DRUNC_DIR}/setup.sh"
+                        "${DBT_INSTALL_DIR}/daq_app_rte.sh"
                     ]
                 },
                 {
-                    "cd": [
-                        "${DRUNC_DIR}"
-                    ]
-                },
-                {
-                    "echo": [
-                        "${PATH}"
-                    ]
+                    "env": []
                 },
                 {
                     "drunc-controller": [
@@ -39,33 +43,23 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
-                "DRUNC_DIR": "getenv",
+                "DBT_INSTALL_DIR": "getenv",
                 "NAME": "{name}",
                 "PORT": "{port}"
             }
         },
-        "fake-daq-application": {
+        "daq-application": {
             "executable_and_arguments": [
+                {
+                    "source": [
+                        "${DBT_INSTALL_DIR}/daq_app_rte.sh"
+                    ]
+                },
                 {
                     "env": []
                 },
                 {
-                    "source": [
-                        "${DRUNC_DIR}/setup.sh"
-                    ]
-                },
-                {
-                    "cd": [
-                        "${DRUNC_DIR}"
-                    ]
-                },
-                {
-                    "echo": [
-                        "${PATH}"
-                    ]
-                },
-                {
-                    "fake_daq_application": [
+                    "daq_application": [
                         "-n",
                         "${NAME}",
                         "-d",
@@ -77,7 +71,7 @@
             ],
             "environment": {
                 "CONFIGURATION": "{configuration}",
-                "DRUNC_DIR": "getenv",
+                "DBT_INSTALL_DIR": "getenv",
                 "NAME": "{name}",
                 "PORT": "{port}"
             }

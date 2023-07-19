@@ -6,6 +6,10 @@ from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 from drunc.utils.grpc_utils import unpack_any
 
+class ConfigurationTypeNotSupported(Exception):
+    def __init__(self, conf_type):
+        self.type = conf_type
+        super().__init__(f'{str(conf_type)} is not supported by this process manager')
 
 class ProcessManagerDriver:
     def __init__(self, pm_conf:dict, token):
@@ -16,17 +20,51 @@ class ProcessManagerDriver:
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
-    def _create_request(self, payload):
+
+    def _create_request(self, payload=None):
         token = Token()
         token.CopyFrom(self.token)
         data = Any()
-        data.Pack(payload)
-        return Request(
-            token = token,
-            data = data
-        )
+        if payload:
+            data.Pack(payload)
 
-    async def boot(self, boot_configuration_file:str, user:str, session:str) -> ProcessInstance:
+        if payload:
+            return Request(
+                token = token,
+                data = data
+            )
+        else:
+            return Request(
+                token = token
+            )
+
+
+    async def _convert_boot_conf(self, conf, conf_type, user, session):
+        from drunc.process_manager.utils import ConfTypes
+        match conf_type:
+            case ConfTypes.DAQCONF:
+                async for i in self._convert_daqconf_to_boot_request(conf, user, session):
+                    yield i
+            case ConfTypes.DRUNC:
+                async for i in self._convert_drunc_to_boot_request(conf, user, session):
+                    yield i
+            case ConfTypes.OKS:
+                async for i in self._convert_oks_to_boot_request(conf, user, session):
+                    yield i
+            case _:
+                raise ConfigurationTypeNotSupported(conf_type)
+
+    async def _convert_daqconf_to_boot_request(self, daqconf_dir, user, session) -> BootRequest:
+        from drunc.process_manager.utils import ConfTypes
+        raise ConfigurationTypeNotSupported(ConfTypes.DAQCONF)
+        yield None
+
+    async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
+        from drunc.process_manager.utils import ConfTypes
+        raise ConfigurationTypeNotSupported(ConfTypes.OKS)
+        yield None
+
+    async def _convert_drunc_to_boot_request(self, boot_configuration_file, user, session) -> BootRequest:
         boot_configuration = {}
         with open(boot_configuration_file) as f:
             import json
@@ -59,23 +97,25 @@ class ProcessManagerDriver:
                 else:
                     new_env[k] = v.format(**app)
 
-            answer = await self.pm_stub.boot(
-                self._create_request(
-                    BootRequest(
-                        process_description = ProcessDescription(
-                            metadata = ProcessMetadata(
-                                user = user,
-                                session = session,
-                                name = app['name'],
-                            ),
-                            executable_and_arguments = executable_and_arguments,
-                            env = new_env
-                        ),
-                        process_restriction = ProcessRestriction(
-                            allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
-                        )
-                    )
+            yield BootRequest(
+                process_description = ProcessDescription(
+                    metadata = ProcessMetadata(
+                        user = user,
+                        session = session,
+                        name = app['name'],
+                    ),
+                    executable_and_arguments = executable_and_arguments,
+                    env = new_env
+                ),
+                process_restriction = ProcessRestriction(
+                    allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
                 )
+            )
+
+    async def boot(self, boot_configuration:str, user:str, session:str, conf_type) -> ProcessInstance:
+        async for br in self._convert_boot_conf(boot_configuration, conf_type, user, session):
+            answer = await self.pm_stub.boot(
+                self._create_request(br)
             )
             pd = unpack_any(answer.data,ProcessInstance)
             yield pd

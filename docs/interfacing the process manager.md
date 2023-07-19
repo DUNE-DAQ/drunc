@@ -76,13 +76,13 @@ The request's payload is a [`druncschema.ProcessQuery`](https://github.com/DUNE-
 It is used to query the processes in the process manager.
 
 A query takes the following arguments:
-- `uuid`
+- `uuids`
 - `user`
 - `session`
-- `name`
-- and `force` (which has no place here, so should be removed).
+- `names`
 
-`uuid` is the unique identifier for the process as described earlier, `user` is the user who started the process, `session` is the which the process belongs to, `name` is the friendly name in the metadata.
+`uuids` is a vector of unique identifiers for the process as described earlier, `user` is the user who started the process, `session` is the which the process belongs to, `names` is the friendly name in the metadata, note that names can have some python regex in them, so for example you can access all the processes by setting `names = [.*]`.
+
 Restart will check that the query you have formulated corresponds to one an only one process, and restart the process.
 
 

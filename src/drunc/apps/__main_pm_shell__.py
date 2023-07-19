@@ -1,8 +1,6 @@
 
 def main():
-    import nest_asyncio
-    nest_asyncio.apply()
-    from drunc.interface.process_manager_shell import process_manager_shell, PMContext
+    from drunc.process_manager.interface.process_manager_shell import process_manager_shell, PMContext
     from rich.console import Console
     console = Console()
     context = PMContext()
@@ -19,4 +17,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-        
