@@ -15,8 +15,7 @@ setup(
         "grpcio-status",
         "nest_asyncio",
         "rich",
-        "sh",
-        "druncschema"
+        "sh"
     ],
     extras_require={"develop": [
         "ipdb",

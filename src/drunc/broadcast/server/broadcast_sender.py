@@ -4,10 +4,10 @@ class BroadcastSender:
         if impl == 'daq_streamer':
             self.implementation = None
         elif impl == 'kafka':
-            from drunc.status_broadcaster.server.kafka_sender import KafkaSender
+            from drunc.broadcast.server.kafka_sender import KafkaSender
             self.implementation = KafkaSender()
         elif impl == 'grpc':
-            from drunc.status_broadcaster.server.grpc_servicer import GRCPBroadcastSender
+            from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
             self.implementation = GRCPBroadcastSender()
 
     def broadcast(self, message, level):

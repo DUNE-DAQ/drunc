@@ -16,7 +16,7 @@ class DummyAuthoriser:
 
 
     def is_authorised(self, token:Token, command:str) -> bool:
-        action_type = self.command_actions.get(command, ActionType.UNSPECIFIED)
+        action_type = self.command_actions.get(command, ActionType.ACTION_UNSPECIFIED)
         self.log.info(f'Authorising {token.token} to {command} ({action_type})')
         return True
 

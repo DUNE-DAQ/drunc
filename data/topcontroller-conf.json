@@ -1,9 +1,4 @@
 {
-    "children_controllers": [
-        {
-            "name": "controller0",
-            "cmd_address": "localhost:3601"
-        }
-    ],
+    "children_controllers": [],
     "apps": []
 }

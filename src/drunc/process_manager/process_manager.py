@@ -3,7 +3,7 @@ from druncschema.token_pb2 import Token
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
-from drunc.status_broadcaster.server.broadcast_sender import BroadcastSender
+from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import abc
 
 from drunc.utils.grpc_utils import unpack_any
