@@ -15,23 +15,31 @@ from google.rpc import status_pb2
 from grpc_status import rpc_status
 from google.protobuf.any_pb2 import Any
 
-class ProcessManager(abc.ABC, ProcessManagerServicer,BroadcastSender):
+class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, configuration_loc):
         ProcessManagerServicer.__init__(self)
-        BroadcastSender.__init__(self)
-        self.name = 'ProcessManager'
 
         from drunc.process_manager.configuration import ProcessManagerConfiguration
         self.configuration = ProcessManagerConfiguration(configuration_loc)
 
+        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
+        self.name = 'ProcessManager'
+
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import ActionType, SystemType, AuthoriserRequest
 
-        self.authoriser = DummyAuthoriser(self.configuration.data['authoriser'], SystemType.PROCESS_MANAGER)
+        self.authoriser = DummyAuthoriser(
+            self.configuration.get_authoriser_configuration(), # sloppy way to do this... should be similar to broadcast
+            SystemType.PROCESS_MANAGER
+        )
 
         self.process_store = {} # dict[str, sh.RunningCommand]
         self.boot_request = {} # dict[str, BootRequest]
+        self.broadcast(
+            message = 'ready',
+
+        )
 
     def terminate(self):
         self._terminate()
@@ -128,7 +136,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer,BroadcastSender):
         return self._generic_command(req, '_boot_impl', BootRequest, context)
 
 
-
     @abc.abstractmethod
     def _restart_impl(self, process, context) -> ProcessInstance:
         raise NotImplementedError
@@ -145,42 +152,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer,BroadcastSender):
     def kill(self, req:Request, context) -> Response:
         self.log.debug(f'received \'kill\' request \'{req}\'')
         return self._generic_command(req, '_kill_impl', ProcessQuery, context)
-
-    def broadcast_command_unauthorised(self, user, command):
-        from druncschema import BroadcastMessage, CommandNotificationMessage
-        nm = CommandNotificationMessage(
-            user = user,
-            command = command
-        )
-        data = Any()
-        data.Pack(nm)
-
-        bm = BroadcastMessage(
-            type = BroadcastMessage.NotificationType.COMMAND_EXECUTION_NOT_AUTHORISED,
-            data = data
-        )
-
-        for bl in self.broadcast_message.values():
-            b = BroadcastMessage().CopyFrom(bm)
-            bl.put(b)
-
-    def broadcast_command_fail(self, user, command):
-        from druncschema import BroadcastMessage, CommandNotificationMessage
-        nm = CommandNotificationMessage(
-            user = user,
-            command = command
-        )
-        data = Any()
-        data.Pack(nm)
-
-        bm = BroadcastMessage(
-            type = BroadcastMessage.NotificationType.COMMAND_FAILED,
-            data = data
-        )
-
-        for bl in self.broadcast_message.values():
-            b = BroadcastMessage().CopyFrom(bm)
-            bl.put(b)
 
 
     @abc.abstractmethod

@@ -1,5 +1,14 @@
 {
-    "address": "0.0.0.0:10054",
     "type": "ssh",
-    "name": "SSHProcessManager"
+    "name": "SSHProcessManager",
+    "command_address": "0.0.0.0:10054",
+
+    "authoriser": {
+        "type": "dummy"
+    },
+
+    "broadcaster": {
+        "type": "kafka",
+        "kafka_address": "monkafka.cern.ch:30092"
+    }
 }
