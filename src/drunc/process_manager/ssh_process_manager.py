@@ -5,6 +5,32 @@ from functools import partial
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from drunc.process_manager.process_manager import ProcessManager
 
+# # ------------------------------------------------
+# # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
+from ctypes import cdll
+import signal
+
+# Constant taken from http://linux.die.net/include/linux/prctl.h
+PR_SET_PDEATHSIG = 1
+
+class PrCtlError(Exception):
+    pass
+
+
+def on_parent_exit(signum):
+    """
+    Return a function to be run in a child process which will trigger
+    SIGNAME to be sent when the parent process dies
+    """
+
+    def set_parent_exit_signal():
+        # http://linux.die.net/man/2/prctl
+        result = cdll['libc.so.6'].prctl(PR_SET_PDEATHSIG, signum)
+        if result != 0:
+            raise PrCtlError('prctl failed with error code %s' % result)
+    return set_parent_exit_signal
+# # ------------------------------------------------
+
 
 class SSHProcessManager(ProcessManager):
     def __init__(self, conf):
@@ -108,6 +134,7 @@ class SSHProcessManager(ProcessManager):
                     _bg=True,
                     _bg_exc=False,
                     _new_session=True,
+                    _preexec_fn = on_parent_exit(signal.SIGTERM)
                 )
                 self.log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
                 break
