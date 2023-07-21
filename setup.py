@@ -10,9 +10,9 @@ setup(
         "click",
         "click_shell",
         "grpcio",
-        "grpcio_tools",
         "googleapis-common-protos",
         "grpcio-status",
+        "kafka-python",
         "nest_asyncio",
         "rich",
         "sh"

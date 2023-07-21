@@ -16,7 +16,7 @@ class ProcessManagerDriver:
         import grpc
         self.token = Token()
         self.token.CopyFrom(token)
-        self.pm_address = pm_conf['address']
+        self.pm_address = pm_conf['command_address']
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 

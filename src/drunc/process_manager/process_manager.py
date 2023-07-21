@@ -1,5 +1,6 @@
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
+from druncschema.broadcast_pb2 import BroadcastType
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
@@ -18,13 +19,14 @@ from google.protobuf.any_pb2 import Any
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, configuration_loc):
+        self.name = 'ProcessManager'
+
         ProcessManagerServicer.__init__(self)
 
         from drunc.process_manager.configuration import ProcessManagerConfiguration
         self.configuration = ProcessManagerConfiguration(configuration_loc)
 
         BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
-        self.name = 'ProcessManager'
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import ActionType, SystemType, AuthoriserRequest
@@ -38,7 +40,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         self.boot_request = {} # dict[str, BootRequest]
         self.broadcast(
             message = 'ready',
-
+            btype = BroadcastType.SERVER_READY
         )
 
     def terminate(self):
@@ -68,7 +70,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         )
 
     def _generic_command(self, request:Request, command:str, req_format, context):
-
+        self.broadcast(
+            message = f'User \'{request.token.user_name}\' attempting to execute {command}',
+            btype = BroadcastType.ACK
+        )
         if not self.authoriser.is_authorised(request.token, command):
             context.abort_with_status(
                 rpc_status.to_status(

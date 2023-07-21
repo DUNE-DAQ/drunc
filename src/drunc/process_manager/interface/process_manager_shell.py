@@ -46,21 +46,19 @@ class PMContext:
 
         self.print_traceback = print_traceback
 
-        # from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-        # self.status_receiver = StdoutBroadcastHandler(
-        #     port = shell_notif_port,
-        #     stub = self.pmd.pm_stub,
-        #     token = self.token
-        # )
-        # from threading import Thread
-        # self.server_thread = Thread(target=self.status_receiver.serve, name=f'serve_thread')
-        # self.server_thread.start()
-
-        # self.status_receiver.connect()
-
+        from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
+        from druncschema.broadcast_pb2 import BroadcastMessage
+        self.status_receiver = KafkaStdoutBroadcastHandler(
+            conf = pm_conf_data['broadcaster'],
+            topic = 'ProcessManager',
+            message_format = BroadcastMessage,
+        )
+    def terminate(self):
+        self.status_receiver.stop()
 
     def print(self, text):
         self._console.print(text)
+
     def rule(self, text):
         self._console.rule(text)
 
@@ -78,6 +76,10 @@ def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> No
         pm_conf = pm_conf,
         print_traceback = traceback
     )
+    def cleanup():
+        ctx.obj.terminate()
+
+    ctx.call_on_close(cleanup)
 
 
 

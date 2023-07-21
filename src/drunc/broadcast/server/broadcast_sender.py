@@ -1,3 +1,5 @@
+
+
 class BroadcastSenderTechnologyUnknown(Exception):
     def __init__(self, implementation):
         super().__init__(f'The implementation {implementation} is not supported for the BroadcastSender')
@@ -8,7 +10,7 @@ class BroadcastSender:
         match self.impl_technology:
             case 'kafka':
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(configuration)
+                self.implementation = KafkaSender(configuration, self.name)
             case 'grpc':
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(configuration)
@@ -22,8 +24,9 @@ class BroadcastSender:
         any = pack_to_any(PlainText(text=message))
 
         bm = BroadcastMessage(
-            name = self.name,
+            emitter = self.name,
             type = btype,
             data = any,
         )
+        bm.type = btype
         self.implementation._send(bm)

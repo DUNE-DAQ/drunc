@@ -24,7 +24,6 @@ def regex_match(regex, string):
 log_level = logging.INFO
 
 def update_log_level(loglevel):
-    import sh
     log_level = log_levels[loglevel]
     #logging.basicConfig(level=log_level)
     # Update log level for root logger
@@ -32,13 +31,23 @@ def update_log_level(loglevel):
     logger.setLevel(log_level)
     for handler in logger.handlers:
         handler.setLevel(log_level)
+
     # And then manually tweak 'sh.command' logger. Sigh.
     sh_command_level = log_level if log_level > logging.INFO else (log_level+10)
+    import sh
+
     sh_command_logger = logging.getLogger(sh.__name__)
-    # sh_command_logger.propagate = False
     sh_command_logger.setLevel(sh_command_level)
     for handler in sh_command_logger.handlers:
         handler.setLevel(sh_command_level)
+
+    # And kafka
+    kafka_command_level = log_level if log_level > logging.INFO else (log_level+10)
+    import kafka
+    kafka_command_logger = logging.getLogger(kafka.__name__)
+    kafka_command_logger.setLevel(kafka_command_level)
+    for handler in kafka_command_logger.handlers:
+        handler.setLevel(kafka_command_level)
 
     from rich.logging import RichHandler
 
