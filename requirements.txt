@@ -3,6 +3,7 @@ click_shell
 grpcio
 googleapis-common-protos
 grpcio-status
+grpcio_tools
 kafka-python
 nest_asyncio
 rich

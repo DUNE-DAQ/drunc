@@ -11,6 +11,7 @@ setup(
         "click_shell",
         "grpcio",
         "googleapis-common-protos",
+        "grpcio_tools",
         "grpcio-status",
         "kafka-python",
         "nest_asyncio",
