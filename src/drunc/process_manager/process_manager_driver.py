@@ -13,6 +13,8 @@ class ConfigurationTypeNotSupported(Exception):
 
 class ProcessManagerDriver:
     def __init__(self, pm_conf:dict, token):
+        import logging
+        self._log = logging.getLogger('ProcessManagerDriver')
         import grpc
         self.token = Token()
         self.token.CopyFrom(token)
@@ -90,10 +92,12 @@ class ProcessManagerDriver:
             for k, v in old_env.items():
                 if v == 'getenv':
                     import os
-                    try:
-                        new_env[k] = os.getenv(k)
-                    except:
-                        print(f'Variable {k} is not in the environment, so won\'t be set.')
+                    var = os.getenv(k)
+                    if var:
+                        new_env[k] = var
+                    else:
+                        self._log.warning(f'Variable {k} is not in the environment, so won\'t be set.')
+
                 else:
                     new_env[k] = v.format(**app)
 
