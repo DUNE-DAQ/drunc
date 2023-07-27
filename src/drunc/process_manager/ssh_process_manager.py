@@ -39,6 +39,10 @@ class SSHProcessManager(ProcessManager):
         self.log = logging.getLogger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
+        from pathlib import Path
+        from os import getcwd
+        self.app_exec_path = Path(conf.get('app-exec-path', getcwd()))
+        self.app_log_path = Path(conf.get('app-log-path', getcwd()))
 
     def _terminate(self):
         self.log.info('Terminating')
@@ -92,7 +96,7 @@ class SSHProcessManager(ProcessManager):
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
-
+        meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise RuntimeError('No allowed host provided! bailing')
 
@@ -109,13 +113,15 @@ class SSHProcessManager(ProcessManager):
                 user = boot_request.process_description.metadata.user
                 user_host = host if not user else f'{user}@{host}'
 
+                from drunc.utils.utils import now_str
+                log_file = self.app_log_path / f'log-{meta.user}-{meta.session}-{meta.name}-{now_str(True)}.txt'
                 env_var = boot_request.process_description.env
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
 
-                runtime_var = boot_request.process_description.env
-                cmd += ';' + ';'.join([ f"export {n}=\"{v}\"" for n,v in runtime_var.items()])
+                # runtime_var = boot_request.process_description.env
+                # cmd += ';' + ';'.join([ f"export {n}=\"{v}\"" for n,v in runtime_var.items()])
 
-                cmd += ';'
+                cmd += f'; cd {self.app_exec_path} ;'
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec
@@ -126,7 +132,7 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ';':
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", cmd]
+                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} 2>&1 | tee {log_file}']
 
                 self.process_store[uuid] = sh.ssh (
                     *arguments,
