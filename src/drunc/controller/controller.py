@@ -1,6 +1,5 @@
 import grpc
 
-from google.protobuf import any_pb2
 from google.rpc import code_pb2
 from google.rpc import error_details_pb2
 from google.rpc import status_pb2
@@ -16,7 +15,7 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.controller.exceptions as ctler_excpt
-from drunc.utils.grpc_utils import unpack_any
+from drunc.utils.grpc_utils import pack_to_any
 from threading import Lock, Thread
 import time
 from typing import Optional, Dict, List
@@ -70,6 +69,8 @@ class Controller(ControllerServicer, BroadcastSender):
         self.configuration = ControllerConfiguration(self.configuration_loc)
         self.children_nodes = [] # type: List[ChildNode]
 
+        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
+
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
         self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
@@ -93,8 +94,10 @@ class Controller(ControllerServicer, BroadcastSender):
         # self.broadcast_server_thread.start()
 
         # # do this at the end, otherwise we need to self.stop() if an exception is raised
-        # from drunc.controller.broadcaster import Broadcaster
-        # self.broadcaster = Broadcaster()
+        self.broadcast(
+            message = 'ready',
+            btype = BroadcastType.SERVER_READY
+        )
 
         self._log.info('Controller initialised')
 
@@ -254,8 +257,7 @@ class Controller(ControllerServicer, BroadcastSender):
                 text = f'ControllerException when executing {command}: {e}'
             )
 
-            detail = any_pb2.Any()
-            detail.Pack(PlainText(text = f'ControllerException when executing {command}: {e}'))
+            detail = pack_to_any(PlainText(text = f'ControllerException when executing {command}: {e}'))
 
             self.log.error(f'Aborting {command}')
 
@@ -281,8 +283,7 @@ class Controller(ControllerServicer, BroadcastSender):
             text = f'Successfully executed {command}: {result}'
         )
 
-        result_any = any_pb2.Any()
-        result_any.Pack(result) # pack response to any
+        result_any = pack_to_any(data)
         response = Response(data = result_any)
         self.log.info(f'Successfully executed {command}, response: {response}')
         return response

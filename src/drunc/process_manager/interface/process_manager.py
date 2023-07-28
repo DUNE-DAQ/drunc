@@ -54,7 +54,7 @@ def process_manager_cli(pm_conf:str, loglevel):
 
     try:
         loop.run_until_complete(
-            serve(pm_conf_data['address'])
+            serve(pm_conf_data['command_address'])
         )
     except Exception as e:
         console.print_exception()

@@ -10,8 +10,8 @@ from druncschema.authoriser_pb2 import ActionType
 
 class ListenerRepresentation:
 
-    def __init__(self, address):
-        self.address = address
+    def __init__(self, configuration):
+        self.address = configuration['address']
         self.channel = grpc.insecure_channel(address)
         from druncschema.broadcast_pb2_grpc import BroadcastReceiverStub
         self.stub = BroadcastReceiverStub(self.channel)
@@ -22,7 +22,7 @@ class ListenerRepresentation:
 
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
-    def __init__(self):
+    def __init__(self, configuration):
         from logging import getLogger
         self.name = 'broadcast_sender'
         self._log = getLogger("Broadcast Sender")
@@ -32,6 +32,10 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
         self._consumer_thread = Thread(target=self._consumer, name='broadcast_consumer')
         self._consumer_thread.start()
         self._log.info('Broadcaster started')
+
+    def _send(self, bm:BroadcastMessage):
+        pass
+
 
     def get_listeners(self):
         import copy as cp

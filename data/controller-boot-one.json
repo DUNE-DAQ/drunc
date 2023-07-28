@@ -5,7 +5,7 @@
             "port": 3600,
             "restriction": "localhost",
             "type": "drunc-controller",
-            "configuration": "file:///nfs/home/plasorak/dd-N23-07-17/swdir/drunc/data/topcontroller-conf.json"
+            "configuration": "file://data/topcontroller-conf.json"
         },
         {
             "name": "app00",

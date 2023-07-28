@@ -147,6 +147,10 @@ class SSHProcessManager(ProcessManager):
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
+        import os
+        platform = os.uname().sysname.lower()
+        macos = ("darwin" in platform)
+
         meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise RuntimeError('No allowed host provided! bailing')
@@ -191,7 +195,7 @@ class SSHProcessManager(ProcessManager):
                     _bg=True,
                     _bg_exc=False,
                     _new_session=True,
-                    _preexec_fn = on_parent_exit(signal.SIGTERM)
+                    _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
                 )
 
                 self._watch(
