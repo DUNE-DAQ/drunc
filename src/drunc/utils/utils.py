@@ -59,6 +59,9 @@ def get_new_port():
     return sock.getsockname()[1]
 
 
-def now_str():
+def now_str(posix_friendly=False):
     from datetime import datetime
-    return datetime.now().strftime("%m/%d/%Y,%H:%M:%S.%f")
+    if not posix_friendly:
+        return datetime.now().strftime("%m/%d/%Y,%H:%M:%S")
+    else:
+        return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
