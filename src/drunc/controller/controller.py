@@ -69,6 +69,8 @@ class Controller(ControllerServicer, BroadcastSender):
         self.configuration = ControllerConfiguration(self.configuration_loc)
         self.children_nodes = [] # type: List[ChildNode]
 
+        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
+
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
         self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
@@ -92,8 +94,10 @@ class Controller(ControllerServicer, BroadcastSender):
         # self.broadcast_server_thread.start()
 
         # # do this at the end, otherwise we need to self.stop() if an exception is raised
-        from drunc.broadcast.server.broadcast_sender import BroadcastSender
-        self.broadcaster = BroadcastSender(configuration['broadcast'])
+        self.broadcast(
+            message = 'ready',
+            btype = BroadcastType.SERVER_READY
+        )
 
         self._log.info('Controller initialised')
 
