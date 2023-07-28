@@ -7,3 +7,4 @@ venv/
 build
 data/*.json
 .DS_Store
+log*
