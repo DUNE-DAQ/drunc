@@ -62,12 +62,12 @@ class ProcessManagerDriver:
         yield None
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
-        import drunc.process_manager.oks_parser as oks
+        from drunc.process_manager.oks_parser import process_segment
         import oksdbinterfaces
         db = oksdbinterfaces.Configuration("oksconfig:" + oks_conf)
         session_dal = db.get_dal(class_name="Session", uid=session)
 
-        apps=oks.process_segment(db, session_dal, session_dal.segment)
+        apps = process_segment(db, session_dal, session_dal.segment)
         print(f"{apps=}")
 
         # Start with an arbitrary port for now
@@ -89,31 +89,20 @@ class ProcessManagerDriver:
 
             print(f"{app=}")
 
-            # =====================================================
-            # For now hardwire the rte source until it is put it in
-            # the OKS config
-            # =====================================================
-            executable_and_arguments = [
-                ProcessDescription.ExecAndArgs(
+            executable_and_arguments = []
+            if session_dal.rte_script:
+                executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
-                    args=['${DBT_INSTALL_DIR}/daq_app_rte.sh']),
-                ProcessDescription.ExecAndArgs(
-                    exec=exe,
-                    args=[args])
-            ]
+                    args=[session_dal.rte_script]))
+            executable_and_arguments.append(ProcessDescription.ExecAndArgs(
+                exec=exe,
+                args=[args]))
 
             new_env = {
                 "PORT": str(port),
             }
             for k, v in old_env.items():
-                if v == 'getenv':
-                    import os
-                    try:
-                        new_env[k] = os.getenv(k)
-                    except:
-                        print(f'Variable {k} is not in the environment, so won\'t be set.')
-                else:
-                    new_env[k] = v.format(**app)
+                new_env[k] = v.format(**app)
 
             #print(f"{new_env=}")
             breq =  BootRequest(
@@ -144,7 +133,6 @@ class ProcessManagerDriver:
         #     raise RuntimeError(f'Boot configuration isn\'t valid!')
 
         for app in boot_configuration['instances']:
-            print (f"{app=}\n")
             executable_and_arguments = []
             for execargs in boot_configuration['executables'][app['type']]['executable_and_arguments']:
                 for exe, args in execargs.items():
