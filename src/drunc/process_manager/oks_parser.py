@@ -36,7 +36,9 @@ def process_segment(db, session, segment):
 
   # Recurse over nested segments
   for seg in segment.segments:
-    apps.append(process_segment(db, session, seg))
+    if not coredal.component_disabled(db._obj, session.id, seg.id):
+      for app in process_segment(db, session, seg):
+        apps.append(app)
 
   # Get all the enabled applications of this segment
   for app in segment.applications:
@@ -66,16 +68,21 @@ def process_services(session):
 
 
 # Search segment and all contained segments for apps controlled by
-# given controller
-def find_controlled_apps(mycontroller, segment):
+# given controller. Return separate lists of apps and sub-controllers
+def find_controlled_apps(db, session, mycontroller, segment):
   apps = []
+  controllers = []
   if segment.controller.id == mycontroller:
     for app in segment.applications:
       apps.append(app.id)
     for seg in segment.segments:
-      apps.append(seg.controller.id)
+      if not coredal.component_disabled(db._obj, session.id, seg.id):
+        controllers.append(seg.controller.id)
   else:
     for seg in segment.segments:
-      aps.append(find_controlled_apps(mycontroller, seg))
-  return apps
+      if not coredal.component_disabled(db._obj, session.id, seg.id):
+        aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
+        if len(apps) > 0:
+          break;
+  return apps, controllers
 
