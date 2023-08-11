@@ -43,7 +43,12 @@ def process_segment(db, session, segment):
   # Get all the enabled applications of this segment
   for app in segment.applications:
     #print()
-    if not coredal.component_disabled(db._obj, session.id, app.id):
+    if 'Component' in app.oksTypes():
+      enabled = not coredal.component_disabled(db._obj, session.id, app.id)
+      print(f"{app.id} {enabled=}")
+    else:
+      enabled = True
+    if enabled:
       appenv = defenv
       # Override with any app specific environment from Application
       process_variables(app.applicationEnvironment, appenv)
