@@ -68,7 +68,7 @@ class ProcessManagerDriver:
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = process_segment(db, session_dal, session_dal.segment)
-        print(f"{apps=}")
+        self._log.debug(f"{apps=}")
 
         # Start with an arbitrary port for now
         base_port = 9000
@@ -87,7 +87,7 @@ class ProcessManagerDriver:
             next_port[host] = port + 1
             app['port'] = port
 
-            print(f"{app=}")
+            self._log.debug(f"{app=}")
 
             executable_and_arguments = []
             if session_dal.rte_script:
@@ -104,7 +104,7 @@ class ProcessManagerDriver:
             for k, v in old_env.items():
                 new_env[k] = v.format(**app)
 
-            #print(f"{new_env=}")
+            self._log.debug(f"{new_env=}")
             breq =  BootRequest(
             process_description = ProcessDescription(
                 metadata = ProcessMetadata(
@@ -119,7 +119,7 @@ class ProcessManagerDriver:
                     allowed_hosts = [host]
                 )
             )
-            #print (f"{breq=}\n\n")
+            self._log.debug(f"{breq=}\n\n")
             yield breq
 
     async def _convert_drunc_to_boot_request(self, boot_configuration_file, user, session) -> BootRequest:
