@@ -16,6 +16,8 @@ def process_variables(variables, envDict):
 
 # Recursively process all Segments in given Segment extracting Applications
 def process_segment(db, session, segment):
+  import logging
+  log = logging.getLogger('process_segment')
   # Get default environment from Session
   defenv = {}
   process_variables(session.environment, defenv)
@@ -42,12 +44,13 @@ def process_segment(db, session, segment):
 
   # Get all the enabled applications of this segment
   for app in segment.applications:
-    #print()
     if 'Component' in app.oksTypes():
       enabled = not coredal.component_disabled(db._obj, session.id, app.id)
-      print(f"{app.id} {enabled=}")
+      log.debug(f"{app.id} {enabled=}")
     else:
       enabled = True
+      log.debug(f"{app.id} {enabled=}")
+
     if enabled:
       appenv = defenv
       # Override with any app specific environment from Application
@@ -61,7 +64,7 @@ def process_segment(db, session, segment):
                    "host": host,
                    "env": appenv})
     else:
-      print(f"Ignoring disabled app {app.id}")
+      log.info(f"Ignoring disabled app {app.id}")
   return apps
 
 def process_services(session):
