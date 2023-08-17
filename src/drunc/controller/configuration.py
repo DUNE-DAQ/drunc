@@ -1,13 +1,13 @@
 from typing import Optional, Dict, List
-from drunc.utils.utils import get_logger
 
 
 class ControllerConfiguration:
     def __init__(self, configuration_loc:str):
-        self.log = get_logger("controller-configuration")
+        from logging import getLogger
+        self.log = getLogger("controller-configuration")
         self.configuration_loc = configuration_loc
-        conf_data = self.validate_configuration_location(configuration_loc)
-        self.parse_configuration(conf_data)
+        self.data = self.validate_configuration_location(configuration_loc)
+        self.parse_configuration(self.data)
         self.log.info('Configured')
 
     def validate_configuration_location(self, configuration_loc:str) -> dict:
@@ -38,3 +38,8 @@ class ControllerConfiguration:
         self.broadcast_receiving_port = conf_data.get('broadcast_receiving_port', 50051)
         self.authoriser = conf_data.get('authoriser', {})
 
+    def get_authoriser_configuration(self):
+        return self.data['authoriser']
+
+    def get_broadcaster_configuration(self):
+        return self.data['broadcaster']

@@ -1,19 +1,72 @@
 import grpc
 import sh
 from functools import partial
+import threading
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from drunc.process_manager.process_manager import ProcessManager
 
+# # ------------------------------------------------
+# # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
+from ctypes import cdll
+import signal
+
+# Constant taken from http://linux.die.net/include/linux/prctl.h
+PR_SET_PDEATHSIG = 1
+
+class PrCtlError(Exception):
+    pass
+
+
+def on_parent_exit(signum):
+    """
+    Return a function to be run in a child process which will trigger
+    SIGNAME to be sent when the parent process dies
+    """
+
+    def set_parent_exit_signal():
+        # http://linux.die.net/man/2/prctl
+        result = cdll['libc.so.6'].prctl(PR_SET_PDEATHSIG, signum)
+        if result != 0:
+            raise PrCtlError('prctl failed with error code %s' % result)
+    return set_parent_exit_signal
+# # ------------------------------------------------
+class AppProcessWatcherThread(threading.Thread):
+    def __init__(self, pm, name, user, session, process):
+        threading.Thread.__init__(self)
+        self.pm = pm
+        self.user = user
+        self.session = session
+        self.name = name
+        self.process = process
+
+    def run(self):
+
+        exc = None
+        try:
+            self.process.wait()
+        except sh.ErrorReturnCode as e:
+            exc = e
+
+        self.pm.notify_join(
+            name = self.name,
+            session = self.session,
+            user = self.user,
+            exec = exc
+        )
 
 class SSHProcessManager(ProcessManager):
     def __init__(self, conf):
         super().__init__(conf)
-
-        from drunc.utils.utils import get_logger
-        self.log = get_logger('ssh-process-manager')
+        import logging
+        self.log = logging.getLogger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
+        self.watchers = []
+        from pathlib import Path
+        from os import getcwd
+        self.app_exec_path = Path(conf.get('app-exec-path', getcwd()))
+        self.app_log_path = Path(conf.get('app-log-path', getcwd()))
 
     def _terminate(self):
         self.log.info('Terminating')
@@ -26,7 +79,7 @@ class SSHProcessManager(ProcessManager):
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
-            self.log.warning(f'Killing {self.boot_request.process_description.metadata[uuid].name}')
+            self.log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
             process.terminate()
 
     def _process_children_logs(self, uuid, line):
@@ -65,9 +118,40 @@ class SSHProcessManager(ProcessManager):
                 yield ll
                 cursor += 1
 
+
+    def notify_join(self, name, session, user, exec):
+        exit_code = None
+        if exec:
+            exit_code = exec.exit_code
+        end_str = f"Process \'{name}\' (session: \'{session}\', user: \'{user}\') process exited with exit code {exit_code}"
+        self.log.info(end_str)
+        if exec:
+            self.log.debug(name+str(exec))
+
+        from druncschema.broadcast_pb2 import BroadcastType
+        self.broadcast(
+            end_str,
+            BroadcastType.SUBPROCESS_STATUS_UPDATE
+        )
+
+    def _watch(self, name, session, user, process):
+        t = AppProcessWatcherThread(
+            pm = self,
+            session = session,
+            user = user,
+            name = name,
+            process = process
+        )
+        t.start()
+        self.watchers.append(t)
+
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         self.log.info(f'Booting {boot_request.process_description.metadata}')
+        import os
+        platform = os.uname().sysname.lower()
+        macos = ("darwin" in platform)
 
+        meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise RuntimeError('No allowed host provided! bailing')
 
@@ -84,13 +168,15 @@ class SSHProcessManager(ProcessManager):
                 user = boot_request.process_description.metadata.user
                 user_host = host if not user else f'{user}@{host}'
 
+                from drunc.utils.utils import now_str
+                log_file = self.app_log_path / f'log-{meta.user}-{meta.session}-{meta.name}-{now_str(True)}.txt'
                 env_var = boot_request.process_description.env
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
 
-                runtime_var = boot_request.process_description.env
-                cmd += ';' + ';'.join([ f"export {n}=\"{v}\"" for n,v in runtime_var.items()])
+                # runtime_var = boot_request.process_description.env
+                # cmd += ';' + ';'.join([ f"export {n}=\"{v}\"" for n,v in runtime_var.items()])
 
-                cmd += ';'
+                cmd += f'; cd {self.app_exec_path} ;'
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec
@@ -101,7 +187,7 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ';':
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", cmd]
+                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} 2>&1 | tee {log_file}']
 
                 self.process_store[uuid] = sh.ssh (
                     *arguments,
@@ -109,6 +195,14 @@ class SSHProcessManager(ProcessManager):
                     _bg=True,
                     _bg_exc=False,
                     _new_session=True,
+                    _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
+                )
+
+                self._watch(
+                    name = meta.name,
+                    user = meta.user,
+                    session = meta.session,
+                    process = self.process_store[uuid]
                 )
                 self.log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
                 break
@@ -231,10 +325,7 @@ class SSHProcessManager(ProcessManager):
         for uuid in uuids:
             process = self.process_store[uuid]
             if not process.is_alive():
-                if query.force:
-                    continue
-                else:
-                    raise RuntimeError(f'The process {uuid} is already dead!')
+                continue
 
             process.terminate()
 

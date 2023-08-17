@@ -1,6 +1,5 @@
 from drunc.fsm.fsm_core import FSMInterface
 
-
 class LogbookInterface(FSMInterface):
     def __init__(self, configuration):
         super().__init__("logbook")

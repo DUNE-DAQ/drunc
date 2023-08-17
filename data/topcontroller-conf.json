@@ -1,21 +1,14 @@
 {
-    "children_controllers": [
-        {
-            "name": "controller0",
-            "cmd_address": "localhost:3601"
-        },
-        {
-            "name": "controller1",
-            "cmd_address": "localhost:3602"
-        },
-        {
-            "name": "controller2",
-            "cmd_address": "localhost:3603"
-        },
-        {
-            "name": "controller3",
-            "cmd_address": "localhost:3604"
-        }
-    ],
-    "apps": []
+    "children_controllers": [],
+    "apps": [],
+
+    "authoriser": {
+        "type": "dummy"
+    },
+
+    "broadcaster": {
+        "type": "kafka",
+        "kafka_address": "localhost:30092",
+        "publish_timeout": 2
+    }
 }

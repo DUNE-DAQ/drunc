@@ -1,7 +1,7 @@
 import os
 import sys
-this_dir = os.path.dirname(__file__)
-fsm_dir = os.path.join(this_dir, '..', 'fsm')
+top_dir = os.environ['DRUNC_DIR']
+fsm_dir = os.path.join(top_dir, 'src', 'drunc', 'fsm')
 sys.path.append(fsm_dir)
 from fsm_core import FSM
 

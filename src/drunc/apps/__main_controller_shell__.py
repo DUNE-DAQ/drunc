@@ -1,6 +1,6 @@
 
 def main() -> None:
-    from drunc.interface.controller_shell import controller_shell, ControllerContext
+    from drunc.controller.interface.controller_shell import controller_shell, ControllerContext
     from rich.console import Console
     console = Console()
     context = ControllerContext()

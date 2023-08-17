@@ -1,5 +1,15 @@
 {
-    "address": "[::]:100",
     "type": "ssh",
-    "name": "SSHProcessManager"
+    "name": "SSHProcessManager",
+    "command_address": "0.0.0.0:10054",
+
+    "authoriser": {
+        "type": "dummy"
+    },
+
+    "broadcaster": {
+        "type": "kafka",
+        "kafka_address": "localhost:30092",
+        "publish_timeout": 2
+    }
 }
