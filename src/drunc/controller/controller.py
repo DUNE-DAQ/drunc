@@ -73,12 +73,7 @@ class Controller(ControllerServicer, BroadcastSender):
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
-<<<<<<< HEAD
-
-        self.authoriser = DummyAuthoriser(self.configuration.authoriser, SystemType.CONTROLLER)
-=======
         self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
->>>>>>> develop
 
         self.actor = ControllerActor(None)
 
@@ -236,34 +231,6 @@ class Controller(ControllerServicer, BroadcastSender):
             )
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
-<<<<<<< HEAD
-        try:
-            creq = unpack_any(request.data, Request)
-        except MalformedMessage as e:
-            self.log.error(f'Cannot unpack data in request to \'Request\': {e}')
-
-        self.broadcaster.new_broadcast(
-            BroadcastMessage(
-                level = Level.INFO,
-                payload = f'{request.token.user_name} is attempting to execute {command}',
-                emitter = self.name
-            )
-        )
-
-        self.log.debug(f'{command} data: {creq.data}')
-
-        node_to_execute = self._resolve(creq.locations)
-
-        if node_to_execute:
-            self.propagate_to_list(creq, command, node_to_execute) # TODO this function needs to bundle the results
-
-        if self._should_execute_on_self(creq.locations):
-            try:
-                token = Token()
-                token.CopyFrom(request.token)
-                self.log.info(f'{token} executing {command}')
-                result = getattr(self, command+"_impl")(creq.data, token)
-=======
         self.broadcast(
             BroadcastType = BroadcastType.TEXT_MESSAGE,
             text = f'{request.token.user_name} is attempting to execute {command}',
@@ -282,7 +249,6 @@ class Controller(ControllerServicer, BroadcastSender):
             token.CopyFrom(request.token)
             self.log.info(f'{token} executing {command}')
             result = getattr(self, command+"_impl")(data, token)
->>>>>>> develop
 
         except ctler_excpt.ControllerException as e:
             self.log.error(f'ControllerException when executing {command}: {e}')
@@ -336,46 +302,6 @@ class Controller(ControllerServicer, BroadcastSender):
         )
 
 
-<<<<<<< HEAD
-    def add_to_broadcast_list(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'add_to_broadcast_list\' request: {request}')
-        return self._generic_user_command(request, '_add_to_broadcast_list', context)
-
-    def _add_to_broadcast_list_impl(self, data, _) -> PlainText:
-        r = unpack_any(data, BroadcastRequest)
-        self.log.info(f'Adding {r.broadcast_receiver_address} to broadcast list')
-        if not self.broadcaster.add_listener(r.broadcast_receiver_address):
-            raise ctler_excpt.ControllerException(f'Failed to add {r.broadcast_receiver_address} to broadcast list')
-        return PlainText(text = f'Added {r.broadcast_receiver_address} to broadcast list')
-
-
-
-    def remove_from_broadcast_list(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'remove_from_broadcast_list\' request: {request}')
-        return self._generic_user_command(request, '_remove_from_broadcast_list', context)
-
-    def _remove_from_broadcast_list_impl(self, data, _) -> PlainText:
-        r = unpack_any(data, BroadcastRequest)
-        if not self.broadcaster.rm_listener(r.broadcast_receiver_address):
-            raise ctler_excpt.ControllerException(f'Failed to remove {r.broadcast_receiver_address} from broadcast list')
-        return PlainText(text = f'Removed {r.broadcast_receiver_address} to broadcast list')
-
-
-
-    def get_broadcast_list(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'get_broadcast_list\' request: {request}')
-        return self._generic_user_command(request, '_get_broadcast_list', context)
-
-    def _get_broadcast_list_impl(self, dummy, _) -> PlainText:
-        ret = StringStringMap()
-        listeners = self.broadcaster.get_listeners()
-        for k, v in listeners.items():
-            ret[k] = v
-        return
-
-
-=======
->>>>>>> develop
     def take_control(self, request:Request, context) -> Response:
         self.log.debug(f'Received \'take_control\' request: {request}')
         return self._generic_user_command(request, '_take_control', context)
