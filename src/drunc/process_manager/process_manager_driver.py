@@ -62,9 +62,65 @@ class ProcessManagerDriver:
         yield None
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
-        from drunc.process_manager.utils import ConfTypes
-        raise ConfigurationTypeNotSupported(ConfTypes.OKS)
-        yield None
+        from drunc.process_manager.oks_parser import process_segment
+        import oksdbinterfaces
+        db = oksdbinterfaces.Configuration("oksconfig:" + oks_conf)
+        session_dal = db.get_dal(class_name="Session", uid=session)
+
+        apps = process_segment(db, session_dal, session_dal.segment)
+        self._log.debug(f"{apps=}")
+
+        # Start with an arbitrary port for now
+        base_port = 9000
+        next_port = {}
+        #for name, exe, args, host, old_env in apps:
+        for app in apps:
+            host = app['restriction']
+            name = app['name']
+            exe = app['type']
+            args = app['args']
+            old_env = app['env']
+            if not host in next_port:
+                port = base_port
+            else:
+                port = next_port[host]
+            next_port[host] = port + 1
+            app['port'] = port
+
+            self._log.debug(f"{app=}")
+
+            executable_and_arguments = []
+            if session_dal.rte_script:
+                executable_and_arguments.append(ProcessDescription.ExecAndArgs(
+                    exec='source',
+                    args=[session_dal.rte_script]))
+            executable_and_arguments.append(ProcessDescription.ExecAndArgs(
+                exec=exe,
+                args=[args]))
+
+            new_env = {
+                "PORT": str(port),
+            }
+            for k, v in old_env.items():
+                new_env[k] = v.format(**app)
+
+            self._log.debug(f"{new_env=}")
+            breq =  BootRequest(
+            process_description = ProcessDescription(
+                metadata = ProcessMetadata(
+                    user = user,
+                    session = session,
+                    name = name,
+                ),
+                executable_and_arguments = executable_and_arguments,
+                env = new_env
+            ),
+                process_restriction = ProcessRestriction(
+                    allowed_hosts = [host]
+                )
+            )
+            self._log.debug(f"{breq=}\n\n")
+            yield breq
 
     async def _convert_drunc_to_boot_request(self, boot_configuration_file, user, session) -> BootRequest:
         boot_configuration = {}
