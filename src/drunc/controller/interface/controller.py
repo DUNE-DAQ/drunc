@@ -7,8 +7,9 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 @click.argument('configuration', type=str)
 @click.argument('control-port', type=int)
 @click.argument('name', type=str)
+@click.argument('session', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, control_port:int, name:str, log_level:str):
+def controller_cli(configuration:str, control_port:int, name:str, session:str, log_level:str):
     from rich.console import Console
     console = Console()
 
@@ -18,7 +19,7 @@ def controller_cli(configuration:str, control_port:int, name:str, log_level:str)
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
-    ctrlr = Controller(name, configuration)
+    ctrlr = Controller(name, session, configuration)
 
     def serve(port:int) -> None:
         if not port:
@@ -38,14 +39,11 @@ def controller_cli(configuration:str, control_port:int, name:str, log_level:str)
         def sigint(sig, frame):
             console.print('Requested termination')
             server.stop(0)
-            console.print('Server stopped')
-            ctrlr.stop()
-            console.print('Controller stopped')
+            ctrlr.terminate()
 
         signal.signal(signal.SIGINT, sigint)
 
         server.wait_for_termination()
-        console.print(f'{ctrlr.name} was terminated')
 
     try:
         serve(control_port)

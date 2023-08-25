@@ -57,12 +57,13 @@ class ControllerActor:
 
 
 class Controller(ControllerServicer, BroadcastSender):
-    def __init__(self, name:str, configuration:str):
+    def __init__(self, name:str, session:str, configuration:str):
         super(Controller, self).__init__()
 
         from logging import getLogger
         self._log = getLogger("Controller")
         self.name = name
+        self.session = session
         self.configuration_loc = configuration
 
         from drunc.controller.configuration import ControllerConfiguration
@@ -96,7 +97,7 @@ class Controller(ControllerServicer, BroadcastSender):
 
         self._log.info('Controller initialised')
 
-    def stop(self):
+    def terminate(self):
         self._log.info(f'Stopping controller {self.name}')
 
         self.broadcast(
@@ -104,15 +105,10 @@ class Controller(ControllerServicer, BroadcastSender):
             message = 'over_and_out',
         )
 
-        if self.broadcast_server_thread:
-            self._log.info('Stopping broadcast receiver thread')
-            self.broadcast_handler.stop()
-            self.broadcast_server_thread.join()
-
         self._log.info('Stopping children')
         for child in self.children_nodes:
             self._log.debug(f'Stopping {child.name}')
-            child.stop()
+            child.terminate()
 
 
 
@@ -167,41 +163,7 @@ class Controller(ControllerServicer, BroadcastSender):
                 return True
         return False
 
-    # def _resolve(self, paths) -> dict[ChildNode, Location]:
-
-    #     ret = {}
-    #     from drunc.utils.utils import regex_match
-    #     for loc in paths:
-
-    #         if loc.nodes[0] != self.name:
-    #             continue
-
-    #         elif loc.nodes == [self.name] and loc.recursive:
-    #             for node in self.nodes:
-    #                 if node in ret: # TODO my own error here please
-    #                     raise RuntimeError(f'Mutliple command paths for the same node! \'{node.name}\' should propagate to \'{ret[node]}\' and to \'{loc}\'')
-    #                 ret[node] = Location(
-    #                     nodes = [node.name],
-    #                     recursive = True
-    #                 )
-
-    #         elif loc.nodes == [self.name] and not loc.recursive:
-    #             continue
-
-    #         else:
-    #             for cn in self.children_nodes:
-    #                 if regex_match(cn.name, node):
-    #                     if node in ret: # TODO my own error here please
-    #                         raise RuntimeError(f'Mutliple command paths for the same node! \'{node.name}\' should propagate to \'{ret[node]}\' and to \'{loc}\'')
-    #                     ret[cn] = Location(
-    #                         nodes = [cn.name] + loc.nodes[2:] if len(loc.nodes)>2 else [],
-    #                         recursive = loc.recursive
-    #                     )
-
-    #     return ret
-
-
-    def _generic_user_command(self, request:Request, command:str, context):
+    def _generic_user_command(self, request:Request, command:str, context, propagate=False):
         """
         A generic way to execute the controller commands from a user.
         1. Check if the command is authorised
@@ -211,8 +173,16 @@ class Controller(ControllerServicer, BroadcastSender):
         5. Return the result
         """
         self.log.info(f'Attempting to execute {command}')
+        self.broadcast(
+            btype = BroadcastType.ACK,
+            message = f'{request.token.user_name} is attempting to execute {command}',
+        )
 
         if not self.authoriser.is_authorised(request.token, command):
+            self.broadcast(
+                btype = BroadcastType.TEXT_MESSAGE, # make this an real type rather than just text
+                message = f'{request.token.user_name} is not authorised to execute {command}',
+            )
             context.abort_with_status(
                 rpc_status.to_status(
                     status_pb2.Status(
@@ -224,24 +194,23 @@ class Controller(ControllerServicer, BroadcastSender):
             )
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
-        self.broadcast(
-            btype = BroadcastType.TEXT_MESSAGE,
-            message = f'{request.token.user_name} is attempting to execute {command}',
-        )
 
         data = request.data if request.data else None
         self.log.debug(f'{command} data: {request.data}')
 
-        # node_to_execute = self._resolve(request.locations)
+        if propagate:
+            self.propagate_to_list(request, command, self.children_nodes)
 
-        self.propagate_to_list(request, command, self.children_nodes) # TODO this function needs to bundle the results
-
-        # if self._should_execute_on_self(request.locations):
         try:
             token = Token()
             token.CopyFrom(request.token)
             self.log.info(f'{token} executing {command}')
+            self.broadcast(
+                btype = BroadcastType.COMMAND_EXECUTION_START,
+                message = f'{self.name}.{self.session} is executing {command} (on request from {request.token.user_name})',
+            )
             result = getattr(self, command+"_impl")(data, token)
+
 
         except ctler_excpt.ControllerException as e:
             self.log.error(f'ControllerException when executing {command}: {e}')
@@ -270,22 +239,22 @@ class Controller(ControllerServicer, BroadcastSender):
             )
             raise e # let gRPC handle it
 
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            message = f'Successfully executed {command}: {result}'
-        )
-
         result_any = pack_to_any(data)
         response = Response(data = result_any)
         self.log.info(f'Successfully executed {command}, response: {response}')
+
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_END,
+            message = f'{self.name}.{self.session} succesfully executed {command} (on request from {request.token.user_name})',
+        )
+
         return response
 
 
 
     def ls(self, request:Request, context) -> Response:
         self.log.debug(f'Received \'ls\' request: {request}')
-        return self._generic_user_command(request, '_ls', context)
+        return self._generic_user_command(request, '_ls', context, propagate=False)
 
     def _ls_impl(self, _, dummy) -> PlainTextVector:
         nodes = [node.name for node in self.children_nodes]

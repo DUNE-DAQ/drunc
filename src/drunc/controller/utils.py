@@ -1,14 +1,14 @@
 
-def send_command(controller, token, command:str, data=None, paths=[], recursive=False, rethrow=False):
-    from druncschema.controller_pb2 import ControllerRequest, Location
+def send_command(controller, token, command:str, data=None, rethrow=False):
+    from druncschema.controller_pb2 import ControllerRequest
     from druncschema.request_response_pb2 import Request
     from druncschema.token_pb2 import Token
     import grpc
     from google.protobuf import any_pb2
 
-    from drunc.utils.utils import get_logger
+    import logging
+    log = logging.getLogger("send_command")
 
-    log = get_logger("send_command")
     # Grab the command from the controller stub in the context
     # Add the token to the data (which can be of any protobuf type)
     # Send the command to the controller
@@ -20,28 +20,16 @@ def send_command(controller, token, command:str, data=None, paths=[], recursive=
 
     token = Token()
     token.CopyFrom(token) # some protobuf magic
+    request = Request(
+        token = token,
+    )
 
     try:
-        locs = [
-            Location(
-                path = path,
-                recursive = recursive
-            ) for path in paths
-        ]
-
-        creq = ControllerRequest(
-            location = locs
-        )
-
         if data:
             data_detail = any_pb2.Any()
             data_detail.Pack(data)
-            creq.data.CopyFrom(data_detail)
+            request.data.CopyFrom(data_detail)
 
-
-        request = Request(
-            token = token,
-        )
         creq_any = any_pb2.Any()
         creq_any.Pack(creq)
         request.data.CopyFrom(creq_any)

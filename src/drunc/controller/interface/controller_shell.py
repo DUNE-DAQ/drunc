@@ -53,12 +53,12 @@ class ControllerContext:
 
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True)
-# @click.argument('controller-address', type=str)#, help='Which address the controller is running on')
+@click.argument('controller-address', type=str)#, help='Which address the controller is running on')
 # @click.argument('this-port', type=int)#, help='Which port to use for receiving status')
 # @click.option('--just-watch', type=bool, default=False, is_flag=True, help='If one just doesn\'t want to take control of the controller')
 @click.argument('conf', type=click.Path(exists=True))
 @click.pass_context
-def controller_shell(ctx, conf) -> None:#controller_address:str, this_port:int, just_watch:bool) -> None:
+def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int, just_watch:bool) -> None:
     ctx.obj = ControllerContext(conf)
 
     # first add the shell to the controller broadcast list
@@ -80,9 +80,11 @@ def controller_shell(ctx, conf) -> None:#controller_address:str, this_port:int, 
             command = 'ls',
             rethrow = True
         )
-        ll = LocationList()
-        response.data.Unpack(ll)
-        ctx.obj.log.info(ll.locations)
+
+        ptv = PlainTextVector()
+        response.data.Unpack(ptv)
+        ctx.obj.log.info(ptv.locations)
+
     except Exception as e:
         ctx.obj.log.error('Could not list this controller\'s contents')
         ctx.obj.log.error(e)
