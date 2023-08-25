@@ -1,7 +1,7 @@
 import asyncio
 import grpc
 from typing import Optional
-from drunc.communication.child_node import ChildNode, ChildNodeType
+from drunc.controller.child_node import ChildNode, ChildNodeType
 # from drunc.communication.controller_pb2_grpc import ControllerStub
 
 class DAQAppChild(ChildNode):
