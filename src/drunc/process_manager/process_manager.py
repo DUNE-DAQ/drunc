@@ -44,6 +44,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         )
 
     def terminate(self):
+        self.broadcast(
+            message='over_and_out',
+            btype=BroadcastType.SERVER_SHUTDOWN
+        )
         self._terminate()
 
     @abc.abstractmethod
