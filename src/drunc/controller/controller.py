@@ -5,9 +5,9 @@ from google.rpc import error_details_pb2
 from google.rpc import status_pb2
 from grpc_status import rpc_status
 
-from drunc.communication.child_node import ChildNode
-from drunc.communication.daq_app_child import DAQAppChild
-from drunc.communication.controller_child import ControllerChild
+from drunc.controller.child_node import ChildNode
+from drunc.controller.daq_app_child import DAQAppChild
+from drunc.controller.controller_child import ControllerChild
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.generic_pb2 import PlainText, PlainTextVector
@@ -102,52 +102,50 @@ class Controller(ControllerServicer, BroadcastSender):
         self._log.info('Controller initialised')
 
     def stop(self):
-        self.log.info(f'Stopping controller {self.name}')
+        self._log.info(f'Stopping controller {self.name}')
 
-        if self.broadcaster:
-            self.log.info('Stopping broadcaster')
-            self.broadcaster(
-                BroadcastType = BroadcastType.SERVER_SHUTDOWN,
-                text = 'over_and_out',
-            )
+        self.broadcast(
+            btype = BroadcastType.SERVER_SHUTDOWN,
+            message = 'over_and_out',
+        )
 
         if self.broadcast_server_thread:
-            self.log.info('Stopping broadcast receiver thread')
+            self._log.info('Stopping broadcast receiver thread')
             self.broadcast_handler.stop()
             self.broadcast_server_thread.join()
 
-        self.log.info('Stopping children')
+        self._log.info('Stopping children')
         for child in self.children_nodes:
-            self.log.debug(f'Stopping {child.name}')
+            self._log.debug(f'Stopping {child.name}')
             child.stop()
 
 
 
     def _propagate_to_list(self, request:Request, command:str, context, node_to_execute:Dict[ChildNode, str]):
 
-        self.broadcaster(
-            BroadcastType = BroadcastType.COMMAND_EXECUTION_START,
-            text = f'Propagating {command} to children',
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_START,
+            message = f'Propagating {command} to children',
         )
 
         def propagate_to_child(child, command, data, token, location_override):
 
-            self.broadcaster(
-                BroadcastType = BroadcastType.CHILD_COMMAND_EXECUTION_START,
-                text = f'Propagating {command} to children ({child.node_type.name})',
+            self.broadcast(
+                btype = BroadcastType.CHILD_COMMAND_EXECUTION_START,
+                message = f'Propagating {command} to children ({child.node_type.name})',
             )
 
             try:
                 child.propagate_command(command, data, token, location)
-                self.broadcaster(
-                    BroadcastType = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
-                    text = f'Propagating {command} to children ({child.node_type.name})',
+                self.broadcast(
+                    btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
+                    message = f'Propagating {command} to children ({child.node_type.name})',
                 )
             except:
                 self.log.error(f'Failed to propagate {command} to {child.name} ({child.node_type.name})')
-                self.broadcaster(
-                    BroadcastType = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    text = f'Failed to propagate {command} to {child.name} ({child.node_type.name})',
+                self.broadcast(
+                    btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
+                    message = f'Failed to propagate {command} to {child.name} ({child.node_type.name})',
                 )
 
         threads = []
@@ -160,9 +158,9 @@ class Controller(ControllerServicer, BroadcastSender):
         for thread in threads:
             thread.join()
 
-        self.broadcaster(
-            BroadcastType = BroadcastType.COMMAND_EXECUTION_END,
-            text = f'Propagated {command} to children',
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_END,
+            message = f'Propagated {command} to children',
         )
 
     def _should_execute_on_self(self, node_path) -> bool:
@@ -232,8 +230,8 @@ class Controller(ControllerServicer, BroadcastSender):
             self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
         self.broadcast(
-            BroadcastType = BroadcastType.TEXT_MESSAGE,
-            text = f'{request.token.user_name} is attempting to execute {command}',
+            btype = BroadcastType.TEXT_MESSAGE,
+            message = f'{request.token.user_name} is attempting to execute {command}',
         )
 
         data = request.data if request.data else None
@@ -253,8 +251,8 @@ class Controller(ControllerServicer, BroadcastSender):
         except ctler_excpt.ControllerException as e:
             self.log.error(f'ControllerException when executing {command}: {e}')
             self.broadcast(
-                BroadcastType = BroadcastType.EXCEPTION_RAISED,
-                text = f'ControllerException when executing {command}: {e}'
+                btype = BroadcastType.EXCEPTION_RAISED,
+                message = f'ControllerException when executing {command}: {e}'
             )
 
             detail = pack_to_any(PlainText(text = f'ControllerException when executing {command}: {e}'))
@@ -272,15 +270,15 @@ class Controller(ControllerServicer, BroadcastSender):
             )
         except Exception as e:
             self.broadcast(
-                BroadcastType = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
-                text = f'Unhandled exception when executing {command}: {e}'
+                btype = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+                message = f'Unhandled exception when executing {command}: {e}'
             )
             raise e # let gRPC handle it
 
 
         self.broadcast(
-            BroadcastType = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            text = f'Successfully executed {command}: {result}'
+            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
+            message = f'Successfully executed {command}: {result}'
         )
 
         result_any = pack_to_any(data)
