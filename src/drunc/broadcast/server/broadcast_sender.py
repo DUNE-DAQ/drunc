@@ -26,13 +26,16 @@ class BroadcastSender:
             # nice and easy case
             return
 
-        from druncschema.broadcast_pb2 import BroadcastMessage
+        from druncschema.broadcast_pb2 import BroadcastMessage, Emitter
         from druncschema.generic_pb2 import PlainText
         from drunc.utils.grpc_utils import pack_to_any
         any = pack_to_any(PlainText(text=message))
-
+        emitter = Emitter(
+            process = self.name,
+            session = getattr(self, 'session', "none")
+        )
         bm = BroadcastMessage(
-            emitter = self.name,
+            emitter = emitter,
             type = btype,
             data = any,
         )

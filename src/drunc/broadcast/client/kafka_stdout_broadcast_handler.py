@@ -50,7 +50,7 @@ class KafkaStdoutBroadcastHandler:
                         else:
                             txt = decoded.data
 
-                        self._log.info(f'"{decoded.emitter}": "{BroadcastType.Name(decoded.type)}" {txt}')
+                        self._log.info(f'"{decoded.emitter.session}.{decoded.emitter.process}": "{BroadcastType.Name(decoded.type)}" {txt}')
 
                     except Exception as e:
                         self._log.error(f'Weird broadcast message: {message} (error: {str(e)})')

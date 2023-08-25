@@ -88,12 +88,7 @@ class Controller(ControllerServicer, BroadcastSender):
         for app_cfg in self.configuration.applications:
             self.children_nodes.append(DAQAppChild(app_cfg))
 
-        # from drunc.interface.stdout_broadcast_handler import StdoutBroadcastHandler
-        # self.broadcast_handler = StdoutBroadcastHandler(self.configuration.broadcast_receiving_port)
-        # self.broadcast_server_thread = Thread(target=self.broadcast_handler.serve, name=f'broadcast_serve_thread')
-        # self.broadcast_server_thread.start()
-
-        # # do this at the end, otherwise we need to self.stop() if an exception is raised
+        # do this at the end, otherwise we need to self.stop() if an exception is raised
         self.broadcast(
             message = 'ready',
             btype = BroadcastType.SERVER_READY

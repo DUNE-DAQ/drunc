@@ -19,7 +19,7 @@ from google.protobuf.any_pb2 import Any
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, configuration_loc):
-        self.name = 'ProcessManager'
+        self.name = 'process_manager'
 
         ProcessManagerServicer.__init__(self)
 
