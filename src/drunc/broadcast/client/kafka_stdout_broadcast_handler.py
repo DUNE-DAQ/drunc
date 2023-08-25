@@ -28,15 +28,32 @@ class KafkaStdoutBroadcastHandler:
 
     def consume(self):
         from google.protobuf import text_format
-
+        import druncschema.broadcast_pb2 as b_desc
+        from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
+        from druncschema.generic_pb2 import PlainText
+        from drunc.utils.grpc_utils import unpack_any
         while self.run:
             for messages in self.consumer.poll(timeout_ms = 500).values():
                 for message in messages:
+                    decoded=''
                     try:
                         decoded = self.message_format()
                         decoded.ParseFromString(message.value)
-                        # hum, we would really prefer something a bit better here... I don't know what
+                        self._log.debug(f'{decoded=}, {type(decoded)=}')
+                    except Exception as e:
+                        self._log.error(f'Unhandled broadcast message: {message} (error: {str(e)})')
+                        pass
+
+                    try:
+                        if decoded.data.Is(PlainText.DESCRIPTOR):
+                            txt = unpack_any(decoded.data, PlainText).text
+                        else:
+                            txt = decoded.data
+
+                        self._log.info(f'"{decoded.emitter}": "{BroadcastType.Name(decoded.type)}" {txt}')
+
+                    except Exception as e:
+                        self._log.error(f'Weird broadcast message: {message} (error: {str(e)})')
                         text_proto = text_format.MessageToString(decoded)
                         self._log.info(text_proto)
-                    except:
-                        pass
+                        raise e
