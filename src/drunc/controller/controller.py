@@ -61,7 +61,7 @@ class Controller(ControllerServicer, BroadcastSender):
         super(Controller, self).__init__()
 
         from logging import getLogger
-        self._log = getLogger("Controller")
+        self._log = getLogger(name)
         self.name = name
         self.session = session
         self.configuration_loc = configuration
@@ -70,7 +70,7 @@ class Controller(ControllerServicer, BroadcastSender):
         self.configuration = ControllerConfiguration(self.configuration_loc)
         self.children_nodes = [] # type: List[ChildNode]
 
-        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
+        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration(), self._log)
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
@@ -95,11 +95,7 @@ class Controller(ControllerServicer, BroadcastSender):
             btype = BroadcastType.SERVER_READY
         )
 
-        self._log.info('Controller initialised')
-
     def terminate(self):
-        self._log.info(f'Stopping controller {self.name}')
-
         self.broadcast(
             btype = BroadcastType.SERVER_SHUTDOWN,
             message = 'over_and_out',
@@ -133,7 +129,6 @@ class Controller(ControllerServicer, BroadcastSender):
                     message = f'Propagating {command} to children ({child.node_type.name})',
                 )
             except:
-                self.log.error(f'Failed to propagate {command} to {child.name} ({child.node_type.name})')
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
                     message = f'Failed to propagate {command} to {child.name} ({child.node_type.name})',
@@ -141,7 +136,7 @@ class Controller(ControllerServicer, BroadcastSender):
 
         threads = []
         for child, location in node_to_execute.items():
-            self.log.debug(f'Propagating to {child.name}')
+            self._log.debug(f'Propagating to {child.name}')
             t = Thread(target=propagate_to_child, args=(child, command, request.data, request.token, location))
             t.start()
             threads.append(t)
@@ -172,10 +167,9 @@ class Controller(ControllerServicer, BroadcastSender):
         4. Broadcast that the command has been executed successfully or not
         5. Return the result
         """
-        self.log.info(f'Attempting to execute {command}')
         self.broadcast(
-            btype = BroadcastType.ACK,
-            message = f'{request.token.user_name} is attempting to execute {command}',
+            btype = BroadcastType.COMMAND_RECEIVED,
+            message = f'{request.token.user_name} attempting to execute {command}'
         )
 
         if not self.authoriser.is_authorised(request.token, command):
@@ -192,11 +186,10 @@ class Controller(ControllerServicer, BroadcastSender):
                     )
                 )
             )
-            self.log.error(f'Unauthorised attempt to execute {command} from {request.token.user_name}')
 
 
         data = request.data if request.data else None
-        self.log.debug(f'{command} data: {request.data}')
+        self._log.debug(f'{command} data: {request.data}')
 
         if propagate:
             self.propagate_to_list(request, command, self.children_nodes)
@@ -204,16 +197,14 @@ class Controller(ControllerServicer, BroadcastSender):
         try:
             token = Token()
             token.CopyFrom(request.token)
-            self.log.info(f'{token} executing {command}')
             self.broadcast(
                 btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'{self.name}.{self.session} is executing {command} (on request from {request.token.user_name})',
+                message = f'Executing {command} (upon request from {request.token.user_name})',
             )
             result = getattr(self, command+"_impl")(data, token)
 
 
         except ctler_excpt.ControllerException as e:
-            self.log.error(f'ControllerException when executing {command}: {e}')
             self.broadcast(
                 btype = BroadcastType.EXCEPTION_RAISED,
                 message = f'ControllerException when executing {command}: {e}'
@@ -221,7 +212,6 @@ class Controller(ControllerServicer, BroadcastSender):
 
             detail = pack_to_any(PlainText(text = f'ControllerException when executing {command}: {e}'))
 
-            self.log.error(f'Aborting {command}')
 
             context.abort_with_status(
                 rpc_status.to_status(
@@ -239,13 +229,12 @@ class Controller(ControllerServicer, BroadcastSender):
             )
             raise e # let gRPC handle it
 
-        result_any = pack_to_any(data)
+        result_any = pack_to_any(result)
         response = Response(data = result_any)
-        self.log.info(f'Successfully executed {command}, response: {response}')
 
         self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_END,
-            message = f'{self.name}.{self.session} succesfully executed {command} (on request from {request.token.user_name})',
+            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
+            message = f'Succesfully executed {command}'
         )
 
         return response
@@ -253,43 +242,48 @@ class Controller(ControllerServicer, BroadcastSender):
 
 
     def ls(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'ls\' request: {request}')
         return self._generic_user_command(request, '_ls', context, propagate=False)
 
     def _ls_impl(self, _, dummy) -> PlainTextVector:
         nodes = [node.name for node in self.children_nodes]
-        self.log.info(f'Listing children nodes: {nodes}')
         return PlainTextVector(
             text = nodes
         )
 
+    def describe(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, '_describe', context, propagate=False)
+
+    def _describe_impl(self, _, dummy):
+        from druncschema.request_response_pb2 import Description
+        return Description(
+            name = self.name,
+            session = self.session,
+            # ... list of commands, etc...
+        )
+
 
     def take_control(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'take_control\' request: {request}')
         return self._generic_user_command(request, '_take_control', context)
 
     def _take_control_impl(self, _, token) -> PlainText:
         self.actor.take_control(token)
-        self.log.info(f'User {token.user_name} took control')
-        return PlainText(text = f'User {token.user_name} took control')
+        return PlainText(text = f'{token.user_name} took control')
 
 
 
     def surrender_control(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'surrender_control\' request: {request}')
         return self._generic_user_command(request, '_surrender_control', context)
 
     def _surrender_control_impl(self, _, token) -> PlainText:
         user = self.actor.get_user_name()
         self.actor.surrender_control(token)
-        return PlainText(text = f'User {user} surrendered control')
+        return PlainText(text = f'{user} surrendered control')
 
 
 
     def who_is_in_charge(self, request:Request, context) -> Response:
-        self.log.debug(f'Received \'who_is_in_charge\' request: {request}')
         return self._generic_user_command(request, '_who_is_in_charge', context)
 
     def _who_is_in_charge_impl(self, *args) -> PlainText:
         user = self.actor.get_user_name()
-        return PlainText(text = f'{user}')
+        return PlainText(text = user)

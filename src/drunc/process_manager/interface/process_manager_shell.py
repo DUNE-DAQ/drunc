@@ -32,27 +32,32 @@ class PMContext:
         if pm_conf is None:
             return
 
-        pm_conf_data = {}
+        self.pm_conf_data = {}
         with open(pm_conf) as f:
             import json
-            pm_conf_data = json.loads(f.read())
+            self.pm_conf_data = json.loads(f.read())
 
         user=getpass.getuser()
         self.token = Token(token=f'{user}-token', user_name=user)
         self.pmd = ProcessManagerDriver(
-            pm_conf_data,
+            self.pm_conf_data,
             self.token
         )
 
         self.print_traceback = print_traceback
+        self.status_receiver = None
 
+    def start_listening(self, topic):
         from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
         from druncschema.broadcast_pb2 import BroadcastMessage
+
         self.status_receiver = KafkaStdoutBroadcastHandler(
-            conf = pm_conf_data['broadcaster'],
-            topic = 'ProcessManager',
+            conf = self.pm_conf_data['broadcaster'],
+            topic = topic,
             message_format = BroadcastMessage,
         )
+
+
     def terminate(self):
         self.status_receiver.stop()
 
@@ -76,6 +81,14 @@ def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> No
         pm_conf = pm_conf,
         print_traceback = traceback
     )
+
+    desc = asyncio.get_event_loop().run_until_complete(ctx.obj.pmd.describe())
+
+    ctx.obj._log.info(f'{ctx.obj.pmd.pm_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    ctx.obj.start_listening(
+        desc.name
+    )
+
     def cleanup():
         ctx.obj.terminate()
 

@@ -11,7 +11,6 @@ from drunc.utils.grpc_utils import unpack_any
 
 from google.protobuf import any_pb2
 from google.rpc import code_pb2
-from google.rpc import error_details_pb2
 from google.rpc import status_pb2
 from grpc_status import rpc_status
 from google.protobuf.any_pb2 import Any
@@ -20,6 +19,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, configuration_loc):
         self.name = 'process_manager'
+        self.session = None
 
         ProcessManagerServicer.__init__(self)
 
@@ -93,10 +93,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         data = request.data if request.data else None
 
         try:
-            formatted_data = unpack_any(data, req_format)
-            self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-            result = getattr(self, command)(formatted_data, context)
-            self.log.info(f'\'{type(self).__name__}.{command}\' executed')
+            if request.HasField('data'):# is not None:
+                formatted_data = unpack_any(data, req_format)
+                self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
+                result = getattr(self, command)(formatted_data, context)
+                self.log.info(f'\'{type(self).__name__}.{command}\' executed')
+            else:
+                result = getattr(self, command)(None, context)
+
 
         except Exception as e:
             raise e # let gRPC handle it
@@ -223,6 +227,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         return self._generic_command(req, '_flush_impl', ProcessQuery, context)
 
 
+
+    def describe(self, request:Request, context) -> Response:
+        return self._generic_command(request, '_describe_impl', None, context)
+
+    def _describe_impl(self, _, dummy):
+        from druncschema.request_response_pb2 import Description
+        return Description(
+            name = self.name,
+            # ... list of commands, etc...
+        )
 
     @abc.abstractmethod
     async def _logs_impl(self, req:Request, context) -> Response:

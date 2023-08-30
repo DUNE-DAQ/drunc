@@ -11,7 +11,8 @@ def main() -> None:
         if not context.print_traceback:
             console.log(e)
         else:
-            console.print_exception()
+            import os
+            console.print_exception(width=os.get_terminal_size()[0])
 
 
 if __name__ == '__main__':

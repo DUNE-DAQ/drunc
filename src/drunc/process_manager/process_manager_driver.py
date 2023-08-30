@@ -1,5 +1,5 @@
 import asyncio
-from druncschema.request_response_pb2 import Request, Response
+from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.token_pb2 import Token
@@ -27,7 +27,7 @@ class ProcessManagerDriver:
         token = Token()
         token.CopyFrom(self.token)
         data = Any()
-        if payload:
+        if payload is not None:
             data.Pack(payload)
 
         if payload:
@@ -214,3 +214,11 @@ class ProcessManagerDriver:
         )
         pi = unpack_any(answer.data, ProcessInstance)
         return pi
+
+    async def describe(self) -> Description:
+        r = self._create_request(payload = None)
+        answer = await self.pm_stub.describe(
+            r
+        )
+        desc = unpack_any(answer.data, Description)
+        return desc

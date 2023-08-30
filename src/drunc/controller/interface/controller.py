@@ -48,4 +48,5 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
     try:
         serve(control_port)
     except Exception as e:
-        console.print_exception()
+        import os
+        console.print_exception(width=os.get_terminal_size()[0])

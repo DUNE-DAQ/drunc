@@ -22,7 +22,7 @@ class ListenerRepresentation:
 
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
-    def __init__(self, configuration):
+    def __init__(self, configuration, logger):
         from logging import getLogger
         self.name = 'broadcast_sender'
         self._log = getLogger("Broadcast Sender")

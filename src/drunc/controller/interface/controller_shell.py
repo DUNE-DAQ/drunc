@@ -1,18 +1,14 @@
 import click
 import click_shell
-from drunc.controller.controller import Controller
-from druncschema.request_response_pb2 import Request, Response
-from druncschema.token_pb2 import Token
-import drunc.controller.exceptions as ctler_excpt
 from drunc.controller.utils import send_command
-
-import grpc
-import google.protobuf.any_pb2 as any_pb2
-from grpc_status import rpc_status
-
+from drunc.utils.grpc_utils import unpack_any
+from druncschema.generic_pb2 import PlainText, PlainTextVector
+from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 
 class ControllerContext:
     def __init__(self,  ctler_conf:str=None, print_traceback:bool=False) -> None:
+        from rich.console import Console
+        self._console = Console()
         from logging import getLogger
         self.log = getLogger("ControllerShell")
         self.print_traceback = True
@@ -24,23 +20,30 @@ class ControllerContext:
         import os
         user = os.getlogin()
 
+        from druncschema.token_pb2 import Token
         self.token = Token ( # fake token, but should be figured out from the environment/authoriser
             token = f'{user}-token',
             user_name = user
         )
 
-        ctler_conf_data = {}
+        self.ctler_conf_data = {}
         with open(ctler_conf) as f:
             import json
-            ctler_conf_data = json.loads(f.read())
+            self.ctler_conf_data = json.loads(f.read())
 
+
+        self.status_receiver = None
+
+    def start_listening(self, topic):
         from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
         from druncschema.broadcast_pb2 import BroadcastMessage
+
         self.status_receiver = KafkaStdoutBroadcastHandler(
-            conf = ctler_conf_data['broadcaster'],
-            topic = 'ProcessManager',
+            conf = self.ctler_conf_data['broadcaster'],
+            topic = topic,
             message_format = BroadcastMessage,
         )
+
 
     def terminate(self):
         self.status_receiver.stop()
@@ -57,8 +60,12 @@ class ControllerContext:
 # @click.argument('this-port', type=int)#, help='Which port to use for receiving status')
 # @click.option('--just-watch', type=bool, default=False, is_flag=True, help='If one just doesn\'t want to take control of the controller')
 @click.argument('conf', type=click.Path(exists=True))
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.pass_context
-def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int, just_watch:bool) -> None:
+def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#, this_port:int, just_watch:bool) -> None:
+    from drunc.utils.utils import update_log_level
+    update_log_level(log_level)
+
     ctx.obj = ControllerContext(conf)
 
     # first add the shell to the controller broadcast list
@@ -71,77 +78,49 @@ def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int
 
     ctx.obj.log.info('Connected to the controller')
 
-    try:
-        ctx.obj.log.info('Attempting to list this controller\'s children')
-
-        response = send_command(
-            controller = ctx.obj.controller,
-            token = ctx.obj.token,
-            command = 'ls',
-            rethrow = True
-        )
-
-        ptv = PlainTextVector()
-        response.data.Unpack(ptv)
-        ctx.obj.log.info(ptv.locations)
-
-    except Exception as e:
-        ctx.obj.log.error('Could not list this controller\'s contents')
-        ctx.obj.log.error(e)
-        ctx.obj.log.error('Exiting.')
-        ctx.obj.status_receiver.stop()
-        ctx.obj.server_thread.join()
-        raise e
-
-    ctx.obj.log.info('Adding this shell to the broadcast list.')
+    from druncschema.request_response_pb2 import Description
+    desc = Description()
 
     try:
         response = send_command(
             controller = ctx.obj.controller,
             token = ctx.obj.token,
-            command = 'add_to_broadcast_list',
-            data = BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}'),
+            command = 'describe',
             rethrow = True
         )
-        # this command returns a response with a plain text message
-        pt = PlainText()
-        response.data.Unpack(pt)
-        ctx.obj.log.info(pt)
-        ctx.obj.broadcasted_to = True
+
+        response.data.Unpack(desc)
+
     except Exception as e:
-        ctx.obj.log.error('Could not add this shell to the broadcast list.')
+        ctx.obj.log.error('Could not get the controller\'s status')
         ctx.obj.log.error(e)
         ctx.obj.log.error('Exiting.')
-        ctx.obj.status_receiver.stop()
-        ctx.obj.server_thread.join()
+        ctx.obj.terminate()
         raise e
+
+    ctx.obj.log.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    ctx.obj.start_listening(
+        f'{desc.name}.{desc.session}'
+    )
+
+    ctx.obj.log.info('Attempting to list this controller\'s children')
+    from druncschema.generic_pb2 import PlainText, PlainTextVector
+
+    response = send_command(
+        controller = ctx.obj.controller,
+        token = ctx.obj.token,
+        command = 'ls',
+        rethrow = True
+    )
+
+    ptv = PlainTextVector()
+    response.data.Unpack(ptv)
+    ctx.obj.log.info(f'{desc.name}.{desc.session}\'s children: {ptv.text}')
 
 
     def cleanup():
         # remove the shell from the controller broadcast list
         dead = False
-        if ctx.obj.broadcasted_to:
-            ctx.obj.log.debug('Removing this shell from the broadcast list.')
-            try:
-                response = send_command(
-                    controller = ctx.obj.controller,
-                    token = ctx.obj.token,
-                    command = 'remove_from_broadcast_list',
-                    data = BroadcastRequest(broadcast_receiver_address =  f'[::]:{this_port}'),
-                    rethrow = True
-                )
-                ctx.obj.log.debug('Removed this shell from the broadcast list.')
-            except grpc.RpcError as e:
-                dead = grpc.StatusCode.UNAVAILABLE == e.code()
-            except Exception as e:
-                ctx.obj.log.error('Could not remove this shell from the broadcast list.')
-                ctx.obj.log.error(e)
-
-        if dead:
-            ctx.obj.log.error('Controller is dead. Exiting.')
-            ctx.obj.status_receiver.stop()
-            ctx.obj.server_thread.join()
-            return
 
         from drunc.utils.grpc_utils import unpack_any
         try:
@@ -151,14 +130,19 @@ def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int
                 command = 'who_is_in_charge',
                 rethrow = True
             )
-            pt = unpack_any(response.data, PlainText)
+            pt = unpack_any(response.data, PlainText).text
+        except grpc.RpcError as e:
+            dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
             ctx.obj.log.error('Could not understand who is in charge from the controller.')
             ctx.obj.log.error(e)
             pt = 'no_one'
 
+        if dead:
+            ctx.obj.log.error('Controller is dead. Exiting.')
+            return
 
-        if pt.text == ctx.obj.token.user_name:
+        if pt == ctx.obj.token.user_name:
             ctx.obj.log.info('You are in control. Surrendering control.')
             try:
                 response = send_command(
@@ -171,17 +155,10 @@ def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int
                 ctx.obj.log.error('Could not surrender control.')
                 ctx.obj.log.error(e)
             ctx.obj.log.info('Control surrendered.')
-
-        ctx.obj.status_receiver.stop()
-        ctx.obj.server_thread.join()
+        ctx.obj.terminate()
 
     ctx.call_on_close(cleanup)
 
-    # If we are just interested in watching the controller, then we are done here
-    if just_watch:
-        return
-
-    # then take control of the controller
     ctx.obj.log.info(f'Taking control of the controller as {ctx.obj.token}')
     try:
         response = send_command(
@@ -194,6 +171,21 @@ def controller_shell(ctx, controller_address:str, conf) -> None:#, this_port:int
         ctx.obj.log.error('You NOT are in control.')
         raise e
     ctx.obj.log.info('You are in control.')
+
+@controller_shell.command('ls')
+@click.pass_obj
+def ls(obj:ControllerContext) -> None:
+    children = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'ls',
+            data = None
+        ).data,
+        PlainTextVector
+    )
+    obj.print(children.text)
+
 
 
 @controller_shell.command('take-control')
@@ -217,16 +209,25 @@ def surrender_control(obj:ControllerContext) -> None:
         data = None
     )
 
+@controller_shell.command('who-am-i')
+@click.pass_obj
+def who_am_i(obj:ControllerContext) -> None:
+    obj.print(obj.token.user_name)
 
 @controller_shell.command('who-is-in-charge')
 @click.pass_obj
 def who_is_in_charge(obj:ControllerContext) -> None:
-    send_command(
-        controller = obj.controller,
-        token = obj.token,
-        command = 'who_is_in_charge',
-        data = None
+
+    who = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'who_is_in_charge',
+            data = None
+        ).data,
+        PlainText
     )
+    obj.print(who.text)
 
 
 @controller_shell.command('some-command')

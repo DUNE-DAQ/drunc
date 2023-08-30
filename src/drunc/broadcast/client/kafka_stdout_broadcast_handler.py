@@ -11,6 +11,7 @@ class KafkaStdoutBroadcastHandler:
         from kafka import KafkaConsumer
         self.consumer = KafkaConsumer(
             self.topic,
+            client_id = 'run_control',
             bootstrap_servers = [self.kafka_address],
             #value_deserializer = lambda m: self.message_format().ParseFromString(m)
         )
@@ -29,7 +30,7 @@ class KafkaStdoutBroadcastHandler:
     def consume(self):
         from google.protobuf import text_format
         import druncschema.broadcast_pb2 as b_desc
-        from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
+        from druncschema.broadcast_pb2 import BroadcastType
         from druncschema.generic_pb2 import PlainText
         from drunc.utils.grpc_utils import unpack_any
         while self.run:
@@ -50,7 +51,7 @@ class KafkaStdoutBroadcastHandler:
                         else:
                             txt = decoded.data
 
-                        self._log.info(f'"{decoded.emitter.session}.{decoded.emitter.process}": "{BroadcastType.Name(decoded.type)}" {txt}')
+                        self._log.info(f'"{decoded.emitter.process}.{decoded.emitter.session}": "{BroadcastType.Name(decoded.type)}" {txt}')
 
                     except Exception as e:
                         self._log.error(f'Weird broadcast message: {message} (error: {str(e)})')
