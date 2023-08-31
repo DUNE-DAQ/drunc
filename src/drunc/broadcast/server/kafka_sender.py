@@ -8,12 +8,20 @@ class KafkaSender(BroadcastSenderImplementation):
         self._log = logging.getLogger(f"{topic}_KafkaSender")
 
         from kafka import KafkaProducer
+        from kafka import errors as Errors
         self.topic = topic
         self.kafka_address = conf['kafka_address']
-        self.kafka = KafkaProducer(
-            bootstrap_servers = [self.kafka_address],
-            client_id = 'run_control',
-        )
+
+        try:
+            self.kafka = KafkaProducer(
+                bootstrap_servers = [self.kafka_address],
+                client_id = 'run_control',
+            )
+        except Errors.NoBrokersAvailable as e:
+            t = f'{self.kafka_address} does not seem to point to a kafka broker.'
+            self._log.critical(t)
+            raise RuntimeError(t) from e
+
         self.publish_timeout = conf['publish_timeout']
 
     def _send(self, bm:BroadcastMessage):
