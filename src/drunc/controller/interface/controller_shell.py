@@ -33,6 +33,7 @@ class ControllerContext:
 
 
         self.status_receiver = None
+        self.took_control = False
 
     def start_listening(self, topic):
         from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
@@ -142,7 +143,7 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
             ctx.obj.log.error('Controller is dead. Exiting.')
             return
 
-        if pt == ctx.obj.token.user_name:
+        if pt == ctx.obj.token.user_name and ctx.obj.took_control:
             ctx.obj.log.info('You are in control. Surrendering control.')
             try:
                 response = send_command(
@@ -167,9 +168,14 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
             command = 'take_control',
             rethrow = True
         )
+        ctx.obj.took_control = True
+
     except Exception as e:
         ctx.obj.log.error('You NOT are in control.')
-        raise e
+        ctx.obj.took_control = False
+        #raise e
+        return
+
     ctx.obj.log.info('You are in control.')
 
 
