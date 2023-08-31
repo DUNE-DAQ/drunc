@@ -172,6 +172,7 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
         raise e
     ctx.obj.log.info('You are in control.')
 
+
 @controller_shell.command('ls')
 @click.pass_obj
 def ls(obj:ControllerContext) -> None:
@@ -209,10 +210,12 @@ def surrender_control(obj:ControllerContext) -> None:
         data = None
     )
 
+
 @controller_shell.command('who-am-i')
 @click.pass_obj
 def who_am_i(obj:ControllerContext) -> None:
     obj.print(obj.token.user_name)
+
 
 @controller_shell.command('who-is-in-charge')
 @click.pass_obj

@@ -1,13 +1,10 @@
-import grpc
-
 from google.rpc import code_pb2
-from google.rpc import error_details_pb2
 from google.rpc import status_pb2
 from grpc_status import rpc_status
 
-from drunc.controller.child_node import ChildNode
-from drunc.controller.daq_app_child import DAQAppChild
-from drunc.controller.controller_child import ControllerChild
+# from drunc.controller.child_node import ChildNode
+# from drunc.controller.daq_app_child import DAQAppChild
+# from drunc.controller.controller_child import ControllerChild
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.generic_pb2 import PlainText, PlainTextVector
@@ -17,7 +14,6 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import pack_to_any
 from threading import Lock, Thread
-import time
 from typing import Optional, Dict, List
 
 
@@ -83,11 +79,12 @@ class Controller(ControllerServicer, BroadcastSender):
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
         )
 
+        from drunc.controller.children_interface.child_node import ChildNode
         for child_controller_cfg in self.configuration.children_controllers:
-            self.children_nodes.append(ControllerChild(child_controller_cfg, self.configuration.broadcast_receiving_port, self.controller_token))
+            self.children_nodes.append(ChildNode(child_controller_cfg))
 
         for app_cfg in self.configuration.applications:
-            self.children_nodes.append(DAQAppChild(app_cfg))
+            self.children_nodes.append(ChildNode(app_cfg))
 
         # do this at the end, otherwise we need to self.stop() if an exception is raised
         self.broadcast(
