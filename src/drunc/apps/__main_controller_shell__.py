@@ -6,13 +6,9 @@ def main() -> None:
     context = ControllerContext()
     try:
         controller_shell(obj = context)
-    except Exception as e:
-        console.log("[bold red]Exception caught[/bold red]")
-        if not context.print_traceback:
-            console.log(e)
-        else:
-            import os
-            console.print_exception(width=os.get_terminal_size()[0])
+    except Exception:
+        import os
+        console.print_exception(width=os.get_terminal_size()[0])
 
 
 if __name__ == '__main__':
