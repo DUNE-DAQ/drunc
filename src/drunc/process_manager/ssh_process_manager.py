@@ -30,7 +30,8 @@ def on_parent_exit(signum):
         if result != 0:
             raise PrCtlError('prctl failed with error code %s' % result)
     return set_parent_exit_signal
-# # ------------------------------------------------
+# ------------------------------------------------
+
 class AppProcessWatcherThread(threading.Thread):
     def __init__(self, pm, name, user, session, process):
         threading.Thread.__init__(self)
@@ -92,9 +93,6 @@ class SSHProcessManager(ProcessManager):
 
         self.children_logs[uuid].append(line)
 
-    #def __is_alive_ret_code(uuid):
-    # try:
-    # etc...
 
     async def _logs_impl(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
