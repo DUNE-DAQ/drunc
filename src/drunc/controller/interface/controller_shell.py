@@ -171,7 +171,7 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
         ctx.obj.took_control = True
 
     except Exception as e:
-        ctx.obj.log.error('You NOT are in control.')
+        ctx.obj.log.error('You are NOT in control.')
         ctx.obj.took_control = False
         #raise e
         return
