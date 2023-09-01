@@ -60,15 +60,19 @@ class FlaskManager(threading.Thread):
     </snippet>
     '''
 
-    def __init__(self, name, app, port, workers=1):
+    def __init__(self, name, app, port, workers=1, host='0.0.0.0'):
         threading.Thread.__init__(self)
         self.log = logging.getLogger(f"{name}-flaskmanager")
         self.name = name
         self.app = app
         self.prod_app = None
         self.flask = None
+
+        self.host = host
         self.port = port
+
         self.workers = workers
+
         self.ready = False
         self.joined = False
         self.ready_lock = threading.Lock()
@@ -90,7 +94,7 @@ class FlaskManager(threading.Thread):
         self.prod_app = StandaloneApplication(
             app = self.app,
             options = {
-                "bind": f"0.0.0.0:{self.port}",
+                "bind": f"{self.host}:{self.port}",
                 "workers": self.workers
             }
         )
@@ -114,7 +118,7 @@ class FlaskManager(threading.Thread):
                 raise RuntimeError(f"Cannot start a FlaskManager for {self.name}")
             tries += 1
             try:
-                resp = get(f"http://0.0.0.0:{self.port}/readystatus")
+                resp = get(f"http://{self.host}:{self.port}/readystatus")
                 if resp.text == "ready":
                     break
             except Exception as e:
@@ -138,9 +142,11 @@ class FlaskManager(threading.Thread):
         # manager = manager.restart_renew()
 
         fm = FlaskManager(
-            self.name,
-            self.app,
-            self.port
+            name = self.name,
+            app = self.app,
+            port = self.port,
+            workers = self.workers,
+            host = self.host
         )
         fm.start()
         while not fm.is_ready():
@@ -196,7 +202,8 @@ def main():
             manager = FlaskManager(
                 port = get_new_port(),
                 app = app,
-                name = "test_name"
+                name = "test_name",
+                host = "127.0.0.1"
             )
         except:
             continue
@@ -209,7 +216,7 @@ def main():
             assert(manager.is_ready())
 
             import requests
-            requests.get(f'http://0.0.0.0:{manager.port}/dummy')
+            requests.get(f'http://127.0.0.1:{manager.port}/dummy')
             print('succesfully got endpoint /dummy')
             manager.stop()
             assert(manager.is_terminated())
@@ -218,7 +225,7 @@ def main():
             manager = manager.restart_renew()
             assert(not manager.is_terminated())
             assert(manager.is_ready())
-            requests.get(f'http://0.0.0.0:{manager.port}/dummy')
+            requests.get(f'http://127.0.0.1:{manager.port}/dummy')
             print('succesfully got endpoint /dummy')
             manager.stop()
             assert(manager.is_terminated())
