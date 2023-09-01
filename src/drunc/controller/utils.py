@@ -43,3 +43,17 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         return None
 
     return response
+
+
+
+def get_status_message(stateful):
+    from druncschema.controller_pb2 import Status
+    return Status(
+        name = stateful.name,
+        uri = stateful.uri,
+        bool   ping,
+        string state,
+        in_error,
+        included
+    )
+

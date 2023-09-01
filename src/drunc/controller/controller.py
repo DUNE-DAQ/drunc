@@ -8,9 +8,10 @@ from druncschema.token_pb2 import Token
 from druncschema.generic_pb2 import PlainText, PlainTextVector
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
+from druncschema.controller_pb2 import Status, ChildrenStatus
 
 from drunc.controller.children_interface.child_node import ChildNode
-
+from drunc.controller.stateful_node import StatefulNode
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import pack_to_any
@@ -53,7 +54,7 @@ class ControllerActor:
 
 
 
-class Controller(ControllerServicer, BroadcastSender):
+class Controller(ControllerServicer, BroadcastSender, StatefulNode):
     def __init__(self, name:str, session:str, configuration:str):
         super(Controller, self).__init__()
 
@@ -236,6 +237,22 @@ class Controller(ControllerServicer, BroadcastSender):
 
         return response
 
+
+    def get_children_status(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, '_get_children_status', context, propagate=False)
+
+    def _get_children_status_impl(self, _, dummy) -> ChildrenStatus:
+        from drunc.controller.utils import get_status_message
+        return ChildrenStatus(
+            children_status = [get_status_message(n) for n in self.children_nodes]
+        )
+
+    def get_status(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, '_get_status', context, propagate=False)
+
+    def _get_status_impl(self, _, dummy) -> Status:
+        from drunc.controller.utils import get_status_message
+        return get_status_message(self)
 
 
     def ls(self, request:Request, context) -> Response:

@@ -2,9 +2,9 @@ click
 click_shell
 grpcio
 googleapis-common-protos
-gunicorn
 grpcio-status
 grpcio_tools
+gunicorn
 kafka-python
 nest_asyncio
 rich
