@@ -13,6 +13,7 @@ setup(
         "googleapis-common-protos",
         "grpcio_tools",
         "grpcio-status",
+        "gunicorn",
         "kafka-python",
         "nest_asyncio",
         "rich",

@@ -2,6 +2,7 @@ click
 click_shell
 grpcio
 googleapis-common-protos
+gunicorn
 grpcio-status
 grpcio_tools
 kafka-python
