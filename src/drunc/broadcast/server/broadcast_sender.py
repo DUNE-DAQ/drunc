@@ -5,9 +5,16 @@ class BroadcastSenderTechnologyUnknown(Exception):
         super().__init__(f'The implementation {implementation} is not supported for the BroadcastSender')
 
 class BroadcastSender:
-    def __init__(self, configuration:dict={}, logger=None):
-        self.impl_technology = configuration.get('type')
-        self.logger = logger
+    def __init__(self, name:str, session:str='no_session', configuration:dict={}, **kwargs):
+        super(BroadcastSender, self).__init__(
+            **kwargs,
+        )
+        self.name = name
+        self.session = session
+        self.identifier = f'{self.name}.{self.session}'
+
+        from logging import getLogger
+        self.logger = getLogger(self.identifier)
 
         broadcast_types_loglevels_str = configuration.get(
             'broadcast_types_loglevels',
@@ -31,6 +38,9 @@ class BroadcastSender:
             }
         )
 
+        self.impl_technology = configuration.get('type')
+
+
         from collections import defaultdict
         def def_value():
             return "info"
@@ -41,14 +51,14 @@ class BroadcastSender:
         self.broadcast_types_loglevels = {
             v: broadcast_types_loglevels_str_dd[n].lower() for n,v in BroadcastType.items()
         }
+        self.logger.debug(f'{configuration}, {self.identifier}')
 
         if self.impl_technology is None:
             return
-
         match self.impl_technology:
             case 'kafka':
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(configuration, self.name if self.session is None else f'{self.name}.{self.session}')
+                self.implementation = KafkaSender(configuration, self.identifier)
             case 'grpc':
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(configuration)
@@ -56,13 +66,15 @@ class BroadcastSender:
                 raise BroadcastSenderTechnologyUnknown(self.impl_technology)
 
     def broadcast(self, message, btype):
-        if self.impl_technology is None:
-            # nice and easy case
-            return
+
         if self.logger:
             from druncschema.broadcast_pb2 import BroadcastType
             f = getattr(self.logger, self.broadcast_types_loglevels[btype])
             f(f'{self.name}.{self.session} {BroadcastType.Name(btype)}: {message}')
+
+        if self.impl_technology is None:
+            # nice and easy case
+            return
 
         from druncschema.broadcast_pb2 import BroadcastMessage, Emitter
         from druncschema.generic_pb2 import PlainText
@@ -70,7 +82,7 @@ class BroadcastSender:
         any = pack_to_any(PlainText(text=message))
         emitter = Emitter(
             process = self.name,
-            session = getattr(self, 'session', "none")
+            session = self.session,
         )
         bm = BroadcastMessage(
             emitter = emitter,
