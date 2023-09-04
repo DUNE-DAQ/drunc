@@ -23,7 +23,7 @@ def process_manager_cli(pm_conf:str, loglevel):
         pm_conf_data = json.loads(f.read())
 
     from drunc.process_manager.process_manager import ProcessManager
-    pm = ProcessManager.get(pm_conf_data)
+    pm = ProcessManager.get(pm_conf_data, name='process_manager')
     loop = asyncio.get_event_loop()
 
     async def serve(address:str) -> None:

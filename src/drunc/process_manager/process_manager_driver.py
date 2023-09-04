@@ -144,7 +144,9 @@ class ProcessManagerDriver:
                     ]
 
             old_env = boot_configuration['executables'][app['type']]['environment']
-            new_env = {}
+            new_env = {
+                'SESSION': session
+            }
             for k, v in old_env.items():
                 if v == 'getenv':
                     import os
@@ -155,7 +157,7 @@ class ProcessManagerDriver:
                         self._log.warning(f'Variable {k} is not in the environment, so won\'t be set.')
 
                 else:
-                    new_env[k] = v.format(**app)
+                    new_env[k] = v.format(**app) if isinstance(v, str) else str(v)
 
             yield BootRequest(
                 process_description = ProcessDescription(

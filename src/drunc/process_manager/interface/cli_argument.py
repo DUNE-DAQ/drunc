@@ -20,10 +20,10 @@ def accept_configuration_type():
 
     def add_decorator(function):
         import click
-        f1 = click.option(
-            '--conf-type',
+        f1 = click.argument(
+            'conf-type',
             type=click.Choice(['daqconf', 'drunc', 'OKS'], case_sensitive=False),
-            default='daqconf',
+            #default='daqconf',
             callback=configuration_type_callback
         )(function)
         return f1

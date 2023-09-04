@@ -57,30 +57,34 @@ class AppProcessWatcherThread(threading.Thread):
         )
 
 class SSHProcessManager(ProcessManager):
-    def __init__(self, conf):
-        super().__init__(conf)
+    def __init__(self, pm_conf, **kwargs):
+        super(SSHProcessManager, self).__init__(
+            pm_conf = pm_conf,
+            **kwargs
+        )
+
         import logging
-        self.log = logging.getLogger('ssh-process-manager')
+        self._log = logging.getLogger('ssh-process-manager')
         self.children_logs_depth = 1000
         self.children_logs = {}
         self.watchers = []
         from pathlib import Path
         from os import getcwd
-        self.app_exec_path = Path(conf.get('app-exec-path', getcwd()))
-        self.app_log_path = Path(conf.get('app-log-path', getcwd()))
+        self.app_exec_path = Path(pm_conf.get('app-exec-path', getcwd()))
+        self.app_log_path = Path(pm_conf.get('app-log-path', getcwd()))
 
     def _terminate(self):
-        self.log.info('Terminating')
+        self._log.info('Terminating')
 
         if self.process_store:
-            self.log.warning('Killing all the known processes before exiting')
+            self._log.warning('Killing all the known processes before exiting')
         else:
-            self.log.info('No known process to kill before exiting')
+            self._log.info('No known process to kill before exiting')
 
         for uuid, process in self.process_store.items():
             if not process.is_alive():
                 continue
-            self.log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
+            self._log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
             process.terminate()
 
     def _process_children_logs(self, uuid, line):
@@ -122,9 +126,9 @@ class SSHProcessManager(ProcessManager):
         if exec:
             exit_code = exec.exit_code
         end_str = f"Process \'{name}\' (session: \'{session}\', user: \'{user}\') process exited with exit code {exit_code}"
-        self.log.info(end_str)
+        self._log.info(end_str)
         if exec:
-            self.log.debug(name+str(exec))
+            self._log.debug(name+str(exec))
 
         from druncschema.broadcast_pb2 import BroadcastType
         self.broadcast(
@@ -144,7 +148,7 @@ class SSHProcessManager(ProcessManager):
         self.watchers.append(t)
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
-        self.log.info(f'Booting {boot_request.process_description.metadata}')
+        self._log.info(f'Booting {boot_request.process_description.metadata}')
         import os
         platform = os.uname().sysname.lower()
         macos = ("darwin" in platform)
@@ -202,7 +206,7 @@ class SSHProcessManager(ProcessManager):
                     session = meta.session,
                     process = self.process_store[uuid]
                 )
-                self.log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
+                self._log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
                 break
 
             except Exception as e:
@@ -211,7 +215,7 @@ class SSHProcessManager(ProcessManager):
                 print(f'\nTrying on a different host')
                 continue
 
-        self.log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
+        self._log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)
         pr = ProcessRestriction()

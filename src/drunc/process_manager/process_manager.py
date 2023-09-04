@@ -17,16 +17,22 @@ from google.protobuf.any_pb2 import Any
 
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
-    def __init__(self, configuration_loc):
-        self.name = 'process_manager'
+    def __init__(self, pm_conf, name, **kwargs):
+        super(ProcessManager, self).__init__(
+            name = name,
+            **kwargs
+        )
+        self.name = name
         self.session = None
 
-        ProcessManagerServicer.__init__(self)
+        from logging import getLogger
+        self.log = getLogger("process_manager")
+        # ProcessManagerServicer.__init__(self)
 
         from drunc.process_manager.configuration import ProcessManagerConfiguration
-        self.configuration = ProcessManagerConfiguration(configuration_loc)
+        self.configuration = ProcessManagerConfiguration(pm_conf)
 
-        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
+        #BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import ActionType, SystemType, AuthoriserRequest
@@ -299,14 +305,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
 
     @staticmethod
-    def get(conf:dict):
+    def get(conf:dict, **kwargs):
         from rich.console import Console
         console = Console()
 
         if conf['type'] == 'ssh':
             console.print(f'Starting \'SSHProcessManager\'')
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
-            return SSHProcessManager(conf)
+            return SSHProcessManager(conf, **kwargs)
         else:
             raise RuntimeError(f'ProcessManager type {conf["type"]} is unsupported!')
 
