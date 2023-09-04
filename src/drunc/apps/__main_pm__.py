@@ -7,10 +7,8 @@ def main():
     try:
         process_manager_cli()
     except Exception:
-        from rich.console import Console
-        console = Console()
-        import os
-        console.print_exception(width=os.get_terminal_size()[0])
+        from drunc.utils.utils import print_traceback
+        print_traceback()
 
 
 if __name__ == '__main__':

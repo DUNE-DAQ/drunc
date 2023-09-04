@@ -23,6 +23,17 @@ def regex_match(regex, string):
 
 log_level = logging.INFO
 
+def print_traceback():
+    from rich.console import Console
+    c = Console()
+    import os
+    try:
+        width = os.get_terminal_size()[0]
+    except:
+        width = 150
+    c.print_exception(width=width)
+
+
 def update_log_level(loglevel):
     log_level = log_levels[loglevel]
     #logging.basicConfig(level=log_level)
@@ -50,13 +61,18 @@ def update_log_level(loglevel):
 
     from rich.logging import RichHandler
     import os
+    try:
+        width = os.get_terminal_size()[1]
+    except:
+        width = 150
+
     logging.basicConfig(
         level=log_level,
         format="%(message)s",
         datefmt="[%X]",
         handlers=[
             #logging.StreamHandler(),
-            RichHandler(rich_tracebacks=False, tracebacks_width=os.get_terminal_size()[1]) # Make this True, and everything crashes on exceptions (no clue why)
+            RichHandler(rich_tracebacks=False, tracebacks_width=width) # Make this True, and everything crashes on exceptions (no clue why)
         ]
     )
 

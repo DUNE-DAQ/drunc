@@ -7,8 +7,9 @@ def main():
     try:
         process_manager_shell(obj = context)
     except Exception:
-        import os
-        console.print_exception(width=os.get_terminal_size()[0])
+        from drunc.utils.utils import print_traceback
+        print_traceback()
+
 
 
 if __name__ == '__main__':
