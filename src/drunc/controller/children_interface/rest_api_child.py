@@ -4,7 +4,7 @@ class ResponseListener:
     _instance = None
 
     def __init__(self):
-        raise RuntimeError('Call instance() instead')
+        raise RuntimeError('Call get() instead')
 
     @classmethod
     def get(cls):

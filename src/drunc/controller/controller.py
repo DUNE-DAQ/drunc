@@ -10,6 +10,8 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
 
+from drunc.broadcast.server.broadcast_sender import BroadcastSender
+
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.stateful_node import StatefulNode
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
@@ -54,21 +56,17 @@ class ControllerActor:
 
 
 
-class Controller(ControllerServicer, BroadcastSender, StatefulNode):
-    def __init__(self, name:str, session:str, configuration:str):
-        super(Controller, self).__init__()
-
-        from logging import getLogger
-        self._log = getLogger(name)
-        self.name = name
-        self.session = session
-        self.configuration_loc = configuration
-
+class Controller(StatefulNode, ControllerServicer, BroadcastSender):
+    def __init__(self, configuration:str, **kwargs):
         from drunc.controller.configuration import ControllerConfiguration
-        self.configuration = ControllerConfiguration(self.configuration_loc)
-        self.children_nodes = [] # type: List[ChildNode]
+        self.configuration = ControllerConfiguration(configuration)
 
-        BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration(), self._log)
+        super(Controller, self).__init__(
+            configuration = self.configuration,
+            **kwargs
+        )
+
+        self.children_nodes = [] # type: List[ChildNode]
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
@@ -81,11 +79,16 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
         )
 
-        for child_controller_cfg in self.configuration.children_controllers:
-            self.children_nodes.append(ChildNode.get(child_controller_cfg))
+        for child_controller_cfg in self.configuration.get('children_controllers', []):
+            self.children_nodes.append(
+                ChildNode.get_from_file(
+                        child_controller_cfg['name'],
+                        child_controller_cfg
+                    )
+                )
 
-        for app_cfg in self.configuration.applications:
-            self.children_nodes.append(ChildNode.get(app_cfg))
+        for app_cfg in self.configuration.get('applications', []):
+            self.children_nodes.append(ChildNode.get_from_file(app_cfg))
 
         # do this at the end, otherwise we need to self.stop() if an exception is raised
         self.broadcast(
@@ -99,53 +102,49 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
             message = 'over_and_out',
         )
 
-        self._log.info('Stopping children')
+        self.logger.info('Stopping children')
         for child in self.children_nodes:
-            self._log.debug(f'Stopping {child.name}')
+            self.logger.debug(f'Stopping {child.name}')
             child.terminate()
 
 
 
-    def _propagate_to_list(self, request:Request, command:str, context, node_to_execute:Dict[ChildNode, str]):
+    def propagate_to_list(self, request:Request, command:str, node_to_execute):
 
         self.broadcast(
             btype = BroadcastType.COMMAND_EXECUTION_START,
             message = f'Propagating {command} to children',
         )
 
-        def propagate_to_child(child, command, data, token, location_override):
+        def propagate_to_child(child, command, data, token):
 
             self.broadcast(
                 btype = BroadcastType.CHILD_COMMAND_EXECUTION_START,
-                message = f'Propagating {command} to children ({child.node_type.name})',
+                message = f'Propagating {command} to children ({child.name})',
             )
 
             try:
-                child.propagate_command(command, data, token, location)
+                child.propagate_command(command, data, token)
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
-                    message = f'Propagating {command} to children ({child.node_type.name})',
+                    message = f'Propagating {command} to children ({child.name})',
                 )
             except:
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    message = f'Failed to propagate {command} to {child.name} ({child.node_type.name})',
+                    message = f'Failed to propagate {command} to {child.name} ({child.name})',
                 )
 
         threads = []
-        for child, location in node_to_execute.items():
-            self._log.debug(f'Propagating to {child.name}')
-            t = Thread(target=propagate_to_child, args=(child, command, request.data, request.token, location))
+        for child in node_to_execute:
+            self.logger.debug(f'Propagating to {child.name}')
+            t = Thread(target=propagate_to_child, args=(child, command, request.data, request.token))
             t.start()
             threads.append(t)
 
         for thread in threads:
             thread.join()
 
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_END,
-            message = f'Propagated {command} to children',
-        )
 
     def _should_execute_on_self(self, node_path) -> bool:
         if node_path == []:
@@ -187,7 +186,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
         data = request.data if request.data else None
-        self._log.debug(f'{command} data: {request.data}')
+        self.logger.debug(f'{command} data: {request.data}')
 
         if propagate:
             self.propagate_to_list(request, command, self.children_nodes)
@@ -199,7 +198,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
                 btype = BroadcastType.COMMAND_EXECUTION_START,
                 message = f'Executing {command} (upon request from {request.token.user_name})',
             )
-            result = getattr(self, command+"_impl")(data, token)
+            result = getattr(self, "_"+command+"_impl")(data, token)
 
 
         except ctler_excpt.ControllerException as e:
@@ -239,7 +238,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
     def get_children_status(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_get_children_status', context, propagate=False)
+        return self._generic_user_command(request, 'get_children_status', context, propagate=False)
 
     def _get_children_status_impl(self, _, dummy) -> ChildrenStatus:
         from drunc.controller.utils import get_status_message
@@ -248,7 +247,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
         )
 
     def get_status(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_get_status', context, propagate=False)
+        return self._generic_user_command(request, 'get_status', context, propagate=False)
 
     def _get_status_impl(self, _, dummy) -> Status:
         from drunc.controller.utils import get_status_message
@@ -256,7 +255,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
     def ls(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_ls', context, propagate=False)
+        return self._generic_user_command(request, 'ls', context, propagate=False)
 
     def _ls_impl(self, _, dummy) -> PlainTextVector:
         nodes = [node.name for node in self.children_nodes]
@@ -265,7 +264,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
         )
 
     def describe(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_describe', context, propagate=False)
+        return self._generic_user_command(request, 'describe', context, propagate=False)
 
     def _describe_impl(self, _, dummy):
         from druncschema.request_response_pb2 import Description
@@ -277,7 +276,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
     def take_control(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_take_control', context)
+        return self._generic_user_command(request, 'take_control', context, propagate=True)
 
     def _take_control_impl(self, _, token) -> PlainText:
         self.actor.take_control(token)
@@ -286,7 +285,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
     def surrender_control(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_surrender_control', context)
+        return self._generic_user_command(request, 'surrender_control', context)
 
     def _surrender_control_impl(self, _, token) -> PlainText:
         user = self.actor.get_user_name()
@@ -296,7 +295,7 @@ class Controller(ControllerServicer, BroadcastSender, StatefulNode):
 
 
     def who_is_in_charge(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, '_who_is_in_charge', context)
+        return self._generic_user_command(request, 'who_is_in_charge', context)
 
     def _who_is_in_charge_impl(self, *args) -> PlainText:
         user = self.actor.get_user_name()

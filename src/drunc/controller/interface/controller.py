@@ -19,7 +19,11 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
-    ctrlr = Controller(name, session, configuration)
+    ctrlr = Controller(
+        name = name,
+        session = session,
+        configuration = configuration
+    )
 
     def serve(port:int) -> None:
         if not port:
@@ -48,5 +52,6 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
     try:
         serve(control_port)
     except Exception as e:
-        import os
-        console.print_exception(width=os.get_terminal_size()[0])
+        from drunc.utils.utils import print_traceback
+        print_traceback()
+
