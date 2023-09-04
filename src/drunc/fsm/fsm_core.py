@@ -1,8 +1,8 @@
 import logging
-import interface_factory
+from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
-from fsm_errors import *
+import drunc.fsm.fsm_errors
 
 def validate_arguments(obj, func_name, arguments) -> None:
     '''
@@ -19,8 +19,8 @@ def validate_arguments(obj, func_name, arguments) -> None:
         default = sig.parameters[p].default
         typing = sig.parameters[p].annotation
         #If there is no default, an arg must be provided
-        if default == Parameter.empty and p not in arguments: 
-            raise MissingArgument(p, func_name)
+        if default == Parameter.empty and p not in arguments:
+            raise fsm_errors.MissingArgument(p, func_name)
         #We should obey any annotations, assuming a value was provided
         if p in arguments:
             if typing != Parameter.empty and type(arguments[p]) != typing:
@@ -29,13 +29,13 @@ def validate_arguments(obj, func_name, arguments) -> None:
     for arg in arguments:
         #We shouldn't be providing any arguments that the function doesn't ask for
         if arg not in sig.parameters.keys():
-            raise UnknownArgument(arg, func_name)
+            raise fsm_errors.UnknownArgument(arg, func_name)
 
 class FSMInterface:
     '''Abstract class defining a generic interface'''
     def __init__(self, name):
         self.name = name
-    
+
     def get_transition_arguments(self, func_name) -> signature:
         func = getattr(self, func_name, None)
         if not func:
@@ -54,7 +54,7 @@ class FSMInterface:
             return func(run_data, **arguments)              #The run_data is passed as a dictionary, whereas arguments are unpacked
         else:
             return None
-            
+
 
     def post_transition(self, transition, run_data, arguments):
         '''
@@ -69,19 +69,26 @@ class FSMInterface:
             return None
 
 class FSMConfig:
-    def __init__(self, config_data):
+    def __init__(self, config_data, config_type='file'):
         '''
         Takes a config.json describing the FSM, and stores it as a class object
         '''
-        self.states           = config_data['states']
-        self.transitions      = config_data['transitions']
-        self.sequences        = config_data['command_sequences']
-        self.pre_transitions  = config_data['pre_transitions']
-        self.post_transitions = config_data['post_transitions']
-        self.interfaces = {}
-        for name, data in config_data['interfaces'].items():
-            self.interfaces[name] = interface_factory.FSMInterfacesFact.get(name, data)
-        
+        if config_type == 'file':
+            self.states           = config_data['states']
+            self.transitions      = config_data['transitions']
+            self.sequences        = config_data['command_sequences']
+            self.pre_transitions  = config_data['pre_transitions']
+            self.post_transitions = config_data['post_transitions']
+            self.interfaces = {}
+            for name, data in config_data['interfaces'].items():
+                self.interfaces[name] = FSMInterfaceFactory.get().get_interface(name, data)
+
+        elif 'oks':
+            raise RuntimeError(f'config type {config_type} is not supported')
+
+        else:
+            raise RuntimeError(f'config type {config_type} is not supported')
+
 
 class FSM:
     def __init__(self, configuration):
@@ -143,7 +150,7 @@ class FSM:
         The keys are pre_int or post_int, where int is the interface name
         If we are executing a sequence, it will be a dict with each transition as keys, and objects like this as values.
         '''
-        if transition in self.config.sequences: 
+        if transition in self.config.sequences:
             #TODO check nanorc.common_commands.py, should be like that
             for command in self.config.sequences[transition]:   #"command" has format {"cmd": "conf", "optional": true }
                 try:                                            #Attempt every transition in the sequence
@@ -155,11 +162,11 @@ class FSM:
 
         #Check that the transition is valid from our state
         if not self.can_execute_transition(transition):
-            raise InvalidTransition(transition, self.current_state)
+            raise fsm_errors.InvalidTransition(transition, self.current_state)
 
         func = self.transition_functions.get(transition)
         if not func:
-            raise UnregisteredTransition(transition)
+            raise fsm_errors.UnregisteredTransition(transition)
 
         pre_data = {k:v for (k,v) in transition_data.items() if "pre_" in k}
         self.pre_transition_sequence(transition, pre_data)
@@ -235,4 +242,3 @@ class FSM:
                         raise e
                     else:
                         self.log(e)
-    
