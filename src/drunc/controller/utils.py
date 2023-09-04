@@ -45,15 +45,17 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
     return response
 
 
+from drunc.controller.stateful_node import StatefulNode
 
-def get_status_message(stateful):
+def get_status_message(stateful:StatefulNode):
     from druncschema.controller_pb2 import Status
+
     return Status(
         name = stateful.name,
         uri = stateful.uri,
-        bool   ping,
-        string state,
-        in_error,
-        included
+        ping = stateful.ping,
+        state = stateful.state,
+        in_error = stateful.in_error,
+        included = stateful.included,
     )
 
