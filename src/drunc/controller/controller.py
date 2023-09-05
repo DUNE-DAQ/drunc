@@ -420,7 +420,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
 
     def surrender_control(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'surrender_control', context)
+        return self._generic_user_command(request, 'surrender_control', context, propagate=True)
 
     def _surrender_control_impl(self, _, token) -> PlainText:
         user = self.actor.get_user_name()
