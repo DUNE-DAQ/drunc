@@ -23,6 +23,8 @@ class KafkaSender(BroadcastSenderImplementation):
             raise RuntimeError(t) from e
 
         self.publish_timeout = conf['publish_timeout']
+        self._log.info(f'Broadcasting to Kafka ({self.kafka_address}) client_id: "run_control", topic: "{self.topic}"')
+
 
     def _send(self, bm:BroadcastMessage):
         from kafka.errors import KafkaError

@@ -5,7 +5,7 @@ class BroadcastSenderTechnologyUnknown(Exception):
         super().__init__(f'The implementation {implementation} is not supported for the BroadcastSender')
 
 class BroadcastSender:
-    def __init__(self, name:str, session:str='no_session', configuration:dict={}, **kwargs):
+    def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, **kwargs):
         super(BroadcastSender, self).__init__(
             **kwargs,
         )
@@ -16,7 +16,7 @@ class BroadcastSender:
         from logging import getLogger
         self.logger = getLogger(self.identifier)
 
-        broadcast_types_loglevels_str = configuration.get(
+        broadcast_types_loglevels_str = broadcast_configuration.get(
             'broadcast_types_loglevels',
             {
                 'ACK'                             : 'debug',
@@ -38,7 +38,7 @@ class BroadcastSender:
             }
         )
 
-        self.impl_technology = configuration.get('type')
+        self.impl_technology = broadcast_configuration.get('type')
 
 
         from collections import defaultdict
@@ -51,17 +51,17 @@ class BroadcastSender:
         self.broadcast_types_loglevels = {
             v: broadcast_types_loglevels_str_dd[n].lower() for n,v in BroadcastType.items()
         }
-        self.logger.debug(f'{configuration}, {self.identifier}')
+        self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
 
         if self.impl_technology is None:
             return
         match self.impl_technology:
             case 'kafka':
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(configuration, self.identifier)
+                self.implementation = KafkaSender(broadcast_configuration, self.identifier)
             case 'grpc':
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
-                self.implementation = GRCPBroadcastSender(configuration)
+                self.implementation = GRCPBroadcastSender(broadcast_configuration)
             case _:
                 raise BroadcastSenderTechnologyUnknown(self.impl_technology)
 
