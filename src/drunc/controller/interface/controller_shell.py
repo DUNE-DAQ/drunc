@@ -47,7 +47,8 @@ class ControllerContext:
 
 
     def terminate(self):
-        self.status_receiver.stop()
+        if self.status_receiver:
+            self.status_receiver.stop()
 
     def print(self, text):
         self._console.print(text)
@@ -177,6 +178,33 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
         return
 
     ctx.obj.log.info('You are in control.')
+
+
+
+@controller_shell.command('man')
+@click.pass_obj
+def man(obj:ControllerContext) -> None:
+    from druncschema.request_response_pb2 import Description
+
+    desc = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'describe',
+            data = None
+        ).data,
+        Description
+    )
+    from rich.table import Table
+    t = Table(title=f'{desc.name}.{desc.session} ({desc.type}) commands')
+    t.add_column('name')
+    t.add_column('input type')
+    t.add_column('return type')
+    t.add_column('help')
+    for c in desc.commands:
+        t.add_row(c.name, c.data_type, c.return_type, c.help)
+    obj.print(t)
+
 
 
 @controller_shell.command('ls')

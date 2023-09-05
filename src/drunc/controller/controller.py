@@ -91,6 +91,88 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         for app_cfg in self.configuration.get('applications', []):
             self.children_nodes.append(ChildNode.get_from_file(app_cfg))
 
+        from druncschema.request_response_pb2 import CommandDescription
+        # TODO, probably need to think of a better way to do this?
+        # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
+        # Not particularly pretty...
+        self.commands = [
+            CommandDescription(
+                name = 'describe',
+                data_type = 'None',
+                help = 'Describe self (return a list of commands, the type of endpoint, the name and session).',
+                return_type = 'request_response_pb2.Description'
+            ),
+
+            CommandDescription(
+                name = 'get_children_status',
+                data_type = 'generic_pb2.PlainText,None',
+                help = 'Get the status of all the children. Only get the status from the child if provided in the request.',
+                return_type = 'controller_pb2.ChildrenStatus'
+            ),
+
+            CommandDescription(
+                name = 'get_status',
+                data_type = 'None',
+                help = 'Get the status of self',
+                return_type = 'controller_pb2.Status'
+            ),
+
+            CommandDescription(
+                name = 'ls',
+                data_type = 'None',
+                help = 'List the children',
+                return_type = 'generic_pb2.PlainTextVector'
+            ),
+
+            CommandDescription(
+                name = 'describe_fsm',
+                data_type = 'None',
+                help = 'List available FSM commands for the current state.',
+                return_type = 'request_response_pb2.Description'
+            ),
+
+            CommandDescription(
+                name = 'execute_fsm_command',
+                data_type = 'controller_pb2.FSMCommand',
+                help = 'Execute an FSM command',
+                return_type = 'controller_pb2.FSMCommandResponse'
+            ),
+
+            CommandDescription(
+                name = 'include',
+                data_type = 'controller_pb2.FSMCommand',
+                help = 'Include self in the current session, if a children is provided, include it and its eventual children',
+                return_type = 'controller_pb2.FSMCommandResponse'
+            ),
+
+            CommandDescription(
+                name = 'exclude',
+                data_type = 'controller_pb2.FSMCommand',
+                help = 'Exclude self in the current session, if a children is provided, exclude it and its eventual children',
+                return_type = 'controller_pb2.FSMCommandResponse'
+            ),
+
+            CommandDescription(
+                name = 'take_control',
+                data_type = 'None',
+                help = 'Take control of self and children',
+                return_type = 'generic_pb2.PlainText'
+            ),
+
+            CommandDescription(
+                name = 'surrender_control',
+                data_type = 'None',
+                help = 'Surrender control of self and children',
+                return_type = 'generic_pb2.PlainText'
+            ),
+
+            CommandDescription(
+                name = 'who_is_in_charge',
+                data_type = 'None',
+                help = 'Get who is in control of self',
+                return_type = 'generic_pb2.PlainText'
+            ),
+        ]
 
         # do this at the end, otherwise we need to self.terminate() if an exception is raised
         self.broadcast(
@@ -381,9 +463,10 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     def _describe_impl(self, request:Request, dummy):
         from druncschema.request_response_pb2 import Description
         return Description(
+            type = 'controller',
             name = self.name,
             session = self.session,
-
+            commands = self.commands
         )
 
 
