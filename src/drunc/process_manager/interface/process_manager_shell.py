@@ -50,7 +50,6 @@ class PMContext:
     def start_listening(self, topic):
         from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
         from druncschema.broadcast_pb2 import BroadcastMessage
-
         self.status_receiver = KafkaStdoutBroadcastHandler(
             conf = self.pm_conf_data['broadcaster'],
             topic = topic,
@@ -82,11 +81,13 @@ def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> No
         print_traceback = traceback
     )
 
-    desc = asyncio.get_event_loop().run_until_complete(ctx.obj.pmd.describe())
+    desc = asyncio.get_event_loop().run_until_complete(
+        ctx.obj.pmd.describe()
+    )
 
     ctx.obj._log.info(f'{ctx.obj.pmd.pm_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     ctx.obj.start_listening(
-        desc.name
+        f'{desc.name}.{desc.session}'
     )
 
     def cleanup():

@@ -20,6 +20,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
     def __init__(self, pm_conf, name, **kwargs):
         super(ProcessManager, self).__init__(
             name = name,
+            broadcast_configuration = pm_conf['broadcaster'],
             **kwargs
         )
         self.name = name
@@ -241,7 +242,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         from druncschema.request_response_pb2 import Description
         return Description(
             name = self.name,
-            # ... list of commands, etc...
+            session = 'no_session',# ... list of commands, etc...
         )
 
     @abc.abstractmethod
