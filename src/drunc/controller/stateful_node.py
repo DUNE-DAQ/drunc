@@ -2,12 +2,11 @@ import abc
 from drunc.fsm.fsm_core import FSM
 
 class StatefulNode(abc.ABC):
-    def __init__(self, configuration, **kwargs):
+    def __init__(self, statefulnode_configuration, **kwargs):
         super(StatefulNode, self).__init__(
-            configuration = configuration,
             **kwargs
         )
-        self.fsm = FSM(configuration.get('fsm'))
+        self.fsm = FSM(statefulnode_configuration.get('fsm'))
         self.included = True
         self.in_error = False
 

@@ -62,7 +62,8 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         self.configuration = ControllerConfiguration(configuration)
 
         super(Controller, self).__init__(
-            configuration = self.configuration,
+            broadcast_configuration = self.configuration.get('broadcaster'),
+            statefulnode_configuration = self.configuration.get('statefulnode'),
             **kwargs
         )
 
@@ -90,7 +91,8 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         for app_cfg in self.configuration.get('applications', []):
             self.children_nodes.append(ChildNode.get_from_file(app_cfg))
 
-        # do this at the end, otherwise we need to self.stop() if an exception is raised
+
+        # do this at the end, otherwise we need to self.terminate() if an exception is raised
         self.broadcast(
             message = 'ready',
             btype = BroadcastType.SERVER_READY
@@ -376,12 +378,12 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     def describe(self, request:Request, context) -> Response:
         return self._generic_user_command(request, 'describe', context, propagate=False)
 
-    def _describe_impl(self, _, dummy):
+    def _describe_impl(self, request:Request, dummy):
         from druncschema.request_response_pb2 import Description
         return Description(
             name = self.name,
             session = self.session,
-            # ... list of commands, etc...
+
         )
 
 
