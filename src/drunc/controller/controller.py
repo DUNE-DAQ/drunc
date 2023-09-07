@@ -98,77 +98,77 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         self.commands = [
             CommandDescription(
                 name = 'describe',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'Describe self (return a list of commands, the type of endpoint, the name and session).',
                 return_type = 'request_response_pb2.Description'
             ),
 
             CommandDescription(
                 name = 'get_children_status',
-                data_type = 'generic_pb2.PlainText,None',
+                data_type = ['generic_pb2.PlainText','None'],
                 help = 'Get the status of all the children. Only get the status from the child if provided in the request.',
                 return_type = 'controller_pb2.ChildrenStatus'
             ),
 
             CommandDescription(
                 name = 'get_status',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'Get the status of self',
                 return_type = 'controller_pb2.Status'
             ),
 
             CommandDescription(
                 name = 'ls',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'List the children',
                 return_type = 'generic_pb2.PlainTextVector'
             ),
 
             CommandDescription(
                 name = 'describe_fsm',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'List available FSM commands for the current state.',
                 return_type = 'request_response_pb2.Description'
             ),
 
             CommandDescription(
                 name = 'execute_fsm_command',
-                data_type = 'controller_pb2.FSMCommand',
+                data_type = ['controller_pb2.FSMCommand'],
                 help = 'Execute an FSM command',
                 return_type = 'controller_pb2.FSMCommandResponse'
             ),
 
             CommandDescription(
                 name = 'include',
-                data_type = 'controller_pb2.FSMCommand',
+                data_type = ['controller_pb2.FSMCommand'],
                 help = 'Include self in the current session, if a children is provided, include it and its eventual children',
                 return_type = 'controller_pb2.FSMCommandResponse'
             ),
 
             CommandDescription(
                 name = 'exclude',
-                data_type = 'controller_pb2.FSMCommand',
+                data_type = ['controller_pb2.FSMCommand'],
                 help = 'Exclude self in the current session, if a children is provided, exclude it and its eventual children',
                 return_type = 'controller_pb2.FSMCommandResponse'
             ),
 
             CommandDescription(
                 name = 'take_control',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'Take control of self and children',
                 return_type = 'generic_pb2.PlainText'
             ),
 
             CommandDescription(
                 name = 'surrender_control',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'Surrender control of self and children',
                 return_type = 'generic_pb2.PlainText'
             ),
 
             CommandDescription(
                 name = 'who_is_in_charge',
-                data_type = 'None',
+                data_type = ['None'],
                 help = 'Get who is in control of self',
                 return_type = 'generic_pb2.PlainText'
             ),
@@ -190,7 +190,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         for child in self.children_nodes:
             self.logger.debug(f'Stopping {child.name}')
             child.terminate()
-
 
 
     def propagate_to_list(self, command:str, data, token, node_to_execute):
@@ -359,13 +358,13 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         #def propagate_to_list(self, command:str, data, token, node_to_execute):
         children_fsm_command = FSMCommand()
         children_fsm_command.CopyFrom(fsm_command)
-        fsm_command.children_nodes = [] # we strip the children node, since when we feed them to the children they are meaningless
-        if fsm_command.HasField('children_node'):
-            self.propagate_to_list(command, children_fsm_command, request.Token, fsm_command.children_nodes)
+        children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
+        if fsm_command.HasField('children_nodes'):
+            self.propagate_to_list(command, children_fsm_command, request.token, fsm_command.children_nodes)
         else:
-            self.propagate_to_list(command, children_fsm_command, request.Token, self.children_nodes)
+            self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
 
-        import drunc.fsm.fsm_errors
+        import drunc.fsm.fsm_errors as fsm_errors
 
         try:
             token = Token()
@@ -374,7 +373,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 btype = BroadcastType.COMMAND_EXECUTION_START,
                 message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
             )
-            self.fsm.execute_transition(fsm_command.command_name, fsm_command.data)
+            self.fsm.execute_transition(fsm_command.command_name, fsm_command.arguments)
 
         except fsm_errors.UnregisteredTransition as e:
             self.broadcast(
@@ -470,14 +469,21 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         )
 
 
+    def describe_fsm(self, request:Request, context) -> Response:
+        return self._generic_user_command(request, 'describe_fsm', context, propagate=False)
+
+    def _describe_fsm_impl(self, _, dummy):
+        from drunc.fsm.utils import convert_fsm_transition
+        desc = convert_fsm_transition(self.fsm)
+        desc.type = 'controller'
+        desc.name = self.name
+        desc.session = self.session
+        return desc
+
 
     ########################################
     ############# FSM commands #############
     ########################################
-
-    def get_fsm_command_list(self, request:Request, context) -> Response:
-        return self._fsm_command(request, 'get_fsm_command_list', context)
-
 
     def execute_fsm_command(self, request:Request, context) -> Response:
         return self._fsm_command(request, 'execute_fsm_command', context)
