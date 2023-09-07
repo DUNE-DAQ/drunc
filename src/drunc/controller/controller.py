@@ -239,42 +239,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 return True
         return False
 
-
-    def _interrupt_with_message(self, message, context):
-        detail = pack_to_any(PlainText(text = message))
-
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=message,
-                    details=[detail],
-                )
-            )
-        )
-
-
-    def _interrupt_with_exception(self, ex_stack, ex_text, context):
-        self.logger.error(
-            ex_stack+"\n"+ex_text
-        )
-
-        detail = pack_to_any(
-            Stacktrace(
-                text = ex_stack.split('\n')
-            )
-        )
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=f'Exception thrown: {str(ex_text)}',
-                    details=[detail],
-                )
-            )
-        )
-
-
     def _generic_user_command(self, request:Request, command:str, context, propagate=False):
         """
         A generic way to execute the controller commands from a user.
@@ -291,10 +255,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         if not self.authoriser.is_authorised(request.token, command):
             message = f'{request.token.user_name} is not authorised to execute {command}'
-            self.broadcast(
-                btype = BroadcastType.TEXT_MESSAGE, # make this an real type rather than just text
-                message = message
-            )
             self._interrupt_with_message(message, context)
 
 
@@ -314,30 +274,13 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             )
             result = getattr(self, "_"+command+"_impl")(data, token)
 
-
-        except ctler_excpt.ControllerException as e:
-            self.broadcast(
-                btype = BroadcastType.EXCEPTION_RAISED,
-                message = f'ControllerException when executing {command}: {e}'
-            )
-
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
-
         except Exception as e:
-            self.broadcast(
-                btype = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
-                message = f'Unhandled exception when executing {command}: {e}'
-            )
-
             self._interrupt_with_exception(
                 ex_stack = traceback.format_exc(),
                 ex_text = str(e),
                 context = context
             )
+
         result_any = pack_to_any(result)
         response = Response(data = result_any)
 
@@ -370,15 +313,11 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         if not self.authoriser.is_authorised(request.token, 'fsm'):
             message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}'
-            self.broadcast(
-                btype = BroadcastType.TEXT_MESSAGE, # make this an real type rather than just text
-                message= message
-            )
             self._interrupt_with_message(message, context)
 
 
         self.logger.debug(f'{command} data: {fsm_command}')
-        #def propagate_to_list(self, command:str, data, token, node_to_execute):
+
         if False: # Keep this out of the way for now
             children_fsm_command = FSMCommand()
             children_fsm_command.CopyFrom(fsm_command)
@@ -397,46 +336,13 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         try:
             result = self.fsm.execute_transition(fsm_command.command_name, fsm_command.arguments)
 
-        except fsm_errors.UnregisteredTransition as e:
-            self.broadcast(
-                btype = BroadcastType.EXCEPTION_RAISED,
-                message = f'Transition {fsm_command.command_name} not a valid transition. Available transitions are {[self.fsm.get_all_transitions()]}.'
-            )
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
-        except fsm_errors.InvalidTransition as e:
-            self.broadcast(
-                btype = BroadcastType.EXCEPTION_RAISED,
-                message = f'Transition {fsm_command.command_name} is invalid from state {self.fsm.get_current_state()}. Available transitions are {[self.fsm.get_executable_transitions()]}.'
-            )
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
-        except ctler_excpt.ControllerException as e:
-            self.broadcast(
-                btype = BroadcastType.EXCEPTION_RAISED,
-                message = f'ControllerException when executing {fsm_command.command_name}: {e}'
-            )
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
         except Exception as e:
-            self.broadcast(
-                btype = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
-                message = f'Unhandled exception when executing {command}: {e}'
-            )
             self._interrupt_with_exception(
                 ex_stack = traceback.format_exc(),
                 ex_text = str(e),
                 context = context
             )
+
         result_any = pack_to_any(result)
         response = Response(data = result_any)
 

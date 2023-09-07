@@ -92,3 +92,62 @@ class BroadcastSender:
         bm.type = btype
 
         self.implementation._send(bm)
+
+
+    def _interrupt_with_message(self, message, context):
+        from druncschema.generic_pb2 import PlainText
+        from druncschema.broadcast_pb2 import BroadcastType
+        from drunc.utils.grpc_utils import pack_to_any
+        from google.rpc import code_pb2
+        from google.rpc import status_pb2
+        from grpc_status import rpc_status
+        self.broadcast(
+            btype = BroadcastType.TEXT_MESSAGE,
+            message = message
+        )
+
+        detail = pack_to_any(PlainText(text = message))
+
+        context.abort_with_status(
+            rpc_status.to_status(
+                status_pb2.Status(
+                    code=code_pb2.INTERNAL,
+                    message=message,
+                    details=[detail],
+                )
+            )
+        )
+
+
+    def _interrupt_with_exception(self, ex_stack, ex_text, context):
+        from druncschema.broadcast_pb2 import BroadcastType
+
+        self.broadcast(
+            btype = BroadcastType.EXCEPTION_RAISED,
+            message = ex_text
+        )
+        self.logger.error(
+            ex_stack+"\n"+ex_text
+        )
+
+        from druncschema.generic_pb2 import Stacktrace
+        from drunc.utils.grpc_utils import pack_to_any
+        from google.rpc import code_pb2
+        from google.rpc import status_pb2
+        from grpc_status import rpc_status
+
+        detail = pack_to_any(
+            Stacktrace(
+                text = ex_stack.split('\n')
+            )
+        )
+
+        context.abort_with_status(
+            rpc_status.to_status(
+                status_pb2.Status(
+                    code=code_pb2.INTERNAL,
+                    message=f'Exception thrown: {str(ex_text)}',
+                    details=[detail],
+                )
+            )
+        )
