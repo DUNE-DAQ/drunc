@@ -1,7 +1,6 @@
 
 def convert_fsm_arguments(args):
     from druncschema.controller_pb2 import Argument
-    print(f'arguments = {args}')
     # if not signature:
     # signature = [<Parameter "some_int: int">,
     #              <Parameter "some_str: str">,
