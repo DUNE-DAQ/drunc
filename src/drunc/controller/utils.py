@@ -31,12 +31,24 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         response = cmd(request)
 
     except grpc.RpcError as e:
-        log.error(f'Error sending command {command} to controller: {e.code().name}')
-        log.error(e)
-        try:
-            log.error(e.details())
-        except:
-            pass
+        log.error(f'Error sending command {command} to controller')
+
+        from grpc_status import rpc_status
+        status = rpc_status.from_call(e)
+        from druncschema.generic_pb2 import Stacktrace, PlainText
+        from drunc.utils.grpc_utils import unpack_any
+        log.error(status.message)
+
+        for detail in status.details:
+            if detail.Is(Stacktrace.DESCRIPTOR):
+                text = 'Stacktrace [bold red]on remote server![/]\n'
+                stack = unpack_any(detail, Stacktrace)
+                for l in stack.text:
+                    text += l+"\n"
+                log.error(text, extra={"markup": True})
+            elif detail.Is(PlainText.DESCRIPTOR):
+                txt = unpack_any(detail, PlainText)
+                log.error(txt)
 
         if rethrow:
             raise e
@@ -52,9 +64,9 @@ def get_status_message(stateful:StatefulNode):
 
     return Status(
         name = stateful.name,
-        uri = stateful.uri,
-        ping = stateful.ping,
-        state = stateful.state,
+        #uri = stateful.uri,
+        ping = True,
+        state = stateful.fsm.current_state,
         in_error = stateful.in_error,
         included = stateful.included,
     )

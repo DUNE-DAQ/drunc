@@ -2,10 +2,11 @@ from google.rpc import code_pb2
 from google.rpc import status_pb2
 from grpc_status import rpc_status
 
+import traceback
 
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
-from druncschema.generic_pb2 import PlainText, PlainTextVector
+from druncschema.generic_pb2 import PlainText, PlainTextVector, Stacktrace
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
@@ -238,6 +239,42 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 return True
         return False
 
+
+    def _interrupt_with_message(self, message, context):
+        detail = pack_to_any(PlainText(text = message))
+
+        context.abort_with_status(
+            rpc_status.to_status(
+                status_pb2.Status(
+                    code=code_pb2.INTERNAL,
+                    message=message,
+                    details=[detail],
+                )
+            )
+        )
+
+
+    def _interrupt_with_exception(self, ex_stack, ex_text, context):
+        self.logger.error(
+            ex_stack+"\n"+ex_text
+        )
+
+        detail = pack_to_any(
+            Stacktrace(
+                text = ex_stack.split('\n')
+            )
+        )
+        context.abort_with_status(
+            rpc_status.to_status(
+                status_pb2.Status(
+                    code=code_pb2.INTERNAL,
+                    message=f'Exception thrown: {str(ex_text)}',
+                    details=[detail],
+                )
+            )
+        )
+
+
     def _generic_user_command(self, request:Request, command:str, context, propagate=False):
         """
         A generic way to execute the controller commands from a user.
@@ -253,23 +290,17 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         )
 
         if not self.authoriser.is_authorised(request.token, command):
+            message = f'{request.token.user_name} is not authorised to execute {command}'
             self.broadcast(
                 btype = BroadcastType.TEXT_MESSAGE, # make this an real type rather than just text
-                message = f'{request.token.user_name} is not authorised to execute {command}',
+                message = message
             )
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
+            self._interrupt_with_message(message, context)
 
 
         data = request.data if request.data else None
         self.logger.debug(f'{command} data: {request.data}')
+
 
         if propagate:
             self.propagate_to_list(command, request.data, request.token, self.children_nodes)
@@ -290,25 +321,23 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 message = f'ControllerException when executing {command}: {e}'
             )
 
-            detail = pack_to_any(PlainText(text = f'ControllerException when executing {command}: {e}'))
-
-
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.INTERNAL,
-                        message='Exception thrown while executing the command',
-                        details=[detail],
-                    )
-                )
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
             )
+
         except Exception as e:
             self.broadcast(
                 btype = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
                 message = f'Unhandled exception when executing {command}: {e}'
             )
-            raise e # let gRPC handle it
 
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
         result_any = pack_to_any(result)
         response = Response(data = result_any)
 
@@ -340,78 +369,74 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         fsm_command = unpack_any(request.data, FSMCommand)
 
         if not self.authoriser.is_authorised(request.token, 'fsm'):
+            message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}'
             self.broadcast(
                 btype = BroadcastType.TEXT_MESSAGE, # make this an real type rather than just text
-                message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}',
+                message= message
             )
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
+            self._interrupt_with_message(message, context)
+
 
         self.logger.debug(f'{command} data: {fsm_command}')
         #def propagate_to_list(self, command:str, data, token, node_to_execute):
-        children_fsm_command = FSMCommand()
-        children_fsm_command.CopyFrom(fsm_command)
-        children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
-        if fsm_command.HasField('children_nodes'):
-            self.propagate_to_list(command, children_fsm_command, request.token, fsm_command.children_nodes)
-        else:
-            self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
+        if False: # Keep this out of the way for now
+            children_fsm_command = FSMCommand()
+            children_fsm_command.CopyFrom(fsm_command)
+            children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
+            if fsm_command.HasField('children_nodes'):
+                self.propagate_to_list(command, children_fsm_command, request.token, fsm_command.children_nodes)
+            else:
+                self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
 
         import drunc.fsm.fsm_errors as fsm_errors
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_START,
+            message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
+        )
 
         try:
-            token = Token()
-            token.CopyFrom(request.token)
-            self.broadcast(
-                btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
-            )
-            self.fsm.execute_transition(fsm_command.command_name, fsm_command.arguments)
+            result = self.fsm.execute_transition(fsm_command.command_name, fsm_command.arguments)
 
         except fsm_errors.UnregisteredTransition as e:
             self.broadcast(
                 btype = BroadcastType.EXCEPTION_RAISED,
                 message = f'Transition {fsm_command.command_name} not a valid transition. Available transitions are {[self.fsm.get_all_transitions()]}.'
             )
-
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
         except fsm_errors.InvalidTransition as e:
             self.broadcast(
                 btype = BroadcastType.EXCEPTION_RAISED,
                 message = f'Transition {fsm_command.command_name} is invalid from state {self.fsm.get_current_state()}. Available transitions are {[self.fsm.get_executable_transitions()]}.'
             )
-
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
         except ctler_excpt.ControllerException as e:
             self.broadcast(
                 btype = BroadcastType.EXCEPTION_RAISED,
                 message = f'ControllerException when executing {fsm_command.command_name}: {e}'
             )
-
-            detail = pack_to_any(PlainText(text = f'ControllerException when executing {command}: {e}'))
-
-
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.INTERNAL,
-                        message='Exception thrown while executing the command',
-                        details=[detail],
-                    )
-                )
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
             )
         except Exception as e:
             self.broadcast(
                 btype = BroadcastType.UNHANDLED_EXCEPTION_RAISED,
                 message = f'Unhandled exception when executing {command}: {e}'
             )
-            raise e # let gRPC handle it
-
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
         result_any = pack_to_any(result)
         response = Response(data = result_any)
 
