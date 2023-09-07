@@ -27,3 +27,21 @@ class UnknownArgument(Exception):
     def __init__(self, param, name):
         self.message = f"The mandatory argument \"{param}\" is not required by transition {name}"
         super().__init__(self.message)
+
+class InvalidInterface(Exception):
+    '''Raised when an interface doesn't have pre/post transitions'''
+    def __init__(self, iface):
+        self.message = f"The interface \"{iface}\" does not have any pre or post transition method"
+        super().__init__(self.message)
+
+class InvalidInterfaceMethod(Exception):
+    '''Raised when an interface doesn't have the pre/post transitions arguments'''
+    def __init__(self, iface, method):
+        self.message = f"The interface \"{iface}\" method {method} does not have the correct arguements, each one should have at least \"_input_data\" and \"**kwargs\", and have type annotations"
+        super().__init__(self.message)
+
+
+class MethodSignatureMissingAnnotation(Exception):
+    def __init__(self, iface, method, pname):
+        self.message = f"The interface \"{iface}\" method {method} does not have the correct arguement annotation for \"{pname}\", provide \"argument:int\" to your pre/post methods."
+        super().__init__(self.message)

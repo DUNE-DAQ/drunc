@@ -2,7 +2,7 @@ import logging
 from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
-import drunc.fsm.fsm_errors
+import drunc.fsm.fsm_errors as fsm_errors
 
 def validate_arguments(obj, func_name, arguments) -> None:
     '''
@@ -36,37 +36,37 @@ class FSMInterface:
     def __init__(self, name):
         self.name = name
 
-    def get_transition_arguments(self, func_name) -> signature:
-        func = getattr(self, func_name, None)
-        if not func:
-            return None
-        sig = signature(func)
-        return sig
+    # def get_transition_arguments(self, func_name) -> signature:
+    #     func = getattr(self, func_name, None)
+    #     if not func:
+    #         return None
+    #     sig = signature(func)
+    #     return sig
 
-    def pre_transition(self, transition, run_data, arguments):
-        '''
-        For the given transition, check if we have anything to do before it, then do it.
-        '''
-        name = "pre_"+transition
-        func = getattr(self, "pre_"+transition, None)
-        if func:
-            validate_arguments(self, name, arguments)  #This will raise an error if something is wrong
-            return func(run_data, **arguments)              #The run_data is passed as a dictionary, whereas arguments are unpacked
-        else:
-            return None
+    # def pre_transition(self, transition, run_data, arguments):
+    #     '''
+    #     For the given transition, check if we have anything to do before it, then do it.
+    #     '''
+    #     name = "pre_"+transition
+    #     func = getattr(self, "pre_"+transition, None)
+    #     if func:
+    #         validate_arguments(self, name, arguments)  #This will raise an error if something is wrong
+    #         return func(run_data, **arguments)              #The run_data is passed as a dictionary, whereas arguments are unpacked
+    #     else:
+    #         return None
 
 
-    def post_transition(self, transition, run_data, arguments):
-        '''
-        For the given transition, check if we have anything to do after it, then do it.
-        '''
-        name = "post_"+transition
-        func = getattr(self, "post_"+transition, None)
-        if func:
-            validate_arguments(self, name, arguments)
-            return func(run_data, **arguments)
-        else:
-            return None
+    # def post_transition(self, transition, run_data, arguments):
+    #     '''
+    #     For the given transition, check if we have anything to do after it, then do it.
+    #     '''
+    #     name = "post_"+transition
+    #     func = getattr(self, "post_"+transition, None)
+    #     if func:
+    #         validate_arguments(self, name, arguments)
+    #         return func(run_data, **arguments)
+    #     else:
+    #         return None
 
 class FSMConfig:
     def __init__(self, config_data, config_type='file'):
@@ -76,11 +76,13 @@ class FSMConfig:
         if config_type == 'file':
             self.states           = config_data['states']
             self.transitions      = config_data['transitions']
-            self.sequences        = config_data['command_sequences']
-            self.pre_transitions  = config_data['pre_transitions']
-            self.post_transitions = config_data['post_transitions']
+            self.sequences        = config_data.get('command_sequences', {})
+            self.pre_transitions  = config_data.get('pre_transitions', {})
+            self.post_transitions = config_data.get('post_transitions', {})
+            self.initial_state    = config_data['initial_state']
             self.interfaces = {}
-            for name, data in config_data['interfaces'].items():
+
+            for name, data in config_data.get('interfaces', {}).items():
                 self.interfaces[name] = FSMInterfaceFactory.get().get_interface(name, data)
 
         elif 'oks':
@@ -92,8 +94,40 @@ class FSMConfig:
 
 class FSM:
     def __init__(self, configuration):
-        self.current_state = "none"
         self.config = FSMConfig(configuration)
+
+        self.pre_transition_sequence = {}
+        self.post_transition_sequence = {}
+        self.interfaces = self.config.interfaces
+
+        for transition in self.config.transitions:
+            trigger = transition['trigger']
+            pre_seq = []
+            pt = self.config.pre_transitions.get(trigger, {"order":[], "mandatory":[]})
+
+            for iface in pt["order"]:
+                method = getattr(self.interfaces[iface], f'pre_{trigger}')
+                if not method:
+                    raise RuntimeError(f'pre_{trigger} method not found in {iface}')
+
+                pre_seq += [(method, iface in pt["mandatory"])]
+
+            self.pre_transition_sequence[trigger] = pre_seq
+
+            post_seq = []
+            pt = self.config.post_transitions.get(trigger, {"order":[], "mandatory":[]})
+
+            for iface in pt["order"]:
+                method = getattr(self.interfaces[iface], f'post_{trigger}')
+                if not method:
+                    raise RuntimeError(f'post_{trigger} method not found in {iface}')
+
+                post_seq += [(method, iface in pt["mandatory"])]
+
+            self.post_transition_sequence[trigger] = post_seq
+
+
+        self.current_state = self.config.initial_state
         self.transition_functions = {}
         self.log = logging.getLogger(self.__class__.__name__)
         self.run_data = {}
@@ -183,7 +217,7 @@ class FSM:
     def get_interfaces(self, name) -> List[str]:
         return self.config.interfaces.keys()
 
-    def process_responces(self, responses):
+    def process_responses(self, responses):
         '''
         A dictionary of all the responses from the interfaces, for this pre/post transition.
         '''
@@ -196,49 +230,71 @@ class FSM:
         '''
         self.transition_functions[name] = func
 
-    def get_transition_arguments(self, func_name) -> signature:
-        if func_name not in self.transition_functions:
-            return None
-        func = self.transition_functions[func_name]
-        sig = signature(func)
-        return sig
+    def aggregate_signature(self, func, parameters:list) -> list:
+        from rich.console import Console
+        c = Console()
+        s = signature(func)
+
+        for pname, p in s.parameters.items():
+            c.print(pname, p, type(p))
+
+            if pname in ["_input_data", "args", "kwargs"]:
+                continue
+
+            if p in parameters:
+                raise RuntimeError(f"Parameter {p} is already in the list of parameters")
+            parameters.append(p)
+
+        return parameters
+
+
+    def get_transition_arguments(self, transition) -> signature:
+        all_arguments = []
+        for func, _ in self.pre_transition_sequence[transition]:
+            all_arguments = self.aggregate_signature(func, all_arguments)
+
+        for func, _ in self.post_transition_sequence[transition]:
+            all_arguments = self.aggregate_signature(func, all_arguments)
+
+        if transition in self.transition_functions:
+            all_arguments = self.aggregate_signature(self.transition_functions[transition], all_arguments)
+
+        return all_arguments
 
     def pre_transition_sequence(self, transition, pre_data) -> None:
-        if transition in self.config.pre_transitions:
-            info = self.config.pre_transitions[transition]          #Information relating to this pre-transition
-            for name in info['order']:                              #A list of all interfaces to be tried (in order)
-                interface = self.config.interfaces[name]
-                try:
-                    search_name = "pre_"+name
-                    if search_name in pre_data:
-                        data = pre_data[search_name]
-                    else:
-                        data = {}                                   #We may still want to call with no arguments
-                    response = interface.pre_transition(transition, self.run_data, data)
-                    if response:                                    #The response is a tuple of a name and value (or maybe a list of tuples)
-                        self.run_data.update(response)              #We save to run_data
-                except Exception as e:
-                    if name in info['mandatory']:                   #If the transition is required, raise an error
-                        raise e
-                    else:
-                        self.log(e)
+        for f,mandatory in self.pre_transition_sequence[transition]:
+            try:
+                pre_data = f(pre_data)
+            except Exception as e:
+                if mandatory:
+                    raise e
+                else:
+                    self.log(e)
+        # if transition in self.config.pre_transitions:
+        #     info = self.config.pre_transitions[transition]          #Information relating to this pre-transition
+        #     for name in info['order']:                              #A list of all interfaces to be tried (in order)
+        #         interface = self.config.interfaces[name]
+        #         try:
+        #             search_name = "pre_"+name
+        #             if search_name in pre_data:
+        #                 data = pre_data[search_name]
+        #             else:
+        #                 data = {}                                   #We may still want to call with no arguments
+        #             response = interface.pre_transition(transition, self.run_data, data)
+        #             if response:                                    #The response is a tuple of a name and value (or maybe a list of tuples)
+        #                 self.run_data.update(response)              #We save to run_data
+        #         except Exception as e:
+        #             if name in info['mandatory']:                   #If the transition is required, raise an error
+        #                 raise e
+        #             else:
+        #                 self.log(e)
 
     def post_transition_sequence(self, transition, post_data) -> None:
-        if transition in self.config.post_transitions:
-            info = self.config.post_transitions[transition]
-            for name in info['order']:
-                interface = self.config.interfaces[name]
-                try:
-                    search_name = "post_"+name
-                    if search_name in post_data:
-                        data = post_data[search_name]
-                    else:
-                        data = {}
-                    response = interface.post_transition(transition, self.run_data, data)
-                    if response:
-                        self.run_data.update(response)
-                except Exception as e:
-                    if name in info['mandatory']:
-                        raise e
-                    else:
-                        self.log(e)
+        for f,mandatory in self.post_transition_sequence[transition]:
+            try:
+                post_data = f(post_data)
+            except Exception as e:
+                if mandatory:
+                    raise e
+                else:
+                    self.log(e)

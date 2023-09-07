@@ -180,29 +180,88 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
     ctx.obj.log.info('You are in control.')
 
 
-
 @controller_shell.command('man')
+@click.option("--command", type=str, default='.*')#, help='Which command you are interested')
 @click.pass_obj
-def man(obj:ControllerContext) -> None:
+def man(obj:ControllerContext, command) -> None:
     from druncschema.request_response_pb2 import Description
+    from druncschema.controller_pb2 import FSMCommandsDescription, Argument
+    desc = Description()
+    if command == 'fsm':
+        desc = unpack_any(
+            send_command(
+                controller = obj.controller,
+                token = obj.token,
+                command = 'describe_fsm',
+                data = None
+            ).data,
+            FSMCommandsDescription
+        )
+    else:
+        desc = unpack_any(
+            send_command(
+                controller = obj.controller,
+                token = obj.token,
+                command = 'describe',
+                data = None
+            ).data,
+            Description
+        )
 
-    desc = unpack_any(
-        send_command(
-            controller = obj.controller,
-            token = obj.token,
-            command = 'describe',
-            data = None
-        ).data,
-        Description
-    )
     from rich.table import Table
     t = Table(title=f'{desc.name}.{desc.session} ({desc.type}) commands')
     t.add_column('name')
     t.add_column('input type')
     t.add_column('return type')
     t.add_column('help')
+
+    if command == 'fsm':
+        t.add_column('Command arguments')
+
+    from drunc.utils.utils import regex_match
+
+    def format_fsm_argument(arg):
+        d = '<no_default>'
+        from druncschema.generic_pb2 import string_msg, float_msg, int_msg
+
+        if arg.HasField('default_value'):
+            if arg.type == Argument.Type.STRING:
+                from drunc.utils.grpc_utils import unpack_any
+                d = unpack_any(arg.default_value, string_msg).value
+
+            elif arg.type == Argument.Type.FLOAT:
+                from drunc.utils.grpc_utils import unpack_any
+                d = str(unpack_any(arg.default_value, float_msg).value)
+
+            elif type == Argument.Type.INT:
+                from drunc.utils.grpc_utils import unpack_any
+                d = str(unpack_any(arg.default_value, int_msg).value)
+
+            else:
+                d = arg.default_value
+
+        return f'{arg.name} ({Argument.Type.Name(arg.type)} {Argument.Presence.Name(arg.presence)}) default: {d} help: {arg.help}'
+
     for c in desc.commands:
-        t.add_row(c.name, c.data_type, c.return_type, c.help)
+
+        if not regex_match(command, c.name) and command != 'fsm':
+            continue
+
+        if command == 'fsm':
+            args = c.arguments
+            if len(args) == 0:
+                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,)
+            elif len(args) == 1:
+                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,format_fsm_argument(args[0]))
+            else:
+                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,format_fsm_argument(args[0]))
+                for i in range(1, len(args)):
+                    t.add_row('', '', '', '', format_fsm_argument(args[i]))
+
+        else:
+            t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help)
+
+
     obj.print(t)
 
 
@@ -220,6 +279,61 @@ def ls(obj:ControllerContext) -> None:
         PlainTextVector
     )
     obj.print(children.text)
+
+@controller_shell.command('status')
+@click.pass_obj
+def status(obj:ControllerContext) -> None:
+    from druncschema.controller_pb2 import Status, ChildrenStatus
+
+    status = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'get_status',
+            data = None
+        ).data,
+        Status
+    )
+    def format_bool(b):
+        return 'Y' if b else 'N'
+    from rich.table import Table
+    t = Table(title=f'{status.name} status')
+    t.add_column('name')
+    t.add_column('ping')
+    t.add_column('state')
+    t.add_column('in_error')
+    t.add_column('included')
+    t.add_row(status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
+    if False:
+        statuses = unpack_any(
+            send_command(
+                controller = obj.controller,
+                token = obj.token,
+                command = 'get_children_status',
+                data = None
+            ).data,
+            ChildrenStatus
+        )
+
+        first_one = "└── "
+        first_many = "├── "
+        next = "├── "
+        last = "└── "
+
+
+        how_many = len(statuses.children_status)
+
+        for i, c_status in enumerate(statuses.children_status):
+            if i==0 and how_many == 1:
+                t.add_row(first_one+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
+            elif i==0:
+                t.add_row(first_many+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
+            elif i == how_many-1:
+                t.add_row(last+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
+            else:
+                t.add_row(next+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
+
+    obj.print(t)
 
 
 
@@ -267,8 +381,27 @@ def who_is_in_charge(obj:ControllerContext) -> None:
     obj.print(who.text)
 
 
-@controller_shell.command('some-command')
+@controller_shell.command('fsm')
+@click.argument('command', type=str)
+@click.argument('arguments', type=str, nargs=-1)
 @click.pass_obj
-def some_command(obj:ControllerContext) -> None:
-    raise NotImplementedError('This is just an example command, so it is not implemented.')
+def some_command(obj:ControllerContext, command, arguments) -> None:
+    from druncschema.controller_pb2 import FSMCommand
+    args = {}
+    if len(arguments) % 2 != 0:
+        raise RuntimeError('Arguments are pairs of key value!')
+
+    for i in range(int(len(arguments)/2)):
+        args[arguments[i]] = arguments[i+1]
+
+    data = FSMCommand(
+        command_name = command,
+        arguments = args,
+    )
+    send_command(
+        controller = obj.controller,
+        token = obj.token,
+        command = 'execute_fsm_command',
+        data = data
+    )
 
