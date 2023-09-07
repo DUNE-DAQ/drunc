@@ -3,23 +3,23 @@ from drunc.fsm.fsm_core import FSM
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 
 class Observed:
-    def __init__(self, name, broadcast_on_change:BroadcastSender, broadcast_key, initial_value=None):
-        self._name = name
-        self._broadcast_on_change = broadcast_on_change
-        self._value = initial_value
-        self._broadcast_key = broadcast_key
-
     @property
     def value(self):
         return self._value
 
     @value.setter
     def value(self, value):
-        self.broadcast(
+        self._broadcast_on_change.broadcast(
             message = f'Changing {self._name} from {self._value} to {value}',
             btype = self._broadcast_key,
         )
         self._value = value
+
+    def __init__(self, name, broadcast_on_change:BroadcastSender, broadcast_key, initial_value=None):
+        self._name = name
+        self._broadcast_on_change = broadcast_on_change
+        self._value = initial_value
+        self._broadcast_key = broadcast_key
 
 
 class FSMState(Observed):
@@ -44,6 +44,15 @@ class InclusionState(Observed):
             name = 'inclusion_state',
             **kwargs
         )
+
+class StatefulNodeException(Exception):
+    pass
+
+class CannotInclude(Exception):
+    pass
+
+class CannotExclude(Exception):
+    pass
 
 
 class StatefulNode(abc.ABC, BroadcastSender):
@@ -70,23 +79,27 @@ class StatefulNode(abc.ABC, BroadcastSender):
             initial_value = False
         )
 
-    def state(self):
-        return self.state.value()
+    def node_fsm_state(self):
+        return self.state.value
 
-    def include(self):
-        self.included = True
+    def include_node(self):
+        if self.included.value:
+            raise CannotInclude()
+        self.included.value = True
 
-    def exclude(self):
-        self.included = False
+    def exclude_node(self):
+        if not self.included.value:
+            raise CannotExclude()
+        self.included.value = False
 
-    def is_included(self):
-        return self.included.value()
+    def node_is_included(self):
+        return self.included.value
 
     def to_error(self):
-        self.in_error = True
+        self.in_error.value = True
 
     def resolve_error(self):
-        self.in_error = False
+        self.in_error.value = False
 
-    def is_in_error(self):
-        return self.in_error.value()
+    def node_is_in_error(self):
+        return self.in_error.value

@@ -405,3 +405,33 @@ def some_command(obj:ControllerContext, command, arguments) -> None:
         data = data
     )
 
+
+
+@controller_shell.command('include')
+@click.pass_obj
+def some_command(obj:ControllerContext) -> None:
+    from druncschema.controller_pb2 import FSMCommand
+    data = FSMCommand(
+        command_name = 'include',
+    )
+    send_command(
+        controller = obj.controller,
+        token = obj.token,
+        command = 'include',
+        data = data
+    )
+
+@controller_shell.command('exclude')
+@click.pass_obj
+def some_command(obj:ControllerContext) -> None:
+    from druncschema.controller_pb2 import FSMCommand
+    data = FSMCommand(
+        command_name = 'exclude',
+    )
+    send_command(
+        controller = obj.controller,
+        token = obj.token,
+        command = 'exclude',
+        data = data
+    )
+

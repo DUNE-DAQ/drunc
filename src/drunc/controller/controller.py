@@ -137,14 +137,14 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
             CommandDescription(
                 name = 'include',
-                data_type = ['controller_pb2.FSMCommand'],
+                data_type = ['None'],
                 help = 'Include self in the current session, if a children is provided, include it and its eventual children',
                 return_type = 'controller_pb2.FSMCommandResponse'
             ),
 
             CommandDescription(
                 name = 'exclude',
-                data_type = ['controller_pb2.FSMCommand'],
+                data_type = ['None'],
                 help = 'Exclude self in the current session, if a children is provided, exclude it and its eventual children',
                 return_type = 'controller_pb2.FSMCommandResponse'
             ),
@@ -417,12 +417,19 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
 
     def include(self, request:Request, context) -> Response:
-        return self._fsm_command(request, 'include', context)
+        return self._generic_user_command(request, 'include', context, propagate=True)
+
+    def _include_impl(self, _, token) -> PlainText:
+        self.include_node()
+        return PlainText(text = f'{self.name} included')
 
 
     def exclude(self, request:Request, context) -> Response:
-        return self._fsm_command(request, 'exclude', context)
+        return self._generic_user_command(request, 'exclude', context, propagate=True)
 
+    def _exclude_impl(self, _, token) -> PlainText:
+        self.exclude_node()
+        return PlainText(text = f'{self.name} excluded')
 
 
     ##########################################
