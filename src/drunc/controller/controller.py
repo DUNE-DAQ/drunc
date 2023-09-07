@@ -1,12 +1,8 @@
-from google.rpc import code_pb2
-from google.rpc import status_pb2
-from grpc_status import rpc_status
-
 import traceback
 
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
-from druncschema.generic_pb2 import PlainText, PlainTextVector, Stacktrace
+from druncschema.generic_pb2 import PlainText, PlainTextVector
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
@@ -19,7 +15,7 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import pack_to_any
 from threading import Lock, Thread
-from typing import Optional, Dict, List
+from typing import Optional, List
 
 
 class ControllerActor:
