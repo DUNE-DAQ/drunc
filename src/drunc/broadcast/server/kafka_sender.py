@@ -46,3 +46,9 @@ class KafkaSender(BroadcastSenderImplementation):
 
         self._log.debug(f'{record_metadata} published')
 
+    def describe_broadcast(self):
+        from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
+        return KafkaBroadcastHandlerConfiguration(
+            topic = self.topic,
+            kafka_address = self.kafka_address,
+        )

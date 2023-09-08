@@ -1,9 +1,19 @@
 
 
 class KafkaStdoutBroadcastHandler:
-    def __init__(self, conf, topic, message_format):
-        self.kafka_address = conf['kafka_address']
-        self.topic = topic
+    def __init__(self, conf, message_format, conf_type = 'json', topic=''):
+        if conf_type == 'json':
+            self.kafka_address = conf['kafka_address']
+            self.topic = topic
+            if self.topic == '':
+                raise RuntimeError('The topic must be specified for json configuration')
+
+
+        elif conf_type == 'protobuf':
+
+            self.kafka_address = conf.kafka_address
+            self.topic = conf.topic
+
         self.message_format = message_format
 
         import logging

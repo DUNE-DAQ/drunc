@@ -388,11 +388,13 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     def _describe_impl(self, request:Request, dummy):
         from druncschema.request_response_pb2 import Description
+        from drunc.utils.grpc_utils import pack_to_any
         return Description(
             type = 'controller',
             name = self.name,
             session = self.session,
-            commands = self.commands
+            commands = self.commands,
+            broadcast = pack_to_any(self.describe_broadcast()),
         )
 
 

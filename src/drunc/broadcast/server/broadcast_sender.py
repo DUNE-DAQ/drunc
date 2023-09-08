@@ -65,6 +65,9 @@ class BroadcastSender:
             case _:
                 raise BroadcastSenderTechnologyUnknown(self.impl_technology)
 
+    def describe_broadcast(self):
+        return self.implementation.describe_broadcast()
+
     def broadcast(self, message, btype):
 
         if self.logger:
