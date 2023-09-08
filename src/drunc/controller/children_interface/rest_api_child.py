@@ -22,17 +22,19 @@ class ResponseListener:
         return cls.port
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, conf):
-        super().__init__(conf['name'])
-        self.address = conf['address']
+    def __init__(self, child_conf, **kwargs):
+        super(RESTAPIChildNode, self).__init__(
+            **kwargs
+        )
+        self.address = child_conf['address']
         self.response_listener = ResponseListener.get()
-        self.proxy = conf.get('proxy')
+        self.proxy = child_conf.get('proxy')
 
-    def _close(self):
+    def close(self):
         pass
 
 
-    def _propagate_command(self, command, data, token):
+    def propagate_command(self, command, data, token):
         headers = {
             "content-type": "application/json",
             "X-Answer-Port": str(ResponseListener.get().get_port()),

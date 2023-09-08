@@ -6,7 +6,11 @@ class ChildInterfaceTechnologyUnknown(Exception):
 
 
 class ChildNode(abc.ABC):
-    def __init__(self, name:str, node_type:str, token=None) -> None:
+    def __init__(self, name:str, node_type:str, token=None, **kwargs) -> None:
+        super(ChildNode, self).__init__(
+            **kwargs
+        )
+
         self.node_type = node_type
         import logging
         self.log = logging.getLogger(f"{name}-child-node")
@@ -24,10 +28,6 @@ class ChildNode(abc.ABC):
         pass
 
 
-    # def take_control(self, token):
-    #     self.token = token
-
-
     @staticmethod
     def get_from_file(name, conf:dict, token=None):
 
@@ -35,7 +35,7 @@ class ChildNode(abc.ABC):
             case 'grpc':
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode
                 return gRPCChildNode(
-                    conf = conf,
+                    child_conf = conf,
                     conf_type = 'file',
                     token = token,
                     name = name,
@@ -44,7 +44,7 @@ class ChildNode(abc.ABC):
             case 'rest-api':
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
                 return RESTAPIChildNode(
-                    conf = conf,
+                    child_conf = conf,
                     conf_type = 'file',
                     token = token,
                     name = name,
