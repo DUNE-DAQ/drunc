@@ -37,18 +37,21 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         status = rpc_status.from_call(e)
         from druncschema.generic_pb2 import Stacktrace, PlainText
         from drunc.utils.grpc_utils import unpack_any
-        log.error(status.message)
 
-        for detail in status.details:
-            if detail.Is(Stacktrace.DESCRIPTOR):
-                text = 'Stacktrace [bold red]on remote server![/]\n'
-                stack = unpack_any(detail, Stacktrace)
-                for l in stack.text:
-                    text += l+"\n"
-                log.error(text, extra={"markup": True})
-            elif detail.Is(PlainText.DESCRIPTOR):
-                txt = unpack_any(detail, PlainText)
-                log.error(txt)
+        if hasattr(status, 'message'):
+            log.error(status.message)
+
+        if hasattr(status, 'details'):
+            for detail in status.details:
+                if detail.Is(Stacktrace.DESCRIPTOR):
+                    text = 'Stacktrace [bold red]on remote server![/]\n'
+                    stack = unpack_any(detail, Stacktrace)
+                    for l in stack.text:
+                        text += l+"\n"
+                    log.error(text, extra={"markup": True})
+                elif detail.Is(PlainText.DESCRIPTOR):
+                    txt = unpack_any(detail, PlainText)
+                    log.error(txt)
 
         if rethrow:
             raise e
