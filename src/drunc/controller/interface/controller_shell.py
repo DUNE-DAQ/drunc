@@ -14,9 +14,6 @@ class ControllerContext:
         self.print_traceback = True
         self.controller = None
 
-        if ctler_conf is None:
-            return
-
         import os
         user = os.getlogin()
 
@@ -26,22 +23,19 @@ class ControllerContext:
             user_name = user
         )
 
-        self.ctler_conf_data = {}
-        with open(ctler_conf) as f:
-            import json
-            self.ctler_conf_data = json.loads(f.read())
-
-
         self.status_receiver = None
         self.took_control = False
 
-    def start_listening(self, topic):
+    def start_listening(self, broadcaster_conf):
         from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
         from druncschema.broadcast_pb2 import BroadcastMessage
+        from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
+        from drunc.utils.grpc_utils import unpack_any
 
+        data = unpack_any(broadcaster_conf, KafkaBroadcastHandlerConfiguration)
         self.status_receiver = KafkaStdoutBroadcastHandler(
-            conf = self.ctler_conf_data['broadcaster'],
-            topic = topic,
+            conf = data,
+            conf_type = 'protobuf',
             message_format = BroadcastMessage,
         )
 
@@ -61,14 +55,14 @@ class ControllerContext:
 @click.argument('controller-address', type=str)#, help='Which address the controller is running on')
 # @click.argument('this-port', type=int)#, help='Which port to use for receiving status')
 # @click.option('--just-watch', type=bool, default=False, is_flag=True, help='If one just doesn\'t want to take control of the controller')
-@click.argument('conf', type=click.Path(exists=True))
+# @click.argument('conf', type=click.Path(exists=True))
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.pass_context
-def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#, this_port:int, just_watch:bool) -> None:
+def controller_shell(ctx, controller_address:str, log_level:str) -> None:#, this_port:int, just_watch:bool) -> None:
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
-    ctx.obj = ControllerContext(conf)
+    ctx.obj = ControllerContext()
 
     # first add the shell to the controller broadcast list
     from druncschema.controller_pb2_grpc import ControllerStub
@@ -101,9 +95,7 @@ def controller_shell(ctx, controller_address:str, conf, log_level:str) -> None:#
         raise e
 
     ctx.obj.log.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    ctx.obj.start_listening(
-        f'{desc.name}.{desc.session}'
-    )
+    ctx.obj.start_listening(desc.broadcast)
 
     ctx.obj.log.info('Attempting to list this controller\'s children')
     from druncschema.generic_pb2 import PlainText, PlainTextVector
