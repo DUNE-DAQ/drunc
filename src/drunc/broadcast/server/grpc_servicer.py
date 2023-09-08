@@ -12,7 +12,7 @@ class ListenerRepresentation:
 
     def __init__(self, configuration):
         self.address = configuration['address']
-        self.channel = grpc.insecure_channel(address)
+        self.channel = grpc.insecure_channel(self.address)
         from druncschema.broadcast_pb2_grpc import BroadcastReceiverStub
         self.stub = BroadcastReceiverStub(self.channel)
 
@@ -23,6 +23,8 @@ class ListenerRepresentation:
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
     def __init__(self, configuration, logger):
+        raise RuntimeError('GRCPBroadcastSender not supported')
+
         from logging import getLogger
         self.name = 'broadcast_sender'
         self._log = getLogger("Broadcast Sender")

@@ -1,16 +1,24 @@
 
 from druncschema.broadcast_pb2 import BroadcastMessage
 from drunc.broadcast.server.broadcast_sender_implementation import BroadcastSenderImplementation
+from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class KafkaSender(BroadcastSenderImplementation):
-    def __init__(self, conf, topic):
+    def __init__(self, conf, topic, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
+        super(KafkaSender, self).__init__(**kwargs)
         import logging
         self._log = logging.getLogger(f"{topic}_KafkaSender")
 
         from kafka import KafkaProducer
         from kafka import errors as Errors
         self.topic = topic
-        self.kafka_address = conf['kafka_address']
+
+        match conf_type:
+            case ConfTypes.Json:
+                self.kafka_address = conf['kafka_address']
+                self.publish_timeout = conf['publish_timeout']
+            case _:
+                ConfTypeNotSupported(conf_type, 'KafkaSender')
 
         try:
             self.kafka = KafkaProducer(
@@ -22,7 +30,6 @@ class KafkaSender(BroadcastSenderImplementation):
             self._log.critical(t)
             raise RuntimeError(t) from e
 
-        self.publish_timeout = conf['publish_timeout']
         self._log.info(f'Broadcasting to Kafka ({self.kafka_address}) client_id: "run_control", topic: "{self.topic}"')
 
 

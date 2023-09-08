@@ -1,11 +1,12 @@
 
+from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class BroadcastSenderTechnologyUnknown(Exception):
     def __init__(self, implementation):
         super().__init__(f'The implementation {implementation} is not supported for the BroadcastSender')
 
 class BroadcastSender:
-    def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, **kwargs):
+    def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
         super(BroadcastSender, self).__init__(
             **kwargs,
         )
@@ -55,13 +56,14 @@ class BroadcastSender:
 
         if self.impl_technology is None:
             return
+
         match self.impl_technology:
             case 'kafka':
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(broadcast_configuration, self.identifier)
+                self.implementation = KafkaSender(broadcast_configuration, conf_type = conf_type, topic=self.identifier)
             case 'grpc':
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
-                self.implementation = GRCPBroadcastSender(broadcast_configuration)
+                self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
             case _:
                 raise BroadcastSenderTechnologyUnknown(self.impl_technology)
 

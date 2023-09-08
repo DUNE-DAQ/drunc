@@ -2,12 +2,17 @@ from druncschema.broadcast_pb2_grpc import BroadcastReceiverServicer
 from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
 from druncschema.generic_pb2 import Empty
 import grpc
+from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
-class GRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
-    def __init__(self, port, stub, token) -> None:
-        BroadcastReceiverServicer.__init__(self)
+
+class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
+    def __init__(self, conf, token, conf_type:ConfTypes=ConfTypes.Json, **kwargs) -> None:
+        super(gRPCStdoutBroadcastHandler, self).__init__(
+            **kwargs
+        )
+        raise RuntimeError('gRPCStdoutBroadcastHandler is not handled')
         self.ready = False
-        self.stub = stub
+        self.stub = None
         self.token = token
         from logging import getLogger
         self._log = getLogger("BroadcastReceiver")

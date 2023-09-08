@@ -1,18 +1,25 @@
 
+from drunc.broadcast.client.broadcast_handler_implementation import BroadcastHandlerImplementation
+from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
-class KafkaStdoutBroadcastHandler:
-    def __init__(self, conf, message_format, conf_type = 'json', topic=''):
-        if conf_type == 'json':
+class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
+
+    def __init__(self, conf, message_format, conf_type:ConfTypes=ConfTypes.Json, topic=''):\
+
+        if conf_type == ConfTypes.Json:
             self.kafka_address = conf['kafka_address']
             self.topic = topic
             if self.topic == '':
                 raise RuntimeError('The topic must be specified for json configuration')
 
 
-        elif conf_type == 'protobuf':
+        elif conf_type == ConfTypes.Protobuf:
 
             self.kafka_address = conf.kafka_address
             self.topic = conf.topic
+
+        else:
+            raise ConfTypeNotSupported(conf_type, 'KafkaStdoutBroadcastHandler')
 
         self.message_format = message_format
 
@@ -39,7 +46,6 @@ class KafkaStdoutBroadcastHandler:
 
     def consume(self):
         from google.protobuf import text_format
-        import druncschema.broadcast_pb2 as b_desc
         from druncschema.broadcast_pb2 import BroadcastType
         from druncschema.generic_pb2 import PlainText
         from drunc.utils.grpc_utils import unpack_any

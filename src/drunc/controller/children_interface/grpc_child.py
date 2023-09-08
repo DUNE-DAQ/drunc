@@ -14,36 +14,27 @@ class gRPCChildNode(ChildNode):
 
         if conf_type == 'file':
             self.uri = child_conf['uri']
-            #...
-
-            # first add the shell to the controller broadcast list
-            from druncschema.controller_pb2_grpc import ControllerStub
-            import grpc
-            self.channel = grpc.insecure_channel(self.uri)
-            self.controller = ControllerStub(self.channel)
 
         else:
             raise RuntimeError(conf_type+ ' is not supported')
 
+        from druncschema.controller_pb2_grpc import ControllerStub
+        import grpc
+        self.channel = grpc.insecure_channel(self.uri)
+        self.controller = ControllerStub(self.channel)
 
-    # def _update_token(self):
-    #     from druncschema.request_response_pb2 import Description
-    #     desc = Description()
+        from druncschema.request_response_pb2 import Description
+        desc = Description()
 
-    #     try:
-    #         response = send_command(
-    #             controller = self.controller,
-    #             token = self.token,
-    #             command = 'describe',
-    #             rethrow = True
-    #         )
+        response = send_command(
+            controller = self.controller,
+            token = self.token,
+            command = 'describe',
+            rethrow = True
+        )
 
-    #         response.data.Unpack(desc)
-    #     except Exception as e:
-    #         self.log.error('Could not get the controller\'s status')
-    #         self.log.error(e)
-    #         raise e
-
+        response.data.Unpack(desc)
+        self.start_listening(desc.broadcast)
 
     def close(self):
         pass
@@ -58,8 +49,9 @@ class gRPCChildNode(ChildNode):
                 data = data
             )
 
-            #response.data.Unpack(desc)
         except Exception as e:
             self.log.error('Could not get the controller\'s status')
             self.log.error(e)
             raise e
+
+        return response

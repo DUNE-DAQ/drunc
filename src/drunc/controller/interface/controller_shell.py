@@ -27,17 +27,20 @@ class ControllerContext:
         self.took_control = False
 
     def start_listening(self, broadcaster_conf):
-        from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
-        from druncschema.broadcast_pb2 import BroadcastMessage
-        from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
-        from drunc.utils.grpc_utils import unpack_any
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.utils.conf_types import ConfTypes
+        # from drunc.utils.grpc_utils import unpack_any
 
-        data = unpack_any(broadcaster_conf, KafkaBroadcastHandlerConfiguration)
-        self.status_receiver = KafkaStdoutBroadcastHandler(
-            conf = data,
-            conf_type = 'protobuf',
-            message_format = BroadcastMessage,
+        self.status_receiver = BroadcastHandler(
+            broadcast_configuration = broadcaster_conf,
+            conf_type = ConfTypes.Protobuf
         )
+
+        # KafkaStdoutBroadcastHandler(
+        #     conf = data,
+        #     conf_type = 'protobuf',
+        #     message_format = BroadcastMessage,
+        # )
 
 
     def terminate(self):

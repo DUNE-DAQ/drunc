@@ -130,7 +130,7 @@ class FSM:
         self.current_state = self.config.initial_state
         self.transition_functions = {}
         self.log = logging.getLogger(self.__class__.__name__)
-        self.run_data = {}
+        # self.run_data = {}
 
     def get_all_states(self) -> List[str]:
         '''
@@ -172,7 +172,7 @@ class FSM:
         '''
         right_name = [t for t in self.config.transitions if t['trigger'] == transition]
         for tr in right_name:
-        #We allow states that start in the state we are in, or ones that can start anywhere.
+        # We allow states that start in the state we are in, or ones that can start anywhere.
             if tr['source'] == '*' or tr['source'] == self.current_state:
                 return True
         return False
@@ -185,7 +185,7 @@ class FSM:
         If we are executing a sequence, it will be a dict with each transition as keys, and objects like this as values.
         '''
         if transition in self.config.sequences:
-            #TODO check nanorc.common_commands.py, should be like that
+            # TODO check nanorc.common_commands.py, should be like that
             for command in self.config.sequences[transition]:   #"command" has format {"cmd": "conf", "optional": true }
                 try:                                            #Attempt every transition in the sequence
                     self.execute_transition(command['cmd'], transition_data[command['cmd']])
@@ -261,10 +261,10 @@ class FSM:
 
         return all_arguments
 
-    def pre_transition_sequence(self, transition, pre_data) -> None:
+    def pre_transition_sequence(self, transition, pre_data, **kwargs) -> None:
         for f,mandatory in self.pre_transition_sequence[transition]:
             try:
-                pre_data = f(pre_data)
+                pre_data = f(pre_data, **kwargs)
             except Exception as e:
                 if mandatory:
                     raise e
@@ -289,10 +289,10 @@ class FSM:
         #             else:
         #                 self.log(e)
 
-    def post_transition_sequence(self, transition, post_data) -> None:
+    def post_transition_sequence(self, transition, post_data, **kwargs) -> None:
         for f,mandatory in self.post_transition_sequence[transition]:
             try:
-                post_data = f(post_data)
+                post_data = f(post_data, **kwargs)
             except Exception as e:
                 if mandatory:
                     raise e
