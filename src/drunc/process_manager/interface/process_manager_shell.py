@@ -21,7 +21,7 @@ def coroutine(f):
 
 
 class PMContext:
-    def __init__(self, pm_conf:str=None, print_traceback:bool=False) -> None:
+    def __init__(self, address:str=None, print_traceback:bool=False) -> None:
         self.print_traceback = True
         from rich.console import Console
         from drunc.utils.utils import CONSOLE_THEMES
@@ -29,31 +29,25 @@ class PMContext:
         import logging
         self._log = logging.getLogger("PMContext")
         self._log.info('initialising PMContext')
-        if pm_conf is None:
-            return
-
-        self.pm_conf_data = {}
-        with open(pm_conf) as f:
-            import json
-            self.pm_conf_data = json.loads(f.read())
 
         user=getpass.getuser()
         self.token = Token(token=f'{user}-token', user_name=user)
-        self.pmd = ProcessManagerDriver(
-            self.pm_conf_data,
-            self.token
-        )
+        if address:
+            self.pmd = ProcessManagerDriver(
+                address,
+                self.token
+            )
 
         self.print_traceback = print_traceback
         self.status_receiver = None
 
-    def start_listening(self, topic):
-        from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
-        from druncschema.broadcast_pb2 import BroadcastMessage
-        self.status_receiver = KafkaStdoutBroadcastHandler(
-            conf = self.pm_conf_data['broadcaster'],
-            topic = topic,
-            message_format = BroadcastMessage,
+    def start_listening(self, broadcaster_conf):
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.utils.conf_types import ConfTypes
+
+        self.status_receiver = BroadcastHandler(
+            broadcast_configuration = broadcaster_conf,
+            conf_type = ConfTypes.Protobuf
         )
 
 
@@ -70,14 +64,14 @@ class PMContext:
 @click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
-@click.argument('pm-conf', type=click.Path(exists=True))
+@click.argument('process-manager-address', type=str)
 @click.pass_context
-def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> None:
+def process_manager_shell(ctx, process_manager_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
     ctx.obj = PMContext(
-        pm_conf = pm_conf,
+        address = process_manager_address,
         print_traceback = traceback
     )
 
@@ -85,10 +79,8 @@ def process_manager_shell(ctx, pm_conf:str, log_level:str, traceback:bool) -> No
         ctx.obj.pmd.describe()
     )
 
-    ctx.obj._log.info(f'{ctx.obj.pmd.pm_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    ctx.obj.start_listening(
-        f'{desc.name}.{desc.session}'
-    )
+    ctx.obj._log.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
         ctx.obj.terminate()

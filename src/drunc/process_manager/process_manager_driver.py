@@ -12,13 +12,13 @@ class ConfigurationTypeNotSupported(Exception):
         super().__init__(f'{str(conf_type)} is not supported by this process manager')
 
 class ProcessManagerDriver:
-    def __init__(self, pm_conf:dict, token):
+    def __init__(self, address:str, token):
         import logging
         self._log = logging.getLogger('ProcessManagerDriver')
         import grpc
         self.token = Token()
         self.token.CopyFrom(token)
-        self.pm_address = pm_conf['command_address']
+        self.pm_address = address
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
