@@ -6,16 +6,17 @@ from druncschema.generic_pb2 import PlainText, PlainTextVector
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 
 class ControllerContext:
-    def __init__(self,  ctler_conf:str=None, print_traceback:bool=False) -> None:
+    def __init__(self, print_traceback:bool=False) -> None:
         from rich.console import Console
         self._console = Console()
         from logging import getLogger
         self.log = getLogger("ControllerShell")
-        self.print_traceback = True
+        self.print_traceback = print_traceback
         self.controller = None
+        self.status_receiver = None
 
-        import os
-        user = os.getlogin()
+        import getpass
+        user=getpass.getuser()
 
         from druncschema.token_pb2 import Token
         self.token = Token ( # fake token, but should be figured out from the environment/authoriser
@@ -36,12 +37,6 @@ class ControllerContext:
             conf_type = ConfTypes.Protobuf
         )
 
-        # KafkaStdoutBroadcastHandler(
-        #     conf = data,
-        #     conf_type = 'protobuf',
-        #     message_format = BroadcastMessage,
-        # )
-
 
     def terminate(self):
         if self.status_receiver:
@@ -56,16 +51,16 @@ class ControllerContext:
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True)
 @click.argument('controller-address', type=str)#, help='Which address the controller is running on')
-# @click.argument('this-port', type=int)#, help='Which port to use for receiving status')
-# @click.option('--just-watch', type=bool, default=False, is_flag=True, help='If one just doesn\'t want to take control of the controller')
-# @click.argument('conf', type=click.Path(exists=True))
+@click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.pass_context
-def controller_shell(ctx, controller_address:str, log_level:str) -> None:#, this_port:int, just_watch:bool) -> None:
+def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool) -> None:#, this_port:int, just_watch:bool) -> None:
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
-    ctx.obj = ControllerContext()
+    ctx.obj = ControllerContext(
+        print_traceback = traceback
+    )
 
     # first add the shell to the controller broadcast list
     from druncschema.controller_pb2_grpc import ControllerStub
@@ -80,25 +75,40 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:#, this
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
-    try:
-        response = send_command(
-            controller = ctx.obj.controller,
-            token = ctx.obj.token,
-            command = 'describe',
-            rethrow = True
-        )
+    ntries = 5
 
-        response.data.Unpack(desc)
+    from drunc.utils.grpc_utils import ServerUnreachable
+    for itry in range(ntries):
+        try:
+            response = send_command(
+                controller = ctx.obj.controller,
+                token = ctx.obj.token,
+                command = 'describe',
+                rethrow = True
+            )
 
-    except Exception as e:
-        ctx.obj.log.error('Could not get the controller\'s status')
-        ctx.obj.log.error(e)
-        ctx.obj.log.error('Exiting.')
-        ctx.obj.terminate()
-        raise e
+            response.data.Unpack(desc)
 
-    ctx.obj.log.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    ctx.obj.start_listening(desc.broadcast)
+        except ServerUnreachable as e:
+            if itry+1 == ntries:
+                raise e
+            else:
+                ctx.obj.log.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
+                from time import sleep
+                sleep(0.5)
+
+        except Exception as e:
+            ctx.obj.log.critical('Could not get the controller\'s status')
+            ctx.obj.log.critical(e)
+            ctx.obj.log.critical('Exiting.')
+            ctx.obj.terminate()
+            raise e
+
+        else:
+            ctx.obj.log.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+            ctx.obj.start_listening(desc.broadcast)
+            break
+
 
     ctx.obj.log.info('Attempting to list this controller\'s children')
     from druncschema.generic_pb2 import PlainText, PlainTextVector
@@ -218,18 +228,16 @@ def man(obj:ControllerContext, command) -> None:
     def format_fsm_argument(arg):
         d = '<no_default>'
         from druncschema.generic_pb2 import string_msg, float_msg, int_msg
+        from drunc.utils.grpc_utils import unpack_any
 
         if arg.HasField('default_value'):
             if arg.type == Argument.Type.STRING:
-                from drunc.utils.grpc_utils import unpack_any
                 d = unpack_any(arg.default_value, string_msg).value
 
             elif arg.type == Argument.Type.FLOAT:
-                from drunc.utils.grpc_utils import unpack_any
                 d = str(unpack_any(arg.default_value, float_msg).value)
 
             elif type == Argument.Type.INT:
-                from drunc.utils.grpc_utils import unpack_any
                 d = str(unpack_any(arg.default_value, int_msg).value)
 
             else:

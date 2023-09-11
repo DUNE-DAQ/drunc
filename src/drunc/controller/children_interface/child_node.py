@@ -1,4 +1,10 @@
 import abc
+from enum import Enum
+
+class ChildNodeType(Enum):
+    gRPC = 1
+    REST_API = 2
+
 
 class ChildInterfaceTechnologyUnknown(Exception):
     def __init__(self, t, name):
@@ -6,7 +12,7 @@ class ChildInterfaceTechnologyUnknown(Exception):
 
 
 class ChildNode(abc.ABC):
-    def __init__(self, name:str, node_type:str, token=None, **kwargs) -> None:
+    def __init__(self, name:str, node_type:ChildNodeType, token=None, **kwargs) -> None:
         super(ChildNode, self).__init__(
             **kwargs
         )
@@ -30,25 +36,26 @@ class ChildNode(abc.ABC):
 
     @staticmethod
     def get_from_file(name, conf:dict, token=None):
+        from drunc.utils.conf_types import ConfTypes
 
-        match conf['type']:
+        match conf['type'].lower():
             case 'grpc':
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode
                 return gRPCChildNode(
                     child_conf = conf,
-                    conf_type = 'file',
+                    conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
-                    node_type = conf['type']
+                    node_type = ChildNodeType.gRPC
                 )
             case 'rest-api':
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
                 return RESTAPIChildNode(
                     child_conf = conf,
-                    conf_type = 'file',
+                    conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
-                    node_type = conf['type']
+                    node_type = ChildNodeType.REST_API
                 )
             case _:
                 raise ChildInterfaceTechnologyUnknown(conf['type'], name)

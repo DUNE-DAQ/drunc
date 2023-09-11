@@ -31,10 +31,14 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         response = cmd(request)
 
     except grpc.RpcError as e:
-        log.error(f'Error sending command {command} to controller')
+        from drunc.utils.grpc_utils import rethrow_if_unreachable_server
+        rethrow_if_unreachable_server(e)
 
         from grpc_status import rpc_status
         status = rpc_status.from_call(e)
+
+        log.error(f'Error sending command "{command}" to controller')
+
         from druncschema.generic_pb2 import Stacktrace, PlainText
         from drunc.utils.grpc_utils import unpack_any
 
