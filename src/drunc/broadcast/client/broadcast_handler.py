@@ -12,19 +12,29 @@ class BroadcastHandler:
             case ConfTypes.Protobuf:
                 from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
                 from drunc.utils.grpc_utils import unpack_any
-                match broadcast_configuration.DESCRIPTOR:
-                    case KafkaBroadcastHandlerConfiguration.DESCRIPTOR:
-                        self.impl_technology = BroadcastTypes.Kafka
-                        broadcast_configuration = unpack_any(broadcast_configuration, KafkaBroadcastHandlerConfiguration)
-                    case _:
-                        raise BroadcastTypeNotHandled(str(broadcast_configuration.DESCRIPTOR))
+
+                if broadcast_configuration.Is(KafkaBroadcastHandlerConfiguration.DESCRIPTOR):
+                    self.impl_technology = BroadcastTypes.Kafka
+                    broadcast_configuration = unpack_any(broadcast_configuration, KafkaBroadcastHandlerConfiguration)
+                else:
+                    raise BroadcastTypeNotHandled(broadcast_configuration)
 
             case ConfTypes.OKS:
                 raise ConfTypeNotSupported(conf_type, 'BroadcastHandler')
+
             case ConfTypes.Json:
                 self.impl_technology = broadcast_configuration['type']
 
+            case _:
+                raise ConfTypeNotSupported(conf_type, 'BroadcastHandler')
+
+        self.implementation = None
+
         match self.impl_technology:
+            # Being a bit sloppy here, having a Kafka sender doesn't mean we want to dump everything to stdout
+            # There could be cases where we want to do other things.
+            # For now, 1 server type <-> 1 client type...
+            # Maybe in the future some sort of callback-based functionality would be preferable.
             case BroadcastTypes.Kafka:
                 from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
                 from druncschema.broadcast_pb2 import BroadcastMessage
@@ -41,3 +51,7 @@ class BroadcastHandler:
                     message_format = BroadcastMessage,
                     conf_type = conf_type,
                 )
+
+    def stop(self):
+        if self.implementation:
+            self.implementation.stop()

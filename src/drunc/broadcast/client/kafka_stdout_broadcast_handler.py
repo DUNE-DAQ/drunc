@@ -4,7 +4,7 @@ from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
 
-    def __init__(self, conf, message_format, conf_type:ConfTypes=ConfTypes.Json, topic=''):\
+    def __init__(self, conf, message_format, conf_type:ConfTypes=ConfTypes.Json, topic=''):
 
         if conf_type == ConfTypes.Json:
             self.kafka_address = conf['kafka_address']
@@ -24,7 +24,8 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         self.message_format = message_format
 
         import logging
-        self._log = logging.getLogger(f'{topic} message')
+        self._log = logging.getLogger(f'{self.topic} message')
+
         from kafka import KafkaConsumer
         self.consumer = KafkaConsumer(
             self.topic,
@@ -32,6 +33,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
             bootstrap_servers = [self.kafka_address],
             #value_deserializer = lambda m: self.message_format().ParseFromString(m)
         )
+
         self.run = True
         import threading
         self.thread = threading.Thread(
@@ -67,6 +69,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
                         else:
                             txt = decoded.data
 
+                        # everything goes to info... but I'm too lazy to fix this now
                         self._log.info(f'"{decoded.emitter.process}.{decoded.emitter.session}": "{BroadcastType.Name(decoded.type)}" {txt}')
 
                     except Exception as e:

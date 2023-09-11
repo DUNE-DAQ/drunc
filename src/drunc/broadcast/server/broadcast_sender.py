@@ -3,7 +3,7 @@ from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class BroadcastSenderTechnologyUnknown(Exception):
     def __init__(self, implementation):
-        super().__init__(f'The implementation {implementation} is not supported for the BroadcastSender')
+        super().__init__(f'The implementation {str(implementation)} is not supported for the BroadcastSender')
 
 class BroadcastSender:
     def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
@@ -75,7 +75,7 @@ class BroadcastSender:
         if self.logger:
             from druncschema.broadcast_pb2 import BroadcastType
             f = getattr(self.logger, self.broadcast_types_loglevels[btype])
-            f(f'{self.name}.{self.session} {BroadcastType.Name(btype)}: {message}')
+            f(f'"{self.name}.{self.session}": "{BroadcastType.Name(btype)}" {message}')
 
         if self.impl_technology is None:
             # nice and easy case

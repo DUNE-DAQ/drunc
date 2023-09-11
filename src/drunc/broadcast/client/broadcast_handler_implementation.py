@@ -1,3 +1,8 @@
+import abc
 
-class BroadcastHandlerImplementation:
-    pass
+
+
+class BroadcastHandlerImplementation(abc.ABC):
+    @abc.abstractmethod
+    def stop(self):
+        pass
