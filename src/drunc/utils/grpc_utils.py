@@ -18,3 +18,23 @@ def unpack_any(data, format):
     req = format()
     data.Unpack(req)
     return req
+
+
+# A simpler exception for simple error please!
+class ServerUnreachable(Exception):
+    def __init__(self, message):
+        self.message = message
+        super(ServerUnreachable, self).__init__(message)
+
+def server_is_reachable(grpc_error):
+    if hasattr(grpc_error, '_state'):
+        import grpc
+        if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
+            return False
+    return True
+
+def rethrow_if_unreachable_server(grpc_error):
+    if not server_is_reachable(grpc_error):
+        # Come on ! Such a common error and I need to do all this crap to get the address of the service, not even it it's own pre-defined message
+        raise ServerUnreachable(grpc_error._state.details) from grpc_error
+
