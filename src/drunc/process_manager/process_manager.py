@@ -45,6 +45,62 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
         self.process_store = {} # dict[str, sh.RunningCommand]
         self.boot_request = {} # dict[str, BootRequest]
+
+        from druncschema.request_response_pb2 import CommandDescription
+        # TODO, probably need to think of a better way to do this?
+        # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
+        # Not particularly pretty...
+        self.commands = [
+            CommandDescription(
+                name = 'describe',
+                data_type = ['None'],
+                help = 'Describe self (return a list of commands, the type of endpoint, the name and session).',
+                return_type = 'request_response_pb2.Description'
+            ),
+
+            CommandDescription(
+                name = 'kill',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Kill listed process from the process query input (can be multiple).',
+                return_type = 'process_manager_pb2.ProcessInstanceList'
+            ),
+
+            CommandDescription(
+                name = 'restart',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Restart the process from the process query (which must correspond to one process).',
+                return_type = 'process_manager_pb2.ProcessInstance'
+            ),
+
+            CommandDescription(
+                name = 'boot',
+                data_type = ['generic_pb2.BootRequest','None'],
+                help = 'Start a process.',
+                return_type = 'process_manager_pb2.ProcessInstance'
+            ),
+
+            CommandDescription(
+                name = 'flush',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Remove the processes from the list that are dead',
+                return_type = 'process_manager_pb2.ProcessInstanceList'
+            ),
+
+            CommandDescription(
+                name = 'logs',
+                data_type = ['process_manager_pb2.LogRequest'],
+                help = 'Returns the logs from the process ( must correspond to one process). Note this is an ASYNC function',
+                return_type = 'process_manager_pb2.LogLine'
+            ),
+
+            CommandDescription(
+                name = 'ps',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Get the status of the listed process from the process query input (can be multiple).',
+                return_type = 'process_manager_pb2.ProcessInstance'
+            ),
+        ]
+
         self.broadcast(
             message = 'ready',
             btype = BroadcastType.SERVER_READY
@@ -240,9 +296,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def _describe_impl(self, _, dummy):
         from druncschema.request_response_pb2 import Description
+        from drunc.utils.grpc_utils import pack_to_any
+
         return Description(
+            type = 'process_manager',
             name = self.name,
-            session = 'no_session',# ... list of commands, etc...
+            session = 'no_session',
+            commands = self.commands,
+            broadcast = pack_to_any(self.describe_broadcast()),
         )
 
     @abc.abstractmethod
