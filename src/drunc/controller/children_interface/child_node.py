@@ -34,6 +34,10 @@ class ChildNode(abc.ABC):
         pass
 
 
+    @abc.abstractmethod
+    def get_status(self, token):
+        pass
+
     @staticmethod
     def get_from_file(name, conf:dict, token=None):
         from drunc.utils.conf_types import ConfTypes

@@ -43,13 +43,14 @@ class gRPCChildNode(ChildNode):
                 if itry+1 == ntries:
                     raise e
                 else:
-                    self.log.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
+                    self.log.error(f'Could not connect to the controller ({self.uri}), trial {itry+1} of {ntries}')
                     from time import sleep
-                    sleep(0.5)
+                    sleep(5)
 
             except grpc.RpcError as e:
                 raise e
             else:
+                self.log.info(f'Connected to the controller ({self.uri})!')
                 break
         self.start_listening(desc.broadcast)
 
@@ -60,6 +61,21 @@ class gRPCChildNode(ChildNode):
             ConfTypes.Protobuf
         )
 
+    def get_status(self, token):
+        from druncschema.controller_pb2 import Status
+        from drunc.utils.grpc_utils import unpack_any
+
+        status = unpack_any(
+            send_command(
+                controller = self.controller,
+                token = token,
+                command = 'get_status',
+                data = None
+            ).data,
+            Status
+        )
+
+        return status
 
     def close(self):
         pass
