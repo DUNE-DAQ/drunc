@@ -1,68 +1,52 @@
 
-def convert_fsm_arguments(args):
-    from druncschema.controller_pb2 import Argument
-    # if not signature:
-    # signature = [<Parameter "some_int: int">,
-    #              <Parameter "some_str: str">,
-    #              <Parameter "some_float: float">,
-    # ]
-    retr = []
-    from inspect import Parameter
-
-    for p in args:
-        default_value = ''
-
-        t = Argument.Type.INT
-        from druncschema.generic_pb2 import string_msg, float_msg, int_msg
-        from drunc.utils.grpc_utils import pack_to_any
-
-        if p.annotation is str:
-            t = Argument.Type.STRING
-
-            if p.default != Parameter.empty:
-                default_value = pack_to_any(string_msg(value = p.default))
-
-        elif p.annotation is float:
-            t = Argument.Type.FLOAT
-
-            if p.default != Parameter.empty:
-                default_value = pack_to_any(float_msg(value = p.default))
-
-        elif p.annotation is int:
-            t = Argument.Type.INT
-
-            if p.default != Parameter.empty:
-                default_value = pack_to_any(int_msg(value = p.default))
-        else:
-            raise RuntimeError(f'Annotation {p.annotation} is not handled.')
-
-        a = Argument(
-            name = p.name,
-            presence = Argument.Presence.MANDATORY if p.default == Parameter.empty else Argument.Presence.OPTIONAL,
-            type = t,
-            help = '',
-        )
-
-        if default_value:
-            a.default_value.CopyFrom(default_value)
-
-        retr += [a]
-        print(a)
-    return retr
-
-
-def convert_fsm_transition(fsm):
+def convert_fsm_transition(transitions):
     from druncschema.controller_pb2 import FSMCommandsDescription, FSMCommandDescription
     desc = FSMCommandsDescription()
-    for t in fsm.get_executable_transitions():
+    for t in transitions:
         desc.commands.append(
             FSMCommandDescription(
-                name = t,
+                name = t.name,
                 data_type = ['controller_pb2.FSMCommand'],
-                help = t,
+                help = t.help,
                 return_type = 'controller_pb2.FSMCommandResponse',
-                arguments = convert_fsm_arguments(fsm.get_transition_arguments(t))
+                arguments = t.arguments
             )
         )
     return desc
 
+def decode_fsm_arguments(arguments, arguments_format):
+    from drunc.utils.grpc_utils import unpack_any
+    import drunc.fsm.fsm_errors as fsme
+    from druncschema.generic_pb2 import int_msg, float_msg, string_msg
+    from druncschema.controller_pb2 import Argument
+
+    def get_argument(name, arguments):
+        for n, k in arguments.items():
+            if n == name:
+                return k
+        return None
+
+
+    out_dict = {}
+    for arg in arguments_format:
+        arg_value = get_argument(arg.name, arguments)
+
+        if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
+            raise fsme.MissingArgument(arg.name, '')
+
+        if arg_value is None:
+            arg_value = arg.default_value
+
+        match arg.type:
+            case Argument.Type.INT:
+                out_dict[arg.name] = unpack_any(arg_value, int_msg).value
+            case Argument.Type.FLOAT:
+                out_dict[arg.name] = unpack_any(arg_value, float_msg).value
+            case Argument.Type.STRING:
+                out_dict[arg.name] = unpack_any(arg_value, string_msg).value
+            case _:
+                raise RuntimeError(f'Unhandled argument type {arg.type}')
+    import logging
+    l = logging.getLogger('decode_fsm_arguments')
+    l.debug(f'Parsed FSM arguments: {out_dict}')
+    return out_dict

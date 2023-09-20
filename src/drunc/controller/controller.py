@@ -36,17 +36,20 @@ class ControllerActor:
         self._token.CopyFrom(token)
         self._lock.release()
 
-    def _compare_token(self, token1, token2):
+    def compare_token(self, token1, token2):
         return token1.user_name == token2.user_name and token1.token == token2.token #!! come on protobuf, you can compare messages
 
+    def token_is_current_actor(self, token):
+        return self.compare_token(token, self._token)
+
     def surrender_control(self, token) -> None:
-        if self._compare_token(self._token, token):
+        if self.compare_token(self._token, token):
             self._update_actor(Token())
             return
         raise ctler_excpt.CannotSurrenderControl(f'Token {token} cannot release control of {self._token}')
 
     def take_control(self, token) -> None:
-        if not self._compare_token(self._token, Token()):
+        if not self.compare_token(self._token, Token()):
             raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
 
         self._update_actor(token)
@@ -302,7 +305,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             btype = BroadcastType.COMMAND_RECEIVED,
             message = f'{request.token.user_name} attempting to execute and FSM command: {command}'
         )
-
         from drunc.utils.grpc_utils import unpack_any
         from druncschema.controller_pb2 import FSMCommand
         fsm_command = unpack_any(request.data, FSMCommand)
@@ -311,26 +313,58 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}'
             self._interrupt_with_message(message, context)
 
+        if not self.actor.token_is_current_actor(request.token):
+            message = f'{request.token.user_name} is not in control (ask "{self.actor.get_user_name()}" to surrender control to execute the command)'
+            self._interrupt_with_message(message, context)
+
+        transition = self.get_fsm_transition(fsm_command.command_name)
+
+        self.logger.debug(f'The transition requested is "{str(transition)}"')
+
+        if not self.can_transition(transition):
+            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.node_operational_state()}\"'
+            self._interrupt_with_message(message, context)
+
 
         self.logger.debug(f'{command} data: {fsm_command}')
 
-        if False: # Keep this out of the way for now
+        try:
+
+            fsm_args = self.decode_fsm_arguments(fsm_command)
+
+            fsm_data = self.prepare_transition(
+                transition = transition,
+                transition_args = fsm_args,
+                transition_data = fsm_command.data,
+            )
+
+            self.propagate_transition_mark(transition)
+
             children_fsm_command = FSMCommand()
             children_fsm_command.CopyFrom(fsm_command)
+            children_fsm_command.data = fsm_data
             children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
             if fsm_command.HasField('children_nodes'):
                 self.propagate_to_list(command, children_fsm_command, request.token, fsm_command.children_nodes)
             else:
                 self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
 
-        import drunc.fsm.fsm_errors as fsm_errors
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_START,
-            message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
-        )
+            self.finish_propagating_transition_mark(transition)
 
-        try:
-            result = self.fsm.execute_transition(fsm_command.command_name, fsm_command.arguments)
+            self.start_transition_mark(transition)
+
+            self.broadcast(
+                btype = BroadcastType.COMMAND_EXECUTION_START,
+                message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
+            )
+
+            self.terminate_transition_mark(transition)
+
+            fsm_data = self.finalise_transition(
+                transition = transition,
+                transition_args = fsm_args,
+                transition_data = fsm_data
+            )
 
         except Exception as e:
             self._interrupt_with_exception(
@@ -339,13 +373,24 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 context = context
             )
 
-        result_any = pack_to_any(result)
-        response = Response(data = result_any)
-
         self.broadcast(
             btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
             message = f'Succesfully executed {command}'
         )
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
+
+        result = FSMCommandResponse(
+            successful = FSMCommandResponseCode.SUCCESSFUL,
+            command_name = fsm_command.command_name,
+        )
+
+        result_any = pack_to_any(result)
+
+        response = Response(
+            data = result_any
+        )
+
+        response.token.CopyFrom(request.token)
 
         return response
 
@@ -358,10 +403,10 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     def get_children_status(self, request:Request, context) -> Response:
         return self._generic_user_command(request, 'get_children_status', context, propagate=False)
 
-    def _get_children_status_impl(self, _, dummy) -> ChildrenStatus:
-        from drunc.controller.utils import get_status_message
+    def _get_children_status_impl(self, _, token) -> ChildrenStatus:
+        #from drunc.controller.utils import get_status_message
         return ChildrenStatus(
-            children_status = [get_status_message(n) for n in self.children_nodes]
+            children_status = [n.get_status(token) for n in self.children_nodes]
         )
 
 
@@ -403,7 +448,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     def _describe_fsm_impl(self, _, dummy):
         from drunc.fsm.utils import convert_fsm_transition
-        desc = convert_fsm_transition(self.fsm)
+        desc = convert_fsm_transition(self.get_fsm_transitions())
         desc.type = 'controller'
         desc.name = self.name
         desc.session = self.session
