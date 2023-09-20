@@ -185,10 +185,10 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
     ctx.obj.log.info('You are in control.')
 
 
-@controller_shell.command('man')
+@controller_shell.command('describe')
 @click.option("--command", type=str, default='.*')#, help='Which command you are interested')
 @click.pass_obj
-def man(obj:ControllerContext, command) -> None:
+def describe(obj:ControllerContext, command) -> None:
     from druncschema.request_response_pb2 import Description
     from druncschema.controller_pb2 import FSMCommandsDescription, Argument
     desc = Description()
@@ -237,7 +237,7 @@ def man(obj:ControllerContext, command) -> None:
             elif arg.type == Argument.Type.FLOAT:
                 d = str(unpack_any(arg.default_value, float_msg).value)
 
-            elif type == Argument.Type.INT:
+            elif arg.type == Argument.Type.INT:
                 d = str(unpack_any(arg.default_value, int_msg).value)
 
             else:
@@ -297,47 +297,61 @@ def status(obj:ControllerContext) -> None:
         ).data,
         Status
     )
-    def format_bool(b):
-        return 'Y' if b else 'N'
+
+    def format_bool(b, format=['dark_green', 'bold white on red'], false_is_good = False):
+        index_true = 0 if not false_is_good else 1
+        index_false = 1 if not false_is_good else 0
+
+        return f'[{format[index_true]}]Yes[/]' if b else f'[{format[index_false]}]No[/]'
+
     from rich.table import Table
     t = Table(title=f'{status.name} status')
-    t.add_column('name')
-    t.add_column('ping')
-    t.add_column('state')
-    t.add_column('in_error')
-    t.add_column('included')
-    t.add_row(status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
-    if False:
-        statuses = unpack_any(
-            send_command(
-                controller = obj.controller,
-                token = obj.token,
-                command = 'get_children_status',
-                data = None
-            ).data,
-            ChildrenStatus
+    t.add_column('Name')
+    t.add_column('State')
+    t.add_column('In error', justify='center')
+    t.add_column('Included', justify='center')
+    t.add_row(
+        status.name,
+        status.state,
+        format_bool(status.in_error, false_is_good = True),
+        format_bool(status.included),
+    )
+
+    statuses = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'get_children_status',
+            data = None
+        ).data,
+        ChildrenStatus
+    )
+
+    first_one = "└── "
+    first_many = "├── "
+    next = "├── "
+    last = "└── "
+
+    how_many = len(statuses.children_status)
+
+    for i, c_status in enumerate(statuses.children_status):
+        first_column = ''
+        if i==0 and how_many == 1:
+            first_column = first_one+c_status.name
+        elif i==0:
+            first_column = first_many+c_status.name
+        elif i == how_many-1:
+            first_column = last+c_status.name
+        else:
+            first_column = next+c_status.name
+
+        t.add_row(
+            first_column,
+            c_status.state,
+            format_bool(c_status.in_error, false_is_good=True),
+            format_bool(c_status.included)
         )
-
-        first_one = "└── "
-        first_many = "├── "
-        next = "├── "
-        last = "└── "
-
-
-        how_many = len(statuses.children_status)
-
-        for i, c_status in enumerate(statuses.children_status):
-            if i==0 and how_many == 1:
-                t.add_row(first_one+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
-            elif i==0:
-                t.add_row(first_many+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
-            elif i == how_many-1:
-                t.add_row(last+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
-            else:
-                t.add_row(next+status.name, format_bool(status.ping), status.state, format_bool(status.in_error), format_bool(status.included))
-
     obj.print(t)
-
 
 
 @controller_shell.command('take-control')
@@ -388,25 +402,50 @@ def who_is_in_charge(obj:ControllerContext) -> None:
 @click.argument('command', type=str)
 @click.argument('arguments', type=str, nargs=-1)
 @click.pass_obj
-def some_command(obj:ControllerContext, command, arguments) -> None:
+def fsm(obj:ControllerContext, command, arguments) -> None:
     from druncschema.controller_pb2 import FSMCommand
-    args = {}
+
     if len(arguments) % 2 != 0:
-        raise RuntimeError('Arguments are pairs of key value!')
+        raise RuntimeError('Arguments are pairs of key-value!')
 
-    for i in range(int(len(arguments)/2)):
-        args[arguments[i]] = arguments[i+1]
+    from druncschema.controller_pb2 import FSMCommandsDescription, Argument
+    desc = unpack_any(
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'describe_fsm',
+            data = None
+        ).data,
+        FSMCommandsDescription
+    )
 
-    data = FSMCommand(
-        command_name = command,
-        arguments = args,
-    )
-    send_command(
-        controller = obj.controller,
-        token = obj.token,
-        command = 'execute_fsm_command',
-        data = data
-    )
+    from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
+
+    command_desc = search_fsm_command(command, desc.commands)
+    if command_desc is None:
+        obj.log.error(f'Command "{command}" does not exist, or is not accessible right now')
+        return
+
+    keys = arguments[::2]
+    values = arguments[1::2]
+    arguments_dict = {keys[i]:values[i] for i in range(len(keys))}
+    try:
+        formated_args = validate_and_format_fsm_arguments(arguments_dict, command_desc.arguments)
+        data = FSMCommand(
+            command_name = command,
+            arguments = formated_args,
+        )
+        send_command(
+            controller = obj.controller,
+            token = obj.token,
+            command = 'execute_fsm_command',
+            data = data
+        )
+    except ArgumentException as ae:
+        obj.print(str(ae))
+    except Exception as e:
+        raise e
+
 
 
 
