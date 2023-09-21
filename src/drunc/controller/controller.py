@@ -318,7 +318,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             self._interrupt_with_message(message, context)
 
         if not self.node_is_included():
-            message = f'{self.name} is not included, not executing the FSM command {fsm_command.command_name}'.capitalize
+            message = f'{self.name} is not included, not executing the FSM command {fsm_command.command_name}'
             self._interrupt_with_message(message, context)
 
         transition = self.get_fsm_transition(fsm_command.command_name)
