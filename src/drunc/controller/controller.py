@@ -317,6 +317,10 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             message = f'{request.token.user_name} is not in control (ask "{self.actor.get_user_name()}" to surrender control to execute the command)'
             self._interrupt_with_message(message, context)
 
+        if not self.node_is_included():
+            message = f'{self.name} is not included, not executing the FSM command {fsm_command.command_name}'.capitalize
+            self._interrupt_with_message(message, context)
+
         transition = self.get_fsm_transition(fsm_command.command_name)
 
         self.logger.debug(f'The transition requested is "{str(transition)}"')
