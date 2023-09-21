@@ -1,44 +1,58 @@
-from typing import Optional, Dict, List
-
 
 class ControllerConfiguration:
     def __init__(self, configuration_loc:str):
         from logging import getLogger
         self.log = getLogger("controller-configuration")
-        self.configuration_loc = configuration_loc
-        self.data = self.validate_configuration_location(configuration_loc)
-        self.parse_configuration(self.data)
+
+        from urllib.parse import urlparse
+        self.cfg_loc = urlparse(configuration_loc)
+
+        self.cfg_type = self.validate_configuration_location(self.cfg_loc)
+
+        self.data = self.parse_configuration(self.cfg_loc)
+
         self.log.info('Configured')
 
-    def validate_configuration_location(self, configuration_loc:str) -> dict:
-        from urllib.parse import urlparse
-        loc = urlparse(configuration_loc)
 
-        if loc.scheme == 'file':
+    def validate_configuration_location(self, cfg_loc) -> dict:
+
+        if cfg_loc.scheme == 'file':
             from os.path import exists
-            if not exists(loc.netloc+loc.path):
-                raise RuntimeError(f'Location {loc.netloc+loc.path} is empty!')
+            if not exists(cfg_loc.netloc+cfg_loc.path):
+                raise RuntimeError(f'Location {cfg_loc.netloc+cfg_loc.path} is empty!')
 
+        elif cfg_loc.scheme == 'oks':
+            raise RuntimeError(f'Configuration scheme invalid {cfg_loc.scheme}')
+
+        else:
+            raise RuntimeError(f'Configuration scheme invalid {cfg_loc.scheme}')
+
+        return cfg_loc.scheme
+
+    def parse_configuration(self, cfg_loc) -> None:
+
+        if cfg_loc.scheme == 'file':
             conf_data = {}
             try:
-                with open(loc.netloc+loc.path) as f:
+                with open(cfg_loc.netloc+cfg_loc.path) as f:
                     import json
                     conf_data = json.loads(f.read())
                     return conf_data
             except Exception as e:
-                raise RuntimeError(f'Couldn\'t parse configuration file {loc.netloc+loc.path}, cause {str(e)}') from e
+                raise RuntimeError(f'Couldn\'t parse configuration file {cfg_loc.netloc+cfg_loc.path}, cause {str(e)}') from e
+
+        elif cfg_loc.scheme == 'oks':
+            raise RuntimeError(f'Configuration scheme invalid {cfg_loc.scheme}')
 
         else:
-            raise RuntimeError(f'Location scheme invalid {loc.scheme}')
+            raise RuntimeError(f'Configuration scheme invalid {cfg_loc.scheme}')
 
 
-    def parse_configuration(self, conf_data:dict) -> None:
-        self.children_controllers = conf_data.get('children_controllers', [])
-        self.applications = conf_data.get('apps', [])
-        self.broadcast_receiving_port = conf_data.get('broadcast_receiving_port', 50051)
+    def get(self, obj, default=None):
 
-    def get_authoriser_configuration(self):
-        return self.data['authoriser']
+        if self.cfg_type == 'file':
+            return self.data.get(obj, default)
 
-    def get_broadcaster_configuration(self):
-        return self.data['broadcaster']
+        elif self.cfg_type == 'oks':
+            raise RuntimeError(f'Configuration type invalid {self.cfg_type}')
+

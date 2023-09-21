@@ -20,50 +20,21 @@ def unpack_any(data, format):
     return req
 
 
-def send_command(controller, token, command:str, data=None, paths=[], recursive=False, rethrow=False):
-    from druncschema.request_response_pb2 import Request
-    from druncschema.token_pb2 import Token
-    import grpc
-    from google.protobuf import any_pb2
+# A simpler exception for simple error please!
+class ServerUnreachable(Exception):
+    def __init__(self, message):
+        self.message = message
+        super(ServerUnreachable, self).__init__(message)
 
-    import logging
-    log = logging.getLogger("send_command")
-    # Grab the command from the controller stub in the context
-    # Add the token to the data (which can be of any protobuf type)
-    # Send the command to the controller
+def server_is_reachable(grpc_error):
+    if hasattr(grpc_error, '_state'):
+        import grpc
+        if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
+            return False
+    return True
 
-    if not controller:
-        raise RuntimeError('No controller initialised')
+def rethrow_if_unreachable_server(grpc_error):
+    if not server_is_reachable(grpc_error):
+        # Come on ! Such a common error and I need to do all this crap to get the address of the service, not even it it's own pre-defined message
+        raise ServerUnreachable(grpc_error._state.details) from grpc_error
 
-    cmd = getattr(controller, command) # this throws if the command doesn't exist
-
-    token = Token()
-    token.CopyFrom(token) # some protobuf magic
-
-    try:
-        request = Request(
-            token = token
-        )
-
-        if data:
-            data_detail = any_pb2.Any()
-            data_detail.Pack(data)
-            request.data.CopyFrom(data_detail)
-
-        log.debug(f'Sending: {command} with {request}')
-
-        response = cmd(request)
-
-    except grpc.RpcError as e:
-        log.error(f'Error sending command {command}: {e.code().name}')
-        log.error(e)
-        try:
-            log.error(e.details())
-        except:
-            pass
-
-        if rethrow:
-            raise e
-        return None
-
-    return response

@@ -23,8 +23,8 @@ def process_manager_cli(pm_conf:str, loglevel):
         pm_conf_data = json.loads(f.read())
 
     from drunc.process_manager.process_manager import ProcessManager
-    pm = ProcessManager.get(pm_conf_data)
-
+    pm = ProcessManager.get(pm_conf_data, name='process_manager')
+    loop = asyncio.get_event_loop()
 
     async def serve(address:str) -> None:
         if not address:
@@ -50,14 +50,14 @@ def process_manager_cli(pm_conf:str, loglevel):
         _cleanup_coroutines.append(server_shutdown())
         await server.wait_for_termination()
 
-    loop = asyncio.get_event_loop()
 
     try:
         loop.run_until_complete(
             serve(pm_conf_data['command_address'])
         )
     except Exception as e:
-        console.print_exception()
+        import os
+        console.print_exception(width=os.get_terminal_size()[0])
     finally:
         loop.run_until_complete(*_cleanup_coroutines)
         loop.close()

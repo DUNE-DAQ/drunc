@@ -6,4 +6,7 @@ class BroadcastSenderImplementation(abc.ABC):
     def _send(self, bm:BroadcastMessage):
         pass
 
+    @abc.abstractmethod
+    def describe_broadcast(self):
+        pass
 

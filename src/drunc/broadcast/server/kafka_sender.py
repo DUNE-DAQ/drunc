@@ -1,26 +1,43 @@
 
 from druncschema.broadcast_pb2 import BroadcastMessage
 from drunc.broadcast.server.broadcast_sender_implementation import BroadcastSenderImplementation
+from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class KafkaSender(BroadcastSenderImplementation):
-    def __init__(self, conf, name):
+    def __init__(self, conf, topic, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
+        super(KafkaSender, self).__init__(**kwargs)
         import logging
-        self._log = logging.getLogger(f"{name}_KafkaSender")
+        self._log = logging.getLogger(f"{topic}_KafkaSender")
 
         from kafka import KafkaProducer
-        self.name = name
-        self.kafka_address = conf['kafka_address']
-        self.kafka = KafkaProducer(
-            bootstrap_servers = [self.kafka_address],
-            client_id = self.name,
-        )
-        self.publish_timeout = conf['publish_timeout']
+        from kafka import errors as Errors
+        self.topic = topic
+
+        match conf_type:
+            case ConfTypes.Json:
+                self.kafka_address = conf['kafka_address']
+                self.publish_timeout = conf['publish_timeout']
+            case _:
+                ConfTypeNotSupported(conf_type, 'KafkaSender')
+
+        try:
+            self.kafka = KafkaProducer(
+                bootstrap_servers = [self.kafka_address],
+                client_id = 'run_control',
+            )
+        except Errors.NoBrokersAvailable as e:
+            t = f'{self.kafka_address} does not seem to point to a kafka broker.'
+            self._log.critical(t)
+            raise RuntimeError(t) from e
+
+        self._log.info(f'Broadcasting to Kafka ({self.kafka_address}) client_id: "run_control", topic: "{self.topic}"')
+
 
     def _send(self, bm:BroadcastMessage):
         from kafka.errors import KafkaError
 
         future = self.kafka.send(
-            self.name, bm.SerializeToString()
+            self.topic, bm.SerializeToString()
         )
 
         try:
@@ -29,10 +46,16 @@ class KafkaSender(BroadcastSenderImplementation):
             # Decide what to do if produce request failed...
             self._log.error(f'Kafka exception sending message {bm}: {str(e)}')
             pass
-        except Exeception as e:
+        except Exception as e:
             # Decide what to do if produce request failed...
             self._log.error(f'Unhandled exception sending message {bm}: {str(e)}')
             pass
 
         self._log.debug(f'{record_metadata} published')
 
+    def describe_broadcast(self):
+        from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
+        return KafkaBroadcastHandlerConfiguration(
+            topic = self.topic,
+            kafka_address = self.kafka_address,
+        )

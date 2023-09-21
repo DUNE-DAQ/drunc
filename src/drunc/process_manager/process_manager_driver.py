@@ -1,5 +1,5 @@
 import asyncio
-from druncschema.request_response_pb2 import Request, Response
+from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.token_pb2 import Token
@@ -12,13 +12,13 @@ class ConfigurationTypeNotSupported(Exception):
         super().__init__(f'{str(conf_type)} is not supported by this process manager')
 
 class ProcessManagerDriver:
-    def __init__(self, pm_conf:dict, token):
+    def __init__(self, address:str, token):
         import logging
         self._log = logging.getLogger('ProcessManagerDriver')
         import grpc
         self.token = Token()
         self.token.CopyFrom(token)
-        self.pm_address = pm_conf['command_address']
+        self.pm_address = address
         self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
         self.pm_stub = ProcessManagerStub(self.pm_channel)
 
@@ -27,7 +27,7 @@ class ProcessManagerDriver:
         token = Token()
         token.CopyFrom(self.token)
         data = Any()
-        if payload:
+        if payload is not None:
             data.Pack(payload)
 
         if payload:
@@ -144,7 +144,9 @@ class ProcessManagerDriver:
                     ]
 
             old_env = boot_configuration['executables'][app['type']]['environment']
-            new_env = {}
+            new_env = {
+                'SESSION': session
+            }
             for k, v in old_env.items():
                 if v == 'getenv':
                     import os
@@ -155,7 +157,7 @@ class ProcessManagerDriver:
                         self._log.warning(f'Variable {k} is not in the environment, so won\'t be set.')
 
                 else:
-                    new_env[k] = v.format(**app)
+                    new_env[k] = v.format(**app) if isinstance(v, str) else str(v)
 
             yield BootRequest(
                 process_description = ProcessDescription(
@@ -214,3 +216,11 @@ class ProcessManagerDriver:
         )
         pi = unpack_any(answer.data, ProcessInstance)
         return pi
+
+    async def describe(self) -> Description:
+        r = self._create_request(payload = None)
+        answer = await self.pm_stub.describe(
+            r
+        )
+        desc = unpack_any(answer.data, Description)
+        return desc
