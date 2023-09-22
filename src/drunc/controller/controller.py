@@ -229,15 +229,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             thread.join()
 
 
-    def _should_execute_on_self(self, node_path) -> bool:
-        if node_path == []:
-            return True
-
-        for node in node_path:
-            if node == [self.name]:
-                return True
-        return False
-
     def _generic_user_command(self, request:Request, command:str, context, propagate=False):
         """
         A generic way to execute the controller commands from a user.
@@ -249,16 +240,16 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         """
         self.broadcast(
             btype = BroadcastType.COMMAND_RECEIVED,
-            message = f'{request.token.user_name} attempting to execute {command}'
+            message = f'"{request.token.user_name}" attempting to execute "{command}"'
         )
 
         if not self.authoriser.is_authorised(request.token, command):
-            message = f'{request.token.user_name} is not authorised to execute {command}'
+            message = f'"{request.token.user_name}" is not authorised to execute "{command}"'
             self._interrupt_with_message(message, context)
 
 
         data = request.data if request.data else None
-        self.logger.debug(f'{command} data: {request.data}')
+        self.logger.debug(f'"{command}" data: {request.data}')
 
 
         if propagate:
@@ -269,10 +260,18 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             token.CopyFrom(request.token)
             self.broadcast(
                 btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'Executing {command} (upon request from {request.token.user_name})',
+                message = f'Executing "{command}" (upon request from "{request.token.user_name}")',
             )
             result = getattr(self, "_"+command+"_impl")(data, token)
 
+            result_any = pack_to_any(result)
+            response = Response(data = result_any)
+
+        except ctler_excpt.ControllerException as e:
+            self._interrupt_with_message(
+                str(e),
+                context
+            )
         except Exception as e:
             self._interrupt_with_exception(
                 ex_stack = traceback.format_exc(),
@@ -280,12 +279,9 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 context = context
             )
 
-        result_any = pack_to_any(result)
-        response = Response(data = result_any)
-
         self.broadcast(
             btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            message = f'Succesfully executed {command}'
+            message = f'Succesfully executed "{command}"'
         )
 
         return response
@@ -303,22 +299,22 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         """
         self.broadcast(
             btype = BroadcastType.COMMAND_RECEIVED,
-            message = f'{request.token.user_name} attempting to execute and FSM command: {command}'
+            message = f'"{request.token.user_name}" attempting to execute and FSM command: "{command}"'
         )
         from drunc.utils.grpc_utils import unpack_any
         from druncschema.controller_pb2 import FSMCommand
         fsm_command = unpack_any(request.data, FSMCommand)
 
         if not self.authoriser.is_authorised(request.token, 'fsm'):
-            message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}'
+            message = f'"{request.token.user_name}" is not authorised to execute "{fsm_command.command_name}"'
             self._interrupt_with_message(message, context)
 
         if not self.actor.token_is_current_actor(request.token):
-            message = f'{request.token.user_name} is not in control (ask "{self.actor.get_user_name()}" to surrender control to execute the command)'
+            message = f'"{request.token.user_name}" is not in control (ask "{self.actor.get_user_name()}" to surrender control to execute the command)'
             self._interrupt_with_message(message, context)
 
         if not self.node_is_included():
-            message = f'{self.name} is not included, not executing the FSM command {fsm_command.command_name}'
+            message = f'"{self.name}" is not included, not executing the FSM command "{fsm_command.command_name}"'
             self._interrupt_with_message(message, context)
 
         transition = self.get_fsm_transition(fsm_command.command_name)
@@ -359,7 +355,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
             self.broadcast(
                 btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
+                message = f'Executing "{fsm_command.command_name}" (upon request from "{request.token.user_name}")',
             )
 
             self.terminate_transition_mark(transition)
@@ -370,31 +366,38 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 transition_data = fsm_data
             )
 
+            self.broadcast(
+                btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
+                message = f'Succesfully executed "{command}"'
+            )
+            from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
+
+            result = FSMCommandResponse(
+                successful = FSMCommandResponseCode.SUCCESSFUL,
+                command_name = fsm_command.command_name,
+            )
+
+            result_any = pack_to_any(result)
+
+            response = Response(
+                data = result_any
+            )
+
+            response.token.CopyFrom(request.token)
+
+
+        except ctler_excpt.ControllerException as e:
+            self._interrupt_with_message(
+                str(e),
+                context
+            )
+
         except Exception as e:
             self._interrupt_with_exception(
                 ex_stack = traceback.format_exc(),
                 ex_text = str(e),
                 context = context
             )
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            message = f'Succesfully executed {command}'
-        )
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
-
-        result = FSMCommandResponse(
-            successful = FSMCommandResponseCode.SUCCESSFUL,
-            command_name = fsm_command.command_name,
-        )
-
-        result_any = pack_to_any(result)
-
-        response = Response(
-            data = result_any
-        )
-
-        response.token.CopyFrom(request.token)
 
         return response
 
@@ -472,7 +475,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     def _include_impl(self, _, token) -> PlainText:
         self.include_node()
-        return PlainText(text = f'{self.name} included')
+        return PlainText(text = f'"{self.name}" included')
 
 
     def exclude(self, request:Request, context) -> Response:
@@ -480,7 +483,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     def _exclude_impl(self, _, token) -> PlainText:
         self.exclude_node()
-        return PlainText(text = f'{self.name} excluded')
+        return PlainText(text = f'"{self.name}" excluded')
 
 
     ##########################################
@@ -492,7 +495,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     def _take_control_impl(self, _, token) -> PlainText:
         self.actor.take_control(token)
-        return PlainText(text = f'{token.user_name} took control')
+        return PlainText(text = f'"{token.user_name}" took control')
 
 
     def surrender_control(self, request:Request, context) -> Response:
@@ -501,7 +504,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     def _surrender_control_impl(self, _, token) -> PlainText:
         user = self.actor.get_user_name()
         self.actor.surrender_control(token)
-        return PlainText(text = f'{user} surrendered control')
+        return PlainText(text = f'"{user}" surrendered control')
 
 
     def who_is_in_charge(self, request:Request, context) -> Response:
