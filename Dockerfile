@@ -1,5 +1,5 @@
 # Use Python 3.10.4-bullseye as a base image
-FROM python:3.10.4-bullseye AS builder
+FROM python:3.10.4-bullseye
 
 # Define shell
 SHELL ["/bin/bash", "-c"]
@@ -10,18 +10,24 @@ RUN apt update && apt install -y --no-install-recommends \
     openssh-server \
     openssh-client
 
-# Branch applied
 # Clone the repository and install the required Python packages
-RUN git clone -b plasorak/better-process-queries https://github.com/DUNE-DAQ/drunc.git && \
+RUN cd / && \
+    git clone -b develop https://github.com/DUNE-DAQ/druncschema.git && \
+    cd druncschema && \
+    pip install -r requirements.txt && \
+    pip install .
+
+RUN cd / && \
+    git clone -b develop https://github.com/DUNE-DAQ/drunc.git && \
     cd drunc && \
     pip install -r requirements.txt && \
     pip install .
 
-# Start a new build stage with Python 3.10.4-bullseye as the base image
-FROM python:3.10.4-bullseye
+# # Start a new build stage with Python 3.10.4-bullseye as the base image
+# FROM python:3.10.4-bullseye
 
-# Copy everything from the builder stage
-COPY --from=builder / /
+# # Copy everything from the builder stage
+# COPY --from=builder / /
 
 # Generate root ssh key
 RUN mkdir -p /root/.ssh && \
@@ -33,13 +39,14 @@ RUN echo "PermitRootLogin without-password" >> /etc/ssh/sshd_config && \
     echo "StrictHostKeyChecking no" >> /etc/ssh/ssh_config && \
     echo "UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config
 
-# Define environment variables
-ENV DRUNC_DIR=/drunc
-ENV DRUNC_DATA=/drunc/data
+# # Define environment variables
+# ENV DRUNC_DIR=/drunc
+# ENV DRUNC_DATA=/drunc/data
 
 # Expose SSH default port
 EXPOSE 22
+EXPOSE 10054
 
 # Run SSHD in the background and drunc-process-manager in the foreground
-ENTRYPOINT service ssh start && drunc-process-manager --loglevel debug
+ENTRYPOINT service ssh start && drunc-process-manager --loglevel debug /drunc/data/process-manager.json
 
