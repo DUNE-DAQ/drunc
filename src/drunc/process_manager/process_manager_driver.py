@@ -9,7 +9,9 @@ from drunc.utils.grpc_utils import unpack_any
 class ConfigurationTypeNotSupported(Exception):
     def __init__(self, conf_type):
         self.type = conf_type
-        super().__init__(f'{str(conf_type)} is not supported by this process manager')
+        super(ConfigurationTypeNotSupported, self).__init__(
+            f'{str(conf_type)} is not supported by this process manager'
+        )
 
 class ProcessManagerDriver:
     def __init__(self, address:str, token):
@@ -56,10 +58,142 @@ class ProcessManagerDriver:
             case _:
                 raise ConfigurationTypeNotSupported(conf_type)
 
+
+
+    def generate_app_controller_conf(self, children, output_file):
+        data = {
+            "children_controllers": [],
+            "apps": children,
+
+            "broadcaster": {
+                "type": "kafka",
+                "kafka_address": "localhost:30092",
+                "publish_timeout": 2
+            },
+
+            "statefulnode": {
+                "included": True,
+                "fsm":{
+                    "states": [
+                        "initial", "configured", "ready", "running",
+                        "paused", "dataflow_drained", "trigger_sources_stopped", "error"
+                    ],
+                    "initial_state": "initial",
+                    "transitions": [
+                        { "trigger": "conf",                 "source": "initial",                 "dest": "configured"             },
+                        { "trigger": "start",                "source": "configured",              "dest": "ready"                  },
+                        { "trigger": "enable_triggers",      "source": "ready",                   "dest": "running"                },
+                        { "trigger": "disable_triggers",     "source": "running",                 "dest": "ready"                  },
+                        { "trigger": "drain_dataflow",       "source": "ready",                   "dest": "dataflow_drained"       },
+                        { "trigger": "stop_trigger_sources", "source": "dataflow_drained",        "dest": "trigger_sources_stopped"},
+                        { "trigger": "stop",                 "source": "trigger_sources_stopped", "dest": "configured"             },
+                        { "trigger": "scrap",                "source": "configured",              "dest": "initial"                }
+                    ],
+                    "command_sequences": {
+                        "start_run": [
+                            {"cmd": "conf",            "optional": True },
+                            {"cmd": "start",           "optional": False},
+                            {"cmd": "enable_triggers", "optional": False}
+                        ],
+                        "stop_run" : [
+                            {"cmd": "disable_triggers",     "optional": True },
+                            {"cmd": "drain_dataflow",       "optional": False},
+                            {"cmd": "stop_trigger_sources", "optional": False},
+                            {"cmd": "stop",                 "optional": False}
+                        ],
+                        "shutdown" : [
+                            {"cmd": "disable_triggers",     "optional": True },
+                            {"cmd": "drain_dataflow",       "optional": True },
+                            {"cmd": "stop_trigger_sources", "optional": True },
+                            {"cmd": "stop",                 "optional": True },
+                            {"cmd": "scrap",                "optional": True }
+                        ]
+                    }
+                }
+            }
+        }
+        import json
+        json.dump(open(output_file, 'w'))
+
+
+
     async def _convert_daqconf_to_boot_request(self, daqconf_dir, user, session) -> BootRequest:
-        from drunc.process_manager.utils import ConfTypes
-        raise ConfigurationTypeNotSupported(ConfTypes.DAQCONF)
-        yield None
+        from pathlib import Path
+        boot_configuration = {}
+        import os
+        daqconf_fullpath_dir = Path(os.path.abspath(daqconf_dir))
+        with open(Path(daqconf_fullpath_dir)/'boot.json') as f:
+            import json
+            boot_configuration = json.loads(f.read())
+
+        env = boot_configuration['env']
+        exec = boot_configuration['exec']
+        rte = boot_configuration.get('rte_script')
+        hosts = boot_configuration['hosts-ctrl']
+        metadata_app = ProcessMetadata(
+            user = user,
+            session = session,
+        )
+        # metadata_svc = ProcessMetadata(
+        #     user = user,
+        # )
+
+        from drunc.process_manager.boot_json_parser import process_exec, parse_configuration
+        from drunc.utils.utils import now_str
+        parsed_config_dir = Path(str(daqconf_fullpath_dir)+'_'+now_str(True))
+        if boot_configuration['apps']:
+            parse_configuration(
+                input_dir = daqconf_fullpath_dir,
+                output_dir = parsed_config_dir,
+            )
+
+        for svc_name, svc_data in boot_configuration.get('services', {}).items():
+            raise RuntimeError('Services cannot be started by drunc (yet)')
+
+        app_addresses = []
+
+        for app_name, app_data in boot_configuration['apps'].items():
+            app_addresses += [f'{hosts[app_name]}:{app_data["port"]}']
+            br = process_exec(
+                name = app_name,
+                data = app_data,
+                rte = rte,
+                env = env,
+                exec = exec,
+                hosts = hosts,
+                session = session,
+                conf = f'file://{parsed_config_dir}',
+            )
+            br.process_description.metadata.CopyFrom(metadata_app)
+            br.process_description.metadata.name = app_name
+            yield br
+
+        ctrler_conf = parsed_config_dir/'controller.json',
+
+        self.generate_app_controller_conf(
+            children = app_addresses,
+            output_dir = ctrler_conf,
+        )
+
+
+        yield BootRequest(
+            process_description = ProcessDescription(
+                metadata = ProcessMetadata(
+                    user = user,
+                    session = session,
+                    name = 'controller',
+                ),
+                executable_and_arguments = [
+
+                ],
+                env = new_env
+            ),
+            process_restriction = ProcessRestriction(
+                allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
+            )
+        )
+
+
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
         from drunc.process_manager.oks_parser import process_segment
