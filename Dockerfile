@@ -18,7 +18,7 @@ RUN cd / && \
     pip install .
 
 RUN cd / && \
-    git clone -b develop https://github.com/DUNE-DAQ/drunc.git && \
+    git clone -b ui-development https://github.com/DUNE-DAQ/drunc.git && \
     cd drunc && \
     pip install -r requirements.txt && \
     pip install .
