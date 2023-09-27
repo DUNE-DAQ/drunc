@@ -1,13 +1,11 @@
 {
-    "children_controllers": [
+    "children": [
         {
             "name": "controller0",
             "type": "grpc",
             "uri": "localhost:3601"
         }
     ],
-
-    "apps": [],
 
     "authoriser": {
         "type": "dummy"
