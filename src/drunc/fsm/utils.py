@@ -17,7 +17,7 @@ def convert_fsm_transition(transitions):
 def decode_fsm_arguments(arguments, arguments_format):
     from drunc.utils.grpc_utils import unpack_any
     import drunc.fsm.fsm_errors as fsme
-    from druncschema.generic_pb2 import int_msg, float_msg, string_msg
+    from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from druncschema.controller_pb2 import Argument
 
     def get_argument(name, arguments):
@@ -44,6 +44,8 @@ def decode_fsm_arguments(arguments, arguments_format):
                 out_dict[arg.name] = unpack_any(arg_value, float_msg).value
             case Argument.Type.STRING:
                 out_dict[arg.name] = unpack_any(arg_value, string_msg).value
+            case Argument.Type.BOOL:
+                out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise RuntimeError(f'Unhandled argument type {arg.type}')
     import logging

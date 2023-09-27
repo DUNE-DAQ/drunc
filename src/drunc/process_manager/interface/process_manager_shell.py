@@ -91,14 +91,21 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
 
 @process_manager_shell.command('boot')
 @click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @accept_configuration_type()
 @click.argument('boot-configuration', type=click.Path(exists=True))
 @click.argument('session-name', type=str)
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, user:str, conf_type:str, session_name:str, boot_configuration:str) -> None:
+async def boot(obj:PMContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str) -> None:
 
-    results = obj.pmd.boot(boot_configuration, user, session_name, conf_type)
+    results = obj.pmd.boot(
+        conf = boot_configuration,
+        conf_type = conf_type,
+        user = user,
+        session_name = session_name,
+        log_level = log_level
+    )
     async for result in results:
         obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 
@@ -123,9 +130,10 @@ async def flush(obj:PMContext, query:ProcessQuery) -> None:
 @process_manager_shell.command('logs')
 @add_query_options(at_least_one=True)
 @click.option('--how-far', type=int, default=100, help='How many lines one wants')
+@click.option('--grep', type=str, default=None)
 @click.pass_obj
 @coroutine
-async def logs(obj:PMContext, how_far:int, query:ProcessQuery) -> None:
+async def logs(obj:PMContext, how_far:int, grep:str, query:ProcessQuery) -> None:
     from druncschema.process_manager_pb2 import LogRequest, LogLine
 
     log_req = LogRequest(
@@ -148,18 +156,24 @@ async def logs(obj:PMContext, how_far:int, query:ProcessQuery) -> None:
         if line[-1] == '\n':
             line = line[:-1]
 
+        if grep is not None and grep not in line:
+            continue
+
         line = escape(line)
 
-        console_print = True
-        for c in ['[',']']: # If these are here, it probably means that this is already a rich formatted string
-            if c in line:
-                console_print = False
-                break
+        if grep is not None:
+            line = line.replace(grep, f'[u]{grep}[/]')
 
-        if console_print:
-            obj.print(line)
-        else:
-            print(line)
+        # console_print = True
+        # for c in ['[',']']: # If these are here, it probably means that this is already a rich formatted string
+        #     if c in line:
+        #         console_print = False
+        #         break
+
+        # if console_print:
+        obj.print(line)
+        # else:
+        #     print(line)
 
     obj.rule(f'End')
 

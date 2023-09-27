@@ -98,6 +98,7 @@ class BroadcastSender:
 
         self.implementation._send(bm)
 
+    # def broadcast_stacktrace()?
 
     def _interrupt_with_message(self, message, context):
         from druncschema.generic_pb2 import PlainText

@@ -16,7 +16,7 @@ class MissingArgument(ArgumentException):
 class DuplicateArgument(ArgumentException):
     def __init__(self, argument_name):
         message = f'Duplicate argument: "{argument_name}"'
-        super(MissingArgument, self).__init__(message)
+        super(DuplicateArgument, self).__init__(message)
 
 class InvalidArgumentType(ArgumentException):
     def __init__(self, argument_name, value, expected_type):
@@ -26,7 +26,7 @@ class InvalidArgumentType(ArgumentException):
 class UnhandledArgumentType(ArgumentException):
     def __init__(self, argument_name, argument_type):
         message = f'Unhandled argument type for argument: "{argument_name}" Type: {argument_type}'
-        super(MissingArgument, self).__init__(message)
+        super(UnhandledArgumentType, self).__init__(message)
 
 class UnhandledArguments(ArgumentException):
     def __init__(self, arguments_and_values):
@@ -36,7 +36,7 @@ class UnhandledArguments(ArgumentException):
 
 def validate_and_format_fsm_arguments(arguments, arguments_desc):
     from druncschema.controller_pb2 import Argument
-    from druncschema.generic_pb2 import int_msg, float_msg, string_msg
+    from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from drunc.utils.grpc_utils import pack_to_any
     out_dict = {}
 
@@ -83,8 +83,21 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
                 value = string_msg(value=value)
 
 
+            case Argument.Type.BOOL:
+                bvalue = value.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
+
+                try:
+                    value = bool_msg(value=bvalue)
+                except Exception as e:
+                    raise InvalidArgumentType(aname, value, atype) from e
+
+
             case _:
-                raise UnhandledArgumentType(argument_desc.name, argument_desc.type)
+                try:
+                    pretty_type = Argument.Type.Name(argument_desc.type)
+                except:
+                    pretty_type = argument_desc.type
+                raise UnhandledArgumentType(argument_desc.name,  pretty_type)
 
 
         out_dict[aname] = pack_to_any(value)
@@ -93,3 +106,27 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
         raise UnhandledArguments(arguments_left)
 
     return out_dict
+
+
+
+
+def format_bool(b, format=['dark_green', 'bold white on red'], false_is_good = False):
+    index_true = 0 if not false_is_good else 1
+    index_false = 1 if not false_is_good else 0
+
+    return f'[{format[index_true]}]Yes[/]' if b else f'[{format[index_false]}]No[/]'
+
+def tree_prefix(i, n):
+    first_one = "└── "
+    first_many = "├── "
+    next = "├── "
+    last = "└── "
+    first_column = ''
+    if i==0 and n == 1:
+        return first_one
+    elif i==0:
+        return first_many
+    elif i == n-1:
+        return last
+    else:
+        return next

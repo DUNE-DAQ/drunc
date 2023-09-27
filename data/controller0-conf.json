@@ -1,7 +1,5 @@
 {
-    "children_controllers": [],
-
-    "apps": [],
+    "children": [],
 
     "broadcaster": {
         "type": "kafka",

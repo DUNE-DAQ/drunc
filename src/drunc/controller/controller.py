@@ -80,16 +80,34 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
         )
 
-        for child_controller_cfg in self.configuration.get('children_controllers', []):
-            self.children_nodes.append(
-                ChildNode.get_from_file(
-                        child_controller_cfg['name'],
-                        child_controller_cfg
-                    )
-                )
 
-        for app_cfg in self.configuration.get('applications', []):
-            self.children_nodes.append(ChildNode.get_from_file(app_cfg))
+        from copy import deepcopy as dc
+        fsm_conf = dc(self.configuration.data['statefulnode']['fsm'])
+        fsm_conf.update({
+            "interfaces": {},
+            "pre_transitions": {},
+            "post_transitions": {},
+        })
+
+        for child in self.configuration.get('children', []):
+            if child['type'] == 'rest-api': # already some hacking
+                self.children_nodes.append(
+                    ChildNode.get_from_file(
+                            name = child['name'],
+                            conf = child,
+                            fsm_conf = fsm_conf
+                        )
+                    )
+            else:
+                self.children_nodes.append(
+                    ChildNode.get_from_file(
+                            name = child['name'],
+                            conf = child,
+                        )
+                    )
+
+        # for app_cfg in self.configuration.get('applications', []):
+        #     self.children_nodes.append(ChildNode.get_from_file(app_cfg))
 
         from druncschema.request_response_pb2 import CommandDescription
         # TODO, probably need to think of a better way to do this?
@@ -191,6 +209,10 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             self.logger.debug(f'Stopping {child.name}')
             child.terminate()
 
+        from drunc.controller.children_interface.rest_api_child import ResponseListener
+
+        if ResponseListener.exists():
+            ResponseListener.get().terminate()
 
     def propagate_to_list(self, command:str, data, token, node_to_execute):
 
@@ -198,7 +220,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             btype = BroadcastType.COMMAND_EXECUTION_START,
             message = f'Propagating {command} to children',
         )
-
+        return_statuses = {}
         def propagate_to_child(child, command, data, token):
 
             self.broadcast(
@@ -207,15 +229,17 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             )
 
             try:
-                child.propagate_command(command, data, token)
+                return_statuses[child.name] = child.propagate_command(command, data, token)
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
                     message = f'Propagating {command} to children ({child.name})',
                 )
-            except:
+            except Exception as e:
+                from druncschema.controller_pb2 import FSMCommandResponseCode
+                return_statuses[child.name] = FSMCommandResponseCode.UNSUCCESSFUL
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    message = f'Failed to propagate {command} to {child.name} ({child.name})',
+                    message = f'Failed to propagate {command} to {child.name} ({child.name}): {str(e)}',
                 )
 
         threads = []
@@ -227,7 +251,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         for thread in threads:
             thread.join()
-
+        return return_statuses
 
     def _should_execute_on_self(self, node_path) -> bool:
         if node_path == []:
@@ -272,6 +296,12 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                 message = f'Executing {command} (upon request from {request.token.user_name})',
             )
             result = getattr(self, "_"+command+"_impl")(data, token)
+
+        except ctler_excpt.ControllerException as e:
+            self._interrupt_with_message(
+                str(e),
+                context = context
+            )
 
         except Exception as e:
             self._interrupt_with_exception(
@@ -331,7 +361,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
 
         self.logger.debug(f'{command} data: {fsm_command}')
-
+        child_statuses = {}
         try:
 
             fsm_args = self.decode_fsm_arguments(fsm_command)
@@ -348,10 +378,12 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             children_fsm_command.CopyFrom(fsm_command)
             children_fsm_command.data = fsm_data
             children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
-            if fsm_command.HasField('children_nodes'):
-                self.propagate_to_list(command, children_fsm_command, request.token, fsm_command.children_nodes)
+            execute_on = fsm_command.children_nodes
+
+            if execute_on:
+                child_statuses = self.propagate_to_list(command, children_fsm_command, request.token, execute_on)
             else:
-                self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
+                child_statuses = self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
 
             self.finish_propagating_transition_mark(transition)
 
@@ -386,6 +418,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         result = FSMCommandResponse(
             successful = FSMCommandResponseCode.SUCCESSFUL,
             command_name = fsm_command.command_name,
+            children_successful = child_statuses,
         )
 
         result_any = pack_to_any(result)

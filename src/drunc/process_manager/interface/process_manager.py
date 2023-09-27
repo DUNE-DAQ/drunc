@@ -59,5 +59,6 @@ def process_manager_cli(pm_conf:str, loglevel):
         import os
         console.print_exception(width=os.get_terminal_size()[0])
     finally:
-        loop.run_until_complete(*_cleanup_coroutines)
+        if _cleanup_coroutines:
+            loop.run_until_complete(*_cleanup_coroutines)
         loop.close()

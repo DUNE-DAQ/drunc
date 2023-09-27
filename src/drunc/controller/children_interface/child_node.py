@@ -39,7 +39,7 @@ class ChildNode(abc.ABC):
         pass
 
     @staticmethod
-    def get_from_file(name, conf:dict, token=None):
+    def get_from_file(name, conf:dict, token=None, **kwargs):
         from drunc.utils.conf_types import ConfTypes
 
         match conf['type'].lower():
@@ -50,7 +50,8 @@ class ChildNode(abc.ABC):
                     conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
-                    node_type = ChildNodeType.gRPC
+                    node_type = ChildNodeType.gRPC,
+                    **kwargs,
                 )
             case 'rest-api':
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
@@ -59,7 +60,8 @@ class ChildNode(abc.ABC):
                     conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
-                    node_type = ChildNodeType.REST_API
+                    node_type = ChildNodeType.REST_API,
+                    **kwargs,
                 )
             case _:
                 raise ChildInterfaceTechnologyUnknown(conf['type'], name)
