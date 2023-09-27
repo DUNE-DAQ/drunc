@@ -437,6 +437,7 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
         result = unpack_any(r.data, FSMCommandResponse)
     except ArgumentException as ae:
         obj.print(str(ae))
+        return
     except Exception as e:
         raise e
 
