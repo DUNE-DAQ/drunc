@@ -5,7 +5,7 @@ from multiprocessing import Process
 import logging
 import gunicorn.app.base
 
-class StandaloneApplication(gunicorn.app.base.BaseApplication):
+class GunicornStandaloneApplication(gunicorn.app.base.BaseApplication):
 
     def __init__(self, app, options=None):
         self.options = options or {}
@@ -61,7 +61,7 @@ class FlaskManager(threading.Thread):
     '''
 
     def __init__(self, name, app, port, workers=1, host='0.0.0.0'):
-        threading.Thread.__init__(self)
+        super(FlaskManager, self).__init__(daemon = True)
         self.log = logging.getLogger(f"{name}-flaskmanager")
         self.name = name
         self.app = app
@@ -87,21 +87,23 @@ class FlaskManager(threading.Thread):
             return "ready"
 
         if need_ready:
-            print("need ready")
             self.app.add_url_rule("/readystatus", "get_ready_status", get_ready_status, methods=["GET"])
 
 
-        self.prod_app = StandaloneApplication(
+        self.prod_app = GunicornStandaloneApplication(
             app = self.app,
             options = {
                 "bind": f"{self.host}:{self.port}",
-                "workers": self.workers
+                "workers": self.workers,
             }
         )
 
         thread_name = f'{self.name}_thread'
-        flask_srv = Process(target=self.prod_app.run, name=thread_name)
-        flask_srv.daemon = False
+        flask_srv = Process(
+            target = self.prod_app.run,
+            name = thread_name,
+            daemon = True
+        )
         flask_srv.start()
         self.log.debug(f'{self.name} Flask lives on PID: {flask_srv.pid}')
 
