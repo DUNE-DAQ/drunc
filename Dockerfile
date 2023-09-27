@@ -48,5 +48,5 @@ EXPOSE 22
 EXPOSE 10054
 
 # Run SSHD in the background and drunc-process-manager in the foreground
-ENTRYPOINT service ssh start && drunc-process-manager --loglevel debug /drunc/data/process-manager.json
+ENTRYPOINT service ssh start && drunc-process-manager --loglevel debug /drunc/data/process-manager-pocket.json
 

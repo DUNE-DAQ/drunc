@@ -56,17 +56,12 @@
                 ]
             },
             "interfaces": {
-                "user-provided-run-number": {},
-                "file-logbook": {"file_name":"logbook.txt"},
-                "test-interface": {}
+                "user-provided-run-number": {}
             },
             "pre_transitions": {
-                "conf":  {"order": ["test-interface"], "mandatory": ["test-interface"]}
+                "start":  {"order": ["user-provided-run-number"], "mandatory": ["user-provided-run-number"]}
             },
-            "post_transitions": {
-                "start": {"order": ["user-provided-run-number", "file-logbook"], "mandatory": ["user-provided-run-number"]},
-                "stop":  {"order": ["file-logbook"], "mandatory": []}
-            }
+            "post_transitions": {}
         }
     }
 }
