@@ -68,7 +68,7 @@ def update_log_level(loglevel):
 
     logging.basicConfig(
         level=log_level,
-        format="%(message)s",
+        format="\"%(name)s\": %(message)s",
         datefmt="[%X]",
         handlers=[
             #logging.StreamHandler(),
