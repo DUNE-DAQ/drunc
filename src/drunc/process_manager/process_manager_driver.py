@@ -140,13 +140,8 @@ class ProcessManagerDriver:
         if rte is None:
             raise RuntimeError(f'RTE was not supplied in the boot.json')
         hosts = boot_configuration['hosts-ctrl']
-        metadata_app = ProcessMetadata(
-            user = user,
-            session = session,
-        )
-        # metadata_svc = ProcessMetadata(
-        #     user = user,
-        # )
+
+        pwd = os.getcwd()
 
         from drunc.process_manager.boot_json_parser import process_exec, parse_configuration
         from drunc.utils.utils import now_str
@@ -178,9 +173,9 @@ class ProcessManagerDriver:
                 hosts = hosts,
                 session = session,
                 conf = f'file://{parsed_config_dir}',
+                pwd = pwd,
+                user = user,
             )
-            br.process_description.metadata.CopyFrom(metadata_app)
-            br.process_description.metadata.name = app_name
             yield br
 
         ctrler_conf = parsed_config_dir/'controller.json'
@@ -220,6 +215,9 @@ class ProcessManagerDriver:
         from drunc.process_manager.boot_json_parser import process_env
         ctrler_env = process_env(ctrler_env, rte is not None)
 
+        from drunc.utils.utils import now_str
+        log_path = f'{pwd}/log_{user}_{session}_{ctrler_env["NAME"]}_{now_str(True)}.log'
+
         yield BootRequest(
             process_description = ProcessDescription(
                 metadata = ProcessMetadata(
@@ -228,7 +226,9 @@ class ProcessManagerDriver:
                     name = ctrler_env['NAME'],
                 ),
                 executable_and_arguments = executable_and_arguments,
-                env = ctrler_env
+                env = ctrler_env,
+                process_execution_directory = pwd,
+                process_logs_path = log_path,
             ),
             process_restriction = ProcessRestriction(
                 allowed_hosts = ['localhost']
@@ -245,6 +245,8 @@ class ProcessManagerDriver:
 
         apps = process_segment(db, session_dal, session_dal.segment)
         self._log.debug(f"{apps=}")
+        import os
+        pwd = os.getcwd()
 
         # Start with an arbitrary port for now
         base_port = 9000
@@ -280,6 +282,9 @@ class ProcessManagerDriver:
             for k, v in old_env.items():
                 new_env[k] = v.format(**app)
 
+            from drunc.utils.utils import now_str
+            log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
+
             self._log.debug(f"{new_env=}")
             breq =  BootRequest(
             process_description = ProcessDescription(
@@ -289,7 +294,9 @@ class ProcessManagerDriver:
                     name = name,
                 ),
                 executable_and_arguments = executable_and_arguments,
-                env = new_env
+                env = new_env,
+                process_execution_directory = pwd,
+                process_logs_path = log_path,
             ),
                 process_restriction = ProcessRestriction(
                     allowed_hosts = [host]
@@ -307,6 +314,8 @@ class ProcessManagerDriver:
         # For the future...
         # if not boot_configuration.is_valid():
         #     raise RuntimeError(f'Boot configuration isn\'t valid!')
+        import os
+        pwd = os.getcwd()
 
         for app in boot_configuration['instances']:
             executable_and_arguments = []
@@ -335,6 +344,9 @@ class ProcessManagerDriver:
                 else:
                     new_env[k] = v.format(**app) if isinstance(v, str) else str(v)
 
+            from drunc.utils.utils import now_str
+            log_path = f'{pwd}/log_{user}_{session}_{app["name"]}_{now_str(True)}.log'
+
             yield BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
@@ -343,7 +355,9 @@ class ProcessManagerDriver:
                         name = app['name'],
                     ),
                     executable_and_arguments = executable_and_arguments,
-                    env = new_env
+                    env = new_env,
+                    process_execution_directory = pwd,
+                    process_logs_path = log_path,
                 ),
                 process_restriction = ProcessRestriction(
                     allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']

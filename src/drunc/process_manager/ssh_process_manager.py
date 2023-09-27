@@ -68,10 +68,6 @@ class SSHProcessManager(ProcessManager):
         self.children_logs_depth = 1000
         self.children_logs = {}
         self.watchers = []
-        from pathlib import Path
-        from os import getcwd
-        self.app_exec_path = Path(pm_conf.get('app-exec-path', getcwd()))
-        self.app_log_path = Path(pm_conf.get('app-log-path', getcwd()))
 
     def _terminate(self):
         self._log.info('Terminating')
@@ -171,14 +167,11 @@ class SSHProcessManager(ProcessManager):
                 user_host = host if not user else f'{user}@{host}'
 
                 from drunc.utils.utils import now_str
-                log_file = self.app_log_path / f'log-{meta.user}-{meta.session}-{meta.name}-{now_str(True)}.txt'
+                log_file =  boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
 
-                # runtime_var = boot_request.process_description.env
-                # cmd += ';' + ';'.join([ f"export {n}=\"{v}\"" for n,v in runtime_var.items()])
-
-                cmd += f'; cd {self.app_exec_path} ;'
+                cmd += f'; cd {boot_request.process_description.process_execution_directory} ;'
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec

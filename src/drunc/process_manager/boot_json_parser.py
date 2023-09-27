@@ -43,8 +43,8 @@ def process_args(args, env):
     return new_args
 
 
-def process_exec(name, data, env, exec, hosts, **kwargs):
-    from druncschema.process_manager_pb2 import BootRequest, ProcessDescription, ProcessRestriction
+def process_exec(name, data, env, exec, hosts, pwd, session, user, **kwargs):
+    from druncschema.process_manager_pb2 import BootRequest, ProcessDescription, ProcessRestriction, ProcessMetadata
 
     from logging import getLogger
     _log = getLogger('process_exec')
@@ -59,8 +59,7 @@ def process_exec(name, data, env, exec, hosts, **kwargs):
         'APP_HOST': hosts[name],
     })
 
-    if 'session' in kwargs:
-        app_env['DUNEDAQ_PARTITION'] = kwargs['session']
+    app_env['DUNEDAQ_PARTITION'] = session
 
     if 'conf' in kwargs:
         app_env['CONF_LOC'] = kwargs['conf']
@@ -94,6 +93,8 @@ def process_exec(name, data, env, exec, hosts, **kwargs):
         rte = rte_present
     )
     _log.debug(app_env)
+    from drunc.utils.utils import now_str
+    log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
 
 
     exec_and_args += [ProcessDescription.ExecAndArgs(
@@ -103,7 +104,14 @@ def process_exec(name, data, env, exec, hosts, **kwargs):
 
     pd = ProcessDescription(
         executable_and_arguments = exec_and_args,
-        env = app_env
+        env = app_env,
+        process_execution_directory = pwd,
+        process_logs_path = log_path,
+        metadata = ProcessMetadata(
+            user = user,
+            session = session,
+            name = name,
+        )
     )
 
     pr = ProcessRestriction(
