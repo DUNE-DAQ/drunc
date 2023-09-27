@@ -1,3 +1,5 @@
+
+
 def process_env(env, rte):
     new_env = {}
 
@@ -30,17 +32,6 @@ def process_env(env, rte):
 
     return new_env
 
-# def process_env(env):
-#     new_env = {}
-#     from copy import deepcopy
-#     e = deepcopy(env)
-#     for name, value in env.items():
-#         if type(value) is str:
-#             new_env[name] = value.format(**e)
-#         else:
-#             new_env[name] = str(value)
-#     return new_env
-
 
 def process_args(args, env):
     new_args = []
@@ -57,7 +48,8 @@ def process_exec(name, data, env, exec, hosts, **kwargs):
 
     from logging import getLogger
     _log = getLogger('process_exec')
-
+    from copy import deepcopy as dc
+    exec = dc(exec)
     app_exec = exec[data['exec']]
     app_env = app_exec['env']
     app_env.update(env)
@@ -149,5 +141,5 @@ def parse_configuration(input_dir, output_dir):
                 new_connections += [nc]
             data['connections'] = new_connections
 
-            json.dump(data, open(output_dir/filename,'w'))
+            json.dump(data, open(output_dir/filename,'w'), indent=4)
 

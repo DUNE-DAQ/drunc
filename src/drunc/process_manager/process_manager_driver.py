@@ -43,17 +43,17 @@ class ProcessManagerDriver:
             )
 
 
-    async def _convert_boot_conf(self, conf, conf_type, user, session):
+    async def _convert_boot_conf(self, conf, conf_type, user, session_name, log_level):
         from drunc.process_manager.utils import ConfTypes
         match conf_type:
             case ConfTypes.DAQCONF:
-                async for i in self._convert_daqconf_to_boot_request(conf, user, session):
+                async for i in self._convert_daqconf_to_boot_request(conf, user, session_name, log_level):
                     yield i
             case ConfTypes.DRUNC:
-                async for i in self._convert_drunc_to_boot_request(conf, user, session):
+                async for i in self._convert_drunc_to_boot_request(conf, user, session_name):
                     yield i
             case ConfTypes.OKS:
-                async for i in self._convert_oks_to_boot_request(conf, user, session):
+                async for i in self._convert_oks_to_boot_request(conf, user, session_name):
                     yield i
             case _:
                 raise ConfigurationTypeNotSupported(conf_type)
@@ -62,8 +62,7 @@ class ProcessManagerDriver:
 
     def generate_app_controller_conf(self, children, output_file):
         data = {
-            "children_controllers": [],
-            "apps": children,
+            "children": children,
 
             "broadcaster": {
                 "type": "kafka",
@@ -108,16 +107,25 @@ class ProcessManagerDriver:
                             {"cmd": "stop",                 "optional": True },
                             {"cmd": "scrap",                "optional": True }
                         ]
-                    }
+                    },
+                    "interfaces": {
+                        "user-provided-run-number": {},
+                    },
+                    "pre_transitions": {
+                        "start":  {"order": ["user-provided-run-number"], "mandatory": ["user-provided-run-number"]}
+                    },
+                    "post_transitions": {}
                 }
             }
         }
         import json
-        json.dump(open(output_file, 'w'))
+        json.dump(data, open(output_file, 'w'), indent=4)
 
 
 
-    async def _convert_daqconf_to_boot_request(self, daqconf_dir, user, session) -> BootRequest:
+    async def _convert_daqconf_to_boot_request(self, daqconf_dir, user, session, loglevel) -> BootRequest:
+        from logging import getLogger
+        log = getLogger('_convert_daqconf_to_boot_request')
         from pathlib import Path
         boot_configuration = {}
         import os
@@ -129,6 +137,8 @@ class ProcessManagerDriver:
         env = boot_configuration['env']
         exec = boot_configuration['exec']
         rte = boot_configuration.get('rte_script')
+        if rte is None:
+            raise RuntimeError(f'RTE was not supplied in the boot.json')
         hosts = boot_configuration['hosts-ctrl']
         metadata_app = ProcessMetadata(
             user = user,
@@ -150,10 +160,15 @@ class ProcessManagerDriver:
         for svc_name, svc_data in boot_configuration.get('services', {}).items():
             raise RuntimeError('Services cannot be started by drunc (yet)')
 
-        app_addresses = []
+        children_app = []
 
         for app_name, app_data in boot_configuration['apps'].items():
-            app_addresses += [f'{hosts[app_name]}:{app_data["port"]}']
+            children_app += [{
+                'name': app_name,
+                'uri': f'{hosts[app_name]}:{app_data["port"]}',
+                'type': 'rest-api'
+            }]
+            log.debug(f'{app_name=}, {app_data=}')
             br = process_exec(
                 name = app_name,
                 data = app_data,
@@ -168,28 +183,55 @@ class ProcessManagerDriver:
             br.process_description.metadata.name = app_name
             yield br
 
-        ctrler_conf = parsed_config_dir/'controller.json',
+        ctrler_conf = parsed_config_dir/'controller.json'
 
         self.generate_app_controller_conf(
-            children = app_addresses,
-            output_dir = ctrler_conf,
+            children = children_app,
+            output_file = ctrler_conf,
         )
 
+        executable_and_arguments = [
+            ProcessDescription.ExecAndArgs(
+                exec = 'source',
+                args = ["${DBT_INSTALL_DIR}/daq_app_rte.sh"]
+            ),
+            ProcessDescription.ExecAndArgs(
+                exec = 'drunc-controller',
+                args = [
+                    "${CONFIGURATION}",
+                    "${PORT}",
+                    "${NAME}",
+                    "${SESSION}",
+                    "--log-level",
+                    loglevel,
+                ]
+            )
+        ]
+
+        ctrler_env = {
+            'SESSION': session,
+            "CONFIGURATION": f"file://{str(ctrler_conf)}",
+            "DBT_INSTALL_DIR": "getenv",
+            "NAME": "topcontroller",
+            "PORT": "3600",
+            "COLUMNS": 150
+        }
+
+        from drunc.process_manager.boot_json_parser import process_env
+        ctrler_env = process_env(ctrler_env, rte is not None)
 
         yield BootRequest(
             process_description = ProcessDescription(
                 metadata = ProcessMetadata(
                     user = user,
                     session = session,
-                    name = 'controller',
+                    name = ctrler_env['NAME'],
                 ),
-                executable_and_arguments = [
-
-                ],
-                env = new_env
+                executable_and_arguments = executable_and_arguments,
+                env = ctrler_env
             ),
             process_restriction = ProcessRestriction(
-                allowed_hosts = boot_configuration['restrictions'][app['restriction']]['hosts']
+                allowed_hosts = ['localhost']
             )
         )
 
@@ -308,8 +350,13 @@ class ProcessManagerDriver:
                 )
             )
 
-    async def boot(self, boot_configuration:str, user:str, session:str, conf_type) -> ProcessInstance:
-        async for br in self._convert_boot_conf(boot_configuration, conf_type, user, session):
+    async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str) -> ProcessInstance:
+        async for br in self._convert_boot_conf(
+            conf = conf,
+            conf_type = conf_type,
+            user = user,
+            session_name = session_name,
+            log_level = log_level):
             answer = await self.pm_stub.boot(
                 self._create_request(br)
             )
