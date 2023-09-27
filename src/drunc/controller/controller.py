@@ -297,6 +297,12 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             )
             result = getattr(self, "_"+command+"_impl")(data, token)
 
+        except ctler_excpt.ControllerException as e:
+            self._interrupt_with_message(
+                str(e),
+                context = context
+            )
+
         except Exception as e:
             self._interrupt_with_exception(
                 ex_stack = traceback.format_exc(),
