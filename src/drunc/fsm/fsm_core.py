@@ -115,7 +115,7 @@ class PreOrPostTransitionSequence:
                 default_value = ''
 
                 t = Argument.Type.INT
-                from druncschema.generic_pb2 import string_msg, float_msg, int_msg
+                from druncschema.generic_pb2 import string_msg, float_msg, int_msg, bool_msg
                 from drunc.utils.grpc_utils import pack_to_any
 
                 if p.annotation is str:
@@ -135,6 +135,12 @@ class PreOrPostTransitionSequence:
 
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(int_msg(value = p.default))
+
+                elif p.annotation is bool:
+                    t = Argument.Type.BOOL
+
+                    if p.default != Parameter.empty:
+                        default_value = pack_to_any(bool_msg(value = p.default))
                 else:
                     raise RuntimeError(f'Annotation {p.annotation} is not handled.')
 
@@ -242,8 +248,8 @@ class JsonFSMConfigParser(FSMConfigParser):
                 else:
                     self.post_transitions[transition] = seq
 
-        for transition in self.transitions:
-            print(transition.name, transition.arguments, self.pre_transitions[transition], self.post_transitions[transition])
+        # for transition in self.transitions:
+        #     print(transition.name, transition.arguments, self.pre_transitions[transition], self.post_transitions[transition])
 
     def _parse_transitions(self, transitions):
         trs = [
