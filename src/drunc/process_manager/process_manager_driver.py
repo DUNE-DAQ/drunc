@@ -66,7 +66,7 @@ class ProcessManagerDriver:
 
             "broadcaster": {
                 "type": "kafka",
-                "kafka_address": "localhost:30092",
+                "kafka_address": "monkafka.cern.ch:30092",
                 "publish_timeout": 2
             },
 
