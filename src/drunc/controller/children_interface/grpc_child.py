@@ -81,12 +81,24 @@ class gRPCChildNode(ChildNode):
         pass
 
     def propagate_command(self, command, data, token):
-        response = send_command(
-            controller = self.controller,
-            token = token,
-            command = command,
-            rethrow = True,
-            data = data
-        )
+        success = False
+        try:
+            response = send_command(
+                controller = self.controller,
+                token = token,
+                command = command,
+                rethrow = True,
+                data = data
+            )
+            success = True
+        except Exception as e:
+            if command != 'execute_fsm_command':
+                raise e
 
-        return response
+
+        if command == 'execute_fsm_command':
+            from druncschema.controller_pb2 import FSMCommandResponseCode
+            return FSMCommandResponseCode.SUCCESSFUL if success else FSMCommandResponseCode.SUCCESSFUL
+        else:
+            return response
+

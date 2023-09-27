@@ -227,7 +227,7 @@ def describe(obj:ControllerContext, command) -> None:
 
     def format_fsm_argument(arg):
         d = '<no_default>'
-        from druncschema.generic_pb2 import string_msg, float_msg, int_msg
+        from druncschema.generic_pb2 import string_msg, float_msg, int_msg, bool_msg
         from drunc.utils.grpc_utils import unpack_any
 
         if arg.HasField('default_value'):
@@ -239,6 +239,9 @@ def describe(obj:ControllerContext, command) -> None:
 
             elif arg.type == Argument.Type.INT:
                 d = str(unpack_any(arg.default_value, int_msg).value)
+
+            elif arg.type == Argument.Type.BOOL:
+                d = str(unpack_any(arg.default_value, bool_msg).value)
 
             else:
                 d = arg.default_value
@@ -297,22 +300,19 @@ def status(obj:ControllerContext) -> None:
         ).data,
         Status
     )
-
-    def format_bool(b, format=['dark_green', 'bold white on red'], false_is_good = False):
-        index_true = 0 if not false_is_good else 1
-        index_false = 1 if not false_is_good else 0
-
-        return f'[{format[index_true]}]Yes[/]' if b else f'[{format[index_false]}]No[/]'
+    from drunc.controller.interface.shell_utils import format_bool, tree_prefix
 
     from rich.table import Table
     t = Table(title=f'{status.name} status')
     t.add_column('Name')
     t.add_column('State')
+    t.add_column('Substate')
     t.add_column('In error', justify='center')
     t.add_column('Included', justify='center')
     t.add_row(
         status.name,
         status.state,
+        status.sub_state,
         format_bool(status.in_error, false_is_good = True),
         format_bool(status.included),
     )
@@ -335,19 +335,12 @@ def status(obj:ControllerContext) -> None:
     how_many = len(statuses.children_status)
 
     for i, c_status in enumerate(statuses.children_status):
-        first_column = ''
-        if i==0 and how_many == 1:
-            first_column = first_one+c_status.name
-        elif i==0:
-            first_column = first_many+c_status.name
-        elif i == how_many-1:
-            first_column = last+c_status.name
-        else:
-            first_column = next+c_status.name
+        first_column = tree_prefix(i, how_many)+c_status.name
 
         t.add_row(
             first_column,
             c_status.state,
+            c_status.sub_state,
             format_bool(c_status.in_error, false_is_good=True),
             format_bool(c_status.included)
         )
@@ -407,8 +400,8 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
 
     if len(arguments) % 2 != 0:
         raise RuntimeError('Arguments are pairs of key-value!')
-
-    from druncschema.controller_pb2 import FSMCommandsDescription, Argument
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.controller_pb2 import FSMCommandsDescription, Argument, FSMCommandResponse, FSMCommandResponseCode
     desc = unpack_any(
         send_command(
             controller = obj.controller,
@@ -435,18 +428,38 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
             command_name = command,
             arguments = formated_args,
         )
-        send_command(
+        r = send_command(
             controller = obj.controller,
             token = obj.token,
             command = 'execute_fsm_command',
             data = data
         )
+        result = unpack_any(r.data, FSMCommandResponse)
     except ArgumentException as ae:
         obj.print(str(ae))
     except Exception as e:
         raise e
 
+    from drunc.controller.interface.shell_utils import format_bool, tree_prefix
 
+    from rich.table import Table
+    t = Table(title=f'{command} execution report')
+    t.add_column('Name')
+    t.add_column('Command success')
+    t.add_row(
+        '<root>',
+        format_bool(result.successful == FSMCommandResponseCode.SUCCESSFUL),
+    )
+
+    i=0
+    n=len(result.children_successful)
+    for name, sucess in result.children_successful.items():
+        t.add_row(
+            tree_prefix(i, n)+name,
+            format_bool(sucess == FSMCommandResponseCode.SUCCESSFUL),
+        )
+        i += 1
+    obj.print(t)
 
 
 @controller_shell.command('include')
@@ -456,6 +469,7 @@ def some_command(obj:ControllerContext) -> None:
     data = FSMCommand(
         command_name = 'include',
     )
+
     send_command(
         controller = obj.controller,
         token = obj.token,
@@ -470,6 +484,7 @@ def some_command(obj:ControllerContext) -> None:
     data = FSMCommand(
         command_name = 'exclude',
     )
+
     send_command(
         controller = obj.controller,
         token = obj.token,
