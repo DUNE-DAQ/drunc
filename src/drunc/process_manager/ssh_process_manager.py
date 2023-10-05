@@ -321,9 +321,19 @@ class SSHProcessManager(ProcessManager):
             process = self.process_store[uuid]
             if not process.is_alive():
                 continue
+            import signal
 
-            process.terminate()
-
+            sequence = [
+                signal.SIGINT,
+                signal.SIGKILL,
+            ]
+            for sig in sequence:
+                if not process.is_alive():
+                    break
+                print(f'sending {sig} to {uuid}')
+                process.signal_group(sig) # TODO grab this from the inputs
+                from time import sleep
+                sleep(0.1)
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
             pr = ProcessRestriction()

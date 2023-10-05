@@ -25,7 +25,7 @@ class ChildNode(abc.ABC):
 
 
     @abc.abstractmethod
-    def close(self):
+    def terminate(self):
         pass
 
 

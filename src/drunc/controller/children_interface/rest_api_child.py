@@ -92,7 +92,7 @@ class ResponseListener:
 
         return cls._instance
 
-    @staticmethod
+    @classmethod
     def exists(cls):
         return (cls._instance is not None)
 
@@ -408,7 +408,7 @@ class RESTAPIChildNode(ChildNode):
 
         self.state = StateRESTAPI()
 
-    def close(self):
+    def terminate(self):
         pass
 
     def get_status(self, token):

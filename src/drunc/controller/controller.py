@@ -214,6 +214,18 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         if ResponseListener.exists():
             ResponseListener.get().terminate()
 
+        import threading
+        self.logger.info("Threading threads")
+        self.logger.info(threading.enumerate())
+        from multiprocessing import Manager
+        with Manager() as manager:
+            self.logger.info("Multiprocess threads")
+            self.logger.info(manager.list())
+
+
+    def __del__(self):
+        self.terminate()
+
     def propagate_to_list(self, command:str, data, token, node_to_execute):
 
         self.broadcast(

@@ -90,6 +90,8 @@ class FlaskManager(threading.Thread):
             self.app.add_url_rule("/readystatus", "get_ready_status", get_ready_status, methods=["GET"])
 
 
+        import signal
+        print(signal.Handlers)
         self.prod_app = GunicornStandaloneApplication(
             app = self.app,
             options = {
@@ -134,6 +136,13 @@ class FlaskManager(threading.Thread):
         return flask_srv
 
     def stop(self) -> NoReturn:
+        print('stopping flask/gunicorn')
+        pid = self.flask.pid
+        import psutil
+        gunicorn_proc = psutil.Process(pid)
+        import signal
+        # https://github.com/benoitc/gunicorn/blob/ab9c8301cb9ae573ba597154ddeea16f0326fc15/docs/source/signals.rst#master-process
+        gunicorn_proc.send_signal(signal.SIGTERM)
         self.flask.terminate()
         self.join()
 

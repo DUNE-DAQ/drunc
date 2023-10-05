@@ -5,21 +5,7 @@
             "port": 3600,
             "restriction": "localhost",
             "type": "drunc-controller",
-            "configuration": "file://data/topcontroller-conf.json"
-        },
-        {
-            "name": "app00",
-            "port": 7200,
-            "restriction": "localhost",
-            "type": "daq-application",
-            "configuration": "file://data/app00-conf.json"
-        },
-        {
-            "name": "app01",
-            "port": 7201,
-            "restriction": "localhost",
-            "type": "daq-application",
-            "configuration": "file://data/app00-conf.json"
+            "configuration": "file://data/single-topcontroller-conf.json"
         }
     ],
     "executables": {
@@ -31,41 +17,13 @@
                     ]
                 },
                 {
-                    "env": []
-                },
-                {
                     "drunc-controller": [
                         "${CONFIGURATION}",
                         "${PORT}",
-                        "${NAME}"
-                    ]
-                }
-            ],
-            "environment": {
-                "CONFIGURATION": "{configuration}",
-                "DBT_INSTALL_DIR": "getenv",
-                "NAME": "{name}",
-                "PORT": "{port}"
-            }
-        },
-        "daq-application": {
-            "executable_and_arguments": [
-                {
-                    "source": [
-                        "${DBT_INSTALL_DIR}/daq_app_rte.sh"
-                    ]
-                },
-                {
-                    "env": []
-                },
-                {
-                    "daq_application": [
-                        "-n",
                         "${NAME}",
-                        "-d",
-                        "${CONFIGURATION}",
-                        "-c",
-                        "rest://localhost:${PORT}"
+                        "${SESSION}",
+                        "--log-level",
+                        "DEBUG"
                     ]
                 }
             ],
@@ -73,7 +31,8 @@
                 "CONFIGURATION": "{configuration}",
                 "DBT_INSTALL_DIR": "getenv",
                 "NAME": "{name}",
-                "PORT": "{port}"
+                "PORT": "{port}",
+                "COLUMNS": 150
             }
         }
     },

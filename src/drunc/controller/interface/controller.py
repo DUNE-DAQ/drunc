@@ -38,20 +38,33 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
         server.add_insecure_port(listen_addr)
 
         server.start()
+
         console.print(f'{ctrlr.name} was started on {listen_addr}')
 
-        def sigint(sig, frame):
-            console.print('Requested termination')
-            server.stop(0)
-            ctrlr.terminate()
+        return server
 
-        signal.signal(signal.SIGINT, sigint)
+    def controller_shutdown():
+        console.print('Requested termination')
+        ctrlr.terminate()
 
-        server.wait_for_termination()
+    def my_sighup(sig, frame):
+        console.print(f'Received {sig}')
+        server.stop(5)
+        controller_shutdown()
+        exit(sig)
+
+    catchable_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
+    for sig in catchable_sigs:
+        signal.signal(sig, my_sighup)
 
     try:
-        serve(control_port)
+        server = serve(control_port)
+        for sig in catchable_sigs:
+            signal.signal(sig, my_sighup)
+        server.wait_for_termination(timeout=None)
+
     except Exception as e:
         from drunc.utils.utils import print_traceback
         print_traceback()
+
 
