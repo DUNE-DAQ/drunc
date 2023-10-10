@@ -10,6 +10,7 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
 @click.argument('session', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 def controller_cli(configuration:str, control_port:int, name:str, session:str, log_level:str):
+
     from rich.console import Console
     console = Console()
 
@@ -34,7 +35,8 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
 
         add_ControllerServicer_to_server(ctrlr, server)
 
-        listen_addr = f'[::]:{port}'
+        import socket
+        listen_addr = f'{socket.gethostname()}:{port}'
         server.add_insecure_port(listen_addr)
 
         server.start()
@@ -47,20 +49,25 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
         console.print('Requested termination')
         ctrlr.terminate()
 
-    def my_sighup(sig, frame):
+    def shutdown(sig, frame):
         console.print(f'Received {sig}')
-        server.stop(5)
-        controller_shutdown()
-        exit(sig)
+        try:
+            controller_shutdown()
+        except:
+            from drunc.utils.utils import print_traceback
+            print_traceback()
 
-    catchable_sigs = set(signal.Signals) - {signal.SIGKILL, signal.SIGSTOP}
-    for sig in catchable_sigs:
-        signal.signal(sig, my_sighup)
+        import os
+        os.kill(os.getpid(), signal.SIGQUIT)
+
+
+    terminate_signals = [signal.SIGHUP, signal.SIGPIPE]
+    # terminate_signals = set(signal.Signals) - set([signal.SIGKILL, signal.SIGSTOP])
+    for sig in terminate_signals:
+        signal.signal(sig, shutdown)
 
     try:
         server = serve(control_port)
-        for sig in catchable_sigs:
-            signal.signal(sig, my_sighup)
         server.wait_for_termination(timeout=None)
 
     except Exception as e:

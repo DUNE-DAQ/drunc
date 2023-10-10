@@ -10,3 +10,7 @@ class BroadcastSenderImplementation(abc.ABC):
     def describe_broadcast(self):
         pass
 
+    @abc.abstractmethod
+    def can_broadcast(self):
+        pass
+

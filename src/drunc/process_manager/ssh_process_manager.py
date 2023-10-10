@@ -65,8 +65,8 @@ class SSHProcessManager(ProcessManager):
 
         import logging
         self._log = logging.getLogger('ssh-process-manager')
-        self.children_logs_depth = 1000
-        self.children_logs = {}
+        # self.children_logs_depth = 1000
+        # self.children_logs = {}
         self.watchers = []
 
     def _terminate(self):
@@ -83,38 +83,43 @@ class SSHProcessManager(ProcessManager):
             self._log.warning(f'Killing {self.boot_request[uuid].process_description.metadata.name}')
             process.terminate()
 
-    def _process_children_logs(self, uuid, line):
-        if not uuid in self.children_logs:
-            from collections import deque
-            self.children_logs[uuid] = deque()
-
-        if len(self.children_logs[uuid]) > self.children_logs_depth:
-            self.children_logs[uuid].popleft()
-
-        self.children_logs[uuid].append(line)
-
 
     async def _logs_impl(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
-        cursor = -log_request.how_far
+        logfile = self.boot_request[uid].process_description.process_logs_path
+        # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
+        # "Not the straight forward way"...
+        import tempfile
+        f = tempfile.NamedTemporaryFile(delete=False)
+        import sh
+        nlines = log_request.how_far
+        if not nlines:
+            nlines = 100
 
-        if uid not in self.children_logs:
+        try:
+            sh.tail(
+                f'-{nlines}', logfile,
+                _out=f.name,
+                _err_to_out=True,
+            )
+        except Exception as e:
             ll = LogLine(
                 uuid = ProcessUUID(uuid=uid),
-                line='<empty>'
+                line =  f'Could not retrieve logs: {str(e)}'
             )
             yield ll
-        else:
-            if -cursor > len(self.children_logs[uid]):
-                cursor = -len(self.children_logs[uid])
-
-            while cursor != 0:
+        f.close()
+        with open(f.name, 'r') as fi:
+            lines = fi.readlines()
+            for line in lines:
                 ll = LogLine(
                     uuid = ProcessUUID(uuid=uid),
-                    line = self.children_logs[uid][cursor]
+                    line = line
                 )
                 yield ll
-                cursor += 1
+
+        import os
+        os.remove(f.name)
 
 
     def notify_join(self, name, session, user, exec):
@@ -167,7 +172,7 @@ class SSHProcessManager(ProcessManager):
                 user_host = host if not user else f'{user}@{host}'
 
                 from drunc.utils.utils import now_str
-                log_file =  boot_request.process_description.process_logs_path
+                log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
 
@@ -182,11 +187,12 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ';':
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} 2>&1 | tee {log_file}']
-
+                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} &> {log_file}']
+                # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
+                # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = sh.ssh (
                     *arguments,
-                    _out=partial(self._process_children_logs, uuid),
+                    # _out=partial(self._process_children_logs, uuid),
                     _bg=True,
                     _bg_exc=False,
                     _new_session=True,

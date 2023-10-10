@@ -37,7 +37,7 @@ class ResponseDispatcher(threading.Thread):
 
 class ResponseListener:
     _instance = None
-
+    manager = None
     def __init__(self):
         raise RuntimeError('Call get() instead')
 
@@ -56,7 +56,6 @@ class ResponseListener:
             from multiprocessing import Queue
             cls.queue = Queue()
             cls.handlers = {}
-            log.debug(f'Queue pointer {cls.queue}')
 
             cls.dispatcher = ResponseDispatcher(cls)
             cls.dispatcher.start()
@@ -106,8 +105,10 @@ class ResponseListener:
 
     @classmethod
     def terminate(cls):
-        # if cls.is_ready
-        cls.manager.stop()
+        cls.queue.close()
+        cls.queue.join_thread()
+        if cls.manager:
+            cls.manager.stop()
 
     @classmethod
     def register(cls, app: str, handler):
