@@ -151,3 +151,5 @@ def parse_configuration(input_dir, output_dir):
 
             json.dump(data, open(output_dir/filename,'w'), indent=4)
 
+    import shutil
+    shutil.copy(input_dir/'controller.json', output_dir/'controller.json')
