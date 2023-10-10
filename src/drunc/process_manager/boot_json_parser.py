@@ -43,7 +43,7 @@ def process_args(args, env):
     return new_args
 
 
-def process_exec(name, data, env, exec, hosts, pwd, session, user, **kwargs):
+def process_exec(name, data, env, exec, hosts, pwd, session, user, extra_args, **kwargs):
     from druncschema.process_manager_pb2 import BootRequest, ProcessDescription, ProcessRestriction, ProcessMetadata
 
     from logging import getLogger
@@ -99,7 +99,7 @@ def process_exec(name, data, env, exec, hosts, pwd, session, user, **kwargs):
 
     exec_and_args += [ProcessDescription.ExecAndArgs(
         exec = app_exec['cmd'],
-        args = process_args(app_exec['args'], app_env)
+        args = process_args(app_exec['args']+extra_args, app_env)
     )]
 
     pd = ProcessDescription(
