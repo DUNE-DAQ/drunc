@@ -10,12 +10,14 @@ class BroadcastSender:
         super(BroadcastSender, self).__init__(
             **kwargs,
         )
+        print('Initialising broadcast')
         self.name = name
         self.session = session
         self.identifier = f'{self.name}.{self.session}'
 
         from logging import getLogger
         self.logger = getLogger(self.identifier)
+
 
         broadcast_types_loglevels_str = broadcast_configuration.get(
             'broadcast_types_loglevels',
@@ -40,7 +42,7 @@ class BroadcastSender:
         )
 
         self.impl_technology = broadcast_configuration.get('type')
-
+        self.implementation = None
 
         from collections import defaultdict
         def def_value():
@@ -65,10 +67,19 @@ class BroadcastSender:
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
             case _:
-                raise BroadcastSenderTechnologyUnknown(self.impl_technology)
+                self.logger.error('There is no broadcasting service!')
 
     def describe_broadcast(self):
-        return self.implementation.describe_broadcast()
+        if self.implementation:
+            return self.implementation.describe_broadcast()
+        else:
+            return None
+
+    def can_broadcast(self):
+        if not self.implementation:
+            return False
+
+        return self.implementation.can_broadcast()
 
     def broadcast(self, message, btype):
 
@@ -77,7 +88,7 @@ class BroadcastSender:
             f = getattr(self.logger, self.broadcast_types_loglevels[btype])
             f(f'"{self.name}.{self.session}": "{BroadcastType.Name(btype)}" {message}')
 
-        if self.impl_technology is None:
+        if self.implementation is None:
             # nice and easy case
             return
 

@@ -60,6 +60,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     def __init__(self, configuration:str, **kwargs):
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(configuration)
+        self.children_nodes = [] # type: List[ChildNode]
 
         super(Controller, self).__init__(
             broadcast_configuration = self.configuration.get('broadcaster'),
@@ -67,7 +68,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             **kwargs
         )
 
-        self.children_nodes = [] # type: List[ChildNode]
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
@@ -199,10 +199,11 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         )
 
     def terminate(self):
-        self.broadcast(
-            btype = BroadcastType.SERVER_SHUTDOWN,
-            message = 'over_and_out',
-        )
+        if self.can_broadcast():
+            self.broadcast(
+                btype = BroadcastType.SERVER_SHUTDOWN,
+                message = 'over_and_out',
+            )
 
         self.logger.info('Stopping children')
         for child in self.children_nodes:
@@ -213,6 +214,20 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         if ResponseListener.exists():
             ResponseListener.get().terminate()
+
+        import threading
+        self.logger.info("Threading threads")
+        for t in threading.enumerate():
+            print(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
+
+        from multiprocessing import Manager
+        with Manager() as manager:
+            self.logger.info("Multiprocess threads")
+            self.logger.info(manager.list())
+
+
+    def __del__(self):
+        self.terminate()
 
     def propagate_to_list(self, command:str, data, token, node_to_execute):
 

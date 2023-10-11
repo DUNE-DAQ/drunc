@@ -12,6 +12,7 @@ class KafkaSender(BroadcastSenderImplementation):
         from kafka import KafkaProducer
         from kafka import errors as Errors
         self.topic = topic
+        self._can_broadcast = False
 
         match conf_type:
             case ConfTypes.Json:
@@ -31,6 +32,10 @@ class KafkaSender(BroadcastSenderImplementation):
             raise RuntimeError(t) from e
 
         self._log.info(f'Broadcasting to Kafka ({self.kafka_address}) client_id: "run_control", topic: "{self.topic}"')
+        self._can_broadcast = True
+
+    def can_broadcast(self):
+        return self._can_broadcast
 
 
     def _send(self, bm:BroadcastMessage):

@@ -72,7 +72,7 @@ class FlaskManager(threading.Thread):
         self.port = port
 
         self.workers = workers
-
+        self.gunicorn_pid = None
         self.ready = False
         self.joined = False
         self.ready_lock = threading.Lock()
@@ -89,7 +89,6 @@ class FlaskManager(threading.Thread):
         if need_ready:
             self.app.add_url_rule("/readystatus", "get_ready_status", get_ready_status, methods=["GET"])
 
-
         self.prod_app = GunicornStandaloneApplication(
             app = self.app,
             options = {
@@ -99,13 +98,14 @@ class FlaskManager(threading.Thread):
         )
 
         thread_name = f'{self.name}_thread'
-        flask_srv = Process(
+        flask_srv = Process( # Indeed, we've just forked this sucker
             target = self.prod_app.run,
             name = thread_name,
             daemon = True
         )
         flask_srv.start()
-        self.log.debug(f'{self.name} Flask lives on PID: {flask_srv.pid}')
+        self.gunicorn_pid = flask_srv.pid
+        self.log.debug(f'Flask lives on PID: {flask_srv.pid}')
 
         tries=0
 
@@ -133,8 +133,20 @@ class FlaskManager(threading.Thread):
 
         return flask_srv
 
+    def __del__(self):
+        self.stop()
+
     def stop(self) -> NoReturn:
-        self.flask.terminate()
+        # gunicorn is forked, so we need to now need send signal ourselves
+        if self.gunicorn_pid:
+            import psutil
+            gunicorn_proc = psutil.Process(self.gunicorn_pid)
+            import signal
+            # https://github.com/benoitc/gunicorn/blob/ab9c8301cb9ae573ba597154ddeea16f0326fc15/docs/source/signals.rst#master-process
+            # TOTAL DESTRUCTION
+            gunicorn_proc.send_signal(signal.SIGTERM)
+            self.flask.terminate()
+
         self.join()
 
     def restart_renew(self):

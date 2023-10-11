@@ -77,7 +77,7 @@ class gRPCChildNode(ChildNode):
 
         return status
 
-    def close(self):
+    def terminate(self):
         pass
 
     def propagate_command(self, command, data, token):
