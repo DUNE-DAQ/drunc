@@ -102,7 +102,7 @@ class ProcessManagerDriver:
 
             extra_args = []
             config = parsed_config_dir
-            if'controller' in app_name: # meh meh meh
+            if 'drunc_controller' in app_data['exec']: # meh meh meh
                 config = f'{parsed_config_dir}/controller.json'
                 if loglevel:
                     extra_args = ['--log-level', loglevel]
