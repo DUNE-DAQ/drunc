@@ -141,6 +141,7 @@ class ProcessManagerDriver:
         # Start with an arbitrary port for now
         base_port = 9000
         next_port = {}
+        firstApp = True
         #for name, exe, args, host, old_env in apps:
         for app in apps:
             host = app['restriction']
@@ -154,6 +155,29 @@ class ProcessManagerDriver:
                 port = next_port[host]
             next_port[host] = port + 1
             app['port'] = port
+
+            if firstApp:
+                from pathlib import Path
+                from drunc.process_manager.boot_json_parser import process_exec, parse_configuration
+                from drunc.utils.utils import now_str
+                smatch = "file://"
+                spos = args.find(smatch) + len(smatch)
+                ematch = "/data"
+                if not ematch in args[spos:]:
+                    ematch = "controller.json"
+                epos = args.find(ematch,spos) - 1
+                cdir = args[spos:epos]
+                pdir = cdir+'_'+now_str(True)
+                config_dir = Path(cdir)
+                parsed_config_dir = Path(pdir)
+                parse_configuration(input_dir = config_dir,
+                                    output_dir = parsed_config_dir,
+                                    )
+                firstApp = False
+            if cdir+'/data' in args:
+                args = args.replace(cdir+'/data', pdir)
+            else:
+                args = args.replace(cdir, pdir)
 
             self._log.debug(f"{app=}")
 
