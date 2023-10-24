@@ -138,22 +138,62 @@ class ProcessManagerDriver:
         import os
         pwd = os.getcwd()
 
-        # Start with an arbitrary port for now
-        base_port = 9000
-        next_port = {}
+        ## Allocate ports for REST interface to apps
+        ## Start with an arbitrary port for now
+        #base_port = 9000
+        #next_port = {}
+        #for app in apps:
+        #    if not host in next_port:
+        #        port = base_port
+        #    else:
+        #        port = next_port[host]
+        #    next_port[host] = port + 1
+        #    app['port'] = port
+
+        ##########  Kludge starts ################################
+        args = apps[0]['args']
+        from pathlib import Path
+        from drunc.process_manager.boot_json_parser import process_exec, parse_configuration
+        from drunc.utils.utils import now_str
+        smatch = "file://"
+        spos = args.find(smatch) + len(smatch)
+        ematch = "controller.json"
+        epos = args.find(ematch,spos) - 1
+        cdir = args[spos:epos]
+        pdir = cdir+'_'+now_str(True)
+        config_dir = Path(cdir)
+        parsed_config_dir = Path(pdir)
+        parse_configuration(input_dir = config_dir,
+                            output_dir = parsed_config_dir,
+                            )
+        # Load controller json, read ports for apps
+        import json
+        with open(pdir+'/controller.json') as f:
+            ctl = json.loads(f.read())
+            f.close()
+        ports = {}
+        for child in ctl["children"]:
+            uri = child["uri"]
+            port = uri[uri.find(":")+1:]
+            ports[child["name"]] = port
+            last_port = port
+        for app in apps:
+            if cdir+'/data' in app['args']:
+                app['args'] = app['args'].replace(cdir+'/data', pdir)
+                app['port'] = ports[app['name']]
+            else:
+                app['args'] = app['args'].replace(cdir, pdir)
+                app['port'] = str(int(last_port) + 1)
+        ##########  Kludge ends ################################
+
         #for name, exe, args, host, old_env in apps:
         for app in apps:
             host = app['restriction']
             name = app['name']
+            port = app['port']
             exe = app['type']
             args = app['args']
             old_env = app['env']
-            if not host in next_port:
-                port = base_port
-            else:
-                port = next_port[host]
-            next_port[host] = port + 1
-            app['port'] = port
 
             self._log.debug(f"{app=}")
 
