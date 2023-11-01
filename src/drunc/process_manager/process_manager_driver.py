@@ -1,10 +1,9 @@
 import asyncio
 from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
-from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
+
 from drunc.utils.grpc_utils import unpack_any
+from drunc.utils.shell_utils import GRPCDriver
 
 class ConfigurationTypeNotSupported(Exception):
     def __init__(self, conf_type):
@@ -13,34 +12,19 @@ class ConfigurationTypeNotSupported(Exception):
             f'{str(conf_type)} is not supported by this process manager'
         )
 
-class ProcessManagerDriver:
-    def __init__(self, address:str, token):
-        import logging
-        self._log = logging.getLogger('ProcessManagerDriver')
-        import grpc
-        self.token = Token()
-        self.token.CopyFrom(token)
-        self.pm_address = address
-        self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
-        self.pm_stub = ProcessManagerStub(self.pm_channel)
+class ProcessManagerDriver(GRPCDriver):
+    def __init__(self, address:str, token, **kwargs):
+        super(ProcessManagerDriver, self).__init__(
+            name = 'process_manager_driver',
+            address = address,
+            token = token,
+            **kwargs
+        )
 
 
-    def _create_request(self, payload=None):
-        token = Token()
-        token.CopyFrom(self.token)
-        data = Any()
-        if payload is not None:
-            data.Pack(payload)
-
-        if payload:
-            return Request(
-                token = token,
-                data = data
-            )
-        else:
-            return Request(
-                token = token
-            )
+    def create_stub(self, channel):
+        from druncschema.process_manager_pb2_grpc import ProcessManagerStub
+        return ProcessManagerStub(channel)
 
 
     async def _convert_boot_conf(self, conf, conf_type, user, session_name, log_level):
@@ -301,7 +285,7 @@ class ProcessManagerDriver:
             user = user,
             session_name = session_name,
             log_level = log_level):
-            answer = await self.pm_stub.boot(
+            answer = await self.stub.boot(
                 self._create_request(br)
             )
             pd = unpack_any(answer.data,ProcessInstance)
@@ -309,7 +293,7 @@ class ProcessManagerDriver:
 
 
     async def kill(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.pm_stub.kill(
+        answer = await self.stub.kill(
             self._create_request(payload = query)
         )
         pi = unpack_any(answer.data, ProcessInstanceList)
@@ -317,35 +301,40 @@ class ProcessManagerDriver:
 
 
     async def logs(self, req:LogRequest) -> LogLine:
-        async for stream in self.pm_stub.logs(self._create_request(payload = req)):
+        async for stream in self.stub.logs(self._create_request(payload = req)):
             ll = unpack_any(stream.data, LogLine)
             yield ll
 
     async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.ps(
-            self._create_request(payload = query)
-        )
+        answer = await self.send_command('ps', data=query)
         pil = unpack_any(answer.data, ProcessInstanceList)
         return pil
 
     async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.flush(
+        answer = await self.stub.flush(
             self._create_request(payload = query)
         )
         pil = unpack_any(answer.data, ProcessInstanceList)
         return pil
 
     async def restart(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.pm_stub.restart(
+        answer = await self.stub.restart(
             self._create_request(payload = query)
         )
         pi = unpack_any(answer.data, ProcessInstance)
         return pi
 
     async def describe(self) -> Description:
-        r = self._create_request(payload = None)
-        answer = await self.pm_stub.describe(
-            r
-        )
+        import grpc
+        try:
+            answer = await self.send_command('describe')
+        # r = self._create_request(payload = None)
+        # answer = await self.stub.describe(
+        #     r
+        # )
+        except grpc.aio.AioRpcError as e:
+            from drunc.utils.grpc_utils import rethrow_if_unreachable_server
+            rethrow_if_unreachable_server(e)
+
         desc = unpack_any(answer.data, Description)
         return desc

@@ -2,75 +2,72 @@ import click
 import click_shell
 from drunc.controller.utils import send_command
 from drunc.utils.grpc_utils import unpack_any
+from drunc.utils.shell_utils import ShellContext
 from druncschema.generic_pb2 import PlainText, PlainTextVector
+from druncschema.token_pb2 import Token
+
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
+from drunc.utils.shell_utils import GRPCDriver
+from typing import Mapping
+from drunc.controller.controller_driver import ControllerDriver
 
-class ControllerContext:
-    def __init__(self, print_traceback:bool=False) -> None:
-        from rich.console import Console
-        self._console = Console()
-        from logging import getLogger
-        self.log = getLogger("ControllerShell")
-        self.print_traceback = print_traceback
-        self.controller = None
-        self.status_receiver = None
+class ControllerContext(ShellContext): # boilerplatefest
+    status_receiver = None
 
-        import getpass
-        user=getpass.getuser()
-
-        from druncschema.token_pb2 import Token
-        self.token = Token ( # fake token, but should be figured out from the environment/authoriser
-            token = f'{user}-token',
-            user_name = user
+    def reset(self, address:str=None, print_traceback:bool=False):
+        self.address = address
+        super(ControllerContext, self)._reset(
+            print_traceback = print_traceback,
+            name = 'controller_context',
+            token_args = {},
+            driver_args = {},
         )
 
-        self.status_receiver = None
-        self.took_control = False
+    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+        if not self.address:
+            return {}
+        return {
+            'controller_driver': ControllerDriver(
+                self.address,
+                self._token
+            )
+        }
+
+    def create_token(self, **kwargs) -> Token:
+        from drunc.utils.shell_utils import create_dummy_token_from_uname
+        return create_dummy_token_from_uname()
+
 
     def start_listening(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
         from drunc.utils.conf_types import ConfTypes
-        # from drunc.utils.grpc_utils import unpack_any
 
         self.status_receiver = BroadcastHandler(
             broadcast_configuration = broadcaster_conf,
             conf_type = ConfTypes.Protobuf
         )
 
-
     def terminate(self):
         if self.status_receiver:
             self.status_receiver.stop()
 
-    def print(self, text):
-        self._console.print(text)
-
-    def rule(self, text):
-        self._console.rule(text)
 
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True)
-@click.argument('controller-address', type=str)#, help='Which address the controller is running on')
-@click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
+@click.argument('controller-address', type=str)
+@click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.pass_context
-def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool) -> None:#, this_port:int, just_watch:bool) -> None:
+def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
-    ctx.obj = ControllerContext(
-        print_traceback = traceback
+    ctx.obj.reset(
+        print_traceback = traceback,
+        address = controller_address,
     )
 
-    # first add the shell to the controller broadcast list
-    from druncschema.controller_pb2_grpc import ControllerStub
-    import grpc
-
-    channel = grpc.insecure_channel(controller_address)
-
-    ctx.obj.controller = ControllerStub(channel)
-
-    ctx.obj.log.info('Connected to the controller')
+    ctx.obj.info('Connected to the controller')
 
     from druncschema.request_response_pb2 import Description
     desc = Description()
@@ -80,49 +77,48 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
     from drunc.utils.grpc_utils import ServerUnreachable
     for itry in range(ntries):
         try:
-            response = send_command(
-                controller = ctx.obj.controller,
-                token = ctx.obj.token,
-                command = 'describe',
-                rethrow = True
-            )
-
-            response.data.Unpack(desc)
-
+            desc = ctx.obj.get_driver().describe()
+            # response = send_command(
+            #     controller = ctx.obj.get_driver().stub,
+            #     token = ctx.obj.get_token(),
+            #     command = 'ls',
+            #     rethrow = True
+            # )
+            # response.data.unpack(desc)
         except ServerUnreachable as e:
             if itry+1 == ntries:
                 raise e
             else:
-                ctx.obj.log.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
+                ctx.obj.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
                 from time import sleep
                 sleep(0.5)
 
         except Exception as e:
-            ctx.obj.log.critical('Could not get the controller\'s status')
-            ctx.obj.log.critical(e)
-            ctx.obj.log.critical('Exiting.')
+            ctx.obj.critical('Could not get the controller\'s status')
+            ctx.obj.critical(e)
+            ctx.obj.critical('Exiting.')
             ctx.obj.terminate()
             raise e
 
         else:
-            ctx.obj.log.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+            ctx.obj.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
             ctx.obj.start_listening(desc.broadcast)
             break
 
 
-    ctx.obj.log.info('Attempting to list this controller\'s children')
+    ctx.obj.info('Attempting to list this controller\'s children')
     from druncschema.generic_pb2 import PlainText, PlainTextVector
 
     response = send_command(
-        controller = ctx.obj.controller,
-        token = ctx.obj.token,
+        controller = ctx.obj.get_client_side_object(),
+        token = ctx.obj.get_token(),
         command = 'ls',
         rethrow = True
     )
 
     ptv = PlainTextVector()
     response.data.Unpack(ptv)
-    ctx.obj.log.info(f'{desc.name}.{desc.session}\'s children: {ptv.text}')
+    ctx.obj.info(f'{desc.name}.{desc.session}\'s children: {ptv.text}')
 
 
     def cleanup():
@@ -132,8 +128,8 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
         from drunc.utils.grpc_utils import unpack_any
         try:
             response = send_command(
-                controller = ctx.obj.controller,
-                token = ctx.obj.token,
+                controller = ctx.obj.get_client_side_object(),
+                token = ctx.obj.get_token(),
                 command = 'who_is_in_charge',
                 rethrow = True
             )
@@ -141,48 +137,48 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
-            ctx.obj.log.error('Could not understand who is in charge from the controller.')
-            ctx.obj.log.error(e)
+            ctx.obj.error('Could not understand who is in charge from the controller.')
+            ctx.obj.error(e)
             pt = 'no_one'
 
         if dead:
-            ctx.obj.log.error('Controller is dead. Exiting.')
+            ctx.obj.error('Controller is dead. Exiting.')
             return
 
-        if pt == ctx.obj.token.user_name and ctx.obj.took_control:
-            ctx.obj.log.info('You are in control. Surrendering control.')
+        if pt == ctx.obj.get_token().user_name and ctx.obj.took_control:
+            ctx.obj.info('You are in control. Surrendering control.')
             try:
                 response = send_command(
-                    controller = ctx.obj.controller,
-                    token = ctx.obj.token,
+                    controller = ctx.obj.get_client_side_object(),
+                    token = ctx.obj.get_token(),
                     command = 'surrender_control',
                     rethrow = True
                 )
             except Exception as e:
-                ctx.obj.log.error('Could not surrender control.')
-                ctx.obj.log.error(e)
-            ctx.obj.log.info('Control surrendered.')
+                ctx.obj.error('Could not surrender control.')
+                ctx.obj.error(e)
+            ctx.obj.info('Control surrendered.')
         ctx.obj.terminate()
 
     ctx.call_on_close(cleanup)
 
-    ctx.obj.log.info(f'Taking control of the controller as {ctx.obj.token}')
+    ctx.obj.info(f'Taking control of the controller as {ctx.obj.get_token()}')
     try:
         response = send_command(
-            controller = ctx.obj.controller,
-            token = ctx.obj.token,
+            controller = ctx.obj.get_client_side_object(),
+            token = ctx.obj.get_token(),
             command = 'take_control',
             rethrow = True
         )
         ctx.obj.took_control = True
 
     except Exception as e:
-        ctx.obj.log.error('You are NOT in control.')
+        ctx.obj.error('You are NOT in control.')
         ctx.obj.took_control = False
         #raise e
         return
 
-    ctx.obj.log.info('You are in control.')
+    ctx.obj.info('You are in control.')
 
 
 @controller_shell.command('describe')
@@ -195,8 +191,8 @@ def describe(obj:ControllerContext, command) -> None:
     if command == 'fsm':
         desc = unpack_any(
             send_command(
-                controller = obj.controller,
-                token = obj.token,
+                controller = obj.get_client_side_object(),
+                token = obj.get_token(),
                 command = 'describe_fsm',
                 data = None
             ).data,
@@ -205,8 +201,8 @@ def describe(obj:ControllerContext, command) -> None:
     else:
         desc = unpack_any(
             send_command(
-                controller = obj.controller,
-                token = obj.token,
+                controller = obj.get_client_side_object(),
+                token = obj.get_token(),
                 command = 'describe',
                 data = None
             ).data,
@@ -277,8 +273,8 @@ def describe(obj:ControllerContext, command) -> None:
 def ls(obj:ControllerContext) -> None:
     children = unpack_any(
         send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'ls',
             data = None
         ).data,
@@ -293,8 +289,8 @@ def status(obj:ControllerContext) -> None:
 
     status = unpack_any(
         send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'get_status',
             data = None
         ).data,
@@ -319,8 +315,8 @@ def status(obj:ControllerContext) -> None:
 
     statuses = unpack_any(
         send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'get_children_status',
             data = None
         ).data,
@@ -351,8 +347,8 @@ def status(obj:ControllerContext) -> None:
 @click.pass_obj
 def take_control(obj:ControllerContext) -> None:
     send_command(
-        controller = obj.controller,
-        token = obj.token,
+        controller = obj.get_client_side_object(),
+        token = obj.get_token(),
         command = 'take_control',
         data = None
     )
@@ -362,8 +358,8 @@ def take_control(obj:ControllerContext) -> None:
 @click.pass_obj
 def surrender_control(obj:ControllerContext) -> None:
     send_command(
-        controller = obj.controller,
-        token = obj.token,
+        controller = obj.get_client_side_object(),
+        token = obj.get_token(),
         command = 'surrender_control',
         data = None
     )
@@ -372,7 +368,7 @@ def surrender_control(obj:ControllerContext) -> None:
 @controller_shell.command('who-am-i')
 @click.pass_obj
 def who_am_i(obj:ControllerContext) -> None:
-    obj.print(obj.token.user_name)
+    obj.print(obj.get_token().user_name)
 
 
 @controller_shell.command('who-is-in-charge')
@@ -381,8 +377,8 @@ def who_is_in_charge(obj:ControllerContext) -> None:
 
     who = unpack_any(
         send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'who_is_in_charge',
             data = None
         ).data,
@@ -404,8 +400,8 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
     from druncschema.controller_pb2 import FSMCommandsDescription, Argument, FSMCommandResponse, FSMCommandResponseCode
     desc = unpack_any(
         send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'describe_fsm',
             data = None
         ).data,
@@ -416,7 +412,7 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
 
     command_desc = search_fsm_command(command, desc.commands)
     if command_desc is None:
-        obj.log.error(f'Command "{command}" does not exist, or is not accessible right now')
+        obj.error(f'Command "{command}" does not exist, or is not accessible right now')
         return
 
     keys = arguments[::2]
@@ -429,8 +425,8 @@ def fsm(obj:ControllerContext, command, arguments) -> None:
             arguments = formated_args,
         )
         r = send_command(
-            controller = obj.controller,
-            token = obj.token,
+            controller = obj.get_client_side_object(),
+            token = obj.get_token(),
             command = 'execute_fsm_command',
             data = data
         )
@@ -472,8 +468,8 @@ def some_command(obj:ControllerContext) -> None:
     )
 
     send_command(
-        controller = obj.controller,
-        token = obj.token,
+        controller = obj.get_client_side_object(),
+        token = obj.get_token(),
         command = 'include',
         data = data
     )
@@ -487,8 +483,8 @@ def some_command(obj:ControllerContext) -> None:
     )
 
     send_command(
-        controller = obj.controller,
-        token = obj.token,
+        controller = obj.get_client_side_object(),
+        token = obj.get_token(),
         command = 'exclude',
         data = data
     )

@@ -31,10 +31,19 @@ def server_is_reachable(grpc_error):
         import grpc
         if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
             return False
+
+    elif hasattr(grpc_error, '_code'): # the async server case
+        import grpc
+        if grpc_error._code == grpc.StatusCode.UNAVAILABLE:
+            return False
+
     return True
 
 def rethrow_if_unreachable_server(grpc_error):
     if not server_is_reachable(grpc_error):
         # Come on ! Such a common error and I need to do all this crap to get the address of the service, not even it it's own pre-defined message
-        raise ServerUnreachable(grpc_error._state.details) from grpc_error
+        if hasattr(grpc_error, '_state'):
+            raise ServerUnreachable(grpc_error._state.details) from grpc_error
+        elif hasattr(grpc_error, '_details'): # -1 for gRPC not throwing the same exception in case the server is async
+            raise ServerUnreachable(grpc_error._details) from grpc_error
 

@@ -15,6 +15,7 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         raise RuntimeError('No controller initialised')
 
     cmd = getattr(controller, command) # this throws if the command doesn't exist
+    print(controller)
 
     request = Request(
         token = token,
@@ -29,7 +30,7 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         log.debug(f'Sending: {command} to the controller, with {request}')
 
         response = cmd(request)
-
+        print(response)
     except grpc.RpcError as e:
         from drunc.utils.grpc_utils import rethrow_if_unreachable_server
         rethrow_if_unreachable_server(e)

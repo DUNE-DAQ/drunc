@@ -1,13 +1,14 @@
 import asyncio
 import click
 import click_shell
-import os
 import getpass
 from functools import wraps
+from typing import Mapping
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
+from drunc.utils.shell_utils import ShellContext, GRPCDriver
 from drunc.process_manager.interface.cli_argument import accept_configuration_type, add_query_options
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
@@ -20,26 +21,33 @@ def coroutine(f):
     return wrapper
 
 
-class PMContext:
-    def __init__(self, address:str=None, print_traceback:bool=False) -> None:
-        self.print_traceback = True
-        from rich.console import Console
-        from drunc.utils.utils import CONSOLE_THEMES
-        self._console = Console(theme=CONSOLE_THEMES)
-        import logging
-        self._log = logging.getLogger("PMContext")
-        self._log.info('initialising PMContext')
+class ProcessManagerContext(ShellContext): # boilerplatefest
+    status_receiver = None
 
-        user=getpass.getuser()
-        self.token = Token(token=f'{user}-token', user_name=user)
-        if address:
-            self.pmd = ProcessManagerDriver(
-                address,
-                self.token
+    def reset(self, address:str=None, print_traceback:bool=False):
+        self.address = address
+        super(ProcessManagerContext, self)._reset(
+            print_traceback = print_traceback,
+            name = 'process_manager_context',
+            token_args = {},
+            driver_args = {},
+        )
+
+    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+        if not self.address:
+            return {}
+        return {
+            'process_manager_driver': ProcessManagerDriver(
+                self.address,
+                self._token,
+                aio_channel = True
             )
+        }
 
-        self.print_traceback = print_traceback
-        self.status_receiver = None
+    def create_token(self, **kwargs) -> Token:
+        from drunc.utils.shell_utils import create_dummy_token_from_uname
+        return create_dummy_token_from_uname()
+
 
     def start_listening(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
@@ -49,37 +57,34 @@ class PMContext:
             broadcast_configuration = broadcaster_conf,
             conf_type = ConfTypes.Protobuf
         )
-
+        from rich import print as rprint
+        rprint(f':ear: Listening to the Process Manager at {self.address}')
 
     def terminate(self):
-        self.status_receiver.stop()
-
-    def print(self, text):
-        self._console.print(text)
-
-    def rule(self, text):
-        self._console.rule(text)
+        if self.status_receiver:
+            self.status_receiver.stop()
 
 
-@click_shell.shell(prompt='pm > ', chain=True, context_settings=CONTEXT_SETTINGS)
+
+@click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.option('-t', '--traceback', is_flag=True, default=True, help='Print full exception traceback')
+@click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.argument('process-manager-address', type=str)
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
-    ctx.obj = PMContext(
+    ctx.obj.reset(
+        print_traceback = traceback,
         address = process_manager_address,
-        print_traceback = traceback
     )
 
     desc = asyncio.get_event_loop().run_until_complete(
-        ctx.obj.pmd.describe()
+        ctx.obj.get_driver().describe()
     )
 
-    ctx.obj._log.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
@@ -97,9 +102,9 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
 @click.argument('session-name', type=str)
 @click.pass_obj
 @coroutine
-async def boot(obj:PMContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str) -> None:
+async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str) -> None:
 
-    results = obj.pmd.boot(
+    results = obj.get_driver().boot(
         conf = boot_configuration,
         conf_type = conf_type,
         user = user,
@@ -114,8 +119,8 @@ async def boot(obj:PMContext, user:str, conf_type:str, session_name:str, boot_co
 @add_query_options(at_least_one=False)
 @click.pass_obj
 @coroutine
-async def kill(obj:PMContext, query:ProcessQuery) -> None:
-    result = await obj.pmd.kill(query = query)
+async def kill(obj:ProcessManagerContext, query:ProcessQuery) -> None:
+    result = await obj.get_driver().kill(query = query)
     obj.print(tabulate_process_instance_list(result, 'Killed process', False))
 
 
@@ -123,9 +128,10 @@ async def kill(obj:PMContext, query:ProcessQuery) -> None:
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @click.pass_obj
 @coroutine
-async def flush(obj:PMContext, query:ProcessQuery) -> None:
-    result = await obj.pmd.flush(query = query)
+async def flush(obj:ProcessManagerContext, query:ProcessQuery) -> None:
+    result = await obj.get_driver().flush(query = query)
     obj.print(tabulate_process_instance_list(result, 'Flushed process', False))
+
 
 @process_manager_shell.command('logs')
 @add_query_options(at_least_one=True)
@@ -133,7 +139,7 @@ async def flush(obj:PMContext, query:ProcessQuery) -> None:
 @click.option('--grep', type=str, default=None)
 @click.pass_obj
 @coroutine
-async def logs(obj:PMContext, how_far:int, grep:str, query:ProcessQuery) -> None:
+async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQuery) -> None:
     from druncschema.process_manager_pb2 import LogRequest, LogLine
 
     log_req = LogRequest(
@@ -145,7 +151,7 @@ async def logs(obj:PMContext, how_far:int, grep:str, query:ProcessQuery) -> None
     from rich.markup import escape
     from drunc.utils.grpc_utils import unpack_any
 
-    async for result in obj.pmd.logs(log_req):
+    async for result in obj.get_driver().logs(log_req):
 
         if uuid is None:
             uuid = result.uuid.uuid
@@ -164,16 +170,7 @@ async def logs(obj:PMContext, how_far:int, grep:str, query:ProcessQuery) -> None
         if grep is not None:
             line = line.replace(grep, f'[u]{grep}[/]')
 
-        # console_print = True
-        # for c in ['[',']']: # If these are here, it probably means that this is already a rich formatted string
-        #     if c in line:
-        #         console_print = False
-        #         break
-
-        # if console_print:
         obj.print(line)
-        # else:
-        #     print(line)
 
     obj.rule(f'End')
 
@@ -182,8 +179,8 @@ async def logs(obj:PMContext, how_far:int, grep:str, query:ProcessQuery) -> None
 @add_query_options(at_least_one=True)
 @click.pass_obj
 @coroutine
-async def restart(obj:PMContext, query:ProcessQuery) -> None:
-    result = await obj.pmd.restart(query = query)
+async def restart(obj:ProcessManagerContext, query:ProcessQuery) -> None:
+    result = await obj.get_driver().restart(query = query)
     obj.print(result)
 
 
@@ -192,8 +189,8 @@ async def restart(obj:PMContext, query:ProcessQuery) -> None:
 @click.option('-l','--long-format', is_flag=True, type=bool, default=False, help='Whether to have a long output')
 @click.pass_obj
 @coroutine
-async def ps(obj:PMContext, query:ProcessQuery, long_format:bool) -> None:
-    results = await obj.pmd.ps(query=query)
+async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool) -> None:
+    results = await obj.get_driver().ps(query=query)
 
     obj.print(tabulate_process_instance_list(results, title='Processes running', long=long_format))
 
