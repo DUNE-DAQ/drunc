@@ -10,14 +10,15 @@ class BroadcastSender:
         super(BroadcastSender, self).__init__(
             **kwargs,
         )
-        print('Initialising broadcast')
+
         self.name = name
         self.session = session
-        self.identifier = f'{self.name}.{self.session}'
+        self.identifier = f'{self.session}.{self.name}'
 
         from logging import getLogger
         self.logger = getLogger(self.identifier)
 
+        self.logger.info('Initialising broadcast')
 
         broadcast_types_loglevels_str = broadcast_configuration.get(
             'broadcast_types_loglevels',
@@ -62,7 +63,7 @@ class BroadcastSender:
         match self.impl_technology:
             case 'kafka':
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(broadcast_configuration, conf_type = conf_type, topic=self.identifier)
+                self.implementation = KafkaSender(broadcast_configuration, conf_type=conf_type, topic=f'control.{self.identifier}')
             case 'grpc':
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
