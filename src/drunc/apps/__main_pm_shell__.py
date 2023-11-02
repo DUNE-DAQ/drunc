@@ -1,7 +1,7 @@
 
 def main():
     try:
-        from drunc.process_manager.interface.process_manager_shell import process_manager_shell
+        from drunc.process_manager.interface.shell import process_manager_shell
         from drunc.process_manager.interface.context import ProcessManagerContext
 
         context = ProcessManagerContext()
