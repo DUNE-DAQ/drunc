@@ -1,9 +1,11 @@
 
 def main() -> None:
-    from drunc.controller.interface.controller_shell import controller_shell, ControllerContext
-    context = ControllerContext()
 
     try:
+        from drunc.controller.interface.shell import controller_shell
+        from drunc.controller.interface.context import ControllerContext
+
+        context = ControllerContext()
         controller_shell(obj = context)
 
     except Exception as e:
