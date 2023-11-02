@@ -1,22 +1,13 @@
-import asyncio
 
 import getpass
-from functools import wraps
 from typing import Mapping
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
 from drunc.utils.shell_utils import ShellContext, GRPCDriver, add_traceback_flag
+from drunc.utils.utils import run_coroutine
 from drunc.process_manager.interface.cli_argument import accept_configuration_type, add_query_options
-
-def coroutine(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
-
-    return wrapper
-
 
 class ProcessManagerContext(ShellContext): # boilerplatefest
     status_receiver = None
@@ -87,6 +78,7 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
     from drunc.utils.grpc_utils import ServerUnreachable
 
     try:
+        import asyncio
         desc = asyncio.get_event_loop().run_until_complete(
             ctx.obj.get_driver().describe(rethrow=True)
         )
@@ -112,7 +104,7 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
 @click.argument('boot-configuration', type=click.Path(exists=True))
 @click.argument('session-name', type=str)
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str, traceback:bool) -> None:
 
     results = obj.get_driver().boot(
@@ -132,7 +124,7 @@ async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:
 @add_query_options(at_least_one=False)
 @add_traceback_flag()
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver().kill(
         query = query,
@@ -149,7 +141,7 @@ async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) ->
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @add_traceback_flag()
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver().flush(
         query = query,
@@ -168,7 +160,7 @@ async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -
 @click.option('--grep', type=str, default=None)
 @add_traceback_flag()
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQuery, traceback:bool) -> None:
     from druncschema.process_manager_pb2 import LogRequest, LogLine
 
@@ -213,7 +205,7 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
 @add_query_options(at_least_one=True)
 @add_traceback_flag()
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver().restart(
         query = query,
@@ -230,7 +222,7 @@ async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool)
 @click.option('-l','--long-format', is_flag=True, type=bool, default=False, help='Whether to have a long output')
 @add_traceback_flag()
 @click.pass_obj
-@coroutine
+@run_coroutine
 async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool, traceback:bool) -> None:
     results = await obj.get_driver().ps(
         query=query,
