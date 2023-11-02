@@ -1,9 +1,10 @@
 
 def main():
-    from drunc.controller.interface.unified_shell import unified_shell, UnifiedShellContext
-    context = UnifiedShellContext()
-
     try:
+        from drunc.unified_shell.shell import unified_shell
+        from drunc.unified_shell.context import UnifiedShellContext
+
+        context = UnifiedShellContext()
         unified_shell(obj = context)
 
     except Exception as e:
