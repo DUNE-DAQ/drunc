@@ -5,7 +5,7 @@ from typing import Mapping
 
 
 class GRPCDriver:
-    def __init__(self, name:str, address:str, token:Token, aio_channel=False):
+    def __init__(self, name:str, address:str, token:Token, aio_channel=False, rethrow_by_default=False):
         import logging
         self._log = logging.getLogger(name)
         import grpc
@@ -20,6 +20,7 @@ class GRPCDriver:
         self.stub = self.create_stub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
+        self.rethrow_by_default = rethrow_by_default
 
     @abc.abstractmethod
     def create_stub(self, channel):
@@ -44,7 +45,51 @@ class GRPCDriver:
                 token = token2
             )
 
-    def send_command(self, command:str, data=None, rethrow=False):
+    def __handle_grpc_error(self, error, command, rethrow):
+        if rethrow is None:
+            rethrow = self.rethrow_by_default
+
+        from drunc.utils.grpc_utils import rethrow_if_unreachable_server, interrupt_if_unreachable_server
+        if rethrow:
+            rethrow_if_unreachable_server(error)
+        else:
+            text = interrupt_if_unreachable_server(error)
+            if text:
+                self._log.error(text)
+
+        from grpc_status import rpc_status
+        status = rpc_status.from_call(error)
+
+        self._log.error(f'Error sending command "{command}" to stub')
+
+        from druncschema.generic_pb2 import Stacktrace, PlainText
+        from drunc.utils.grpc_utils import unpack_any
+
+        if hasattr(status, 'message'):
+            self._log.error(status.message)
+
+        if hasattr(status, 'details'):
+            for detail in status.details:
+                if detail.Is(Stacktrace.DESCRIPTOR) and rethrow:
+                    text = 'Stacktrace [bold red]on remote server![/]\n'
+                    stack = unpack_any(detail, Stacktrace)
+                    for l in stack.text:
+                        text += l+"\n"
+                    self._log.error(text, extra={"markup": True})
+                elif detail.Is(PlainText.DESCRIPTOR):
+                    txt = unpack_any(detail, PlainText)
+                    self._log.error(txt)
+
+        if hasattr(error, 'details'): #ARGG asyncio gRPC so different from synchronous one!!
+            self._log.error(error.details())
+
+            # of course, right now asyncio servers are not able to reply with a stacktrace (yet)
+            # we just throw the client-side error and call it a day for now
+            if rethrow:
+                raise error
+
+
+    def send_command(self, command:str, data=None, rethrow=None, outformat=None):
         import grpc
         if not self.stub:
             raise RuntimeError('No stub initialised')
@@ -54,41 +99,57 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            response = cmd(request)
+            a = cmd(request)
+            if outformat:
+                from drunc.utils.grpc_utils import unpack_any
+                return unpack_any(a.data, outformat)
+            else:
+                return a
 
         except grpc.RpcError as e:
+            self.__handle_grpc_error(e, command, rethrow = rethrow)
 
-            from drunc.utils.grpc_utils import rethrow_if_unreachable_server
-            rethrow_if_unreachable_server(e)
 
-            from grpc_status import rpc_status
-            status = rpc_status.from_call(e)
+    async def send_command_aio(self, command:str, data=None, rethrow=None, outformat=None):
+        import grpc
+        if not self.stub:
+            raise RuntimeError('No stub initialised')
 
-            self._log.error(f'Error sending command "{command}" to stub')
+        cmd = getattr(self.stub, command) # this throws if the command doesn't exist
 
-            from druncschema.generic_pb2 import Stacktrace, PlainText
-            from drunc.utils.grpc_utils import unpack_any
+        request = self._create_request(data)
 
-            if hasattr(status, 'message'):
-                self._log.error(status.message)
+        try:
+            a = await cmd(request)
+            if outformat:
+                from drunc.utils.grpc_utils import unpack_any
+                return unpack_any(a.data, outformat)
+            else:
+                return a
 
-            if hasattr(status, 'details'):
-                for detail in status.details:
-                    if detail.Is(Stacktrace.DESCRIPTOR):
-                        text = 'Stacktrace [bold red]on remote server![/]\n'
-                        stack = unpack_any(detail, Stacktrace)
-                        for l in stack.text:
-                            text += l+"\n"
-                        self._log.error(text, extra={"markup": True})
-                    elif detail.Is(PlainText.DESCRIPTOR):
-                        txt = unpack_any(detail, PlainText)
-                        self._log.error(txt)
+        except grpc.aio.AioRpcError as e:
+            self.__handle_grpc_error(e, command, rethrow = rethrow)
 
-            if rethrow:
-                raise e
-            return None
 
-        return response
+    async def send_command_for_aio(self, command:str, data=None, rethrow=None, outformat=None):
+        import grpc
+        if not self.stub:
+            raise RuntimeError('No stub initialised')
+
+        cmd = getattr(self.stub, command) # this throws if the command doesn't exist
+
+        request = self._create_request(data)
+
+        try:
+            async for s in cmd(request):
+                if outformat:
+                    from drunc.utils.grpc_utils import unpack_any
+                    yield unpack_any(s.data, outformat)
+                else:
+                    yield s
+
+        except grpc.aio.AioRpcError as e:
+            self.__handle_grpc_error(e, command, rethrow = rethrow)
 
 
 
@@ -167,3 +228,11 @@ def create_dummy_token_from_uname() -> Token:
         token = f'{user}-token',
         user_name = user
     )
+
+
+def add_traceback_flag():
+    def wrapper(f0):
+        import click
+        f1 = click.option('-t/-nt','--traceback/--no-traceback', default=None, help='Print full exception traceback')(f0)
+        return f1
+    return wrapper
