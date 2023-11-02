@@ -1,6 +1,5 @@
 import asyncio
-import click
-import click_shell
+
 import getpass
 from functools import wraps
 from typing import Mapping
@@ -10,14 +9,12 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
 from drunc.utils.shell_utils import ShellContext, GRPCDriver, add_traceback_flag
 from drunc.process_manager.interface.cli_argument import accept_configuration_type, add_query_options
-from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 def coroutine(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
-        #return asyncio.run(f(*args, **kwargs))
+
     return wrapper
 
 
@@ -38,6 +35,9 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
     def create_drivers(self, print_traceback, **kwargs) -> Mapping[str, GRPCDriver]:
         if not self.address:
             return {}
+
+        from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+
         return {
             'process_manager_driver': ProcessManagerDriver(
                 self.address,
@@ -67,7 +67,8 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
         if self.status_receiver:
             self.status_receiver.stop()
 
-
+import click
+import click_shell
 
 @click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
@@ -137,7 +138,10 @@ async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) ->
         query = query,
         rethrow = traceback,
     )
+
     if not result: return
+
+    from drunc.process_manager.utils import tabulate_process_instance_list
     obj.print(tabulate_process_instance_list(result, 'Killed process', False))
 
 
@@ -151,7 +155,10 @@ async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -
         query = query,
         rethrow = traceback,
     )
+
     if not result: return
+
+    from drunc.process_manager.utils import tabulate_process_instance_list
     obj.print(tabulate_process_instance_list(result, 'Flushed process', False))
 
 
@@ -212,7 +219,9 @@ async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool)
         query = query,
         rethrow = traceback,
     )
+
     if not result: return
+
     obj.print(result)
 
 
@@ -227,7 +236,10 @@ async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool, tr
         query=query,
         rethrow = traceback,
     )
+
     if not results: return
+
+    from drunc.process_manager.utils import tabulate_process_instance_list
     obj.print(tabulate_process_instance_list(results, title='Processes running', long=long_format))
 
 

@@ -1,15 +1,6 @@
-import click
-import click_shell
-from drunc.controller.utils import send_command
-from drunc.utils.grpc_utils import unpack_any
-from drunc.utils.shell_utils import ShellContext
-from druncschema.generic_pb2 import PlainText, PlainTextVector
+from drunc.utils.shell_utils import ShellContext, GRPCDriver, add_traceback_flag
 from druncschema.token_pb2 import Token
-
-from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
-from drunc.utils.shell_utils import GRPCDriver, add_traceback_flag
 from typing import Mapping
-from drunc.controller.controller_driver import ControllerDriver
 
 class ControllerContext(ShellContext): # boilerplatefest
     status_receiver = None
@@ -27,6 +18,8 @@ class ControllerContext(ShellContext): # boilerplatefest
     def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         if not self.address:
             return {}
+
+        from drunc.controller.controller_driver import ControllerDriver
         return {
             'controller_driver': ControllerDriver(
                 self.address,
@@ -52,7 +45,9 @@ class ControllerContext(ShellContext): # boilerplatefest
         if self.status_receiver:
             self.status_receiver.stop()
 
-
+import click
+import click_shell
+from drunc.utils.utils import log_levels
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True)
 @click.argument('controller-address', type=str)
@@ -61,6 +56,7 @@ class ControllerContext(ShellContext): # boilerplatefest
 @click.pass_context
 def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
+
     update_log_level(log_level)
 
     ctx.obj.reset(
