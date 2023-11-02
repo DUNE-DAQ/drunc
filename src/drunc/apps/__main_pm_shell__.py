@@ -1,9 +1,11 @@
 
 def main():
-    from drunc.process_manager.interface.process_manager_shell import process_manager_shell, ProcessManagerContext
-    context = ProcessManagerContext()
-
     try:
+        from drunc.process_manager.interface.process_manager_shell import process_manager_shell
+        from drunc.process_manager.interface.context import ProcessManagerContext
+
+        context = ProcessManagerContext()
+
         process_manager_shell(obj = context)
 
     except Exception as e:
