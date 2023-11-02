@@ -67,8 +67,6 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
         address = controller_address,
     )
 
-    ctx.obj.info('Connected to the controller')
-
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
@@ -78,18 +76,11 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
     for itry in range(ntries):
         try:
             desc = ctx.obj.get_driver().describe()
-            # response = send_command(
-            #     controller = ctx.obj.get_driver().stub,
-            #     token = ctx.obj.get_token(),
-            #     command = 'ls',
-            #     rethrow = True
-            # )
-            # response.data.unpack(desc)
         except ServerUnreachable as e:
-            if itry+1 == ntries:
+            ctx.obj.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
+            if itry >= ntries-1:
                 raise e
             else:
-                ctx.obj.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
                 from time import sleep
                 sleep(0.5)
 
@@ -105,6 +96,7 @@ def controller_shell(ctx, controller_address:str, log_level:str, traceback:bool)
             ctx.obj.start_listening(desc.broadcast)
             break
 
+    ctx.obj.info('Connected to the controller')
 
     ctx.obj.info('Attempting to list this controller\'s children')
     from druncschema.generic_pb2 import PlainText, PlainTextVector
