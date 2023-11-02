@@ -278,63 +278,70 @@ class ProcessManagerDriver(GRPCDriver):
                 )
             )
 
-    async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str) -> ProcessInstance:
+    async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str, rethrow=None) -> ProcessInstance:
         async for br in self._convert_boot_conf(
             conf = conf,
             conf_type = conf_type,
             user = user,
             session_name = session_name,
             log_level = log_level):
-            answer = await self.stub.boot(
-                self._create_request(br)
+            yield await self.send_command_aio(
+                'boot',
+                data = br,
+                outformat = ProcessInstance,
+                rethrow = rethrow,
             )
-            pd = unpack_any(answer.data,ProcessInstance)
-            yield pd
 
 
-    async def kill(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.stub.kill(
-            self._create_request(payload = query)
+    async def kill(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+        return await self.send_command_aio(
+            'kill',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        pi = unpack_any(answer.data, ProcessInstanceList)
-        return pi
 
 
-    async def logs(self, req:LogRequest) -> LogLine:
-        async for stream in self.stub.logs(self._create_request(payload = req)):
-            ll = unpack_any(stream.data, LogLine)
-            yield ll
+    async def logs(self, req:LogRequest, rethrow=None) -> LogLine:
+        async for stream in self.send_command_for_aio(
+            'logs',
+            data = req,
+            outformat = LogLine,
+            rethrow = rethrow,):
+            yield stream
 
-    async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.send_command('ps', data=query)
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
-    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.stub.flush(
-            self._create_request(payload = query)
+    async def ps(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+        return await self.send_command_aio(
+            'ps',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
-    async def restart(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.stub.restart(
-            self._create_request(payload = query)
+
+
+    async def flush(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+        return await self.send_command_aio(
+            'flush',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        pi = unpack_any(answer.data, ProcessInstance)
-        return pi
 
-    async def describe(self) -> Description:
-        import grpc
-        try:
-            answer = await self.send_command('describe')
-        # r = self._create_request(payload = None)
-        # answer = await self.stub.describe(
-        #     r
-        # )
-        except grpc.aio.AioRpcError as e:
-            from drunc.utils.grpc_utils import rethrow_if_unreachable_server
-            rethrow_if_unreachable_server(e)
 
-        desc = unpack_any(answer.data, Description)
-        return desc
+    async def restart(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+        return await self.send_command_aio(
+            'restart',
+            data = query,
+            outformat = ProcessInstance,
+            rethrow = rethrow,
+        )
+
+
+    async def describe(self, rethrow=None) -> Description:
+        return await self.send_command_aio(
+            'describe',
+            outformat = Description,
+            rethrow = rethrow,
+        )
