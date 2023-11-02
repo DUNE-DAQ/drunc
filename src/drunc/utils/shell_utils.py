@@ -65,17 +65,19 @@ class GRPCDriver:
         from druncschema.generic_pb2 import Stacktrace, PlainText
         from drunc.utils.grpc_utils import unpack_any
 
-        if hasattr(status, 'message'):
-            self._log.error(status.message)
-
         if hasattr(status, 'details'):
             for detail in status.details:
-                if detail.Is(Stacktrace.DESCRIPTOR) and rethrow:
-                    text = 'Stacktrace [bold red]on remote server![/]\n'
+                if detail.Is(Stacktrace.DESCRIPTOR):
                     stack = unpack_any(detail, Stacktrace)
-                    for l in stack.text:
-                        text += l+"\n"
+                    text = ''
+                    if rethrow:
+                        text += 'Stacktrace [bold red]on remote server![/]\n'
+                        for l in stack.text:
+                            text += l+"\n"
+                    else:
+                        text += 'Error [bold red]on remote server![/]\n'+'\n'.join(stack.text[:-2])
                     self._log.error(text, extra={"markup": True})
+                    return
                 elif detail.Is(PlainText.DESCRIPTOR):
                     txt = unpack_any(detail, PlainText)
                     self._log.error(txt)
