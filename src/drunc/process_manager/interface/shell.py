@@ -22,7 +22,7 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
     try:
         import asyncio
         desc = asyncio.get_event_loop().run_until_complete(
-            ctx.obj.get_driver().describe(rethrow=True)
+            ctx.obj.get_driver('process_manager').describe(rethrow=True)
         )
     except ServerUnreachable as e:
         ctx.obj.critical(f'Could not connect to the process manager')
