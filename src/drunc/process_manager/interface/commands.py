@@ -1,4 +1,3 @@
-
 import click
 import getpass
 
@@ -21,7 +20,7 @@ from druncschema.process_manager_pb2 import ProcessQuery
 @run_coroutine
 async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str, traceback:bool) -> None:
 
-    results = obj.get_driver().boot(
+    results = obj.get_driver('process_manager').boot(
         conf = boot_configuration,
         conf_type = conf_type,
         user = user,
@@ -33,6 +32,15 @@ async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:
         if not result: break
         obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
 
+    controller_address = obj.get_driver('process_manager').controller_address
+    if controller_address:
+        from rich.panel import Panel
+        obj.print(Panel("Controller endpoint: 'np04-srv-019:3338', point your 'drunc-controller-shell' to it.", padding=(2,6), style='violet', border_style='violet'), justify='center')
+    else:
+        obj.error(f'Could not understand where the controller is! You can look at the logs of the controller to see its address')
+        return
+
+
 
 @click.command('kill')
 @add_query_options(at_least_one=False)
@@ -40,7 +48,7 @@ async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:
 @click.pass_obj
 @run_coroutine
 async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
-    result = await obj.get_driver().kill(
+    result = await obj.get_driver('process_manager').kill(
         query = query,
         rethrow = traceback,
     )
@@ -57,7 +65,7 @@ async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) ->
 @click.pass_obj
 @run_coroutine
 async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
-    result = await obj.get_driver().flush(
+    result = await obj.get_driver('process_manager').flush(
         query = query,
         rethrow = traceback,
     )
@@ -87,7 +95,7 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
     from rich.markup import escape
     from drunc.utils.grpc_utils import unpack_any
 
-    async for result in obj.get_driver().logs(
+    async for result in obj.get_driver('process_manager').logs(
         log_req,
         rethrow = traceback,
         ):
@@ -121,7 +129,7 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
 @click.pass_obj
 @run_coroutine
 async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
-    result = await obj.get_driver().restart(
+    result = await obj.get_driver('process_manager').restart(
         query = query,
         rethrow = traceback,
     )
@@ -138,7 +146,7 @@ async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool)
 @click.pass_obj
 @run_coroutine
 async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool, traceback:bool) -> None:
-    results = await obj.get_driver().ps(
+    results = await obj.get_driver('process_manager').ps(
         query=query,
         rethrow = traceback,
     )

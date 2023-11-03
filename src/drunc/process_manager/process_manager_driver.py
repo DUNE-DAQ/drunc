@@ -13,6 +13,8 @@ class ConfigurationTypeNotSupported(Exception):
         )
 
 class ProcessManagerDriver(GRPCDriver):
+    controller_address = ''
+
     def __init__(self, address:str, token, **kwargs):
         super(ProcessManagerDriver, self).__init__(
             name = 'process_manager_driver',
@@ -75,22 +77,18 @@ class ProcessManagerDriver(GRPCDriver):
         for svc_name, svc_data in boot_configuration.get('services', {}).items():
             raise RuntimeError('Services cannot be started by drunc (yet)')
 
-        children_app = []
-
         for app_name, app_data in boot_configuration['apps'].items():
-            children_app += [{
-                'name': app_name,
-                'uri': f'{hosts[app_name]}:{app_data["port"]}',
-                'type': 'rest-api'
-            }]
 
             extra_args = []
             config = parsed_config_dir
+
             if 'drunc_controller' in app_data['exec']: # meh meh meh
                 config = f'{parsed_config_dir}/controller.json'
                 if loglevel:
                     extra_args = ['--log-level', loglevel]
                 log.debug(f'{app_name=} (daq controller) {app_data=}')
+                self.controller_address = f"{hosts[app_data['host']]}:{app_data['port']}"
+
             else:
                 log.debug(f'{app_name=} (daq app) {app_data=}')
 
@@ -181,11 +179,16 @@ class ProcessManagerDriver(GRPCDriver):
 
             self._log.debug(f"{app=}")
 
+            if 'drunc_controller' in exe: # meh meh meh
+                self.controller_address = f"{host}:{port}"
+
             executable_and_arguments = []
+
             if session_dal.rte_script:
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
                     args=[session_dal.rte_script]))
+
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
                 args=[args]))
@@ -201,17 +204,17 @@ class ProcessManagerDriver(GRPCDriver):
 
             self._log.debug(f"{new_env=}")
             breq =  BootRequest(
-            process_description = ProcessDescription(
-                metadata = ProcessMetadata(
-                    user = user,
-                    session = session,
-                    name = name,
+                process_description = ProcessDescription(
+                    metadata = ProcessMetadata(
+                        user = user,
+                        session = session,
+                        name = name,
+                    ),
+                    executable_and_arguments = executable_and_arguments,
+                    env = new_env,
+                    process_execution_directory = pwd,
+                    process_logs_path = log_path,
                 ),
-                executable_and_arguments = executable_and_arguments,
-                env = new_env,
-                process_execution_directory = pwd,
-                process_logs_path = log_path,
-            ),
                 process_restriction = ProcessRestriction(
                     allowed_hosts = [host]
                 )
@@ -232,6 +235,7 @@ class ProcessManagerDriver(GRPCDriver):
         pwd = os.getcwd()
 
         for app in boot_configuration['instances']:
+
             executable_and_arguments = []
             for execargs in boot_configuration['executables'][app['type']]['executable_and_arguments']:
                 for exe, args in execargs.items():
@@ -260,6 +264,10 @@ class ProcessManagerDriver(GRPCDriver):
 
             from drunc.utils.utils import now_str
             log_path = f'{pwd}/log_{user}_{session}_{app["name"]}_{now_str(True)}.log'
+
+            if 'topcontroller' in app['name']: # ARGGG
+                host = boot_configuration['restrictions'][app['restriction']]['hosts'][0]
+                self.controller_address = f"{host}:{app['port']}"
 
             yield BootRequest(
                 process_description = ProcessDescription(
