@@ -13,11 +13,12 @@ class ConfigurationTypeNotSupported(Exception):
         )
 
 class ControllerDriver(GRPCDriver):
-    def __init__(self, address:str, token):
+    def __init__(self, address:str, token, **kwargs):
         super(ControllerDriver, self).__init__(
             name = 'controller_driver',
             address = address,
-            token = token
+            token = token,
+            **kwargs
         )
 
     def create_stub(self, channel):
