@@ -10,7 +10,7 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
         self.address = address
         super(ProcessManagerContext, self)._reset(
             print_traceback = print_traceback,
-            name = 'process_manager_context',
+            name = 'process_manager',
             token_args = {},
             driver_args = {
                 'print_traceback': print_traceback
@@ -24,7 +24,7 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
         from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
         return {
-            'process_manager_driver': ProcessManagerDriver(
+            'process_manager': ProcessManagerDriver(
                 self.address,
                 self._token,
                 aio_channel = True,
