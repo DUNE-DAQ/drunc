@@ -10,6 +10,10 @@ class GRPCDriver:
         self._log = logging.getLogger(name)
         import grpc
         from druncschema.token_pb2 import Token
+
+        if not address:
+            raise RuntimeError(f'You need to provide a valid IP address for the driver. Provided \'{address}\'')
+
         self.address = address
 
         if aio_channel:
@@ -204,26 +208,26 @@ class ShellContext:
     def get_token(self) -> Token:
         return self._token
 
-    def print(self, text) -> None:
-        self._console.print(text)
+    def print(self, *args, **kwargs) -> None:
+        self._console.print(*args, **kwargs)
 
-    def rule(self, text) -> None:
-        self._console.rule(text)
+    def rule(self, *args, **kwargs) -> None:
+        self._console.rule(*args, **kwargs)
 
-    def info(self, text) -> None:
-        self._log.info(text)
+    def info(self, *args, **kwargs) -> None:
+        self._log.info(*args, **kwargs)
 
-    def warn(self, text) -> None:
-        self._log.warn(text)
+    def warn(self, *args, **kwargs) -> None:
+        self._log.warn(*args, **kwargs)
 
-    def error(self, text) -> None:
-        self._log.error(text)
+    def error(self, *args, **kwargs) -> None:
+        self._log.error(*args, **kwargs)
 
-    def debug(self, text) -> None:
-        self._log.debug(text)
+    def debug(self, *args, **kwargs) -> None:
+        self._log.debug(*args, **kwargs)
 
-    def critical(self, text) -> None:
-        self._log.critical(text)
+    def critical(self, *args, **kwargs) -> None:
+        self._log.critical(*args, **kwargs)
 
 def create_dummy_token_from_uname() -> Token:
     from drunc.utils.shell_utils import create_dummy_token_from_uname
