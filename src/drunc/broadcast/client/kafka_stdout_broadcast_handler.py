@@ -26,16 +26,16 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         import logging
         self._log = logging.getLogger(f'{self.topic} message')
 
-        from drunc.utils.utils import get_random_string, now_str
+        from drunc.utils.utils import now_str, get_random_string
         import getpass
-        group_id = f'kafka-stdout-broadcasthandler-{getpass.getuser()}-{now_str(True)}'
+        group_id = f'drunc-stdout-broadcasthandler-{getpass.getuser()}-{now_str(True)}-{get_random_string(5)}'
+
         from kafka import KafkaConsumer
         self.consumer = KafkaConsumer(
             self.topic,
             client_id = 'run_control',
             bootstrap_servers = [self.kafka_address],
             group_id = group_id,
-            #value_deserializer = lambda m: self.message_format().ParseFromString(m)
         )
 
         self.run = True
