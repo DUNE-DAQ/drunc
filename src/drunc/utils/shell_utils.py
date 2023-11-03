@@ -166,7 +166,12 @@ class ShellContext:
         self._drivers: Mapping[str, GRPCDriver] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
-        self.reset(*args, **kwargs)
+        try:
+            self.reset(*args, **kwargs)
+        except Exception as e:
+            from drunc.utils.utils import print_traceback
+            print_traceback()
+            exit(1)
 
     @abc.abstractmethod
     def reset(self, **kwargs):
