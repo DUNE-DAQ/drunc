@@ -12,9 +12,9 @@ def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
     from druncschema.controller_pb2 import Argument
 
     if command == 'fsm':
-        desc = obj.get_driver().describe_fsm(rethrow=traceback)
+        desc = obj.get_driver('controller').describe_fsm(rethrow=traceback)
     else:
-        desc = obj.get_driver().describe(rethrow=traceback)
+        desc = obj.get_driver('controller').describe(rethrow=traceback)
 
     if not desc: return
 
@@ -81,7 +81,7 @@ def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
 @add_traceback_flag()
 @click.pass_obj
 def ls(obj:ControllerContext, traceback:bool) -> None:
-    children = obj.get_driver().ls(rethrow=traceback)
+    children = obj.get_driver('controller').ls(rethrow=traceback)
     if not children: return
     obj.print(children.text)
 
@@ -91,7 +91,7 @@ def ls(obj:ControllerContext, traceback:bool) -> None:
 @click.pass_obj
 def status(obj:ControllerContext, traceback:bool) -> None:
     from druncschema.controller_pb2 import Status, ChildrenStatus
-    status = obj.get_driver().get_status(traceback)
+    status = obj.get_driver('controller').get_status(traceback)
 
     if not status: return
 
@@ -112,7 +112,7 @@ def status(obj:ControllerContext, traceback:bool) -> None:
         format_bool(status.included),
     )
 
-    statuses = obj.get_driver().get_children_status(traceback)
+    statuses = obj.get_driver('controller').get_children_status(traceback)
 
     if not statuses:
         statuses = []
@@ -131,19 +131,30 @@ def status(obj:ControllerContext, traceback:bool) -> None:
         )
     obj.print(t)
 
+@click.command('connect')
+@add_traceback_flag()
+@click.argument('controller_address', type=str)
+@click.pass_obj
+def connect(obj:ControllerContext, traceback:bool, controller_address:str) -> None:
+    obj.print(f'Connecting this shell to it...')
+    obj.set_controller_driver(controller_address, obj.print_traceback)
+    from drunc.controller.interface.shell_utils import controller_setup
+    controller_setup(obj, controller_address)
+
+
 
 @click.command('take-control')
 @add_traceback_flag()
 @click.pass_obj
 def take_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver().take_control(traceback)
+    obj.get_driver('controller').take_control(traceback)
 
 
 @click.command('surrender-control')
 @add_traceback_flag()
 @click.pass_obj
 def surrender_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver().surrender_control(traceback)
+    obj.get_driver('controller').surrender_control(traceback)
 
 
 @click.command('who-am-i')
@@ -156,7 +167,7 @@ def who_am_i(obj:ControllerContext) -> None:
 @add_traceback_flag()
 @click.pass_obj
 def who_is_in_charge(obj:ControllerContext, traceback:bool) -> None:
-    who = obj.get_driver().who_is_in_charge(traceback)
+    who = obj.get_driver('controller').who_is_in_charge(traceback)
     if who:
         obj.print(who.text)
 
@@ -171,7 +182,7 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
 
     if len(arguments) % 2 != 0:
         raise RuntimeError('Arguments are pairs of key-value!')
-    desc = obj.get_driver().describe_fsm(traceback)
+    desc = obj.get_driver('controller').describe_fsm(traceback)
 
     from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
 
@@ -190,7 +201,7 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
             command_name = command,
             arguments = formated_args,
         )
-        result = obj.get_driver().execute_fsm_command(
+        result = obj.get_driver('controller').execute_fsm_command(
             arguments = data,
             rethrow = True, # we throw here any way
         )
@@ -235,7 +246,7 @@ def include(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'include',
     )
-    result = obj.get_driver().include(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').include(rethrow=traceback, arguments=data)
     if not result: return
     obj.print(result.text)
 
@@ -248,6 +259,6 @@ def exclude(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'exclude',
     )
-    result = obj.get_driver().exclude(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').exclude(rethrow=traceback, arguments=data)
     if not result: return
     obj.print(result.text)
