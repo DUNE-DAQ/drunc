@@ -9,11 +9,11 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
     address_pm = ''
     address_controller = ''
 
-    def reset(self, address_pm:str=None, print_traceback:bool=False):
+    def reset(self, address_pm:str='', print_traceback:bool=False):
         self.address_pm = address_pm
         super(UnifiedShellContext, self)._reset(
             print_traceback = print_traceback,
-            name = 'controller_context',
+            name = 'unified',
             token_args = {},
             driver_args = {
                 'print_traceback': print_traceback
@@ -25,16 +25,16 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
 
         if self.address_pm != '':
             from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-            ret['process_manager_driver'] = ProcessManagerDriver(
+            ret['process_manager'] = ProcessManagerDriver(
                 self.address_pm,
                 self._token,
                 aio_channel = True,
                 rethrow_by_default = print_traceback
             )
 
-        if self.address_controler != '':
+        if self.address_controller != '':
             from drunc.controller.controller_driver import ControllerDriver
-            ret['controller_driver'] = ControllerDriver(
+            ret['controller'] = ControllerDriver(
                 self.address,
                 self._token,
                 aio_channel = False,
@@ -48,8 +48,8 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
 
         from drunc.controller.controller_driver import ControllerDriver
 
-        self._drivers['controller_driver'] = ControllerDriver(
-            self.address,
+        self._drivers['controller'] = ControllerDriver(
+            self.address_controller,
             self._token,
             aio_channel = False,
             rethrow_by_default = print_traceback

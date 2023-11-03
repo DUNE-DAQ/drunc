@@ -13,7 +13,7 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
 
     ctx.obj.reset(
         print_traceback = traceback,
-        address = process_manager_address,
+        address_pm = process_manager_address,
     )
 
     from drunc.utils.grpc_utils import ServerUnreachable
@@ -28,15 +28,17 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
         raise e
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    ctx.obj.start_listening(desc.broadcast)
+    ctx.obj.start_listening_pm(desc.broadcast)
 
     def cleanup():
         ctx.obj.terminate()
 
     ctx.call_on_close(cleanup)
 
-    from drunc.process_manager.interface.commands import boot, kill, flush, logs, restart, ps
+    from drunc.unified_shell.commands import boot
     ctx.command.add_command(boot, 'boot')
+
+    from drunc.process_manager.interface.commands import kill, flush, logs, restart, ps
     ctx.command.add_command(kill, 'kill')
     ctx.command.add_command(flush, 'flush')
     ctx.command.add_command(logs, 'logs')
@@ -44,16 +46,16 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
     ctx.command.add_command(ps, 'ps')
 
     from drunc.controller.interface.commands import (
-        describe, ls, status, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude
+        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude
     )
     ctx.command.add_command(describe, 'describe')
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
+    ctx.command.add_command(connect, 'connect')
     ctx.command.add_command(take_control, 'take_control')
-    ctx.command.add_command(surrender_control, 'surrender_control')
-    ctx.command.add_command(who_am_i, 'who_am_i')
-    ctx.command.add_command(who_is_in_charge, 'who_is_in_charge')
+    ctx.command.add_command(surrender_control, 'surrender-control')
+    ctx.command.add_command(who_am_i, 'whoami')
+    ctx.command.add_command(who_is_in_charge, 'who-is-in-charge')
     ctx.command.add_command(fsm, 'fsm')
     ctx.command.add_command(include, 'include')
     ctx.command.add_command(exclude, 'exclude')
-
