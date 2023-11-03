@@ -10,7 +10,7 @@ class ControllerContext(ShellContext): # boilerplatefest
         self.address = address
         super(ControllerContext, self)._reset(
             print_traceback = print_traceback,
-            name = 'controller_context',
+            name = 'controller',
             token_args = {},
             driver_args = {},
         )
@@ -21,7 +21,7 @@ class ControllerContext(ShellContext): # boilerplatefest
 
         from drunc.controller.controller_driver import ControllerDriver
         return {
-            'controller_driver': ControllerDriver(
+            'controller': ControllerDriver(
                 self.address,
                 self._token
             )
@@ -32,7 +32,7 @@ class ControllerContext(ShellContext): # boilerplatefest
         return create_dummy_token_from_uname()
 
 
-    def start_listening(self, broadcaster_conf):
+    def start_listening_controller(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
         from drunc.utils.conf_types import ConfTypes
 
