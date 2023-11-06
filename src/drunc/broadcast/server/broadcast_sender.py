@@ -16,46 +16,16 @@ class BroadcastSender:
         self.identifier = f'{self.session}.{self.name}'
 
         from logging import getLogger
-        self.logger = getLogger(self.identifier)
+        self.logger = getLogger('Broadcast')
 
         self.logger.info('Initialising broadcast')
 
-        broadcast_types_loglevels_str = broadcast_configuration.get(
-            'broadcast_types_loglevels',
-            {
-                'ACK'                             : 'debug',
-                'RECEIVER_REMOVED'                : 'info',
-                'RECEIVER_ADDED'                  : 'info',
-                'SERVER_READY'                    : 'info',
-                'SERVER_SHUTDOWN'                 : 'info',
-                'TEXT_MESSAGE'                    : 'info',
-                'COMMAND_EXECUTION_START'         : 'info',
-                'COMMAND_EXECUTION_SUCCESS'       : 'info',
-                'EXCEPTION_RAISED'                : 'error',
-                'UNHANDLED_EXCEPTION_RAISED'      : 'critical',
-                'STATUS_UPDATE'                   : 'info',
-                'SUBPROCESS_STATUS_UPDATE'        : 'info',
-                'DEBUG'                           : 'debug',
-                'CHILD_COMMAND_EXECUTION_START'   : 'info',
-                'CHILD_COMMAND_EXECUTION_SUCCESS' : 'info',
-                'CHILD_COMMAND_EXECUTION_FAILED'  : 'error',
-            }
-        )
+        from drunc.broadcast.utils import broadcast_types_loglevels
+        self.broadcast_types_loglevels = broadcast_types_loglevels
+        self.broadcast_types_loglevels.update(broadcast_configuration.get('broadcast_types_loglevels', {}))
 
-        self.impl_technology = broadcast_configuration.get('type')
-        self.implementation = None
-
-        from collections import defaultdict
-        def def_value():
-            return "info"
-
-        broadcast_types_loglevels_str_dd = defaultdict(def_value, **broadcast_types_loglevels_str)
-
-        from druncschema.broadcast_pb2 import BroadcastType
-        self.broadcast_types_loglevels = {
-            v: broadcast_types_loglevels_str_dd[n].lower() for n,v in BroadcastType.items()
-        }
         self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
+        self.impl_technology = broadcast_configuration.get('type')
 
         if self.impl_technology is None:
             return
@@ -85,9 +55,8 @@ class BroadcastSender:
     def broadcast(self, message, btype):
 
         if self.logger:
-            from druncschema.broadcast_pb2 import BroadcastType
-            f = getattr(self.logger, self.broadcast_types_loglevels[btype])
-            f(f'"{self.name}.{self.session}": "{BroadcastType.Name(btype)}" {message}')
+            from drunc.broadcast.utils import get_broadcast_level_from_broadcast_type
+            get_broadcast_level_from_broadcast_type(btype, self.logger, self.broadcast_types_loglevels)(message)
 
         if self.implementation is None:
             # nice and easy case
