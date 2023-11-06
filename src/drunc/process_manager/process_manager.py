@@ -15,6 +15,8 @@ from google.rpc import status_pb2
 from grpc_status import rpc_status
 from google.protobuf.any_pb2 import Any
 
+import traceback
+
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, pm_conf, name, **kwargs):
@@ -137,21 +139,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         )
 
     def _generic_command(self, request:Request, command:str, req_format, context):
+
         self.broadcast(
-            message = f'User \'{request.token.user_name}\' attempting to execute {command}',
+            message = f'User \'{request.token.user_name}\' attempting to execute \'{command}\'',
             btype = BroadcastType.ACK
         )
+
         if not self.authoriser.is_authorised(request.token, command):
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
-            self.log.error(f'Unauthorised attempt to execute \'{command}\' from \'{request.token.user_name}\'')
+            message = f'{request.token.user_name} is not authorised to execute \'{command}\''
+            self._interrupt_with_message(message, context)
+
+        self.broadcast(
+            message = f'User \'{request.token.user_name}\' starting to execute \'{command}\'',
+            btype = BroadcastType.COMMAND_EXECUTION_START
+        )
 
         data = request.data if request.data else None
 
@@ -159,48 +160,64 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
             if request.HasField('data'):# is not None:
                 formatted_data = unpack_any(data, req_format)
                 self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-                result = getattr(self, command)(formatted_data, context)
+                result = getattr(self, "_"+command+"_impl")(formatted_data, context)
                 self.log.info(f'\'{type(self).__name__}.{command}\' executed')
             else:
-                result = getattr(self, command)(None, context)
+                result = getattr(self, "_"+command+"_impl")(None, context)
 
 
         except Exception as e:
-            raise e # let gRPC handle it
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
+
+        self.broadcast(
+            message = f'User \'{request.token.user_name}\' successfully executed \'{command}\'',
+            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
+        )
 
         return self._create_response(result,request.token)
 
 
     async def _generic_command_async(self, request:Request, command:str, req_format, context):
 
+        self.broadcast(
+            message = f'User \'{request.token.user_name}\' attempting to execute \'{command}\'',
+            btype = BroadcastType.ACK
+        )
+
         if not self.authoriser.is_authorised(request.token, command):
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
-            self.log.error(f'Unauthorised attempt to execute \'{command}\' from \'{request.token.user_name}\'')
+            message = f'{request.token.user_name} is not authorised to execute \'{command}\''
+            self._interrupt_with_message(message, context)
+
+        self.broadcast(
+            message = f'User \'{request.token.user_name}\' starting to execute \'{command}\'',
+            btype = BroadcastType.COMMAND_EXECUTION_START
+        )
 
         data = request.data if request.data else None
 
         try:
             formatted_data = unpack_any(data, req_format)
             self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-            f = getattr(self, command)
+            f = getattr(self, "_"+command+"_impl")
             async for r in f(formatted_data, context):
                 s = self._create_stream(r,request.token)
                 yield s
 
-            self.log.info(f'\'{type(self).__name__}.{command}\' executed')
+            self.broadcast( # this actually never gets executed... whatever
+                message = f'User \'{request.token.user_name}\' successfully executed \'{command}\'',
+                btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
+            )
 
         except Exception as e:
-            self.log.error(e)
-            raise e # let gRPC handle it
-
+            self._interrupt_with_exception(
+                ex_stack = traceback.format_exc(),
+                ex_text = str(e),
+                context = context
+            )
 
 
     @abc.abstractmethod
@@ -209,7 +226,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def boot(self, req:Request, context) -> Response:
         self.log.debug(f'received \'boot\' request \'{req}\'')
-        return self._generic_command(req, '_boot_impl', BootRequest, context)
+        return self._generic_command(req, 'boot', BootRequest, context)
 
 
     @abc.abstractmethod
@@ -218,7 +235,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def restart(self, req:Request, context)-> Response:
         self.log.debug(f'received \'restart\' request \'{req}\'')
-        return self._generic_command(req, '_restart_impl', ProcessQuery, context)
+        return self._generic_command(req, 'restart', ProcessQuery, context)
 
 
     @abc.abstractmethod
@@ -227,7 +244,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def kill(self, req:Request, context) -> Response:
         self.log.debug(f'received \'kill\' request \'{req}\'')
-        return self._generic_command(req, '_kill_impl', ProcessQuery, context)
+        return self._generic_command(req, 'kill', ProcessQuery, context)
 
 
     @abc.abstractmethod
@@ -236,7 +253,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def ps(self, req:Request, context) -> Response:
         self.log.debug(f'received \'ps\' request \'{req}\'')
-        return self._generic_command(req, '_ps_impl', ProcessQuery, context)
+        return self._generic_command(req, 'ps', ProcessQuery, context)
 
 
     def _flush_impl(self, query, context) -> Response:
@@ -287,12 +304,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def flush(self, req:Request, context) -> Response:
         self.log.debug(f'received \'flush\' request \'{req}\'')
-        return self._generic_command(req, '_flush_impl', ProcessQuery, context)
+        return self._generic_command(req, 'flush', ProcessQuery, context)
 
 
 
     def describe(self, request:Request, context) -> Response:
-        return self._generic_command(request, '_describe_impl', None, context)
+        return self._generic_command(request, 'describe', None, context)
 
     def _describe_impl(self, _, dummy):
         from druncschema.request_response_pb2 import Description
@@ -312,7 +329,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     async def logs(self, req:Request, context) -> Response:
         self.log.debug(f'received \'logs\' request \'{req}\'')
-        async for r in self._generic_command_async(req, '_logs_impl', LogRequest, context):
+        async for r in self._generic_command_async(req, 'logs', LogRequest, context):
             yield r
 
 

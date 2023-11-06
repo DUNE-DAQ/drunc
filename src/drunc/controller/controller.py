@@ -268,14 +268,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             thread.join()
         return return_statuses
 
-    def _should_execute_on_self(self, node_path) -> bool:
-        if node_path == []:
-            return True
-
-        for node in node_path:
-            if node == [self.name]:
-                return True
-        return False
 
     def _generic_user_command(self, request:Request, command:str, context, propagate=False):
         """
@@ -286,19 +278,22 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         4. Broadcast that the command has been executed successfully or not
         5. Return the result
         """
+
         self.broadcast(
-            btype = BroadcastType.COMMAND_RECEIVED,
-            message = f'{request.token.user_name} attempting to execute {command}'
+            btype = BroadcastType.ACK,
+            message = f'{request.token.user_name} attempting to execute \'{nice_command}\''
         )
 
-        if not self.authoriser.is_authorised(request.token, command):
-            message = f'{request.token.user_name} is not authorised to execute {command}'
+        if not self.authoriser.is_authorised(request.token, nice_command):
+            message = f'{request.token.user_name} is not authorised to execute \'{nice_command}\''
             self._interrupt_with_message(message, context)
 
-
         data = request.data if request.data else None
-        self.logger.debug(f'{command} data: {request.data}')
 
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_START,
+            message = f'Executing {command} (upon request from {request.token.user_name})',
+        )
 
         if propagate:
             self.propagate_to_list(command, request.data, request.token, self.children_nodes)
@@ -306,10 +301,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         try:
             token = Token()
             token.CopyFrom(request.token)
-            self.broadcast(
-                btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'Executing {command} (upon request from {request.token.user_name})',
-            )
             result = getattr(self, "_"+command+"_impl")(data, token)
 
         except ctler_excpt.ControllerException as e:
@@ -346,10 +337,12 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         4. Broadcast that the command has been executed successfully or not
         5. Return the result
         """
+
         self.broadcast(
-            btype = BroadcastType.COMMAND_RECEIVED,
+            btype = BroadcastType.ACK,
             message = f'{request.token.user_name} attempting to execute and FSM command: {command}'
         )
+
         from drunc.utils.grpc_utils import unpack_any
         from druncschema.controller_pb2 import FSMCommand
         fsm_command = unpack_any(request.data, FSMCommand)
@@ -374,6 +367,11 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.node_operational_state()}\"'
             self._interrupt_with_message(message, context)
 
+
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_START,
+            message = f'Executing {command} (upon request from {request.token.user_name})',
+        )
 
         self.logger.debug(f'{command} data: {fsm_command}')
         child_statuses = {}
@@ -437,11 +435,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         )
 
         result_any = pack_to_any(result)
-
-        response = Response(
-            data = result_any
-        )
-
+        response = Response(data = result_any)
         response.token.CopyFrom(request.token)
 
         return response
