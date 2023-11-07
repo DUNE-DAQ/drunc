@@ -15,33 +15,6 @@ from google.rpc import status_pb2
 from grpc_status import rpc_status
 from google.protobuf.any_pb2 import Any
 
-
-def authentified_and_authorised(action_type):
-    def decor(cmd):
-        def check_token(self_, request, context):
-            if not self_.authoriser.is_authorised(request.token, action_type):
-                context.abort_with_status(
-                    rpc_status.to_status(
-                        status_pb2.Status(
-                            code=code_pb2.PERMISSION_DENIED,
-                            message='Unauthorised',
-                            details=[],
-                        )
-                    )
-                )
-                self_.log.error(f'Unauthorised attempt to execute \'{cmd.__name__}\' from \'{request.token.user_name}\'')
-            cmd(self_, request, request, context)
-        return check_token
-    return decor
-
-
-def broadcasted(cmd):
-    def broadcast_me(self_, *arg, **kwargs):
-        pass
-
-
-    return broadcast_me
-
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, pm_conf, name, **kwargs):
@@ -234,8 +207,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
     def _boot_impl(self, boot_data, context) -> ProcessUUID:
         raise NotImplementedError
 
-
-    @authentified_and_authorised(action_type='shifter,expert;write')
     def boot(self, req:Request, context) -> Response:
         self.log.debug(f'received \'boot\' request \'{req}\'')
         return self._generic_command(req, '_boot_impl', BootRequest, context)
