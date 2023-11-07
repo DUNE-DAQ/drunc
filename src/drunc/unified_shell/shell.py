@@ -1,8 +1,9 @@
 import click
 import click_shell
 from drunc.utils.utils import log_levels
+import os
 
-@click_shell.shell(prompt='drunc-unified-shell > ', chain=True)
+@click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
 @click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.argument('process-manager-address', type=str)
