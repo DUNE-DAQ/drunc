@@ -34,8 +34,6 @@ async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:
     if controller_address:
         obj.print(f'Controller endpoint is \'{controller_address}\'')
         obj.print(f'Connecting this shell to it...')
-        from time import sleep
-        sleep(4)
         obj.set_controller_driver(controller_address, obj.print_traceback)
         from drunc.controller.interface.shell_utils import controller_setup
         controller_setup(obj, controller_address)
