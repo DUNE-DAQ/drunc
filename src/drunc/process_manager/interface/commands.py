@@ -35,7 +35,7 @@ async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:
     controller_address = obj.get_driver('process_manager').controller_address
     if controller_address:
         from rich.panel import Panel
-        obj.print(Panel("Controller endpoint: 'np04-srv-019:3338', point your 'drunc-controller-shell' to it.", padding=(2,6), style='violet', border_style='violet'), justify='center')
+        obj.print(Panel("Controller endpoint: '{controller_address}', point your 'drunc-controller-shell' to it.", padding=(2,6), style='violet', border_style='violet'), justify='center')
     else:
         obj.error(f'Could not understand where the controller is! You can look at the logs of the controller to see its address')
         return
