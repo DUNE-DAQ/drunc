@@ -16,6 +16,11 @@ log_levels = {
     'NOTSET'  : logging.NOTSET,
 }
 
+def get_random_string(length):
+    import random
+    import string
+    letters = string.ascii_lowercase
+    return ''.join(random.choice(letters) for i in range(length))
 
 def regex_match(regex, string):
     import re
