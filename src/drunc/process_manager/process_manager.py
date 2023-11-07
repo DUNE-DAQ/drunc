@@ -19,15 +19,17 @@ import traceback
 
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
-    def __init__(self, pm_conf, name, **kwargs):
+    def __init__(self, pm_conf, name, session=None, **kwargs):
+
         super(ProcessManager, self).__init__(
             name = name,
             broadcast_configuration = pm_conf['broadcaster'],
+            session = session,
             **kwargs
         )
-        self.name = name
-        self.session = None
 
+        self.name = name
+        self.session = session
         from logging import getLogger
         self.log = getLogger("process_manager")
         # ProcessManagerServicer.__init__(self)
@@ -318,7 +320,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         return Description(
             type = 'process_manager',
             name = self.name,
-            session = 'no_session',
+            session = 'no_session' if not self.session else self.session,
             commands = self.commands,
             broadcast = pack_to_any(self.describe_broadcast()),
         )
