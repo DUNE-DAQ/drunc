@@ -1,10 +1,9 @@
 import asyncio
 from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
-from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
+
 from drunc.utils.grpc_utils import unpack_any
+from drunc.utils.shell_utils import GRPCDriver
 
 class ConfigurationTypeNotSupported(Exception):
     def __init__(self, conf_type):
@@ -13,34 +12,21 @@ class ConfigurationTypeNotSupported(Exception):
             f'{str(conf_type)} is not supported by this process manager'
         )
 
-class ProcessManagerDriver:
-    def __init__(self, address:str, token):
-        import logging
-        self._log = logging.getLogger('ProcessManagerDriver')
-        import grpc
-        self.token = Token()
-        self.token.CopyFrom(token)
-        self.pm_address = address
-        self.pm_channel = grpc.aio.insecure_channel(self.pm_address)
-        self.pm_stub = ProcessManagerStub(self.pm_channel)
+class ProcessManagerDriver(GRPCDriver):
+    controller_address = ''
+
+    def __init__(self, address:str, token, **kwargs):
+        super(ProcessManagerDriver, self).__init__(
+            name = 'process_manager_driver',
+            address = address,
+            token = token,
+            **kwargs
+        )
 
 
-    def _create_request(self, payload=None):
-        token = Token()
-        token.CopyFrom(self.token)
-        data = Any()
-        if payload is not None:
-            data.Pack(payload)
-
-        if payload:
-            return Request(
-                token = token,
-                data = data
-            )
-        else:
-            return Request(
-                token = token
-            )
+    def create_stub(self, channel):
+        from druncschema.process_manager_pb2_grpc import ProcessManagerStub
+        return ProcessManagerStub(channel)
 
 
     async def _convert_boot_conf(self, conf, conf_type, user, session_name, log_level):
@@ -91,22 +77,18 @@ class ProcessManagerDriver:
         for svc_name, svc_data in boot_configuration.get('services', {}).items():
             raise RuntimeError('Services cannot be started by drunc (yet)')
 
-        children_app = []
-
         for app_name, app_data in boot_configuration['apps'].items():
-            children_app += [{
-                'name': app_name,
-                'uri': f'{hosts[app_name]}:{app_data["port"]}',
-                'type': 'rest-api'
-            }]
 
             extra_args = []
             config = parsed_config_dir
+
             if 'drunc_controller' in app_data['exec']: # meh meh meh
                 config = f'{parsed_config_dir}/controller.json'
                 if loglevel:
                     extra_args = ['--log-level', loglevel]
                 log.debug(f'{app_name=} (daq controller) {app_data=}')
+                self.controller_address = f"{hosts[app_data['host']]}:{app_data['port']}"
+
             else:
                 log.debug(f'{app_name=} (daq app) {app_data=}')
 
@@ -197,11 +179,16 @@ class ProcessManagerDriver:
 
             self._log.debug(f"{app=}")
 
+            if 'drunc_controller' in exe: # meh meh meh
+                self.controller_address = f"{host}:{port}"
+
             executable_and_arguments = []
+
             if session_dal.rte_script:
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
                     args=[session_dal.rte_script]))
+
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
                 args=[args]))
@@ -217,17 +204,17 @@ class ProcessManagerDriver:
 
             self._log.debug(f"{new_env=}")
             breq =  BootRequest(
-            process_description = ProcessDescription(
-                metadata = ProcessMetadata(
-                    user = user,
-                    session = session,
-                    name = name,
+                process_description = ProcessDescription(
+                    metadata = ProcessMetadata(
+                        user = user,
+                        session = session,
+                        name = name,
+                    ),
+                    executable_and_arguments = executable_and_arguments,
+                    env = new_env,
+                    process_execution_directory = pwd,
+                    process_logs_path = log_path,
                 ),
-                executable_and_arguments = executable_and_arguments,
-                env = new_env,
-                process_execution_directory = pwd,
-                process_logs_path = log_path,
-            ),
                 process_restriction = ProcessRestriction(
                     allowed_hosts = [host]
                 )
@@ -248,6 +235,7 @@ class ProcessManagerDriver:
         pwd = os.getcwd()
 
         for app in boot_configuration['instances']:
+
             executable_and_arguments = []
             for execargs in boot_configuration['executables'][app['type']]['executable_and_arguments']:
                 for exe, args in execargs.items():
@@ -277,6 +265,10 @@ class ProcessManagerDriver:
             from drunc.utils.utils import now_str
             log_path = f'{pwd}/log_{user}_{session}_{app["name"]}_{now_str(True)}.log'
 
+            if 'topcontroller' in app['name']: # ARGGG
+                host = boot_configuration['restrictions'][app['restriction']]['hosts'][0]
+                self.controller_address = f"{host}:{app['port']}"
+
             yield BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
@@ -294,58 +286,70 @@ class ProcessManagerDriver:
                 )
             )
 
-    async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str) -> ProcessInstance:
+    async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str, rethrow=None) -> ProcessInstance:
         async for br in self._convert_boot_conf(
             conf = conf,
             conf_type = conf_type,
             user = user,
             session_name = session_name,
             log_level = log_level):
-            answer = await self.pm_stub.boot(
-                self._create_request(br)
+            yield await self.send_command_aio(
+                'boot',
+                data = br,
+                outformat = ProcessInstance,
+                rethrow = rethrow,
             )
-            pd = unpack_any(answer.data,ProcessInstance)
-            yield pd
 
 
-    async def kill(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.pm_stub.kill(
-            self._create_request(payload = query)
+    async def kill(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+        return await self.send_command_aio(
+            'kill',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        pi = unpack_any(answer.data, ProcessInstanceList)
-        return pi
 
 
-    async def logs(self, req:LogRequest) -> LogLine:
-        async for stream in self.pm_stub.logs(self._create_request(payload = req)):
-            ll = unpack_any(stream.data, LogLine)
-            yield ll
+    async def logs(self, req:LogRequest, rethrow=None) -> LogLine:
+        async for stream in self.send_command_for_aio(
+            'logs',
+            data = req,
+            outformat = LogLine,
+            rethrow = rethrow,):
+            yield stream
 
-    async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.ps(
-            self._create_request(payload = query)
+
+    async def ps(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+        return await self.send_command_aio(
+            'ps',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
-    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
-        answer = await self.pm_stub.flush(
-            self._create_request(payload = query)
-        )
-        pil = unpack_any(answer.data, ProcessInstanceList)
-        return pil
 
-    async def restart(self, query:ProcessQuery) -> ProcessInstance:
-        answer = await self.pm_stub.restart(
-            self._create_request(payload = query)
-        )
-        pi = unpack_any(answer.data, ProcessInstance)
-        return pi
 
-    async def describe(self) -> Description:
-        r = self._create_request(payload = None)
-        answer = await self.pm_stub.describe(
-            r
+    async def flush(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+        return await self.send_command_aio(
+            'flush',
+            data = query,
+            outformat = ProcessInstanceList,
+            rethrow = rethrow,
         )
-        desc = unpack_any(answer.data, Description)
-        return desc
+
+
+    async def restart(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+        return await self.send_command_aio(
+            'restart',
+            data = query,
+            outformat = ProcessInstance,
+            rethrow = rethrow,
+        )
+
+
+    async def describe(self, rethrow=None) -> Description:
+        return await self.send_command_aio(
+            'describe',
+            outformat = Description,
+            rethrow = rethrow,
+        )

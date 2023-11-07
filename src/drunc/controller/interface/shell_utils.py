@@ -1,3 +1,92 @@
+
+def controller_cleanup_wrapper(ctx):
+    def controller_cleanup():
+        # remove the shell from the controller broadcast list
+        dead = False
+        import grpc
+        who = ''
+        from drunc.utils.grpc_utils import unpack_any
+        try:
+            who = ctx.get_driver('controller').who_is_in_charge(rethrow=True).text
+
+        except grpc.RpcError as e:
+            dead = grpc.StatusCode.UNAVAILABLE == e.code()
+        except Exception as e:
+            ctx.error('Could not understand who is in charge from the controller.')
+            ctx.error(e)
+            who = 'no_one'
+
+        if dead:
+            ctx.error('Controller is dead. Exiting.')
+            return
+
+        if who == ctx.get_token().user_name and ctx.took_control:
+            ctx.info('You are in control. Surrendering control.')
+            try:
+                ctx.get_driver('controller').surrender_control(rethrow=True)
+            except Exception as e:
+                ctx.error('Could not surrender control.')
+                ctx.error(e)
+            ctx.info('Control surrendered.')
+        ctx.terminate()
+    return controller_cleanup
+
+
+def controller_setup(ctx, controller_address):
+    if not hasattr(ctx, 'took_control'):
+        raise RuntimeError('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
+
+
+    from druncschema.request_response_pb2 import Description
+    desc = Description()
+
+    ntries = 10
+
+    from drunc.utils.grpc_utils import ServerUnreachable
+    for itry in range(ntries):
+        try:
+            desc = ctx.get_driver('controller').describe(rethrow=True)
+        except ServerUnreachable as e:
+            ctx.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
+            if itry >= ntries-1:
+                raise e
+            else:
+                from time import sleep
+                sleep(0.5)
+
+        except Exception as e:
+            ctx.critical('Could not get the controller\'s status')
+            ctx.critical(e)
+            ctx.critical('Exiting.')
+            ctx.terminate()
+            raise e
+
+        else:
+            ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+            ctx.start_listening_controller(desc.broadcast)
+            break
+
+    ctx.print('Connected to the controller')
+
+    from druncschema.generic_pb2 import PlainText, PlainTextVector
+
+    children = ctx.get_driver('controller').ls(rethrow=False)
+    ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
+
+    ctx.info(f'Taking control of the controller as {ctx.get_token()}')
+    try:
+        ctx.get_driver('controller').take_control(rethrow=True)
+        ctx.took_control = True
+
+    except Exception as e:
+        ctx.warn('You are NOT in control.')
+        ctx.took_control = False
+        return
+
+    ctx.info('You are in control.')
+
+
+
 def search_fsm_command(command_name, command_list):
     for command in command_list:
         if command_name == command.name:

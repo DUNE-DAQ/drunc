@@ -90,3 +90,12 @@ def now_str(posix_friendly=False):
         return datetime.now().strftime("%m/%d/%Y,%H:%M:%S")
     else:
         return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+
+def run_coroutine(f):
+    from functools import wraps
+    import asyncio
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
+
+    return wrapper

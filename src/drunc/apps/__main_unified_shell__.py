@@ -1,12 +1,11 @@
 
 def main():
-    from drunc.process_manager.interface.context import ProcessManagerContext
-    context = ProcessManagerContext()
+    from drunc.unified_shell.context import UnifiedShellContext
+    context = UnifiedShellContext()
 
     try:
-        from drunc.process_manager.interface.shell import process_manager_shell
-
-        process_manager_shell(obj = context)
+        from drunc.unified_shell.shell import unified_shell
+        unified_shell(obj = context)
 
     except Exception as e:
         from rich import print as rprint
@@ -18,7 +17,6 @@ def main():
             rprint(f'[yellow]{e}[/]\nUse [blue]--traceback[/] for more information')
         rprint(f'Exiting...')
         exit(1)
-
 
 
 if __name__ == '__main__':
