@@ -4,7 +4,7 @@ import os
 
 from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
 
-@click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
+@click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS, hist_file=os.path.expanduser('~')+'/.drunc-pm-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t','--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.argument('process-manager-address', type=str)
