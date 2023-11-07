@@ -281,11 +281,11 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         self.broadcast(
             btype = BroadcastType.ACK,
-            message = f'{request.token.user_name} attempting to execute \'{nice_command}\''
+            message = f'{request.token.user_name} attempting to execute \'{command}\''
         )
 
-        if not self.authoriser.is_authorised(request.token, nice_command):
-            message = f'{request.token.user_name} is not authorised to execute \'{nice_command}\''
+        if not self.authoriser.is_authorised(request.token, command):
+            message = f'{request.token.user_name} is not authorised to execute \'{command}\''
             self._interrupt_with_message(message, context)
 
         data = request.data if request.data else None
