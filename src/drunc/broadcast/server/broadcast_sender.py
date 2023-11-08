@@ -1,9 +1,5 @@
+from drunc.utils.conf_types import ConfTypes
 
-from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
-
-class BroadcastSenderTechnologyUnknown(Exception):
-    def __init__(self, implementation):
-        super().__init__(f'The implementation {str(implementation)} is not supported for the BroadcastSender')
 
 class BroadcastSender:
     def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
@@ -79,62 +75,44 @@ class BroadcastSender:
 
         self.implementation._send(bm)
 
-    # def broadcast_stacktrace()?
 
-    def _interrupt_with_message(self, message, context):
-        from druncschema.generic_pb2 import PlainText
+    def _interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        from drunc.utils.grpc_utils import pack_to_any
-        from google.rpc import code_pb2
-        from google.rpc import status_pb2
-        from grpc_status import rpc_status
+        txt = f'Exception thrown: {exception}'
+
+        from drunc.exceptions import DruncException
         self.broadcast(
-            btype = BroadcastType.TEXT_MESSAGE,
-            message = message
+            btype = BroadcastType.DRUNC_EXCEPTION_RAISED if isinstance(exception, DruncException) else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            message = txt,
         )
 
-        detail = pack_to_any(PlainText(text = message))
+        if stack:
+            txt += '\n\n'+stack
 
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=message,
-                    details=[detail],
-                )
-            )
+        from google.rpc import code_pb2
+        error_code = getattr(exception, 'grpc_error_code', code_pb2.INTERNAL)
+        context.abort(
+            code = error_code,
+            details = txt,
         )
 
 
-    def _interrupt_with_exception(self, ex_stack, ex_text, context):
+    async def _async_interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
+        txt = f'Exception thrown: {exception}'
 
+        from drunc.exceptions import DruncException
         self.broadcast(
-            btype = BroadcastType.EXCEPTION_RAISED,
-            message = ex_text
-        )
-        self.logger.error(
-            ex_stack+"\n"+ex_text
+            btype = BroadcastType.DRUNC_EXCEPTION_RAISED if isinstance(exception, DruncException) else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            message = txt,
         )
 
-        from druncschema.generic_pb2 import Stacktrace
-        from drunc.utils.grpc_utils import pack_to_any
+        if stack:
+            txt += '\n\n'+stack
+
         from google.rpc import code_pb2
-        from google.rpc import status_pb2
-        from grpc_status import rpc_status
-
-        detail = pack_to_any(
-            Stacktrace(
-                text = ex_stack.split('\n')
-            )
-        )
-
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=f'Exception thrown: {str(ex_text)}',
-                    details=[detail],
-                )
-            )
+        error_code = getattr(exception, 'grpc_error_code', code_pb2.INTERNAL)
+        await context.abort(
+            code = error_code,
+            details = txt,
         )
