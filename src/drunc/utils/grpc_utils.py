@@ -1,10 +1,12 @@
 
-
-class UnpackingError(Exception):
+from drunc.exceptions import DruncCommandException,DruncException
+class UnpackingError(DruncCommandException):
     def __init__(self, data, format):
         self.data = data
         self.format = format
-        super().__init__(f'Cannot unpack {data} to {format.DESCRIPTOR}')
+
+        from google.rpc import code_pb2
+        super().__init__(f'Cannot unpack {data} to {format.DESCRIPTOR}', code_pb2.INVALID_ARGUMENT)
 
 def pack_to_any(data):
     from google.protobuf import any_pb2
@@ -21,10 +23,11 @@ def unpack_any(data, format):
 
 
 # A simpler exception for simple error please!
-class ServerUnreachable(Exception):
+class ServerUnreachable(DruncException):
     def __init__(self, message):
         self.message = message
-        super(ServerUnreachable, self).__init__(message)
+        from google.rpc import code_pb2
+        super(ServerUnreachable, self).__init__(message, code_pb2.UNAVAILABLE)
 
 def server_is_reachable(grpc_error):
     import grpc

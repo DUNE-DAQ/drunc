@@ -1,12 +1,13 @@
 import abc
 from enum import Enum
+from drunc.exceptions import DruncSetupException
 
 class ChildNodeType(Enum):
     gRPC = 1
     REST_API = 2
 
 
-class ChildInterfaceTechnologyUnknown(Exception):
+class ChildInterfaceTechnologyUnknown(DruncSetupException):
     def __init__(self, t, name):
         super().__init__(f'The type {t} is not supported for the ChildNode {name}')
 
@@ -69,4 +70,4 @@ class ChildNode(abc.ABC):
 
     @staticmethod
     def get_from_oks(name, conf, token=None):
-        raise RuntimeError('OKS Not supported')
+        raise DruncSetupException('OKS Not supported')

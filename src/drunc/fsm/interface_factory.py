@@ -4,14 +4,15 @@ import inspect
 
 class FSMInterfaceFactory:
     def __init__(self):
-        raise RuntimeError('Call get() instead')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('Call get() instead')
 
     def _get_pre_transitions(self, interface):
         retr = {}
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
                 if name[:4] == 'pre_':
-                    print(f'ADDING {name=}')
+                    # print(f'ADDING {name=}')
                     retr[name] = method
         return retr
 
@@ -20,7 +21,7 @@ class FSMInterfaceFactory:
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
                 if name[:5] == 'post_':
-                    print(f'ADDING {name=}')
+                    # print(f'ADDING {name=}')
                     retr[name] = method
         return retr
 

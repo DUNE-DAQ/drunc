@@ -1,4 +1,5 @@
 from enum import Enum
+from drunc.exceptions import DruncSetupException
 
 
 class BroadcastTypes(Enum):
@@ -7,7 +8,7 @@ class BroadcastTypes(Enum):
     ERS = 2
 
 
-class BroadcastTypeNotHandled(Exception):
+class BroadcastTypeNotHandled(DruncSetupException):
     def __init__(self, btype):
         message = f'{btype} not handled'
         super(BroadcastTypeNotHandled, self).__init__(

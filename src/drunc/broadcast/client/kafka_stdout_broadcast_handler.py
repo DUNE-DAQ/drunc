@@ -24,7 +24,8 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
             self.kafka_address = conf['kafka_address']
             self.topic = topic
             if self.topic == '':
-                raise RuntimeError('The topic must be specified for json configuration')
+                from drunc.exceptions import DruncSetupException
+                raise DruncSetupException('The topic must be specified for json configuration')
 
             self.broadcast_types_loglevels.update(conf.get('broadcast_types_loglevels', {}))
 
@@ -87,17 +88,14 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
                         else:
                             txt = decoded.data
 
-                        # everything goes to info... but I'm too lazy to fix this now
                         from drunc.broadcast.utils import get_broadcast_level_from_broadcast_type
                         from druncschema.broadcast_pb2 import BroadcastType
                         bt = BroadcastType.Name(decoded.type)
 
                         get_broadcast_level_from_broadcast_type(decoded.type, self._log, self.broadcast_types_loglevels)(f'\'{bt}\' {txt}')
-                        # self._log.info(f'"{decoded.emitter.process}.{decoded.emitter.session}": "{BroadcastType.Name(decoded.type)}" {txt}')
-
 
                     except Exception as e:
                         self._log.error(f'Weird broadcast message: {message} (error: {str(e)})')
                         text_proto = text_format.MessageToString(decoded)
                         self._log.info(text_proto)
-                        raise e
+                        pass

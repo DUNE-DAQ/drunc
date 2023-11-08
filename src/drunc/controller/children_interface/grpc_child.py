@@ -29,6 +29,7 @@ class gRPCChildNode(ChildNode):
         desc = Description()
         ntries = 5
         from drunc.utils.grpc_utils import ServerUnreachable
+        from drunc.exceptions import DruncSetupException
 
         for itry in range(ntries):
             try:
@@ -48,7 +49,7 @@ class gRPCChildNode(ChildNode):
                     sleep(5)
 
             except grpc.RpcError as e:
-                raise e
+                raise DruncSetupException from e
             else:
                 self.log.info(f'Connected to the controller ({self.uri})!')
                 break

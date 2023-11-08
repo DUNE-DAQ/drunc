@@ -14,7 +14,8 @@ import signal
 # Constant taken from http://linux.die.net/include/linux/prctl.h
 PR_SET_PDEATHSIG = 1
 
-class PrCtlError(Exception):
+from drunc.exceptions import DruncException
+class PrCtlError(DruncException):
     pass
 
 
@@ -158,15 +159,16 @@ class SSHProcessManager(ProcessManager):
         import os
         platform = os.uname().sysname.lower()
         macos = ("darwin" in platform)
+        from drunc.exceptions import DruncCommandException
 
         meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
-            raise RuntimeError('No allowed host provided! bailing')
+            raise DruncCommandException('No allowed host provided! bailing')
 
         error = ''
 
         if uuid in self.boot_request:
-            raise RuntimeError(f'Process {uuid} already exists!')
+            raise DruncCommandException(f'Process {uuid} already exists!')
 
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)

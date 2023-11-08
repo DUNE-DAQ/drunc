@@ -39,7 +39,8 @@ class ResponseListener:
     _instance = None
     manager = None
     def __init__(self):
-        raise RuntimeError('Call get() instead')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('Call get() instead')
 
     @classmethod
     def get(cls):
@@ -125,7 +126,8 @@ class ResponseListener:
         :raises     RuntimeError:  { exception_description }
         """
         if app in cls.handlers:
-            raise RuntimeError(f"Handler already registered with notification listerner for app {app}")
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"Handler already registered with notification listerner for app {app}")
 
         cls.handlers[app] = handler
 
@@ -139,13 +141,15 @@ class ResponseListener:
 
         """
         if not app in cls.handlers:
-            return RuntimeError(f"No handler registered for app {app}")
+            from drunc.exceptions import DruncException
+            raise DruncException(f"No handler registered for app {app}")
         del cls.handlers[app]
 
     @classmethod
     def notify(cls, reply: dict):
         if 'appname' not in reply:
-            raise RuntimeError(f"No 'appname' field in reply {reply}")
+            from drunc.exceptions import DruncException
+            raise DruncException(f"No 'appname' field in reply {reply}")
 
         app = reply["appname"]
 

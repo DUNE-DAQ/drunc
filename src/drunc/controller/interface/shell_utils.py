@@ -34,7 +34,8 @@ def controller_cleanup_wrapper(ctx):
 
 def controller_setup(ctx, controller_address):
     if not hasattr(ctx, 'took_control'):
-        raise RuntimeError('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
 
 
     from druncschema.request_response_pb2 import Description
@@ -94,7 +95,8 @@ def search_fsm_command(command_name, command_list):
     return None
 
 
-class ArgumentException(Exception):
+from drunc.exceptions import DruncShellException
+class ArgumentException(DruncShellException):
     pass
 
 class MissingArgument(ArgumentException):

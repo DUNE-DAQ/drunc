@@ -47,7 +47,8 @@ class InclusionState(Observed):
             **kwargs
         )
 
-class StatefulNodeException(Exception):
+from drunc.exceptions import DruncCommandException
+class StatefulNodeException(DruncCommandException):
     pass
 
 class CannotInclude(StatefulNodeException):

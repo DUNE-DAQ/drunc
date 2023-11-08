@@ -181,7 +181,7 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
     from druncschema.controller_pb2 import FSMCommand
 
     if len(arguments) % 2 != 0:
-        raise RuntimeError('Arguments are pairs of key-value!')
+        raise click.BadParameter('Arguments are pairs of key-value!')
     desc = obj.get_driver('controller').describe_fsm(traceback)
 
     from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException

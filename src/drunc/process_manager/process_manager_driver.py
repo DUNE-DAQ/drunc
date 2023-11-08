@@ -5,7 +5,9 @@ from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQue
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
 
-class ConfigurationTypeNotSupported(Exception):
+from drunc.exceptions import DruncSetupException, DruncShellException
+
+class ConfigurationTypeNotSupported(DruncSetupException):
     def __init__(self, conf_type):
         self.type = conf_type
         super(ConfigurationTypeNotSupported, self).__init__(
@@ -60,7 +62,7 @@ class ProcessManagerDriver(GRPCDriver):
         exec = boot_configuration['exec']
         rte = boot_configuration.get('rte_script')
         if rte is None:
-            raise RuntimeError(f'RTE was not supplied in the boot.json')
+            raise DruncShellException(f'RTE was not supplied in the boot.json')
         hosts = boot_configuration['hosts-ctrl']
 
         pwd = os.getcwd()
@@ -75,7 +77,7 @@ class ProcessManagerDriver(GRPCDriver):
             )
 
         for svc_name, svc_data in boot_configuration.get('services', {}).items():
-            raise RuntimeError('Services cannot be started by drunc (yet)')
+            raise DruncShellException('Services cannot be started by drunc (yet)')
 
         for app_name, app_data in boot_configuration['apps'].items():
 

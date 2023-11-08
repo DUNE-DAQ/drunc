@@ -22,6 +22,9 @@ class GunicornStandaloneApplication(gunicorn.app.base.BaseApplication):
         return self.application
 
 
+from drunc.exceptions import DruncCommandException
+class CannotStartFlaskManager(DruncCommandException):
+    pass
 
 class FlaskManager(threading.Thread):
     '''
@@ -117,7 +120,7 @@ class FlaskManager(threading.Thread):
                 self.log.critical('This can happen if the web proxy is on at NP04.'+
                                   '\nExit NanoRC and try again after executing:'+
                                   '\nsource ~np04daq/bin/web_proxy.sh -u')
-                raise RuntimeError(f"Cannot start a FlaskManager for {self.name}")
+                raise CannotStartFlaskManager(f"Cannot start a FlaskManager for {self.name}")
             tries += 1
             try:
                 resp = get(f"http://{self.host}:{self.port}/readystatus")

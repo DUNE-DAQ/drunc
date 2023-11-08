@@ -1,4 +1,5 @@
-class FSMException(Exception):
+from drunc.exceptions import DruncCommandException
+class FSMException(DruncCommandException):
     pass
 
 
@@ -38,6 +39,17 @@ class MissingArgument(FSMException):
     def __init__(self, param, name):
         self.message = f"The mandatory argument \"{param}\" was not provided to the transition {name}"
         super(MissingArgument, self).__init__(self.message)
+
+class DoubleArgument(FSMException):
+    '''Raised when an argument is provided more than once'''
+    def __init__(self, txt):
+        self.message = txt
+        super(DoubleArgument, self).__init__(self.message)
+
+class UnhandledArgumentType(FSMException):
+    def __init__(self, annotation):
+        self.message = f"The argument \"{annotation}\" cannot be handled"
+        super(UnknownArgument, self).__init__(self.message)
 
 class UnknownArgument(FSMException):
     '''Raised when an unwanted argument is given to a transition'''

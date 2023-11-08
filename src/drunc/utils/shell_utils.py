@@ -2,7 +2,7 @@ import abc
 from druncschema.token_pb2 import Token
 from druncschema.request_response_pb2 import Request
 from typing import Mapping
-
+from drunc.exceptions import DruncShellException
 
 class GRPCDriver:
     def __init__(self, name:str, address:str, token:Token, aio_channel=False, rethrow_by_default=False):
@@ -12,7 +12,8 @@ class GRPCDriver:
         from druncschema.token_pb2 import Token
 
         if not address:
-            raise RuntimeError(f'You need to provide a valid IP address for the driver. Provided \'{address}\'')
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f'You need to provide a valid IP address for the driver. Provided \'{address}\'')
 
         self.address = address
 
@@ -61,30 +62,30 @@ class GRPCDriver:
             if text:
                 self._log.error(text)
 
-        from grpc_status import rpc_status
-        status = rpc_status.from_call(error)
+        # from grpc_status import rpc_status
+        # status = rpc_status.from_call(error)
 
-        self._log.error(f'Error sending command "{command}" to stub')
+        # self._log.error(f'Error sending command "{command}" to stub')
 
-        from druncschema.generic_pb2 import Stacktrace, PlainText
-        from drunc.utils.grpc_utils import unpack_any
+        # from druncschema.generic_pb2 import Stacktrace, PlainText
+        # from drunc.utils.grpc_utils import unpack_any
 
-        if hasattr(status, 'details'):
-            for detail in status.details:
-                if detail.Is(Stacktrace.DESCRIPTOR):
-                    stack = unpack_any(detail, Stacktrace)
-                    text = ''
-                    if rethrow:
-                        text += 'Stacktrace [bold red]on remote server![/]\n'
-                        for l in stack.text:
-                            text += l+"\n"
-                    else:
-                        text += 'Error [bold red]on remote server![/]\n'+'\n'.join(stack.text[:-2])
-                    self._log.error(text, extra={"markup": True})
-                    return
-                elif detail.Is(PlainText.DESCRIPTOR):
-                    txt = unpack_any(detail, PlainText)
-                    self._log.error(txt)
+        # if hasattr(status, 'details'):
+        #     for detail in status.details:
+        #         if detail.Is(Stacktrace.DESCRIPTOR):
+        #             stack = unpack_any(detail, Stacktrace)
+        #             text = ''
+        #             if rethrow:
+        #                 text += 'Stacktrace [bold red]on remote server![/]\n'
+        #                 for l in stack.text:
+        #                     text += l+"\n"
+        #             else:
+        #                 text += 'Error [bold red]on remote server![/]\n'+'\n'.join(stack.text[:-2])
+        #             self._log.error(text, extra={"markup": True})
+        #             return
+        #         elif detail.Is(PlainText.DESCRIPTOR):
+        #             txt = unpack_any(detail, PlainText)
+        #             self._log.error(txt)
 
         if hasattr(error, 'details'): #ARGG asyncio gRPC so different from synchronous one!!
             self._log.error(error.details())
@@ -98,7 +99,7 @@ class GRPCDriver:
     def send_command(self, command:str, data=None, rethrow=None, outformat=None):
         import grpc
         if not self.stub:
-            raise RuntimeError('No stub initialised')
+            raise DruncShellException('No stub initialised')
 
         cmd = getattr(self.stub, command) # this throws if the command doesn't exist
 
@@ -119,7 +120,7 @@ class GRPCDriver:
     async def send_command_aio(self, command:str, data=None, rethrow=None, outformat=None):
         import grpc
         if not self.stub:
-            raise RuntimeError('No stub initialised')
+            raise DruncShellException('No stub initialised')
 
         cmd = getattr(self.stub, command) # this throws if the command doesn't exist
 
@@ -140,7 +141,7 @@ class GRPCDriver:
     async def send_command_for_aio(self, command:str, data=None, rethrow=None, outformat=None):
         import grpc
         if not self.stub:
-            raise RuntimeError('No stub initialised')
+            raise DruncShellException('No stub initialised')
 
         cmd = getattr(self.stub, command) # this throws if the command doesn't exist
 
@@ -195,14 +196,14 @@ class ShellContext:
 
     def set_driver(self, name:str, driver:GRPCDriver) -> None:
         if name in self._drivers:
-            raise RuntimeError(f"Driver {name} already present in this context")
+            raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
     def get_driver(self, name:str=None) -> GRPCDriver:
         if name:
             return self._drivers[name]
         elif len(self._drivers)>1:
-            raise RuntimeError(f'More than one driver in this context')
+            raise DruncShellException(f'More than one driver in this context')
         return list(self._drivers.values())[0]
 
     def get_token(self) -> Token:
