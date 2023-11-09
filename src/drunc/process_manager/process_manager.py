@@ -7,9 +7,10 @@ from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessIn
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
+from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
 import abc
 
-from drunc.utils.grpc_utils import unpack_any
+# from drunc.utils.grpc_utils import unpack_any
 
 from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
 
@@ -125,128 +126,72 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
     def _terminate(self):
         pass
 
-    def _create_response(self, payload, token):
-        new_token = Token()
-        new_token.CopyFrom(token)
-        data = Any()
-        data.Pack(payload)
-        return Response(
-            token = new_token,
-            data = data
-        )
-    def _create_stream(self, payload, token):
-        new_token = Token()
-        new_token.CopyFrom(token)
-        data = Any()
-        data.Pack(payload)
-        return Response(
-            token = new_token,
-            data = data
-        )
-
-    def _generic_command(self, request:Request, command:str, req_format, context):
-
-        self.broadcast(
-            message = f'User \'{request.token.user_name}\' starting to execute \'{command}\'',
-            btype = BroadcastType.COMMAND_EXECUTION_START
-        )
-
-        data = request.data if request.data else None
-
-        if request.HasField('data'):# is not None:
-            formatted_data = unpack_any(data, req_format)
-            self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-            result = getattr(self, "_"+command+"_impl")(formatted_data, context)
-            self.log.info(f'\'{type(self).__name__}.{command}\' executed')
-        else:
-            result = getattr(self, "_"+command+"_impl")(None, context)
-
-        return self._create_response(result,request.token)
-
-
-    async def _generic_command_async(self, request:Request, command:str, req_format, context):
-
-        self.broadcast(
-            message = f'User \'{request.token.user_name}\' starting to execute \'{command}\'',
-            btype = BroadcastType.COMMAND_EXECUTION_START
-        )
-
-        data = request.data if request.data else None
-
-        formatted_data = unpack_any(data, req_format)
-        self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-        f = getattr(self, "_"+command+"_impl")
-        async for r in f(formatted_data, context):
-            s = self._create_stream(r,request.token)
-            yield s
-
-        self.broadcast( # this actually never gets executed... whatever
-            message = f'User \'{request.token.user_name}\' successfully executed \'{command}\'',
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
-        )
-
 
     @abc.abstractmethod
-    def _boot_impl(self, boot_data, context) -> ProcessUUID:
+    def _boot_impl(self, br:BootRequest) -> ProcessUUID:
         raise NotImplementedError
 
     # ORDER MATTERS!
-    @broadcasted
+    @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.CREATE,
         system=SystemType.PROCESS_MANAGER
-    )
-    def boot(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'boot\' request \'{req}\'')
-        return self._generic_command(req, 'boot', BootRequest, context)
+    ) # 2nd step
+    @unpack_request_data_to(BootRequest) # 3rd step
+    @pack_response # 4th step
+    def boot(self, br:BootRequest) -> Response:
+        return self._boot_impl(br)
 
 
     @abc.abstractmethod
-    def _restart_impl(self, process, context) -> ProcessInstance:
+    def _restart_impl(self, q:ProcessQuery) -> ProcessInstance:
         raise NotImplementedError
 
     # ORDER MATTERS!
-    @broadcasted
-    @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.PROCESS_MANAGER
-    )
-    def restart(self, req:Request, context)-> Response:
-        self.log.debug(f'received \'restart\' request \'{req}\'')
-        return self._generic_command(req, 'restart', ProcessQuery, context)
-
-
-    @abc.abstractmethod
-    def _kill_impl(self, process, context) -> Response:
-        raise NotImplementedError
-
-    # ORDER MATTERS!
-    @broadcasted
+    @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE,
         system=SystemType.PROCESS_MANAGER
-    )
-    def kill(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'kill\' request \'{req}\'')
-        return self._generic_command(req, 'kill', ProcessQuery, context)
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def restart(self, q:ProcessQuery)-> Response:
+        return self._restart_impl(q)
 
 
     @abc.abstractmethod
-    def _ps_impl(self, req, context) -> Response:
+    def _kill_impl(self, q:ProcessQuery) -> Response:
         raise NotImplementedError
 
     # ORDER MATTERS!
-    @broadcasted
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def kill(self, q:ProcessQuery) -> Response:
+        return self._kill_impl(q)
+
+
+    @abc.abstractmethod
+    def _ps_impl(self, q:ProcessQuery) -> Response:
+        raise NotImplementedError
+
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ,
         system=SystemType.PROCESS_MANAGER
-    )
-    def ps(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'ps\' request \'{req}\'')
-        return self._generic_command(req, 'ps', ProcessQuery, context)
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def ps(self, q:ProcessQuery) -> Response:
+        return self._ps_impl(q)
 
 
-    def _flush_impl(self, query, context) -> Response:
+    def _flush_impl(self, query) -> Response:
         ret = []
 
         for uuid in self._get_process_uid(query):
@@ -293,25 +238,28 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         return pil
 
     # ORDER MATTERS!
-    @broadcasted
+    @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
+        action=ActionType.DELETE,
         system=SystemType.PROCESS_MANAGER
-    )
-    def flush(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'flush\' request \'{req}\'')
-        return self._generic_command(req, 'flush', ProcessQuery, context)
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def flush(self, q:ProcessQuery) -> Response:
+        return self._flush_impl(q)
 
     # ORDER MATTERS!
-    @broadcasted
+    @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ,
         system=SystemType.PROCESS_MANAGER
-    )
-    def describe(self, request:Request, context) -> Response:
-        return self._generic_command(request, 'describe', None, context)
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def describe(self) -> Response:
+        return self._describe_impl()
 
-    def _describe_impl(self, _, dummy):
+    def _describe_impl(self):
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
 
@@ -328,14 +276,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         raise NotImplementedError
 
     # ORDER MATTERS!
-    @async_broadcasted
+    @async_broadcasted # outer most wrapper 1st step
     @async_authentified_and_authorised(
         action=ActionType.READ,
         system=SystemType.PROCESS_MANAGER
-    )
-    async def logs(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'logs\' request \'{req}\'')
-        async for r in self._generic_command_async(req, 'logs', LogRequest, context):
+    ) # 2nd step
+    @async_unpack_request_data_to(LogRequest) # 3rd step
+    @async_pack_response # 4th step
+    async def logs(self, lr:LogRequest) -> Response:
+        async for r in self._logs_impl(lr):
             yield r
 
 

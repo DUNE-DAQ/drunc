@@ -90,7 +90,7 @@ class SSHProcessManager(ProcessManager):
             process.terminate()
 
 
-    async def _logs_impl(self, log_request:LogRequest,  context: grpc.aio.ServicerContext=None) -> LogLine:
+    async def _logs_impl(self, log_request:LogRequest) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         logfile = self.boot_request[uid].process_description.process_logs_path
         # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
@@ -260,7 +260,7 @@ class SSHProcessManager(ProcessManager):
         return pi
 
 
-    def _ps_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _ps_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         ret = []
 
         for uuid in self._get_process_uid(query):
@@ -307,14 +307,14 @@ class SSHProcessManager(ProcessManager):
         return pil
 
 
-    def _boot_impl(self, boot_request:BootRequest, context: grpc.aio.ServicerContext=None) -> ProcessUUID:
+    def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
         import uuid
         this_uuid = str(uuid.uuid4())
         return self.__boot(boot_request, this_uuid)
 
 
 
-    def _restart_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _restart_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
@@ -326,7 +326,7 @@ class SSHProcessManager(ProcessManager):
         return self.__boot(self.boot_request[uuid], uuid)
 
 
-    def _kill_impl(self, query:ProcessQuery, context: grpc.aio.ServicerContext=None) -> ProcessInstanceList:
+    def _kill_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         ret = []
 
