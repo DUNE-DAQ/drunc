@@ -2,6 +2,9 @@ from drunc.utils.conf_types import ConfTypes
 
 
 class BroadcastSender:
+
+    implementation = None
+
     def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
         super(BroadcastSender, self).__init__(
             **kwargs,
