@@ -10,11 +10,7 @@ from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
 import abc
 
-# from drunc.utils.grpc_utils import unpack_any
-
 from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
-
-from google.protobuf.any_pb2 import Any
 
 from drunc.exceptions import DruncCommandException
 class BadQuery(DruncCommandException):
