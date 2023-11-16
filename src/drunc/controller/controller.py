@@ -16,6 +16,13 @@ import drunc.controller.exceptions as ctler_excpt
 from drunc.utils.grpc_utils import pack_to_any
 from threading import Lock, Thread
 from typing import Optional, List
+from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
+from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
+from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
+from druncschema.authoriser_pb2 import ActionType, SystemType
+from drunc.controller.decorators import in_control
+
+from druncschema.controller_pb2 import FSMCommand
 
 
 class ControllerActor:
@@ -57,10 +64,12 @@ class ControllerActor:
 
 
 class Controller(StatefulNode, ControllerServicer, BroadcastSender):
+
+    children_nodes = [] # type: List[ChildNode]
+
     def __init__(self, configuration:str, **kwargs):
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(configuration)
-        self.children_nodes = [] # type: List[ChildNode]
 
         super(Controller, self).__init__(
             broadcast_configuration = self.configuration.get('broadcaster'),
@@ -75,6 +84,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         self.actor = ControllerActor(None)
 
+        ## TODO rm
         self.controller_token = Token(
             user_name = f'{self.name}_controller',
             token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
@@ -199,15 +209,18 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         )
 
     def terminate(self):
+        from logging import getLogger
+        log = getLogger('ControllerTerminate')
+
         if self.can_broadcast():
             self.broadcast(
                 btype = BroadcastType.SERVER_SHUTDOWN,
                 message = 'over_and_out',
             )
 
-        self.logger.info('Stopping children')
+        log.info('Stopping children')
         for child in self.children_nodes:
-            self.logger.debug(f'Stopping {child.name}')
+            log.debug(f'Stopping {child.name}')
             child.terminate()
 
         from drunc.controller.children_interface.rest_api_child import ResponseListener
@@ -216,14 +229,14 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             ResponseListener.get().terminate()
 
         import threading
-        self.logger.info("Threading threads")
+        log.debug("Threading threads")
         for t in threading.enumerate():
-            print(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
+            log.debug(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
 
         from multiprocessing import Manager
         with Manager() as manager:
-            self.logger.info("Multiprocess threads")
-            self.logger.info(manager.list())
+            log.debug("Multiprocess threads")
+            log.debug(manager.list())
 
 
     def __del__(self):
@@ -269,230 +282,84 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
         return return_statuses
 
 
-    def _generic_user_command(self, request:Request, command:str, context, propagate=False):
-        """
-        A generic way to execute the controller commands from a user.
-        1. Check if the command is authorised
-        2. Broadcast that the command is being executed
-        3. Execute the command on children controller, app, and self
-        4. Broadcast that the command has been executed successfully or not
-        5. Return the result
-        """
-
-        self.broadcast(
-            btype = BroadcastType.ACK,
-            message = f'{request.token.user_name} attempting to execute \'{command}\''
-        )
-
-        if not self.authoriser.is_authorised(request.token, command):
-            message = f'{request.token.user_name} is not authorised to execute \'{command}\''
-            self._interrupt_with_message(message, context)
-
-        data = request.data if request.data else None
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_START,
-            message = f'Executing {command} (upon request from {request.token.user_name})',
-        )
-
-        if propagate:
-            self.propagate_to_list(command, request.data, request.token, self.children_nodes)
-
-        try:
-            token = Token()
-            token.CopyFrom(request.token)
-            result = getattr(self, "_"+command+"_impl")(data, token)
-
-        except ctler_excpt.ControllerException as e:
-            self._interrupt_with_message(
-                str(e),
-                context = context
-            )
-
-        except Exception as e:
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
-
-        result_any = pack_to_any(result)
-        response = Response(data = result_any)
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            message = f'Succesfully executed {command}'
-        )
-
-        return response
-
-
-
-    def _fsm_command(self, request:Request, command:str, context):
-        """
-        A generic way to execute the controller commands from a user.
-        1. Check if the command is authorised
-        2. Broadcast that the command is being executed
-        3. Execute the command on children controller, app, and self
-        4. Broadcast that the command has been executed successfully or not
-        5. Return the result
-        """
-
-        self.broadcast(
-            btype = BroadcastType.ACK,
-            message = f'{request.token.user_name} attempting to execute and FSM command: {command}'
-        )
-
-        from drunc.utils.grpc_utils import unpack_any
-        from druncschema.controller_pb2 import FSMCommand
-        fsm_command = unpack_any(request.data, FSMCommand)
-
-        if not self.authoriser.is_authorised(request.token, 'fsm'):
-            message = f'{request.token.user_name} is not authorised to execute {fsm_command.command_name}'
-            self._interrupt_with_message(message, context)
-
-        if not self.actor.token_is_current_actor(request.token):
-            message = f'{request.token.user_name} is not in control (ask "{self.actor.get_user_name()}" to surrender control to execute the command)'
-            self._interrupt_with_message(message, context)
-
-        if not self.node_is_included():
-            message = f'{self.name} is not included, not executing the FSM command {fsm_command.command_name}'
-            self._interrupt_with_message(message, context)
-
-        transition = self.get_fsm_transition(fsm_command.command_name)
-
-        self.logger.debug(f'The transition requested is "{str(transition)}"')
-
-        if not self.can_transition(transition):
-            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.node_operational_state()}\"'
-            self._interrupt_with_message(message, context)
-
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_START,
-            message = f'Executing {command} (upon request from {request.token.user_name})',
-        )
-
-        self.logger.debug(f'{command} data: {fsm_command}')
-        child_statuses = {}
-        try:
-
-            fsm_args = self.decode_fsm_arguments(fsm_command)
-
-            fsm_data = self.prepare_transition(
-                transition = transition,
-                transition_args = fsm_args,
-                transition_data = fsm_command.data,
-            )
-
-            self.propagate_transition_mark(transition)
-
-            children_fsm_command = FSMCommand()
-            children_fsm_command.CopyFrom(fsm_command)
-            children_fsm_command.data = fsm_data
-            children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
-            execute_on = fsm_command.children_nodes
-
-            if execute_on:
-                child_statuses = self.propagate_to_list(command, children_fsm_command, request.token, execute_on)
-            else:
-                child_statuses = self.propagate_to_list(command, children_fsm_command, request.token, self.children_nodes)
-
-            self.finish_propagating_transition_mark(transition)
-
-            self.start_transition_mark(transition)
-
-            self.broadcast(
-                btype = BroadcastType.COMMAND_EXECUTION_START,
-                message = f'Executing {fsm_command.command_name} (upon request from {request.token.user_name})',
-            )
-
-            self.terminate_transition_mark(transition)
-
-            fsm_data = self.finalise_transition(
-                transition = transition,
-                transition_args = fsm_args,
-                transition_data = fsm_data
-            )
-
-        except Exception as e:
-            self._interrupt_with_exception(
-                ex_stack = traceback.format_exc(),
-                ex_text = str(e),
-                context = context
-            )
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS,
-            message = f'Succesfully executed {command}'
-        )
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
-
-        result = FSMCommandResponse(
-            successful = FSMCommandResponseCode.SUCCESSFUL,
-            command_name = fsm_command.command_name,
-            children_successful = child_statuses,
-        )
-
-        result_any = pack_to_any(result)
-        response = Response(data = result_any)
-        response.token.CopyFrom(request.token)
-
-        return response
-
-
-
     ########################################################
     ############# Status, description commands #############
     ########################################################
 
-    def get_children_status(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'get_children_status', context, propagate=False)
-
-    def _get_children_status_impl(self, _, token) -> ChildrenStatus:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def get_children_status(self, token:Token) -> ChildrenStatus:
         #from drunc.controller.utils import get_status_message
         return ChildrenStatus(
             children_status = [n.get_status(token) for n in self.children_nodes]
         )
 
-
-    def get_status(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'get_status', context, propagate=False)
-
-    def _get_status_impl(self, _, dummy) -> Status:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def get_status(self) -> Status:
         from drunc.controller.utils import get_status_message
         return get_status_message(self)
 
 
-    def ls(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'ls', context, propagate=False)
-
-    def _ls_impl(self, _, dummy) -> PlainTextVector:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def ls(self) -> PlainTextVector:
         nodes = [node.name for node in self.children_nodes]
         return PlainTextVector(
             text = nodes
         )
 
 
-    def describe(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'describe', context, propagate=False)
-
-    def _describe_impl(self, request:Request, dummy):
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def describe(self) -> Response:
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
-        return Description(
+        bd = self.describe_broadcast()
+        d = Description(
             type = 'controller',
             name = self.name,
             session = self.session,
             commands = self.commands,
-            broadcast = pack_to_any(self.describe_broadcast()),
         )
+        if bd:
+            d.broadcast.CopyFrom(pack_to_any(bd))
+        return d
 
 
-    def describe_fsm(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'describe_fsm', context, propagate=False)
-
-    def _describe_fsm_impl(self, _, dummy):
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def describe_fsm(self) -> Response:
         from drunc.fsm.utils import convert_fsm_transition
         desc = convert_fsm_transition(self.get_fsm_transitions())
         desc.type = 'controller'
@@ -504,51 +371,149 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
     ########################################
     ############# FSM commands #############
     ########################################
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @in_control
+    @unpack_request_data_to(FSMCommand, pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def execute_fsm_command(self, fsm_command:FSMCommand, token:Token) -> Response:
+        """
+        A generic way to execute the controller commands from a user.
+        1. Check if the command can be executed (correct FSM transition)
+        2. Execute the command on children controller, app, and self
+        3. Return the result
+        """
 
-    def execute_fsm_command(self, request:Request, context) -> Response:
-        return self._fsm_command(request, 'execute_fsm_command', context)
+        transition = self.get_fsm_transition(fsm_command.command_name)
+
+        self.logger.debug(f'The transition requested is "{str(transition)}"')
+
+        if not self.can_transition(transition):
+            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.node_operational_state()}\"'
+
+        self.logger.debug(f'FSM command data: {fsm_command}')
+        child_statuses = {}
+
+        fsm_args = self.decode_fsm_arguments(fsm_command)
+
+        fsm_data = self.prepare_transition(
+            transition = transition,
+            transition_args = fsm_args,
+            transition_data = fsm_command.data,
+        )
+
+        self.propagate_transition_mark(transition)
+
+        children_fsm_command = FSMCommand()
+        children_fsm_command.CopyFrom(fsm_command)
+        children_fsm_command.data = fsm_data
+        children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
+        execute_on = fsm_command.children_nodes
+
+        if execute_on:
+            child_statuses = self.propagate_to_list('execute_fsm_command', children_fsm_command, token, execute_on)
+        else:
+            child_statuses = self.propagate_to_list('execute_fsm_command', children_fsm_command, token, self.children_nodes)
+
+        self.finish_propagating_transition_mark(transition)
+
+        self.start_transition_mark(transition)
+
+        self.broadcast(
+            btype = BroadcastType.COMMAND_EXECUTION_START,
+            message = f'Executing {fsm_command.command_name} (upon request from {token.user_name})',
+        )
+
+        self.terminate_transition_mark(transition)
+
+        fsm_data = self.finalise_transition(
+            transition = transition,
+            transition_args = fsm_args,
+            transition_data = fsm_data
+        )
+
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
+
+        result = FSMCommandResponse(
+            successful = FSMCommandResponseCode.SUCCESSFUL,
+            command_name = fsm_command.command_name,
+            children_successful = child_statuses,
+        )
+
+        return result
 
 
-    def include(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'include', context, propagate=True)
-
-    def _include_impl(self, _, token) -> PlainText:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @in_control
+    @unpack_request_data_to(pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def include(self, token:Token) -> PlainText:
+        self.propagate_to_list('include', data=None, token=token, node_to_execute=self.children_nodes)
         self.include_node()
-        return PlainText(text = f'{self.name} included')
+        return PlainText(text = f'{self.name} and children included')
 
 
-    def exclude(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'exclude', context, propagate=True)
-
-    def _exclude_impl(self, _, token) -> PlainText:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @in_control
+    @unpack_request_data_to(pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def exclude(self, token:Token) -> Response:
+        self.propagate_to_list('exclude', data=None, token=token, node_to_execute=self.children_nodes)
         self.exclude_node()
-        return PlainText(text = f'{self.name} excluded')
+        return PlainText(text = f'{self.name} and children excluded')
 
 
     ##########################################
     ############# Actor commands #############
     ##########################################
 
-    def take_control(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'take_control', context, propagate=True)
-
-    def _take_control_impl(self, _, token) -> PlainText:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def take_control(self, token:Token) -> PlainText:
         self.actor.take_control(token)
         return PlainText(text = f'{token.user_name} took control')
 
-
-    def surrender_control(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'surrender_control', context, propagate=True)
-
-    def _surrender_control_impl(self, _, token) -> PlainText:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(pass_token=True) # 3rd step
+    @pack_response # 4th step
+    def surrender_control(self, token:Token) -> PlainText:
         user = self.actor.get_user_name()
         self.actor.surrender_control(token)
         return PlainText(text = f'{user} surrendered control')
 
-
-    def who_is_in_charge(self, request:Request, context) -> Response:
-        return self._generic_user_command(request, 'who_is_in_charge', context)
-
-    def _who_is_in_charge_impl(self, *args) -> PlainText:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.CONTROLLER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def who_is_in_charge(self) -> PlainText:
         user = self.actor.get_user_name()
         return PlainText(text = user)
