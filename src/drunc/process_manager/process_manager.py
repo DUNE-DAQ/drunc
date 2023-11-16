@@ -191,7 +191,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         return self._ps_impl(q)
 
 
-    def _flush_impl(self, query) -> Response:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def flush(self, query:ProcessQuery) -> Response:
         ret = []
 
         for uuid in self._get_process_uid(query):
@@ -240,36 +248,24 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
     # ORDER MATTERS!
     @broadcasted # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE,
-        system=SystemType.PROCESS_MANAGER
-    ) # 2nd step
-    @unpack_request_data_to(ProcessQuery) # 3rd step
-    @pack_response # 4th step
-    def flush(self, q:ProcessQuery) -> Response:
-        return self._flush_impl(q)
-
-    # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
-    @authentified_and_authorised(
         action=ActionType.READ,
         system=SystemType.PROCESS_MANAGER
     ) # 2nd step
     @unpack_request_data_to(None) # 3rd step
     @pack_response # 4th step
     def describe(self) -> Response:
-        return self._describe_impl()
-
-    def _describe_impl(self):
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
-
-        return Description(
+        bd = self.describe_broadcast()
+        d = Description(
             type = 'process_manager',
             name = self.name,
             session = 'no_session' if not self.session else self.session,
             commands = self.commands,
-            broadcast = pack_to_any(self.describe_broadcast()),
         )
+        if bd:
+            d.broadcast.CopyFrom(pack_to_any(bd))
+        return d
 
     @abc.abstractmethod
     async def _logs_impl(self, req:Request, context) -> Response:
