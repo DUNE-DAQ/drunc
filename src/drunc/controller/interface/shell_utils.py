@@ -64,12 +64,11 @@ def controller_setup(ctx, controller_address):
 
         else:
             ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-            ctx.start_listening_controller(desc.broadcast)
+            if desc.HasField('broadcast'):
+                ctx.start_listening_controller(desc.broadcast)
             break
 
     ctx.print('Connected to the controller')
-
-    from druncschema.generic_pb2 import PlainText, PlainTextVector
 
     children = ctx.get_driver('controller').ls(rethrow=False)
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')

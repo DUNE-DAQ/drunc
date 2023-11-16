@@ -22,8 +22,9 @@ class BroadcastSender:
 
         self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
         self.impl_technology = broadcast_configuration.get('type')
-
+        self.implementation = None
         if self.impl_technology is None:
+            self.logger.warning('There is no broadcasting service!')
             return
 
         match self.impl_technology:
@@ -34,7 +35,8 @@ class BroadcastSender:
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
             case _:
-                self.logger.error('There is no broadcasting service!')
+                from drunc.exceptions import DruncSetupException
+                raise DruncSetupException(f"Broadcaster cannot be {self.impl_technology}")
 
     def describe_broadcast(self):
         if self.implementation:
