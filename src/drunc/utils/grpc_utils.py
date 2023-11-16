@@ -25,7 +25,7 @@ def unpack_any(data, format):
     return req
 
 
-def unpack_request_data_to(data_type=None):
+def unpack_request_data_to(data_type=None, pass_token=False):
 
     def decor(cmd):
 
@@ -40,14 +40,15 @@ def unpack_request_data_to(data_type=None):
             ret = None
             log.debug('Executing wrapped function')
 
-            from druncschema.token_pb2 import Token
-            if data_type == Token: # special case of token
-                ret = cmd(obj, request.token)
-            elif data_type is not None:
+            kwargs = {}
+            if pass_token:
+                kwargs = {'token': request.token}
+
+            if data_type is not None:
                 data = unpack_any(request.data, data_type)
-                ret = cmd(obj, data)
+                ret = cmd(obj, data, **kwargs)
             else:
-                ret = cmd(obj)
+                ret = cmd(obj, **kwargs)
 
             log.debug('Exiting')
 
@@ -57,7 +58,7 @@ def unpack_request_data_to(data_type=None):
     return decor
 
 
-def async_unpack_request_data_to(data_type=None):
+def async_unpack_request_data_to(data_type=None, pass_token=False):
 
     def decor(cmd):
 
@@ -71,16 +72,16 @@ def async_unpack_request_data_to(data_type=None):
 
             log.debug('Executing wrapped function')
 
-            from druncschema.token_pb2 import Token
-            if data_type == Token: # special case of token
-                async for a in cmd(obj, request.token):
-                    yield a
-            elif data_type is not None:
+            kwargs = {}
+            if pass_token:
+                kwargs = {'token': request.token}
+
+            if data_type is not None:
                 data = unpack_any(request.data, data_type)
-                async for a in cmd(obj, data):
+                async for a in cmd(obj, data, **kwargs):
                     yield a
             else:
-                async for a in cmd(obj):
+                async for a in cmd(obj, **kwargs):
                     yield a
 
             log.debug('Exiting')
