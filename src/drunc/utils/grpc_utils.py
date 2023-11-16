@@ -40,7 +40,10 @@ def unpack_request_data_to(data_type=None):
             ret = None
             log.debug('Executing wrapped function')
 
-            if data_type:
+            from druncschema.token_pb2 import Token
+            if data_type == Token: # special case of token
+                ret = cmd(obj, request.token)
+            elif data_type is not None:
                 data = unpack_any(request.data, data_type)
                 ret = cmd(obj, data)
             else:
@@ -68,7 +71,11 @@ def async_unpack_request_data_to(data_type=None):
 
             log.debug('Executing wrapped function')
 
-            if data_type:
+            from druncschema.token_pb2 import Token
+            if data_type == Token: # special case of token
+                async for a in cmd(obj, request.token):
+                    yield a
+            elif data_type is not None:
                 data = unpack_any(request.data, data_type)
                 async for a in cmd(obj, data):
                     yield a
