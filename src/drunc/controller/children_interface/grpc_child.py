@@ -1,5 +1,5 @@
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import send_command
+# from drunc.controller.utils import send_command
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 import grpc as grpc
 
@@ -46,7 +46,7 @@ class gRPCChildNode(ChildNode):
                 else:
                     self.log.error(f'Could not connect to the controller ({self.uri}), trial {itry+1} of {ntries}')
                     from time import sleep
-                    sleep(5)
+                    sleep(2)
 
             except grpc.RpcError as e:
                 raise DruncSetupException from e
