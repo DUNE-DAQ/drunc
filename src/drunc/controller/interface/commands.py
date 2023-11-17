@@ -202,7 +202,7 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
             arguments = formated_args,
         )
         result = obj.get_driver('controller').execute_fsm_command(
-            arguments = data,
+            data = data,
             rethrow = True, # we throw here any way
         )
     except ArgumentException as ae:
@@ -246,7 +246,7 @@ def include(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'include',
     )
-    result = obj.get_driver('controller').include(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').include(rethrow=traceback, data=data)
     if not result: return
     obj.print(result.text)
 
@@ -259,6 +259,6 @@ def exclude(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'exclude',
     )
-    result = obj.get_driver('controller').exclude(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').exclude(rethrow=traceback, data=data)
     if not result: return
     obj.print(result.text)

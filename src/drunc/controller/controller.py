@@ -104,7 +104,8 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                     ChildNode.get_from_file(
                             name = child['name'],
                             conf = child,
-                            fsm_conf = fsm_conf
+                            fsm_conf = fsm_conf,
+                            token = self.controller_token,
                         )
                     )
             else:
@@ -112,6 +113,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
                     ChildNode.get_from_file(
                             name = child['name'],
                             conf = child,
+                            token = self.controller_token,
                         )
                     )
 
@@ -259,7 +261,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             )
 
             try:
-                return_statuses[child.name] = child.propagate_command(command, data, token)
+                return_statuses[child.name] = child.propagate_command(command, token, data=data)
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
                     message = f'Propagating {command} to children ({child.name})',

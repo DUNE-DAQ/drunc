@@ -2,7 +2,6 @@ from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.generic_pb2 import PlainText, PlainTextVector
 from druncschema.controller_pb2 import Status, ChildrenStatus
 
-from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
 
 class ConfigurationTypeNotSupported(Exception):
@@ -50,17 +49,17 @@ class ControllerDriver(GRPCDriver):
     def surrender_control(self, rethrow=None) -> Description:
         return self.send_command('surrender_control', rethrow = rethrow)
 
-    def execute_fsm_command(self, arguments, rethrow=None) -> Description:
+    def execute_fsm_command(self, data, rethrow=None) -> Description:
         from druncschema.controller_pb2 import FSMCommandResponse
-        return self.send_command('execute_fsm_command', data = arguments, rethrow = rethrow, outformat = FSMCommandResponse)
+        return self.send_command('execute_fsm_command', data = data, rethrow = rethrow, outformat = FSMCommandResponse)
 
-    def include(self, arguments, rethrow=None) -> Description:
+    def include(self, data, rethrow=None) -> Description:
         from druncschema.controller_pb2 import FSMCommandResponse
-        return self.send_command('include', data = arguments, rethrow = rethrow, outformat = PlainText)
+        return self.send_command('include', data = data, rethrow = rethrow, outformat = PlainText)
 
-    def exclude(self, arguments, rethrow=None) -> Description:
+    def exclude(self, data, rethrow=None) -> Description:
         from druncschema.controller_pb2 import FSMCommandResponse
-        return self.send_command('exclude', data = arguments, rethrow = rethrow, outformat = PlainText)
+        return self.send_command('exclude', data = data, rethrow = rethrow, outformat = PlainText)
 
 
 
