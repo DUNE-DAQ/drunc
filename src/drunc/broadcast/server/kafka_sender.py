@@ -4,6 +4,9 @@ from drunc.broadcast.server.broadcast_sender_implementation import BroadcastSend
 from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
 class KafkaSender(BroadcastSenderImplementation):
+    kafka = None
+    can_broadcast = False
+
     def __init__(self, conf, topic, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
         super(KafkaSender, self).__init__(**kwargs)
         import logging
@@ -36,11 +39,13 @@ class KafkaSender(BroadcastSenderImplementation):
         self._can_broadcast = True
 
     def can_broadcast(self):
-        return self._can_broadcast
-
+        return self._can_broadcast and not self.kafka._closed
 
     def _send(self, bm:BroadcastMessage):
         from kafka.errors import KafkaError
+        if not self.can_broadcast():
+            self._log.error(f'Kafka cannot broadcast (not yet setup or closed)')
+            return
 
         future = self.kafka.send(
             self.topic, bm.SerializeToString()
@@ -65,3 +70,9 @@ class KafkaSender(BroadcastSenderImplementation):
             topic = self.topic,
             kafka_address = self.kafka_address,
         )
+
+    def terminate(self):
+        if self.kafka:
+            self.kafka.flush()
+        print('kafka sender decimated')
+        self._can_broadcast = False

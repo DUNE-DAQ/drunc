@@ -75,4 +75,7 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
         from drunc.utils.utils import print_traceback
         print_traceback()
 
+    finally:
+        controller_shutdown()
+
 

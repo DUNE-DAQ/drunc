@@ -14,3 +14,6 @@ class BroadcastSenderImplementation(abc.ABC):
     def can_broadcast(self):
         pass
 
+    def terminate(self):
+        pass
+

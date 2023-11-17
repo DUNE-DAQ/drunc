@@ -98,7 +98,6 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             "pre_transitions": {},
             "post_transitions": {},
         })
-
         for child in self.configuration.get('children', []):
             if child['type'] == 'rest-api': # already some hacking
                 self.children_nodes.append(
@@ -240,7 +239,10 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
 
     def __del__(self):
-        self.terminate()
+        # PL: Don't put self.terminate() here
+        # If an exception gets thrown on the main thread, each thead get deleted **before** the garbage collector chucks this object.
+        # This means the broadcasting service is long gone at that time, and you can get exceptions when trying to access it
+        pass
 
     def propagate_to_list(self, command:str, data, token, node_to_execute):
 
