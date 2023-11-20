@@ -20,17 +20,22 @@ from druncschema.process_manager_pb2 import ProcessQuery
 @run_coroutine
 async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str, traceback:bool) -> None:
 
-    results = obj.get_driver('process_manager').boot(
-        conf = boot_configuration,
-        conf_type = conf_type,
-        user = user,
-        session_name = session_name,
-        log_level = log_level,
-        rethrow = traceback,
-    )
-    async for result in results:
-        if not result: break
-        obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
+    from drunc.utils.shell_utils import InterruptedCommand
+    try:
+        results = obj.get_driver('process_manager').boot(
+            conf = boot_configuration,
+            conf_type = conf_type,
+            user = user,
+            session_name = session_name,
+            log_level = log_level,
+            rethrow = traceback,
+        )
+        async for result in results:
+            if not result: break
+            obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
+    except InterruptedCommand:
+        return
+
 
     controller_address = obj.get_driver('process_manager').controller_address
     if controller_address:

@@ -289,18 +289,30 @@ class ProcessManagerDriver(GRPCDriver):
             )
 
     async def boot(self, conf:str, user:str, session_name:str, conf_type, log_level:str, rethrow=None) -> ProcessInstance:
-        async for br in self._convert_boot_conf(
-            conf = conf,
-            conf_type = conf_type,
-            user = user,
-            session_name = session_name,
-            log_level = log_level):
-            yield await self.send_command_aio(
-                'boot',
-                data = br,
-                outformat = ProcessInstance,
-                rethrow = rethrow,
-            )
+        from drunc.exceptions import DruncShellException
+        if rethrow is None:
+            rethrow = self.rethrow_by_default
+
+        try:
+            async for br in self._convert_boot_conf(
+                conf = conf,
+                conf_type = conf_type,
+                user = user,
+                session_name = session_name,
+                log_level = log_level):
+                yield await self.send_command_aio(
+                    'boot',
+                    data = br,
+                    outformat = ProcessInstance,
+                    rethrow = rethrow,
+                )
+        except DruncShellException as e:
+            if rethrow:
+                raise e
+            else:
+                self._log.error(e)
+                from drunc.utils.shell_utils import InterruptedCommand
+                raise InterruptedCommand()
 
 
     async def kill(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:

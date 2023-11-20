@@ -10,6 +10,7 @@ from drunc.utils.shell_utils import add_traceback_flag
 @click.pass_obj
 def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
     from druncschema.controller_pb2 import Argument
+    from drunc.utils.shell_utils import InterruptedCommand
 
     if command == 'fsm':
         desc = obj.get_driver('controller').describe_fsm(rethrow=traceback)
@@ -137,9 +138,17 @@ def status(obj:ControllerContext, traceback:bool) -> None:
 @click.pass_obj
 def connect(obj:ControllerContext, traceback:bool, controller_address:str) -> None:
     obj.print(f'Connecting this shell to it...')
-    obj.set_controller_driver(controller_address, obj.print_traceback)
-    from drunc.controller.interface.shell_utils import controller_setup
-    controller_setup(obj, controller_address)
+    from drunc.exceptions import DruncException
+
+    try:
+        obj.set_controller_driver(controller_address, obj.print_traceback)
+        from drunc.controller.interface.shell_utils import controller_setup
+        controller_setup(obj, controller_address)
+    except DruncException as de:
+        if traceback:
+            raise de
+        else:
+            obj.error(de)
 
 
 
