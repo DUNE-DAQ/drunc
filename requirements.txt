@@ -12,4 +12,4 @@ requests
 flask
 flask-restful
 sh
-druncschema @ git+https://github.com/DUNE-DAQ/druncschema.git
+druncschema @ git+https://github.com/DUNE-DAQ/druncschema.git@v0.3.0
