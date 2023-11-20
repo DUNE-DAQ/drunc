@@ -6,11 +6,11 @@ class DruncException(Exception): # All exceptions known to drunc
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-class DruncShellException(Exception): # Exceptions that gets thrown by shells
+class DruncShellException(DruncException): # Exceptions that gets thrown by shells
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-class DruncSetupException(Exception): # Exceptions that gets thrown when services start
+class DruncSetupException(DruncException): # Exceptions that gets thrown when services start
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
