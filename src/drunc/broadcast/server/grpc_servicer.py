@@ -23,7 +23,8 @@ class ListenerRepresentation:
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
     def __init__(self, configuration, logger):
-        raise RuntimeError('GRCPBroadcastSender not supported')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('GRCPBroadcastSender not supported')
 
         from logging import getLogger
         self.name = 'broadcast_sender'
@@ -111,8 +112,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
             )
         except Exception as e:
             self.broadcast_exception(e)
-            from drunc.utils.command import parse_exception
-            return parse_exception(e)
+
 
     def remove_from_broadcast_list(self, request:Request, context) -> Response:
         r = unpack_any(data, BroadcastRequest)

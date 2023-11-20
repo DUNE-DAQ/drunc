@@ -2,7 +2,7 @@ from druncschema.broadcast_pb2_grpc import BroadcastReceiverServicer
 from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
 from druncschema.generic_pb2 import Empty
 import grpc
-from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
+from drunc.utils.conf_types import ConfTypes
 
 
 class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
@@ -10,7 +10,8 @@ class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
         super(gRPCStdoutBroadcastHandler, self).__init__(
             **kwargs
         )
-        raise RuntimeError('gRPCStdoutBroadcastHandler is not handled')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('gRPCStdoutBroadcastHandler is not handled it needs to be reworked!')
         self.ready = False
         self.stub = None
         self.token = token

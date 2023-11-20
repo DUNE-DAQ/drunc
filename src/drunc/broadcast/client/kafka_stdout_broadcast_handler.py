@@ -6,15 +6,30 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
 
     def __init__(self, conf, message_format, conf_type:ConfTypes=ConfTypes.Json, topic=''):
 
+        from drunc.broadcast.utils import broadcast_types_loglevels
+        self.broadcast_types_loglevels = broadcast_types_loglevels # in this case, we stick with default
+
+        import os
+        drunc_shell_conf = os.getenv('DRUNC_SHELL_CONF', None)
+        if drunc_shell_conf is not None:
+            print(drunc_shell_conf)
+
+            with open(drunc_shell_conf) as f:
+                import json
+                self.global_kafka_stdout_conf = json.load(f).get('kafka_broadcast_handler', {})
+                if 'broadcast_types_loglevels' in self.global_kafka_stdout_conf:
+                    self.broadcast_types_loglevels.update(self.global_kafka_stdout_conf['broadcast_types_loglevels'])
+
         if conf_type == ConfTypes.Json:
             self.kafka_address = conf['kafka_address']
             self.topic = topic
             if self.topic == '':
-                raise RuntimeError('The topic must be specified for json configuration')
+                from drunc.exceptions import DruncSetupException
+                raise DruncSetupException('The topic must be specified for json configuration')
 
+            self.broadcast_types_loglevels.update(conf.get('broadcast_types_loglevels', {}))
 
         elif conf_type == ConfTypes.Protobuf:
-
             self.kafka_address = conf.kafka_address
             self.topic = conf.topic
 
@@ -24,7 +39,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         self.message_format = message_format
 
         import logging
-        self._log = logging.getLogger(f'{self.topic} message')
+        self._log = logging.getLogger(f'Broadcast')
 
         from drunc.utils.utils import now_str, get_random_string
         import getpass
@@ -73,11 +88,14 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
                         else:
                             txt = decoded.data
 
-                        # everything goes to info... but I'm too lazy to fix this now
-                        self._log.info(f'"{decoded.emitter.process}.{decoded.emitter.session}": "{BroadcastType.Name(decoded.type)}" {txt}')
+                        from drunc.broadcast.utils import get_broadcast_level_from_broadcast_type
+                        from druncschema.broadcast_pb2 import BroadcastType
+                        bt = BroadcastType.Name(decoded.type)
+
+                        get_broadcast_level_from_broadcast_type(decoded.type, self._log, self.broadcast_types_loglevels)(f'\'{bt}\' {txt}')
 
                     except Exception as e:
                         self._log.error(f'Weird broadcast message: {message} (error: {str(e)})')
                         text_proto = text_format.MessageToString(decoded)
                         self._log.info(text_proto)
-                        raise e
+                        pass

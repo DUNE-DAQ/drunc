@@ -1,6 +1,6 @@
 
 from druncschema.token_pb2 import Token
-from druncschema.authoriser_pb2 import ActionType, SystemType, AuthoriserRequest
+from druncschema.authoriser_pb2 import ActionType, SystemType
 
 # TODO: Should be communicating over network
 
@@ -15,9 +15,8 @@ class DummyAuthoriser:
         self.system = system
 
 
-    def is_authorised(self, token:Token, command:str) -> bool:
-        action_type = self.command_actions.get(command, ActionType.ACTION_UNSPECIFIED)
-        self.log.debug(f'Authorising {token.token} to {command} ({action_type})')
+    def is_authorised(self, token:Token, action:ActionType, system:SystemType, cmd_name:str='') -> bool:
+        self.log.debug(f'Authorising {token.user_name} to {ActionType.Name(action)} ({cmd_name}) on {SystemType.Name(system)}')
         return True
 
 
@@ -28,7 +27,6 @@ class DummyAuthoriser:
 
 def main():
     a = DummyAuthoriser()
-    print(a.is_authorised())
 
 if __name__ == '__main__':
     main()

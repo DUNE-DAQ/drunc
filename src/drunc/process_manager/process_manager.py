@@ -1,19 +1,26 @@
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.authoriser_pb2 import ActionType, SystemType
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
+from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
+from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
 import abc
 
-from drunc.utils.grpc_utils import unpack_any
+# from drunc.utils.grpc_utils import unpack_any
 
-from google.protobuf import any_pb2
-from google.rpc import code_pb2
-from google.rpc import status_pb2
-from grpc_status import rpc_status
+from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
+
 from google.protobuf.any_pb2 import Any
+
+from drunc.exceptions import DruncCommandException
+class BadQuery(DruncCommandException):
+    def __init__(self, txt):
+        from google.rpc import code_pb2
+        super(BadQuery, self).__init__(txt, code_pb2.INVALID_ARGUMENT)
 
 class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
@@ -119,129 +126,80 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
     def _terminate(self):
         pass
 
-    def _create_response(self, payload, token):
-        new_token = Token()
-        new_token.CopyFrom(token)
-        data = Any()
-        data.Pack(payload)
-        return Response(
-            token = new_token,
-            data = data
-        )
-    def _create_stream(self, payload, token):
-        new_token = Token()
-        new_token.CopyFrom(token)
-        data = Any()
-        data.Pack(payload)
-        return Response(
-            token = new_token,
-            data = data
-        )
 
-    def _generic_command(self, request:Request, command:str, req_format, context):
-        self.broadcast(
-            message = f'User \'{request.token.user_name}\' attempting to execute {command}',
-            btype = BroadcastType.ACK
-        )
-        if not self.authoriser.is_authorised(request.token, command):
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
-            self.log.error(f'Unauthorised attempt to execute \'{command}\' from \'{request.token.user_name}\'')
+    @abc.abstractmethod
+    def _boot_impl(self, br:BootRequest) -> ProcessUUID:
+        raise NotImplementedError
 
-        data = request.data if request.data else None
-
-        try:
-            if request.HasField('data'):# is not None:
-                formatted_data = unpack_any(data, req_format)
-                self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-                result = getattr(self, command)(formatted_data, context)
-                self.log.info(f'\'{type(self).__name__}.{command}\' executed')
-            else:
-                result = getattr(self, command)(None, context)
-
-
-        except Exception as e:
-            raise e # let gRPC handle it
-
-        return self._create_response(result,request.token)
-
-
-    async def _generic_command_async(self, request:Request, command:str, req_format, context):
-
-        if not self.authoriser.is_authorised(request.token, command):
-            context.abort_with_status(
-                rpc_status.to_status(
-                    status_pb2.Status(
-                        code=code_pb2.PERMISSION_DENIED,
-                        message='Unauthorised',
-                        details=[],
-                    )
-                )
-            )
-            self.log.error(f'Unauthorised attempt to execute \'{command}\' from \'{request.token.user_name}\'')
-
-        data = request.data if request.data else None
-
-        try:
-            formatted_data = unpack_any(data, req_format)
-            self.log.info(f'\'{request.token.user_name}\' executing \'{type(self).__name__}.{command}\'')
-            f = getattr(self, command)
-            async for r in f(formatted_data, context):
-                s = self._create_stream(r,request.token)
-                yield s
-
-            self.log.info(f'\'{type(self).__name__}.{command}\' executed')
-
-        except Exception as e:
-            self.log.error(e)
-            raise e # let gRPC handle it
-
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.CREATE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(BootRequest) # 3rd step
+    @pack_response # 4th step
+    def boot(self, br:BootRequest) -> Response:
+        return self._boot_impl(br)
 
 
     @abc.abstractmethod
-    def _boot_impl(self, boot_data, context) -> ProcessUUID:
+    def _restart_impl(self, q:ProcessQuery) -> ProcessInstance:
         raise NotImplementedError
 
-    def boot(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'boot\' request \'{req}\'')
-        return self._generic_command(req, '_boot_impl', BootRequest, context)
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def restart(self, q:ProcessQuery)-> Response:
+        return self._restart_impl(q)
 
 
     @abc.abstractmethod
-    def _restart_impl(self, process, context) -> ProcessInstance:
+    def _kill_impl(self, q:ProcessQuery) -> Response:
         raise NotImplementedError
 
-    def restart(self, req:Request, context)-> Response:
-        self.log.debug(f'received \'restart\' request \'{req}\'')
-        return self._generic_command(req, '_restart_impl', ProcessQuery, context)
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def kill(self, q:ProcessQuery) -> Response:
+        return self._kill_impl(q)
 
 
     @abc.abstractmethod
-    def _kill_impl(self, process, context) -> Response:
+    def _ps_impl(self, q:ProcessQuery) -> Response:
         raise NotImplementedError
 
-    def kill(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'kill\' request \'{req}\'')
-        return self._generic_command(req, '_kill_impl', ProcessQuery, context)
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def ps(self, q:ProcessQuery) -> Response:
+        return self._ps_impl(q)
 
 
-    @abc.abstractmethod
-    def _ps_impl(self, req, context) -> Response:
-        raise NotImplementedError
-
-    def ps(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'ps\' request \'{req}\'')
-        return self._generic_command(req, '_ps_impl', ProcessQuery, context)
-
-
-    def _flush_impl(self, query, context) -> Response:
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def flush(self, query:ProcessQuery) -> Response:
         ret = []
 
         for uuid in self._get_process_uid(query):
@@ -287,50 +245,57 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         )
         return pil
 
-    def flush(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'flush\' request \'{req}\'')
-        return self._generic_command(req, '_flush_impl', ProcessQuery, context)
-
-
-
-    def describe(self, request:Request, context) -> Response:
-        return self._generic_command(request, '_describe_impl', None, context)
-
-    def _describe_impl(self, _, dummy):
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(None) # 3rd step
+    @pack_response # 4th step
+    def describe(self) -> Response:
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
-
-        return Description(
+        bd = self.describe_broadcast()
+        d = Description(
             type = 'process_manager',
             name = self.name,
             session = 'no_session' if not self.session else self.session,
             commands = self.commands,
-            broadcast = pack_to_any(self.describe_broadcast()),
         )
+        if bd:
+            d.broadcast.CopyFrom(pack_to_any(bd))
+        return d
 
     @abc.abstractmethod
     async def _logs_impl(self, req:Request, context) -> Response:
         raise NotImplementedError
 
-    async def logs(self, req:Request, context) -> Response:
-        self.log.debug(f'received \'logs\' request \'{req}\'')
-        async for r in self._generic_command_async(req, '_logs_impl', LogRequest, context):
+    # ORDER MATTERS!
+    @async_broadcasted # outer most wrapper 1st step
+    @async_authentified_and_authorised(
+        action=ActionType.READ,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @async_unpack_request_data_to(LogRequest) # 3rd step
+    @async_pack_response # 4th step
+    async def logs(self, lr:LogRequest) -> Response:
+        async for r in self._logs_impl(lr):
             yield r
-
 
 
     def _ensure_one_process(self, uuids:[str], in_boot_request:bool=False) -> str:
         if uuids == []:
-            raise RuntimeError(f'The process corresponding to the query doesn\'t exist')
+            raise BadQuery(f'The process corresponding to the query doesn\'t exist')
         elif len(uuids)>1:
-            raise RuntimeError(f'There are more than 1 processes corresponding to the query')
+            raise BadQuery(f'There are more than 1 processes corresponding to the query')
 
         if in_boot_request:
             if not uuids[0] in self.boot_request:
-                raise RuntimeError(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the boot requests')
+                raise BadQuery(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the boot requests')
         else:
             if not uuids[0] in self.process_store:
-                raise RuntimeError(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the process store')
+                raise BadQuery(f'Couldn\'t find the process corresponding to the UUID {uuids[0]} in the process store')
         return uuids[0]
 
 

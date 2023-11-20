@@ -29,7 +29,8 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
         raise e
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    ctx.obj.start_listening_pm(desc.broadcast)
+    if desc.HasField('broadcast'):
+        ctx.obj.start_listening_pm(desc.broadcast)
 
     def cleanup():
         ctx.obj.terminate()
@@ -53,7 +54,7 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
     ctx.command.add_command(connect, 'connect')
-    ctx.command.add_command(take_control, 'take_control')
+    ctx.command.add_command(take_control, 'take-control')
     ctx.command.add_command(surrender_control, 'surrender-control')
     ctx.command.add_command(who_am_i, 'whoami')
     ctx.command.add_command(who_is_in_charge, 'who-is-in-charge')

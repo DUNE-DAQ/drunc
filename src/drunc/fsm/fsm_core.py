@@ -43,7 +43,8 @@ class PreOrPostTransitionSequence:
     def __init__(self, transition:Transition, pre_or_post = "pre"):
         self.transition = transition
         if pre_or_post not in ['pre', 'post']:
-            raise RuntimeError(f"pre_or_post should be either 'pre' of 'post', provided {pre_or_post}")
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"pre_or_post should be either 'pre' of 'post', provided {pre_or_post}")
 
         self.prefix = pre_or_post
 
@@ -55,7 +56,8 @@ class PreOrPostTransitionSequence:
         method = getattr(interface, f'{self.prefix}_{self.transition.name}')
 
         if not method:
-                raise RuntimeError(f'{self.prefix}_{self.transition.name} method not found in {interface.name}')
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f'{self.prefix}_{self.transition.name} method not found in {interface.name}')
 
         self.sequence += [
             Callback(
@@ -109,7 +111,7 @@ class PreOrPostTransitionSequence:
                     continue
 
                 if pname in all_the_parameter_names:
-                    raise RuntimeError(f"Parameter {pname} is already in the list of parameters")
+                    raise fsme.DoubleArgument(f"Parameter {pname} is already in the list of parameters")
                 all_the_parameter_names.append(p)
 
                 default_value = ''
@@ -142,7 +144,7 @@ class PreOrPostTransitionSequence:
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(bool_msg(value = p.default))
                 else:
-                    raise RuntimeError(f'Annotation {p.annotation} is not handled.')
+                    raise fsme.UnhandledArgumentType(p.annotation)
 
                 a = Argument(
                     name = p.name,

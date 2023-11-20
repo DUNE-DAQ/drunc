@@ -1,11 +1,10 @@
+from drunc.utils.conf_types import ConfTypes
 
-from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
-
-class BroadcastSenderTechnologyUnknown(Exception):
-    def __init__(self, implementation):
-        super().__init__(f'The implementation {str(implementation)} is not supported for the BroadcastSender')
 
 class BroadcastSender:
+
+    implementation = None
+
     def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
         super(BroadcastSender, self).__init__(
             **kwargs,
@@ -16,48 +15,19 @@ class BroadcastSender:
         self.identifier = f'{self.session}.{self.name}'
 
         from logging import getLogger
-        self.logger = getLogger(self.identifier)
+        self.logger = getLogger('Broadcast')
 
         self.logger.info('Initialising broadcast')
 
-        broadcast_types_loglevels_str = broadcast_configuration.get(
-            'broadcast_types_loglevels',
-            {
-                'ACK'                             : 'debug',
-                'RECEIVER_REMOVED'                : 'info',
-                'RECEIVER_ADDED'                  : 'info',
-                'SERVER_READY'                    : 'info',
-                'SERVER_SHUTDOWN'                 : 'info',
-                'TEXT_MESSAGE'                    : 'info',
-                'COMMAND_EXECUTION_START'         : 'info',
-                'COMMAND_EXECUTION_SUCCESS'       : 'info',
-                'EXCEPTION_RAISED'                : 'error',
-                'UNHANDLED_EXCEPTION_RAISED'      : 'critical',
-                'STATUS_UPDATE'                   : 'info',
-                'SUBPROCESS_STATUS_UPDATE'        : 'info',
-                'DEBUG'                           : 'debug',
-                'CHILD_COMMAND_EXECUTION_START'   : 'info',
-                'CHILD_COMMAND_EXECUTION_SUCCESS' : 'info',
-                'CHILD_COMMAND_EXECUTION_FAILED'  : 'error',
-            }
-        )
+        from drunc.broadcast.utils import broadcast_types_loglevels
+        self.broadcast_types_loglevels = broadcast_types_loglevels
+        self.broadcast_types_loglevels.update(broadcast_configuration.get('broadcast_types_loglevels', {}))
 
+        self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
         self.impl_technology = broadcast_configuration.get('type')
         self.implementation = None
-
-        from collections import defaultdict
-        def def_value():
-            return "info"
-
-        broadcast_types_loglevels_str_dd = defaultdict(def_value, **broadcast_types_loglevels_str)
-
-        from druncschema.broadcast_pb2 import BroadcastType
-        self.broadcast_types_loglevels = {
-            v: broadcast_types_loglevels_str_dd[n].lower() for n,v in BroadcastType.items()
-        }
-        self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
-
         if self.impl_technology is None:
+            self.logger.warning('There is no broadcasting service!')
             return
 
         match self.impl_technology:
@@ -68,7 +38,8 @@ class BroadcastSender:
                 from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
                 self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
             case _:
-                self.logger.error('There is no broadcasting service!')
+                from drunc.exceptions import DruncSetupException
+                raise DruncSetupException(f"Broadcaster cannot be {self.impl_technology}")
 
     def describe_broadcast(self):
         if self.implementation:
@@ -85,9 +56,8 @@ class BroadcastSender:
     def broadcast(self, message, btype):
 
         if self.logger:
-            from druncschema.broadcast_pb2 import BroadcastType
-            f = getattr(self.logger, self.broadcast_types_loglevels[btype])
-            f(f'"{self.name}.{self.session}": "{BroadcastType.Name(btype)}" {message}')
+            from drunc.broadcast.utils import get_broadcast_level_from_broadcast_type
+            get_broadcast_level_from_broadcast_type(btype, self.logger, self.broadcast_types_loglevels)(message)
 
         if self.implementation is None:
             # nice and easy case
@@ -110,62 +80,44 @@ class BroadcastSender:
 
         self.implementation._send(bm)
 
-    # def broadcast_stacktrace()?
 
-    def _interrupt_with_message(self, message, context):
-        from druncschema.generic_pb2 import PlainText
+    def _interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        from drunc.utils.grpc_utils import pack_to_any
-        from google.rpc import code_pb2
-        from google.rpc import status_pb2
-        from grpc_status import rpc_status
+        txt = f'Exception thrown: {exception}'
+
+        from drunc.exceptions import DruncException
         self.broadcast(
-            btype = BroadcastType.TEXT_MESSAGE,
-            message = message
+            btype = BroadcastType.DRUNC_EXCEPTION_RAISED if isinstance(exception, DruncException) else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            message = txt,
         )
 
-        detail = pack_to_any(PlainText(text = message))
+        if stack:
+            txt += '\n\n'+stack
 
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=message,
-                    details=[detail],
-                )
-            )
+        from google.rpc import code_pb2
+        error_code = getattr(exception, 'grpc_error_code', code_pb2.INTERNAL)
+        context.abort(
+            code = error_code,
+            details = txt,
         )
 
 
-    def _interrupt_with_exception(self, ex_stack, ex_text, context):
+    async def _async_interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
+        txt = f'Exception thrown: {exception}'
 
+        from drunc.exceptions import DruncException
         self.broadcast(
-            btype = BroadcastType.EXCEPTION_RAISED,
-            message = ex_text
-        )
-        self.logger.error(
-            ex_stack+"\n"+ex_text
+            btype = BroadcastType.DRUNC_EXCEPTION_RAISED if isinstance(exception, DruncException) else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            message = txt,
         )
 
-        from druncschema.generic_pb2 import Stacktrace
-        from drunc.utils.grpc_utils import pack_to_any
+        if stack:
+            txt += '\n\n'+stack
+
         from google.rpc import code_pb2
-        from google.rpc import status_pb2
-        from grpc_status import rpc_status
-
-        detail = pack_to_any(
-            Stacktrace(
-                text = ex_stack.split('\n')
-            )
-        )
-
-        context.abort_with_status(
-            rpc_status.to_status(
-                status_pb2.Status(
-                    code=code_pb2.INTERNAL,
-                    message=f'Exception thrown: {str(ex_text)}',
-                    details=[detail],
-                )
-            )
+        error_code = getattr(exception, 'grpc_error_code', code_pb2.INTERNAL)
+        await context.abort(
+            code = error_code,
+            details = txt,
         )

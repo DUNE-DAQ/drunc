@@ -29,7 +29,8 @@ class KafkaSender(BroadcastSenderImplementation):
         except Errors.NoBrokersAvailable as e:
             t = f'{self.kafka_address} does not seem to point to a kafka broker.'
             self._log.critical(t)
-            raise RuntimeError(t) from e
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(t) from e
 
         self._log.info(f'Broadcasting to Kafka ({self.kafka_address}) client_id: "run_control", topic: "{self.topic}"')
         self._can_broadcast = True

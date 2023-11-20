@@ -28,7 +28,8 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
 
     def serve(port:int) -> None:
         if not port:
-            raise RuntimeError('The port on which to expect commands/send status wasn\'t specified')
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException('The port on which to expect commands/send status wasn\'t specified')
 
         from concurrent import futures
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))

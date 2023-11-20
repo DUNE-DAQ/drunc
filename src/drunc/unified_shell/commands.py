@@ -18,25 +18,37 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 @run_coroutine
 async def boot(obj:ProcessManagerContext, user:str, conf_type:str, session_name:str, boot_configuration:str, log_level:str, traceback:bool) -> None:
 
-    results = obj.get_driver('process_manager').boot(
-        conf = boot_configuration,
-        conf_type = conf_type,
-        user = user,
-        session_name = session_name,
-        log_level = log_level,
-        rethrow = traceback,
-    )
-    async for result in results:
-        if not result: break
-        obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
+    from drunc.utils.shell_utils import InterruptedCommand
+    try:
+        results = obj.get_driver('process_manager').boot(
+            conf = boot_configuration,
+            conf_type = conf_type,
+            user = user,
+            session_name = session_name,
+            log_level = log_level,
+            rethrow = traceback,
+        )
+        async for result in results:
+            if not result: break
+            obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
+    except InterruptedCommand:
+        return
 
     controller_address = obj.get_driver('process_manager').controller_address
     if controller_address:
         obj.print(f'Controller endpoint is \'{controller_address}\'')
         obj.print(f'Connecting this shell to it...')
-        obj.set_controller_driver(controller_address, obj.print_traceback)
-        from drunc.controller.interface.shell_utils import controller_setup
-        controller_setup(obj, controller_address)
+        from drunc.exceptions import DruncException
+        try:
+            obj.set_controller_driver(controller_address, obj.print_traceback)
+            from drunc.controller.interface.shell_utils import controller_setup
+            controller_setup(obj, controller_address)
+        except DruncException as de:
+            if traceback:
+                raise de
+            else:
+                obj.error(de)
+
     else:
         obj.error(f'Could not understand where the controller is!')
         return

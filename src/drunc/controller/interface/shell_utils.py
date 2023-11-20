@@ -34,7 +34,8 @@ def controller_cleanup_wrapper(ctx):
 
 def controller_setup(ctx, controller_address):
     if not hasattr(ctx, 'took_control'):
-        raise RuntimeError('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
 
 
     from druncschema.request_response_pb2 import Description
@@ -63,12 +64,11 @@ def controller_setup(ctx, controller_address):
 
         else:
             ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-            ctx.start_listening_controller(desc.broadcast)
+            if desc.HasField('broadcast'):
+                ctx.start_listening_controller(desc.broadcast)
             break
 
     ctx.print('Connected to the controller')
-
-    from druncschema.generic_pb2 import PlainText, PlainTextVector
 
     children = ctx.get_driver('controller').ls(rethrow=False)
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
@@ -94,7 +94,8 @@ def search_fsm_command(command_name, command_list):
     return None
 
 
-class ArgumentException(Exception):
+from drunc.exceptions import DruncShellException
+class ArgumentException(DruncShellException):
     pass
 
 class MissingArgument(ArgumentException):

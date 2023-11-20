@@ -28,7 +28,8 @@ def process_manager_cli(pm_conf:str, loglevel):
 
     async def serve(address:str) -> None:
         if not address:
-            raise RuntimeError('The address on which to expect commands/send status wasn\'t specified')
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException('The address on which to expect commands/send status wasn\'t specified')
         from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
         server = grpc.aio.server()

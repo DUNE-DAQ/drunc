@@ -47,14 +47,17 @@ class InclusionState(Observed):
             **kwargs
         )
 
-class StatefulNodeException(Exception):
+from drunc.exceptions import DruncCommandException
+class StatefulNodeException(DruncCommandException):
     pass
 
 class CannotInclude(StatefulNodeException):
-    pass
+    def __init__(self):
+        super().__init__('Cannot include node (most likely, it is already included)')
 
 class CannotExclude(StatefulNodeException):
-    pass
+    def __init__(self):
+        super().__init__('Cannot exclude node (most likely, it is already excluded)')
 
 class InvalidSubTransition(StatefulNodeException):
     def __init__(self, current_state, expected_state, action):
@@ -62,10 +65,12 @@ class InvalidSubTransition(StatefulNodeException):
         super(InvalidSubTransition, self).__init__(message)
 
 class TransitionNotTerminated(StatefulNodeException):
-    pass
+    def __init__(self):
+        super().__init__('The transition did not finished successfully')
 
 class TransitionExecuting(StatefulNodeException):
-    pass
+    def __init__(self):
+        super().__init__('A transition is already executing')
 
 class StatefulNode(abc.ABC, BroadcastSender):
     def __init__(self, statefulnode_configuration, **kwargs):
