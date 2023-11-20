@@ -4,6 +4,12 @@ from druncschema.request_response_pb2 import Request
 from typing import Mapping
 from drunc.exceptions import DruncShellException
 
+class InterruptedCommand(DruncShellException):
+    '''
+    This exception gets thrown if we don't want to have a full stack, but still want to interrupt a **shell** command
+    '''
+    pass
+
 class GRPCDriver:
     def __init__(self, name:str, address:str, token:Token, aio_channel=False, rethrow_by_default=False):
         import logging
