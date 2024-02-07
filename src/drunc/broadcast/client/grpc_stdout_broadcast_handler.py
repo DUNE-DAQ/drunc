@@ -2,11 +2,11 @@ from druncschema.broadcast_pb2_grpc import BroadcastReceiverServicer
 from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
 from druncschema.generic_pb2 import Empty
 import grpc
-from drunc.utils.conf_types import ConfTypes
+from drunc.utils.configuration_utils import ConfTypes, ConfData
 
 
 class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
-    def __init__(self, conf, token, conf_type:ConfTypes=ConfTypes.Json, **kwargs) -> None:
+    def __init__(self, conf:ConfData, token, **kwargs) -> None:
         super(gRPCStdoutBroadcastHandler, self).__init__(
             **kwargs
         )

@@ -1,5 +1,3 @@
-import traceback
-
 from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from druncschema.generic_pb2 import PlainText, PlainTextVector
@@ -23,7 +21,7 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
 
 from druncschema.controller_pb2 import FSMCommand
-
+from drunc.utils.configuration_utils import ConfTypeNotSupported, ConfTypes, ConfData
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
@@ -67,7 +65,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration:str, **kwargs):
+    def __init__(self, configuration:ConfData, **kwargs):
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(configuration)
 

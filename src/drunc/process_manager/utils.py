@@ -1,9 +1,9 @@
-from enum import Enum
+# from enum import Enum
 
-class ConfTypes(Enum):
-    DAQCONF = 1
-    DRUNC = 2
-    OKS = 3
+# class ConfTypes(Enum):
+#     DAQCONF = 1
+#     DRUNC = 2
+#     OKS = 3
 
 
 

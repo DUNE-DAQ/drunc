@@ -2,7 +2,7 @@ import abc
 from drunc.fsm.fsm_core import FSM
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.fsm.fsm_errors as fsme
-from drunc.utils.conf_types import ConfTypeNotSupported, ConfTypes
+from drunc.utils.configuration_utils import ConfData
 
 class Observed:
     @property
@@ -73,16 +73,23 @@ class TransitionExecuting(StatefulNodeException):
         super().__init__('A transition is already executing')
 
 class StatefulNode(abc.ABC, BroadcastSender):
-    def __init__(self, statefulnode_configuration, **kwargs):
+    def __init__(self, statefulnode_configuration:ConfData, **kwargs):
         super(StatefulNode, self).__init__(
             **kwargs
         )
+        from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported
 
-        # blurp if using other configuration...
-        self.__fsm = FSM(
-            conf = statefulnode_configuration.get('fsm'),
-            conf_type=ConfTypes.Json
-        )
+        FSMConf = None
+        match statefulnode_configuration.type:
+            case ConfTypes.RawDict:
+                FSMConf = ConfData(
+                    type = ConfTypes.RawDict,
+                    data = statefulnode_configuration['fsm']
+                )
+            case _:
+                raise ConfTypeNotSupported(statefulnode_configuration.type, "StatefulNode")
+
+        self.__fsm = FSM(FSMConf)
 
         from druncschema.broadcast_pb2 import BroadcastType
         self.__operational_state = OperationalState(

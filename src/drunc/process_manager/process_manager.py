@@ -1,5 +1,4 @@
 from druncschema.request_response_pb2 import Request, Response
-from druncschema.token_pb2 import Token
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.authoriser_pb2 import ActionType, SystemType
 
@@ -10,13 +9,11 @@ from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
 import abc
 
-# from drunc.utils.grpc_utils import unpack_any
-
 from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
-
-from google.protobuf.any_pb2 import Any
+from drunc.utils.configuration_utils import ConfData
 
 from drunc.exceptions import DruncCommandException
+
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
         from google.rpc import code_pb2
@@ -26,9 +23,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
 
     def __init__(self, pm_conf, name, session=None, **kwargs):
 
+
+        self.configuration = pm_conf
+
         super(ProcessManager, self).__init__(
             name = name,
-            broadcast_configuration = pm_conf['broadcaster'],
+            broadcast_configuration = self.configuration.get('broadcaster'),
             session = session,
             **kwargs
         )
@@ -37,18 +37,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         self.session = session
         from logging import getLogger
         self.log = getLogger("process_manager")
-        # ProcessManagerServicer.__init__(self)
-
-        from drunc.process_manager.configuration import ProcessManagerConfiguration
-        self.configuration = ProcessManagerConfiguration(pm_conf)
-
-        #BroadcastSender.__init__(self, self.configuration.get_broadcaster_configuration())
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-        from druncschema.authoriser_pb2 import ActionType, SystemType, AuthoriserRequest
+        from druncschema.authoriser_pb2 import SystemType
 
         self.authoriser = DummyAuthoriser(
-            self.configuration.get_authoriser_configuration(), # sloppy way to do this... should be similar to broadcast
+            self.configuration.get('authoriser'), # sloppy way to do this... should be similar to broadcast
             SystemType.PROCESS_MANAGER
         )
 
@@ -333,16 +327,25 @@ class ProcessManager(abc.ABC, ProcessManagerServicer, BroadcastSender):
         return processes
 
 
+    def get_address(self):
+        return self.configuration.get_raw('command_address')
+
     @staticmethod
-    def get(conf:dict, **kwargs):
+    def get(conf:ConfData, **kwargs):
         from rich.console import Console
         console = Console()
+        from drunc.process_manager.configuration import ProcessManagerConfiguration
+        pmc = ProcessManagerConfiguration(conf)
 
-        if conf['type'] == 'ssh':
+        from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported
+        if pmc.conf.type != ConfTypes.RawDict:
+            raise ConfTypeNotSupported(pmc.conf.type, "ProcessManager.get")
+
+        if conf.data.get('type') == 'ssh':
             console.print(f'Starting \'SSHProcessManager\'')
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
-            return SSHProcessManager(conf, **kwargs)
+            return SSHProcessManager(pmc, **kwargs)
         else:
-            raise RuntimeError(f'ProcessManager type {conf["type"]} is unsupported!')
+            raise RuntimeError(f'ProcessManager type {conf.get("type")} is unsupported!')
 
 

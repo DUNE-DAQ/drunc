@@ -1,10 +1,11 @@
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.utils import send_command
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
 import grpc as grpc
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, child_conf, conf_type, **kwargs):
+    def __init__(self, name, child_conf:ConfData, **kwargs):
         super(gRPCChildNode, self).__init__(
             name = name,
             **kwargs
@@ -12,13 +13,11 @@ class gRPCChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{name}-grpc-child')
 
-        from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
+        if child_conf.type != ConfTypes.RawDict:
+            raise ConfTypeNotSupported(child_conf.type, 'gRPCChildNode')
 
-        if conf_type == ConfTypes.Json:
-            self.uri = child_conf['uri']
+        self.uri = child_conf['uri']
 
-        else:
-            raise ConfTypeNotSupported(conf_type, 'gRPCChildNode')
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
@@ -53,13 +52,16 @@ class gRPCChildNode(ChildNode):
             else:
                 self.log.info(f'Connected to the controller ({self.uri})!')
                 break
-        self.start_listening(desc.broadcast)
+        self.start_listening(
+            ConfData(
+                type = ConfTypes.ProtobufObject,
+                data = desc.broadcast
+            )
+        )
 
     def start_listening(self, bdesc):
-        from drunc.utils.conf_types import ConfTypes
         self.broadcast = BroadcastHandler(
             bdesc,
-            ConfTypes.Protobuf
         )
 
     def get_status(self, token):

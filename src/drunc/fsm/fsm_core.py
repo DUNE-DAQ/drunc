@@ -2,7 +2,7 @@ from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.fsm_errors as fsme
-from drunc.utils.conf_types import ConfTypeNotSupported, ConfTypes
+from drunc.utils.configuration_utils import ConfTypeNotSupported, ConfTypes, ConfData
 
 
 class FSMInterface:
@@ -192,11 +192,11 @@ class FSMConfigParser(abc.ABC):
     def get_post_transitions_sequences(self):
         return self.post_transitions
 
-class JsonFSMConfigParser(FSMConfigParser):
+class RawDictFSMConfigParser(FSMConfigParser):
 
     def __init__(self, config_data, **kwargs):
 
-        super(JsonFSMConfigParser, self).__init__(**kwargs)
+        super(RawDictFSMConfigParser, self).__init__(**kwargs)
 
         '''
         Takes a config.json describing the FSM, and stores it as a class object
@@ -277,12 +277,12 @@ class JsonFSMConfigParser(FSMConfigParser):
 
 
 class FSM:
-    def __init__(self, conf, conf_type:ConfTypes):
-        match conf_type:
-            case ConfTypes.Json:
-                self.config = JsonFSMConfigParser(conf)
+    def __init__(self, conf:ConfData):
+        match conf.type:
+            case ConfTypes.RawDict:
+                self.config = RawDictFSMConfigParser(conf)
             case _:
-                raise ConfTypeNotSupported(conf_type, 'FSM')
+                raise ConfTypeNotSupported(conf.type, 'FSM')
 
         from logging import getLogger
         self._log = getLogger('FSM')

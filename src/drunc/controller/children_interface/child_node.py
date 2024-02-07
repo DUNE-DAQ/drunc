@@ -1,6 +1,7 @@
 import abc
 from enum import Enum
 from drunc.exceptions import DruncSetupException
+from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
 
 class ChildNodeType(Enum):
     gRPC = 1
@@ -40,15 +41,22 @@ class ChildNode(abc.ABC):
         pass
 
     @staticmethod
-    def get_from_file(name, conf:dict, token=None, **kwargs):
-        from drunc.utils.conf_types import ConfTypes
+    def get_child(name, conf:ConfData, token=None, **kwargs):
+        child_type = ''
 
-        match conf['type'].lower():
+        match conf.type:
+            case ConfTypes.RawDict:
+                child_type = conf['type']
+            case ConfTypes.OKSObject:
+                child_type = 'rest-api'
+            case _:
+                raise ConfTypeNotSupported(conf.type, "ChildNode.get_child")
+
+        match child_type:
             case 'grpc':
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode
                 return gRPCChildNode(
                     child_conf = conf,
-                    conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
                     node_type = ChildNodeType.gRPC,
@@ -58,16 +66,11 @@ class ChildNode(abc.ABC):
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
                 return RESTAPIChildNode(
                     child_conf = conf,
-                    conf_type = ConfTypes.Json,
                     token = token,
                     name = name,
                     node_type = ChildNodeType.REST_API,
                     **kwargs,
                 )
             case _:
-                raise ChildInterfaceTechnologyUnknown(conf['type'], name)
+                raise ChildInterfaceTechnologyUnknown(child_type, name)
 
-
-    @staticmethod
-    def get_from_oks(name, conf, token=None):
-        raise DruncSetupException('OKS Not supported')

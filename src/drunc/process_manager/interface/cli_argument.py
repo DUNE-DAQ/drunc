@@ -14,15 +14,22 @@ def add_query_options(at_least_one:bool, all_processes_by_default:bool=False):
 
 def accept_configuration_type():
     def configuration_type_callback(ctx, param, conf_type):
-        from drunc.process_manager.utils import ConfTypes
+        from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported
         CONF_TYPE = conf_type.upper()
-        return ConfTypes[CONF_TYPE]
+
+        match CONF_TYPE:
+            case "FILE":
+                return ConfTypes.DAQConfDir
+            case "OKS":
+                return ConfTypes.OKSFileName
+            case _:
+                raise RuntimeError(f"Configuration {conf_type} is not handled by this CLI")
 
     def add_decorator(function):
         import click
         f1 = click.argument(
             'conf-type',
-            type=click.Choice(['daqconf', 'drunc', 'OKS'], case_sensitive=False),
+            type=click.Choice(['file', 'OKS'], case_sensitive=False),
             #default='daqconf',
             callback=configuration_type_callback
         )(function)

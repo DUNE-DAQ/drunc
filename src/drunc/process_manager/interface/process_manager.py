@@ -8,22 +8,22 @@ from drunc.utils.utils import log_levels
 _cleanup_coroutines = []
 
 @click.command()
-@click.argument('pm-conf', type=click.Path(exists=True))
-@click.option('-l', '--loglevel', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def process_manager_cli(pm_conf:str, loglevel):
+@click.argument('pm-conf', type=str)
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
+def process_manager_cli(pm_conf:str, log_level):
     from rich.console import Console
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
-    pm_conf_data = None
-    from drunc.utils.utils import update_log_level
-    update_log_level(loglevel)
 
-    with open(pm_conf) as f:
-        import json
-        pm_conf_data = json.loads(f.read())
+    from drunc.utils.utils import update_log_level
+    update_log_level(log_level)
+
+    from drunc.utils.configuration_utils import ConfData
+    pm_conf_data = ConfData.get_from_url(pm_conf)
 
     from drunc.process_manager.process_manager import ProcessManager
     pm = ProcessManager.get(pm_conf_data, name='process_manager')
+
     loop = asyncio.get_event_loop()
 
     async def serve(address:str) -> None:
@@ -54,7 +54,7 @@ def process_manager_cli(pm_conf:str, loglevel):
 
     try:
         loop.run_until_complete(
-            serve(pm_conf_data['command_address'])
+            serve(pm.get_address())
         )
     except Exception as e:
         import os

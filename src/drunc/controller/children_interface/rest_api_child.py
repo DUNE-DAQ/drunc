@@ -367,9 +367,10 @@ class StateRESTAPI:
         with self._state_lock:
             return self._errored
 
+from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, name, child_conf, conf_type, fsm_conf, **kwargs):
+    def __init__(self, name, child_conf:ConfData, **kwargs):
         super(RESTAPIChildNode, self).__init__(
             name = name,
             **kwargs
@@ -378,19 +379,18 @@ class RESTAPIChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{name}-rest-api-child')
 
-        from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
-        if conf_type != ConfTypes.Json:
-            raise ConfTypeNotSupported(conf_type, 'RESTAPIChildNode')
+        if child_conf.type != ConfTypes.RawDict:
+            raise ConfTypeNotSupported(child_conf.type, 'RESTAPIChildNode')
 
         self.response_listener = ResponseListener.get()
 
         import socket
         response_listener_host = socket.gethostname()
 
-        app_host, app_port = child_conf['uri'].split(":")
+        app_host, app_port = child_conf.data['uri'].split(":")
         app_port = int(app_port)
 
-        proxy_host, proxy_port = child_conf.get('proxy', [None, None])
+        proxy_host, proxy_port = child_conf.data.get('proxy', [None, None])
         proxy_port = int(proxy_port) if proxy_port is not None else None
 
         self.commander = AppCommander(
@@ -405,8 +405,9 @@ class RESTAPIChildNode(ChildNode):
 
         from drunc.fsm.fsm_core import FSM
         self.fsm = FSM(
-            conf = fsm_conf,
-            conf_type=ConfTypes.Json
+            conf = ConfData(
+                type = child_conf.type,
+                data = child_conf.data['fsm_conf']),
         )
 
         self.response_listener.register(self.name, self.commander)
