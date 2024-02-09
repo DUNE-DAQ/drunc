@@ -61,6 +61,9 @@ class ConfigurationHandler:
         from os.path import exists
 
         match self.conf.type:
+            case ConfTypes.OKSObject | ConfTypes.RawDict:
+                return
+
             case ConfTypes.JsonFileName:
                 if not exists(self.conf.data):
                     raise DruncSetupException(f'Location {self.conf.data} is empty!')
