@@ -1,7 +1,7 @@
 import click
 import signal
 import sys
-from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,  update_log_level
+from drunc.utils.utils import log_levels,  update_log_level
 
 @click.command()
 @click.argument('configuration', type=str)
@@ -20,10 +20,13 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
     import grpc
 
+    from drunc.utils.configuration_utils import ConfData
+    configuration_data = ConfData.get_from_url(configuration)
+
     ctrlr = Controller(
         name = name,
         session = session,
-        configuration = configuration
+        configuration = configuration_data
     )
 
     def serve(port:int) -> None:
