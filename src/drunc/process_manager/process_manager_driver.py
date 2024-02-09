@@ -32,15 +32,15 @@ class ProcessManagerDriver(GRPCDriver):
 
 
     async def _convert_boot_conf(self, conf, conf_type, user, session_name, log_level):
-        from drunc.process_manager.utils import ConfTypes
+        from drunc.utils.configuration_utils import ConfTypes
         match conf_type:
-            case ConfTypes.DAQCONF:
+            case ConfTypes.DAQConfDir:
                 async for i in self._convert_daqconf_to_boot_request(conf, user, session_name, log_level):
                     yield i
-            case ConfTypes.DRUNC:
-                async for i in self._convert_drunc_to_boot_request(conf, user, session_name):
-                    yield i
-            case ConfTypes.OKS:
+            # case ConfTypes.DRUNC:
+            #     async for i in self._convert_drunc_to_boot_request(conf, user, session_name):
+            #         yield i
+            case ConfTypes.OKSFileName:
                 async for i in self._convert_oks_to_boot_request(conf, user, session_name):
                     yield i
             case _:
