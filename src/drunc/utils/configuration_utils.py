@@ -39,7 +39,9 @@ class ConfData:
 
 class ConfTypeNotSupported(DruncSetupException):
     def __init__(self, conf_type, class_name):
-        message = f'{conf_type.value} is not supported by {class_name}'
+        if not isinstance(class_name, str):
+            class_name = type(class_name)
+        message = f'\'{conf_type}\' is not supported by \'{class_name}\''
         super(ConfTypeNotSupported, self).__init__(message)
 
 
@@ -77,7 +79,7 @@ class ConfigurationHandler:
                 if not exists(self.conf.data):
                     raise DruncSetupException(f'Location {self.conf.data} is empty!')
 
-                raise ConfTypeNotSupported(self.conf.type, "ControllerConfiguration")
+                raise ConfTypeNotSupported(self.conf.type, self)
 
             case _:
                 raise ConfTypeNotSupported(self.conf.type, "ControllerConfiguration")
