@@ -65,13 +65,17 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration:ConfData, **kwargs):
+    def __init__(self, configuration:ConfData,name:str, **kwargs):
         from drunc.controller.configuration import ControllerConfiguration
-        self.configuration = ControllerConfiguration(configuration)
+        self.configuration = ControllerConfiguration(
+            configuration = configuration,
+            uid = name,
+        )
 
-        super(Controller, self).__init__(
+        super().__init__(
             broadcast_configuration = self.configuration.get('broadcaster'),
-            statefulnode_configuration = self.configuration.get('statefulnode'),
+            fsm_configuration = self.configuration.get('fsm'),
+            name = name,
             **kwargs
         )
 
