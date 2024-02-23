@@ -41,36 +41,25 @@ class ChildNode(abc.ABC):
         pass
 
     @staticmethod
-    def get_child(name, conf:ConfData, token=None, **kwargs):
-        child_type = ''
+    def get_child(name:str, type:ChildNodeType, conf:ConfData, token=None, **kwargs):
 
-        match conf.type:
-            case ConfTypes.RawDict:
-                child_type = conf['type']
-            case ConfTypes.OKSObject:
-                child_type = 'rest-api'
-            case _:
-                raise ConfTypeNotSupported(conf.type, "ChildNode.get_child")
-
-        match child_type:
-            case 'grpc':
+        match type:
+            case ChildNodeType.gRPC:
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode
                 return gRPCChildNode(
-                    child_conf = conf,
+                    configuration = conf,
                     token = token,
                     name = name,
-                    node_type = ChildNodeType.gRPC,
                     **kwargs,
                 )
-            case 'rest-api':
+            case ChildNodeType.REST_API:
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
                 return RESTAPIChildNode(
-                    child_conf = conf,
+                    configuration = conf,
                     token = token,
                     name = name,
-                    node_type = ChildNodeType.REST_API,
                     **kwargs,
                 )
             case _:
-                raise ChildInterfaceTechnologyUnknown(child_type, name)
+                raise ChildInterfaceTechnologyUnknown(type, name)
 
