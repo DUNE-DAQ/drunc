@@ -1,13 +1,14 @@
 
 from drunc.broadcast.types import BroadcastTypes, BroadcastTypeNotHandled
 from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported, ConfData
+from drunc.broadcast.client.configuration import BroadcastClientConfiguration
 
 class BroadcastHandler:
     def __init__(self, broadcast_configuration:ConfData, **kwargs):
         super(BroadcastHandler, self).__init__(
             **kwargs,
         )
-
+        self.configuration = BroadcastClientConfiguration(broadcast_configuration)
         match broadcast_configuration.type:
             case ConfTypes.ProtobufObject:
                 from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
