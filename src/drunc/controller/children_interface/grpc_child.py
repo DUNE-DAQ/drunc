@@ -1,14 +1,14 @@
-from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
 from drunc.controller.utils import send_command
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
 import grpc as grpc
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, child_conf:ConfData, **kwargs):
-        super(gRPCChildNode, self).__init__(
+    def __init__(self, name, configuration:ConfData, **kwargs):
+        super().__init__(
             name = name,
-            **kwargs
+            node_type = ChildNodeType.gRPC
         )
         from logging import getLogger
         self.log = getLogger(f'{name}-grpc-child')
