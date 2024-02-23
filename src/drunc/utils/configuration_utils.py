@@ -24,7 +24,7 @@ class ConfData:
     def get_from_url(url):
         from urllib.parse import urlparse
         u = urlparse(url)
-        #urlparse("scheme://netloc/path;parameters?query#fragment")
+        # urlparse("scheme://netloc/path;parameters?query#fragment")
         t = ConfTypes.Unknown
         match u.scheme:
             case 'file':
@@ -33,10 +33,17 @@ class ConfData:
                 t = ConfTypes.OKSFileName
             case _:
                 raise DruncSetupException(f'{u.scheme} configuration type is not understood')
-        return ConfData(
-            type = t,
-            data = f'{u.netloc}/{u.path}'
-        )
+
+        if u.path: #ugly ugly ugly
+            return ConfData(
+                type = t,
+                data = f'{u.netloc}/{u.path}'
+            )
+        else:
+            return ConfData(
+                type = t,
+                data = f'{u.netloc}'
+            )
 
 class ConfTypeNotSupported(DruncSetupException):
     def __init__(self, conf_type, class_name):
@@ -49,7 +56,7 @@ class ConfTypeNotSupported(DruncSetupException):
 class ConfigurationHandler:
     def __init__(self, configuration:ConfData):
         from logging import getLogger
-        self.log = getLogger("configuration-handler")
+        self.log = getLogger(self.__class__.__name__)
         if not isinstance(configuration, ConfData):
             raise DruncSetupException(f'ConfigurationHandler expected "ConfData", got {type(configuration)}: {configuration}')
 
@@ -64,7 +71,7 @@ class ConfigurationHandler:
         raise ConfTypeNotSupported(self.conf.OKSFileName, self)
 
     def _parse_dict(self, data):
-        # Reimplement this in case to validate the dictonary
+        # Reimplement to validate/parse the dictonary
         self.log.warning(f'The configuration passed for {type(self)} is just a raw dictionary, the information in it was not checked')
         return ConfTypes.RawDict, data
 
