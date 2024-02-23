@@ -72,24 +72,17 @@ class TransitionExecuting(StatefulNodeException):
     def __init__(self):
         super().__init__('A transition is already executing')
 
+
+
+
 class StatefulNode(abc.ABC, BroadcastSender):
-    def __init__(self, statefulnode_configuration:ConfData, **kwargs):
+    def __init__(self, fsm_configuration:ConfData, **kwargs):
         super(StatefulNode, self).__init__(
             **kwargs
         )
         from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported
 
-        FSMConf = None
-        match statefulnode_configuration.type:
-            case ConfTypes.RawDict:
-                FSMConf = ConfData(
-                    type = ConfTypes.RawDict,
-                    data = statefulnode_configuration['fsm']
-                )
-            case _:
-                raise ConfTypeNotSupported(statefulnode_configuration.type, "StatefulNode")
-
-        self.__fsm = FSM(FSMConf)
+        self.__fsm = FSM(fsm_configuration)
 
         from druncschema.broadcast_pb2 import BroadcastType
         self.__operational_state = OperationalState(
