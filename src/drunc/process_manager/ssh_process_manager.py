@@ -111,9 +111,18 @@ class SSHProcessManager(ProcessManager):
         except Exception as e:
             ll = LogLine(
                 uuid = ProcessUUID(uuid=uid),
-                line =  f'Could not retrieve logs: {str(e)}'
+                line =  f'Could not retrieve logs for the reason: {str(e)}\nNext is the stdout/stderr if the SSH process is dead\n'
             )
             yield ll
+            if not self.process_store[uid].is_alive():
+                ll = LogLine(
+                    uuid = ProcessUUID(uuid=uid),
+                    line = self.process_store[uid].stdout,
+                )
+                yield ll
+            f.close()
+            return
+
         f.close()
         with open(f.name, 'r') as fi:
             lines = fi.readlines()
@@ -181,9 +190,13 @@ class SSHProcessManager(ProcessManager):
                 from drunc.utils.utils import now_str
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
+
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
 
-                cmd += f'; cd {boot_request.process_description.process_execution_directory} ;'
+                if cmd:
+                    cmd+=';'
+
+                cmd += f'cd {boot_request.process_description.process_execution_directory} ;'
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec
@@ -191,7 +204,7 @@ class SSHProcessManager(ProcessManager):
                         cmd += f' {arg}'
                     cmd += ';'
 
-                if cmd[-1] == ';':
+                while cmd[-1] == ';':
                     cmd = cmd[:-1]
 
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} &> {log_file}']
@@ -203,6 +216,7 @@ class SSHProcessManager(ProcessManager):
                     _bg=True,
                     _bg_exc=False,
                     _new_session=True,
+                    _err_to_out=True,
                     _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
                 )
 
