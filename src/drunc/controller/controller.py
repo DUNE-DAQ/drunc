@@ -79,47 +79,13 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             **kwargs
         )
 
-
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
         self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
 
         self.actor = ControllerActor(None)
 
-        ## TODO rm
-        self.controller_token = Token(
-            user_name = f'{self.name}_controller',
-            token = 'broadcast_token' # massive hack here, controller should use user token to execute command, and have a "broadcasted to" token
-        )
-
-
-        from copy import deepcopy as dc
-        fsm_conf = dc(self.configuration.data['statefulnode']['fsm'])
-        fsm_conf.update({
-            "interfaces": {},
-            "pre_transitions": {},
-            "post_transitions": {},
-        })
-
-        for child in self.configuration.get('children', []):
-            if child['type'] == 'rest-api': # already some hacking
-                self.children_nodes.append(
-                    ChildNode.get_from_file(
-                            name = child['name'],
-                            conf = child,
-                            fsm_conf = fsm_conf
-                        )
-                    )
-            else:
-                self.children_nodes.append(
-                    ChildNode.get_from_file(
-                            name = child['name'],
-                            conf = child,
-                        )
-                    )
-
-        # for app_cfg in self.configuration.get('applications', []):
-        #     self.children_nodes.append(ChildNode.get_from_file(app_cfg))
+        self.children_nodes = [] # self.configuration.get_children()
 
         from druncschema.request_response_pb2 import CommandDescription
         # TODO, probably need to think of a better way to do this?
