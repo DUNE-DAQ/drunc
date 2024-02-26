@@ -7,7 +7,7 @@ class UnpackingError(DruncCommandException):
         self.format = format
 
         from google.rpc import code_pb2
-        super().__init__(f'Cannot unpack {data} to {format.DESCRIPTOR}', code_pb2.INVALID_ARGUMENT)
+        super().__init__(f'Cannot unpack {data.TypeName()} to {format.__name__}', code_pb2.INVALID_ARGUMENT)
 
 
 def pack_to_any(data):
