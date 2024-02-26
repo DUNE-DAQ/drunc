@@ -6,7 +6,7 @@ class ConfTypes(Enum):
     JsonFileName       = 1
     DAQConfDir         = 2
     RawDict            = 3
-    ProtobufSerialised = 4
+    ProtobufAny        = 4
     ProtobufObject     = 5
     OKSFileName        = 6
     OKSObject          = 7
@@ -68,7 +68,11 @@ class ConfigurationHandler:
 
     def _parse_oks(self, oks_path):
         # Reimplement this in case you need to be able to parse OKS configurations
-        raise ConfTypeNotSupported(self.conf.OKSFileName, self)
+        raise ConfTypeNotSupported(ConfTypes.OKSFileName, self)
+
+    def _parse_pbany(self, pbany_data):
+        # Reimplement this in case you need to be able to parse OKS configurations
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self)
 
     def _parse_dict(self, data):
         # Reimplement to validate/parse the dictonary
@@ -80,7 +84,7 @@ class ConfigurationHandler:
         from os.path import exists
 
         match self.conf.type:
-            case ConfTypes.OKSObject | ConfTypes.RawDict | ConfTypes.PyObject:
+            case ConfTypes.OKSObject | ConfTypes.RawDict | ConfTypes.PyObject | ConfTypes.ProtobufObject:
                 return
 
             case ConfTypes.JsonFileName:
@@ -99,6 +103,10 @@ class ConfigurationHandler:
                 self.conf.data = self._parse_oks(self.conf.data)
                 self.conf.type = ConfTypes.OKSObject
 
+            case ConfTypes.ProtobufAny:
+                self.conf.data = self._parse_pbany(self.conf.data)
+                self.conf.type = ConfTypes.ProtobufObject
+
             case _:
                 raise ConfTypeNotSupported(self.conf.type, "ControllerConfiguration")
 
@@ -111,13 +119,13 @@ class ConfigurationHandler:
                     type = self.conf.type,
                     data = self.conf.data[obj],
                 )
-            case ConfTypes.OKSObject | ConfTypes.PyObject:
+            case ConfTypes.OKSObject | ConfTypes.PyObject | ConfTypes.ProtobufObject:
                 return ConfData(
                     type = self.conf.type,
                     data = getattr(self.conf.data, obj),
                 )
-            case ConfTypes.JsonFileName | ConfTypes.OKSFileName:
-                raise DruncSetupException(f'Configuration in {self.conf.data} was not parsed, there is a setup error')
+            case ConfTypes.JsonFileName | ConfTypes.OKSFileName | ConfTypes.ProtobufAny:
+                raise DruncSetupException(f'Configuration "{self.conf.data}" was not parsed, there is a setup error')
             case _:
                 raise ConfTypeNotSupported(self.conf.type, "ControllerConfiguration")
 
