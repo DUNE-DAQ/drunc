@@ -1,6 +1,6 @@
 
 from drunc.broadcast.types import BroadcastTypes, BroadcastTypeNotHandled
-from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported, ConfData
+from drunc.utils.configuration_utils import ConfData
 from drunc.broadcast.client.configuration import BroadcastClientConfiguration
 
 class BroadcastHandler:
@@ -9,26 +9,7 @@ class BroadcastHandler:
             **kwargs,
         )
         self.configuration = BroadcastClientConfiguration(broadcast_configuration)
-        match broadcast_configuration.type:
-            case ConfTypes.ProtobufObject:
-                from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
-                from drunc.utils.grpc_utils import unpack_any
-
-                if broadcast_configuration.data.Is(KafkaBroadcastHandlerConfiguration.DESCRIPTOR):
-                    self.impl_technology = BroadcastTypes.Kafka
-                    broadcast_configuration = ConfData(
-                        type = ConfTypes.ProtobufObject,
-                        data = unpack_any(broadcast_configuration.data, KafkaBroadcastHandlerConfiguration)
-                    )
-                else:
-                    raise BroadcastTypeNotHandled(broadcast_configuration)
-
-            case ConfTypes.RawDict:
-                self.impl_technology = broadcast_configuration.data['type']
-
-            case _:
-                raise ConfTypeNotSupported(broadcast_configuration.type, 'BroadcastHandler')
-
+        self.impl_technology = self.configuration.get_impl_technology()
         self.implementation = None
 
         match self.impl_technology:
@@ -44,6 +25,8 @@ class BroadcastHandler:
                     message_format = BroadcastMessage,
                 )
             case BroadcastTypes.gRPC:
+                from drunc.exceptions import DruncSetupException
+                raise DruncSetupException("gRPC is not available for broadcasting!")
                 from drunc.broadcast.client.grpc_stdout_broadcast_handler import gRPCStdoutBroadcastHandler
                 from druncschema.broadcast_pb2 import BroadcastMessage
                 self.implementation = gRPCStdoutBroadcastHandler(
