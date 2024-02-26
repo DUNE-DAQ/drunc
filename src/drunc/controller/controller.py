@@ -61,23 +61,32 @@ class ControllerActor:
 
 
 
-class Controller(StatefulNode, ControllerServicer, BroadcastSender):
+class Controller(ControllerServicer):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration:ConfData,name:str, **kwargs):
+    def __init__(self, configuration:ConfData, name:str, session:str):
+        super().__init__()
+        self.name = name
+        self.session = session
+
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(
             configuration = configuration,
             uid = name,
         )
 
-        super().__init__(
-            broadcast_configuration = self.configuration.get('broadcaster'),
-            fsm_configuration = self.configuration.get('fsm'),
+        self.broadcast_service = BroadcastSender(
             name = name,
-            **kwargs
+            session = session,
+            configuration = self.configuration.get_broadcast_configuration(),
         )
+
+        self.stateful_node = StatefulNode(
+            fsm_configuration = self.configuration.get_fsm_configuration(),
+            broadcaster = self.broadcast_service
+        )
+
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
@@ -85,7 +94,7 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
 
         self.actor = ControllerActor(None)
 
-        self.children_nodes = [] # self.configuration.get_children()
+        self.children_nodes = self.configuration.get_children()
 
         from druncschema.request_response_pb2 import CommandDescription
         # TODO, probably need to think of a better way to do this?
@@ -175,6 +184,19 @@ class Controller(StatefulNode, ControllerServicer, BroadcastSender):
             message = 'ready',
             btype = BroadcastType.SERVER_READY
         )
+
+
+    '''
+    A couple of simple pass-through functions to the broadcasting service
+    '''
+    def broadcast(self, *args, **kwargs):
+        return self.broadcast_service.broadcast(*args, **kwargs)
+
+    def can_broadcast(self, *args, **kwargs):
+        return self.broadcast_service.can_broadcast(*args, **kwargs)
+
+    def describe_broadcast(self, *args, **kwargs):
+        return self.broadcast_service.describe_broadcast(*args, **kwargs)
 
     def terminate(self):
         from logging import getLogger

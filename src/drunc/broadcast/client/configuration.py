@@ -28,4 +28,4 @@ class BroadcastClientConfiguration(ConfigurationHandler):
 
         except UnpackingError as e:
             from drunc.exceptions import DruncSetupException
-            raise DruncSetupException(f'Input configuration to configure the broadcast was not understood, could not setup the broadcast handler. {e}')
+            raise DruncSetupException(f'Input configuration to configure the broadcast was not understood, could not setup the broadcast handler: {e}')

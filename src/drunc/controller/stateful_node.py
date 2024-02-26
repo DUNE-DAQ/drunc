@@ -75,33 +75,31 @@ class TransitionExecuting(StatefulNodeException):
 
 
 
-class StatefulNode(abc.ABC, BroadcastSender):
-    def __init__(self, fsm_configuration:ConfData, **kwargs):
-        super(StatefulNode, self).__init__(
-            **kwargs
-        )
-        from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported
+class StatefulNode(abc.ABC):
+    def __init__(self, fsm_configuration:ConfData, broadcaster:BroadcastSender):
+
+        self.broadcast = broadcaster
 
         self.__fsm = FSM(fsm_configuration)
 
         from druncschema.broadcast_pb2 import BroadcastType
         self.__operational_state = OperationalState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
             initial_value = self.__fsm.initial_state
         )
         self.__operational_sub_state = OperationalState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
             initial_value = self.__fsm.initial_state
         )
         self.__included = InclusionState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.STATUS_UPDATE,
             initial_value = True
         )
         self.__in_error = ErrorState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.STATUS_UPDATE,
             initial_value = False
         )

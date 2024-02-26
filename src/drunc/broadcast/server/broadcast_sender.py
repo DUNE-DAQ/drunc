@@ -5,9 +5,9 @@ class BroadcastSender:
 
     implementation = None
 
-    def __init__(self, name:str, broadcast_configuration:ConfData, session:str='no_session', **kwargs):
+    def __init__(self, name:str, configuration:ConfData, session:str='no_session', **kwargs):
         from drunc.broadcast.server.configuration import BroadcastSenderConfiguration
-        self.configuration = BroadcastSenderConfiguration(broadcast_configuration)
+        self.configuration = BroadcastSenderConfiguration(configuration)
 
         super(BroadcastSender, self).__init__(
             **kwargs,

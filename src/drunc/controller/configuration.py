@@ -11,8 +11,32 @@ class ControllerConfiguration(ConfigurationHandler):
         import oksdbinterfaces
         dal = oksdbinterfaces.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
         db = oksdbinterfaces.Configuration("oksconfig:" + oks_conf)
-        return db.get_dal(class_name="RCApplication", uid=self.uid)
+        return db.get_dal(class_name="Segment", uid=self.uid)
 
+
+    def get_broadcast_configuration(self):
+        data = None
+        match self.conf.type:
+            case ConfTypes.OKSObject:
+                data = self.conf.data.controller.broadcaster
+            case ConfTypes.PyObject:
+                data = self.conf.data['broadcaster']
+        return ConfData(
+            type = self.conf.type,
+            data = data
+        )
+
+    def get_fsm_configuration(self):
+        data = None
+        match self.conf.type:
+            case ConfTypes.OKSObject:
+                data = self.conf.data.controller.fsm
+            case ConfTypes.PyObject:
+                data = self.conf.data.fsm
+        return ConfData(
+            type = self.conf.type,
+            data = data
+        )
 
 
     def get_children(self):
@@ -30,7 +54,7 @@ class ControllerConfiguration(ConfigurationHandler):
     def __get_children_from_pyobj(self):
         children = []
 
-        for child in self.data.children:
+        for child in self.conf.data.children:
             if child.type == 'rest-api': # already some hacking
                 new_node = ChildNode.get_child(
                     name = child.name,
@@ -57,7 +81,7 @@ class ControllerConfiguration(ConfigurationHandler):
 
     def __get_children_from_oksobj(self):
         children = []
-        for segment in self.data.segments:
+        for segment in self.conf.data.segments:
             new_node = ChildNode.get_child(
                 type = ControllerConfiguration.__get_children_type_from_cli(segment.controller.commandline_parameters),
                 name = segment.id,
@@ -66,7 +90,7 @@ class ControllerConfiguration(ConfigurationHandler):
             )
             children.append(new_node)
 
-        for app in self.data.applications:
+        for app in self.conf.data.applications:
             new_node = ChildNode.get_child(
                 type = ControllerConfiguration.__get_children_type_from_cli(app.commandline_parameters),
                 name = app.id,
