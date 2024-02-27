@@ -69,6 +69,8 @@ class Controller(ControllerServicer):
         super().__init__()
         self.name = name
         self.session = session
+        import logging
+        log = logging.getLogger('controller-ctor')
 
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(
@@ -95,6 +97,8 @@ class Controller(ControllerServicer):
         self.actor = ControllerActor(None)
 
         self.children_nodes = self.configuration.get_children()
+        for child in self.children_nodes:
+            log.info(child)
 
         from druncschema.request_response_pb2 import CommandDescription
         # TODO, probably need to think of a better way to do this?
