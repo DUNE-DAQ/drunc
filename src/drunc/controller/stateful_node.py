@@ -3,6 +3,8 @@ from drunc.fsm.fsm_core import FSM
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.fsm.fsm_errors as fsme
 from drunc.utils.configuration_utils import ConfData
+from typing import Optional
+from druncschema.broadcast_pb2 import BroadcastType
 
 class Observed:
     @property
@@ -11,13 +13,23 @@ class Observed:
 
     @value.setter
     def value(self, value):
+        if self._broadcast_on_change is None or self._broadcast_key is None:
+            self._value = value
+            return
+
         self._broadcast_on_change.broadcast(
             message = f'Changing {self._name} from {self._value} to {value}',
             btype = self._broadcast_key,
         )
         self._value = value
 
-    def __init__(self, name, broadcast_on_change:BroadcastSender, broadcast_key, initial_value=None):
+    def __init__(
+            self,
+            name:str,
+            broadcast_on_change:Optional[BroadcastSender]=None,
+            broadcast_key=None, # Optional[BroadcastType]=None
+            initial_value:Optional[str]=None
+        ):
         self._name = name
         self._broadcast_on_change = broadcast_on_change
         self._value = initial_value
@@ -76,13 +88,12 @@ class TransitionExecuting(StatefulNodeException):
 
 
 class StatefulNode(abc.ABC):
-    def __init__(self, fsm_configuration:ConfData, broadcaster:BroadcastSender):
+    def __init__(self, fsm_configuration:ConfData, broadcaster:Optional[BroadcastSender]=None):
 
         self.broadcast = broadcaster
 
         self.__fsm = FSM(fsm_configuration)
 
-        from druncschema.broadcast_pb2 import BroadcastType
         self.__operational_state = OperationalState(
             broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
