@@ -27,14 +27,14 @@ def broadcasted(cmd):
             ret = cmd(obj, request) # we strip the context here, no need for that anymore
 
         except DruncCommandException as e:
-            obj._interrupt_with_exception(
+            obj.broadcast_service._interrupt_with_exception(
                 exception = e,
                 context = context
             )
 
         except Exception as e:
             import traceback
-            obj._interrupt_with_exception(
+            obj.broadcast_service._interrupt_with_exception(
                 exception = e,
                 stack = traceback.format_exc(),
                 context = context
@@ -74,14 +74,14 @@ def async_broadcasted(cmd):
                 yield a
 
         except DruncCommandException as e:
-            await obj._async_interrupt_with_exception(
+            await obj.broadcast_service._async_interrupt_with_exception(
                 exception = e,
                 context = context
             )
 
         except Exception as e:
             import traceback
-            await obj._async_interrupt_with_exception(
+            await obj.broadcast_service._async_interrupt_with_exception(
                 exception = e,
                 stack = traceback.format_exc(),
                 context = context
