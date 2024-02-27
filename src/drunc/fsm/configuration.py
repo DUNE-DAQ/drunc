@@ -42,8 +42,8 @@ class FSMConfiguration(ConfigurationHandler):
         return self.transitions
 
     def get_pre_transitions_sequences(self):
-        pass
+        return {}
 
     def get_post_transitions_sequences(self):
-        pass
+        return {}
 
