@@ -94,6 +94,9 @@ class StatefulNode(abc.ABC):
 
         self.__fsm = FSM(fsm_configuration)
 
+        from logging import getLogger
+        self.logger = getLogger('StatefulNode')
+
         self.__operational_state = OperationalState(
             broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
