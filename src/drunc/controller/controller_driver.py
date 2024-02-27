@@ -5,12 +5,6 @@ from druncschema.controller_pb2 import Status, ChildrenStatus
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
 
-class ConfigurationTypeNotSupported(Exception):
-    def __init__(self, conf_type):
-        self.type = conf_type
-        super(ConfigurationTypeNotSupported, self).__init__(
-            f'{str(conf_type)} is not supported by this controller'
-        )
 
 class ControllerDriver(GRPCDriver):
     def __init__(self, address:str, token, **kwargs):
