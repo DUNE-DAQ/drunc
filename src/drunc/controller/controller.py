@@ -27,7 +27,15 @@ class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
         from logging import getLogger
         self.logger = getLogger("ControllerActor")
-        self._token = Token()
+
+        self._token = Token(
+            token="",
+            user_name="controller_default_token",
+        )
+
+        if token is not None:
+            self._token.CopyFrom(token)
+
         self._lock = Lock()
 
     def get_token(self) -> Token:
