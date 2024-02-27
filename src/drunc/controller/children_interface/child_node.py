@@ -25,6 +25,9 @@ class ChildNode(abc.ABC):
         self.name = name
         self.token = token
 
+    @abc.abstractmethod
+    def __str__(self):
+        pass
 
     @abc.abstractmethod
     def terminate(self):
@@ -41,13 +44,13 @@ class ChildNode(abc.ABC):
         pass
 
     @staticmethod
-    def get_child(name:str, type:ChildNodeType, conf:ConfData, token=None, **kwargs):
+    def get_child(name:str, type:ChildNodeType, configuration:ConfData, token=None, **kwargs):
 
         match type:
             case ChildNodeType.gRPC:
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode
                 return gRPCChildNode(
-                    configuration = conf,
+                    configuration = configuration,
                     token = token,
                     name = name,
                     **kwargs,
@@ -55,7 +58,7 @@ class ChildNode(abc.ABC):
             case ChildNodeType.REST_API:
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
                 return RESTAPIChildNode(
-                    configuration = conf,
+                    configuration = configuration,
                     token = token,
                     name = name,
                     **kwargs,

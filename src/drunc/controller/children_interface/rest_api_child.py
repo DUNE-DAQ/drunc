@@ -35,6 +35,9 @@ class ResponseDispatcher(threading.Thread):
         self.listener.queue.put_nowait(self.STOP)
         self.join()
 
+    def __str__(self):
+        return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
+
 class ResponseListener:
     _instance = None
     manager = None
