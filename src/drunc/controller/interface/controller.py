@@ -1,15 +1,16 @@
 import click
 import signal
 import sys
-from drunc.utils.utils import log_levels,  update_log_level
+from drunc.utils.utils import log_levels,  update_log_level, validate_command_facility
+import socket
 
 @click.command()
 @click.argument('configuration', type=str)
-@click.argument('control-port', type=int)
+@click.argument('command-facility', type=str, callback=validate_command_facility)#, help=f'Command facility (protocol, host and port) grpc://{socket.gethostname()}:12345')
 @click.argument('name', type=str)
 @click.argument('session', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, control_port:int, name:str, session:str, log_level:str):
+def controller_cli(configuration:str, command_facility:int, name:str, session:str, log_level:str):
 
     from rich.console import Console
     console = Console()
@@ -29,18 +30,13 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
         configuration = configuration_data
     )
 
-    def serve(port:int) -> None:
-        if not port:
-            from drunc.exceptions import DruncSetupException
-            raise DruncSetupException('The port on which to expect commands/send status wasn\'t specified')
-
+    def serve(listen_addr:str) -> None:
         from concurrent import futures
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
 
         add_ControllerServicer_to_server(ctrlr, server)
 
         import socket
-        listen_addr = f'{socket.gethostname()}:{port}'
         server.add_insecure_port(listen_addr)
 
         server.start()
@@ -71,7 +67,7 @@ def controller_cli(configuration:str, control_port:int, name:str, session:str, l
         signal.signal(sig, shutdown)
 
     try:
-        server = serve(control_port)
+        server = serve(command_facility)
         server.wait_for_termination(timeout=None)
 
     except Exception as e:
