@@ -76,21 +76,31 @@ class ControllerConfiguration(ConfigurationHandler):
         for CLA in CLAs:
             if "rest://" in CLA:
                 return ChildNodeType.REST_API
-        return ChildNodeType.gRPC
+            if "grpc://" in CLA:
+                return ChildNodeType.gRPC
+
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
 
 
     def __get_children_from_oksobj(self):
         children = []
+        self.log.debug(f'looping over children\n{self.conf.data.segments}')
+
         for segment in self.conf.data.segments:
+            self.log.debug(segment)
             new_node = ChildNode.get_child(
-                type = ControllerConfiguration.__get_children_type_from_cli(segment.controller.commandline_parameters),
+                type = ControllerConfiguration.__get_children_type_from_cli(
+                    segment.controller.commandline_parameters
+                ),
                 name = segment.id,
-                configuration = ConfData(segment.controller, self.conf.type),
-                fsm_configuration = ConfData(self.configuration.fsm, self.conf.type), # TODO, this should be segment.fsm, at some point
+                configuration = ConfData(segment, self.conf.type),
+                fsm_configuration = ConfData(self.conf.data.controller.fsm, self.conf.type), # TODO, this should be segment.fsm, at some point
             )
             children.append(new_node)
 
         for app in self.conf.data.applications:
+            self.log.debug(app)
             new_node = ChildNode.get_child(
                 type = ControllerConfiguration.__get_children_type_from_cli(app.commandline_parameters),
                 name = app.id,
