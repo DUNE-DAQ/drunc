@@ -26,7 +26,7 @@ from drunc.utils.configuration_utils import ConfTypeNotSupported, ConfTypes, Con
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
         from logging import getLogger
-        self._log = getLogger("ControllerActor")
+        self.logger = getLogger("ControllerActor")
         self._token = Token()
         self._lock = Lock()
 
@@ -67,10 +67,12 @@ class Controller(ControllerServicer):
 
     def __init__(self, configuration:ConfData, name:str, session:str):
         super().__init__()
+
         self.name = name
         self.session = session
-        import logging
-        log = logging.getLogger('controller-ctor')
+
+        from logging import getLogger
+        self.logger = getLogger('Controller')
 
         from drunc.controller.configuration import ControllerConfiguration
         self.configuration = ControllerConfiguration(
@@ -203,8 +205,6 @@ class Controller(ControllerServicer):
         return self.broadcast_service.describe_broadcast(*args, **kwargs)
 
     def terminate(self):
-        from logging import getLogger
-        log = getLogger('ControllerTerminate')
 
         if self.can_broadcast():
             self.broadcast(
@@ -212,9 +212,9 @@ class Controller(ControllerServicer):
                 message = 'over_and_out',
             )
 
-        log.info('Stopping children')
+        self.logger.info('Stopping children')
         for child in self.children_nodes:
-            log.debug(f'Stopping {child.name}')
+            self.logger.debug(f'Stopping {child.name}')
             child.terminate()
 
         from drunc.controller.children_interface.rest_api_child import ResponseListener
@@ -223,14 +223,14 @@ class Controller(ControllerServicer):
             ResponseListener.get().terminate()
 
         import threading
-        log.debug("Threading threads")
+        self.logger.debug("Threading threads")
         for t in threading.enumerate():
-            log.debug(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
+            self.logger.debug(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
 
         from multiprocessing import Manager
         with Manager() as manager:
-            log.debug("Multiprocess threads")
-            log.debug(manager.list())
+            self.logger.debug("Multiprocess threads")
+            self.logger.debug(manager.list())
 
 
     def __del__(self):
@@ -355,7 +355,7 @@ class Controller(ControllerServicer):
     @pack_response # 4th step
     def describe_fsm(self) -> Response:
         from drunc.fsm.utils import convert_fsm_transition
-        desc = convert_fsm_transition(self.get_fsm_transitions())
+        desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
         desc.type = 'controller'
         desc.name = self.name
         desc.session = self.session
@@ -382,25 +382,25 @@ class Controller(ControllerServicer):
         3. Return the result
         """
 
-        transition = self.get_fsm_transition(fsm_command.command_name)
+        transition = self.stateful_node.get_fsm_transition(fsm_command.command_name)
 
         self.logger.debug(f'The transition requested is "{str(transition)}"')
 
-        if not self.can_transition(transition):
-            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.node_operational_state()}\"'
+        if not self.stateful_node.can_transition(transition):
+            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"'
 
         self.logger.debug(f'FSM command data: {fsm_command}')
         child_statuses = {}
 
-        fsm_args = self.decode_fsm_arguments(fsm_command)
+        fsm_args = self.stateful_node.decode_fsm_arguments(fsm_command)
 
-        fsm_data = self.prepare_transition(
+        fsm_data = self.stateful_node.prepare_transition(
             transition = transition,
             transition_args = fsm_args,
             transition_data = fsm_command.data,
         )
 
-        self.propagate_transition_mark(transition)
+        self.stateful_node.propagate_transition_mark(transition)
 
         children_fsm_command = FSMCommand()
         children_fsm_command.CopyFrom(fsm_command)
@@ -413,18 +413,18 @@ class Controller(ControllerServicer):
         else:
             child_statuses = self.propagate_to_list('execute_fsm_command', children_fsm_command, token, self.children_nodes)
 
-        self.finish_propagating_transition_mark(transition)
+        self.stateful_node.finish_propagating_transition_mark(transition)
 
-        self.start_transition_mark(transition)
+        self.stateful_node.start_transition_mark(transition)
 
         self.broadcast(
             btype = BroadcastType.COMMAND_EXECUTION_START,
             message = f'Executing {fsm_command.command_name} (upon request from {token.user_name})',
         )
 
-        self.terminate_transition_mark(transition)
+        self.stateful_node.terminate_transition_mark(transition)
 
-        fsm_data = self.finalise_transition(
+        fsm_data = self.stateful_node.finalise_transition(
             transition = transition,
             transition_args = fsm_args,
             transition_data = fsm_data
@@ -452,7 +452,7 @@ class Controller(ControllerServicer):
     @pack_response # 4th step
     def include(self, token:Token) -> PlainText:
         self.propagate_to_list('include', data=None, token=token, node_to_execute=self.children_nodes)
-        self.include_node()
+        self.stateful_node.include_node()
         return PlainText(text = f'{self.name} and children included')
 
 
@@ -467,7 +467,7 @@ class Controller(ControllerServicer):
     @pack_response # 4th step
     def exclude(self, token:Token) -> Response:
         self.propagate_to_list('exclude', data=None, token=token, node_to_execute=self.children_nodes)
-        self.exclude_node()
+        self.stateful_node.exclude_node()
         return PlainText(text = f'{self.name} and children excluded')
 
 
