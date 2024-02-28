@@ -94,7 +94,7 @@ class BroadcastSender:
 
     def _interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        txt = f'Exception thrown: {exception}'
+        txt = f'\'{exception.__class__.__name__}\' exception thrown: {exception}'
 
         from drunc.exceptions import DruncException
         self.broadcast(
@@ -115,7 +115,7 @@ class BroadcastSender:
 
     async def _async_interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        txt = f'Exception thrown: {exception}'
+        txt = f'\'{exception.__class__.__name__}\' exception thrown: {exception}'
 
         from drunc.exceptions import DruncException
         self.broadcast(
