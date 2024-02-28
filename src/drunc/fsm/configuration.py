@@ -4,76 +4,85 @@ from drunc.fsm.fsm_core import PreOrPostTransitionSequence
 
 class FSMConfiguration(ConfigurationHandler):
     def __init__(self, configuration):
-
-        super().__init__(configuration)
-
-        if self.conf.type not in [ConfTypes.PyObject, ConfTypes.OKSObject]:
-            raise DruncSetupException('FSM Configuration was not parsed correctly')
-
         self.transitions = []
-        self.states = self.conf.data.states
-        self.initial_state = self.conf.data.initial_state
+        self.states = []
+        self.initial_state = ''
         self.pre_transitions  = {}
         self.post_transitions = {}
         self.interfaces = {}
+        super().__init__(configuration)
+
+        if self.conf.type == ConfTypes.OKSObject:
+            self.__configure_with_oks(self.conf.data)
+
+
+
+    def __fill_pre_post_transition_sequence_oks(self, prefix, transition, data):
+        seq = PreOrPostTransitionSequence(
+            transition,
+            prefix,
+        )
+
+        if data is None:
+            return seq
+
+        class empty_sequence_conf_data:
+            order = []
+            mandatory = []
+
+        seq_conf = empty_sequence_conf_data()
+
+        for fsm_x_transition in data:
+            if fsm_x_transition.id == transition.name:
+                seq_conf = fsm_x_transition
+
+        for interface in seq_conf.order:
+            seq.add_callback(
+                interface = self.interfaces[interface],
+                mandatory = interface in seq_conf.mandatory,
+            )
+
+
+        return seq
+
+    def __configure_with_oks(self, data):
+        self.states = data.states
+        self.initial_state = data.initial_state
 
         from drunc.fsm.interface_factory import FSMInterfaceFactory
-        from drunc.utils.configuration_utils import ConfData
+        from drunc.utils.configuration_utils import ConfData, ConfTypes
 
-        for interface in self.conf.data.interfaces:
+        for interface in data.interfaces:
+            self.log.info(f'Setting up interface \'{interface.id}\'')
             self.interfaces[interface.id] = FSMInterfaceFactory.get().get_interface(
-                ConfData(self.conf.type, interface)
+                interface.id,
+                ConfData(ConfTypes.OKSObject, interface)
             )
+
 
         from drunc.fsm.transition import Transition
 
-
-        for transition in self.conf.data.transitions:
+        for transition in data.transitions:
             tr = Transition(
                 name = transition.id,
                 source = transition.source,
                 destination = transition.dest,
+                arguments = [] # not needed in principle, but I getting transition from the previous iteration I don't add this (?!?!)
             )
 
-            for prefix in ['pre', 'post']:
-                seq = PreOrPostTransitionSequence(
-                    tr,
-                    prefix,
-                )
+            pre_transitions  = self.__fill_pre_post_transition_sequence_oks('pre' , tr, data.pre_transitions)
+            post_transitions = self.__fill_pre_post_transition_sequence_oks('post', tr, data.post_transitions)
 
-                data = getattr(self.conf.data, f'{prefix}_transitions', None)
+            tr.arguments += pre_transitions .get_arguments()
+            tr.arguments += post_transitions.get_arguments()
 
-                if not data:
-                    if prefix == 'pre':
-                        self.pre_transitions[tr] = seq
-                    else:
-                        self.post_transitions[tr] = seq
-                    continue
-
-                class empty_sequence_conf_data:
-                    def __init__(self):
-                        self.order = []
-                        self.mandatory = []
-                empty_seq = empty_sequence_conf_data()
-
-                blurp = getattr(data, tr.name, empty_seq)
-
-                for interface in blurp.order:
-                    seq.add_callback(
-                        interface = self.interfaces[interface],
-                        mandatory = interface in blurp.get("mandatory", []),
-                    )
-                tr.arguments += seq.get_arguments()
-
-                if prefix == 'pre':
-                    self.pre_transitions[tr] = seq
-                else:
-                    self.post_transitions[tr] = seq
+            self.pre_transitions [tr] = pre_transitions
+            self.post_transitions[tr] = post_transitions
 
             self.transitions += [tr]
 
-    def _parse_dict(self, data):
-        pass
+    # def _parse_dict(self, data):
+    #     pass
 
     def get_interfaces(self):
         return self.interfaces

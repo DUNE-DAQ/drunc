@@ -1,7 +1,7 @@
 from druncschema.controller_pb2 import Argument
 
 class Transition:
-    def __init__(self, name, source, destination, arguments:[Argument]=[], help:str=''):
+    def __init__(self, name, source, destination, arguments=[], help:str=''):
         self.source = source
         self.destination = destination
         self.name = name

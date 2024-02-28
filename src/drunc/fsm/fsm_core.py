@@ -45,6 +45,9 @@ class PreOrPostTransitionSequence:
             )
         ]
 
+    def __str__(self):
+        return ', '.join([f'{cb.method.__name__} (mandatory={cb.mandatory})'for cb in self.sequence])
+
 
     def execute(self, transition_data, transition_args):
         self._log.debug(f'{transition_data=}, {transition_args=}')
@@ -79,6 +82,8 @@ class PreOrPostTransitionSequence:
         '''
         retr = []
         all_the_parameter_names = []
+
+        from druncschema.controller_pb2 import Argument
 
         for callback in self.sequence:
             method = callback.method
@@ -156,16 +161,19 @@ class FSM:
         self.states = self.configuration.get_states()
 
         self.transitions = self.configuration.get_transitions()
-        self._log.info('Allowed transitions are:')
-        for t in self.transitions:
-            self._log.info(str(t))
 
         self._enusure_unique_transition(self.transitions)
 
-        self._log.info(f'Initial state is "{self.initial_state}"')
 
         self.pre_transition_sequences = self.configuration.get_pre_transitions_sequences()
         self.post_transition_sequences = self.configuration.get_post_transitions_sequences()
+
+        self._log.info(f'Initial state is "{self.initial_state}"')
+        self._log.info('Allowed transitions are:')
+        for t in self.transitions:
+            self._log.info(str(t))
+            self._log.info(f'Pre transition: {self.pre_transition_sequences[t]}')
+            self._log.info(f'Post transition: {self.post_transition_sequences[t]}')
 
     def _enusure_unique_transition(self, transitions):
         a_set = set()
