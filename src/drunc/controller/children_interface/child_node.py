@@ -14,7 +14,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 
 class ChildNode(abc.ABC):
-    def __init__(self, name:str, node_type:ChildNodeType, token=None, **kwargs) -> None:
+    def __init__(self, name:str, node_type:ChildNodeType, **kwargs) -> None:
         super(ChildNode, self).__init__(
             **kwargs
         )
@@ -23,11 +23,12 @@ class ChildNode(abc.ABC):
         import logging
         self.log = logging.getLogger(f"{name}-child-node")
         self.name = name
-        self.token = token
+
 
     @abc.abstractmethod
     def __str__(self):
         pass
+
 
     @abc.abstractmethod
     def terminate(self):
@@ -42,6 +43,7 @@ class ChildNode(abc.ABC):
     @abc.abstractmethod
     def get_status(self, token):
         pass
+
 
     @staticmethod
     def get_child(name:str, type:ChildNodeType, configuration:ConfData, token=None, **kwargs):

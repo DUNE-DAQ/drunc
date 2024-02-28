@@ -27,7 +27,7 @@ class gRCPChildConfigurationHandler(ConfigurationHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration:ConfData, **kwargs):
+    def __init__(self, name, configuration:ConfData, init_token, **kwargs):
         super().__init__(
             name = name,
             node_type = ChildNodeType.gRPC
@@ -59,7 +59,7 @@ class gRPCChildNode(ChildNode):
             try:
                 response = send_command(
                     controller = self.controller,
-                    token = self.token,
+                    token = init_token,
                     command = 'describe',
                     rethrow = True
                 )

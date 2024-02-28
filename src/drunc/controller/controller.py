@@ -30,7 +30,7 @@ class ControllerActor:
 
         self._token = Token(
             token="",
-            user_name="controller_default_token",
+            user_name="",
         )
 
         if token is not None:
@@ -62,9 +62,8 @@ class ControllerActor:
         raise ctler_excpt.CannotSurrenderControl(f'Token {token} cannot release control of {self._token}')
 
     def take_control(self, token) -> None:
-        if not self.compare_token(self._token, Token()):
-            raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
-
+        # if not self.compare_token(self._token, token):
+        #     raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
         self._update_actor(token)
 
 
@@ -104,11 +103,17 @@ class Controller(ControllerServicer):
         from druncschema.authoriser_pb2 import SystemType
         self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
 
-        self.actor = ControllerActor(None)
+        self.actor = ControllerActor(
+            Token(
+                token="",
+                user_name=f"Controller.{self.name}.{self.session}",
+            )
+        )
 
-        self.children_nodes = self.configuration.get_children()
+        self.children_nodes = self.configuration.get_children(self.actor.get_token())
         for child in self.children_nodes:
-            log.info(child)
+            self.logger.info(child)
+            child.propagate_command('take_control', None, self.actor.get_token())
 
         from druncschema.request_response_pb2 import CommandDescription
         # TODO, probably need to think of a better way to do this?
@@ -493,6 +498,7 @@ class Controller(ControllerServicer):
     @pack_response # 4th step
     def take_control(self, token:Token) -> PlainText:
         self.actor.take_control(token)
+        self.propagate_to_list('take_control', data=None, token=token, node_to_execute=self.children_nodes)
         return PlainText(text = f'{token.user_name} took control')
 
     # ORDER MATTERS!
@@ -506,6 +512,7 @@ class Controller(ControllerServicer):
     def surrender_control(self, token:Token) -> PlainText:
         user = self.actor.get_user_name()
         self.actor.surrender_control(token)
+        self.propagate_to_list('surrender_control', data=None, token=token, node_to_execute=self.children_nodes)
         return PlainText(text = f'{user} surrendered control')
 
     # ORDER MATTERS!

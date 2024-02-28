@@ -39,19 +39,19 @@ class ControllerConfiguration(ConfigurationHandler):
         )
 
 
-    def get_children(self):
+    def get_children(self, token):
         if self.conf.type not in [ConfTypes.PyObject, ConfTypes.OKSObject]:
             raise DruncSetupException('Controller Configuration was not parsed correctly')
 
 
         match self.conf.type:
             case ConfTypes.OKSObject:
-                return self.__get_children_from_oksobj()
+                return self.__get_children_from_oksobj(token)
             case ConfTypes.PyObject:
-                return self.__get_children_from_pyobj()
+                return self.__get_children_from_pyobj(token)
 
 
-    def __get_children_from_pyobj(self):
+    def __get_children_from_pyobj(self, token):
         children = []
 
         for child in self.conf.data.children:
@@ -59,6 +59,7 @@ class ControllerConfiguration(ConfigurationHandler):
                 new_node = ChildNode.get_child(
                     name = child.name,
                     configuration = child,
+                    init_token = token,
                     fsm_configuration = self.configuration.fsm
                 )
 
@@ -66,6 +67,7 @@ class ControllerConfiguration(ConfigurationHandler):
                 new_node = ChildNode.get_child(
                     name = child['name'],
                     configuration = child,
+                    init_token = token,
                 )
             children.append(new_node)
 
@@ -83,7 +85,7 @@ class ControllerConfiguration(ConfigurationHandler):
         raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
 
 
-    def __get_children_from_oksobj(self):
+    def __get_children_from_oksobj(self, token):
         children = []
         self.log.debug(f'looping over children\n{self.conf.data.segments}')
 
@@ -93,6 +95,7 @@ class ControllerConfiguration(ConfigurationHandler):
                 type = ControllerConfiguration.__get_children_type_from_cli(
                     segment.controller.commandline_parameters
                 ),
+                init_token = token,
                 name = segment.id,
                 configuration = ConfData(segment, self.conf.type),
                 fsm_configuration = ConfData(self.conf.data.controller.fsm, self.conf.type), # TODO, this should be segment.fsm, at some point
@@ -103,6 +106,7 @@ class ControllerConfiguration(ConfigurationHandler):
             self.log.debug(app)
             new_node = ChildNode.get_child(
                 type = ControllerConfiguration.__get_children_type_from_cli(app.commandline_parameters),
+                init_token = token,
                 name = app.id,
                 configuration = ConfData(app, self.conf.type),
             )
