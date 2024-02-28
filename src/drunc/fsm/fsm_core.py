@@ -142,12 +142,11 @@ class PreOrPostTransitionSequence:
 
 
 class FSM:
-    def __init__(self, conf:ConfData, uid=None):
+    def __init__(self, conf:ConfData):
 
         from drunc.fsm.configuration import FSMConfiguration
         self.configuration = FSMConfiguration(
             configuration = conf,
-            uid = uid
         )
 
         from logging import getLogger
