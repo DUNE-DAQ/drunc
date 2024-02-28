@@ -317,7 +317,9 @@ class Controller(ControllerServicer):
     @pack_response # 4th step
     def get_status(self) -> Status:
         from drunc.controller.utils import get_status_message
-        return get_status_message(self)
+        status = get_status_message(self.stateful_node)
+        status.name = self.name
+        return status
 
 
     # ORDER MATTERS!

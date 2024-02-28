@@ -7,7 +7,6 @@ def get_status_message(stateful:StatefulNode):
         state_string += f' ({stateful.get_node_operational_sub_state()})'
 
     return Status(
-        name = stateful.name,
         state = state_string,
         sub_state = stateful.get_node_operational_sub_state(),
         in_error = stateful.node_is_in_error(),
