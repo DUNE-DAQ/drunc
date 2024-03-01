@@ -19,11 +19,10 @@ class KafkaBroadcastSenderConfData:
         )
 
 class BroadcastSenderConfHandler(ConfHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def _post_process_oks(self):
         from drunc.broadcast.types import BroadcastTypes
         self.impl_technology = BroadcastTypes.Kafka
-
+        self.log.info(self.data)
     def get_impl_technology(self):
         return self.impl_technology
 
