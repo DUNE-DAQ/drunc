@@ -2,7 +2,6 @@ from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.fsm_errors as fsme
-from drunc.utils.configuration_utils import ConfData
 from drunc.fsm.transition import Transition
 
 class FSMInterface:
@@ -147,12 +146,9 @@ class PreOrPostTransitionSequence:
 
 
 class FSM:
-    def __init__(self, conf:ConfData):
+    def __init__(self, conf):
 
-        from drunc.fsm.configuration import FSMConfiguration
-        self.configuration = FSMConfiguration(
-            configuration = conf,
-        )
+        self.configuration = conf
 
         from logging import getLogger
         self._log = getLogger('FSM')

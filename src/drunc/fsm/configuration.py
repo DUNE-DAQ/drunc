@@ -1,23 +1,8 @@
-from drunc.utils.configuration_utils import ConfigurationHandler, ConfTypes
-from drunc.exceptions import DruncSetupException
+from drunc.utils.configuration import ConfHandler, ConfTypes, OKSKey
 from drunc.fsm.fsm_core import PreOrPostTransitionSequence
 
-class FSMConfiguration(ConfigurationHandler):
-    def __init__(self, configuration):
-        self.transitions = []
-        self.states = []
-        self.initial_state = ''
-        self.pre_transitions  = {}
-        self.post_transitions = {}
-        self.interfaces = {}
-        super().__init__(configuration)
-
-        if self.conf.type == ConfTypes.OKSObject:
-            self.__configure_with_oks(self.conf.data)
-
-
-
-    def __fill_pre_post_transition_sequence_oks(self, prefix, transition, data):
+class FSMConfHandler(ConfHandler):
+    def _fill_pre_post_transition_sequence_oks(self, prefix, transition, data):
         seq = PreOrPostTransitionSequence(
             transition,
             prefix,
@@ -45,24 +30,28 @@ class FSMConfiguration(ConfigurationHandler):
 
         return seq
 
-    def __configure_with_oks(self, data):
-        self.states = data.states
-        self.initial_state = data.initial_state
+    def _post_process_oks(self):
+        self.log.info('_post_process_oks configuration')
+        self.pre_transitions  = {}
+        self.post_transitions = {}
+        self.interfaces = {}
+        self.transitions = []
+        self.states = self.data.states
+        self.initial_state = self.data.initial_state
 
         from drunc.fsm.interface_factory import FSMInterfaceFactory
-        from drunc.utils.configuration_utils import ConfData, ConfTypes
 
-        for interface in data.interfaces:
+        for interface in self.data.interfaces:
             self.log.info(f'Setting up interface \'{interface.id}\'')
             self.interfaces[interface.id] = FSMInterfaceFactory.get().get_interface(
                 interface.id,
-                ConfData(ConfTypes.OKSObject, interface)
+                interface
             )
 
 
         from drunc.fsm.transition import Transition
 
-        for transition in data.transitions:
+        for transition in self.data.transitions:
             tr = Transition(
                 name = transition.id,
                 source = transition.source,
@@ -70,8 +59,8 @@ class FSMConfiguration(ConfigurationHandler):
                 arguments = [] # not needed in principle, but I getting transition from the previous iteration I don't add this (?!?!)
             )
 
-            pre_transitions  = self.__fill_pre_post_transition_sequence_oks('pre' , tr, data.pre_transitions)
-            post_transitions = self.__fill_pre_post_transition_sequence_oks('post', tr, data.post_transitions)
+            pre_transitions  = self._fill_pre_post_transition_sequence_oks('pre' , tr, self.data.pre_transitions)
+            post_transitions = self._fill_pre_post_transition_sequence_oks('post', tr, self.data.post_transitions)
 
             tr.arguments += pre_transitions .get_arguments()
             tr.arguments += post_transitions.get_arguments()
@@ -88,10 +77,10 @@ class FSMConfiguration(ConfigurationHandler):
         return self.interfaces
 
     def get_initial_state(self):
-        return self.initial_state
+        return self.data.initial_state
 
     def get_states(self):
-        return self.states
+        return self.data.states
 
     def get_transitions(self):
         return self.transitions
