@@ -1,7 +1,6 @@
 import abc
 from enum import Enum
 from drunc.exceptions import DruncSetupException
-from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
 
 class ChildNodeType(Enum):
     gRPC = 1
@@ -46,7 +45,7 @@ class ChildNode(abc.ABC):
 
 
     @staticmethod
-    def get_child(name:str, type:ChildNodeType, configuration:ConfData, token=None, **kwargs):
+    def get_child(name:str, type:ChildNodeType, configuration, token=None, **kwargs):
 
         match type:
             case ChildNodeType.gRPC:

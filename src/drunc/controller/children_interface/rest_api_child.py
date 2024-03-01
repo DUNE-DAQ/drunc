@@ -370,10 +370,13 @@ class StateRESTAPI:
         with self._state_lock:
             return self._errored
 
-from drunc.utils.configuration_utils import ConfTypes, ConfData, ConfTypeNotSupported
+from drunc.utils.configuration import ConfHandler
+
+class RESTAPIChildNodeConfHandler(ConfHandler):
+    pass
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, name, child_conf:ConfData, **kwargs):
+    def __init__(self, name, child_conf:RESTAPIChildNodeConfHandler, **kwargs):
         super(RESTAPIChildNode, self).__init__(
             name = name,
             **kwargs
@@ -382,15 +385,12 @@ class RESTAPIChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{name}-rest-api-child')
 
-        if child_conf.type != ConfTypes.RawDict:
-            raise ConfTypeNotSupported(child_conf.type, 'RESTAPIChildNode')
-
         self.response_listener = ResponseListener.get()
 
         import socket
         response_listener_host = socket.gethostname()
 
-        app_host, app_port = child_conf.data['uri'].split(":")
+        app_host, app_port = child_conf.data.uri.split(":")
         app_port = int(app_port)
 
         proxy_host, proxy_port = child_conf.data.get('proxy', [None, None])
@@ -407,11 +407,12 @@ class RESTAPIChildNode(ChildNode):
         )
 
         from drunc.fsm.fsm_core import FSM
-        self.fsm = FSM(
-            conf = ConfData(
-                type = child_conf.type,
-                data = child_conf.data['fsm_conf']),
+        from drunc.fsm.configuration import FSMConfHandler
+        fsm_conf = FSMConfHandler(
+            data = child_conf.fsm
         )
+
+        self.fsm = FSM(conf = fsm_conf)
 
         self.response_listener.register(self.name, self.commander)
 
