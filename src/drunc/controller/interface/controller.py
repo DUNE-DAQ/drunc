@@ -1,8 +1,6 @@
 import click
 import signal
-import sys
 from drunc.utils.utils import log_levels,  update_log_level, validate_command_facility
-import socket
 
 @click.command()
 @click.argument('configuration', type=str)
@@ -18,19 +16,35 @@ def controller_cli(configuration:str, command_facility:int, name:str, session:st
     update_log_level(log_level)
 
     from drunc.controller.controller import Controller
+    from drunc.controller.configuration import ControllerConfHandler
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
-    import grpc
-
-    from drunc.utils.configuration_utils import ConfData
-    configuration_data = ConfData.get_from_url(configuration)
+    from druncschema.token_pb2 import Token
+    token = Token(
+        user_name = "controller_init_token",
+        token = '',
+    )
+    from drunc.utils.configuration import parse_conf_url, OKSKey
+    conf_path, conf_type = parse_conf_url(configuration)
+    controller_configuration = ControllerConfHandler(
+        type = conf_type,
+        data = conf_path,
+        oks_key = OKSKey(
+            schema_file='schema/coredal/dunedaq.schema.xml',
+            class_name="Segment",
+            uid=name,
+        ),
+        init_token = token,
+    )
 
     ctrlr = Controller(
         name = name,
         session = session,
-        configuration = configuration_data
+        configuration = controller_configuration,
+        token = token,
     )
 
     def serve(listen_addr:str) -> None:
+        import grpc
         from concurrent import futures
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
 

@@ -1,77 +1,57 @@
-from drunc.utils.configuration_utils import ConfigurationHandler, ConfTypes, ConfData
-from drunc.exceptions import DruncSetupException
+from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
 
-class ControllerConfiguration(ConfigurationHandler):
-    def __init__(self, uid, configuration):
-        self.uid = uid
-        super().__init__(configuration)
+class ControllerConfData: # the bastardised OKS
+    def __init__(self):
 
-    def _parse_oks(self, oks_conf):
-        import oksdbinterfaces
-        dal = oksdbinterfaces.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
-        db = oksdbinterfaces.Configuration("oksconfig:" + oks_conf)
-        return db.get_dal(class_name="Segment", uid=self.uid)
+        class id_able:
+            id = None
 
+        class cler:
+            pass
 
-    def get_broadcast_configuration(self):
-        data = None
-        match self.conf.type:
-            case ConfTypes.OKSObject:
-                data = self.conf.data.controller.broadcaster
-            case ConfTypes.PyObject:
-                data = self.conf.data['broadcaster']
-        return ConfData(
-            type = self.conf.type,
-            data = data
-        )
-
-    def get_fsm_configuration(self):
-        data = None
-        match self.conf.type:
-            case ConfTypes.OKSObject:
-                data = self.conf.data.controller.fsm
-            case ConfTypes.PyObject:
-                data = self.conf.data.fsm
-        return ConfData(
-            type = self.conf.type,
-            data = data
-        )
+        self.controller = cler()
+        self.controller.broadcaster = id_able()
+        self.controller.fsm = id_able()
 
 
-    def get_children(self, token):
-        if self.conf.type not in [ConfTypes.PyObject, ConfTypes.OKSObject]:
-            raise DruncSetupException('Controller Configuration was not parsed correctly')
+class ControllerConfHandler(ConfHandler):
+
+    def get_children(self):
+        return self.children
 
 
-        match self.conf.type:
-            case ConfTypes.OKSObject:
-                return self.__get_children_from_oksobj(token)
-            case ConfTypes.PyObject:
-                return self.__get_children_from_pyobj(token)
+    def _post_process_oks(self, init_token):
+        self.authoriser = None
+        self.children = []
 
 
-    def __get_children_from_pyobj(self, token):
-        children = []
+        self.log.debug(f'looping over children\n{self.data.segments}')
 
-        for child in self.conf.data.children:
-            if child.type == 'rest-api': # already some hacking
-                new_node = ChildNode.get_child(
-                    name = child.name,
-                    configuration = child,
-                    init_token = token,
-                    fsm_configuration = self.configuration.fsm
-                )
+        for segment in self.data.segments:
+            self.log.debug(segment)
+            from drunc.controller.children_interface.grpc_child import gRCPChildConfHandler
+            new_node = ChildNode.get_child(
+                type = ControllerConfHandler.__get_children_type_from_cli(
+                    segment.controller.commandline_parameters
+                ),
+                init_token = init_token,
+                name = segment.id,
+                configuration = gRCPChildConfHandler(segment, ConfTypes.PyObject),
+                fsm_configuration = self.data.controller.fsm # TODO, this should be segment.fsm, at some point
+            )
+            self.children.append(new_node)
 
-            else:
-                new_node = ChildNode.get_child(
-                    name = child['name'],
-                    configuration = child,
-                    init_token = token,
-                )
-            children.append(new_node)
+        for app in self.data.applications:
+            self.log.debug(app)
+            new_node = ChildNode.get_child(
+                type = ControllerConfHandler.__get_children_type_from_cli(app.commandline_parameters),
+                init_token = init_token,
+                name = app.id,
+                configuration = app
+            )
+            self.children.append(new_node)
 
-        return children
 
     @staticmethod
     def __get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:
@@ -83,35 +63,5 @@ class ControllerConfiguration(ConfigurationHandler):
 
         from drunc.exceptions import DruncSetupException
         raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
-
-
-    def __get_children_from_oksobj(self, token):
-        children = []
-        self.log.debug(f'looping over children\n{self.conf.data.segments}')
-
-        for segment in self.conf.data.segments:
-            self.log.debug(segment)
-            new_node = ChildNode.get_child(
-                type = ControllerConfiguration.__get_children_type_from_cli(
-                    segment.controller.commandline_parameters
-                ),
-                init_token = token,
-                name = segment.id,
-                configuration = ConfData(segment, self.conf.type),
-                fsm_configuration = ConfData(self.conf.data.controller.fsm, self.conf.type), # TODO, this should be segment.fsm, at some point
-            )
-            children.append(new_node)
-
-        for app in self.conf.data.applications:
-            self.log.debug(app)
-            new_node = ChildNode.get_child(
-                type = ControllerConfiguration.__get_children_type_from_cli(app.commandline_parameters),
-                init_token = token,
-                name = app.id,
-                configuration = ConfData(app, self.conf.type),
-            )
-            children.append(new_node)
-
-        return children
 
 

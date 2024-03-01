@@ -21,7 +21,6 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
 
 from druncschema.controller_pb2 import FSMCommand
-from drunc.utils.configuration_utils import ConfTypeNotSupported, ConfTypes, ConfData
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
@@ -72,45 +71,54 @@ class Controller(ControllerServicer):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration:ConfData, name:str, session:str):
+    def __init__(self, configuration, name:str, session:str, token:Token):
         super().__init__()
-
         self.name = name
         self.session = session
+        self.broadcast_service = None
 
         from logging import getLogger
         self.logger = getLogger('Controller')
 
-        from drunc.controller.configuration import ControllerConfiguration
-        self.configuration = ControllerConfiguration(
-            configuration = configuration,
-            uid = name,
+        self.configuration = configuration
+
+        from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
+        bsch = BroadcastSenderConfHandler(
+            data = self.configuration.data.controller.broadcaster,
         )
 
         self.broadcast_service = BroadcastSender(
             name = name,
             session = session,
-            configuration = self.configuration.get_broadcast_configuration(),
+            configuration = bsch,
+        )
+
+
+        from drunc.fsm.configuration import FSMConfHandler
+        fsmch = FSMConfHandler(
+            data = self.configuration.data.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
-            fsm_configuration = self.configuration.get_fsm_configuration(),
+            fsm_configuration = fsmch,
             broadcaster = self.broadcast_service
         )
 
+        from drunc.authoriser.configuration import DummyAuthoriserConfHandler
+        dach = DummyAuthoriserConfHandler(
+            data = self.configuration.authoriser,
+        )
 
         from drunc.authoriser.dummy_authoriser import DummyAuthoriser
         from druncschema.authoriser_pb2 import SystemType
-        self.authoriser = DummyAuthoriser({}, SystemType.CONTROLLER)
-
-        self.actor = ControllerActor(
-            Token(
-                token="",
-                user_name=f"Controller.{self.name}.{self.session}",
-            )
+        self.authoriser = DummyAuthoriser(
+            dach,
+            SystemType.CONTROLLER
         )
 
-        self.children_nodes = self.configuration.get_children(self.actor.get_token())
+        self.actor = ControllerActor(token)
+
+        self.children_nodes = self.configuration.get_children()
         for child in self.children_nodes:
             self.logger.info(child)
             child.propagate_command('take_control', None, self.actor.get_token())
@@ -212,7 +220,9 @@ class Controller(ControllerServicer):
         return self.broadcast_service.broadcast(*args, **kwargs)
 
     def can_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.can_broadcast(*args, **kwargs)
+        if self.broadcast_service:
+            return self.broadcast_service.can_broadcast(*args, **kwargs)
+        return False
 
     def describe_broadcast(self, *args, **kwargs):
         return self.broadcast_service.describe_broadcast(*args, **kwargs)

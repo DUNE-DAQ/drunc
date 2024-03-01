@@ -2,7 +2,6 @@ import abc
 from drunc.fsm.fsm_core import FSM
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 import drunc.fsm.fsm_errors as fsme
-from drunc.utils.configuration_utils import ConfData
 from typing import Optional
 from druncschema.broadcast_pb2 import BroadcastType
 
@@ -88,7 +87,7 @@ class TransitionExecuting(StatefulNodeException):
 
 
 class StatefulNode(abc.ABC):
-    def __init__(self, fsm_configuration:ConfData, broadcaster:Optional[BroadcastSender]=None):
+    def __init__(self, fsm_configuration, broadcaster:Optional[BroadcastSender]=None):
 
         self.broadcast = broadcaster
 
