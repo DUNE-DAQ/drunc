@@ -1,14 +1,12 @@
 
 from drunc.broadcast.types import BroadcastTypes, BroadcastTypeNotHandled
-from drunc.utils.configuration_utils import ConfData
-from drunc.broadcast.client.configuration import BroadcastClientConfiguration
+from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 
 class BroadcastHandler:
-    def __init__(self, broadcast_configuration:ConfData, **kwargs):
-        super(BroadcastHandler, self).__init__(
-            **kwargs,
-        )
-        self.configuration = BroadcastClientConfiguration(broadcast_configuration)
+    def __init__(self, broadcast_configuration:BroadcastClientConfHandler, **kwargs):
+        super().__init__(**kwargs)
+
+        self.configuration = broadcast_configuration
         self.impl_technology = self.configuration.get_impl_technology()
         self.implementation = None
 
@@ -21,12 +19,10 @@ class BroadcastHandler:
                 from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
                 from druncschema.broadcast_pb2 import BroadcastMessage
                 self.implementation = KafkaStdoutBroadcastHandler(
-                    conf = broadcast_configuration,
                     message_format = BroadcastMessage,
                 )
             case BroadcastTypes.gRPC:
-                from drunc.exceptions import DruncSetupException
-                raise DruncSetupException("gRPC is not available for broadcasting!")
+                raise BroadcastTypeNotHandled("gRPC is not available for broadcasting!")
                 from drunc.broadcast.client.grpc_stdout_broadcast_handler import gRPCStdoutBroadcastHandler
                 from druncschema.broadcast_pb2 import BroadcastMessage
                 self.implementation = gRPCStdoutBroadcastHandler(

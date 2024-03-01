@@ -1,7 +1,6 @@
 
 from druncschema.broadcast_pb2 import BroadcastMessage
 from drunc.broadcast.server.broadcast_sender_implementation import BroadcastSenderImplementation
-from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported, ConfData
 
 class KafkaSender(BroadcastSenderImplementation):
     def __init__(self, kafka_address:str, publish_timeout:int, topic:str, **kwargs):

@@ -1,18 +1,13 @@
-from drunc.utils.configuration_utils import ConfTypes, ConfTypeNotSupported, ConfData
-
+from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 
 class BroadcastSender:
 
     implementation = None
 
-    def __init__(self, name:str, configuration:ConfData, session:str='no_session', **kwargs):
-        from drunc.broadcast.server.configuration import BroadcastSenderConfiguration
-        self.configuration = BroadcastSenderConfiguration(configuration)
+    def __init__(self, name:str, configuration:BroadcastSenderConfHandler, session:str='no_session'):
+        super().__init__()
 
-        super(BroadcastSender, self).__init__(
-            **kwargs,
-        )
-
+        self.configuration = configuration
 
         self.name = name
         self.session = session
@@ -30,24 +25,24 @@ class BroadcastSender:
         # self.broadcast_types_loglevels.update(self.configuration.get_raw('broadcast_types_loglevels', {}))
 
         #self.logger.debug(f'{broadcast_configuration.data}, {self.identifier}')
-        self.impl_technology = self.configuration.get_raw('type')
+        self.impl_technology = self.configuration.get_impl_technology()
+
         self.implementation = None
 
         if self.impl_technology is None:
             self.logger.warning('There is no broadcasting service!')
             return
 
+        from drunc.broadcast.types import BroadcastTypes
+
         match self.impl_technology:
-            case 'kafka':
+            case BroadcastTypes.Kafka:
                 from drunc.broadcast.server.kafka_sender import KafkaSender
                 self.implementation = KafkaSender(
-                    self.configuration.get_raw('address'),
-                    self.configuration.get_raw('publish_timeout'),
+                    self.configuration.data.address,
+                    self.configuration.data.publish_timeout,
                     topic=f'control.{self.identifier}',
                 )
-            case 'grpc':
-                from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
-                self.implementation = GRCPBroadcastSender()
             case _:
                 from drunc.exceptions import DruncSetupException
                 raise DruncSetupException(f"Broadcaster cannot be {self.impl_technology}")
