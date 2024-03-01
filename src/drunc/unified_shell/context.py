@@ -1,7 +1,6 @@
 from drunc.utils.shell_utils import ShellContext, GRPCDriver, add_traceback_flag
 from druncschema.token_pb2 import Token
 from typing import Mapping
-from drunc.utils.configuration_utils import ConfData
 
 class UnifiedShellContext(ShellContext): # boilerplatefest
     status_receiver_pm = None
@@ -62,18 +61,29 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
         return create_dummy_token_from_uname()
 
 
-    def start_listening_pm(self, broadcaster_conf:ConfData):
+    def start_listening_pm(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-
-        self.status_receiver_pm = BroadcastHandler(
-            broadcast_configuration = broadcaster_conf
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.utils.configuration import ConfTypes
+        bcch = BroadcastClientConfHandler(
+            type = ConfTypes.ProtobufAny,
+            data = broadcaster_conf,
         )
 
-    def start_listening_controller(self, broadcaster_conf:ConfData):
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        self.status_receiver_pm = BroadcastHandler(
+            broadcast_configuration = bcch
+        )
 
+    def start_listening_controller(self, broadcaster_conf):
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.utils.configuration import ConfTypes
+        bcch = BroadcastClientConfHandler(
+            type = ConfTypes.ProtobufAny,
+            data = broadcaster_conf,
+        )
         self.status_receiver_controller = BroadcastHandler(
-            broadcast_configuration = broadcaster_conf
+            broadcast_configuration = bcch
         )
 
     def terminate(self):
