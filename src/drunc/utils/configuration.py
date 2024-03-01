@@ -47,14 +47,18 @@ class OKSKey:
         self.uid = uid
 
 class ConfHandler:
-    def __init__(self, data=None, type=ConfTypes.Unknown, oks_key:OKSKey=None):
+    def __init__(self, data=None, type=ConfTypes.PyObject, oks_key:OKSKey=None, *args, **kwargs):
         from logging import getLogger
         self.class_name = self.__class__.__name__
         self.log = getLogger(self.class_name)
         self.initial_type = type
         self.initial_data = data
+
+        if type == ConfTypes.OKSFileName and oks_key is None:
+            raise DruncSetupException('Need to provide a key for the OKS file')
+
         self.oks_key = oks_key
-        self.validate_and_parse_configuration_location()
+        self.validate_and_parse_configuration_location(*args, **kwargs)
 
     def copy_oks_key(self):
         from copy import deepcopy as dc
@@ -79,6 +83,9 @@ class ConfHandler:
            raise DruncSetupException(f'OKS params where not passed to theis ConfigurationHandler, cannot parse OKS configurations') from e
 
 
+    def _post_process_oks(self):
+        pass
+
     def _parse_pbany(self, pbany_data):
         raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self)
 
@@ -87,13 +94,14 @@ class ConfHandler:
         raise ConfTypeNotSupported(ConfTypes.JsonFileName, self)
 
 
-    def validate_and_parse_configuration_location(self):
+    def validate_and_parse_configuration_location(self, *args, **kwargs):
         from os.path import exists
 
         match self.initial_type:
             case ConfTypes.PyObject:
                 self.data = self.initial_data
                 self.type = self.initial_type
+                self._post_process_oks(*args, **kwargs)
 
             case ConfTypes.JsonFileName:
                 if not exists(self.initial_data):
@@ -111,6 +119,7 @@ class ConfHandler:
 
                 self.data = self._parse_oks_file(self.initial_data)
                 self.type = ConfTypes.PyObject
+                self._post_process_oks(*args, **kwargs)
 
             case ConfTypes.ProtobufAny:
                 self.data = self._parse_pbany(self.initial_data)
