@@ -18,11 +18,16 @@ def process_manager_cli(pm_conf:str, log_level):
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
-    from drunc.utils.configuration_utils import ConfData
-    pm_conf_data = ConfData.get_from_url(pm_conf)
 
     from drunc.process_manager.process_manager import ProcessManager
-    pm = ProcessManager.get(pm_conf_data, name='process_manager')
+    from drunc.utils.configuration import parse_conf_url, OKSKey
+    from drunc.process_manager.configuration import ProcessManagerConfHandler
+    conf_path, conf_type = parse_conf_url(pm_conf)
+    pmch = ProcessManagerConfHandler(
+        type = conf_type,
+        data = conf_path
+    )
+    pm = ProcessManager.get(pmch, name='process_manager')
 
     loop = asyncio.get_event_loop()
 

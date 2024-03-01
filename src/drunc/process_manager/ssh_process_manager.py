@@ -58,13 +58,13 @@ class AppProcessWatcherThread(threading.Thread):
         )
 
 class SSHProcessManager(ProcessManager):
-    def __init__(self, pm_conf, **kwargs):
+    def __init__(self, configuration, **kwargs):
 
         import getpass
         self.session = getpass.getuser() # unfortunate
 
-        super(SSHProcessManager, self).__init__(
-            pm_conf = pm_conf,
+        super().__init__(
+            configuration = configuration,
             session = self.session,
             **kwargs
         )
