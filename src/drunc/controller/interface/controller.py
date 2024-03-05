@@ -23,6 +23,7 @@ def controller_cli(configuration:str, command_facility:int, name:str, session:st
         user_name = "controller_init_token",
         token = '',
     )
+
     from drunc.utils.configuration import parse_conf_url, OKSKey
     conf_path, conf_type = parse_conf_url(configuration)
     controller_configuration = ControllerConfHandler(
@@ -31,9 +32,9 @@ def controller_cli(configuration:str, command_facility:int, name:str, session:st
         oks_key = OKSKey(
             schema_file='schema/coredal/dunedaq.schema.xml',
             class_name="Segment",
-            uid=name,
+            obj_uid=name,
+            session=session, # some of the function for enable/disable require the full dal of the session
         ),
-        init_token = token,
     )
 
     ctrlr = Controller(
