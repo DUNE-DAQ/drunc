@@ -19,7 +19,7 @@ class gRCPChildConfHandler(ConfHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration:gRCPChildConfHandler, init_token, **kwargs):
+    def __init__(self, name, configuration:gRCPChildConfHandler, init_token):
         super().__init__(
             name = name,
             node_type = ChildNodeType.gRPC
@@ -71,9 +71,9 @@ class gRPCChildNode(ChildNode):
                 break
         self.start_listening(desc.broadcast)
 
-
     def __str__(self):
         return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
+
 
 
     def start_listening(self, bdesc):
