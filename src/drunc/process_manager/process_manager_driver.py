@@ -50,7 +50,8 @@ class ProcessManagerDriver(GRPCDriver):
         from pathlib import Path
         boot_configuration = {}
         import os
-        daqconf_fullpath_dir = Path(os.path.abspath(daqconf_dir))
+        from drunc.utils.utils import expand_path
+        daqconf_fullpath_dir = Path(expand_path(daqconf_dir, turn_to_abs_path=True))
         with open(Path(daqconf_fullpath_dir)/'boot.json') as f:
             import json
             boot_configuration = json.loads(f.read())
@@ -111,10 +112,20 @@ class ProcessManagerDriver(GRPCDriver):
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
         from drunc.process_manager.oks_parser import process_segment
         import oksdbinterfaces
-        db = oksdbinterfaces.Configuration("oksconfig:" + oks_conf)
+        from drunc.utils.utils import expand_path
+        oks_conf = expand_path(oks_conf, turn_to_abs_path=True)
+        from logging import getLogger
+        log = getLogger('_convert_oks_to_boot_request')
+        log.info(oks_conf)
+        db = oksdbinterfaces.Configuration(f"oksconfig:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = process_segment(db, session_dal, session_dal.segment)
+
+        # WHEEYYYY
+        from urllib.parse import urlparse
+        self.controller_address = urlparse(session_dal.segment.controller.commandline_parameters[1]).netloc
+
         self._log.debug(f"{apps=}")
         import os
         pwd = os.getcwd()
