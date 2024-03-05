@@ -118,7 +118,7 @@ class Controller(ControllerServicer):
 
         self.actor = ControllerActor(token)
 
-        self.children_nodes = self.configuration.get_children()
+        self.children_nodes = self.configuration.get_children(self.actor.get_token())
         for child in self.children_nodes:
             self.logger.info(child)
             child.propagate_command('take_control', None, self.actor.get_token())

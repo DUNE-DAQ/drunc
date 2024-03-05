@@ -17,51 +17,56 @@ class ControllerConfData: # the bastardised OKS
 
 class ControllerConfHandler(ConfHandler):
 
-    def get_children(self):
-        return self.children
-
-
-    def _post_process_oks(self, init_token):
+    def _post_process_oks(self):
         self.authoriser = None
         self.children = []
+
+
+    def get_children(self, init_token, without_excluded=False):
+
+        if self.children != []:
+            return self.get_children
+
+        if without_excluded:
+            try:
+                import coredal
+                session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
+
+            except ImportError as e:
+                self.log.error('OKS was not set up, so configuration does not know about include/exclude. All the children nodes will be returned')
+                without_excluded=True
 
 
         self.log.debug(f'looping over children\n{self.data.segments}')
 
         for segment in self.data.segments:
             self.log.debug(segment)
-            from drunc.controller.children_interface.grpc_child import gRCPChildConfHandler
+
+            if without_excluded:
+                if coredal.component_disabled(self.db._obj, session.id, segment.id):
+                    continue
+
             new_node = ChildNode.get_child(
-                type = ControllerConfHandler.__get_children_type_from_cli(
-                    segment.controller.commandline_parameters
-                ),
+                cli = segment.controller.commandline_parameters,
                 init_token = init_token,
                 name = segment.id,
-                configuration = gRCPChildConfHandler(segment, ConfTypes.PyObject),
-                fsm_configuration = self.data.controller.fsm # TODO, this should be segment.fsm, at some point
+                configuration = segment,
             )
             self.children.append(new_node)
 
         for app in self.data.applications:
             self.log.debug(app)
+
+            if without_excluded:
+                if coredal.component_disabled(self.db._obj, session.id, app.id):
+                    continue
+
             new_node = ChildNode.get_child(
-                type = ControllerConfHandler.__get_children_type_from_cli(app.commandline_parameters),
-                init_token = init_token,
+                cli = app.commandline_parameters,
                 name = app.id,
-                configuration = app
+                configuration = app,
+                fsm_configuration = self.data.controller.fsm
             )
             self.children.append(new_node)
 
-
-    @staticmethod
-    def __get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:
-        for CLA in CLAs:
-            if "rest://" in CLA:
-                return ChildNodeType.REST_API
-            if "grpc://" in CLA:
-                return ChildNodeType.gRPC
-
-        from drunc.exceptions import DruncSetupException
-        raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
-
-
+        return self.children
