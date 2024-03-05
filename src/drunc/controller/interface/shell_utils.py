@@ -41,32 +41,67 @@ def controller_setup(ctx, controller_address):
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
-    ntries = 10
+    #ntries = 10
+    timeout = 60
 
     from drunc.utils.grpc_utils import ServerUnreachable
-    for itry in range(ntries):
-        try:
-            desc = ctx.get_driver('controller').describe(rethrow=True)
-        except ServerUnreachable as e:
-            ctx.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
-            if itry >= ntries-1:
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TimeRemainingColumn(),
+        TimeElapsedColumn(),
+        console=ctx._console,
+    ) as progress:
+            # total = progress.add_task("[yellow]# apps started", total=len(apps))
+            # apps_tasks = {
+            #     a: progress.add_task(f"[blue]{a}", total=1) for a in self.apps
+            # }
+        waiting = progress.add_task("[yellow]timeout", total=timeout)
+
+            # for _ in range(timeout):
+            #     progress.update(waiting, advance=1)
+
+            #     alive, failed, resp = self.check_apps()
+
+            #     for a, t in apps_tasks.items():
+            #         if a in resp:
+            #             progress.update(t, completed=1)
+
+            #     progress.update(total, completed=len(resp))
+
+            #     if set.union(set(resp), set(failed.keys())) == set(self.apps.keys()):
+            #         progress.update(waiting, visible=False)
+            #         break
+            #     time.sleep(1)
+
+        itry = -1
+        while itry<timeout:# itry in range(ntries):
+            itry += 1
+            progress.update(waiting, advance=1)
+
+            try:
+                desc = ctx.get_driver('controller').describe(rethrow=True)
+            except ServerUnreachable as e:
+                #ctx.info(f'Could not connect to the controller, trial {itry+1} of {timeout}')
+                if itry >= timeout-1:
+                    raise e
+                else:
+                    from time import sleep
+                    sleep(1)
+
+            except Exception as e:
+                ctx.critical('Could not get the controller\'s status')
+                ctx.critical(e)
+                ctx.critical('Exiting.')
+                ctx.terminate()
                 raise e
-            else:
-                from time import sleep
-                sleep(0.5)
 
-        except Exception as e:
-            ctx.critical('Could not get the controller\'s status')
-            ctx.critical(e)
-            ctx.critical('Exiting.')
-            ctx.terminate()
-            raise e
-
-        else:
-            ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-            if desc.HasField('broadcast'):
-                ctx.start_listening_controller(desc.broadcast)
-            break
+    ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    if desc.HasField('broadcast'):
+        ctx.start_listening_controller(desc.broadcast)
 
     ctx.print('Connected to the controller')
 
