@@ -105,6 +105,12 @@ def run_coroutine(f):
 
     return wrapper
 
+def expand_path(path, turn_to_abs_path):
+    from os.path import abspath, expanduser, expandvars
+    if turn_to_abs_path:
+        return abspath(expanduser(expandvars(path)))
+    return expanduser(expandvars(path))
+
 
 def validate_command_facility(ctx, param, value):
     from click import BadParameter

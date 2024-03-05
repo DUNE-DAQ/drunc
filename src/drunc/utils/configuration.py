@@ -41,10 +41,11 @@ class ConfTypeNotSupported(DruncSetupException):
         super().__init__(message)
 
 class OKSKey:
-    def __init__(self, schema_file:str, class_name:str, uid:str):
+    def __init__(self, schema_file:str, class_name:str, obj_uid:str, session:str):
         self.schema_file = schema_file
         self.class_name = class_name
-        self.uid = uid
+        self.obj_uid = obj_uid
+        self.session = session
 
 class ConfHandler:
     def __init__(self, data=None, type=ConfTypes.PyObject, oks_key:OKSKey=None, *args, **kwargs):
@@ -69,11 +70,13 @@ class ConfHandler:
 
         try:
             import oksdbinterfaces
-            dal = oksdbinterfaces.dal.module('x', self.oks_key.schema_file)
-            db = oksdbinterfaces.Configuration("oksconfig:" + oks_path)
-            return db.get_dal(
+            self.dal = oksdbinterfaces.dal.module('x', self.oks_key.schema_file)
+            self.oks_path = f"oksconfig:{oks_path}"
+            self.log.info(f'Using {self.oks_path} to configure')
+            self.db = oksdbinterfaces.Configuration(self.oks_path)
+            return self.db.get_dal(
                 class_name=self.oks_key.class_name,
-                uid=self.oks_key.uid
+                uid=self.oks_key.obj_uid
             )
 
         except ImportError as e:
@@ -96,34 +99,48 @@ class ConfHandler:
 
     def validate_and_parse_configuration_location(self, *args, **kwargs):
         from os.path import exists
+        from drunc.utils.utils import expand_path
 
         match self.initial_type:
+
+
             case ConfTypes.PyObject:
+
                 self.data = self.initial_data
                 self.type = self.initial_type
                 self._post_process_oks(*args, **kwargs)
 
-            case ConfTypes.JsonFileName:
-                if not exists(self.initial_data):
-                    raise DruncSetupException(f'Location {self.initial_data} is empty!')
 
-                with open(self.initial_data) as f:
+            case ConfTypes.JsonFileName:
+
+                resolved = expand_path(self.initial_data, True)
+                if not exists(expand_path(self.initial_data)):
+                    raise DruncSetupException(f'Location {resolved} ({self.initial_data}) is empty!')
+
+                with open(resolved) as f:
                     import json
                     data = json.loads(f.read())
                     self.data = self._parse_dict(data)
                     self.type = ConfTypes.PyObject
+                    self._post_process_oks(*args, **kwargs)
+
 
             case ConfTypes.OKSFileName:
-                if not exists(self.initial_data):
-                    raise DruncSetupException(f'Location {self.initial_data} is empty!')
 
-                self.data = self._parse_oks_file(self.initial_data)
+                resolved = expand_path(self.initial_data, True)
+                if not exists(resolved):
+                    raise DruncSetupException(f'Location {resolved} ({self.initial_data}) is empty!')
+
+                self.data = self._parse_oks_file(resolved)
                 self.type = ConfTypes.PyObject
                 self._post_process_oks(*args, **kwargs)
 
+
             case ConfTypes.ProtobufAny:
+
                 self.data = self._parse_pbany(self.initial_data)
                 self.type = ConfTypes.PyObject
+
 
             case _:
                 raise ConfTypeNotSupported(self.initial_type, self.class_name)
