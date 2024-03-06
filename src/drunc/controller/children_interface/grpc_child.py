@@ -1,24 +1,40 @@
-from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
 from drunc.controller.utils import send_command
-from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+from drunc.utils.configuration import ConfHandler
 import grpc as grpc
+from drunc.exceptions import DruncSetupException
+
+class BadArgumentInConf(DruncSetupException):
+    pass
+
+class gRCPChildConfHandler(ConfHandler):
+
+    def get_uri(self):
+        from drunc.utils.utils import validate_command_facility
+        from click import BadParameter
+        try:
+            return validate_command_facility(None, None, self.data.controller.commandline_parameters[1])
+        except BadParameter as e:
+            raise BadArgumentInConf(f'Error in the configuration, the 2nd CLA seems to be incorrect: {e.message}. CLA:\'{self.data.controller.commandline_parameters[1]}\'')
+
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, child_conf, conf_type, **kwargs):
-        super(gRPCChildNode, self).__init__(
+    def __init__(self, name, configuration:gRCPChildConfHandler, init_token):
+        super().__init__(
             name = name,
-            **kwargs
+            node_type = ChildNodeType.gRPC
         )
+
         from logging import getLogger
-        self.log = getLogger(f'{name}-grpc-child')
+        self.log = getLogger(f'{self.name}-grpc-child')
+        self.configuration = configuration
+        try:
+            self.uri =  self.configuration.get_uri()
+        except BadArgumentInConf as e:
+            message = f'\'{self.name}\' {str(e)}'
+            raise BadArgumentInConf(message)
 
-        from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
 
-        if conf_type == ConfTypes.Json:
-            self.uri = child_conf['uri']
-
-        else:
-            raise ConfTypeNotSupported(conf_type, 'gRPCChildNode')
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
@@ -35,7 +51,7 @@ class gRPCChildNode(ChildNode):
             try:
                 response = send_command(
                     controller = self.controller,
-                    token = self.token,
+                    token = init_token,
                     command = 'describe',
                     rethrow = True
                 )
@@ -44,7 +60,7 @@ class gRPCChildNode(ChildNode):
                 if itry+1 == ntries:
                     raise e
                 else:
-                    self.log.error(f'Could not connect to the controller ({self.uri}), trial {itry+1} of {ntries}')
+                    self.log.info(f'Could not connect to the controller ({self.uri}), trial {itry+1} of {ntries}')
                     from time import sleep
                     sleep(5)
 
@@ -55,11 +71,20 @@ class gRPCChildNode(ChildNode):
                 break
         self.start_listening(desc.broadcast)
 
+    def __str__(self):
+        return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
+
+
+
     def start_listening(self, bdesc):
-        from drunc.utils.conf_types import ConfTypes
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.utils.configuration import ConfTypes
         self.broadcast = BroadcastHandler(
-            bdesc,
-            ConfTypes.Protobuf
+            BroadcastClientConfHandler(
+                data = bdesc,
+                type = ConfTypes.ProtobufAny,
+            )
         )
 
     def get_status(self, token):
