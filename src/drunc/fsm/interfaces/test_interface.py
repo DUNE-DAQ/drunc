@@ -1,4 +1,4 @@
-from drunc.fsm.fsm_core import FSMInterface
+from drunc.fsm.core import FSMInterface
 from enum import Enum
 
 class an_enum(Enum):

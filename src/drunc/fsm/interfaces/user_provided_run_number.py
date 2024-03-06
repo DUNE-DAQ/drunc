@@ -1,4 +1,4 @@
-from drunc.fsm.fsm_core import FSMInterface
+from drunc.fsm.core import FSMInterface
 
 class UserProvidedRunNumber(FSMInterface):
     def __init__(self, configuration):

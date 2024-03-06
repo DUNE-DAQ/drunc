@@ -475,7 +475,7 @@ class RESTAPIChildNode(ChildNode):
             proxy_port = proxy_port,
         )
 
-        from drunc.fsm.fsm_core import FSM
+        from drunc.fsm.core import FSM
         from drunc.fsm.configuration import FSMConfHandler
         fsmch = FSMConfHandler(fsm_configuration)
 

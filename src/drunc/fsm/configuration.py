@@ -1,5 +1,5 @@
 from drunc.utils.configuration import ConfHandler
-from drunc.fsm.fsm_core import PreOrPostTransitionSequence
+from drunc.fsm.core import PreOrPostTransitionSequence
 
 class FSMConfHandler(ConfHandler):
     def _fill_pre_post_transition_sequence_oks(self, prefix, transition, data):
