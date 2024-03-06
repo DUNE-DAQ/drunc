@@ -2,8 +2,7 @@ from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.fsm_errors as fsme
-from drunc.utils.conf_types import ConfTypeNotSupported, ConfTypes
-
+from drunc.fsm.transition import Transition
 
 class FSMInterface:
     '''Abstract class defining a generic interface'''
@@ -11,27 +10,6 @@ class FSMInterface:
         self.name = name
 
 
-from druncschema.controller_pb2 import Argument
-
-class Transition:
-    def __init__(self, name, source, destination, arguments:[Argument]=[], help:str=''):
-        self.source = source
-        self.destination = destination
-        self.name = name
-        self.arguments = arguments
-        self.help = help
-
-    def __eq__(self, another):
-        same_name = hasattr(another, 'name') and self.name == another.name
-        same_destination = hasattr(another, 'destination') and self.destination == another.destination
-        same_source = hasattr(another, 'source') and self.source == another.source
-        return same_name and same_destination and same_source
-
-    def __hash__(self):
-        return hash(self.__str__())
-
-    def __str__(self):
-        return f'\"{self.name}\": \"{self.source}\" → \"{self.destination}\"'
 
 class Callback:
     def __init__(self, method, mandatory=True):
@@ -44,7 +22,7 @@ class PreOrPostTransitionSequence:
         self.transition = transition
         if pre_or_post not in ['pre', 'post']:
             from drunc.exceptions import DruncSetupException
-            raise DruncSetupException(f"pre_or_post should be either 'pre' of 'post', provided {pre_or_post}")
+            raise DruncSetupException(f"pre_or_post should be either 'pre' of 'post', you provided '{pre_or_post}'")
 
         self.prefix = pre_or_post
 
@@ -65,6 +43,9 @@ class PreOrPostTransitionSequence:
                 mandatory = mandatory,
             )
         ]
+
+    def __str__(self):
+        return ', '.join([f'{cb.method.__name__} (mandatory={cb.mandatory})'for cb in self.sequence])
 
 
     def execute(self, transition_data, transition_args):
@@ -100,6 +81,8 @@ class PreOrPostTransitionSequence:
         '''
         retr = []
         all_the_parameter_names = []
+
+        from druncschema.controller_pb2 import Argument
 
         for callback in self.sequence:
             method = callback.method
@@ -161,146 +144,32 @@ class PreOrPostTransitionSequence:
         return retr
 
 
-import abc
-class FSMConfigParser(abc.ABC):
-    # these 2 need to be filled at init
-    pre_transitions = {}
-    post_transitions = {}
-
-    @abc.abstractmethod
-    def get_initial_state(self):
-        pass
-
-    @abc.abstractmethod
-    def get_states(self):
-        pass
-
-    @abc.abstractmethod
-    def get_transitions(self):
-        pass
-
-
-    def get_pre_transition_sequence(self, transition:Transition):
-        return self.pre_transitions.get(transition, PreOrPostTransitionSequence(transition, 'pre'))
-
-    def get_post_transition_sequence(self, transition:Transition):
-        return self.post_transitions.get(transition, PreOrPostTransitionSequence(transition, 'post'))
-
-    def get_pre_transitions_sequences(self):
-        return self.pre_transitions
-
-    def get_post_transitions_sequences(self):
-        return self.post_transitions
-
-class JsonFSMConfigParser(FSMConfigParser):
-
-    def __init__(self, config_data, **kwargs):
-
-        super(JsonFSMConfigParser, self).__init__(**kwargs)
-
-        '''
-        Takes a config.json describing the FSM, and stores it as a class object
-        '''
-        self.config_data = config_data
-
-        self.states           = self.config_data['states']
-        self.transitions      = self._parse_transitions(self.config_data['transitions'])
-        self.initial_state    = self.config_data['initial_state']
-
-        self.interfaces = {}
-        for name, data in config_data.get('interfaces', {}).items():
-            self.interfaces[name] = FSMInterfaceFactory.get().get_interface(name, data)
-
-        self.pre_transitions_data  = self.config_data.get('pre_transitions', {})
-        self.post_transitions_data = self.config_data.get('post_transitions', {})
-
-        self.pre_transitions  = {}
-        self.post_transitions = {}
-
-        for prefix in ['pre', 'post']:
-            for i, transition in enumerate(self.transitions):
-                seq = PreOrPostTransitionSequence(
-                    transition,
-                    prefix,
-                )
-
-                if not self.config_data.get(f'{prefix}_transitions'):
-                    if prefix == 'pre':
-                        self.pre_transitions[transition] = seq
-                    else:
-                        self.post_transitions[transition] = seq
-                    continue
-
-                blurp = self.config_data[f'{prefix}_transitions'].get(
-                    transition.name,
-                    {
-                        'order':[],
-                        'mandatory': []
-                    }
-                )
-                for interface in blurp['order']:
-                    seq.add_callback(
-                        interface = self.interfaces[interface],
-                        mandatory = interface in blurp.get("mandatory", []),
-                    )
-                self.transitions[i].arguments += seq.get_arguments()
-
-                if prefix == 'pre':
-                    self.pre_transitions[transition] = seq
-                else:
-                    self.post_transitions[transition] = seq
-
-        # for transition in self.transitions:
-        #     print(transition.name, transition.arguments, self.pre_transitions[transition], self.post_transitions[transition])
-
-    def _parse_transitions(self, transitions):
-        trs = [
-            Transition(
-                name = t['trigger'],
-                source = t['source'],
-                destination = t['dest'],
-                arguments = [] # for now, no arguments
-            )
-            for t in transitions
-        ]
-        return trs
-
-
-    def get_initial_state(self):
-        return self.initial_state
-
-    def get_states(self):
-        return self.states
-
-    def get_transitions(self):
-        return self.transitions
-
 
 class FSM:
-    def __init__(self, conf, conf_type:ConfTypes):
-        match conf_type:
-            case ConfTypes.Json:
-                self.config = JsonFSMConfigParser(conf)
-            case _:
-                raise ConfTypeNotSupported(conf_type, 'FSM')
+    def __init__(self, conf):
+
+        self.configuration = conf
 
         from logging import getLogger
         self._log = getLogger('FSM')
 
-        self.initial_state = self.config.get_initial_state()
-        self.states = self.config.get_states()
+        self.initial_state = self.configuration.get_initial_state()
+        self.states = self.configuration.get_states()
 
-        self.transitions = self.config.get_transitions()
-        self._log.info('Allowed transitions are:')
-        for t in self.transitions:
-            self._log.info(str(t))
+        self.transitions = self.configuration.get_transitions()
 
         self._enusure_unique_transition(self.transitions)
 
-        self._log.info(f'Initial state is "{self.initial_state}"')
 
-        self.pre_transition_sequences = self.config.get_pre_transitions_sequences()
-        self.post_transition_sequences = self.config.get_post_transitions_sequences()
+        self.pre_transition_sequences = self.configuration.get_pre_transitions_sequences()
+        self.post_transition_sequences = self.configuration.get_post_transitions_sequences()
+
+        self._log.info(f'Initial state is "{self.initial_state}"')
+        self._log.info('Allowed transitions are:')
+        for t in self.transitions:
+            self._log.info(str(t))
+            self._log.info(f'Pre transition: {self.pre_transition_sequences[t]}')
+            self._log.info(f'Post transition: {self.post_transition_sequences[t]}')
 
     def _enusure_unique_transition(self, transitions):
         a_set = set()
