@@ -34,11 +34,13 @@ class ControllerContext(ShellContext): # boilerplatefest
 
     def start_listening_controller(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.utils.conf_types import ConfTypes
+        from drunc.utils.configuration_utils import ConfData, ConfTypes
 
         self.status_receiver = BroadcastHandler(
-            broadcast_configuration = broadcaster_conf,
-            conf_type = ConfTypes.Protobuf
+            broadcast_configuration = ConfData(
+                data = broadcaster_conf,
+                type = ConfTypes.ProtobufAny
+            )
         )
 
     def terminate(self):
