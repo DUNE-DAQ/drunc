@@ -104,3 +104,10 @@ def run_coroutine(f):
         return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
 
     return wrapper
+
+def expand_path(path, turn_to_abs_path=False):
+    from os.path import abspath, expanduser, expandvars
+    if turn_to_abs_path:
+        return abspath(expanduser(expandvars(path)))
+    return expanduser(expandvars(path))
+
