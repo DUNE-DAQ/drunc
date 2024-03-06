@@ -39,7 +39,7 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
 
     def start_listening(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.utils.conf_types import ConfTypes
+        from drunc.utils.configuration import ConfTypes
 
         self.status_receiver = BroadcastHandler(
             broadcast_configuration = broadcaster_conf,
