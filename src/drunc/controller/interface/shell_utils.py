@@ -41,7 +41,7 @@ def controller_setup(ctx, controller_address):
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
-    ntries = 10
+    ntries = 30
 
     from drunc.utils.grpc_utils import ServerUnreachable
     for itry in range(ntries):
