@@ -1,11 +1,3 @@
-from enum import Enum
-
-class ConfTypes(Enum):
-    DAQCONF = 1
-    DRUNC = 2
-    OKS = 3
-
-
 
 def generate_process_query(f, at_least_one:bool, all_processes_by_default:bool=False):
     import click
