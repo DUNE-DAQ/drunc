@@ -55,13 +55,13 @@ class FSMInterfaceFactory:
         iface = None
         match interface_name:
             case "user-provided-run-number":
-                from drunc.fsm.interfaces.UserProvidedRunNumber import UserProvidedRunNumber
+                from drunc.fsm.interfaces.user_provided_run_number import UserProvidedRunNumber
                 iface = UserProvidedRunNumber(configuration)
             case 'test-interface':
-                from drunc.fsm.interfaces.TestInterface import TestInterface
+                from drunc.fsm.interfaces.test_interface import TestInterface
                 iface = TestInterface(configuration)
             case "file-logbook":
-                from drunc.fsm.interfaces.FileLogbook import FileLogbook
+                from drunc.fsm.interfaces.file_logbook import FileLogbook
                 iface = FileLogbook(configuration)
             case _:
                 raise fsm_errors.UnknownInterface(interface_name)

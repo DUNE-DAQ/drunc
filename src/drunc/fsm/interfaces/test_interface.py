@@ -7,7 +7,7 @@ class an_enum(Enum):
 
 class TestInterface(FSMInterface):
     def __init__(self, configuration):
-        super(TestInterface, self).__init__(
+        super().__init__(
             name = "test-interface"
         )
 

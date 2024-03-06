@@ -2,7 +2,7 @@ from drunc.fsm.fsm_core import FSMInterface
 
 class FileLogbook(FSMInterface):
     def __init__(self, configuration):
-        super(FileLogbook, self).__init__(
+        super().__init__(
             name = "file-logbook"
         )
         self.file = configuration['file_name']
