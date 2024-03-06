@@ -11,8 +11,7 @@ class FSMInterfaceFactory:
         retr = {}
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
-                if name[:4] == 'pre_':
-                    # print(f'ADDING {name=}')
+                if name.startswith('pre_'):
                     retr[name] = method
         return retr
 
@@ -20,8 +19,7 @@ class FSMInterfaceFactory:
         retr = {}
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
-                if name[:5] == 'post_':
-                    # print(f'ADDING {name=}')
+                if name.startswith('post_'):
                     retr[name] = method
         return retr
 
