@@ -1,59 +1,72 @@
-from drunc.exceptions import DruncSetupException
+from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
 
-class ControllerConfiguration:
-    def __init__(self, configuration_loc:str):
-        from logging import getLogger
-        self.log = getLogger("controller-configuration")
+class ControllerConfData: # the bastardised OKS
+    def __init__(self):
 
-        from urllib.parse import urlparse
-        self.cfg_loc = urlparse(configuration_loc)
+        class id_able:
+            id = None
 
-        self.cfg_type = self.validate_configuration_location(self.cfg_loc)
+        class cler:
+            pass
 
-        self.data = self.parse_configuration(self.cfg_loc)
+        self.controller = cler()
+        self.controller.broadcaster = id_able()
+        self.controller.fsm = id_able()
 
-        self.log.info('Configured')
+
+class ControllerConfHandler(ConfHandler):
+
+    def _post_process_oks(self):
+        self.authoriser = None
+        self.children = []
 
 
-    def validate_configuration_location(self, cfg_loc) -> dict:
+    def get_children(self, init_token, without_excluded=False):
 
-        if cfg_loc.scheme == 'file':
-            from os.path import exists
-            if not exists(cfg_loc.netloc+cfg_loc.path):
-                raise DruncSetupException(f'Location {cfg_loc.netloc+cfg_loc.path} is empty!')
+        if self.children != []:
+            return self.get_children
 
-        elif cfg_loc.scheme == 'oks':
-            raise DruncSetupException(f'Configuration scheme invalid {cfg_loc.scheme}')
-
-        else:
-            raise DruncSetupException(f'Configuration scheme invalid {cfg_loc.scheme}')
-
-        return cfg_loc.scheme
-
-    def parse_configuration(self, cfg_loc) -> None:
-
-        if cfg_loc.scheme == 'file':
-            conf_data = {}
+        if without_excluded:
             try:
-                with open(cfg_loc.netloc+cfg_loc.path) as f:
-                    import json
-                    conf_data = json.loads(f.read())
-                    return conf_data
-            except Exception as e:
-                raise DruncSetupException(f'Couldn\'t parse configuration file {cfg_loc.netloc+cfg_loc.path}, cause {str(e)}') from e
+                import coredal
+                session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
 
-        elif cfg_loc.scheme == 'oks':
-            raise DruncSetupException(f'Configuration scheme invalid {cfg_loc.scheme}')
-
-        else:
-            raise DruncSetupException(f'Configuration scheme invalid {cfg_loc.scheme}')
+            except ImportError as e:
+                self.log.error('OKS was not set up, so configuration does not know about include/exclude. All the children nodes will be returned')
+                without_excluded=True
 
 
-    def get(self, obj, default=None):
+        self.log.debug(f'looping over children\n{self.data.segments}')
 
-        if self.cfg_type == 'file':
-            return self.data.get(obj, default)
+        for segment in self.data.segments:
+            self.log.debug(segment)
 
-        elif self.cfg_type == 'oks':
-            raise DruncSetupException(f'Configuration type invalid {self.cfg_type}')
+            if without_excluded:
+                if coredal.component_disabled(self.db._obj, session.id, segment.id):
+                    continue
 
+            new_node = ChildNode.get_child(
+                cli = segment.controller.commandline_parameters,
+                init_token = init_token,
+                name = segment.id,
+                configuration = segment,
+            )
+            self.children.append(new_node)
+
+        for app in self.data.applications:
+            self.log.debug(app)
+
+            if without_excluded:
+                if coredal.component_disabled(self.db._obj, session.id, app.id):
+                    continue
+
+            new_node = ChildNode.get_child(
+                cli = app.commandline_parameters,
+                name = app.id,
+                configuration = app,
+                fsm_configuration = self.data.controller.fsm
+            )
+            self.children.append(new_node)
+
+        return self.children
