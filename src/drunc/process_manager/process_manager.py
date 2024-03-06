@@ -146,6 +146,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def describe_broadcast(self, *args, **kwargs):
         return self.broadcast_service.describe_broadcast(*args, **kwargs)
 
+    def interrupt_with_exception(self, *args, **kwargs):
+        return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
+
+    def async_interrupt_with_exception(self, *args, **kwargs):
+        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
+
 
     @abc.abstractmethod
     def _boot_impl(self, br:BootRequest) -> ProcessUUID:
