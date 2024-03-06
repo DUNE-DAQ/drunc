@@ -111,3 +111,24 @@ def expand_path(path, turn_to_abs_path=False):
         return abspath(expanduser(expandvars(path)))
     return expanduser(expandvars(path))
 
+
+def validate_command_facility(ctx, param, value):
+    from click import BadParameter
+    from urllib.parse import urlparse
+    parsed = ''
+
+    try:
+        parsed = urlparse(value)
+    except Exception as e:
+        raise BadParameter(message=str(e), ctx=ctx, param=param)
+
+
+    if parsed.path or parsed.params or parsed.query or parsed.fragment:
+        raise BadParameter(message=f'Command factory for drunc-controller is not understood', ctx=ctx, param=param)
+
+    match parsed.scheme:
+        case 'grpc':
+            return parsed.netloc
+        case _:
+            raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
+
