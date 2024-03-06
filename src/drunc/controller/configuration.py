@@ -1,5 +1,5 @@
-from drunc.utils.configuration import ConfHandler, ConfTypes
-from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
+from drunc.utils.configuration import ConfHandler
+from drunc.controller.children_interface.child_node import ChildNode
 
 class ControllerConfData: # the bastardised OKS
     def __init__(self):
