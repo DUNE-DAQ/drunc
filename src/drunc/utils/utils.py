@@ -105,7 +105,7 @@ def run_coroutine(f):
 
     return wrapper
 
-def expand_path(path, turn_to_abs_path):
+def expand_path(path, turn_to_abs_path=False):
     from os.path import abspath, expanduser, expandvars
     if turn_to_abs_path:
         return abspath(expanduser(expandvars(path)))
