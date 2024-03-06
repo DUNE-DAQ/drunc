@@ -30,7 +30,9 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     if desc.HasField('broadcast'):
-        ctx.obj.start_listening_pm(desc.broadcast)
+        ctx.obj.start_listening_pm(
+            broadcaster_conf = desc.broadcast,
+        )
 
     def cleanup():
         ctx.obj.terminate()
