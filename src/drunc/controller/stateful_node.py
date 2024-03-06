@@ -1,8 +1,9 @@
 import abc
-from drunc.fsm.fsm_core import FSM
+from drunc.fsm.core import FSM
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
-import drunc.fsm.fsm_errors as fsme
-from drunc.utils.conf_types import ConfTypeNotSupported, ConfTypes
+import drunc.fsm.exceptions as fsme
+from typing import Optional
+from druncschema.broadcast_pb2 import BroadcastType
 
 class Observed:
     @property
@@ -11,13 +12,23 @@ class Observed:
 
     @value.setter
     def value(self, value):
+        if self._broadcast_on_change is None or self._broadcast_key is None:
+            self._value = value
+            return
+
         self._broadcast_on_change.broadcast(
             message = f'Changing {self._name} from {self._value} to {value}',
             btype = self._broadcast_key,
         )
         self._value = value
 
-    def __init__(self, name, broadcast_on_change:BroadcastSender, broadcast_key, initial_value=None):
+    def __init__(
+            self,
+            name:str,
+            broadcast_on_change:Optional[BroadcastSender]=None,
+            broadcast_key=None, # Optional[BroadcastType]=None
+            initial_value:Optional[str]=None
+        ):
         self._name = name
         self._broadcast_on_change = broadcast_on_change
         self._value = initial_value
@@ -72,36 +83,36 @@ class TransitionExecuting(StatefulNodeException):
     def __init__(self):
         super().__init__('A transition is already executing')
 
-class StatefulNode(abc.ABC, BroadcastSender):
-    def __init__(self, statefulnode_configuration, **kwargs):
-        super(StatefulNode, self).__init__(
-            **kwargs
-        )
 
-        # blurp if using other configuration...
-        self.__fsm = FSM(
-            conf = statefulnode_configuration.get('fsm'),
-            conf_type=ConfTypes.Json
-        )
 
-        from druncschema.broadcast_pb2 import BroadcastType
+
+class StatefulNode(abc.ABC):
+    def __init__(self, fsm_configuration, broadcaster:Optional[BroadcastSender]=None):
+
+        self.broadcast = broadcaster
+
+        self.__fsm = FSM(fsm_configuration)
+
+        from logging import getLogger
+        self.logger = getLogger('StatefulNode')
+
         self.__operational_state = OperationalState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
             initial_value = self.__fsm.initial_state
         )
         self.__operational_sub_state = OperationalState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
             initial_value = self.__fsm.initial_state
         )
         self.__included = InclusionState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.STATUS_UPDATE,
             initial_value = True
         )
         self.__in_error = ErrorState(
-            broadcast_on_change = self,
+            broadcast_on_change = self.broadcast,
             broadcast_key = BroadcastType.STATUS_UPDATE,
             initial_value = False
         )
