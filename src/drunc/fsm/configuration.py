@@ -1,4 +1,4 @@
-from drunc.utils.configuration import ConfHandler, ConfTypes, OKSKey
+from drunc.utils.configuration import ConfHandler
 from drunc.fsm.fsm_core import PreOrPostTransitionSequence
 
 class FSMConfHandler(ConfHandler):

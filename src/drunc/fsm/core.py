@@ -1,7 +1,7 @@
 from drunc.fsm.interface_factory import FSMInterfaceFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
-import drunc.fsm.fsm_errors as fsme
+import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
 
 class FSMInterface:
