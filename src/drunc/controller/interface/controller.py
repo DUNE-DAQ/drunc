@@ -8,7 +8,7 @@ from drunc.utils.utils import log_levels,  update_log_level, validate_command_fa
 @click.argument('name', type=str)
 @click.argument('session', type=str)
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, command_facility:int, name:str, session:str, log_level:str):
+def controller_cli(configuration:str, command_facility:str, name:str, session:str, log_level:str):
 
     from rich.console import Console
     console = Console()
