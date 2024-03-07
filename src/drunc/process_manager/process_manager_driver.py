@@ -123,9 +123,18 @@ class ProcessManagerDriver(GRPCDriver):
         apps = process_segment(db, session_dal, session_dal.segment)
 
         # WHEEYYYY
-        from urllib.parse import urlparse
-        self.controller_address = urlparse(session_dal.segment.controller.commandline_parameters[1]).netloc
+        def get_controller_address(CLAs):
+            from urllib.parse import urlparse
+            for CLA in CLAs:
+                try:
+                    address_maybe = urlparse(CLA)
+                except:
+                    pass
+                else:
+                    if address_maybe.scheme == 'grpc':
+                        return address_maybe.netloc
 
+        self.controller_address = get_controller_address(session_dal.segment.controller.commandline_parameters)
         self._log.debug(f"{apps=}")
         import os
         pwd = os.getcwd()
