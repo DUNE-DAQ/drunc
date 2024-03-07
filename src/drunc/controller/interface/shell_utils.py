@@ -41,32 +41,49 @@ def controller_setup(ctx, controller_address):
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
-    ntries = 30
+    timeout = 60
 
     from drunc.utils.grpc_utils import ServerUnreachable
-    for itry in range(ntries):
-        try:
-            desc = ctx.get_driver('controller').describe(rethrow=True)
-        except ServerUnreachable as e:
-            ctx.error(f'Could not connect to the controller, trial {itry+1} of {ntries}')
-            if itry >= ntries-1:
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TimeRemainingColumn(),
+        TimeElapsedColumn(),
+        console=ctx._console,
+    ) as progress:
+
+        waiting = progress.add_task("[yellow]timeout", total=timeout)
+
+        stored_exception = None
+        import time
+        start_time = time.time()
+        while time.time()-start_time < timeout:
+            progress.update(waiting, completed=time.time()-start_time)
+
+            try:
+                desc = ctx.get_driver('controller').describe(rethrow=True)
+                stored_exception = None
+                break
+            except ServerUnreachable as e:
+                stored_exception = e
+                time.sleep(1)
+
+            except Exception as e:
+                ctx.critical('Could not get the controller\'s status')
+                ctx.critical(e)
+                ctx.critical('Exiting.')
+                ctx.terminate()
                 raise e
-            else:
-                from time import sleep
-                sleep(0.5)
 
-        except Exception as e:
-            ctx.critical('Could not get the controller\'s status')
-            ctx.critical(e)
-            ctx.critical('Exiting.')
-            ctx.terminate()
-            raise e
+    if stored_exception is not None:
+        raise stored_exception
 
-        else:
-            ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-            if desc.HasField('broadcast'):
-                ctx.start_listening_controller(desc.broadcast)
-            break
+    ctx.info(f'{controller_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
+    if desc.HasField('broadcast'):
+        ctx.start_listening_controller(desc.broadcast)
 
     ctx.print('Connected to the controller')
 
