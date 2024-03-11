@@ -29,7 +29,7 @@ def parse_conf_url(url:str) ->tuple[ConfTypes,str]:
     t = CLI_to_ConfTypes(u.scheme)
 
     if u.path: #ugly ugly ugly
-        return f'{u.netloc}/{u.path}', t
+        return f'{u.netloc}{u.path}', t
     else:
         return f'{u.netloc}', t
 
