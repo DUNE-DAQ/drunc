@@ -46,6 +46,8 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
             type = ConfTypes.ProtobufAny,
         )
 
+        self._log.debug(f'Broadcaster configuration:\n{broadcaster_conf}')
+
         self.status_receiver = BroadcastHandler(bcch)
 
         from rich import print as rprint

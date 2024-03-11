@@ -1,5 +1,16 @@
 
 
+def validate_conf_string(ctx, param, boot_configuration):
+    from drunc.utils.configuration import ConfTypes
+    import os
+    if ctx.params['conf_type'] == ConfTypes.OKSFileName:
+        return boot_configuration
+
+    if not os.path.exists(boot_configuration):
+        from click.exceptions import BadParameter
+        raise BadParameter(f'\'{boot_configuration}\' does not exist')
+
+
 def add_query_options(at_least_one:bool, all_processes_by_default:bool=False):
     def wrapper(f0):
         import click

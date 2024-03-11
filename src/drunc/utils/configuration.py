@@ -33,6 +33,42 @@ def parse_conf_url(url:str) ->tuple[ConfTypes,str]:
     else:
         return f'{u.netloc}', t
 
+
+
+
+
+class ConfigurationNotFound(DruncSetupException):
+    def __init__(self, requested_path):
+        super().__init__(f'The configuration \'{requested_path}\' is not in $DUNEDAQ_SHARE_PATH, perhaps you forgot to \'dbt-workarea-env && dbt-build\'?')
+
+def find_configuration(path:str) -> str:
+    import logging
+    log = logging.getLogger('find_configuration')
+    import os
+    from drunc.utils.utils import expand_path
+    expanded_path = expand_path(path, turn_to_abs_path=False)
+    if os.path.exists(expanded_path):
+        return expanded_path
+
+    configuration_files = []
+    print(path)
+    for dir in os.getenv('DUNEDAQ_SHARE_PATH').split(":"):
+        tentative = os.path.join(dir, path)
+
+        if os.path.exists(tentative):
+            configuration_files += [tentative]
+
+    if len(configuration_files)>1:
+        l = "\n - ".join(configuration_files)
+        log.warning(f'The configuration \'{path}\' matches >1 configurations in $DUNEDAQ_SHARED_PATH:\n - {l}\nUsing the first one')
+
+    if not configuration_files:
+        raise ConfigurationNotFound(path)
+
+    return configuration_files[0]
+
+
+
 class ConfTypeNotSupported(DruncSetupException):
     def __init__(self, conf_type:ConfTypes, class_name:str):
         if not isinstance(class_name, str):
@@ -127,7 +163,7 @@ class ConfHandler:
 
             case ConfTypes.OKSFileName:
 
-                resolved = expand_path(self.initial_data, True)
+                resolved = find_configuration(self.initial_data)
                 if not exists(resolved):
                     raise DruncSetupException(f'Location {resolved} ({self.initial_data}) is empty!')
 
@@ -140,7 +176,11 @@ class ConfHandler:
 
                 self.data = self._parse_pbany(self.initial_data)
                 self.type = ConfTypes.PyObject
+                self._post_process_oks(*args, **kwargs)
 
 
             case _:
                 raise ConfTypeNotSupported(self.initial_type, self.class_name)
+
+
+

@@ -112,8 +112,8 @@ class ProcessManagerDriver(GRPCDriver):
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
         from drunc.process_manager.oks_parser import process_segment
         import oksdbinterfaces
-        from drunc.utils.utils import expand_path
-        oks_conf = expand_path(oks_conf, turn_to_abs_path=True)
+        from drunc.utils.configuration import find_configuration
+        oks_conf = find_configuration(oks_conf)
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
