@@ -1,8 +1,9 @@
 
 from drunc.utils.configuration import ConfHandler
+from drunc.broadcast.types import BroadcastTypes
 
-class BroadcastClientConfData:
-    def __init__(self, type:str, address:str, topic:str):
+class BroadcastClientConfData: # OKSeroo
+    def __init__(self, type:BroadcastTypes, address:str, topic:str):
         self.type = type
         self.address = address
         self.topic = topic
@@ -11,8 +12,6 @@ class BroadcastClientConfData:
 class BroadcastClientConfHandler(ConfHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from drunc.broadcast.types import BroadcastTypes
-        self.impl_technology = BroadcastTypes.Unknown
 
 
     def get_impl_technology(self):
@@ -28,11 +27,9 @@ class BroadcastClientConfHandler(ConfHandler):
         from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
         from drunc.utils.grpc_utils import unpack_any, UnpackingError
         try:
-            from drunc.broadcast.types import BroadcastTypes
-            self.impl_technology = BroadcastTypes.Kafka
             data = unpack_any(data, KafkaBroadcastHandlerConfiguration)
             return BroadcastClientConfData(
-                type = 'kafka',
+                type = BroadcastTypes.Kafka,
                 address = data.kafka_address,
                 topic = data.topic
             )

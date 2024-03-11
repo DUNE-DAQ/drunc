@@ -4,11 +4,11 @@ from drunc.broadcast.client.broadcast_handler_implementation import BroadcastHan
 
 class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
 
-    def __init__(self, message_format):
+    def __init__(self, message_format, conf):
 
         from drunc.broadcast.utils import broadcast_types_loglevels
         self.broadcast_types_loglevels = broadcast_types_loglevels # in this case, we stick with default
-
+        self.conf = conf
         # import os
         # drunc_shell_conf = os.getenv('DRUNC_SHELL_CONF', None)
         # if drunc_shell_conf is not None:
@@ -19,7 +19,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         #         if 'broadcast_types_loglevels' in self.global_kafka_stdout_conf:
         #             self.broadcast_types_loglevels.update(self.global_kafka_stdout_conf['broadcast_types_loglevels'])
 
-        self.kafka_address = self.conf.data.kafka_address
+        self.kafka_address = self.conf.data.address
         self.topic = self.conf.data.topic
 
         # self.broadcast_types_loglevels.update(conf.data.get('broadcast_types_loglevels', {}))
