@@ -15,7 +15,7 @@ class gRCPChildConfHandler(ConfHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration:gRCPChildConfHandler, init_token):
+    def __init__(self, name, configuration:gRCPChildConfHandler, init_token, uri=None):
         super().__init__(
             name = name,
             node_type = ChildNodeType.gRPC
@@ -24,7 +24,16 @@ class gRPCChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{self.name}-grpc-child')
         self.configuration = configuration
-        self.uri =  self.configuration.get_uri()
+        if uri is None:
+            try:
+                self.uri =  self.configuration.get_uri()
+            except BadArgumentInConf as e:
+                message = f'\'{self.name}\' {str(e)}'
+                raise BadArgumentInConf(message)
+        else:
+            self.uri = uri
+
+
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc

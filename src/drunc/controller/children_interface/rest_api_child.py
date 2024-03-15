@@ -390,7 +390,7 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
 from drunc.fsm.configuration import FSMConfHandler
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler):
+    def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler, uri=None):
         super(RESTAPIChildNode, self).__init__(
             name = name,
             node_type = ChildNodeType.REST_API
@@ -403,7 +403,12 @@ class RESTAPIChildNode(ChildNode):
 
         import socket
         response_listener_host = socket.gethostname()
-        self.app_host, self.app_port = configuration.get_host_port()
+        if uri is None:
+            uri = configuration.get_uri()
+        from urllib.parse import urlparse
+        uri = urlparse(uri)
+        self.app_host, app_port = uri.netloc.split(":")
+        self.app_port = int(app_port)
 
         proxy_host, proxy_port = getattr(configuration.data, "proxy", [None, None])
         proxy_port = int(proxy_port) if proxy_port is not None else None

@@ -189,3 +189,62 @@ def parent_death_pact(signal=signal.SIGHUP):
     retcode = libc.prctl(PR_SET_PDEATHSIG, signal, 0, 0, 0)
     if retcode != 0:
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
+from drunc.exceptions import DruncException
+class IncorrectAddress(DruncException):
+    pass
+
+def https_or_http_present(address:str):
+    if not address.startswith('https://') and not address.startswith('http://'):
+        raise IncorrectAddress('Endpoint should start with http:// or https://')
+
+
+def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import post
+    if as_json:
+        r = post(address, json=data, **post_kwargs)
+    else:
+        r = post(address, json=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+
+
+def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import get
+    if as_json:
+        r = get(address, json=data, **post_kwargs)
+    else:
+        r = get(address, json=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+
+
+def http_update(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import get
+    if as_json:
+        r = get(address, json=data, **post_kwargs)
+    else:
+        r = get(address, json=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+
+
+def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import delete
+    if as_json:
+        r = delete(address, json=data, **post_kwargs)
+    else:
+        r = delete(address, json=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()

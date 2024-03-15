@@ -3,6 +3,7 @@ from enum import Enum
 from drunc.exceptions import DruncSetupException
 
 class ChildNodeType(Enum):
+    Unknown = 0
     gRPC = 1
     REST_API = 2
 
@@ -45,21 +46,30 @@ class ChildNode(abc.ABC):
     @staticmethod
     def _get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:
         for CLA in CLAs:
-            if "rest://" in CLA:
-                return ChildNodeType.REST_API
-            if "grpc://" in CLA:
-                return ChildNodeType.gRPC
+            if   CLA.startswith("rest://"): return ChildNodeType.REST_API
+            elif CLA.startswith("grpc://"): return ChildNodeType.gRPC
 
         from drunc.exceptions import DruncSetupException
         raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
 
+    @staticmethod
+    def _get_children_type_and_uri_from_registry(application_registry, name) -> tuple[ChildNodeType, str]:
+        uri = application_registry.lookup(name)
+        return ChildNode._get_children_type_from_cli([uri]), uri
 
 
     @staticmethod
-    def get_child(name:str, cli, configuration, init_token=None, **kwargs):
+    def get_child(name:str, cli, configuration, init_token=None, application_registry=None, **kwargs):
+
         from drunc.utils.configuration import ConfTypes
 
-        type = ChildNode._get_children_type_from_cli(cli)
+        type = ChildNodeType.Unknown
+        uri = None
+        if application_registry:
+            type, uri = ChildNode._get_children_type_from_registry(application_registry, name)
+
+        if type == ChildNodeType.Unknown:
+            type = ChildNode._get_children_type_from_cli(cli)
 
         match type:
             case ChildNodeType.gRPC:
@@ -69,6 +79,7 @@ class ChildNode(abc.ABC):
                     configuration = gRCPChildConfHandler(configuration, ConfTypes.PyObject),
                     init_token = init_token,
                     name = name,
+                    uri = uri,
                     **kwargs,
                 )
 
@@ -79,6 +90,7 @@ class ChildNode(abc.ABC):
                 return RESTAPIChildNode(
                     configuration =  RESTAPIChildNodeConfHandler(configuration, ConfTypes.PyObject),
                     name = name,
+                    uri = uri,
                     # init_token = init_token, # No authentication for RESTAPI
                     **kwargs,
                 )

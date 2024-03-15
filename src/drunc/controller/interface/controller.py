@@ -51,14 +51,13 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
 
         add_ControllerServicer_to_server(ctrlr, server)
 
-        import socket
-        server.add_insecure_port(listen_addr)
+        port = server.add_insecure_port(listen_addr)
 
         server.start()
 
         console.print(f'{ctrlr.name} was started on {listen_addr}')
 
-        return server
+        return server, port
 
     def controller_shutdown():
         console.print('Requested termination')
@@ -80,7 +79,10 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
-        server = serve(command_facility)
+        server, port = serve(command_facility)
+
+        ctrlr.advertise_control_address(port)
+
         server.wait_for_termination(timeout=None)
 
     except Exception as e:
