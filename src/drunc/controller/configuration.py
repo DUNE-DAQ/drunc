@@ -20,9 +20,14 @@ class ControllerConfHandler(ConfHandler):
     def _post_process_oks(self):
         self.authoriser = None
         self.children = []
+        self.application_registry_address = self.session_data.application_registry_address
+        self.this_host = self.data.controller.runs_on.runs_on.id
+        if self.this_host in ['localhost'] or self.this_host.startswith('127.'):
+            import socket
+            self.this_host = socket.gethostname()
 
 
-    def get_children(self, init_token, without_excluded=False):
+    def get_children(self, init_token, without_excluded=False, application_registry=None):
 
         if self.children != []:
             return self.get_children
@@ -51,6 +56,7 @@ class ControllerConfHandler(ConfHandler):
                 init_token = init_token,
                 name = segment.id,
                 configuration = segment,
+                application_registry = application_registry,
             )
             self.children.append(new_node)
 
@@ -65,7 +71,8 @@ class ControllerConfHandler(ConfHandler):
                 cli = app.commandline_parameters,
                 name = app.id,
                 configuration = app,
-                fsm_configuration = self.data.controller.fsm
+                fsm_configuration = self.data.controller.fsm,
+                application_registry = application_registry,
             )
             self.children.append(new_node)
 

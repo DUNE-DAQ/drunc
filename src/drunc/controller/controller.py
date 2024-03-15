@@ -118,7 +118,20 @@ class Controller(ControllerServicer):
 
         self.actor = ControllerActor(token)
 
-        self.children_nodes = self.configuration.get_children(self.actor.get_token())
+        self.application_registry = None
+
+        if self.configuration.application_registry_address:
+            from drunc.application_registry.client import ApplicationRegistryClient
+            self.application_registry = ApplicationRegistryClient(
+                session = self.session,
+                address = self.configuration.application_registry_address,
+            )
+
+        self.children_nodes = self.configuration.get_children(
+            init_token = self.actor.get_token(),
+            application_registry = self.application_registry
+        )
+
         for child in self.children_nodes:
             self.logger.info(child)
             child.propagate_command('take_control', None, self.actor.get_token())
@@ -234,8 +247,43 @@ class Controller(ControllerServicer):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
 
+    def advertise_control_address(self, port):
+        my_address = f'{self.configuration.this_host}:{port}'
+
+        if not self.application_registry:
+            from drunc.application_registry.client import ApplicationRegistryNotPresent
+            raise ApplicationRegistryNotPresent
+
+        self.application_registry.register(
+            name = self.name,
+            address = my_address
+        )
+        from threading import Thread
+        self.running = True
+
+        def update_application_registry(ctrler, application_registry, interval):
+            import time
+            while ctrler.running:
+                print(ctrler.logger.info('updating the endpoint'))
+                application_registry.update(ctrler.name, None)
+                time.sleep(interval)
+
+        self.application_registry_thread = Thread(
+            target = update_application_registry,
+            args = (self, self.application_registry, 1),
+            name = 'application_registry_updating_thread'
+        )
+
+        # lets roll
+        self.application_registry_thread.start()
+
 
     def terminate(self):
+        self.running = False
+
+        if self.application_registry:
+            self.application_registry_thread.join()
+            self.application_registry.remove(self.name)
 
         if self.can_broadcast():
             self.broadcast(

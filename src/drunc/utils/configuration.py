@@ -110,6 +110,10 @@ class ConfHandler:
             self.oks_path = f"oksconfig:{oks_path}"
             self.log.info(f'Using {self.oks_path} to configure')
             self.db = oksdbinterfaces.Configuration(self.oks_path)
+            self.session_data = self.db.get_dal( # MEHHHH
+                class_name = 'Session',
+                uid = self.oks_key.session
+            )
             return self.db.get_dal(
                 class_name=self.oks_key.class_name,
                 uid=self.oks_key.obj_uid
