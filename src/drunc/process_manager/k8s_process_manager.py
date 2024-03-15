@@ -40,14 +40,15 @@ class K8sProcessManager(ProcessManager):
     def create_namespace(self, request):
         self._log.debug("creating namespace")
         self._log.debug(request)
+        namespace = request.metadata.name
 
-        namespaces = [self.api.list_namespace()]
-        if request.metadata.name in namespaces:
+        existing_namespaces = self.api.list_namespace().items
+        namespaces_list = [ns.metadata.name for ns in existing_namespaces] 
+        if namespace == namespaces_list:
             self._log.debug(f"failed to create namespace \"{namespace}\" because namespace already exists")
             return
         else:
             self._log.info(f"creating namespace \"{namespace}\" ")
-            namespace = request.metadata.name
             self.api.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace)))
 
     
@@ -68,6 +69,13 @@ class K8sProcessManager(ProcessManager):
                 ]
             ),
         )
+    
+    def delete_namespace(self, request):
+        self._log.debug("deleting namespace")
+        self._log.debug(request)
+        namespace = request.metadata.name
+        self.api.delete_namespace(namespace)
+        self._log.info(f"deleted namespace \"{namespace}\" ")
         
     # def boot(self, request, context):     
     #     self._log.debug("booting process")
