@@ -3,12 +3,11 @@ import click_shell
 import os
 
 from drunc.controller.interface.context import ControllerContext
-from drunc.utils.utils import log_levels
-from drunc.utils.shell_utils import add_traceback_flag
+from drunc.utils.utils import log_levels, validate_command_facility
 
 
 @click_shell.shell(prompt='drunc-controller > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-controller-shell.history')
-@click.argument('controller-address', type=str)
+@click.argument('controller-address', type=str, callback=validate_command_facility)
 @click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.pass_context

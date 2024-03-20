@@ -2,12 +2,12 @@ import click_shell
 import click
 import os
 
-from drunc.utils.utils import CONTEXT_SETTINGS, log_levels
+from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,validate_command_facility
 
 @click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS, hist_file=os.path.expanduser('~')+'/.drunc-pm-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('-t','--traceback', is_flag=True, default=False, help='Print full exception traceback')
-@click.argument('process-manager-address', type=str)
+@click.argument('process-manager-address', type=str, callback=validate_command_facility)
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level

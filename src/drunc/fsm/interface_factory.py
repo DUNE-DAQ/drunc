@@ -1,4 +1,4 @@
-import drunc.fsm.fsm_errors as fsm_errors
+import drunc.fsm.exceptions as fsme
 import inspect
 
 
@@ -11,8 +11,7 @@ class FSMInterfaceFactory:
         retr = {}
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
-                if name[:4] == 'pre_':
-                    # print(f'ADDING {name=}')
+                if name.startswith('pre_'):
                     retr[name] = method
         return retr
 
@@ -20,8 +19,7 @@ class FSMInterfaceFactory:
         retr = {}
         for name, method in inspect.getmembers(interface):
             if inspect.ismethod(method):
-                if name[:5] == 'post_':
-                    # print(f'ADDING {name=}')
+                if name.startswith('post_'):
                     retr[name] = method
         return retr
 
@@ -29,14 +27,14 @@ class FSMInterfaceFactory:
         sig = inspect.signature(method)
 
         if 'kwargs' not in sig.parameters.keys() or '_input_data' not in sig.parameters.keys():
-            raise fsm_errors.InvalidInterfaceMethod(interface, name)
+            raise fsme.InvalidInterfaceMethod(interface, name)
 
         for pname, p in sig.parameters.items():
             if pname in ["_input_data", "args", "kwargs"]:
                 continue
 
             if p.annotation is inspect._empty:
-                raise fsm_errors.MethodSignatureMissingAnnotation(interface, name, pname)
+                raise fsme.MethodSignatureMissingAnnotation(interface, name, pname)
 
 
 
@@ -45,7 +43,7 @@ class FSMInterfaceFactory:
         post_transition = self._get_post_transitions(interface)
 
         if not pre_transition and not post_transition:
-            raise fsm_errors.InvalidInterface(interface.name)
+            raise fsme.InvalidInterface(interface.name)
 
         for k,v in pre_transition.items():
             self._validate_signature(k, v, interface.name)
@@ -57,16 +55,16 @@ class FSMInterfaceFactory:
         iface = None
         match interface_name:
             case "user-provided-run-number":
-                from drunc.fsm.interfaces.UserProvidedRunNumber import UserProvidedRunNumber
+                from drunc.fsm.interfaces.user_provided_run_number import UserProvidedRunNumber
                 iface = UserProvidedRunNumber(configuration)
             case 'test-interface':
-                from drunc.fsm.interfaces.TestInterface import TestInterface
+                from drunc.fsm.interfaces.test_interface import TestInterface
                 iface = TestInterface(configuration)
             case "file-logbook":
-                from drunc.fsm.interfaces.FileLogbook import FileLogbook
+                from drunc.fsm.interfaces.file_logbook import FileLogbook
                 iface = FileLogbook(configuration)
             case _:
-                raise fsm_errors.UnknownInterface(interface_name)
+                raise fsme.UnknownInterface(interface_name)
 
         self._validate_interface(iface)
         return iface

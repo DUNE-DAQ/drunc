@@ -1,4 +1,4 @@
-from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
 
 import threading
 from typing import NoReturn
@@ -34,6 +34,9 @@ class ResponseDispatcher(threading.Thread):
     def stop(self) -> NoReturn:
         self.listener.queue.put_nowait(self.STOP)
         self.join()
+
+    def __str__(self):
+        return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
 
 class ResponseListener:
     _instance = None
@@ -367,51 +370,123 @@ class StateRESTAPI:
         with self._state_lock:
             return self._errored
 
+from drunc.utils.configuration import ConfHandler
+from drunc.exceptions import DruncSetupException
+
+class BadArgumentInConf(DruncSetupException):
+    pass
+
+class RESTAPIChildNodeConfHandler(ConfHandler):
+
+    def get_uri(self):
+        ### https://github.com/DUNE-DAQ/appfwk/blob/production/v4/src/CommandLineInterpreter.hpp#L55
+        # bpo::options_description desc(descstr.str());
+        # desc.add_options()
+        #    ("name,n", bpo::value<std::string>()->required(), "Application name")
+        #    ("partition,p", bpo::value<std::string>()->default_value("global"), "Partition name")
+        #    ("commandFacility,c", bpo::value<std::string>()->required(), "CommandFacility URI")
+        #    ("informationService,i", bpo::value<std::string>()->default_value("stdout://flat"), "Information Service URI")
+        #    ("configurationService,d", bpo::value<std::string>()->required(), "Configuration Service URI")
+        #    ("help,h", "produce help message");
+
+        # <data val="--name"/>
+        # <data val="ru-02"/>
+        # <data val="-c"/>
+        # <data val="rest://localhost:3335"/>
+        # <data val="-i"/>
+        # <data val="kafka://monkafka.cern.ch:30092/opmon"/>
+        # <data val="--configurationService"/>
+        # <data val="oksconfig:///nfs/home/plasorak/NAFD24-02-08-OKS/swdir/sourcecode/appdal/test/config/test-session.data.xml"/>
+
+
+        ### FAILED ATTEMPT
+        # import click
+        # def store():
+        #     commandFacility = None
+
+        # # main = fake_main_app
+
+        # @click.command()
+        # @click.option("--name", "-n")
+        # @click.option("--partition", "-p")
+        # @click.option("--commandFacility", "-c")
+        # @click.option("--informationService", "-i")
+        # @click.option("--configurationService", "-d")
+        # @click.pass_context
+        # def fake_main_app(ctx, name, partition, commandfacility, informationservice, configurationservice):
+        #     ctx.obj.commandFacility = commandfacility
+
+        # cmd = fake_main_app
+
+        # obj = store()
+        CLAs=self.data.commandline_parameters
+
+        # context = cmd.make_context(info_name='dmmy', args=CLAs, obj=obj)
+        # fake_main_app.parse_args(args=CLAs, ctx=context)
+        # self.log.info(context.__dict__)
+        # self.log.info(obj.commandFacility)
+        cmd_arg_index = None
+        for i, CLA in enumerate(CLAs):
+            if CLA in ["--commandFacility", "-c"]:
+                cmd_arg_index = i+1
+                break
+
+        if len(CLAs) <= cmd_arg_index:
+            BadArgumentInConf(f'--commandFacility (or -c) was not specified for this app in its command line parameters!')
+        # fake_main_app.main(args=CLAs, obj=obj)#.invoke(ctx)
+        # # self.log.info(obj.commandFacility)
+
+        return CLAs[cmd_arg_index]
+        # except Exception as e:
+        #     raise BadArgumentInConf(f'Error in the configuration, the 2nd CLA seems to be incorrect: {e.message}. CLA:\'{self.data.controller.commandline_parameters[1]}\'')
+
+from drunc.fsm.configuration import FSMConfHandler
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, name, child_conf, conf_type, fsm_conf, **kwargs):
+    def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler):
         super(RESTAPIChildNode, self).__init__(
             name = name,
-            **kwargs
+            node_type = ChildNodeType.REST_API
         )
 
         from logging import getLogger
         self.log = getLogger(f'{name}-rest-api-child')
 
-        from drunc.utils.conf_types import ConfTypes, ConfTypeNotSupported
-        if conf_type != ConfTypes.Json:
-            raise ConfTypeNotSupported(conf_type, 'RESTAPIChildNode')
-
         self.response_listener = ResponseListener.get()
 
         import socket
         response_listener_host = socket.gethostname()
+        uri = configuration.get_uri()
+        from urllib.parse import urlparse
+        uri = urlparse(uri)
+        self.app_host, app_port = uri.netloc.split(":")
+        self.app_port = int(app_port)
 
-        app_host, app_port = child_conf['uri'].split(":")
-        app_port = int(app_port)
-
-        proxy_host, proxy_port = child_conf.get('proxy', [None, None])
+        proxy_host, proxy_port = getattr(configuration.data, "proxy", [None, None])
         proxy_port = int(proxy_port) if proxy_port is not None else None
 
         self.commander = AppCommander(
             app_name = self.name,
-            app_host = app_host,
-            app_port = app_port,
+            app_host = self.app_host,
+            app_port = self.app_port,
             response_host = response_listener_host,
             response_port = self.response_listener.get_port(),
             proxy_host = proxy_host,
             proxy_port = proxy_port,
         )
 
-        from drunc.fsm.fsm_core import FSM
-        self.fsm = FSM(
-            conf = fsm_conf,
-            conf_type=ConfTypes.Json
-        )
+        from drunc.fsm.core import FSM
+        from drunc.fsm.configuration import FSMConfHandler
+        fsmch = FSMConfHandler(fsm_configuration)
+
+        self.fsm = FSM(conf=fsmch)
 
         self.response_listener.register(self.name, self.commander)
 
         self.state = StateRESTAPI()
+
+    def __str__(self):
+        return f'\'{self.name}@{self.app_host}:{self.app_port}\' (type {self.node_type})'
 
     def terminate(self):
         pass

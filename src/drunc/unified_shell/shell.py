@@ -2,11 +2,12 @@ import click
 import click_shell
 from drunc.utils.utils import log_levels
 import os
+from drunc.utils.utils import validate_command_facility
 
 @click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
 @click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.argument('process-manager-address', type=str)
+@click.argument('process-manager-address', type=str, callback=validate_command_facility)
 @click.pass_context
 def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:bool) -> None:
     from drunc.utils.utils import update_log_level
@@ -30,7 +31,9 @@ def unified_shell(ctx, process_manager_address:str, log_level:str, traceback:boo
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     if desc.HasField('broadcast'):
-        ctx.obj.start_listening_pm(desc.broadcast)
+        ctx.obj.start_listening_pm(
+            broadcaster_conf = desc.broadcast,
+        )
 
     def cleanup():
         ctx.obj.terminate()

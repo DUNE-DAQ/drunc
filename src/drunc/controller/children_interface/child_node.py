@@ -13,16 +13,18 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 
 class ChildNode(abc.ABC):
-    def __init__(self, name:str, node_type:ChildNodeType, token=None, **kwargs) -> None:
-        super(ChildNode, self).__init__(
-            **kwargs
-        )
+    def __init__(self, name:str, node_type:ChildNodeType, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         self.node_type = node_type
         import logging
         self.log = logging.getLogger(f"{name}-child-node")
         self.name = name
-        self.token = token
+
+    @abc.abstractmethod
+    def __str__(self):
+        pass
+        return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
 
 
     @abc.abstractmethod
@@ -39,35 +41,47 @@ class ChildNode(abc.ABC):
     def get_status(self, token):
         pass
 
-    @staticmethod
-    def get_from_file(name, conf:dict, token=None, **kwargs):
-        from drunc.utils.conf_types import ConfTypes
 
-        match conf['type'].lower():
-            case 'grpc':
-                from drunc.controller.children_interface.grpc_child import gRPCChildNode
+    @staticmethod
+    def _get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:
+        for CLA in CLAs:
+            if "rest://" in CLA:
+                return ChildNodeType.REST_API
+            if "grpc://" in CLA:
+                return ChildNodeType.gRPC
+
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
+
+
+
+    @staticmethod
+    def get_child(name:str, cli, configuration, init_token=None, **kwargs):
+        from drunc.utils.configuration import ConfTypes
+
+        type = ChildNode._get_children_type_from_cli(cli)
+
+        match type:
+            case ChildNodeType.gRPC:
+                from drunc.controller.children_interface.grpc_child import gRPCChildNode, gRCPChildConfHandler
+
                 return gRPCChildNode(
-                    child_conf = conf,
-                    conf_type = ConfTypes.Json,
-                    token = token,
+                    configuration = gRCPChildConfHandler(configuration, ConfTypes.PyObject),
+                    init_token = init_token,
                     name = name,
-                    node_type = ChildNodeType.gRPC,
                     **kwargs,
                 )
-            case 'rest-api':
-                from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode
+
+
+            case ChildNodeType.REST_API:
+                from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode,RESTAPIChildNodeConfHandler
+
                 return RESTAPIChildNode(
-                    child_conf = conf,
-                    conf_type = ConfTypes.Json,
-                    token = token,
+                    configuration =  RESTAPIChildNodeConfHandler(configuration, ConfTypes.PyObject),
                     name = name,
-                    node_type = ChildNodeType.REST_API,
+                    # init_token = init_token, # No authentication for RESTAPI
                     **kwargs,
                 )
             case _:
-                raise ChildInterfaceTechnologyUnknown(conf['type'], name)
+                raise ChildInterfaceTechnologyUnknown(type, name)
 
-
-    @staticmethod
-    def get_from_oks(name, conf, token=None):
-        raise DruncSetupException('OKS Not supported')

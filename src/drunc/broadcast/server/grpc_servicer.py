@@ -22,7 +22,7 @@ class ListenerRepresentation:
 
 class GRCPBroadcastSender(BroadcastSenderServicer):
 
-    def __init__(self, configuration, logger):
+    def __init__(self):
         from drunc.exceptions import DruncSetupException
         raise DruncSetupException('GRCPBroadcastSender not supported')
 

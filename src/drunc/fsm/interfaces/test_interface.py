@@ -1,4 +1,4 @@
-from drunc.fsm.fsm_core import FSMInterface
+from drunc.fsm.core import FSMInterface
 from enum import Enum
 
 class an_enum(Enum):
@@ -7,7 +7,7 @@ class an_enum(Enum):
 
 class TestInterface(FSMInterface):
     def __init__(self, configuration):
-        super(TestInterface, self).__init__(
+        super().__init__(
             name = "test-interface"
         )
 

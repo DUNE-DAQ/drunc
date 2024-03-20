@@ -1,5 +1,16 @@
 
 
+def validate_conf_string(ctx, param, boot_configuration):
+    from drunc.utils.configuration import ConfTypes
+    import os
+    if ctx.params['conf_type'] == ConfTypes.OKSFileName:
+        return boot_configuration
+
+    if not os.path.exists(boot_configuration):
+        from click.exceptions import BadParameter
+        raise BadParameter(f'\'{boot_configuration}\' does not exist')
+
+
 def add_query_options(at_least_one:bool, all_processes_by_default:bool=False):
     def wrapper(f0):
         import click
@@ -14,15 +25,14 @@ def add_query_options(at_least_one:bool, all_processes_by_default:bool=False):
 
 def accept_configuration_type():
     def configuration_type_callback(ctx, param, conf_type):
-        from drunc.process_manager.utils import ConfTypes
-        CONF_TYPE = conf_type.upper()
-        return ConfTypes[CONF_TYPE]
+        from drunc.utils.configuration import CLI_to_ConfTypes
+        return CLI_to_ConfTypes(conf_type)
 
     def add_decorator(function):
         import click
         f1 = click.argument(
             'conf-type',
-            type=click.Choice(['daqconf', 'drunc', 'OKS'], case_sensitive=False),
+            type=click.Choice(['file', 'oksconfig'], case_sensitive=False),
             #default='daqconf',
             callback=configuration_type_callback
         )(function)
