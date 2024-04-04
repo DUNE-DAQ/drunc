@@ -3,6 +3,7 @@ import sys
 import coredal
 import oksdbinterfaces
 
+
 dal = oksdbinterfaces.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
 
 # Process a dal::Variable object, placing key/value pairs in a dictionary
@@ -28,22 +29,32 @@ def process_segment(db, session, segment):
   controller = segment.controller
   appenv = defenv
   process_variables(controller.applicationEnvironment, appenv)
+  from coredal import application_parse_commandline_parameters
   host = controller.runs_on.runs_on.id
-  apps.append({"name": controller.id,
-               "type": controller.application_name,
-               "args": controller.commandline_parameters,
-               "restriction": host,
-               "host": host,
-               "env": appenv})
+
+  apps.append(
+    {
+      "name": controller.id,
+      "type": controller.application_name,
+      #"args": controller.commandline_parameters,
+      "args": application_parse_commandline_parameters(db._obj, controller.id),
+      "restriction": host,
+      "host": host,
+      "env": appenv
+    }
+  )
 
   # Recurse over nested segments
   for seg in segment.segments:
-    if not coredal.component_disabled(db._obj, session.id, seg.id):
-      for app in process_segment(db, session, seg):
-        apps.append(app)
+    if coredal.component_disabled(db._obj, session.id, seg.id):
+      log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
+
+    for app in process_segment(db, session, seg):
+      apps.append(app)
 
   # Get all the enabled applications of this segment
   for app in segment.applications:
+    continue
     if 'Component' in app.oksTypes():
       enabled = not coredal.component_disabled(db._obj, session.id, app.id)
       log.debug(f"{app.id} {enabled=}")
@@ -51,20 +62,26 @@ def process_segment(db, session, segment):
       enabled = True
       log.debug(f"{app.id} {enabled=}")
 
-    if enabled:
-      appenv = defenv
-      # Override with any app specific environment from Application
-      process_variables(app.applicationEnvironment, appenv)
-
-      host = app.runs_on.runs_on.id
-      apps.append({"name": app.id,
-                   "type": app.application_name,
-                   "args": app.commandline_parameters,
-                   "restriction": host,
-                   "host": host,
-                   "env": appenv})
-    else:
+    if not enabled:
       log.info(f"Ignoring disabled app {app.id}")
+
+    appenv = defenv
+
+    # Override with any app specific environment from Application
+    process_variables(app.applicationEnvironment, appenv)
+
+    host = app.runs_on.runs_on.id
+    apps.append(
+      {
+        "name": app.id,
+        "type": app.application_name,
+        "args": application_parse_commandline_parameters(db._obj, app.id),
+        "restriction": host,
+        "host": host,
+        "env": appenv
+      }
+    )
+
   return apps
 
 def process_services(session):
