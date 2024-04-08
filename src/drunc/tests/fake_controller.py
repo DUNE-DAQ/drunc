@@ -3,7 +3,7 @@ import sys
 top_dir = os.environ['DRUNC_DIR']
 fsm_dir = os.path.join(top_dir, 'src', 'drunc', 'fsm')
 sys.path.append(fsm_dir)
-from fsm_core import FSM
+from drunc.fms.core import FSM
 
 class FakeController:
     def __init__(self, config):
@@ -15,7 +15,7 @@ class FakeController:
         cmds = [c for c in unmangled if c not in unwanted]                      #Filters out non-FSM methods
         for command in cmds:
             self.fsm.register_transition(command, getattr(self, command))       #Passes every command to the FSM
-    
+
     def do_command(self, transition, transition_data):
         self.fsm.execute_transition(transition, transition_data)
 
@@ -30,19 +30,19 @@ class FakeController:
 
     def start(self, data):
         pass
-    
+
     def enable_triggers(self, data):
         pass
-    
+
     def disable_triggers(self, data):
         pass
-    
+
     def drain_dataflow(self, data):
         pass
-    
+
     def stop_trigger_sources(self, data):
         pass
-    
+
     def stop(self, data):
         pass
 

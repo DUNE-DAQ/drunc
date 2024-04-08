@@ -16,7 +16,7 @@ def convert_fsm_transition(transitions):
 
 def decode_fsm_arguments(arguments, arguments_format):
     from drunc.utils.grpc_utils import unpack_any
-    import drunc.fsm.fsm_errors as fsme
+    import drunc.fsm.exceptions as fsme
     from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from druncschema.controller_pb2 import Argument
 

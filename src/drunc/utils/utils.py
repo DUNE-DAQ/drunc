@@ -104,3 +104,31 @@ def run_coroutine(f):
         return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
 
     return wrapper
+
+def expand_path(path, turn_to_abs_path=False):
+    from os.path import abspath, expanduser, expandvars
+    if turn_to_abs_path:
+        return abspath(expanduser(expandvars(path)))
+    return expanduser(expandvars(path))
+
+
+def validate_command_facility(ctx, param, value):
+    from click import BadParameter
+    from urllib.parse import urlparse
+    parsed = ''
+
+    try:
+        parsed = urlparse(value)
+    except Exception as e:
+        raise BadParameter(message=str(e), ctx=ctx, param=param)
+
+
+    if parsed.path or parsed.params or parsed.query or parsed.fragment:
+        raise BadParameter(message=f'Command factory for drunc-controller is not understood', ctx=ctx, param=param)
+
+    match parsed.scheme:
+        case 'grpc':
+            return parsed.netloc
+        case _:
+            raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
+

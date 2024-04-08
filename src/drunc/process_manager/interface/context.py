@@ -39,12 +39,17 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
 
     def start_listening(self, broadcaster_conf):
         from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.utils.conf_types import ConfTypes
-
-        self.status_receiver = BroadcastHandler(
-            broadcast_configuration = broadcaster_conf,
-            conf_type = ConfTypes.Protobuf
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.utils.configuration import ConfTypes
+        bcch = BroadcastClientConfHandler(
+            data = broadcaster_conf,
+            type = ConfTypes.ProtobufAny,
         )
+
+        self._log.debug(f'Broadcaster configuration:\n{broadcaster_conf}')
+
+        self.status_receiver = BroadcastHandler(bcch)
+
         from rich import print as rprint
         rprint(f':ear: Listening to the Process Manager at {self.address}')
 

@@ -1,16 +1,17 @@
-
 from druncschema.token_pb2 import Token
 from druncschema.authoriser_pb2 import ActionType, SystemType
+
+from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 
 # TODO: Should be communicating over network
 
 # The Rolls Royce of the authoriser systems
 class DummyAuthoriser:
-    def __init__(self, configuration:dict, system:SystemType):
+    def __init__(self, system:SystemType, configuration_handler:DummyAuthoriserConfHandler=None):
         import logging
         self.log = logging.getLogger("Controller")
         self.log.info(f'DummyAuthoriser ready')
-        self.configuration = configuration
+        self.configuration = configuration_handler
         self.command_actions = {} # Dict[str, ActionType]
         self.system = system
 

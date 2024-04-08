@@ -7,14 +7,14 @@ from drunc.process_manager.interface.cli_argument import accept_configuration_ty
 from drunc.process_manager.interface.context import ProcessManagerContext
 
 from druncschema.process_manager_pb2 import ProcessQuery
-
+from drunc.process_manager.interface.cli_argument import validate_conf_string
 
 @click.command('boot')
 @click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @accept_configuration_type()
 @add_traceback_flag()
-@click.argument('boot-configuration', type=click.Path(exists=True))
+@click.argument('boot-configuration', type=str, callback=validate_conf_string)
 @click.argument('session-name', type=str)
 @click.pass_obj
 @run_coroutine

@@ -1,14 +1,13 @@
-from drunc.utils.conf_types import ConfTypes
-
+from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 
 class BroadcastSender:
 
     implementation = None
 
-    def __init__(self, name:str, session:str='no_session', broadcast_configuration:dict={}, conf_type:ConfTypes=ConfTypes.Json, **kwargs):
-        super(BroadcastSender, self).__init__(
-            **kwargs,
-        )
+    def __init__(self, name:str, configuration:BroadcastSenderConfHandler, session:str='no_session'):
+        super().__init__()
+
+        self.configuration = configuration
 
         self.name = name
         self.session = session
@@ -21,22 +20,29 @@ class BroadcastSender:
 
         from drunc.broadcast.utils import broadcast_types_loglevels
         self.broadcast_types_loglevels = broadcast_types_loglevels
-        self.broadcast_types_loglevels.update(broadcast_configuration.get('broadcast_types_loglevels', {}))
 
-        self.logger.debug(f'{broadcast_configuration}, {self.identifier}')
-        self.impl_technology = broadcast_configuration.get('type')
+        # TODO
+        # self.broadcast_types_loglevels.update(self.configuration.get_raw('broadcast_types_loglevels', {}))
+
+        #self.logger.debug(f'{broadcast_configuration.data}, {self.identifier}')
+        self.impl_technology = self.configuration.get_impl_technology()
+
         self.implementation = None
+
         if self.impl_technology is None:
             self.logger.warning('There is no broadcasting service!')
             return
 
+        from drunc.broadcast.types import BroadcastTypes
+
         match self.impl_technology:
-            case 'kafka':
+            case BroadcastTypes.Kafka:
                 from drunc.broadcast.server.kafka_sender import KafkaSender
-                self.implementation = KafkaSender(broadcast_configuration, conf_type=conf_type, topic=f'control.{self.identifier}')
-            case 'grpc':
-                from drunc.broadcast.server.grpc_servicer import GRCPBroadcastSender
-                self.implementation = GRCPBroadcastSender(broadcast_configuration, conf_type = conf_type)
+                self.implementation = KafkaSender(
+                    self.configuration.data.address,
+                    self.configuration.data.publish_timeout,
+                    topic=f'control.{self.identifier}',
+                )
             case _:
                 from drunc.exceptions import DruncSetupException
                 raise DruncSetupException(f"Broadcaster cannot be {self.impl_technology}")
@@ -83,7 +89,7 @@ class BroadcastSender:
 
     def _interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        txt = f'Exception thrown: {exception}'
+        txt = f'\'{exception.__class__.__name__}\' exception thrown: {exception}'
 
         from drunc.exceptions import DruncException
         self.broadcast(
@@ -104,7 +110,7 @@ class BroadcastSender:
 
     async def _async_interrupt_with_exception(self, exception, context, stack=''):
         from druncschema.broadcast_pb2 import BroadcastType
-        txt = f'Exception thrown: {exception}'
+        txt = f'\'{exception.__class__.__name__}\' exception thrown: {exception}'
 
         from drunc.exceptions import DruncException
         self.broadcast(
