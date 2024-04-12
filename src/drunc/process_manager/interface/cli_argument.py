@@ -3,7 +3,7 @@
 def validate_conf_string(ctx, param, boot_configuration):
     from drunc.utils.configuration import ConfTypes
     import os
-    if ctx.params['conf_type'] == ConfTypes.OKSFileName:
+    if ctx.params['conf_type'] in [ConfTypes.OKSFileName, ConfTypes.JsonFileName]:
         return boot_configuration
 
     if not os.path.exists(boot_configuration):
