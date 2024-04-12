@@ -11,7 +11,8 @@ This python code uses `rich`, `gRPC`.
 To start using this code, you need to:
 ```bash
 python -m venv venv             # create a python venv
-source setup.sh                 # enter the venv and setup the env variable DRUNC_DATA
+source venv/bin/activate        # enter the venv
+source setup.sh                 # setup the env variable DRUNC_DATA
 pip install -r requirements.txt # ... install rich and gRPC
 pip install .                # ... install this package if you are planning to modify you can use `pip install -e .`
 ```
