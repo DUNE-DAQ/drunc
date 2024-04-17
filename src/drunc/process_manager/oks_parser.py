@@ -29,14 +29,14 @@ def process_segment(db, session, segment):
   controller = segment.controller
   appenv = defenv
   process_variables(controller.applicationEnvironment, appenv)
-  from coredal import rc_application_construct_commandline_parameters
+  from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
 
   apps.append(
     {
       "name": controller.id,
       "type": controller.application_name,
-      "args": rc_application_construct_commandline_parameters(db._obj, session.id, controller.id),
+      "args": get_cla(db._obj, session.id, controller),
       "restriction": host,
       "host": host,
       "env": appenv
@@ -69,22 +69,12 @@ def process_segment(db, session, segment):
     # Override with any app specific environment from Application
     process_variables(app.applicationEnvironment, appenv)
 
-    args = []
-    if "SmartDaqApplication" in app.oksTypes(): # meh
-      from appdal import smart_daq_application_parse_commandline_parameters
-      args = smart_daq_application_parse_commandline_parameters(db._obj, session.id, app.id)
-    elif "DaqApplication" in app.oksTypes():
-      from coredal import daq_application_parse_commandline_parameters
-      args = daq_application_parse_commandline_parameters(db._obj, session.id, app.id)
-    else:
-      args = app.commandline_parameters
-
     host = app.runs_on.runs_on.id
     apps.append(
       {
         "name": app.id,
         "type": app.application_name,
-        "args": args,
+        "args": get_cla(db._obj, session.id, app),
         "restriction": host,
         "host": host,
         "env": appenv
