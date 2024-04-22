@@ -38,7 +38,7 @@ class K8sProcessManager(ProcessManager):
     #     obj.metadata.labels.update({f"{key}.{self.drunc_label}": label})
     #     return obj
 
-    def _add_label(self, obj, key, label):
+    def _add_label(self, obj_name, obj_type, key, label):
         body = {
             "metadata": {
                 "labels": {
@@ -47,24 +47,32 @@ class K8sProcessManager(ProcessManager):
             }
         }
         try:
-            if isinstance(obj, self._ns_v1_api):
-                self._core_v1_api.patch_namespace(obj.metadata.name, body)
-                self._log.info(f"Added label \"{key}:{label}\" to namespace \"{obj.metadata.name}\"")
-            elif isinstance(obj, self._pod_v1_api):
-                self._core_v1_api.patch_namespaced_pod(obj.metadata.name, obj.metadata.namespace, body)
-                self._log.info(f"Added label \"{key}:{label}\" to pod \"{obj.metadata.name}\" in \"{obj.metadata.namespace}\" namespace")
+            if obj_type == 'namespace':
+                self._core_v1_api.patch_namespace(obj_name, body)
+                self._log.info(f"Added label \"{key}:{label}\" to namespace \"{obj_name}\"")
+            elif obj_type == 'pod':
+                namespace = self._get_pod_namespace(obj_name)
+                self._core_v1_api.patch_namespaced_pod(obj_name, namespace, body)
+                self._log.info(f"Added label \"{key}:{label}\" to pod \"{obj_name}\" in \"{namespace}\" namespace")
         except Exception as e:
             self._log.error(f"Couldn't add label to the object: {e}")
             raise e
+
+    def _get_pod_namespace(self, pod_name):
+        pods = self._core_v1_api.list_pod_for_all_namespaces(watch=False)
+        for pod in pods.items:
+            if pod.metadata.name == pod_name:
+                return pod.metadata.namespace
+        return None
     
-    def _add_creator_label(self, obj):
-        return self._add_label(obj, "creator", self.__class__.__name__)
+    def _add_creator_label(self, obj_name, obj_type):
+        return self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _create_namespace(self, nsname):
         try:
-            ns=self._core_v1_api.read_namespace(nsname)
+            self._core_v1_api.read_namespace(nsname)
             self._log.info(f"Namespace \"{nsname}\" already exists")
-            self._add_creator_label(ns)
+            self._add_creator_label(nsname, 'namespace')
         except self._api_error_v1_api as e:
             if e.status == 404:
                 namespace_manifest = {
@@ -91,9 +99,9 @@ class K8sProcessManager(ProcessManager):
             spec=self._pod_spec_v1_api(containers=[self._container_v1_api(name=pod_name,image="busybox",command=["sleep", "3600"])])
         )
         try:
-            pods=self._core_v1_api.create_namespaced_pod(ns, pod)
+            self._core_v1_api.create_namespaced_pod(ns, pod)
             self._log.info(f"Creating pod \"{pod_name}\" in \"{ns}\" namespace ")
-            self._add_creator_label(pods)
+            self._add_creator_label(pod_name, 'pod')
         except Exception as e:
             self._log.error(f"Couldn't Create pod with name: \"{pod_name}\": {e}")
             raise e
@@ -146,6 +154,9 @@ class K8sProcessManager(ProcessManager):
 
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
+        import uuid
+        this_uuid = str(uuid.uuid4())
+        self._log.info(f'uuid for booting is:{this_uuid}')
         if boot_request is None:
             self._log.error('boot_request is None')
             return
@@ -156,6 +167,7 @@ class K8sProcessManager(ProcessManager):
         session = boot_request.process_description.metadata.session
         self._create_namespace(session)
         self._create_pod(boot_request.process_description.metadata.name, session)
+        self._add_label(boot_request.process_description.metadata.name, 'pod', 'uuid', this_uuid)
         return ProcessInstance()
 
 
@@ -165,41 +177,42 @@ class K8sProcessManager(ProcessManager):
         
         import re
 
-        uuid_selector = []
+        # uuid_selector = []
         name_selector = query.names
+        print(name_selector)
         user_selector = query.user
+        print(user_selector)
         session_selector = query.session
+        print(session_selector)
         # relevant reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
 
-        for uid in query.uuids:
-            uuid_selector += [uid.uuid]
+        # for uid in query.uuids:
+        #     uuid_selector += [uid.uuid]
 
         processes = []
         all_the_uuids = self.process_store.keys() if not in_boot_request else self.boot_request.keys()
 
-        for uuid in all_the_uuids:
-            accepted = False
-            meta = self.boot_request[uuid].process_description.metadata
+        # for uuid in all_the_uuids:
+        #     accepted = False
+        #     meta = self.boot_request[uuid].process_description.metadata
 
-            if uuid in uuid_selector: accepted = True
+        #     if uuid in uuid_selector: accepted = True
 
-            for name_reg in name_selector:
-                if re.search(name_reg, meta.name):
-                    accepted = True
+        #     for name_reg in name_selector:
+        #         if re.search(name_reg, meta.name):
+        #             accepted = True
 
-            if session_selector == meta.session: accepted = True
+        #     if session_selector == meta.session: accepted = True
 
-            if user_selector == meta.user: accepted = True
+        #     if user_selector == meta.user: accepted = True
 
-            if accepted: processes.append(uuid)
+        #     if accepted: processes.append(uuid)
 
         return processes
 
 
     def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
-        import uuid
-        this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+        return self.__boot(boot_request, boot_request.process_description.metadata.uuid)
     
 
 
