@@ -34,21 +34,37 @@ class K8sProcessManager(ProcessManager):
         self._pod_spec_v1_api = client.V1PodSpec
         self.drunc_label = "drunc.daq"
     
-    def _label(self, obj, key, label):
-        if obj.metadata.labels is None:
-            pass
-            obj.metadata.labels = {}
-        obj.metadata.labels.update({f"{key}.{self.drunc_label}": label})
-        # add key 
-        return obj
+    # def _label(self, obj, key, label):
+    #     obj.metadata.labels.update({f"{key}.{self.drunc_label}": label})
+    #     return obj
+
+    def _add_label(self, obj, key, label):
+        body = {
+            "metadata": {
+                "labels": {
+                    f"{key}.{self.drunc_label}": label
+                }
+            }
+        }
+        try:
+            if isinstance(obj, self._ns_v1_api):
+                self._core_v1_api.patch_namespace(obj.metadata.name, body)
+                self._log.info(f"Added label \"{key}:{label}\" to namespace \"{obj.metadata.name}\"")
+            elif isinstance(obj, self._pod_v1_api):
+                self._core_v1_api.patch_namespaced_pod(obj.metadata.name, obj.metadata.namespace, body)
+                self._log.info(f"Added label \"{key}:{label}\" to pod \"{obj.metadata.name}\" in \"{obj.metadata.namespace}\" namespace")
+        except Exception as e:
+            self._log.error(f"Couldn't add label to the object: {e}")
+            raise e
     
     def _add_creator_label(self, obj):
-        return self._label(obj, "creator", self.__class__.__name__)
+        return self._add_label(obj, "creator", self.__class__.__name__)
 
     def _create_namespace(self, nsname):
         try:
-            self._core_v1_api.read_namespace(nsname)
+            ns=self._core_v1_api.read_namespace(nsname)
             self._log.info(f"Namespace \"{nsname}\" already exists")
+            self._add_creator_label(ns)
         except self._api_error_v1_api as e:
             if e.status == 404:
                 namespace_manifest = {
@@ -64,6 +80,7 @@ class K8sProcessManager(ProcessManager):
                     raise e
             else:
                 raise e
+        
 
 
     def _create_pod(self, pod_name, ns):
@@ -74,18 +91,13 @@ class K8sProcessManager(ProcessManager):
             spec=self._pod_spec_v1_api(containers=[self._container_v1_api(name=pod_name,image="busybox",command=["sleep", "3600"])])
         )
         try:
-            self._core_v1_api.create_namespaced_pod(ns, pod)
+            pods=self._core_v1_api.create_namespaced_pod(ns, pod)
             self._log.info(f"Creating pod \"{pod_name}\" in \"{ns}\" namespace ")
+            self._add_creator_label(pods)
         except Exception as e:
             self._log.error(f"Couldn't Create pod with name: \"{pod_name}\": {e}")
             raise e
-    #     self._add_creator_label(pod)
-    #     try:
-    #         self._core_v1_api.create_namespaced_pod(pod)
-    #         self._log.info(f"Creating pod \"{pod_name}\" in \"{ns}\" namespace ")
-    #     except Exception as e:
-    #         self._log.error(f"Couldn't Create pod with name: \"{pod_name}\": {e}")
-    #         raise e
+
 
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False):
         import re
@@ -141,13 +153,15 @@ class K8sProcessManager(ProcessManager):
             self._log.error('ProcessInstance is None')
             return
         self._log.info(f'Booting {boot_request.process_description.metadata}')
-        pass
+        session = boot_request.process_description.metadata.session
+        self._create_namespace(session)
+        self._create_pod(boot_request.process_description.metadata.name, session)
         return ProcessInstance()
 
 
 
     def _ps_impl(self, query:ProcessQuery, in_boot_request:bool=False) -> ProcessInstanceList:
-        self._label(query, self.session)
+        #self._label(query, self.session)
         
         import re
 
@@ -181,20 +195,10 @@ class K8sProcessManager(ProcessManager):
 
         return processes
 
-        
-        
-        
-        
-        pass
-
 
     def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
         import uuid
         this_uuid = str(uuid.uuid4())
-        session = boot_request.process_description.metadata.session
-        self._create_namespace(session)
-        self._create_pod(boot_request.process_description.metadata.name, session)
-
         return self.__boot(boot_request, this_uuid)
     
 
@@ -212,5 +216,15 @@ class K8sProcessManager(ProcessManager):
         return self.__boot(self.boot_request[uuid], uuid)
 
 
-    def _kill_impl(self, query:ProcessQuery) -> ProcessInstanceList:
-        pass
+    def _kill_impl(self,query:ProcessQuery) -> ProcessInstanceList: #
+        namespace = "tiago"
+        try:
+            self._core_v1_api.delete_namespace(namespace)
+            self._log.info(f"Killing namespace \"{namespace}\"")
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                self._log.error(f"Namespace \"{namespace}\" does not exist")
+            else:
+                self._log.error(f"Couldn't kill namespace \"{namespace}\": {e}")
+                raise e
+        return ProcessInstanceList()
