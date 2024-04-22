@@ -6,6 +6,7 @@ def process_env(env, rte):
     exclude = [
         "CET_PLUGIN_PATH",
         "DUNEDAQ_SHARE_PATH",
+        "DUNEDAQ_DB_PATH",
         "LD_LIBRARY_PATH",
         "PYTHONPATH",
         "PATH"
