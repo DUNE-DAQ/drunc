@@ -148,7 +148,7 @@ class K8sProcessManager(ProcessManager):
 
         self._log.info(f'all_the_uuids: {all_the_uuids}')
 
-        for uuid in self.process_store.keys():
+        for uuid in self.boot_request.keys():
             accepted = False
             meta = self.boot_request[uuid].process_description.metadata
 
@@ -165,6 +165,7 @@ class K8sProcessManager(ProcessManager):
             if accepted: processes.append(uuid)
 
         return processes
+    
 
 # --------------------------------------Commands--------------------------------------
 
@@ -187,21 +188,23 @@ class K8sProcessManager(ProcessManager):
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
         session = boot_request.process_description.metadata.session
-        podname = boot_request.process_description.metadata.name
-        user_host = f"{podname}.{session}"
+        podnames = boot_request.process_description.metadata.name
 
-        self._log.info(f'boot_request: {boot_request.process_description.metadata.name}')
+        self._log.info(f'boot_request: {boot_request}')
         if uuid in self.boot_request:
             raise DruncCommandException(f'Process {uuid} already exists!')
 
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
+
+        for uuid in self.boot_request:
+            self._log.info(f'boot_request1: {self.boot_request[uuid]}')
         
         self._log.info(f'Booting \n{boot_request.process_description.metadata}')
 
         self._create_namespace(session)
-        self._create_pod(boot_request.process_description.metadata.name, session)
-        self._add_label(boot_request.process_description.metadata.name, 'pod', 'uuid', uuid)
+        self._create_pod(podnames, session)
+        self._add_label(podnames, 'pod', 'uuid', uuid)
         
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -245,21 +248,16 @@ class K8sProcessManager(ProcessManager):
             status_code = ProcessInstance.StatusCode.RUNNING, #if self.is_alive(podname,session) else ProcessInstance.StatusCode.DEAD,
             uuid = pu
         )
-        # ret += [pi]
-        # pil = ProcessInstanceList(
-        #     values=ret
-        # )
 
-        # log_file= self._get_pod_logs(podname, session)
-        # self._log.info(f'log_file: {log_file}')
-        self.process_store[uuid] = pi
+        self.boot_request[uuid]=pi
+
         return pi
 
 
 
     def _ps_impl(self, query:ProcessQuery, in_boot_request:bool=False) -> ProcessInstanceList:
         ret = []
-        
+
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
@@ -273,7 +271,7 @@ class K8sProcessManager(ProcessManager):
             return_code = None
             if not self.is_alive(podname, session):
                 try:
-                    return_code = self.process_store[uuid].exit_code
+                    return_code = self.boot_request[uuid].exit_code
                 except Exception as e:
                     pass
             
@@ -304,6 +302,18 @@ class K8sProcessManager(ProcessManager):
         #         process.terminate()
 
         return #self.__boot(self.boot_request[uuid], uuid)
+    
+
+    # ORDER MATTERS!
+    # @broadcasted # outer most wrapper 1st step
+    # @authentified_and_authorised(
+    #     action=ActionType.DELETE,
+    #     system=SystemType.PROCESS_MANAGER
+    # ) # 2nd step
+    # @unpack_request_data_to(ProcessQuery) # 3rd step
+    # @pack_response # 4th step
+    # def flush(self, query:ProcessQuery) -> Response:
+    #     return
 
 
     def _kill_impl(self,query:ProcessQuery) -> ProcessInstanceList: #
