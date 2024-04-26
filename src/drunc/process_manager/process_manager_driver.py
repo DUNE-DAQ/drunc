@@ -156,6 +156,13 @@ class ProcessManagerDriver(GRPCDriver):
                     exec='source',
                     args=[session_dal.rte_script]))
 
+            executable_and_arguments.append(
+                ProcessDescription.ExecAndArgs(
+                    exec = "env",
+                    args = []
+                )
+            )
+
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
                 args=args))
