@@ -33,3 +33,22 @@ class ProcessManagerConfHandler(ConfHandler):
         new_data.command_address = data['command_address']
 
         return new_data
+
+
+
+def get_cla(db, session_uid, obj):
+
+    if hasattr(obj, "oksTypes"):
+        if 'RCApplication' in obj.oksTypes():
+            from coredal import rc_application_construct_commandline_parameters
+            return rc_application_construct_commandline_parameters(db, session_uid, obj.id)
+
+        elif 'SmartDaqApplication' in obj.oksTypes():
+            from appdal import smart_daq_application_construct_commandline_parameters
+            return smart_daq_application_construct_commandline_parameters(db, session_uid, obj.id)
+
+        elif 'DaqApplication' in obj.oksTypes():
+            from coredal import daq_application_construct_commandline_parameters
+            return daq_application_construct_commandline_parameters(db, session_uid, obj.id)
+
+    return obj.commandline_parameters

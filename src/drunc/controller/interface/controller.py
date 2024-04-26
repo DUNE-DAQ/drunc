@@ -31,7 +31,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         data = conf_path,
         oks_key = OKSKey(
             schema_file='schema/coredal/dunedaq.schema.xml',
-            class_name="Segment",
+            class_name="RCApplication",
             obj_uid=name,
             session=session, # some of the function for enable/disable require the full dal of the session
         ),

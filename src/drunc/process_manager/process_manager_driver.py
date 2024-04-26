@@ -122,19 +122,20 @@ class ProcessManagerDriver(GRPCDriver):
 
         apps = process_segment(db, session_dal, session_dal.segment)
 
-        # WHEEYYYY
-        def get_controller_address(CLAs):
-            from urllib.parse import urlparse
-            for CLA in CLAs:
-                try:
-                    address_maybe = urlparse(CLA)
-                except:
-                    pass
-                else:
-                    if address_maybe.scheme == 'grpc':
-                        return address_maybe.netloc
+        def get_controller_address(top_controller_conf):
+            service_id = top_controller_conf.id + "_control"
+            port_number = None
+            protocol = None
+            for service in top_controller_conf.exposes_service:
+                if service.id == service_id:
+                    port_number = service.port
+                    protocol = service.protocol
+                    break
+            if port_number is None or protocol is None:
+                return None
+            return f'{top_controller_conf.runs_on.runs_on.id}:{port_number}'
 
-        self.controller_address = get_controller_address(session_dal.segment.controller.commandline_parameters)
+        self.controller_address = get_controller_address(session_dal.segment.controller)
         self._log.debug(f"{apps=}")
         import os
         pwd = os.getcwd()
@@ -154,6 +155,13 @@ class ProcessManagerDriver(GRPCDriver):
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
                     args=[session_dal.rte_script]))
+
+            executable_and_arguments.append(
+                ProcessDescription.ExecAndArgs(
+                    exec = "env",
+                    args = []
+                )
+            )
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,

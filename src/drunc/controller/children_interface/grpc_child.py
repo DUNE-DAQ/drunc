@@ -4,18 +4,13 @@ from drunc.utils.configuration import ConfHandler
 import grpc as grpc
 from drunc.exceptions import DruncSetupException
 
-class BadArgumentInConf(DruncSetupException):
-    pass
 
 class gRCPChildConfHandler(ConfHandler):
-
     def get_uri(self):
-        from drunc.utils.utils import validate_command_facility
-        from click import BadParameter
-        try:
-            return validate_command_facility(None, None, self.data.controller.commandline_parameters[1])
-        except BadParameter as e:
-            raise BadArgumentInConf(f'Error in the configuration, the 2nd CLA seems to be incorrect: {e.message}. CLA:\'{self.data.controller.commandline_parameters[1]}\'')
+        for service in self.data.controller.exposes_service:
+            if self.data.controller.id+"_control" in service.id:
+                return f"{self.data.controller.runs_on.runs_on.id}:{service.port}"
+        raise DruncSetupException(f"gRPC API child node {self.data.controller.id} does not expose a control service")
 
 
 class gRPCChildNode(ChildNode):
@@ -28,13 +23,7 @@ class gRPCChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{self.name}-grpc-child')
         self.configuration = configuration
-        try:
-            self.uri =  self.configuration.get_uri()
-        except BadArgumentInConf as e:
-            message = f'\'{self.name}\' {str(e)}'
-            raise BadArgumentInConf(message)
-
-
+        self.uri =  self.configuration.get_uri()
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
