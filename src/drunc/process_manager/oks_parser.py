@@ -21,6 +21,14 @@ def process_segment(db, session, segment):
   log = logging.getLogger('process_segment')
   # Get default environment from Session
   defenv = {}
+
+  import os
+  DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
+  if DB_PATH is None:
+    log.warning("DUNEDAQ_DB_PATH not set in this shell")
+  else:
+    defenv["DUNEDAQ_DB_PATH"] = DB_PATH
+
   process_variables(session.environment, defenv)
 
   apps = []
@@ -53,7 +61,6 @@ def process_segment(db, session, segment):
 
   # Get all the enabled applications of this segment
   for app in segment.applications:
-    continue
     if 'Component' in app.oksTypes():
       enabled = not coredal.component_disabled(db._obj, session.id, app.id)
       log.debug(f"{app.id} {enabled=}")
