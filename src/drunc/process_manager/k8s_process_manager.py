@@ -319,86 +319,58 @@ class K8sProcessManager(ProcessManager):
         ret = []
         self._log.info(f'query: {query.session}')
 
-
-
-        if not query.session ==[]:
-            for uuid in self._get_process_uid(query):
-                session = self.boot_request[uuid].process_description.metadata.session
-                podname = self.boot_request[uuid].process_description.metadata.name
+        for uuid in self._get_process_uid(query):
+            podname = self.boot_request[uuid].process_description.metadata.name
+            session = self.boot_request[uuid].process_description.metadata.session
+            self._log.info(f'Killing pod \"{podname}\" in \"{session}\" namespace')
+            try:
+                self._core_v1_api.delete_namespaced_pod(podname,session)
+            except self._api_error_v1_api as e:
+                if e.status == 404:
+                    self._log.error(f"Namespace \"{session}\" does not exist")
+                else:
+                    self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
+                    raise e
+            
+            return_code = None
+            if not self.is_alive(podname, session):
                 try:
-                    self._core_v1_api.delete_namespace(session)
-                    self._log.info(f"Killing session \"{session}\"")
-                except:
-                    if e.status == 404:
-                        self._log.error(f"Namespace \"{session}\" does not exist")
-                    else:
-                        self._log.error(f"Couldn't kill session \"{session}\": {e}")
-                        raise e
-                pd = ProcessDescription()
-                pd.CopyFrom(self.boot_request[uuid].process_description)
-                pr = ProcessRestriction()
-                pr.CopyFrom(self.boot_request[uuid].process_restriction)
-                pu = ProcessUUID(uuid=uuid)
+                    return_code = self.boot_request[uuid].exit_code
+                except Exception as e:
+                    pass
 
-                return_code = None
-                if not self.is_alive(podname, session):
-                    try:
-                        return_code = self.boot_request[uuid].exit_code
-                    except Exception as e:
-                        pass
-                    
-                pi = ProcessInstance(
-                    process_description = pd,
-                    process_restriction = pr,
-                    status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-                    return_code = return_code,
-                    uuid = pu
-                )
-                ret.append(pi)
+            pd = ProcessDescription()
+            pd.CopyFrom(self.boot_request[uuid].process_description)
+            pr = ProcessRestriction()
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
+            pu = ProcessUUID(uuid=uuid)
+                
+            pi = ProcessInstance(
+                process_description = pd,
+                process_restriction = pr,
+                status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
+                return_code = return_code,
+                uuid = pu
+            )
+            ret.append(pi)
+        
+        # import time
 
-                if not self.is_alive(podname, session):
-                    del self.boot_request[uuid]
-        else:
-            for uuid in self._get_process_uid(query):
-                podname = self.boot_request[uuid].process_description.metadata.name
-                session = self.boot_request[uuid].process_description.metadata.session
-                self._log.info(f'Killing pod \"{podname}\" in \"{session}\" namespace')
-                try:
-                    self._core_v1_api.delete_namespaced_pod(podname,session)
-                except self._api_error_v1_api as e:
-                    if e.status == 404:
-                        self._log.error(f"Namespace \"{session}\" does not exist")
-                    else:
-                        self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
-                        raise e
+        # time.sleep(40)
 
-                pd = ProcessDescription()
-                pd.CopyFrom(self.boot_request[uuid].process_description)
-                pr = ProcessRestriction()
-                pr.CopyFrom(self.boot_request[uuid].process_restriction)
-                pu = ProcessUUID(uuid=uuid)
-
-                return_code = None
-                if not self.is_alive(podname, session):
-                    try:
-                        return_code = self.boot_request[uuid].exit_code
-                    except Exception as e:
-                        pass
-                    
-                pi = ProcessInstance(
-                    process_description = pd,
-                    process_restriction = pr,
-                    status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-                    return_code = return_code,
-                    uuid = pu
-                )
-                ret.append(pi)
-
-                if not self.is_alive(podname, session):
-                    del self.boot_request[uuid]
-
-
-
+        pods = self._core_v1_api.list_namespaced_pod(session)
+        deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
+        self._log.info(f"Deletion timestamp: {deletion_timestamps}")
+        if not pods.items or all(timestamp is not None for timestamp in deletion_timestamps):
+            self._log.info(f"All pods in \"{session}\" namespace are terminating")
+            try:
+                self._core_v1_api.delete_namespace(session)
+            except self._api_error_v1_api as e:
+                if e.status == 404:
+                    self._log.error(f"Namespace \"{session}\" does not exist")
+                else:
+                    self._log.error(f"Couldn't kill namespace \"{session}\": {e}")
+                raise e
 
         pil = ProcessInstanceList(
             values=ret
