@@ -281,13 +281,15 @@ class Controller(ControllerServicer):
                 message = f'Propagating {command} to children ({child.name})',
             )
 
+            from drunc.exceptions import DruncException
+
             try:
                 return_statuses[child.name] = child.propagate_command(command, data, token)
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
                     message = f'Propagating {command} to children ({child.name})',
                 )
-            except Exception as e:
+            except DruncException as e:
                 from druncschema.controller_pb2 import FSMCommandResponseCode
                 return_statuses[child.name] = FSMCommandResponseCode.UNSUCCESSFUL
                 self.broadcast(

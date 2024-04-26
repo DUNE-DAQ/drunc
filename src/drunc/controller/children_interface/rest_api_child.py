@@ -458,7 +458,7 @@ class RESTAPIChildNode(ChildNode):
         # from druncschema.controller_pb2 import FSMCommand
         # fsm_command = unpack_any(data, FSMCommand)
         from druncschema.controller_pb2 import FSMCommandResponseCode
-
+        from drunc.exceptions import DruncException
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(data.command_name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
@@ -476,7 +476,7 @@ class RESTAPIChildNode(ChildNode):
                 self.log.error(r['result'])
                 self.state.to_error()
                 return FSMCommandResponseCode.UNSUCCESSFUL
-        except Exception as e:
+        except DruncException as e:
             self.log.error(str(e))
             self.state.to_error()
             return FSMCommandResponseCode.UNSUCCESSFUL
