@@ -353,10 +353,10 @@ class K8sProcessManager(ProcessManager):
                 uuid = pu
             )
             ret.append(pi)
-        
-        # import time
+            del self.boot_request[uuid]
+            del uuid
+            
 
-        # time.sleep(40)
 
         pods = self._core_v1_api.list_namespaced_pod(session)
         deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
