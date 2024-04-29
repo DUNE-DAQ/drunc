@@ -113,12 +113,12 @@ class K8sProcessManager(ProcessManager):
         
 
 
-    def _create_pod(self, pod_name, ns):
+    def _create_pod(self, pod_name, ns, pod_image="busybox",env_vars=None):
         pod = self._pod_v1_api(
             api_version="v1",
             kind="Pod",
             metadata=self._meta_v1_api(name=pod_name, namespace=ns),
-            spec=self._pod_spec_v1_api(containers=[self._container_v1_api(name=pod_name,image="busybox",command=["sleep", "3600"])])
+            spec=self._pod_spec_v1_api(containers=[self._container_v1_api(name=pod_name,image=pod_image,command=["sleep", "3600"],env=env_vars)])
         )
         try:
             self._core_v1_api.create_namespaced_pod(ns, pod)
@@ -214,14 +214,16 @@ class K8sProcessManager(ProcessManager):
             raise DruncCommandException(f'Process {uuid} already exists!')
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
-        
-        # self._log.info(f'Booting \n{boot_request.process_description.metadata}')
-        
+
+        env_var = boot_request.process_description.env
+        env_vars_list = [client.models.V1EnvVar(name=k, value=v) for k, v in env_var.items()]
+        self._log.info(f'{env_vars_list}')
+                
         try:
             self._create_namespace(session)
         except:
             pass
-        self._create_pod(podnames, session)
+        self._create_pod(podnames, session, env_vars=env_vars_list)
         self._add_label(podnames, 'pod', 'uuid', uuid)
         
         pd = ProcessDescription()
@@ -263,9 +265,11 @@ class K8sProcessManager(ProcessManager):
         pi = ProcessInstance(
             process_description = pd,
             process_restriction = pr,
-            status_code = ProcessInstance.StatusCode.RUNNING, #if self.is_alive(podname,session) else ProcessInstance.StatusCode.DEAD,
+            status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podnames,session) else ProcessInstance.StatusCode.DEAD,
             uuid = pu
         )
+
+
 
         return pi
 
