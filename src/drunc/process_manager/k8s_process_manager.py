@@ -289,6 +289,8 @@ class K8sProcessManager(ProcessManager):
 
     def _restart_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         # ret=[]
+        uuids = self._get_process_uid(query, in_boot_request=True)
+        uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
