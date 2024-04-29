@@ -190,7 +190,6 @@ class K8sProcessManager(ProcessManager):
 
         if uuid in self.boot_request:
             raise DruncCommandException(f'Process {uuid} already exists!')
-        self.br = boot_request
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
         
