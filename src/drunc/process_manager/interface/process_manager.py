@@ -7,17 +7,16 @@ from drunc.utils.utils import log_levels
 
 _cleanup_coroutines = []
 
-@click.command()
-@click.argument('pm-conf', type=str)
-@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def process_manager_cli(pm_conf:str, log_level):
+def run_pm(pm_conf, log_level, ready_event=None):
     from rich.console import Console
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
 
-    from drunc.utils.utils import update_log_level
+    from drunc.utils.utils import update_log_level, pid_info_str
     update_log_level(log_level)
-
+    from logging import getLogger
+    logger = getLogger('run_pm')
+    logger.debug(pid_info_str())
 
     from drunc.process_manager.process_manager import ProcessManager
     from drunc.utils.configuration import parse_conf_url, OKSKey
@@ -27,6 +26,7 @@ def process_manager_cli(pm_conf:str, log_level):
         type = conf_type,
         data = conf_path
     )
+
     pm = ProcessManager.get(pmch, name='process_manager')
 
     loop = asyncio.get_event_loop()
@@ -54,6 +54,8 @@ def process_manager_cli(pm_conf:str, log_level):
             pm.terminate()
 
         _cleanup_coroutines.append(server_shutdown())
+        if ready_event is not None:
+            ready_event.set()
         await server.wait_for_termination()
 
 
@@ -68,3 +70,18 @@ def process_manager_cli(pm_conf:str, log_level):
         if _cleanup_coroutines:
             loop.run_until_complete(*_cleanup_coroutines)
         loop.close()
+
+@click.command()
+@click.argument('pm-conf', type=str)
+@click.option(
+    '-l',
+    '--log-level',
+    type=click.Choice(
+        log_levels.keys(),
+        case_sensitive=False
+    ),
+    default='INFO',
+    help='Set the log level'
+)
+def process_manager_cli(pm_conf:str, log_level):
+    run_pm(pm_conf, log_level)
