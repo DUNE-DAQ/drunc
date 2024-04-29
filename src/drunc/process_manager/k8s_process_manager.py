@@ -7,8 +7,15 @@ from kubernetes import client, config
 
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.authoriser_pb2 import ActionType, SystemType
+
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.exceptions import DruncCommandException
+from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
+from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
+from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
+
 
 
 
@@ -42,11 +49,15 @@ class K8sProcessManager(ProcessManager):
         self.drunc_label = "drunc.daq"
     
     def is_alive(self, name, namespace):
-        for _ in range(10):
-            s = self._core_v1_api.read_namespaced_pod_status(name, namespace)
-            for cond in s.status.conditions:
-                if cond.type == "Ready" and cond.status == "True":
-                    return True
+        try:
+            for _ in range(10):
+                s = self._core_v1_api.read_namespaced_pod_status(name, namespace)
+                for cond in s.status.conditions:
+                    if cond.type == "Ready" and cond.status == "True":
+                        return True
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                return
         return False
 
     def _add_label(self, obj_name, obj_type, key, label):
@@ -142,9 +153,6 @@ class K8sProcessManager(ProcessManager):
         for uuid in all_the_uuids:
             podname = self.boot_request[uuid].process_description.metadata.name
             all_pods.append(podname)
-        self._log.info(f'podnames: {all_pods}')
-
-        self._log.info(f'all_the_uuids: {all_the_uuids}')
 
         for uuid in self.boot_request.keys():
             accepted = False
@@ -263,7 +271,9 @@ class K8sProcessManager(ProcessManager):
             pu = ProcessUUID(uuid=uuid)
 
             return_code = None
+
             if not self.is_alive(podname, session):
+                self._log.info(f'{podname} alive?: {self.is_alive(podname, session)}')
                 try:
                     return_code = self.boot_request[uuid].exit_code
                 except Exception as e:
@@ -351,16 +361,23 @@ class K8sProcessManager(ProcessManager):
         return ret
     
 
-    # # ORDER MATTERS!
-    # @broadcasted # outer most wrapper 1st step
-    # @authentified_and_authorised(
-    #     action=ActionType.DELETE,
-    #     system=SystemType.PROCESS_MANAGER
-    # ) # 2nd step
-    # @unpack_request_data_to(ProcessQuery) # 3rd step
-    # @pack_response # 4th step
-    # def flush(self, query:ProcessQuery) -> Response:
-    #     return
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    @pack_response # 4th step
+    def flush(self, query:ProcessQuery) -> Response:
+        for uuid in self._get_process_uid(query):
+            podname = self.boot_request[uuid].process_description.metadata.name
+            session = self.boot_request[uuid].process_description.metadata.session
+            self._log.info(f'Flushing pod \"{podname}\" in \"{session}\" namespace')
+            if not self.is_alive(podname, session):
+                del self.boot_request[uuid]
+                del uuid
+        return
 
 
     def _kill_impl(self, query:ProcessQuery, in_boot_request:bool=False) -> ProcessInstanceList: 
@@ -372,7 +389,7 @@ class K8sProcessManager(ProcessManager):
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Killing pod \"{podname}\" in \"{session}\" namespace')
             try:
-                self._core_v1_api.delete_namespaced_pod(podname,session)
+                self._core_v1_api.delete_namespaced_pod(podname,session, grace_period_seconds=1)
             except self._api_error_v1_api as e:
                 if e.status == 404:
                     self._log.error(f"Namespace \"{session}\" does not exist")
@@ -403,22 +420,21 @@ class K8sProcessManager(ProcessManager):
             ret.append(pi)
             del self.boot_request[uuid]
             del uuid
-            
-
-
-        pods = self._core_v1_api.list_namespaced_pod(session)
-        deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
-        self._log.info(f"Deletion timestamp: {deletion_timestamps}")
-        if not pods.items or all(timestamp is not None for timestamp in deletion_timestamps):
-            self._log.info(f"All pods in \"{session}\" namespace are terminating")
-            try:
-                self._core_v1_api.delete_namespace(session)
-            except self._api_error_v1_api as e:
-                if e.status == 404:
-                    self._log.error(f"Namespace \"{session}\" does not exist")
-                else:
-                    self._log.error(f"Couldn't kill namespace \"{session}\": {e}")
-                raise e
+    
+            pods = self._core_v1_api.list_namespaced_pod(session)
+            deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
+            self._log.info(f"Deletion timestamp: {deletion_timestamps}")
+            self._log.info(f":{deletion_timestamps} {pods.items}")
+            if not pods.items or all(timestamp is not None for timestamp in deletion_timestamps):
+                self._log.info(f"All pods in \"{session}\" namespace are terminating")
+                try:
+                    self._core_v1_api.delete_namespace(session)
+                except self._api_error_v1_api as e:
+                    if e.status == 404:
+                        self._log.error(f"Namespace \"{session}\" does not exist")
+                    else:
+                        self._log.error(f"Couldn't kill namespace \"{session}\": {e}")
+                    raise e
 
         pil = ProcessInstanceList(
             values=ret
