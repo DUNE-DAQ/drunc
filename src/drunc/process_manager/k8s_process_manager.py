@@ -3,7 +3,6 @@ import sh
 from functools import partial
 import threading
 from kubernetes import client, config
-import time
 
 
 
@@ -126,14 +125,10 @@ class K8sProcessManager(ProcessManager):
 
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False):
         import re
-        self._log.info(f'query: {query}')
         uuid_selector = []
         name_selector = query.names
-        self._log.info(f'name_selector: {name_selector}')
         user_selector = query.user
-        self._log.info(f'user_selector: {user_selector}')
         session_selector = query.session
-        self._log.info(f'session_selector: {session_selector}')
         # relevant reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
 
         processes = []
@@ -195,13 +190,16 @@ class K8sProcessManager(ProcessManager):
 
         if uuid in self.boot_request:
             raise DruncCommandException(f'Process {uuid} already exists!')
-
+        self.br = boot_request
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
         
         # self._log.info(f'Booting \n{boot_request.process_description.metadata}')
-
-        self._create_namespace(session)
+        
+        try:
+            self._create_namespace(session)
+        except:
+            pass
         self._create_pod(podnames, session)
         self._add_label(podnames, 'pod', 'uuid', uuid)
         
@@ -248,8 +246,6 @@ class K8sProcessManager(ProcessManager):
             uuid = pu
         )
 
-        self.boot_request[uuid]=pi
-
         return pi
 
 
@@ -292,18 +288,69 @@ class K8sProcessManager(ProcessManager):
 
 
     def _restart_impl(self, query:ProcessQuery) -> ProcessInstanceList:
-        # uuids = self._get_process_uid(query, in_boot_request=True)
-        # uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        # ret=[]
+        for uuid in self._get_process_uid(query):
+            podname = self.boot_request[uuid].process_description.metadata.name
+            session = self.boot_request[uuid].process_description.metadata.session
+            self._log.info(f'Restarting pod \"{podname}\" in \"{session}\" namespace')
+            try:
+                self._core_v1_api.delete_namespaced_pod(podname, session,grace_period_seconds=1)
+            except self._api_error_v1_api as e:
+                if e.status == 404:
+                    self._log.error(f"Namespace \"{session}\" does not exist")
+                else:
+                    self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
+                    raise e
 
-        # if uuid in self.process_store:
-        #     process = self.process_store[uuid]
-        #     if process.is_alive():
-        #         process.terminate()
+            same_uuid_br = []
+            same_uuid_br = BootRequest()
+            same_uuid_br.CopyFrom(self.boot_request[uuid])
+            same_uuid = uuid
+            self._log.info(f'uuid: {same_uuid}')
 
-        return #self.__boot(self.boot_request[uuid], uuid)
+            del self.boot_request[uuid]
+            del uuid
+
+            from time import sleep
+            sleep(10)
+  
+            ret=self.__boot(same_uuid_br, same_uuid)
+            self._log.info(f'{same_uuid} Process restarted')
+
+
+
+            # pd = ProcessDescription()
+            # pd.CopyFrom(same_uuid_br.process_description)
+            # pr = ProcessRestriction()
+            # pr.CopyFrom(same_uuid_br.process_restriction)
+            # pu = ProcessUUID(uuid=same_uuid)
+
+            # return_code = None
+            # if not self.is_alive(podname, session):
+            #     try:
+            #         return_code = same_uuid_br[same_uuid].exit_code
+            #     except Exception as e:
+            #         pass
+            
+            # pi = ProcessInstance(
+            #     process_description = pd,
+            #     process_restriction = pr,
+            #     status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
+            #     return_code = return_code,
+            #     uuid = pu
+            # )
+            # ret.append(pi)
+
+            del same_uuid_br
+            del same_uuid
+        
+        # pil = ProcessInstanceList(
+        #     values=ret
+        # )
+        return ret
     
 
-    # ORDER MATTERS!
+    # # ORDER MATTERS!
     # @broadcasted # outer most wrapper 1st step
     # @authentified_and_authorised(
     #     action=ActionType.DELETE,
