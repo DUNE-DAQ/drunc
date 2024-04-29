@@ -132,3 +132,11 @@ def validate_command_facility(ctx, param, value):
         case _:
             raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
 
+
+
+
+
+def pid_info_str():
+    import os
+    return f'Parent\'s PID: {os.getppid()} | This PID: {os.getpid()}'
+
