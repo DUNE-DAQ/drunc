@@ -5,7 +5,7 @@ from druncschema.request_response_pb2 import Response
 from druncschema.authoriser_pb2 import ActionType, SystemType
 
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException, DruncException, DruncK8sNamespaceAlreadyExists
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
@@ -99,7 +99,7 @@ class K8sProcessManager(ProcessManager):
             self._core_v1_api.create_namespace(namespace_manifest)
             self._add_creator_label(nsname, 'namespace')
         else:
-            return 
+            return DruncK8sNamespaceAlreadyExists (f'Session {nsname} already exists') 
         
 
 

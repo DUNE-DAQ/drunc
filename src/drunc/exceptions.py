@@ -18,3 +18,7 @@ class DruncCommandException(DruncException): # Exceptions that gets thrown when 
     def __init__(self, txt, grpc_error_code=code_pb2.INTERNAL, *args, **kwargs):
         self.grpc_error_code = grpc_error_code
         super().__init__(txt, *args, **kwargs)
+
+class DruncK8sNamespaceAlreadyExists(DruncException): # Exceptions that gets thrown when namespaces already exists
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
