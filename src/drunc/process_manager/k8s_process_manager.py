@@ -163,14 +163,8 @@ class K8sProcessManager(ProcessManager):
         deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
         if not pods.items or all(timestamp is not None for timestamp in deletion_timestamps):
             self._log.info(f"All pods in \"{session}\" namespace are terminating")
-            try:
-                self._core_v1_api.delete_namespace(session)
-            except self._api_error_v1_api as e:
-                if e.status == 404:
-                    self._log.error(f"Namespace \"{session}\" does not exist")
-                else:
-                    self._log.error(f"Couldn't kill namespace \"{session}\": {e}")
-                raise e
+            self._core_v1_api.delete_namespace(session)
+
         
     
 
@@ -271,14 +265,11 @@ class K8sProcessManager(ProcessManager):
             pr.CopyFrom(self.boot_request[uuid].process_restriction)
             pu = ProcessUUID(uuid=uuid)
 
-            return_code = None
+            if self.is_alive(podname, session):
+                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
+            else:
+                return_code = 404
 
-            if not self.is_alive(podname, session):
-                try:
-                    return_code = self.boot_request[uuid].exit_code
-                except Exception as e:
-                    pass
-            
             pi = ProcessInstance(
                 process_description = pd,
                 process_restriction = pr,
@@ -376,12 +367,10 @@ class K8sProcessManager(ProcessManager):
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Flushing pod \"{podname}\" in \"{session}\" namespace')
             
-            return_code = None
-            if not self.is_alive(podname, session):
-                try:
-                    return_code = self.boot_request[uuid].exit_code
-                except Exception as e:
-                    pass
+            if self.is_alive(podname, session):
+                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
+            else:
+                return_code = 404
 
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -423,17 +412,15 @@ class K8sProcessManager(ProcessManager):
                 self._core_v1_api.delete_namespaced_pod(podname,session, grace_period_seconds=1)
             except self._api_error_v1_api as e:
                 if e.status == 404:
-                    self._log.error(f"Namespace \"{session}\" does not exist")
+                    return
                 else:
                     self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
                     raise e
             
-            return_code = None
-            if not self.is_alive(podname, session):
-                try:
-                    return_code = self.boot_request[uuid].exit_code
-                except Exception as e:
-                    pass
+            if self.is_alive(podname, session):
+                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
+            else:
+                return_code = 404
 
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
