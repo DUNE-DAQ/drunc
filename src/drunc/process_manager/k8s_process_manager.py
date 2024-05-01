@@ -87,26 +87,21 @@ class K8sProcessManager(ProcessManager):
         return self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _create_namespace(self, nsname):
-        try:
-            self._core_v1_api.read_namespace(nsname)
-            self._log.info(f"Namespace \"{nsname}\" already exists")
+        ns_list = self._core_v1_api.list_namespace()
+        ns_names = [ns.metadata.name for ns in ns_list.items]
+        self._log.info(f'ns_list: {ns_names}')
+        if not nsname in ns_names:
+            namespace_manifest = {
+                "apiVersion": "v1",
+                "kind": "Namespace",
+                "metadata": {"name": nsname},
+            }
+            self._core_v1_api.create_namespace(namespace_manifest)
             self._add_creator_label(nsname, 'namespace')
-        except self._api_error_v1_api as e:
-            if e.status == 404:
-                namespace_manifest = {
-                    "apiVersion": "v1",
-                    "kind": "Namespace",
-                    "metadata": {"name": nsname},
-                }
-                try:
-                    self._core_v1_api.create_namespace(namespace_manifest)
-                    self._log.info(f"Creating \"{nsname}\" namespace") 
-                except Exception as e:
-                    self._log.error(f"Couldn't Create the Namespace: {e}")
-                    raise e
-            else:
-                raise e
+        else:
+            return 
         
+
 
 
     def _create_pod(self, pod_name, ns, pod_image="busybox",env_vars=None):
@@ -123,11 +118,6 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             self._log.error(f"Couldn't Create pod with name: \"{pod_name}\": {e}")
             raise e
-
-    def _get_pod_logs(self, pod_name, namespace):
-        config.load_kube_config()
-        log=self._core_v1_api.read_namespaced_pod_log(name=pod_name, namespace=namespace)
-        return log
 
 
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False):
@@ -181,6 +171,7 @@ class K8sProcessManager(ProcessManager):
                 else:
                     self._log.error(f"Couldn't kill namespace \"{session}\": {e}")
                 raise e
+        
     
 
 # --------------------------------------Commands--------------------------------------
@@ -198,7 +189,6 @@ class K8sProcessManager(ProcessManager):
     def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
         import uuid
         this_uuid = str(uuid.uuid4())
-        self._log.info(f'uuid for booting is:{this_uuid}')
         return self.__boot(boot_request, this_uuid)
     
 
@@ -213,12 +203,9 @@ class K8sProcessManager(ProcessManager):
 
         env_var = boot_request.process_description.env
         env_vars_list = [client.models.V1EnvVar(name=k, value=v) for k, v in env_var.items()]
-        self._log.info(f'{env_vars_list}')
                 
-        try:
-            self._create_namespace(session)
-        except:
-            pass
+        
+        self._create_namespace(session)
         self._create_pod(podnames, session, env_vars=env_vars_list)
         self._add_label(podnames, 'pod', 'uuid', uuid)
         
