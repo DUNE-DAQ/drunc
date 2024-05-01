@@ -218,14 +218,10 @@ class K8sProcessManager(ProcessManager):
         #         raise Exception("Timeout: Pod did not boot within 20 seconds")
 
 
-        # return_code = None
-        # try:
-        #     if not self.process_store[uuid].is_alive():
-        #         return_code = self.process_store[uuid].exit_code
-        #     else:
-        #         alive = True
-        # except Exception as e:
-        #     pass
+        # if self.is_alive(podname, session):
+            # return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
+        # else:
+            # return_code = 404
 
         # if uuid not in self.process_store:
         #     pi = ProcessInstance(
@@ -288,7 +284,6 @@ class K8sProcessManager(ProcessManager):
 
 
     def _restart_impl(self, query:ProcessQuery) -> ProcessInstanceList:
-        # ret=[]
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(query):
@@ -313,8 +308,17 @@ class K8sProcessManager(ProcessManager):
             del self.boot_request[uuid]
             del uuid
 
-            from time import sleep
-            sleep(10)
+            while True:
+                try:
+                    self._core_v1_api.read_namespaced_pod(podname, session)
+                    from time import sleep
+                    sleep(1)
+                except self._api_error_v1_api as e:
+                    if e.status == 404:
+                        break
+                    else:
+                        self._log.error(f"Error while waiting for pod \"{podname}.{session}\" to terminate: {e}")
+                        continue
   
             ret=self.__boot(same_uuid_br, same_uuid)
             self._log.info(f'{same_uuid} Process restarted')
@@ -327,12 +331,10 @@ class K8sProcessManager(ProcessManager):
             # pr.CopyFrom(same_uuid_br.process_restriction)
             # pu = ProcessUUID(uuid=same_uuid)
 
-            # return_code = None
-            # if not self.is_alive(podname, session):
-            #     try:
-            #         return_code = same_uuid_br[same_uuid].exit_code
-            #     except Exception as e:
-            #         pass
+            # if self.is_alive(podname, session):
+                # return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
+            # else:
+                # return_code = 404
             
             # pi = ProcessInstance(
             #     process_description = pd,
