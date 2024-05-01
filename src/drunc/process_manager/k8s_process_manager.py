@@ -1,20 +1,14 @@
-import grpc
-import sh
-from functools import partial
-import threading
 from kubernetes import client, config
 
-
-
-from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
-from druncschema.request_response_pb2 import Request, Response
+from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
+from druncschema.request_response_pb2 import Response
 from druncschema.authoriser_pb2 import ActionType, SystemType
 
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.exceptions import DruncCommandException
-from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
-from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
-from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to, pack_response, async_pack_response
+from drunc.exceptions import DruncCommandException, DruncException
+from drunc.authoriser.decorators import authentified_and_authorised
+from drunc.broadcast.server.decorators import broadcasted
+from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 
 
 
@@ -57,7 +51,7 @@ class K8sProcessManager(ProcessManager):
                         return True
         except self._api_error_v1_api as e:
             if e.status == 404:
-                return
+                return False
         return False
 
     def _add_label(self, obj_name, obj_type, key, label):
@@ -76,6 +70,8 @@ class K8sProcessManager(ProcessManager):
                 namespace = self._get_pod_namespace(obj_name)
                 self._core_v1_api.patch_namespaced_pod(obj_name, namespace, body)
                 self._log.info(f"Added label \"{key}:{label}\" to pod \"{obj_name}\" in \"{namespace}\" namespace")
+            else:
+                raise DruncException(f'Cannot add label to object type: {obj_type}')
         except Exception as e:
             self._log.error(f"Couldn't add label to the object: {e}")
             raise e
