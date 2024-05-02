@@ -29,10 +29,12 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
             "log_level": log_level,
             "ready_event": ready_event,
             "signal_handler": ignore_sigint_sighandler,
-        }
+            # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
+        },
     )
     ctx.obj.print(f'Starting process manager with configuration {process_manager_configuration}')
     ctx.obj.pm_process.start()
+
 
     from time import sleep
     for _ in range(100):
