@@ -13,7 +13,7 @@ import pathlib
 def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceback:bool) -> None:
     ctx.obj.print_traceback = traceback,
 
-    from drunc.utils.utils import update_log_level, pid_info_str
+    from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
     update_log_level(log_level)
     from logging import getLogger
     logger = getLogger('unified_shell')
@@ -22,22 +22,26 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
     from drunc.process_manager.interface.process_manager import run_pm
     import multiprocessing as mp
     ready_event = mp.Event()
-    pm_proc = mp.Process(
+    ctx.obj.pm_process = mp.Process(
         target = run_pm,
         kwargs = {
             "pm_conf": process_manager_configuration,
             "log_level": log_level,
             "ready_event": ready_event,
+            "signal_handler": ignore_sigint_sighandler,
         }
     )
     ctx.obj.print(f'Starting process manager with configuration {process_manager_configuration}')
-    pm_proc.start()
+    ctx.obj.pm_process.start()
 
+    from time import sleep
     for _ in range(100):
         if ready_event.is_set():
             break
-        from time import sleep
         sleep(0.1)
+
+    if not ready_event.is_set():
+        raise DruncSetupException('Process manager did not start in time')
 
     from drunc.utils.configuration import parse_conf_url
     conf_path, conf_type = parse_conf_url(process_manager_configuration)
@@ -59,8 +63,8 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
         )
     except ServerUnreachable as e:
         ctx.obj.critical(f'Could not connect to the process manager')
-        if not pm_proc.is_alive():
-            ctx.obj.critical(f'The process manager is dead, exit code {pm_proc.exitcode}')
+        if not ctx.obj.pm_process.is_alive():
+            ctx.obj.critical(f'The process manager is dead, exit code {ctx.obj.pm_process.exitcode}')
         raise e
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
@@ -71,8 +75,8 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
 
     def cleanup():
         ctx.obj.terminate()
-        pm_proc.terminate()
-        pm_proc.join()
+        ctx.obj.pm_process.terminate()
+        ctx.obj.pm_process.join()
 
     ctx.call_on_close(cleanup)
 

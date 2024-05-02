@@ -7,7 +7,10 @@ from drunc.utils.utils import log_levels
 
 _cleanup_coroutines = []
 
-def run_pm(pm_conf, log_level, ready_event=None):
+def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None):
+    if signal_handler is not None:
+        signal_handler()
+
     from rich.console import Console
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
@@ -56,6 +59,7 @@ def run_pm(pm_conf, log_level, ready_event=None):
         _cleanup_coroutines.append(server_shutdown())
         if ready_event is not None:
             ready_event.set()
+
         await server.wait_for_termination()
 
 

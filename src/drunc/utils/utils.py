@@ -140,3 +140,9 @@ def pid_info_str():
     import os
     return f'Parent\'s PID: {os.getppid()} | This PID: {os.getpid()}'
 
+def noop(*args, **kwargs):
+    pass
+
+def ignore_sigint_sighandler():
+    import signal
+    signal.signal(signal.SIGINT, noop)
