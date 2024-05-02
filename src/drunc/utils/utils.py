@@ -140,9 +140,27 @@ def pid_info_str():
     import os
     return f'Parent\'s PID: {os.getppid()} | This PID: {os.getpid()}'
 
-def noop(*args, **kwargs):
-    pass
+import signal
 
 def ignore_sigint_sighandler():
-    import signal
-    signal.signal(signal.SIGINT, noop)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def parent_death_pact(signal=signal.SIGHUP):
+    import ctypes
+    import sys
+    """
+    Commit to kill current process when parent process dies.
+    Each time you spawn a new process, run this to set signal
+    handler appropriately (e.g put it at the beginning of each
+    script, and in multiprocessing startup code).
+    """
+    assert sys.platform == 'linux', \
+        "this fn only works on Linux right now"
+    libc = ctypes.CDLL("libc.so.6")
+    # see include/uapi/linux/prctl.h in kernel
+    PR_SET_PDEATHSIG = 1
+    # last three args are unused for PR_SET_PDEATHSIG
+    retcode = libc.prctl(PR_SET_PDEATHSIG, signal, 0, 0, 0)
+    if retcode != 0:
+        raise Exception("prctl() returned nonzero retcode %d" % retcode)

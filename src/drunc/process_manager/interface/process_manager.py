@@ -11,6 +11,9 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None):
     if signal_handler is not None:
         signal_handler()
 
+    from drunc.utils.utils import parent_death_pact
+    parent_death_pact() # If the parent dies (for example unified shell), we die too
+
     from rich.console import Console
     console = Console()
     console.print(f'Using \'{pm_conf}\' as the ProcessManager configuration')
