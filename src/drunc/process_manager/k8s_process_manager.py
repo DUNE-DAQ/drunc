@@ -89,7 +89,10 @@ class K8sProcessManager(ProcessManager):
             raise e
 
     def _get_pod_namespace(self, pod_name):
-        pods = self._core_v1_api.list_pod_for_all_namespaces(watch=False)
+        pods = self._core_v1_api.list_pod_for_all_namespaces(
+            watch=False,
+            label_selector = self._get_creator_label_selector(),
+        )
         for pod in pods.items:
             if pod.metadata.name == pod_name:
                 return pod.metadata.namespace
@@ -102,7 +105,9 @@ class K8sProcessManager(ProcessManager):
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _create_namespace(self, nsname):
-        ns_list = self._core_v1_api.list_namespace()
+        ns_list = self._core_v1_api.list_namespace(
+            label_selector = self._get_creator_label_selector(),
+        )
 
         ns_names = [ns.metadata.name for ns in ns_list.items]
         self._log.info(f'ns_list: {ns_names}')
@@ -175,7 +180,10 @@ class K8sProcessManager(ProcessManager):
         return processes
 
     def _kill_if_empty_session(self,session):
-        pods = self._core_v1_api.list_namespaced_pod(session)
+        pods = self._core_v1_api.list_namespaced_pod(
+            session,
+            label_selector = self._get_creator_label_selector(),
+        )
         deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
         if not pods.items or all(timestamp is not None for timestamp in deletion_timestamps):
             self._log.info(f"All pods in \"{session}\" namespace are terminating")
