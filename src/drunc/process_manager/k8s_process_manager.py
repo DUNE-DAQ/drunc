@@ -5,7 +5,8 @@ from druncschema.request_response_pb2 import Response
 from druncschema.authoriser_pb2 import ActionType, SystemType
 
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.exceptions import DruncCommandException, DruncException, DruncK8sNamespaceAlreadyExists
+from drunc.exceptions import DruncCommandException, DruncException
+from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
@@ -94,22 +95,44 @@ class K8sProcessManager(ProcessManager):
             namespace_manifest = {
                 "apiVersion": "v1",
                 "kind": "Namespace",
-                "metadata": {"name": nsname},
+                "metadata": {
+                    "name": nsname,
+                    "labels": {
+                        "pod-security.kubernetes.io/enforce":"privileged",
+                        "pod-security.kubernetes.io/enforce-version":"latest",
+                        "pod-security.kubernetes.io/warn":"privileged",
+                        "pod-security.kubernetes.io/warn-version":"latest",
+                        "pod-security.kubernetes.io/audit":"privileged",
+                        "pod-security.kubernetes.io/audit-version":"latest"
+                        }
+                    },
             }
             self._core_v1_api.create_namespace(namespace_manifest)
             self._add_creator_label(nsname, 'namespace')
         else:
-            return DruncK8sNamespaceAlreadyExists (f'Session {nsname} already exists') 
+            return DruncK8sNamespaceAlreadyExists (f'Session {nsname} already exists')
+
         
-
-
 
     def _create_pod(self, pod_name, ns, pod_image="busybox",env_vars=None):
         pod = self._pod_v1_api(
             api_version="v1",
             kind="Pod",
-            metadata=self._meta_v1_api(name=pod_name, namespace=ns),
-            spec=self._pod_spec_v1_api(containers=[self._container_v1_api(name=pod_name,image=pod_image,command=["sleep", "3600"],env=env_vars)])
+            metadata=self._meta_v1_api(
+                name=pod_name, 
+                namespace=ns
+                ),
+            spec=self._pod_spec_v1_api(
+                containers=[
+                    self._container_v1_api(
+                        name=pod_name,
+                        image=pod_image,
+                        command=["sleep", "3600"],
+                        env=env_vars,
+                        restart_policy="Never"
+                    )
+                ]
+            )
         )
         try:
             self._core_v1_api.create_namespaced_pod(ns, pod)
@@ -158,6 +181,38 @@ class K8sProcessManager(ProcessManager):
 
         return processes
     
+    def _get_pi(self, uuid, podname, session, return_code=None):
+        ret =[]
+        pd = ProcessDescription()
+        pd.CopyFrom(self.boot_request[uuid].process_description)
+        pr = ProcessRestriction()
+        pr.CopyFrom(self.boot_request[uuid].process_restriction)
+        pu = ProcessUUID(uuid=uuid)
+            
+        pi = ProcessInstance(
+            process_description = pd,
+            process_restriction = pr,
+            status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
+            return_code = return_code,
+            uuid = pu
+        )
+        ret.append(pi)
+        return ret
+    
+    def _kill_pod(self, podname, session):
+        pods = self._core_v1_api.list_namespaced_pod(session)
+        pod_names = [pod.metadata.name for pod in pods.items]
+        self._log.info(f'pods: {pod_names}') 
+        if podname in pod_names:
+            self._core_v1_api.delete_namespaced_pod(podname, session,grace_period_seconds=0)
+            while podname in pod_names:
+                from time import sleep
+                sleep(1)
+                pods = self._core_v1_api.list_namespaced_pod(session)
+                pod_names = [pod.metadata.name for pod in pods.items]
+        else:
+            pass
+    
     def _kill_if_empty_session(self,session):
         pods = self._core_v1_api.list_namespaced_pod(session)
         deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
@@ -165,8 +220,14 @@ class K8sProcessManager(ProcessManager):
             self._log.info(f"All pods in \"{session}\" namespace are terminating")
             self._core_v1_api.delete_namespace(session)
 
-        
-    
+    def _return_code(self, podname, session):
+        if not self.is_alive(podname, session):
+            return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
+        else:
+            return_code = 0
+        return return_code
+
+
 
 # --------------------------------------Commands--------------------------------------
 
@@ -241,39 +302,22 @@ class K8sProcessManager(ProcessManager):
             status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podnames,session) else ProcessInstance.StatusCode.DEAD,
             uuid = pu
         )
+        ret=[]
+        ret.append(pi)
 
 
-
-        return pi
+        return ret
 
 
 
     def _ps_impl(self, query:ProcessQuery, in_boot_request:bool=False) -> ProcessInstanceList:
-        ret = []
-
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
 
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
+            return_code = self._return_code(podname, session)
 
-            if self.is_alive(podname, session):
-                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
-            else:
-                return_code = 404
-
-            pi = ProcessInstance(
-                process_description = pd,
-                process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-                return_code = return_code,
-                uuid = pu
-            )
-            ret.append(pi)
+            ret += self._get_pi(uuid, podname, session, return_code)
 
         pil = ProcessInstanceList(
             values=ret
@@ -290,15 +334,9 @@ class K8sProcessManager(ProcessManager):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Restarting pod \"{podname}\" in \"{session}\" namespace')
-            try:
-                self._core_v1_api.delete_namespaced_pod(podname, session,grace_period_seconds=1)
-            except self._api_error_v1_api as e:
-                if e.status == 404:
-                    self._log.error(f"Namespace \"{session}\" does not exist")
-                else:
-                    self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
-                    raise e
 
+            self._kill_pod(podname, session)
+            
             same_uuid_br = []
             same_uuid_br = BootRequest()
             same_uuid_br.CopyFrom(self.boot_request[uuid])
@@ -307,46 +345,14 @@ class K8sProcessManager(ProcessManager):
 
             del self.boot_request[uuid]
             del uuid
-
-            while True:
-                try:
-                    self._core_v1_api.read_namespaced_pod(podname, session)
-                    from time import sleep
-                    sleep(1)
-                except self._api_error_v1_api as e:
-                    if e.status == 404:
-                        break
-                    else:
-                        self._log.error(f"Error while waiting for pod \"{podname}.{session}\" to terminate: {e}")
-                        continue
   
             ret=self.__boot(same_uuid_br, same_uuid)
             self._log.info(f'{same_uuid} Process restarted')
 
-
-
-            # pd = ProcessDescription()
-            # pd.CopyFrom(same_uuid_br.process_description)
-            # pr = ProcessRestriction()
-            # pr.CopyFrom(same_uuid_br.process_restriction)
-            # pu = ProcessUUID(uuid=same_uuid)
-
-            # if self.is_alive(podname, session):
-                # return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
-            # else:
-                # return_code = 404
-            
-            # pi = ProcessInstance(
-            #     process_description = pd,
-            #     process_restriction = pr,
-            #     status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-            #     return_code = return_code,
-            #     uuid = pu
-            # )
-            # ret.append(pi)
-
             del same_uuid_br
             del same_uuid
+
+            # ret += self._get_pi(uuid, podname, session)
         
         # pil = ProcessInstanceList(
         #     values=ret
@@ -363,31 +369,15 @@ class K8sProcessManager(ProcessManager):
     @unpack_request_data_to(ProcessQuery) # 3rd step
     @pack_response # 4th step
     def flush(self, query:ProcessQuery) -> Response:
-        ret=[]
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Flushing pod \"{podname}\" in \"{session}\" namespace')
             
-            if self.is_alive(podname, session):
-                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
-            else:
-                return_code = 404
+            return_code = self._return_code(podname, session)
 
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
-                
-            pi = ProcessInstance(
-                process_description = pd,
-                process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-                return_code = return_code,
-                uuid = pu
-            )
-            ret.append(pi)
+            ret += self._get_pi(uuid, podname, session, return_code)
+
             if not self.is_alive(podname, session):
                 del self.boot_request[uuid]
                 del uuid
@@ -403,41 +393,16 @@ class K8sProcessManager(ProcessManager):
 
 
     def _kill_impl(self, query:ProcessQuery, in_boot_request:bool=False) -> ProcessInstanceList: 
-        ret = []
-        self._log.info(f'query: {query.session}')
-
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Killing pod \"{podname}\" in \"{session}\" namespace')
-            try:
-                self._core_v1_api.delete_namespaced_pod(podname,session, grace_period_seconds=1)
-            except self._api_error_v1_api as e:
-                if e.status == 404:
-                    return
-                else:
-                    self._log.error(f"Couldn't kill pod \"{podname}.{session}\": {e}")
-                    raise e
-            
-            if self.is_alive(podname, session):
-                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated
-            else:
-                return_code = 404
 
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
-                
-            pi = ProcessInstance(
-                process_description = pd,
-                process_restriction = pr,
-                status_code = ProcessInstance.StatusCode.RUNNING if self.is_alive(podname, session) else ProcessInstance.StatusCode.DEAD,
-                return_code = return_code,
-                uuid = pu
-            )
-            ret.append(pi)
+            return_code = self._return_code(podname, session)
+            ret += self._get_pi(uuid, podname, session, return_code)
+
+            self._kill_pod(podname, session)
+
             del self.boot_request[uuid]
             del uuid
 
@@ -446,7 +411,5 @@ class K8sProcessManager(ProcessManager):
         pil = ProcessInstanceList(
             values=ret
         )
-
-
         return pil
         
