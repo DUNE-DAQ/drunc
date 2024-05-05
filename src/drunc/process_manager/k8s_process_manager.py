@@ -55,17 +55,18 @@ class K8sProcessManager(ProcessManager):
             self._log.info(f"No active namespace created by drunc")
 
 
-    def is_alive(self, name, namespace):
-        try:
+    def is_alive(self, podname, session):
+        pods = self._core_v1_api.list_namespaced_pod(session)
+        pod_names = [pod.metadata.name for pod in pods.items]
+        if podname in pod_names:
             for _ in range(10):
-                s = self._core_v1_api.read_namespaced_pod_status(name, namespace)
+                s = self._core_v1_api.read_namespaced_pod_status(podname, session)
                 for cond in s.status.conditions:
                     if cond.type == "Ready" and cond.status == "True":
                         return True
-        except self._api_error_v1_api as e:
-            if e.status == 404:
-                return False
-        return False
+        else:
+            return False
+
 
     def _add_label(self, obj_name, obj_type, key, label):
         body = {
@@ -87,10 +88,10 @@ class K8sProcessManager(ProcessManager):
             raise DruncException(f'Cannot add label to object type: {obj_type}')
 
 
-    def _get_pod_namespace(self, pod_name):
+    def _get_pod_namespace(self, podname):
         pods = self._core_v1_api.list_pod_for_all_namespaces()
         for pod in pods.items:
-            if pod.metadata.name == pod_name:
+            if pod.metadata.name == podname:
                 return pod.metadata.namespace
 
     def _add_creator_label(self, obj_name, obj_type):
@@ -101,17 +102,17 @@ class K8sProcessManager(ProcessManager):
         self._log.info(f"label: {label}")
         return label
 
-    def _create_namespace(self, nsname):
+    def _create_namespace(self, session):
         ns_list = self._core_v1_api.list_namespace(
             label_selector = self._get_creator_label_selector(),
         )
         ns_names = [ns.metadata.name for ns in ns_list.items]
-        if not nsname in ns_names:
+        if not session in ns_names:
             namespace_manifest = {
                 "apiVersion": "v1",
                 "kind": "Namespace",
                 "metadata": {
-                    "name": nsname,
+                    "name": session,
                     "labels": {
                         "pod-security.kubernetes.io/enforce":"privileged",
                         "pod-security.kubernetes.io/enforce-version":"latest",
@@ -123,23 +124,23 @@ class K8sProcessManager(ProcessManager):
                     },
                 }
             self._core_v1_api.create_namespace(namespace_manifest)
-            self._add_creator_label(nsname, 'namespace')
+            self._add_creator_label(session, 'namespace')
         else:
-            return DruncK8sNamespaceAlreadyExists (f'Session {nsname} already exists')
+            return DruncK8sNamespaceAlreadyExists (f'Session {session} already exists')
         
 
-    def _create_pod(self, pod_name, ns, pod_image="busybox",env_vars=None):
+    def _create_pod(self, podname, session, pod_image="busybox",env_vars=None):
         pod = self._pod_v1_api(
             api_version="v1",
             kind="Pod",
             metadata=self._meta_v1_api(
-                name=pod_name, 
-                namespace=ns
+                name=podname, 
+                namespace=session
                 ),
             spec=self._pod_spec_v1_api(
                 containers=[
                     self._container_v1_api(
-                        name=pod_name,
+                        name=podname,
                         image=pod_image,
                         command=["sleep", "3600"],
                         env=env_vars,
@@ -149,11 +150,11 @@ class K8sProcessManager(ProcessManager):
             )
         )
         try:
-            self._core_v1_api.create_namespaced_pod(ns, pod)
-            self._log.info(f"Creating pod \"{pod_name}\" in \"{ns}\" namespace ")
-            self._add_creator_label(pod_name, 'pod')
+            self._core_v1_api.create_namespaced_pod(session, pod)
+            self._log.info(f"Creating pod \"{podname}\" in \"{session}\" namespace ")
+            self._add_creator_label(podname, 'pod')
         except Exception as e:
-            self._log.error(f"Couldn't Create pod with name: \"{pod_name}\": {e}")
+            self._log.error(f"Couldn't Create pod with name: \"{podname}\": {e}")
             raise e
 
 
@@ -196,7 +197,6 @@ class K8sProcessManager(ProcessManager):
         return processes
     
     def _get_pi(self, uuid, podname, session, return_code=None):
-        ret =[]
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)
         pr = ProcessRestriction()
@@ -237,10 +237,15 @@ class K8sProcessManager(ProcessManager):
             self._core_v1_api.delete_namespace(session)
 
     def _return_code(self, podname, session):
-        if not self.is_alive(podname, session):
-            return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
+        pods = self._core_v1_api.list_namespaced_pod(session)
+        pod_names = [pod.metadata.name for pod in pods.items]
+        if not podname in pod_names:
+            return_code = 404
         else:
-            return_code = 0
+            if not self.is_alive(podname, session):
+                return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
+            else:
+                return_code = 0
         return return_code
 
 
@@ -255,7 +260,9 @@ class K8sProcessManager(ProcessManager):
 
 
     async def _logs_impl(self, log_request:LogRequest) -> LogLine:
-        pass
+        logs = LogRequest()
+        self._log.info(f'logs: {logs}')
+        
 
     def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
         import uuid
@@ -416,10 +423,10 @@ class K8sProcessManager(ProcessManager):
             session = self.boot_request[uuid].process_description.metadata.session
             self._log.info(f'Killing pod \"{podname}\" in \"{session}\" namespace')
 
+            self._kill_pod(podname, session)
+
             return_code = self._return_code(podname, session)
             ret.append(self._get_pi(uuid, podname, session, return_code))
-
-            self._kill_pod(podname, session)
 
             del self.boot_request[uuid]
             del uuid
