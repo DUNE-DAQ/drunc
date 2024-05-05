@@ -39,7 +39,7 @@ def parse_conf_url(url:str) ->tuple[ConfTypes,str]:
 
 class ConfigurationNotFound(DruncSetupException):
     def __init__(self, requested_path):
-        super().__init__(f'The configuration \'{requested_path}\' is not in $DUNEDAQ_SHARE_PATH, perhaps you forgot to \'dbt-workarea-env && dbt-build\'?')
+        super().__init__(f'The configuration \'{requested_path}\' is not in $DUNEDAQ_DB_PATH, perhaps you forgot to \'dbt-workarea-env && dbt-build\'?')
 
 def find_configuration(path:str) -> str:
     import logging
@@ -52,7 +52,7 @@ def find_configuration(path:str) -> str:
 
     configuration_files = []
     print(path)
-    for dir in os.getenv('DUNEDAQ_SHARE_PATH').split(":"):
+    for dir in os.getenv('DUNEDAQ_DB_PATH').split(":"):
         tentative = os.path.join(dir, path)
 
         if os.path.exists(tentative):
