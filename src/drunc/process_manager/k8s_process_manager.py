@@ -135,7 +135,7 @@ class K8sProcessManager(ProcessManager):
             return DruncK8sNamespaceAlreadyExists (f'\"{session}\" session already exists')
 
 
-    def _create_pod(self, podname, session, pod_image="ghcr.io/dune-daq/alma9-minimal:latest",env_vars=None):
+    def _create_pod(self, podname, session, pod_image="ghcr.io/dune-daq/alma9:latest",env_vars=None, commands=""):
         import os
         # HACK
         import socket
@@ -156,7 +156,10 @@ class K8sProcessManager(ProcessManager):
                     self._container_v1_api(
                         name=podname,
                         image=pod_image,
-                        command = ["sleep", "3600"],#["exit", "3"],
+                        command = ["sh"],
+                        #args = ["-c", "exit 3"],
+                        args = ["-c", commands],
+                        #args = ["-c", "sleep 3600"],
                         env=env_vars,
                         restart_policy="Never",
                         security_context = self._security_context_v1_api(
@@ -183,7 +186,7 @@ class K8sProcessManager(ProcessManager):
                                         {
                                             'key': "kubernetes.io/hostname",
                                             "operator": 'In',
-                                            'values': ["np04-srv-019"],
+                                            'values': [hostname],
                                         }
                                     ]
                                 )
@@ -308,12 +311,12 @@ class K8sProcessManager(ProcessManager):
         pods = self._core_v1_api.list_namespaced_pod(session)
         pod_names = [pod.metadata.name for pod in pods.items]
         if not podname in pod_names:
-            return_code = 404
+            return_code = None
         else:
             if not self.is_alive(podname, session):
                 return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
             else:
-                return_code = 0
+                return_code = None
         return return_code
 
 
@@ -355,7 +358,14 @@ class K8sProcessManager(ProcessManager):
         env_vars_list = [self._k8s_client.models.V1EnvVar(name=k, value=v) for k, v in env_var.items()]
 
         self._create_namespace(session)
-        self._create_pod(podnames, session, env_vars=env_vars_list)
+        exec_and_args = []
+        for e_and_a in boot_request.process_description.executable_and_arguments:
+            args = [a for a in e_and_a.args]
+            exec_and_args += [" ".join([e_and_a.exec] + args)]
+            # exec_and_args = ["source rte", "daq_application --something argument"]
+        exec_and_args = '; '.join(exec_and_args)
+        print(exec_and_args)
+        self._create_pod(podnames, session, env_vars=env_vars_list, commands=exec_and_args)
         self._add_label(podnames, 'pod', 'uuid', uuid)
         self._log.info(f'\"{session}.{podnames}\":{uuid} booted')
 
