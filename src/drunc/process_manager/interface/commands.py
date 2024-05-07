@@ -111,6 +111,9 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
             obj.rule(f'[yellow]{uuid}[/yellow] logs')
 
         line = result.line
+        if line == "":
+            obj.print('')
+            continue
 
         if line[-1] == '\n':
             line = line[:-1]
