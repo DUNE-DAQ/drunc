@@ -135,8 +135,13 @@ class K8sProcessManager(ProcessManager):
             return DruncK8sNamespaceAlreadyExists (f'\"{session}\" session already exists')
 
 
-    def _create_pod(self, podname, session, pod_image="busybox",env_vars=None):
+    def _create_pod(self, podname, session, pod_image="ghcr.io/dune-daq/alma9-minimal:latest",env_vars=None):
         import os
+        # HACK
+        import socket
+        hostname = socket.gethostname()
+        #/ HACK
+
         pod = self._pod_v1_api(
             api_version="v1",
             kind="Pod",
@@ -144,12 +149,14 @@ class K8sProcessManager(ProcessManager):
                 name=podname,
                 namespace=session
             ),
+
             spec=self._pod_spec_v1_api(
+                restart_policy="Never",
                 containers=[
                     self._container_v1_api(
                         name=podname,
                         image=pod_image,
-                        command=["sleep", "3600"],
+                        command = ["sleep", "3600"],#["exit", "3"],
                         env=env_vars,
                         restart_policy="Never",
                         security_context = self._security_context_v1_api(
@@ -166,6 +173,26 @@ class K8sProcessManager(ProcessManager):
                         ),
                     )
                 ],
+                # HACK
+                affinity = self._k8s_client.V1Affinity(
+                    self._k8s_client.V1NodeAffinity(
+                        required_during_scheduling_ignored_during_execution = self._k8s_client.V1NodeSelector(
+                            node_selector_terms = [
+                                self._k8s_client.V1NodeSelectorTerm(
+                                    match_expressions = [
+                                        {
+                                            'key': "kubernetes.io/hostname",
+                                            "operator": 'In',
+                                            'values': ["np04-srv-019"],
+                                        }
+                                    ]
+                                )
+                            ]
+                        )
+                    )
+                ) if hostname.startswith('np04') else None,
+                #/ HACK
+
                 security_context = self._pod_security_context_v1_api(
                     run_as_user = os.getuid(),
                     run_as_group = os.getgid(),
