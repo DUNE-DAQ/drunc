@@ -331,10 +331,14 @@ class K8sProcessManager(ProcessManager):
 
 
     async def _logs_impl(self, log_request:LogRequest) -> LogLine:
-        session = log_request.metadata.session
-        podname = log_request.metadata.name
-        logs = self._core_v1_api.read_namespaced_pod_log(podname, session)
-        return LogLine(logs=logs)
+
+        uuids = self._get_process_uid(log_request.query, in_boot_request=True)
+        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        for uuid in self._get_process_uid(log_request.query):
+            podname = self.boot_request[uuid].process_description.metadata.name
+            session = self.boot_request[uuid].process_description.metadata.session
+            for log in self._core_v1_api.read_namespaced_pod_log(podname, session, tail_lines=log_request.how_far).split("\n"):
+                yield LogLine(line=log)
 
 
 
@@ -456,6 +460,7 @@ class K8sProcessManager(ProcessManager):
                 del self.boot_request[uuid]
                 self._log.info(f'\"{session}.{podname}\":{uuid} flushed')
                 del uuid
+                self._kill_pod(podname, session)
 
             self._kill_if_empty_session(session)
 
@@ -472,6 +477,7 @@ class K8sProcessManager(ProcessManager):
         for uuid in self._get_process_uid(query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
+
             self._log.info(f'Killing \"{session}.{podname}\":{uuid}')
 
             self._kill_pod(podname, session)
