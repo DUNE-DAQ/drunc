@@ -1,7 +1,7 @@
 {
     "type": "ssh",
     "name": "SSHProcessManager",
-    "command_address": "localhost:10054",
+    "command_address": "localhost:0",
 
     "authoriser": {
         "type": "dummy"

@@ -45,11 +45,13 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None):
 
         server = grpc.aio.server()
         add_ProcessManagerServicer_to_server(pm, server)
-        server.add_insecure_port(address)
+        port = server.add_insecure_port(address)
 
         await server.start()
+        import socket
+        hostname = socket.gethostname()
+        console.print(f'ProcessManager was started on {hostname}:{port}')
 
-        console.print(f'ProcessManager was started on {address}')
 
         async def server_shutdown():
             console.print("Starting shutdown...")
