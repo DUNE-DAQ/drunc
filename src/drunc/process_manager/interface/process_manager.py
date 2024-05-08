@@ -7,7 +7,7 @@ from drunc.utils.utils import log_levels
 
 _cleanup_coroutines = []
 
-def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None):
+def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_port=None):
     if signal_handler is not None:
         signal_handler()
 
@@ -46,6 +46,8 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None):
         server = grpc.aio.server()
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)
+        if generated_port is not None:
+            generated_port.value = port
 
         await server.start()
         import socket

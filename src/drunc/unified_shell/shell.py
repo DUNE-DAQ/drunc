@@ -22,6 +22,8 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
     from drunc.process_manager.interface.process_manager import run_pm
     import multiprocessing as mp
     ready_event = mp.Event()
+    port = mp.Value('i', 0)
+
     ctx.obj.pm_process = mp.Process(
         target = run_pm,
         kwargs = {
@@ -30,6 +32,7 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
             "ready_event": ready_event,
             "signal_handler": ignore_sigint_sighandler,
             # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
+            "generated_port": port,
         },
     )
     ctx.obj.print(f'Starting process manager with configuration {process_manager_configuration}')
@@ -45,10 +48,8 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
     if not ready_event.is_set():
         raise DruncSetupException('Process manager did not start in time')
 
-    from drunc.utils.configuration import parse_conf_url
-    conf_path, conf_type = parse_conf_url(process_manager_configuration)
-    import json
-    process_manager_address = json.load(open(conf_path, 'r'))['command_address']
+    import socket
+    process_manager_address = f'localhost:{port.value}'
 
     ctx.obj.reset(
         print_traceback = traceback,
