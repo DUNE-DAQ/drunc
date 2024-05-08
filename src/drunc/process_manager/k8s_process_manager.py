@@ -141,6 +141,23 @@ class K8sProcessManager(ProcessManager):
         import socket
         hostname = socket.gethostname()
         #/ HACK
+        current_directory = os.getcwd()
+        volume_pwd = self._k8s_client.V1Volume(
+            name="pwd",
+            host_path=self._k8s_client.V1HostPathVolumeSource(path=current_directory)
+        )
+        volume_mount_pwd = self._k8s_client.V1VolumeMount(
+            name="pwd",
+            mount_path="/nfs/home/titavare/dunedaq_work_area/drunc-v5.0.0"
+        )
+        volume_cvmfs = self._k8s_client.V1Volume(
+            name="cvmfs",
+            host_path=self._k8s_client.V1HostPathVolumeSource(path="/cvmfs/")
+        )
+        volume_mount_cvmfs = self._k8s_client.V1VolumeMount(
+            name="cvmfs",
+            mount_path="/cvmfs/"
+        )
 
         pod = self._pod_v1_api(
             api_version="v1",
@@ -161,6 +178,7 @@ class K8sProcessManager(ProcessManager):
                         args = ["-c", commands],
                         #args = ["-c", "sleep 3600"],
                         env=env_vars,
+                        volume_mounts=[volume_mount_pwd, volume_mount_cvmfs],
                         restart_policy="Never",
                         security_context = self._security_context_v1_api(
                             run_as_user = os.getuid(),
@@ -176,6 +194,7 @@ class K8sProcessManager(ProcessManager):
                         ),
                     )
                 ],
+                volumes=[volume_pwd, volume_cvmfs],
                 # HACK
                 affinity = self._k8s_client.V1Affinity(
                     self._k8s_client.V1NodeAffinity(
@@ -311,12 +330,12 @@ class K8sProcessManager(ProcessManager):
         pods = self._core_v1_api.list_namespaced_pod(session)
         pod_names = [pod.metadata.name for pod in pods.items]
         if not podname in pod_names:
-            return_code = None
+            return_code = 0
         else:
             if not self.is_alive(podname, session):
                 return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
             else:
-                return_code = None
+                return_code = 0
         return return_code
 
 
@@ -352,7 +371,6 @@ class K8sProcessManager(ProcessManager):
 
         session = boot_request.process_description.metadata.session
         podnames = boot_request.process_description.metadata.name
-
         if uuid in self.boot_request:
             raise DruncCommandException(f'\"{session}.{podnames}\":{uuid} already exists!')
         self.boot_request[uuid] = BootRequest()
