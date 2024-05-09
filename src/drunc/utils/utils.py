@@ -101,7 +101,27 @@ def run_coroutine(f):
     import asyncio
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
+        loop = asyncio.get_event_loop()
+
+        ret = None
+        import signal
+
+        main_task = asyncio.ensure_future(f(*args, **kwargs))
+        wanna_catch_during_command = [signal.SIGINT]
+
+        for sig in wanna_catch_during_command:
+            loop.add_signal_handler(sig, main_task.cancel)
+
+        try:
+            ret = loop.run_until_complete(main_task)
+        except asyncio.exceptions.CancelledError as e:
+            print("Command cancelled")
+        finally:
+            for sig in wanna_catch_during_command:
+                loop.remove_signal_handler(sig)
+
+        if ret:
+            return ret
 
     return wrapper
 
