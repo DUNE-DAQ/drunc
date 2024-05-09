@@ -46,6 +46,7 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
         sleep(0.1)
 
     if not ready_event.is_set():
+        from drunc.exceptions import DruncSetupException
         raise DruncSetupException('Process manager did not start in time')
 
     import socket
