@@ -2,6 +2,7 @@
     "type": "ssh",
     "name": "SSHProcessManager",
     "command_address": "localhost:0",
+    "kill_timeout": 1,
 
     "authoriser": {
         "type": "dummy"

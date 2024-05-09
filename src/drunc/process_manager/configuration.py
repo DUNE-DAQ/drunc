@@ -26,6 +26,7 @@ class ProcessManagerConfHandler(ConfHandler):
         match data['type'].lower():
             case 'ssh':
                 new_data.type = ProcessManagerTypes.SSH
+                new_data.kill_timeout = data.get("kill_timeout", 2)
             case 'k8s':
                 new_data.type = ProcessManagerTypes.K8s
             case _:
