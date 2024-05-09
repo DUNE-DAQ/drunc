@@ -371,6 +371,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             console.print(f'Starting \'SSHProcessManager\'')
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
             return SSHProcessManager(conf, **kwargs)
+        elif conf.data.type == ProcessManagerTypes.K8s:
+            console.print(f'Starting \'K8sProcessManager\'')
+            from drunc.process_manager.k8s_process_manager import K8sProcessManager
+            return K8sProcessManager(conf, **kwargs)
         else:
             raise RuntimeError(f'ProcessManager type {conf.get("type")} is unsupported!')
 
