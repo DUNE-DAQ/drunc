@@ -28,6 +28,7 @@ class ProcessManagerConfHandler(ConfHandler):
                 new_data.type = ProcessManagerTypes.SSH
             case 'k8s':
                 new_data.type = ProcessManagerTypes.K8s
+                new_data.image = data.get("image", 2)
             case _:
                 from drunc.process_manager.exceptions import UnknownProcessManagerType
                 raise UnknownProcessManagerType(data['type'])
