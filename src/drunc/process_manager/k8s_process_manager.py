@@ -134,6 +134,17 @@ class K8sProcessManager(ProcessManager):
         else:
             return DruncK8sNamespaceAlreadyExists (f'\"{session}\" session already exists')
 
+    def _controller_svc(self, session, pod, tport):
+        service = self._k8s_client.V1Service(
+            metadata=self._meta_v1_api(name=f"{pod}-service"),
+            spec=self._k8s_client.V1ServiceSpec(
+                selector={"app": pod},
+                ports=[self._k8s_client.V1ServicePort(port=80, target_port=tport)],
+                type="NodePort"
+            ),
+        )
+        service = self._core_v1_api.create_namespaced_service(session, service)
+        return service
 
     def _volume(self, name, host_path):
         return self._k8s_client.V1Volume(
@@ -167,8 +178,8 @@ class K8sProcessManager(ProcessManager):
         hostname = socket.gethostname()
         #/ HACK
 
-        pod_image = self.configuration.data.image
-        # pod_image="ghcr.io/dune-daq/alma9:latest"
+        # pod_image = boot_request.{where_pod_image_is}
+        pod_image="ghcr.io/dune-daq/alma9:latest"
 
         pod = self._pod_v1_api(
             api_version="v1",
@@ -233,6 +244,10 @@ class K8sProcessManager(ProcessManager):
                 ),
             )
         )
+        if "controller" in podname:
+            import random
+            port = random.randint(30000, 30100)
+            self._controller_svc(session, podname, port)
         try:
             self._core_v1_api.create_namespaced_pod(session, pod)
             self._log.info(f"Creating \"{session}.{podname}\"")
@@ -240,6 +255,7 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             self._log.error(f"Couldn't create pod with name: \"{session}.{podname}\": {e}")
             raise e
+
 
 
     def _get_process_uid(self, query:ProcessQuery, in_boot_request:bool=False):
@@ -299,6 +315,9 @@ class K8sProcessManager(ProcessManager):
     def _kill_pod(self, podname, session):
         pods = self._core_v1_api.list_namespaced_pod(session)
         pod_names = [pod.metadata.name for pod in pods.items]
+        if "controller" in podname:
+            service_name = f"{podname}-service"
+            self._core_v1_api.delete_namespaced_service(service_name, session)
         if podname in pod_names:
             self._core_v1_api.delete_namespaced_pod(podname, session,grace_period_seconds=0)
             while podname in pod_names:
