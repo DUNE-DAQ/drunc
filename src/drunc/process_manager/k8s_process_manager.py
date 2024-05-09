@@ -341,12 +341,12 @@ class K8sProcessManager(ProcessManager):
         pods = self._core_v1_api.list_namespaced_pod(session)
         pod_names = [pod.metadata.name for pod in pods.items]
         if not podname in pod_names:
-            return_code = 0
+            return_code = None
         else:
             if not self.is_alive(podname, session):
                 return_code = self._core_v1_api.read_namespaced_pod_status(podname, session).status.container_statuses[0].state.terminated.exit_code
             else:
-                return_code = 0
+                return_code = None
         return return_code
 
 
