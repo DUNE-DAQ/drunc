@@ -16,6 +16,10 @@ def main():
         else:
             rprint(f'[yellow]{e}[/]\nUse [blue]--traceback[/] for more information')
         rprint(f'Exiting...')
+
+        if context.pm_process and context.pm_process.is_alive():
+            context.pm_process.kill() # We're in an exception handler, so we are not going to do it half-heartedly, send a good ol' SIGKILL
+
         exit(1)
 
 

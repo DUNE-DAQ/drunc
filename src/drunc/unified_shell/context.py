@@ -6,6 +6,7 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
     status_receiver_pm = None
     status_receiver_controller = None
     took_control = False
+    pm_process = None
     address_pm = ''
     address_controller = ''
 
