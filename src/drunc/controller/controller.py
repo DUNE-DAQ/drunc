@@ -448,14 +448,22 @@ class Controller(ControllerServicer):
         else:
             child_statuses = self.propagate_to_list('execute_fsm_command', children_fsm_command, token, self.children_nodes)
 
+        from druncschema.controller_pb2 import FSMCommandResponseCode
+
+        success = True
+        if any(cs != FSMCommandResponseCode.SUCCESSFUL for cs in child_statuses): # if any child was unsuccessful
+            success = False
+            self.stateful_node.to_error()
+
+            self.broadcast(
+                btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
+                message = f'Failed to execute {fsm_command.command_name}',
+            )
+
+
         self.stateful_node.finish_propagating_transition_mark(transition)
 
         self.stateful_node.start_transition_mark(transition)
-
-        self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_START,
-            message = f'Executing {fsm_command.command_name} (upon request from {token.user_name})',
-        )
 
         self.stateful_node.terminate_transition_mark(transition)
 
@@ -468,7 +476,7 @@ class Controller(ControllerServicer):
         from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
 
         result = FSMCommandResponse(
-            successful = FSMCommandResponseCode.SUCCESSFUL,
+            successful = FSMCommandResponseCode.SUCCESSFUL if success else FSMCommandResponseCode.UNSUCCESSFUL,
             command_name = fsm_command.command_name,
             children_successful = child_statuses,
         )

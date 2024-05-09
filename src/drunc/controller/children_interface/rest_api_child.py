@@ -162,9 +162,12 @@ class ResponseListener:
 
         cls.handlers[app].notify(reply)
 
-class ResponseTimeout(Exception):
+from drunc.controller.exceptions import ChildError
+class ResponseTimeout(ChildError):
     pass
-class NoResponse(Exception):
+class NoResponse(ChildError):
+    pass
+class CouldnotSendCommand(ChildError):
     pass
 
 class AppCommander:
@@ -259,16 +262,20 @@ class AppCommander:
 
         self.log.debug(headers)
         import requests
-        ack = requests.post(
-            self.app_url,
-            data=json.dumps(cmd),
-            headers=headers,
-            timeout=1.,
-            proxies={
-                'http': f'socks5h://{self.response_host}:{self.response_port}',
-                'https': f'socks5h://{self.response_host}:{self.response_port}'
-            } if self.proxy_host else None
-        )
+        try:
+            ack = requests.post(
+                self.app_url,
+                data=json.dumps(cmd),
+                headers=headers,
+                timeout=1.,
+                proxies={
+                    'http': f'socks5h://{self.response_host}:{self.response_port}',
+                    'https': f'socks5h://{self.response_host}:{self.response_port}'
+                } if self.proxy_host else None
+            )
+        except requests.ConnectionError as e:
+            self.log.error(f'Connection error to {self.app_url}')
+            raise CouldnotSendCommand(f'Connection error to {self.app_url}')
 
         self.log.debug(f"Ack to {self.app}: {ack.status_code}")
         self.sent_cmd = cmd_id
@@ -291,10 +298,11 @@ class AppCommander:
         try:
             # self.log.info(f"Checking for answers from {self.app} {self.sent_cmd}")
             r = self.response_queue.get(block=(timeout>0), timeout=timeout)
-            self.log.debug(f"Received reply from {self.app} to {self.sent_cmd}")
+            self.log.info(f"Received reply from {self.app} to {self.sent_cmd}")
             self.sent_cmd = None
 
         except queue.Empty:
+            self.log.info(f"Queue empty! {self.app} to {self.sent_cmd}")
             if not timeout:
                 raise NoResponse(f"No response available from {self.app} for command {self.sent_cmd}")
             else:
@@ -302,7 +310,6 @@ class AppCommander:
                 raise ResponseTimeout(
                     f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
                 )
-
         return r
 
 
@@ -452,7 +459,6 @@ class RESTAPIChildNode(ChildNode):
             self.log.info(f'Ignoring command \'{command}\' sent to \'{self.name}\'')
             return None
 
-        self.log.info(f'Sending \'{command}\' to \'{self.name}\'')
 
         # from drunc.utils.grpc_utils import unpack_any
         # from druncschema.controller_pb2 import FSMCommand
@@ -464,19 +470,26 @@ class RESTAPIChildNode(ChildNode):
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
         import json
+        self.log.info(f'Sending \'{data.command_name}\' to \'{self.name}\'')
+
         try:
+
             self.commander.send_command(
                 cmd_id = data.command_name,
                 cmd_data = json.loads(data.data),
                 entry_state = entry_state.upper(),
                 exit_state = exit_state.upper(),
             )
+            self.log.info(f'Sent \'{data.command_name}\' to \'{self.name}\'')
+
             r = self.commander.check_response(10)
+            self.log.info(f'Got response from \'{data.command_name}\' to \'{self.name}\'')
             if not r['success']:
                 self.log.error(r['result'])
                 self.state.to_error()
                 return FSMCommandResponseCode.UNSUCCESSFUL
-        except DruncException as e:
+        except ChildError as e:
+            self.log.info(f'Got error from \'{data.command_name}\' to \'{self.name}\'')
             self.log.error(str(e))
             self.state.to_error()
             return FSMCommandResponseCode.UNSUCCESSFUL
