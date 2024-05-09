@@ -101,7 +101,17 @@ def run_coroutine(f):
     import asyncio
     @wraps(f)
     def wrapper(*args, **kwargs):
-        return asyncio.get_event_loop().run_until_complete(f(*args, **kwargs))
+        loop = asyncio.get_event_loop()
+        main_task = asyncio.ensure_future(f(*args, **kwargs))
+        ret = None
+        for signal in [SIGINT, SIGTERM]:
+            loop.add_signal_handler(signal, main_task.cancel)
+        try:
+            ret = loop.run_until_complete(main_task)
+        finally:
+            loop.close()
+            if ret:
+                return ret
 
     return wrapper
 
