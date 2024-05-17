@@ -91,7 +91,7 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
     return decor
 
 
-def pack_response(cmd):
+def pack_response(cmd, with_children_responses=False):
 
     import functools
 
@@ -106,14 +106,23 @@ def pack_response(cmd):
         from google.protobuf.any_pb2 import Any
 
         log.debug('Executing wrapped function')
-        ret = cmd(obj, *arg, **kwargs)
+        out = cmd(obj, *arg, **kwargs)
+        self_response = out
+        response_children = {}
+
+        if with_children_responses:
+            self_response = out[0]
+            response_children = out[1]
+
 
         new_token = Token() # empty token
         data = Any()
         data.Pack(ret)
         ret = Response(
             token = new_token,
-            data = data
+            data = data,
+            response_flag
+            response_children = response_children,
         )
 
         log.debug('Exiting')
@@ -123,7 +132,7 @@ def pack_response(cmd):
 
 
 
-def async_pack_response(cmd):
+def async_pack_response(cmd, with_children_responses=False):
 
     import functools
 

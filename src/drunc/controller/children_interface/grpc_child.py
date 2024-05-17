@@ -3,6 +3,7 @@ from drunc.controller.utils import send_command
 from drunc.utils.configuration import ConfHandler
 import grpc as grpc
 from drunc.exceptions import DruncSetupException
+from druncschema.controller_pb2 import Response
 
 
 class gRCPChildConfHandler(ConfHandler):
@@ -76,7 +77,7 @@ class gRPCChildNode(ChildNode):
             )
         )
 
-    def get_status(self, token):
+    def get_status(self, token) -> Response:
         from druncschema.controller_pb2 import Status
         from drunc.utils.grpc_utils import unpack_any
 
@@ -95,25 +96,24 @@ class gRPCChildNode(ChildNode):
     def terminate(self):
         pass
 
-    def propagate_command(self, command, data, token):
-        success = False
+    def propagate_command(self, command, data, token) -> Response:
+        from druncschema.generic_pb2 import PlainText, Stacktrace
+        from drunc.grpc_utils import pack_to_any
+
         try:
-            response = send_command(
+            return send_command(
                 controller = self.controller,
                 token = token,
                 command = command,
                 rethrow = True,
                 data = data
             )
-            success = True
-        except Exception as e:
-            if command != 'execute_fsm_command':
-                raise e
+        except DruncException as e:
+            return Response(
+                token = token,
+                data = pack_to_any(Stacktrace(text=str(e)),
+                response_flag = ResponseFlag.UNSUCCESSFUL
+                response_children = {}
+            )
 
-
-        if command == 'execute_fsm_command':
-            from druncschema.controller_pb2 import FSMCommandResponseCode
-            return FSMCommandResponseCode.SUCCESSFUL if success else FSMCommandResponseCode.SUCCESSFUL
-        else:
-            return response
 
