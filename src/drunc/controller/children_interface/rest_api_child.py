@@ -451,7 +451,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.SUCCESSFUL
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 response_children = {}
             )
         elif command == 'include':
@@ -459,7 +459,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.SUCCESSFUL
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 response_children = {}
             )
 
@@ -524,14 +524,14 @@ class RESTAPIChildNode(ChildNode):
             response = Response(
                 token = token,
                 data = fsm_data,
-                response_flag = ResponseFlag.SUCCESSFUL
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 response_children = {}
             )
 
             if not success:
                 self.log.error(r['result'])
                 self.state.to_error()
-                response.response_flag = ResponseFlag.UNSUCCESSFUL # arguably, we succesfully sent the command, and it returned bad, so maybe this shouldn't be unsucessful for the command (FSM should be unsuccessful)
+                response.response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY # /!\ The command executed successfully, but the FSM command was not successful
                 return response
 
         except ChildError as e:
@@ -540,7 +540,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = pack_to_any(Stacktrace(text=str(e)),
-                response_flag = ResponseFlag.UNSUCCESSFUL
+                response_flag = ResponseFlag.EXCEPTION_THROWN
                 response_children = {}
             )
 
