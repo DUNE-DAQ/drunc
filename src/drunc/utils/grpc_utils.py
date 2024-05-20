@@ -54,8 +54,8 @@ def unpack_request_data_to(data_type=None, pass_token=False):
                         data = PlainText(
                             text = str(e)
                         ),
-                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children_responses = {}
+                        response_flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        response_children = {}
                     )
 
             if data is not None:
@@ -94,13 +94,13 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
                 try:
                     data = unpack_any(request.data, data_type)
                 except UnpackingError as e:
-                    return Response(
+                    yield Response(
                         token = request.token,
                         data = PlainText(
                             text = str(e)
                         ),
-                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children_responses = {}
+                        response_flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        response_children = {}
                     )
 
             if data is not None:
@@ -118,6 +118,7 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
 
 
 def pack_response(cmd, with_children_responses=False):
+    raise DeprecationWarning('This function is deprecated, pack your responses yourself')
 
     import functools
 
@@ -147,7 +148,6 @@ def pack_response(cmd, with_children_responses=False):
         ret = Response(
             token = new_token,
             data = data,
-            response_flag
             response_children = response_children,
         )
 
@@ -159,6 +159,7 @@ def pack_response(cmd, with_children_responses=False):
 
 
 def async_pack_response(cmd, with_children_responses=False):
+    raise DeprecationWarning('This function is deprecated, pack your responses yourself')
 
     import functools
 
