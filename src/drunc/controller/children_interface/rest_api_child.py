@@ -540,7 +540,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = pack_to_any(Stacktrace(text=str(e)),
-                response_flag = ResponseFlag.EXCEPTION_THROWN
+                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
                 response_children = {}
             )
 

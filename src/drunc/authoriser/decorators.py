@@ -19,7 +19,7 @@ def authentified_and_authorised(action, system):
                     data = PlainText(
                         text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.__class__.__name__} (action type is {action}, system is {system})"
                     ),
-                    flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
+                    response_flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
                     children_responses = {}
                 )
 
@@ -54,8 +54,8 @@ def async_authentified_and_authorised(action, system):
                     data = PlainText(
                         text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.__class__.__name__} (action type is {action}, system is {system})"
                     ),
-                    flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
-                    children_responses = {}
+                    response_flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
+                    response_children = {}
                 )
             log.debug('Executing wrapped function')
             async for a in cmd(obj, request):

@@ -1,6 +1,6 @@
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.generic_pb2 import Stacktrace
-
+from drunc.utils.grpc_utils import pack_to_any
 def broadcasted(cmd):
 
     import functools
@@ -35,11 +35,13 @@ def broadcasted(cmd):
 
             return Response(
                 token = request.token,
-                data = Stacktrace(
-                    text = [str(e)]
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
                 ),
-                flag = ResponseFlag.EXCEPTION_THROWN,
-                children_responses = {}
+                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                response_children = {}
             )
 
         except Exception as e:
@@ -51,11 +53,13 @@ def broadcasted(cmd):
             # )
             return Response(
                 token = request.token,
-                data = Stacktrace(
-                    text = [str(e)]
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
                 ),
-                flag = ResponseFlag.EXCEPTION_THROWN,
-                children_responses = {}
+                response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                response_children = {}
             )
 
         obj.broadcast(
@@ -98,11 +102,13 @@ def async_broadcasted(cmd):
             # )
             yield Response(
                 token = request.token,
-                data = Stacktrace(
-                    text = [str(e)]
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
                 ),
-                flag = ResponseFlag.EXCEPTION_THROWN,
-                children_responses = {}
+                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                response_children = {}
             )
 
 
@@ -115,11 +121,13 @@ def async_broadcasted(cmd):
             # )
             yield Response(
                 token = request.token,
-                data = Stacktrace(
-                    text = [str(e)]
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
                 ),
-                flag = ResponseFlag.EXCEPTION_THROWN,
-                children_responses = {}
+                response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                response_children = {}
             )
 
         obj.broadcast(

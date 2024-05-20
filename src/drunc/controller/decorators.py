@@ -11,8 +11,8 @@ def in_control(cmd):
                 data = PlainText(
                     text = f"User {request.token.user_name} is not in control of {obj.__class__.__name__}",
                 ),
-                flag = ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
-                children_responses = {}
+                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
+                response_children = {}
             )
 
         return cmd(obj, request)
