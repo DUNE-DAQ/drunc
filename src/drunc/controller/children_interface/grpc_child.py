@@ -112,7 +112,7 @@ class gRPCChildNode(ChildNode):
             return Response(
                 token = token,
                 data = pack_to_any(Stacktrace(text=str(e)),
-                response_flag = ResponseFlag.UNSUCCESSFUL
+                response_flag = ResponseFlag.EXCEPTION_THROWN
                 response_children = {}
             )
 
