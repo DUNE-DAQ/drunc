@@ -65,6 +65,7 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
         desc = asyncio.get_event_loop().run_until_complete(
             ctx.obj.get_driver().describe(rethrow=True)
         )
+        desc = desc.data
     except ServerUnreachable as e:
         ctx.obj.critical(f'Could not connect to the process manager')
         if not ctx.obj.pm_process.is_alive():

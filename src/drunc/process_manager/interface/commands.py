@@ -30,7 +30,7 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
         )
         async for result in results:
             if not result: break
-            obj.print(f'\'{result.process_description.metadata.name}\' ({result.uuid.uuid}) process started')
+            obj.print(f'\'{result.data.process_description.metadata.name}\' ({result.data.uuid.uuid}) process started')
     except InterruptedCommand:
         return
 
@@ -59,7 +59,7 @@ async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) ->
     if not result: return
 
     from drunc.process_manager.utils import tabulate_process_instance_list
-    obj.print(tabulate_process_instance_list(result, 'Killed process', False))
+    obj.print(tabulate_process_instance_list(result.data, 'Killed process', False))
 
 
 @click.command('flush')
@@ -76,7 +76,7 @@ async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -
     if not result: return
 
     from drunc.process_manager.utils import tabulate_process_instance_list
-    obj.print(tabulate_process_instance_list(result, 'Flushed process', False))
+    obj.print(tabulate_process_instance_list(result.data, 'Flushed process', False))
 
 
 @click.command('logs')
@@ -105,10 +105,10 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
         if not result: break
 
         if uuid is None:
-            uuid = result.uuid.uuid
+            uuid = result.data.uuid.uuid
             obj.rule(f'[yellow]{uuid}[/yellow] logs')
 
-        line = result.line
+        line = result.data.line
         if line == "":
             obj.print('')
             continue
@@ -142,7 +142,7 @@ async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool)
 
     if not result: return
 
-    obj.print(result)
+    obj.print(result.data)
 
 
 @click.command('ps')
@@ -160,6 +160,6 @@ async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool, tr
     if not results: return
 
     from drunc.process_manager.utils import tabulate_process_instance_list
-    obj.print(tabulate_process_instance_list(results, title='Processes running', long=long_format))
+    obj.print(tabulate_process_instance_list(results.data, title='Processes running', long=long_format))
 
 

@@ -64,7 +64,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time()-start_time)
 
             try:
-                desc = ctx.get_driver('controller').describe(rethrow=True)
+                desc = ctx.get_driver('controller').describe(rethrow=True).data
                 stored_exception = None
                 break
             except ServerUnreachable as e:
@@ -87,12 +87,12 @@ def controller_setup(ctx, controller_address):
 
     ctx.print('Connected to the controller')
 
-    children = ctx.get_driver('controller').ls(rethrow=False)
+    children = ctx.get_driver('controller').ls(rethrow=False).data
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
-        ctx.get_driver('controller').take_control(rethrow=True)
+        ctx.get_driver('controller').take_control(rethrow=True).data
         ctx.took_control = True
 
     except Exception as e:
