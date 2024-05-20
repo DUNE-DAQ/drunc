@@ -397,12 +397,10 @@ class Controller(ControllerServicer):
         from drunc.controller.utils import get_status_message
         status = get_status_message(self.stateful_node)
         status.name = self.name
-        data = Any()
-        data.Pack(status)
 
         return Response (
             token = None,
-            data = data,
+            data = pack_to_any(status),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
             response_children = {},
         )
@@ -525,11 +523,12 @@ class Controller(ControllerServicer):
             'execute_fsm_command',
             command_data = children_fsm_command,
             token = token,
-            node_to_execute = execute_on if execute_on else self.children_node,
+            node_to_execute = execute_on if execute_on else self.children_nodes,
         )
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
 
         success = FSMCommandResponseCode.SUCCESSFUL
-        if any(cr.response_flag_self for cr in response_children.values()): # if any child was unsuccessful
+        if any(cr.response_flag != success for cr in response_children.values()): # if any child was unsuccessful
             success = FSMCommandResponseCode.UNSUCCESSFUL
             self.stateful_node.to_error()
 
@@ -551,7 +550,6 @@ class Controller(ControllerServicer):
             transition_data = fsm_data
         )
 
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
 
         fsm_result = FSMCommandResponse(
             successful = success,
@@ -660,7 +658,7 @@ class Controller(ControllerServicer):
     def who_is_in_charge(self) -> PlainText:
         user = self.actor.get_user_name()
         return Response (
-            token = token,
+            token = None,
             data = pack_to_any(PlainText(text=user)),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
             response_children = {},
