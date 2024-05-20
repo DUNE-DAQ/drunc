@@ -3,7 +3,7 @@ from drunc.controller.utils import send_command
 from drunc.utils.configuration import ConfHandler
 import grpc as grpc
 from drunc.exceptions import DruncSetupException
-from druncschema.controller_pb2 import Response
+from druncschema.request_response_pb2 import Response
 
 
 class gRCPChildConfHandler(ConfHandler):
@@ -98,7 +98,7 @@ class gRPCChildNode(ChildNode):
 
     def propagate_command(self, command, data, token) -> Response:
         from druncschema.generic_pb2 import PlainText, Stacktrace
-        from drunc.grpc_utils import pack_to_any
+        from drunc.utils.grpc_utils import pack_to_any
 
         try:
             return send_command(
@@ -111,8 +111,12 @@ class gRPCChildNode(ChildNode):
         except DruncException as e:
             return Response(
                 token = token,
-                data = pack_to_any(Stacktrace(text=str(e)),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+                data = pack_to_any(
+                    Stacktrace(
+                        text=[str(e)]
+                    )
+                ),
+                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
                 response_children = {}
             )
 

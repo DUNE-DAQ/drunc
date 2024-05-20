@@ -374,7 +374,7 @@ class Controller(ControllerServicer):
         system=SystemType.CONTROLLER
     ) # 2nd step
     @unpack_request_data_to(pass_token=True) # 3rd step
-    def get_children_status(self, token:Token) -> ChildrenStatus:
+    def get_children_status(self, token:Token) -> Response:
         #from drunc.controller.utils import get_status_message
         response =  ChildrenStatus(
             children_status = [n.get_status(token) for n in self.children_nodes]
@@ -423,7 +423,7 @@ class Controller(ControllerServicer):
 
         return Response (
             token = None,
-            data = pack_to_any(response),,
+            data = pack_to_any(response),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
             response_children = {},
         )

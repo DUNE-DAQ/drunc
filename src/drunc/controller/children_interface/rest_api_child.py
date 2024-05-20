@@ -1,5 +1,6 @@
 from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
-from druncschema.controller_pb2 import Response
+from druncschema.request_response_pb2 import Response
+from druncschema.token_pb2 import Token
 import threading
 from typing import NoReturn
 
@@ -451,7 +452,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
                 response_children = {}
             )
         elif command == 'include':
@@ -459,7 +460,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
                 response_children = {}
             )
 
@@ -469,7 +470,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.NOT_EXECUTED_EXCLUDED
+                response_flag = ResponseFlag.NOT_EXECUTED_EXCLUDED,
                 response_children = {}
             )
 
@@ -479,7 +480,7 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 response_children = {}
             )
 
@@ -524,7 +525,7 @@ class RESTAPIChildNode(ChildNode):
             response = Response(
                 token = token,
                 data = fsm_data,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
                 response_children = {}
             )
 
@@ -539,8 +540,12 @@ class RESTAPIChildNode(ChildNode):
             self.state.to_error()
             return Response(
                 token = token,
-                data = pack_to_any(Stacktrace(text=str(e)),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+                data = pack_to_any(
+                    Stacktrace(
+                        text=[str(e)]
+                    )
+                ),
+                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
                 response_children = {}
             )
 
