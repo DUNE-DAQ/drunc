@@ -44,8 +44,21 @@ def unpack_request_data_to(data_type=None, pass_token=False):
             if pass_token:
                 kwargs = {'token': request.token}
 
+            data = None
             if data_type is not None:
-                data = unpack_any(request.data, data_type)
+                try:
+                    data = unpack_any(request.data, data_type)
+                except UnpackingError as e:
+                    return Response(
+                        token = request.token,
+                        data = PlainText(
+                            text = str(e)
+                        ),
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children_responses = {}
+                    )
+
+            if data is not None:
                 ret = cmd(obj, data, **kwargs)
             else:
                 ret = cmd(obj, **kwargs)
@@ -76,8 +89,21 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
             if pass_token:
                 kwargs = {'token': request.token}
 
+            data = None
             if data_type is not None:
-                data = unpack_any(request.data, data_type)
+                try:
+                    data = unpack_any(request.data, data_type)
+                except UnpackingError as e:
+                    return Response(
+                        token = request.token,
+                        data = PlainText(
+                            text = str(e)
+                        ),
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children_responses = {}
+                    )
+
+            if data is not None:
                 async for a in cmd(obj, data, **kwargs):
                     yield a
             else:
@@ -117,7 +143,7 @@ def pack_response(cmd, with_children_responses=False):
 
         new_token = Token() # empty token
         data = Any()
-        data.Pack(ret)
+        data.Pack(self_response)
         ret = Response(
             token = new_token,
             data = data,
