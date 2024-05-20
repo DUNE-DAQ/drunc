@@ -1,4 +1,5 @@
-
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.generic_pb2 import Stacktrace
 
 def broadcasted(cmd):
 
@@ -27,17 +28,34 @@ def broadcasted(cmd):
             ret = cmd(obj, request) # we strip the context here, no need for that anymore
 
         except DruncCommandException as e:
-            obj.interrupt_with_exception(
-                exception = e,
-                context = context
+            # obj.interrupt_with_exception(
+            #     exception = e,
+            #     context = context
+            # )
+
+            return Response(
+                token = request.token,
+                data = Stacktrace(
+                    text = [str(e)]
+                ),
+                flag = ResponseFlag.EXCEPTION_THROWN,
+                children_responses = {}
             )
 
         except Exception as e:
-            import traceback
-            obj.interrupt_with_exception(
-                exception = e,
-                stack = traceback.format_exc(),
-                context = context
+            # import traceback
+            # obj.interrupt_with_exception(
+            #     exception = e,
+            #     stack = traceback.format_exc(),
+            #     context = context
+            # )
+            return Response(
+                token = request.token,
+                data = Stacktrace(
+                    text = [str(e)]
+                ),
+                flag = ResponseFlag.EXCEPTION_THROWN,
+                children_responses = {}
             )
 
         obj.broadcast(
@@ -74,17 +92,34 @@ def async_broadcasted(cmd):
                 yield a
 
         except DruncCommandException as e:
-            await obj.async_interrupt_with_exception(
-                exception = e,
-                context = context
+            # await obj.async_interrupt_with_exception(
+            #     exception = e,
+            #     context = context
+            # )
+            yield Response(
+                token = request.token,
+                data = Stacktrace(
+                    text = [str(e)]
+                ),
+                flag = ResponseFlag.EXCEPTION_THROWN,
+                children_responses = {}
             )
 
+
         except Exception as e:
-            import traceback
-            await obj.async_interrupt_with_exception(
-                exception = e,
-                stack = traceback.format_exc(),
-                context = context
+            # import traceback
+            # await obj.async_interrupt_with_exception(
+            #     exception = e,
+            #     stack = traceback.format_exc(),
+            #     context = context
+            # )
+            yield Response(
+                token = request.token,
+                data = Stacktrace(
+                    text = [str(e)]
+                ),
+                flag = ResponseFlag.EXCEPTION_THROWN,
+                children_responses = {}
             )
 
         obj.broadcast(
