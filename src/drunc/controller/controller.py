@@ -274,11 +274,11 @@ class Controller(ControllerServicer):
             message = f'Propagating {command} to children',
         )
 
-        children_response = {}
+        response_children = {}
         from threading import Lock, Thread
         response_lock = Lock()
 
-        def propagate_to_child(child, command, command_data, token, response_lock, children_response):
+        def propagate_to_child(child, command, command_data, token, response_lock, response_children):
 
             self.broadcast(
                 btype = BroadcastType.CHILD_COMMAND_EXECUTION_START,
@@ -290,7 +290,7 @@ class Controller(ControllerServicer):
             try:
                 response = child.propagate_command(command, command_data, token)
                 with response_lock:
-                    children_response[child.name] = response
+                    response_children[child.name] = response
 
                 if response.response_flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self.broadcast(
@@ -306,7 +306,7 @@ class Controller(ControllerServicer):
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
-                    children_response[child.name] = Response(
+                    response_children[child.name] = Response(
                         token = token,
                         data = pack_to_any(
                             Stacktrace(
@@ -316,7 +316,24 @@ class Controller(ControllerServicer):
                                 ]
                             )
                         ),
-                        response_flag = ResponseFlag.EXCEPTION_THROWN,
+                        response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                        response_children = [],
+                    )
+            except Exception as e:
+                with response_lock:
+                    from druncschema.request_response_pb2 import Response
+                    from druncschema.generic_pb2 import PlainText, Stacktrace
+                    response_children[child.name] = Response(
+                        token = token,
+                        data = pack_to_any(
+                            Stacktrace(
+                                text=[
+                                    "Exception throw", # poor man's stack trace
+                                    str(e)
+                                ]
+                            )
+                        ),
+                        response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
                         response_children = [],
                     )
                 self.broadcast(
@@ -335,7 +352,7 @@ class Controller(ControllerServicer):
                     "command_data": command_data,
                     "token": token,
                     "response_lock": response_lock,
-                    "children_response": children_response,
+                    "response_children": response_children,
                 }
             )
             t.start()
@@ -343,7 +360,7 @@ class Controller(ControllerServicer):
 
         for thread in threads:
             thread.join()
-        return children_response
+        return response_children
 
 
     ########################################################
@@ -504,7 +521,7 @@ class Controller(ControllerServicer):
         children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
         execute_on = fsm_command.children_nodes
 
-        children_response = self.propagate_to_list(
+        response_children = self.propagate_to_list(
             'execute_fsm_command',
             command_data = children_fsm_command,
             token = token,
@@ -512,7 +529,7 @@ class Controller(ControllerServicer):
         )
 
         success = FSMCommandResponseCode.SUCCESSFUL
-        if any(cr.response_flag_self for cr in children_response.values()): # if any child was unsuccessful
+        if any(cr.response_flag_self for cr in response_children.values()): # if any child was unsuccessful
             success = FSMCommandResponseCode.UNSUCCESSFUL
             self.stateful_node.to_error()
 
@@ -545,7 +562,7 @@ class Controller(ControllerServicer):
             token = token,
             data = pack_to_any(fsm_result),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = children_response,
+            response_children = response_children,
         )
 
 
@@ -558,7 +575,7 @@ class Controller(ControllerServicer):
     @in_control # 3rd step
     @unpack_request_data_to(pass_token=True) # 4th step
     def include(self, token:Token) -> PlainText:
-        children_response = self.propagate_to_list('include', command_data=None, token=token, node_to_execute=self.children_nodes)
+        response_children = self.propagate_to_list('include', command_data=None, token=token, node_to_execute=self.children_nodes)
         self.stateful_node.include_node()
         resp = PlainText(text = f'{self.name} and children included')
 
@@ -566,7 +583,7 @@ class Controller(ControllerServicer):
             token = token,
             data = pack_to_any(resp),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = children_response,
+            response_children = response_children,
         )
 
 
@@ -579,14 +596,14 @@ class Controller(ControllerServicer):
     @in_control
     @unpack_request_data_to(pass_token=True) # 3rd step
     def exclude(self, token:Token) -> Response:
-        children_response = self.propagate_to_list('exclude', command_data=None, token=token, node_to_execute=self.children_nodes)
+        response_children = self.propagate_to_list('exclude', command_data=None, token=token, node_to_execute=self.children_nodes)
         self.stateful_node.exclude_node()
         resp =  PlainText(text = f'{self.name} and children excluded')
         return Response (
             token = token,
             data = pack_to_any(resp),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = children_response,
+            response_children = response_children,
         )
 
 
@@ -604,13 +621,13 @@ class Controller(ControllerServicer):
     @unpack_request_data_to(pass_token=True) # 3rd step
     def take_control(self, token:Token) -> PlainText:
         self.actor.take_control(token)
-        children_response = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
+        response_children = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
         resp = PlainText(text = f'{token.user_name} took control')
         return Response (
             token = token,
             data = pack_to_any(resp),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = children_response,
+            response_children = response_children,
         )
 
     # ORDER MATTERS!
@@ -624,13 +641,13 @@ class Controller(ControllerServicer):
     def surrender_control(self, token:Token) -> PlainText:
         user = self.actor.get_user_name()
         self.actor.surrender_control(token)
-        children_response = self.propagate_to_list('surrender_control', command_data=None, token=token, node_to_execute=self.children_nodes)
+        response_children = self.propagate_to_list('surrender_control', command_data=None, token=token, node_to_execute=self.children_nodes)
         resp = PlainText(text = f'{user} surrendered control')
         return Response (
             token = token,
             data = pack_to_any(resp),
             response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = children_response,
+            response_children = response_children,
         )
 
     # ORDER MATTERS!
