@@ -13,9 +13,9 @@ def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
     from drunc.utils.shell_utils import InterruptedCommand
 
     if command == 'fsm':
-        desc = obj.get_driver('controller').describe_fsm(rethrow=traceback)
+        desc = obj.get_driver('controller').describe_fsm(rethrow=traceback).data
     else:
-        desc = obj.get_driver('controller').describe(rethrow=traceback)
+        desc = obj.get_driver('controller').describe(rethrow=traceback).data
 
     if not desc: return
 
@@ -82,7 +82,7 @@ def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
 @add_traceback_flag()
 @click.pass_obj
 def ls(obj:ControllerContext, traceback:bool) -> None:
-    children = obj.get_driver('controller').ls(rethrow=traceback)
+    children = obj.get_driver('controller').ls(rethrow=traceback).data
     if not children: return
     obj.print(children.text)
 
@@ -92,7 +92,7 @@ def ls(obj:ControllerContext, traceback:bool) -> None:
 @click.pass_obj
 def status(obj:ControllerContext, traceback:bool) -> None:
     from druncschema.controller_pb2 import Status, ChildrenStatus
-    status = obj.get_driver('controller').get_status(traceback)
+    status = obj.get_driver('controller').get_status(traceback).data
 
     if not status: return
 
@@ -113,7 +113,7 @@ def status(obj:ControllerContext, traceback:bool) -> None:
         format_bool(status.included),
     )
 
-    statuses = obj.get_driver('controller').get_children_status(traceback)
+    statuses = obj.get_driver('controller').get_children_status(traceback).data
 
     if not statuses:
         statuses = []
@@ -156,14 +156,14 @@ def connect(obj:ControllerContext, traceback:bool, controller_address:str) -> No
 @add_traceback_flag()
 @click.pass_obj
 def take_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver('controller').take_control(traceback)
+    obj.get_driver('controller').take_control(traceback).data
 
 
 @click.command('surrender-control')
 @add_traceback_flag()
 @click.pass_obj
 def surrender_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver('controller').surrender_control(traceback)
+    obj.get_driver('controller').surrender_control(traceback).data
 
 
 @click.command('who-am-i')
@@ -176,7 +176,7 @@ def who_am_i(obj:ControllerContext) -> None:
 @add_traceback_flag()
 @click.pass_obj
 def who_is_in_charge(obj:ControllerContext, traceback:bool) -> None:
-    who = obj.get_driver('controller').who_is_in_charge(traceback)
+    who = obj.get_driver('controller').who_is_in_charge(traceback).data
     if who:
         obj.print(who.text)
 
@@ -191,7 +191,7 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
 
     if len(arguments) % 2 != 0:
         raise click.BadParameter('Arguments are pairs of key-value!')
-    desc = obj.get_driver('controller').describe_fsm(traceback)
+    desc = obj.get_driver('controller').describe_fsm(traceback).data
 
     from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
 
@@ -225,25 +225,34 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
     if not result: return
 
     from drunc.controller.interface.shell_utils import format_bool, tree_prefix
-    from druncschema.controller_pb2 import FSMCommandResponseCode
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
 
     from rich.table import Table
     t = Table(title=f'{command} execution report')
     t.add_column('Name')
-    t.add_column('Command success')
-    t.add_row(
-        '<root>',
-        format_bool(result.successful == FSMCommandResponseCode.SUCCESSFUL),
-    )
+    t.add_column('Command execution')
+    t.add_column('FSM transition')
 
-    i=0
-    n=len(result.children_successful)
-    for name, sucess in result.children_successful.items():
-        t.add_row(
-            tree_prefix(i, n)+name,
-            format_bool(sucess == FSMCommandResponseCode.SUCCESSFUL),
+    from druncschema.request_response_pb2 import ResponseFlag
+    def bool_to_success(flag_message, FSM):
+        flag = False
+        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            flag = True
+        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            flag = True
+        return "success" if flag else "failed"
+
+    def add_to_table(table, response, prefix=''):
+        table.add_row(
+            prefix+response.name,
+            bool_to_success(response.flag, FSM=False),
+            bool_to_success(response.data.flag, FSM=True) if response.flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY else "failed",
         )
-        i += 1
+        for child_response in response.children:
+            add_to_table(table, child_response, "  "+prefix)
+
+    add_to_table(t, result)
     obj.print(t)
 
 
@@ -255,7 +264,7 @@ def include(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'include',
     )
-    result = obj.get_driver('controller').include(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').include(rethrow=traceback, arguments=data).data
     if not result: return
     obj.print(result.text)
 
@@ -268,6 +277,6 @@ def exclude(obj:ControllerContext, traceback:bool) -> None:
     data = FSMCommand(
         command_name = 'exclude',
     )
-    result = obj.get_driver('controller').exclude(rethrow=traceback, arguments=data)
+    result = obj.get_driver('controller').exclude(rethrow=traceback, arguments=data).data
     if not result: return
     obj.print(result.text)
