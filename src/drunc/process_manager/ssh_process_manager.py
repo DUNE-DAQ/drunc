@@ -318,13 +318,26 @@ class SSHProcessManager(ProcessManager):
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
+        same_uuid_br = []
+        same_uuid_br = BootRequest()
+        same_uuid_br.CopyFrom(self.boot_request[uuid])
+        same_uuid = uuid
+
         if uuid in self.process_store:
             process = self.process_store[uuid]
             if process.is_alive():
                 process.terminate()
 
-        return self.__boot(self.boot_request[uuid], uuid)
+        del self.process_store[uuid]
+        del self.boot_request[uuid]
+        del uuid
+        
+        ret = self.__boot(same_uuid_br, same_uuid)
 
+        del same_uuid_br
+        del same_uuid
+
+        return ret
 
     def _kill_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
