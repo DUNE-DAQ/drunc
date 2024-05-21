@@ -143,7 +143,8 @@ class GRPCDriver:
         )
 
         if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            dr.data = unpack_any(response.data, outformat)
+            if response.HasField("data"):
+                dr.data = unpack_any(response.data, outformat)
 
             for c_response in response.children:
                 dr.children.append(self.handle_response(c_response, command, outformat))
