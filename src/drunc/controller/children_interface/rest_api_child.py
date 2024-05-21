@@ -447,13 +447,19 @@ class RESTAPIChildNode(ChildNode):
 
     def propagate_command(self, command:str, data, token:Token) -> Response:
         from druncschema.request_response_pb2 import ResponseFlag
+        from druncschema.generic_pb2 import PlainText, Stacktrace
+        from drunc.utils.grpc_utils import pack_to_any
 
         if command == 'exclude':
             self.state.exclude()
             return Response(
                 name = self.name,
                 token = token,
-                data = None,
+                data = pack_to_any(
+                    PlainText(
+                        text=f"\'{self.name}\' excluded"
+                    )
+                ),
                 flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children = []
             )
@@ -462,12 +468,15 @@ class RESTAPIChildNode(ChildNode):
             return Response(
                 name = self.name,
                 token = token,
-                data = None,
+                data = pack_to_any(
+                    PlainText(
+                        text=f"\'{self.name}\' included"
+                    )
+                ),
                 flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children = []
             )
 
-        from drunc.utils.grpc_utils import pack_to_any
         from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
 
         if self.state.excluded():
@@ -504,7 +513,6 @@ class RESTAPIChildNode(ChildNode):
         import json
         self.log.info(f'Sending \'{data.command_name}\' to \'{self.name}\'')
 
-        from druncschema.generic_pb2 import PlainText, Stacktrace
 
         try:
             self.commander.send_command(
