@@ -133,7 +133,7 @@ class GRPCDriver:
             if rethrow:
                 raise error
 
-    def handle_response(self, response, outformat):
+    def handle_response(self, response, command, outformat):
         from druncschema.request_response_pb2 import ResponseFlag, Response
         from drunc.utils.grpc_utils import unpack_any
         dr = DecodedResponse(
@@ -146,12 +146,24 @@ class GRPCDriver:
             dr.data = unpack_any(response.data, outformat)
 
             for c_response in response.children:
-                dr.children.append(self.handle_response(c_response, outformat))
+                dr.children.append(self.handle_response(c_response, command, outformat))
 
             return dr
 
         else:
-            self._log.error(f'Command failed with response flag \'{response.flag}\'')
+            def text(verb="not executed"):
+                return f'Command \'{command}\' {verb} on \'{response.name}\' (response flag \'{ResponseFlag.Name(response.flag)}\')'
+            if response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            ]:
+                self._log.info(text())
+            elif response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
+            ]:
+                self._log.warn(text())
+            else:
+                self._log.error(text("failed"))
+
             if not response.HasField("data"): return None
             from druncschema.generic_pb2 import Stacktrace, PlainText, PlainTextVector
             from drunc.utils.grpc_utils import unpack_any
@@ -174,7 +186,7 @@ class GRPCDriver:
 
             dr.data = response.data
             for c_response in response.children:
-                dr.children.append(self.handle_response(c_response, outformat))
+                dr.children.append(self.handle_response(c_response, command, outformat))
             return dr
 
     def send_command(self, command:str, data=None, rethrow=None, outformat=None, decode_children=False):
@@ -190,7 +202,7 @@ class GRPCDriver:
             response = cmd(request)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
-        return self.handle_response(response, outformat)
+        return self.handle_response(response, command, outformat)
 
 
     async def send_command_aio(self, command:str, data=None, rethrow=None, outformat=None):
@@ -207,7 +219,7 @@ class GRPCDriver:
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
-        return self.handle_response(response, outformat)
+        return self.handle_response(response, command, outformat)
 
 
     async def send_command_for_aio(self, command:str, data=None, rethrow=None, outformat=None):
@@ -221,7 +233,7 @@ class GRPCDriver:
 
         try:
             async for s in cmd(request):
-                yield self.handle_response(s, outformat)
+                yield self.handle_response(s, command, outformat)
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
