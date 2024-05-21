@@ -504,6 +504,22 @@ class Controller(ControllerServicer):
         2. Execute the command on children controller, app, and self
         3. Return the result
         """
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+
+        if not self.stateful_node.node_is_included():
+            fsm_result = FSMCommandResponse(
+                flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                command_name = fsm_command.command_name,
+            )
+
+            return Response (
+                name = self.name,
+                token = token,
+                data = pack_to_any(fsm_result),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
+            )
+
 
         transition = self.stateful_node.get_fsm_transition(fsm_command.command_name)
 
@@ -511,6 +527,18 @@ class Controller(ControllerServicer):
 
         if not self.stateful_node.can_transition(transition):
             message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"'
+            fsm_result = FSMCommandResponse(
+                flag = FSMResponseFlag.FSM_INVALID_TRANSITION,
+                command_name = fsm_command.command_name,
+            )
+
+            return Response (
+                name = self.name,
+                token = token,
+                data = pack_to_any(fsm_result),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
+            )
 
         self.logger.debug(f'FSM command data: {fsm_command}')
 
@@ -536,7 +564,6 @@ class Controller(ControllerServicer):
             token = token,
             node_to_execute = self.children_nodes,
         )
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
 
         success = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
         if any(cr.flag != success for cr in response_children): # if any child was unsuccessful
