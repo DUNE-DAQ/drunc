@@ -446,6 +446,7 @@ class RESTAPIChildNode(ChildNode):
         )
 
     def propagate_command(self, command:str, data, token:Token) -> Response:
+        from druncschema.request_response_pb2 import ResponseFlag
 
         if command == 'exclude':
             self.state.exclude()
@@ -466,7 +467,6 @@ class RESTAPIChildNode(ChildNode):
                 children = []
             )
 
-        from druncschema.request_response_pb2 import ResponseFlag
         from drunc.utils.grpc_utils import pack_to_any
         from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
 
