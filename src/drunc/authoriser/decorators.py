@@ -15,19 +15,20 @@ def authentified_and_authorised(action, system):
             if not obj.authoriser.is_authorised(request.token, action, system, cmd.__name__):
                 from drunc.authoriser.exceptions import Unauthorised
                 return Response(
+                    name = obj.name,
                     token = request.token,
                     data = PlainText(
-                        text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.__class__.__name__} (action type is {action}, system is {system})"
+                        text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
                     ),
-                    response_flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
-                    children_responses = {}
+                    flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
+                    responses = []
                 )
 
                 # raise Unauthorised(
                 #     user = request.token.user_name,
                 #     action = action,
                 #     command = cmd.__name__,
-                #     drunc_system = obj.__class__.__name__,
+                #     drunc_system = obj.name,
                 # )
             log.debug('Executing wrapped function')
             ret = cmd(obj, request)
@@ -50,12 +51,13 @@ def async_authentified_and_authorised(action, system):
             log.debug('Entering')
             if not obj.authoriser.is_authorised(request.token, action, system, cmd.__name__):
                 yield Response(
+                    name = obj.name,
                     token = request.token,
                     data = PlainText(
-                        text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.__class__.__name__} (action type is {action}, system is {system})"
+                        text = f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
                     ),
-                    response_flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
-                    response_children = {}
+                    flag = ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
+                    children = []
                 )
             log.debug('Executing wrapped function')
             async for a in cmd(obj, request):

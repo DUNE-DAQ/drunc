@@ -110,14 +110,15 @@ class gRPCChildNode(ChildNode):
             )
         except DruncException as e:
             return Response(
+                name = self.name,
                 token = token,
                 data = pack_to_any(
                     Stacktrace(
                         text=[str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
 

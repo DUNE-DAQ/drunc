@@ -50,12 +50,13 @@ def unpack_request_data_to(data_type=None, pass_token=False):
                     data = unpack_any(request.data, data_type)
                 except UnpackingError as e:
                     return Response(
+                        name = obj.__class__.__name__,
                         token = request.token,
                         data = PlainText(
                             text = str(e)
                         ),
-                        response_flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        response_children = {}
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children = []
                     )
 
             if data is not None:
@@ -95,12 +96,13 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
                     data = unpack_any(request.data, data_type)
                 except UnpackingError as e:
                     yield Response(
+                        name = obj.__class__.__name__,
                         token = request.token,
                         data = PlainText(
                             text = str(e)
                         ),
-                        response_flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        response_children = {}
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children = []
                     )
 
             if data is not None:
@@ -146,9 +148,11 @@ def pack_response(cmd, with_children_responses=False):
         data = Any()
         data.Pack(self_response)
         ret = Response(
+            name = obj.__class__.__name__,
             token = new_token,
             data = data,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
         log.debug('Exiting')

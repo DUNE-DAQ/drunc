@@ -34,14 +34,15 @@ def broadcasted(cmd):
             # )
 
             return Response(
+                name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
                         text = [str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
         except Exception as e:
@@ -52,14 +53,15 @@ def broadcasted(cmd):
             #     context = context
             # )
             return Response(
+                name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
                         text = [str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                children = []
             )
 
         obj.broadcast(
@@ -101,14 +103,15 @@ def async_broadcasted(cmd):
             #     context = context
             # )
             yield Response(
+                name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
                         text = [str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
 
@@ -120,14 +123,15 @@ def async_broadcasted(cmd):
             #     context = context
             # )
             yield Response(
+                name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
                         text = [str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                children = []
             )
 
         obj.broadcast(

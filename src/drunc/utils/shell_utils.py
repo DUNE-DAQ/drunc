@@ -13,16 +13,34 @@ class InterruptedCommand(DruncShellException):
 
 class DecodedResponse:
     ## Warning! This should be kept in sync with druncschema/request_response.proto/Response class
+    name = None
     token = None
     data = None
-    response_flag = None
-    response_children = {}
+    flag = None
+    children = []
 
-    def __init__(self, token, response_flag, data=None, response_children={}):
+    def __init__(self, name, token, flag, data=None, children=None):
+        self.name = name
         self.token = token
-        self.response_flag = response_flag
+        self.flag = flag
         self.data = data
-        self.response_children = response_children
+        if children is None:
+            self.children = []
+        else:
+            self.children = children
+
+    @staticmethod
+    def str(obj, prefix=""):
+        text = f'{prefix} {obj.name}\n'
+        for v in obj.children:
+            if v is None:
+                continue
+            text += DecodedResponse.str(v, prefix+"  ")
+        return text
+
+    def __str__(self):
+        return DecodedResponse.str(self)
+
 
 class GRPCDriver:
     def __init__(self, name:str, address:str, token:Token, aio_channel=False, rethrow_by_default=False):
@@ -119,19 +137,21 @@ class GRPCDriver:
         from druncschema.request_response_pb2 import ResponseFlag, Response
         from drunc.utils.grpc_utils import unpack_any
         dr = DecodedResponse(
+            name = response.name,
             token = response.token,
-            response_flag = response.response_flag,
+            flag = response.flag,
         )
-        if response.response_flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+
+        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             dr.data = unpack_any(response.data, outformat)
 
-            for child, c_response in response.response_children.items():
-                dr.response_children[child] = self.handle_response(c_response, outformat)
+            for c_response in response.children:
+                dr.children.append(self.handle_response(c_response, outformat))
 
             return dr
 
         else:
-            self._log.error(f'Command {command} failed with response flag {str(response.response_flag)}')
+            self._log.error(f'Command failed with response flag \'{response.flag}\'')
             if not response.HasField("data"): return None
             from druncschema.generic_pb2 import Stacktrace, PlainText, PlainTextVector
             from drunc.utils.grpc_utils import unpack_any
@@ -152,6 +172,10 @@ class GRPCDriver:
                 for t in txt.text:
                     self._log.error(t)
 
+            dr.data = response.data
+            for c_response in response.children:
+                dr.children.append(self.handle_response(c_response, outformat))
+            return dr
 
     def send_command(self, command:str, data=None, rethrow=None, outformat=None, decode_children=False):
         import grpc
@@ -166,7 +190,6 @@ class GRPCDriver:
             response = cmd(request)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
-
         return self.handle_response(response, outformat)
 
 

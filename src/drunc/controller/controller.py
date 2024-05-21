@@ -64,7 +64,7 @@ class ControllerActor:
         # if not self.compare_token(self._token, token):
         #     raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
         self._update_actor(token)
-
+        return 0
 
 
 class Controller(ControllerServicer):
@@ -274,7 +274,7 @@ class Controller(ControllerServicer):
             message = f'Propagating {command} to children',
         )
 
-        response_children = {}
+        response_children = []
         from threading import Lock, Thread
         response_lock = Lock()
 
@@ -290,9 +290,9 @@ class Controller(ControllerServicer):
             try:
                 response = child.propagate_command(command, command_data, token)
                 with response_lock:
-                    response_children[child.name] = response
+                    response_children.append(response)
 
-                if response.response_flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+                if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self.broadcast(
                         btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
                         message = f'Propagated {command} to children ({child.name}) successfully',
@@ -300,41 +300,47 @@ class Controller(ControllerServicer):
                 else:
                     self.broadcast(
                         btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                        message = f'Propagating {command} to children ({child.name}) failed: {str(response.response_flag)}',
+                        message = f'Propagating {command} to children ({child.name}) failed: {str(response.flag)}',
                     )
             except DruncException as e:
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
-                    response_children[child.name] = Response(
-                        token = token,
-                        data = pack_to_any(
-                            Stacktrace(
-                                text=[
-                                    "Exception throw", # poor man's stack trace
-                                    str(e)
-                                ]
-                            )
-                        ),
-                        response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                        response_children = [],
+                    response_children.append(
+                        Response(
+                            name = child.name,
+                            token = token,
+                            data = pack_to_any(
+                                Stacktrace(
+                                    text=[
+                                        "Exception throw", # poor man's stack trace
+                                        str(e)
+                                    ]
+                                )
+                            ),
+                            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                            children = [],
+                        )
                     )
             except Exception as e:
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
-                    response_children[child.name] = Response(
-                        token = token,
-                        data = pack_to_any(
-                            Stacktrace(
-                                text=[
-                                    "Exception throw", # poor man's stack trace
-                                    str(e)
-                                ]
-                            )
-                        ),
-                        response_flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
-                        response_children = [],
+                    response_children.append(
+                        Response(
+                            name = child.name,
+                            token = token,
+                            data = pack_to_any(
+                                Stacktrace(
+                                    text=[
+                                        "Exception throw", # poor man's stack trace
+                                        str(e)
+                                    ]
+                                )
+                            ),
+                            flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                            children = [],
+                        )
                     )
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
@@ -380,10 +386,11 @@ class Controller(ControllerServicer):
             children_status = [n.get_status(token) for n in self.children_nodes]
         )
         return Response(
+            name = self.name,
             token = None,
             data = pack_to_any(response),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
     # ORDER MATTERS!
@@ -399,10 +406,11 @@ class Controller(ControllerServicer):
         status.name = self.name
 
         return Response (
+            name = self.name,
             token = None,
             data = pack_to_any(status),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
 
@@ -420,10 +428,11 @@ class Controller(ControllerServicer):
         )
 
         return Response (
+            name = self.name,
             token = None,
             data = pack_to_any(response),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
 
@@ -448,10 +457,11 @@ class Controller(ControllerServicer):
             d.broadcast.CopyFrom(pack_to_any(bd))
 
         return Response (
+            name = self.name,
             token = None,
             data = pack_to_any(d),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
     # ORDER MATTERS!
@@ -468,10 +478,11 @@ class Controller(ControllerServicer):
         desc.name = self.name
         desc.session = self.session
         return Response (
+            name = self.name,
             token = None,
             data = pack_to_any(desc),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
 
@@ -523,13 +534,13 @@ class Controller(ControllerServicer):
             'execute_fsm_command',
             command_data = children_fsm_command,
             token = token,
-            node_to_execute = execute_on if execute_on else self.children_nodes,
+            node_to_execute = self.children_nodes,
         )
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
 
-        success = FSMCommandResponseCode.SUCCESSFUL
-        if any(cr.response_flag != success for cr in response_children.values()): # if any child was unsuccessful
-            success = FSMCommandResponseCode.UNSUCCESSFUL
+        success = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        if any(cr.flag != success for cr in response_children): # if any child was unsuccessful
+            success = FSMResponseFlag.FSM_FAILED
             self.stateful_node.to_error()
 
             self.broadcast(
@@ -552,15 +563,16 @@ class Controller(ControllerServicer):
 
 
         fsm_result = FSMCommandResponse(
-            successful = success,
+            flag = success,
             command_name = fsm_command.command_name,
         )
 
         return Response (
+            name = self.name,
             token = token,
             data = pack_to_any(fsm_result),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
 
@@ -578,10 +590,11 @@ class Controller(ControllerServicer):
         resp = PlainText(text = f'{self.name} and children included')
 
         return Response (
+            name = self.name,
             token = token,
             data = pack_to_any(resp),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
 
@@ -598,10 +611,11 @@ class Controller(ControllerServicer):
         self.stateful_node.exclude_node()
         resp =  PlainText(text = f'{self.name} and children excluded')
         return Response (
+            name = self.name,
             token = token,
             data = pack_to_any(resp),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
 
@@ -618,14 +632,40 @@ class Controller(ControllerServicer):
     ) # 2nd step
     @unpack_request_data_to(pass_token=True) # 3rd step
     def take_control(self, token:Token) -> PlainText:
-        self.actor.take_control(token)
+        if self.actor.take_control(token) != 0:
+            return Response(
+                name = self.name,
+                token = token,
+                data = pack_to_any(
+                    PlainText(
+                        text='Could not take control'
+                    )
+                ),
+                flag = ResponseFlag.FAILED,
+                children = [],
+            )
+
         response_children = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
+        if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
+            return Response(
+                name = self.name,
+                token = token,
+                data = pack_to_any(
+                    PlainText(
+                        text='Could not take control on all children'
+                    )
+                ),
+                flag = ResponseFlag.FAILED,
+                children = response_children,
+            )
+
         resp = PlainText(text = f'{token.user_name} took control')
-        return Response (
+        return Response(
+            name = self.name,
             token = token,
             data = pack_to_any(resp),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
     # ORDER MATTERS!
@@ -638,14 +678,40 @@ class Controller(ControllerServicer):
     @unpack_request_data_to(pass_token=True) # 4th step
     def surrender_control(self, token:Token) -> PlainText:
         user = self.actor.get_user_name()
-        self.actor.surrender_control(token)
+        if self.actor.surrender_control(token) != 0:
+            return Response(
+                name = self.name,
+                token = token,
+                data = pack_to_any(
+                    PlainText(
+                        text='Could not surrender control'
+                    )
+                ),
+                flag = ResponseFlag.FAILED,
+                children = [],
+            )
+
         response_children = self.propagate_to_list('surrender_control', command_data=None, token=token, node_to_execute=self.children_nodes)
+        if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
+            return Response(
+                name = self.name,
+                token = token,
+                data = pack_to_any(
+                    PlainText(
+                        text='Could not surrender control on all children'
+                    )
+                ),
+                flag = ResponseFlag.FAILED,
+                children = response_children,
+            )
+
         resp = PlainText(text = f'{user} surrendered control')
-        return Response (
+        return Response(
+            name = self.name,
             token = token,
             data = pack_to_any(resp),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = response_children,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
     # ORDER MATTERS!
@@ -658,8 +724,9 @@ class Controller(ControllerServicer):
     def who_is_in_charge(self) -> PlainText:
         user = self.actor.get_user_name()
         return Response (
+            name = self.name,
             token = None,
             data = pack_to_any(PlainText(text=user)),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )

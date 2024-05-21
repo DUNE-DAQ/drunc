@@ -167,18 +167,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def boot(self, br:BootRequest) -> Response:
         try:
             resp = self._boot_impl(br)
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {},
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
             )
         except NotImplementedError:
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {},
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
             )
 
 
@@ -196,18 +198,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def restart(self, q:ProcessQuery)-> Response:
         try:
             resp = self._restart_impl(q)
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {},
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
             )
         except NotImplementedError:
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {},
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
             )
 
 
@@ -225,18 +229,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def kill(self, q:ProcessQuery) -> Response:
         try:
             resp = self._kill_impl(q)
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {},
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
             )
         except NotImplementedError:
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {},
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
             )
 
 
@@ -254,18 +260,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def ps(self, q:ProcessQuery) -> Response:
         try:
             resp = self._ps_impl(q)
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {},
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
             )
         except NotImplementedError:
-            return Response (
+            return Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {},
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
             )
 
     # ORDER MATTERS!
@@ -320,11 +328,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             values=ret
         )
 
-        return Response (
+        return Response(
+            name = self.name,
             token = None,
             data = pack_to_any(pil),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
 
@@ -348,11 +357,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         if bd:
             d.broadcast.CopyFrom(pack_to_any(bd))
 
-        return Response (
+        return Response(
+            name = self.name,
             token = None,
             data = pack_to_any(d),
-            response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            response_children = {},
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
 
@@ -371,18 +381,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     async def logs(self, lr:LogRequest) -> Response:
         try:
             async for r in self._logs_impl(lr):
-                yield Response (
+                yield Response(
+                    name = self.name,
                     token = None,
                     data = pack_to_any(r),
-                    response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    response_children = {},
+                    flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                    children = [],
                 )
         except NotImplementedError:
-            yield Response (
+            yield Response(
+                name = self.name,
                 token = None,
                 data = pack_to_any(resp),
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {},
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
             )
 
     def _ensure_one_process(self, uuids:[str], in_boot_request:bool=False) -> str:

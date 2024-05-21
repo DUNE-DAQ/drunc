@@ -450,38 +450,50 @@ class RESTAPIChildNode(ChildNode):
         if command == 'exclude':
             self.state.exclude()
             return Response(
+                name = self.name,
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {}
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = []
             )
         elif command == 'include':
             self.state.include()
             return Response(
+                name = self.name,
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {}
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = []
             )
 
         from druncschema.request_response_pb2 import ResponseFlag
+        from drunc.utils.grpc_utils import pack_to_any
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
 
         if self.state.excluded():
             return Response(
+                name = self.name,
                 token = token,
-                data = None,
-                response_flag = ResponseFlag.NOT_EXECUTED_EXCLUDED,
-                response_children = {}
+                data = pack_to_any(
+                    FSMCommandResponse(
+                        flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                        command_name = data.command_name,
+                        data = None
+                    )
+                ),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = []
             )
 
         # here lies the mother of all the problems
         if command != 'execute_fsm_command':
             self.log.info(f'Ignoring command \'{command}\' sent to \'{self.name}\'')
             return Response(
+                name = self.name,
                 token = token,
                 data = None,
-                response_flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                response_children = {}
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = []
             )
 
         from drunc.exceptions import DruncException
@@ -493,8 +505,6 @@ class RESTAPIChildNode(ChildNode):
         self.log.info(f'Sending \'{data.command_name}\' to \'{self.name}\'')
 
         from druncschema.generic_pb2 import PlainText, Stacktrace
-        from drunc.grpc_utils import pack_to_any
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMCommandResponseCode
 
         try:
             self.commander.send_command(
@@ -512,41 +522,43 @@ class RESTAPIChildNode(ChildNode):
 
             response_data = pack_to_any(
                 PlainText(
-                    text = r.get('result', '')
+                    text = json.dumps(r)
                 )
             )
 
             fsm_data = FSMCommandResponse(
-                successful = FSMCommandResponseCode.SUCCESSFUL if success else FSMCommandResponseCode.UNSUCCESSFUL,
+                flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY if success else FSMResponseFlag.FSM_FAILED,
                 command_name = data.command_name,
                 data = response_data
             )
-
+            from drunc.utils.grpc_utils import pack_to_any
             response = Response(
+                name = self.name,
                 token = token,
-                data = fsm_data,
-                response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                response_children = {}
+                data = pack_to_any(fsm_data),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = {}
             )
 
             if not success:
                 self.log.error(r['result'])
                 self.state.to_error()
-                response.response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY # /!\ The command executed successfully, but the FSM command was not successful
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY # /!\ The command executed successfully, but the FSM command was not successful
                 return response
 
         except ChildError as e:
             self.log.error(f'Got error from \'{data.command_name}\' to \'{self.name}\': {str(e)}')
             self.state.to_error()
             return Response(
+                name = self.name,
                 token = token,
                 data = pack_to_any(
                     Stacktrace(
                         text=[str(e)]
                     )
                 ),
-                response_flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                response_children = {}
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
         self.state.end_command_execution_mark()

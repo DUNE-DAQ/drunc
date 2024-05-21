@@ -113,7 +113,7 @@ def status(obj:ControllerContext, traceback:bool) -> None:
         format_bool(status.included),
     )
 
-    statuses = obj.get_driver('controller').get_children_status(traceback)
+    statuses = obj.get_driver('controller').get_children_status(traceback).data
 
     if not statuses:
         statuses = []
@@ -226,31 +226,35 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
 
     from drunc.controller.interface.shell_utils import format_bool, tree_prefix
     from drunc.utils.grpc_utils import unpack_any
-    from druncschema.controller_pb2 import FSMCommandResponseCode, FSMCommandResponse
-    if result.successful != FSMCommandResponseCode.SUCCESSFUL:
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
+    if result.data.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
         return
 
     from rich.table import Table
     t = Table(title=f'{command} execution report')
     t.add_column('Name')
-    t.add_column('Command success')
-    # t.add_row(
-    #     '<root>',
-    #     format_bool(result.successful == FSMCommandResponseCode.SUCCESSFUL),
-    # )
+    t.add_column('Command execution')
+    t.add_column('FSM transition')
 
-    # i=0
-    def add_to_table(table, response, name, prefix):
-        table.add_row(prefix+name, format_bool(response.successful == FSMCommandResponseCode.SUCCESSFUL))
-        for c_name, c_response in response.response_children.items():
-            add_to_table(table, c_response, c_name, "  "+prefix)
-    # for name, sucess in result.children_successful.items():
-    #     t.add_row(
-    #         tree_prefix(i, n)+name,
-    #         format_bool(sucess == FSMCommandResponseCode.SUCCESSFUL),
-    #     )
-    #     i += 1
-    add_to_table(t, result, '<root>', '')
+    from druncschema.request_response_pb2 import ResponseFlag
+    def bool_to_success(flag_message, FSM):
+        flag = False
+        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            flag = True
+        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            flag = True
+        return "success" if flag else "failed"
+
+    def add_to_table(table, response, prefix=''):
+        table.add_row(
+            prefix+response.name,
+            bool_to_success(response.flag, FSM=False),
+            bool_to_success(response.data.flag, FSM=True) if response.flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY else "failed",
+        )
+        for child_response in response.children:
+            add_to_table(table, child_response, "  "+prefix)
+
+    add_to_table(t, result)
     obj.print(t)
 
 

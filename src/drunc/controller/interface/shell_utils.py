@@ -92,15 +92,21 @@ def controller_setup(ctx, controller_address):
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
-        ctx.get_driver('controller').take_control(rethrow=True).data
-        ctx.took_control = True
+        ret = ctx.get_driver('controller').take_control(rethrow=True)
+        from druncschema.request_response_pb2 import ResponseFlag
+
+        if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            ctx.info('You are in control.')
+            ctx.took_control = True
+        else:
+            ctx.warn(f'You are NOT in control.')
+            ctx.took_control = False
+
 
     except Exception as e:
         ctx.warn('You are NOT in control.')
         ctx.took_control = False
-        return
-
-    ctx.info('You are in control.')
+        raise e
 
 
 
