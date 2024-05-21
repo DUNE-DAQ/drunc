@@ -1,6 +1,6 @@
-from drunc.fsm.core import FSMInterface
+from drunc.fsm.core import FSMHook
 
-class UserProvidedRunNumber(FSMInterface):
+class UserProvidedRunNumber(FSMHook):
     def __init__(self, configuration):
         super().__init__(
             name = "run-number"
