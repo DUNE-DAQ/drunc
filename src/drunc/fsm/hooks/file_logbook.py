@@ -1,6 +1,6 @@
-from drunc.fsm.core import FSMInterface
+from drunc.fsm.core import FSMHook
 
-class FileLogbook(FSMInterface):
+class FileLogbook(FSMHook):
     def __init__(self, configuration):
         super().__init__(
             name = "file-logbook"
