@@ -31,7 +31,7 @@ class DecodedResponse:
 
     @staticmethod
     def str(obj, prefix=""):
-        text = f'{prefix} {obj.name}\n'
+        text = f'{prefix} {obj.name} -> {obj.flag}\n'
         for v in obj.children:
             if v is None:
                 continue
@@ -141,14 +141,12 @@ class GRPCDriver:
             token = response.token,
             flag = response.flag,
         )
-
         if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            if response.HasField("data"):
+            if response.data not in [None, ""]:
                 dr.data = unpack_any(response.data, outformat)
 
             for c_response in response.children:
                 dr.children.append(self.handle_response(c_response, command, outformat))
-
             return dr
 
         else:

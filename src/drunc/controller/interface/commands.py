@@ -227,8 +227,6 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
     from drunc.controller.interface.shell_utils import format_bool, tree_prefix
     from drunc.utils.grpc_utils import unpack_any
     from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
-    if result.data.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
-        return
 
     from rich.table import Table
     t = Table(title=f'{command} execution report')
