@@ -3,6 +3,9 @@ from drunc.exceptions import DruncCommandException
 class ControllerException(DruncCommandException):
     pass
 
+class ChildError(ControllerException):
+    pass
+
 class CannotSurrenderControl(ControllerException):
     pass
 

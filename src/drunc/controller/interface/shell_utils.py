@@ -64,7 +64,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time()-start_time)
 
             try:
-                desc = ctx.get_driver('controller').describe(rethrow=True)
+                desc = ctx.get_driver('controller').describe(rethrow=True).data
                 stored_exception = None
                 break
             except ServerUnreachable as e:
@@ -87,20 +87,26 @@ def controller_setup(ctx, controller_address):
 
     ctx.print('Connected to the controller')
 
-    children = ctx.get_driver('controller').ls(rethrow=False)
+    children = ctx.get_driver('controller').ls(rethrow=False).data
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
-        ctx.get_driver('controller').take_control(rethrow=True)
-        ctx.took_control = True
+        ret = ctx.get_driver('controller').take_control(rethrow=True)
+        from druncschema.request_response_pb2 import ResponseFlag
+
+        if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            ctx.info('You are in control.')
+            ctx.took_control = True
+        else:
+            ctx.warn(f'You are NOT in control.')
+            ctx.took_control = False
+
 
     except Exception as e:
         ctx.warn('You are NOT in control.')
         ctx.took_control = False
-        return
-
-    ctx.info('You are in control.')
+        raise e
 
 
 

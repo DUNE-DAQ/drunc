@@ -44,8 +44,22 @@ def unpack_request_data_to(data_type=None, pass_token=False):
             if pass_token:
                 kwargs = {'token': request.token}
 
+            data = None
             if data_type is not None:
-                data = unpack_any(request.data, data_type)
+                try:
+                    data = unpack_any(request.data, data_type)
+                except UnpackingError as e:
+                    return Response(
+                        name = obj.__class__.__name__,
+                        token = request.token,
+                        data = PlainText(
+                            text = str(e)
+                        ),
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children = []
+                    )
+
+            if data is not None:
                 ret = cmd(obj, data, **kwargs)
             else:
                 ret = cmd(obj, **kwargs)
@@ -76,8 +90,22 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
             if pass_token:
                 kwargs = {'token': request.token}
 
+            data = None
             if data_type is not None:
-                data = unpack_any(request.data, data_type)
+                try:
+                    data = unpack_any(request.data, data_type)
+                except UnpackingError as e:
+                    yield Response(
+                        name = obj.__class__.__name__,
+                        token = request.token,
+                        data = PlainText(
+                            text = str(e)
+                        ),
+                        flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children = []
+                    )
+
+            if data is not None:
                 async for a in cmd(obj, data, **kwargs):
                     yield a
             else:
@@ -91,7 +119,8 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
     return decor
 
 
-def pack_response(cmd):
+def pack_response(cmd, with_children_responses=False):
+    raise DeprecationWarning('This function is deprecated, pack your responses yourself')
 
     import functools
 
@@ -106,14 +135,24 @@ def pack_response(cmd):
         from google.protobuf.any_pb2 import Any
 
         log.debug('Executing wrapped function')
-        ret = cmd(obj, *arg, **kwargs)
+        out = cmd(obj, *arg, **kwargs)
+        self_response = out
+        response_children = {}
+
+        if with_children_responses:
+            self_response = out[0]
+            response_children = out[1]
+
 
         new_token = Token() # empty token
         data = Any()
-        data.Pack(ret)
+        data.Pack(self_response)
         ret = Response(
+            name = obj.__class__.__name__,
             token = new_token,
-            data = data
+            data = data,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = response_children,
         )
 
         log.debug('Exiting')
@@ -123,7 +162,8 @@ def pack_response(cmd):
 
 
 
-def async_pack_response(cmd):
+def async_pack_response(cmd, with_children_responses=False):
+    raise DeprecationWarning('This function is deprecated, pack your responses yourself')
 
     import functools
 

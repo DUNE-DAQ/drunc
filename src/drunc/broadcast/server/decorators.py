@@ -1,5 +1,6 @@
-
-
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.generic_pb2 import Stacktrace
+from drunc.utils.grpc_utils import pack_to_any
 def broadcasted(cmd):
 
     import functools
@@ -27,17 +28,40 @@ def broadcasted(cmd):
             ret = cmd(obj, request) # we strip the context here, no need for that anymore
 
         except DruncCommandException as e:
-            obj.interrupt_with_exception(
-                exception = e,
-                context = context
+            # obj.interrupt_with_exception(
+            #     exception = e,
+            #     context = context
+            # )
+
+            return Response(
+                name = obj.name,
+                token = request.token,
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
+                ),
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
         except Exception as e:
-            import traceback
-            obj.interrupt_with_exception(
-                exception = e,
-                stack = traceback.format_exc(),
-                context = context
+            # import traceback
+            # obj.interrupt_with_exception(
+            #     exception = e,
+            #     stack = traceback.format_exc(),
+            #     context = context
+            # )
+            return Response(
+                name = obj.name,
+                token = request.token,
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
+                ),
+                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                children = []
             )
 
         obj.broadcast(
@@ -74,17 +98,40 @@ def async_broadcasted(cmd):
                 yield a
 
         except DruncCommandException as e:
-            await obj.async_interrupt_with_exception(
-                exception = e,
-                context = context
+            # await obj.async_interrupt_with_exception(
+            #     exception = e,
+            #     context = context
+            # )
+            yield Response(
+                name = obj.name,
+                token = request.token,
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
+                ),
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children = []
             )
 
+
         except Exception as e:
-            import traceback
-            await obj.async_interrupt_with_exception(
-                exception = e,
-                stack = traceback.format_exc(),
-                context = context
+            # import traceback
+            # await obj.async_interrupt_with_exception(
+            #     exception = e,
+            #     stack = traceback.format_exc(),
+            #     context = context
+            # )
+            yield Response(
+                name = obj.name,
+                token = request.token,
+                data = pack_to_any(
+                    Stacktrace(
+                        text = [str(e)]
+                    )
+                ),
+                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+                children = []
             )
 
         obj.broadcast(
