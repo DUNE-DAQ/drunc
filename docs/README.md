@@ -35,4 +35,4 @@ You can add a `-p 100:100` to the last `docker run` command to expose the port 1
 
 
 ## Run me
-See [https://github.com/DUNE-DAQ/drunc/wiki/Running-drunc](url) for guidance.
+See [quick start guide](https://github.com/DUNE-DAQ/drunc/wiki/Running-drunc) for guidance.
