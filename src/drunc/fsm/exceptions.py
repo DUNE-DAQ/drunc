@@ -28,11 +28,11 @@ class UnregisteredTransition(FSMException):
         self.message = f"Implementation of {transition} not found."
         super(UnregisteredTransition, self).__init__(self.message)
 
-class UnknownHook(FSMException):
+class UnknownAction(FSMException):
     '''Raised when a plugin name is provided that does not correspond to any files in /plugins'''
     def __init__(self, name):
         self.message = f"\"{name}\" is not a known plugin."
-        super(UnknownHook, self).__init__(self.message)
+        super(UnknownAction, self).__init__(self.message)
 
 class MissingArgument(FSMException):
     '''Raised when a mandatory argument is not provided for a transition'''
@@ -57,22 +57,22 @@ class UnknownArgument(FSMException):
         self.message = f"The mandatory argument \"{param}\" is not required by transition {name}"
         super(UnknownArgument, self).__init__(self.message)
 
-class InvalidHook(FSMException):
-    '''Raised when an hook doesn't have pre/post transitions'''
+class InvalidAction(FSMException):
+    '''Raised when an action doesn't have pre/post transitions'''
     def __init__(self, iface):
-        self.message = f"The hook \"{iface}\" does not have any pre or post transition method"
-        super(InvalidHook, self).__init__(self.message)
+        self.message = f"The action \"{iface}\" does not have any pre or post transition method"
+        super(InvalidAction, self).__init__(self.message)
 
-class InvalidHookMethod(FSMException):
-    '''Raised when an hook doesn't have the pre/post transitions arguments'''
+class InvalidActionMethod(FSMException):
+    '''Raised when an action doesn't have the pre/post transitions arguments'''
     def __init__(self, iface, method):
-        self.message = f"The hook \"{iface}\" method {method} does not have the correct arguements, each one should have at least \"_input_data\" and \"**kwargs\", and have type annotations"
-        super(InvalidHookMethod, self).__init__(self.message)
+        self.message = f"The action \"{iface}\" method {method} does not have the correct arguements, each one should have at least \"_input_data\" and \"**kwargs\", and have type annotations"
+        super(InvalidActionMethod, self).__init__(self.message)
 
 
 class MethodSignatureMissingAnnotation(FSMException):
     def __init__(self, iface, method, pname):
-        self.message = f"The hook \"{iface}\" method {method} does not have the correct arguement annotation for \"{pname}\", provide \"argument:int\" to your pre/post methods."
+        self.message = f"The action \"{iface}\" method {method} does not have the correct arguement annotation for \"{pname}\", provide \"argument:int\" to your pre/post methods."
         super(MethodSignatureMissingAnnotation, self).__init__(self.message)
 
 

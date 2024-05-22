@@ -1,14 +1,14 @@
-from drunc.fsm.core import FSMHook
+from drunc.fsm.core import FSMAction
 from enum import Enum
 
 class an_enum(Enum):
     ONE=1
     TWO=2
 
-class TestHook(FSMHook):
+class TestAction(FSMAction):
     def __init__(self, configuration):
         super().__init__(
-            name = "test-hook"
+            name = "test-action"
         )
 
 
