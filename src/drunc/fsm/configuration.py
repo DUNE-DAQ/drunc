@@ -23,7 +23,7 @@ class FSMConfHandler(ConfHandler):
 
         for action in seq_conf.order:
             seq.add_callback(
-                actopm = self.actions[action],
+                action = self.actions[action],
                 mandatory = action in seq_conf.mandatory,
             )
 
