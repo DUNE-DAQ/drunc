@@ -21,10 +21,10 @@ class FSMConfHandler(ConfHandler):
             if fsm_x_transition.id == transition.name:
                 seq_conf = fsm_x_transition
 
-        for hook in seq_conf.order:
+        for action in seq_conf.order:
             seq.add_callback(
-                hook = self.hooks[hook],
-                mandatory = hook in seq_conf.mandatory,
+                actopm = self.actions[action],
+                mandatory = action in seq_conf.mandatory,
             )
 
 
@@ -34,18 +34,18 @@ class FSMConfHandler(ConfHandler):
         self.log.info('_post_process_oks configuration')
         self.pre_transitions  = {}
         self.post_transitions = {}
-        self.hooks = {}
+        self.actions = {}
         self.transitions = []
         self.states = self.data.states
         self.initial_state = self.data.initial_state
 
-        from drunc.fsm.hook_factory import FSMHookFactory
+        from drunc.fsm.action_factory import FSMActionFactory
 
-        for hook in self.data.hooks:
-            self.log.info(f'Setting up hook \'{hook.id}\'')
-            self.hooks[hook.id] = FSMHookFactory.get().get_hook(
-                hook.id,
-                hook
+        for action in self.data.actions:
+            self.log.info(f'Setting up action \'{action.id}\'')
+            self.actions[action.id] = FSMActionFactory.get().get_action(
+                action.id,
+                action
             )
 
 
@@ -73,8 +73,8 @@ class FSMConfHandler(ConfHandler):
     # def _parse_dict(self, data):
     #     pass
 
-    def get_hooks(self):
-        return self.hooks
+    def get_actions(self):
+        return self.actions
 
     def get_initial_state(self):
         return self.data.initial_state

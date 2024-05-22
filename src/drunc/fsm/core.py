@@ -1,11 +1,11 @@
-from drunc.fsm.hook_factory import FSMHookFactory
+from drunc.fsm.action_factory import FSMActionFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
 
-class FSMHook:
-    '''Abstract class defining a generic hook'''
+class FSMAction:
+    '''Abstract class defining a generic action'''
     def __init__(self, name):
         self.name = name
 
@@ -30,12 +30,12 @@ class PreOrPostTransitionSequence:
         from logging import getLogger
         self._log = getLogger()
 
-    def add_callback(self, hook, mandatory=True):
-        method = getattr(hook, f'{self.prefix}_{self.transition.name}')
+    def add_callback(self, action, mandatory=True):
+        method = getattr(action, f'{self.prefix}_{self.transition.name}')
 
         if not method:
             from drunc.exceptions import DruncSetupException
-            raise DruncSetupException(f'{self.prefix}_{self.transition.name} method not found in {hook.name}')
+            raise DruncSetupException(f'{self.prefix}_{self.transition.name} method not found in {action.name}')
 
         self.sequence += [
             Callback(
