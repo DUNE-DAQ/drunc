@@ -6,7 +6,7 @@ class UserProvidedRunNumber(FSMAction):
             name = "run-number"
         )
 
-    def pre_start(self, _input_data:dict, run_number:int=1, disable_data_storage:bool=False, trigger_rate:float=1.0, **kwargs):
+    def pre_start(self, _input_data:dict, run_number:int, disable_data_storage:bool=False, trigger_rate:float=1.0, **kwargs):
         _input_data["run"] = run_number
         _input_data['disable_data_storage'] = disable_data_storage
         _input_data['trigger_rate'] = trigger_rate
