@@ -5,9 +5,9 @@ class FileLogbook(FSMAction):
         super().__init__(
             name = "file-logbook"
         )
-        self.file = configuration['file_name']
+        self.file = configuration.file_name
 
-    def post_start(self, _input_data, message:str="", **kwargs):
+    def post_start(self, _input_data, _context, message:str="", **kwargs):
 
         with open(self.file, 'a') as f:
             f.write(f"Run {_input_data['run_num']} started")
@@ -16,7 +16,7 @@ class FileLogbook(FSMAction):
 
         return _input_data
 
-    def post_stop(self, _input_data, **kwargs):
+    def post_stop(self, _input_data, _context, **kwargs):
 
         with open(self.file, 'a') as f:
             f.write(f"Run {_input_data['run_num']} stopped")

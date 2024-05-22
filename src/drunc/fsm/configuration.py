@@ -21,10 +21,10 @@ class FSMConfHandler(ConfHandler):
             if fsm_x_transition.id == transition.name:
                 seq_conf = fsm_x_transition
 
-        for action in seq_conf.order:
+        for action_name in seq_conf.order:
             seq.add_callback(
-                action = self.actions[action],
-                mandatory = action in seq_conf.mandatory,
+                action = self.actions[action_name],
+                mandatory = action_name in seq_conf.mandatory,
             )
 
 
@@ -62,13 +62,15 @@ class FSMConfHandler(ConfHandler):
             pre_transitions  = self._fill_pre_post_transition_sequence_oks('pre' , tr, self.data.pre_transitions)
             post_transitions = self._fill_pre_post_transition_sequence_oks('post', tr, self.data.post_transitions)
 
-            tr.arguments += pre_transitions .get_arguments()
+            tr.arguments += pre_transitions.get_arguments()
             tr.arguments += post_transitions.get_arguments()
 
             self.pre_transitions [tr] = pre_transitions
             self.post_transitions[tr] = post_transitions
 
             self.transitions += [tr]
+            print(f'{tr=}')
+            print(f'{tr.arguments=}')
 
     # def _parse_dict(self, data):
     #     pass
