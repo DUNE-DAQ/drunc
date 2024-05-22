@@ -28,7 +28,7 @@ class PreOrPostTransitionSequence:
 
         self.sequence = []
         from logging import getLogger
-        self._log = getLogger()
+        self._log = getLogger("PreOrPostTransitionSequence")
 
     def add_callback(self, action, mandatory=True):
         method = getattr(action, f'{self.prefix}_{self.transition.name}')
@@ -62,6 +62,7 @@ class PreOrPostTransitionSequence:
         for callback in self.sequence:
             try:
                 self._log.debug(f'data before callback: {input_data}')
+                self._log.info(f'executing the callback: {callback.method.__name__}')
                 input_data = callback.method(_input_data=input_data, **transition_args)
                 self._log.debug(f'data after callback: {input_data}')
             except Exception as e:
