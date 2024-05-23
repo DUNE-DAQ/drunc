@@ -8,7 +8,7 @@ class FileRunRegistry(FSMAction):
         )
 
     def pre_start(self, _input_data, _context, **kwargs):
-        run_number = _input_data['run_num']
+        run_number = _input_data['run']
         run_configuration = find_configuration(_context.configuration.initial_data)
 
         import shutil

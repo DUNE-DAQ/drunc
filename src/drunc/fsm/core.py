@@ -66,10 +66,9 @@ class PreOrPostTransitionSequence:
                 input_data = callback.method(_input_data=input_data, _context=ctx, **transition_args)
                 self._log.debug(f'data after callback: {input_data}')
             except Exception as e:
+                self._log.error(traceback.format_exc())
                 if callback.mandatory:
                     raise e
-                else:
-                    self._log.error(e)
 
         self._log.debug(f'data returned: {input_data}')
 
