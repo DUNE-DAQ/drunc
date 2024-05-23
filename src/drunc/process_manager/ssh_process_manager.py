@@ -334,15 +334,15 @@ class SSHProcessManager(ProcessManager):
             if process.is_alive():
                 import signal
                 sequence = [
-                    signal.SIGHUP,
                     signal.SIGINT,
                     signal.SIGKILL,
+                    signal.SIGQUIT,
                 ]
                 for sig in sequence:
-                    if not process.is_alive():
-                        break
                     self.log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
                     process.signal_group(sig) # TODO grab this from the inputs
+                    if not process.is_alive():
+                        break
                     from time import sleep
                     sleep(self.configuration.data.kill_timeout)
             pd = ProcessDescription()
