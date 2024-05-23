@@ -285,37 +285,6 @@ def index():
 </div>
 <p></p>
 
-<div style="border: 1px solid black">
-<h3>GET /runregistry/getRunBlob/<run_num></h3>
-<p>Get the run configuration blob (tar.gz of some folders structure containing json) for the specified run number (replace <run_num> by the run number you want).</p>
-<p>Example:</p>
-<p style="font-family:courier;">$ curl -u user:password -X GET -O -J http://host:port/runregistry/getRunBlob/2</p>
-</div>
-<p></p>
-
-<div style="border: 1px solid black">
-<h3>POST /runregistry/insertRun/</h3>
-<p>Insert a new run in the database. The post request should have the fields:</p>
-<ul>
-    <li> "file": a file containing the configuration to save
-    <li> "run_num": the run number
-    <li> "det_id": the id of the detector
-    <li> "run_type": the type of run (either PROD of TEST)
-    <li> 'software_version": the version of dunedaq.
-</ul>
-<p>Example:</p>
-<p style="font-family:courier;">$ curl -u user:password -F "file=@sspconf.tar.gz" -F "run_num=4" -F "det_id=foo" -F "run_type=bar" -F "software_version=dunedaq-vX.Y.Z" -X POST http://host:port/runregistry/insertRun/</p>
-</div>
-<p></p>
-
-<div style="border: 1px solid black">
-<h3>GET /runregistry/updateStopTime/<run_num></h3>
-<p>Update the stop time of the specified run number (replace <run_num> with the run number you want).</p>
-<p>Example:</p>
-<p style="font-family:courier;">$ curl -u user:password -X GET http://host:port/runregistry/updateStopTime/2</p>
-</div>
-<p></p>
-
 </body>
 </html>
 '''
@@ -323,5 +292,13 @@ def index():
     return root_text
 
 
+import click
+@click.command()
+@click.option('--port', default=9826, help='Port to run the server on')
+def main(port):
+    app.run(host= '0.0.0.0', port=port, debug=False)
+
+
+
 if __name__ == '__main__':
-    app.run(host= '0.0.0.0', port=9826, debug=False)
+    main()
