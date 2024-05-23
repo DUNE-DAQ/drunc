@@ -342,25 +342,22 @@ class SSHProcessManager(ProcessManager):
     def _kill_impl(self, query:ProcessQuery) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         ret = []
-
         for uuid in uuids:
             process = self.process_store[uuid]
-            if not process.is_alive():
-                continue
-            import signal
-
-            sequence = [
-                signal.SIGHUP,
-                signal.SIGINT,
-                signal.SIGKILL,
-            ]
-            for sig in sequence:
-                if not process.is_alive():
-                    break
-                self.log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
-                process.signal_group(sig) # TODO grab this from the inputs
-                from time import sleep
-                sleep(self.configuration.data.kill_timeout)
+            if process.is_alive():
+                import signal
+                sequence = [
+                    signal.SIGINT,
+                    signal.SIGKILL,
+                    signal.SIGQUIT,
+                ]
+                for sig in sequence:
+                    self.log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
+                    process.signal_group(sig) # TODO grab this from the inputs
+                    if not process.is_alive():
+                        break
+                    from time import sleep
+                    sleep(self.configuration.data.kill_timeout)
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
             pr = ProcessRestriction()
