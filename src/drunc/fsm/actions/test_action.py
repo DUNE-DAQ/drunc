@@ -12,7 +12,7 @@ class TestAction(FSMAction):
         )
 
 
-    def pre_conf(self, _input_data:dict, some_int:int, some_str:str, some_float:float=0.2, **kwargs) -> dict:
+    def pre_conf(self, _input_data:dict, _context, some_int:int, some_str:str, some_float:float=0.2, **kwargs) -> dict:
         print(f"Running pre_conf of {self.name}")
         _input_data['some_int'] = some_int
         _input_data['some_str'] = some_str

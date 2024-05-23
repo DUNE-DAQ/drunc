@@ -26,11 +26,11 @@ class FSMActionFactory:
     def _validate_signature(self, name, method, action):
         sig = inspect.signature(method)
 
-        if 'kwargs' not in sig.parameters.keys() or '_input_data' not in sig.parameters.keys():
+        if 'kwargs' not in sig.parameters.keys() or '_input_data' not in sig.parameters.keys() or '_context' not in sig.parameters.keys():
             raise fsme.InvalidActionMethod(action, name)
 
         for pname, p in sig.parameters.items():
-            if pname in ["_input_data", "args", "kwargs"]:
+            if pname in ["_input_data", "_context", "args", "kwargs"]:
                 continue
 
             if p.annotation is inspect._empty:
@@ -63,6 +63,9 @@ class FSMActionFactory:
             case "file-logbook":
                 from drunc.fsm.actions.file_logbook import FileLogbook
                 iface = FileLogbook(configuration)
+            case "file-run-registry":
+                from drunc.fsm.actions.file_run_registry import FileRunRegistry
+                iface = FileRunRegistry(configuration)
             case _:
                 raise fsme.UnknownAction(action_name)
 

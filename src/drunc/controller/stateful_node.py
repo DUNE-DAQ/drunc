@@ -163,7 +163,7 @@ class StatefulNode(abc.ABC):
         transition = self.get_fsm_transition(fsm_command.command_name)
         return decode_fsm_arguments(fsm_command.arguments, transition.arguments)
 
-    def prepare_transition(self, transition, transition_data, transition_args):
+    def prepare_transition(self, transition, transition_data, transition_args, ctx=None):
         if self.get_node_operational_state() != self.get_node_operational_sub_state():
             raise fsme.InvalidSubTransition(self.get_node_sub_operational_state(), self.get_node_operational_state(), 'prepare_transition')
 
@@ -176,6 +176,7 @@ class StatefulNode(abc.ABC):
             transition,
             transition_data,
             transition_args,
+            ctx,
         )
 
         self.__operational_sub_state.value = f'{transition.name}-ready'
@@ -215,7 +216,7 @@ class StatefulNode(abc.ABC):
         self.__operational_state.value = self.__fsm.get_destination_state(self.__operational_state.value, transition)
 
 
-    def finalise_transition(self, transition, transition_data, transition_args):
+    def finalise_transition(self, transition, transition_data, transition_args, ctx=None):
 
         if self.get_node_operational_sub_state() != f'{transition.name}-terminated':
             raise InvalidSubTransition(self.get_node_operational_sub_state(), f'{transition.name}-terminated', 'finalise_transition')
@@ -225,6 +226,7 @@ class StatefulNode(abc.ABC):
             transition,
             transition_data,
             transition_args,
+            ctx,
         )
         self.__operational_sub_state.value = self.__operational_state.value
 

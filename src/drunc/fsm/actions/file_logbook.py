@@ -1,24 +1,28 @@
 from drunc.fsm.core import FSMAction
+from drunc.utils.utils import now_str
 
 class FileLogbook(FSMAction):
     def __init__(self, configuration):
         super().__init__(
             name = "file-logbook"
         )
-        self.file = configuration['file_name']
+        self.file = configuration.file_name
 
-    def post_start(self, _input_data, message:str="", **kwargs):
+    def post_start(self, _input_data, _context, message:str="", **kwargs):
 
         with open(self.file, 'a') as f:
-            f.write(f"Run {_input_data['run_num']} started")
+            f.write(f"Run {_input_data['run']} started by {_context.actor.get_user_name()} at {now_str()}\n")
             if message != "":
                 f.write(message)
+                f.write("\n")
 
         return _input_data
 
-    def post_stop(self, _input_data, **kwargs):
-
+    def post_drain_dataflow(self, _input_data, _context, message:str="", **kwargs):
         with open(self.file, 'a') as f:
-            f.write(f"Run {_input_data['run_num']} stopped")
+            f.write(f"Current run stopped by {_context.actor.get_user_name()} at {now_str()}\n")
+            if message != "":
+                f.write(message)
+                f.write("\n")
 
         return _input_data

@@ -548,6 +548,7 @@ class Controller(ControllerServicer):
             transition = transition,
             transition_args = fsm_args,
             transition_data = fsm_command.data,
+            ctx = self,
         )
 
         self.stateful_node.propagate_transition_mark(transition)
@@ -585,7 +586,8 @@ class Controller(ControllerServicer):
         fsm_data = self.stateful_node.finalise_transition(
             transition = transition,
             transition_args = fsm_args,
-            transition_data = fsm_data
+            transition_data = fsm_data,
+            ctx = self,
         )
 
 
