@@ -58,10 +58,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         port = server.add_insecure_port(listen_addr)
 
         server.start()
+        listen_addr = listen_addr.split(':')[0] + ":" + str(port)
+        print(f'{listen_addr=}')
+        log.info(f'\'{ctrlr.name}\' was started on \'{listen_addr}\'')
 
-        log.info(f'\'{ctrlr.name}\' was started on \'{listen_addr}\' (port {port})')
-
-        return server, port
+        return server, listen_addr
 
     def controller_shutdown():
         console.print('Requested termination')
@@ -83,9 +84,9 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
-        server, port = serve(command_facility)
+        server, address = serve(command_facility)
 
-        ctrlr.advertise_control_address(port, raise_on_missing_registry=(ars is not None))
+        ctrlr.advertise_control_address(address, raise_on_missing_registry=(ars is not None))
 
         server.wait_for_termination(timeout=None)
 

@@ -259,17 +259,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
             command_name = command_name,
         )
 
-    def construct_error_node_response(self, command_name:str, token:Token) -> Response:
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
-        fsm_result = FSMCommandResponse(
-            flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
-            command_name = command_name,
-        )
-
-    def advertise_control_address(self, port, raise_on_missing_registry=False):
-        import socket
-        this_host = socket.gethostname()
-        my_address = f'grpc://{this_host}:{port}'
+    def advertise_control_address(self, address, raise_on_missing_registry=False):
+        my_address = f'grpc://{address}'
 
         if not self.application_registry:
             from drunc.application_registry.client import ApplicationRegistryNotPresent
