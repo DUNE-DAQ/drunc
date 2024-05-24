@@ -1,4 +1,4 @@
-
+from requests.exceptions import HTTPError
 from drunc.exceptions import DruncException
 
 class ApplicationRegistryNotPresent(DruncException):
@@ -10,6 +10,9 @@ class ApplicationRegistrationUnsuccessful(DruncException):
 class ApplicationLookupUnsuccessful(DruncException):
     pass
 
+class ApplicationUpdateUnsuccessful(DruncException):
+    pass
+
 
 class ApplicationRegistryClient:
     def __init__(self, session:str, address:str):
@@ -18,9 +21,9 @@ class ApplicationRegistryClient:
         self.logger = getLogger('ApplicationRegistryClient')
 
         if address.startswith('http'):
-            self.address = f'{address}/app-control-connection'
+            self.address = f'{address}/app-registry/v0.0.0/app-control-connection'
         else:
-            self.address = f'http://{address}/app-control-connection'
+            self.address = f'http://{address}/app-registry/v0.0.0/app-control-connection'
 
     def remove(self, name):
         from drunc.utils.utils import http_delete
@@ -46,31 +49,48 @@ class ApplicationRegistryClient:
             'session': self.session,
             'name': name
         }
-        try:
-            http_get(
-                self.address,
-                data = data
-            )
-        except Exception as e:
-            self.logger.critical(f'Could not find the address of \'{name}\' on the application registry:\n{str(e)}')
-            raise ApplicationLookupUnsuccessful from e
+        for _ in range(20):
+            try:
+                response = http_get(
+                    self.address,
+                    data = data,
+                    timeout = 0.5,
+                )
+                print(response.json())
+                endpoint = response.json()[0]['endpoint']
+                return endpoint
+            except HTTPError as e:
+                from time import sleep
+                sleep(0.5)
+                continue
 
-    def update(self, name, endpoint=None):
-        from drunc.utils.utils import http_update
+        self.logger.critical(f'Could not find the address of \'{name}\' on the application registry')
+        raise ApplicationLookupUnsuccessful
+
+
+    def patch(self, name, endpoint=None):
+        from drunc.utils.utils import http_patch
         data = {
             'session': self.session,
             'name': name
         }
         if endpoint:
             data['endpoint'] = endpoint
-        try:
-            http_update(
-                self.address,
-                data = data
-            )
-        except Exception as e:
-            self.logger.critical(f'Could not find the address of \'{name}\' on the application registry:\n{str(e)}')
-            raise ApplicationLookupUnsuccessful from e
+
+        for _ in range(5):
+            try:
+                response = http_patch(
+                    self.address,
+                    data = data
+                )
+                return response
+            except HTTPError as e:
+                from time import sleep
+                sleep(0.5)
+                continue
+
+        self.logger.critical(f'Could not update the address of \'{name}\' on the application registry')
+        raise ApplicationUpdateUnsuccessful
 
 
     def register(self, name, address):

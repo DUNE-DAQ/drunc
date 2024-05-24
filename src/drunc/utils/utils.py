@@ -153,7 +153,7 @@ def validate_command_facility(ctx, param, value):
 
     match parsed.scheme:
         case 'grpc':
-            return parsed.netloc
+            return str(parsed.netloc)
         case _:
             raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
 
@@ -189,6 +189,7 @@ def parent_death_pact(signal=signal.SIGHUP):
     retcode = libc.prctl(PR_SET_PDEATHSIG, signal, 0, 0, 0)
     if retcode != 0:
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
+
 from drunc.exceptions import DruncException
 class IncorrectAddress(DruncException):
     pass
@@ -209,32 +210,41 @@ def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
 
     if not ignore_errors:
         r.raise_for_status()
-
+    return r
 
 def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     https_or_http_present(address)
 
     from requests import get
+    log = logging.getLogger("http_get")
+
+    log.debug(f"GETTING {address} {data}")
     if as_json:
         r = get(address, json=data, **post_kwargs)
     else:
         r = get(address, json=data, **post_kwargs)
 
+    log.debug(r.text)
+    log.debug(r.status_code)
+
     if not ignore_errors:
+        log.error(r.text)
         r.raise_for_status()
+    return r
 
 
-def http_update(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+def http_patch(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     https_or_http_present(address)
 
-    from requests import get
+    from requests import patch
     if as_json:
-        r = get(address, json=data, **post_kwargs)
+        r = patch(address, json=data, **post_kwargs)
     else:
-        r = get(address, json=data, **post_kwargs)
+        r = patch(address, json=data, **post_kwargs)
 
     if not ignore_errors:
         r.raise_for_status()
+    return r
 
 
 def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs):
