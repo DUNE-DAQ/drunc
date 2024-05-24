@@ -1,7 +1,7 @@
 import click
 import signal
 from drunc.utils.utils import log_levels,  update_log_level, validate_command_facility
-
+from icecream import ic
 @click.command()
 @click.argument('configuration', type=str)
 @click.argument('command-facility', type=str, callback=validate_command_facility)#, help=f'Command facility (protocol, host and port) grpc://{socket.gethostname()}:12345')
@@ -14,7 +14,8 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     console = Console()
 
     update_log_level(log_level)
-
+    from logging import getLogger
+    log = getLogger('controller_cli')
     from drunc.controller.controller import Controller
     from drunc.controller.configuration import ControllerConfHandler
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
@@ -37,11 +38,15 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         ),
     )
 
+    import os
+    ars = os.getenv('APP_DISCOVERY_SERVICE', None)
+
     ctrlr = Controller(
         name = name,
         session = session,
         configuration = controller_configuration,
         token = token,
+        application_registry_endpoint = ars,
     )
 
     def serve(listen_addr:str) -> None:
@@ -50,12 +55,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
 
         add_ControllerServicer_to_server(ctrlr, server)
-
         port = server.add_insecure_port(listen_addr)
 
         server.start()
 
-        console.print(f'{ctrlr.name} was started on {listen_addr}')
+        log.info(f'\'{ctrlr.name}\' was started on \'{listen_addr}\' (port {port})')
 
         return server, port
 
@@ -81,7 +85,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     try:
         server, port = serve(command_facility)
 
-        ctrlr.advertise_control_address(port)
+        ctrlr.advertise_control_address(port, raise_on_missing_registry=(ars is not None))
 
         server.wait_for_termination(timeout=None)
 

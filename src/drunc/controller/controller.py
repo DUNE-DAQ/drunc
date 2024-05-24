@@ -71,7 +71,7 @@ class Controller(ControllerServicer):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration, name:str, session:str, token:Token):
+    def __init__(self, configuration, name:str, session:str, token:Token, application_registry_endpoint:str=None):
         super().__init__()
         self.name = name
         self.session = session
@@ -119,12 +119,13 @@ class Controller(ControllerServicer):
         self.actor = ControllerActor(token)
 
         self.application_registry = None
+        self.application_registry_thread = None
 
-        if self.configuration.application_registry_address:
+        if application_registry_endpoint:
             from drunc.application_registry.client import ApplicationRegistryClient
             self.application_registry = ApplicationRegistryClient(
                 session = self.session,
-                address = self.configuration.application_registry_address,
+                address = application_registry_endpoint,
             )
 
         self.children_nodes = self.configuration.get_children(
@@ -258,13 +259,24 @@ if nothing (None) is provided, return the transitions accessible from the curren
             command_name = command_name,
         )
 
-    def advertise_control_address(self, port):
-        my_address = f'{self.configuration.this_host}:{port}'
+    def construct_error_node_response(self, command_name:str, token:Token) -> Response:
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        fsm_result = FSMCommandResponse(
+            flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+            command_name = command_name,
+        )
+
+    def advertise_control_address(self, port, raise_on_missing_registry=False):
+        import socket
+        this_host = socket.gethostname()
+        my_address = f'grpc://{this_host}:{port}'
 
         if not self.application_registry:
             from drunc.application_registry.client import ApplicationRegistryNotPresent
-            raise ApplicationRegistryNotPresent
+            if throw:
+                raise ApplicationRegistryNotPresent
 
+        self.logger.info(f'Registering myself to the application registry')
         self.application_registry.register(
             name = self.name,
             address = my_address
@@ -275,18 +287,18 @@ if nothing (None) is provided, return the transitions accessible from the curren
         def update_application_registry(ctrler, application_registry, interval):
             import time
             while ctrler.running:
-                print(ctrler.logger.info('updating the endpoint'))
-                application_registry.update(ctrler.name, None)
+                ctrler.logger.info('Updating the endpoint')
+                application_registry.patch(ctrler.name, None)
                 time.sleep(interval)
 
-        self.application_registry_thread = Thread(
-            target = update_application_registry,
-            args = (self, self.application_registry, 1),
-            name = 'application_registry_updating_thread'
-        )
+        # self.application_registry_thread = Thread(
+        #     target = update_application_registry,
+        #     args = (self, self.application_registry, 10),
+        #     name = 'application_registry_updating_thread'
+        # )
 
-        # lets roll
-        self.application_registry_thread.start()
+        # # lets roll
+        # self.application_registry_thread.start()
 
 
         return Response (
@@ -300,7 +312,9 @@ if nothing (None) is provided, return the transitions accessible from the curren
         self.running = False
 
         if self.application_registry:
-            self.application_registry_thread.join()
+            if self.application_registry_thread:
+                self.application_registry_thread.join()
+            self.logger.info('Unregistering from the application registry')
             self.application_registry.remove(self.name)
 
         if self.can_broadcast():

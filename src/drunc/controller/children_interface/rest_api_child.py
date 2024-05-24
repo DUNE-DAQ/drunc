@@ -403,12 +403,20 @@ class RESTAPIChildNode(ChildNode):
 
         import socket
         response_listener_host = socket.gethostname()
-        if uri is None:
-            uri = configuration.get_uri()
-        from urllib.parse import urlparse
-        uri = urlparse(uri)
-        self.app_host, app_port = uri.netloc.split(":")
-        self.app_port = int(app_port)
+
+
+        if uri is not None:
+            from urllib.parse import urlparse
+            uri = urlparse(uri)
+            self.app_host, app_port = uri.netloc.split(":")
+            self.app_port = int(app_port)
+
+        else:
+            self.app_host, self.app_port = configuration.get_host_port()
+
+        if self.app_port == 0:
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable.")
 
         proxy_host, proxy_port = getattr(configuration.data, "proxy", [None, None])
         proxy_port = int(proxy_port) if proxy_port is not None else None

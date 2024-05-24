@@ -10,7 +10,7 @@ class gRCPChildConfHandler(ConfHandler):
     def get_uri(self):
         for service in self.data.controller.exposes_service:
             if self.data.controller.id+"_control" in service.id:
-                return f"{self.data.controller.runs_on.runs_on.id}:{service.port}"
+                return f"{service.protocol}://{self.data.controller.runs_on.runs_on.id}:{service.port}"
         raise DruncSetupException(f"gRPC API child node {self.data.controller.id} does not expose a control service")
 
 
@@ -24,16 +24,24 @@ class gRPCChildNode(ChildNode):
         from logging import getLogger
         self.log = getLogger(f'{self.name}-grpc-child')
         self.configuration = configuration
+
+
+        port = 0
         if uri is None:
-            try:
-                self.uri =  self.configuration.get_uri()
-            except BadArgumentInConf as e:
-                message = f'\'{self.name}\' {str(e)}'
-                raise BadArgumentInConf(message)
-        else:
-            self.uri = uri
+            uri = configuration.get_uri()
+        print(uri)
 
+        from urllib.parse import urlparse
+        uri = urlparse(uri)
+        print(uri)
+        port = (uri.scheme+uri.netloc).split(":")[1]
+        port = int(port)
 
+        if port == 0:
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable.")
+
+        self.uri = str(uri.netloc)
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
