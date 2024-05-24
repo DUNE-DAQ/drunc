@@ -63,15 +63,19 @@ class ChildNode(abc.ABC):
 
         from drunc.utils.configuration import ConfTypes
 
-        type = ChildNodeType.Unknown
+        ctype = ChildNodeType.Unknown
         uri = None
         if application_registry:
-            type, uri = ChildNode._get_children_type_from_registry(application_registry, name)
+            ctype, uri = ChildNode._get_children_type_and_uri_from_registry(application_registry, name)
+        import logging
+        log = logging.getLogger("ChildNode.get_child")
 
-        if type == ChildNodeType.Unknown:
-            type = ChildNode._get_children_type_from_cli(cli)
+        if ctype == ChildNodeType.Unknown:
+            ctype = ChildNode._get_children_type_from_cli(cli)
 
-        match type:
+        log.info(f"Child {name} is of type {ctype} and has the URI {uri}")
+
+        match ctype:
             case ChildNodeType.gRPC:
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode, gRCPChildConfHandler
 
@@ -95,5 +99,5 @@ class ChildNode(abc.ABC):
                     **kwargs,
                 )
             case _:
-                raise ChildInterfaceTechnologyUnknown(type, name)
+                raise ChildInterfaceTechnologyUnknown(ctype, name)
 
