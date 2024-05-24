@@ -38,7 +38,7 @@ class ProcessManagerDriver(GRPCDriver):
 
         apps = collect_apps(db, session_dal, session_dal.segment)
         infra_apps = collect_infra_apps(session_dal)
-        
+
         apps += infra_apps
 
         def get_controller_address(top_controller_conf):
@@ -67,7 +67,7 @@ class ProcessManagerDriver(GRPCDriver):
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
             tree_id = app['tree_id']
-
+            env["APP_DISCOVERY_SERVICE"] = "np04-srv-019:9826"
             self._log.debug(f"{app=}")
 
             executable_and_arguments = []
@@ -151,7 +151,7 @@ class ProcessManagerDriver(GRPCDriver):
         for i in range(1,n_sleeps+1):
             executable_and_arguments += [ProcessDescription.ExecAndArgs(exec='sleep',args=[str(sleep)+"s"]), ProcessDescription.ExecAndArgs(exec='echo',args=[str(sleep*i)+"s"])]
         executable_and_arguments.append(ProcessDescription.ExecAndArgs(exec='echo',args=["Exiting."]))
-        
+
         for process in range(n_processes):
             breq =  BootRequest(
                 process_description = ProcessDescription(
