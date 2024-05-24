@@ -36,7 +36,8 @@ toy_data_get = {
     "name": "app1-name",
 }
 toy_data_get_str = json.dumps(toy_data_get, indent=2)
-
+import logging
+log = logging.getLogger("app_connectivity_server")
 
 class AppControlEndpoint:
     def __init__(self, session:str, name:str, endpoint:str):
@@ -122,6 +123,8 @@ class Reset(Resource):
 class AppControlConnection(Resource):
 
     def post(self):
+        log.debug(f"{self.__class__.__name__}.post, with request: {request}")
+
         session = None
         endpoints = []
 
@@ -144,6 +147,7 @@ class AppControlConnection(Resource):
                     f'Missing field in request: {str(e)}. Expected json data of format:\n{toy_data_post}',
                     400
                 )
+            log.info(f"Adding endpoint {name=}, {url=}, {session=}")
 
             acr.add_enpoint(
                 AppControlEndpoint(
@@ -155,6 +159,8 @@ class AppControlConnection(Resource):
 
 
     def get(self):
+        log.debug(f"{self.__class__.__name__}.get, with request: {request}")
+
         session = None
         name = None
 
@@ -168,9 +174,12 @@ class AppControlConnection(Resource):
                 400
             )
 
+        log.info(f"Looking up endpoint {name=}, {session=}")
         connections = acr.lookup(session, name)
         if not connections:
             return make_response(f'No connection found with session={session} and name={name}', 404)
+
+        log.info(f"Returning up endpoint {name=}, {session=}, {ac.endpoint for ac in connections}")
         return make_response(
             jsonify(
                 [
@@ -190,6 +199,7 @@ class AppControlConnection(Resource):
     def delete(self):
         session = None
         name = None
+        log.debug(f"{self.__class__.__name__}.delete, with request: {request}")
 
         try:
             data = json.loads(request.data)
@@ -201,9 +211,10 @@ class AppControlConnection(Resource):
                 400
             )
 
+        log.info(f"Deleting {name} from {session}")
         acr.delete(session, name)
 
-    def update(self):
+    def patch(self):
         session = None
         name = None
         endpoint = None
@@ -218,12 +229,14 @@ class AppControlConnection(Resource):
                 400
             )
 
+        log.info(f"Looking up {name} from {session}")
         connections = acr.lookup(session, name)
         if len(connections) > 1:
             return make_response(f'Too many connections found with session={session} and name={name}', 404)
         elif len(connections) == 1:
             return make_response(f'No connection found with session={session} and name={name}', 404)
 
+        log.info(f"updating up {name} from {session}")
         connections[0].update(endpoint)
 
 
