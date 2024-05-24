@@ -10,6 +10,7 @@ from flask_restful import Api, Resource
 from threading import Lock
 from datetime import datetime
 import json
+from drunc.utils.utils import log_levels,  update_log_level, validate_command_facility
 
 app = Flask(__name__)
 api = Api(app)
@@ -87,7 +88,7 @@ class AppControlRegistry:
             return ret
 
 
-    def delete(self, session:str, name:str='.*'):
+    def delete(self, session:str, name:str):
         import re
         name_reg = re.compile(name)
 
@@ -102,7 +103,7 @@ class AppControlRegistry:
                 if name_reg.fullmatch(ep.name) and ep in self.app_endpoints[session]:
                     self.app_endpoints[session].remove(ep)
 
-            if self.app_endpoints[session]:
+            if not self.app_endpoints[session]:
                 del self.app_endpoints[session]
             return
 
@@ -308,10 +309,11 @@ def index():
 import click
 @click.command()
 @click.option('--port', default=9826, help='Port to run the server on')
-def main(port):
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
+def main(port, log_level):
+    update_log_level(log_level)
     app.run(host= '0.0.0.0', port=port, debug=False)
-
-
 
 if __name__ == '__main__':
     main()
+    
