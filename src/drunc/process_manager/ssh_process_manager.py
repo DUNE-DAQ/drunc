@@ -352,6 +352,8 @@ class SSHProcessManager(ProcessManager):
                     signal.SIGQUIT,
                 ]
                 for sig in sequence:
+                    if not process.is_alive():
+                        break
                     self.log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
                     process.signal_group(sig) # TODO grab this from the inputs
                     if not process.is_alive():
