@@ -10,6 +10,38 @@ class InterruptedCommand(DruncShellException):
     '''
     pass
 
+
+class DecodedResponse:
+    ## Warning! This should be kept in sync with druncschema/request_response.proto/Response class
+    name = None
+    token = None
+    data = None
+    flag = None
+    children = []
+
+    def __init__(self, name, token, flag, data=None, children=None):
+        self.name = name
+        self.token = token
+        self.flag = flag
+        self.data = data
+        if children is None:
+            self.children = []
+        else:
+            self.children = children
+
+    @staticmethod
+    def str(obj, prefix=""):
+        text = f'{prefix} {obj.name} -> {obj.flag}\n'
+        for v in obj.children:
+            if v is None:
+                continue
+            text += DecodedResponse.str(v, prefix+"  ")
+        return text
+
+    def __str__(self):
+        return DecodedResponse.str(self)
+
+
 class GRPCDriver:
     def __init__(self, name:str, address:str, token:Token, aio_channel=False, rethrow_by_default=False):
         import logging
@@ -101,8 +133,62 @@ class GRPCDriver:
             if rethrow:
                 raise error
 
+    def handle_response(self, response, command, outformat):
+        from druncschema.request_response_pb2 import ResponseFlag, Response
+        from drunc.utils.grpc_utils import unpack_any
+        dr = DecodedResponse(
+            name = response.name,
+            token = response.token,
+            flag = response.flag,
+        )
+        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            if response.data not in [None, ""]:
+                dr.data = unpack_any(response.data, outformat)
 
-    def send_command(self, command:str, data=None, rethrow=None, outformat=None):
+            for c_response in response.children:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            return dr
+
+        else:
+            def text(verb="not executed"):
+                return f'Command \'{command}\' {verb} on \'{response.name}\' (response flag \'{ResponseFlag.Name(response.flag)}\')'
+            if response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            ]:
+                self._log.info(text())
+            elif response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
+            ]:
+                self._log.warn(text())
+            else:
+                self._log.error(text("failed"))
+
+            if not response.HasField("data"): return None
+            from druncschema.generic_pb2 import Stacktrace, PlainText, PlainTextVector
+            from drunc.utils.grpc_utils import unpack_any
+
+            if response.data.Is(Stacktrace.DESCRIPTOR):
+                stack = unpack_any(response.data, Stacktrace)
+                txt = 'Stacktrace [bold red]on remote server![/]\n'
+                for l in stack.text:
+                    txt += l+"\n"
+                self._log.error(txt, extra={"markup": True})
+
+            elif response.data.Is(PlainText.DESCRIPTOR):
+                txt = unpack_any(response.data, PlainText)
+                self._log.error(txt.text)
+
+            elif response.data.Is(PlainTextVector.DESCRIPTOR):
+                txt = unpack_any(response.data, PlainTextVector)
+                for t in txt.text:
+                    self._log.error(t)
+
+            dr.data = response.data
+            for c_response in response.children:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            return dr
+
+    def send_command(self, command:str, data=None, rethrow=None, outformat=None, decode_children=False):
         import grpc
         if not self.stub:
             raise DruncShellException('No stub initialised')
@@ -112,15 +198,10 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            a = cmd(request)
-            if outformat:
-                from drunc.utils.grpc_utils import unpack_any
-                return unpack_any(a.data, outformat)
-            else:
-                return a
-
+            response = cmd(request)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
+        return self.handle_response(response, command, outformat)
 
 
     async def send_command_aio(self, command:str, data=None, rethrow=None, outformat=None):
@@ -133,15 +214,11 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            a = await cmd(request)
-            if outformat:
-                from drunc.utils.grpc_utils import unpack_any
-                return unpack_any(a.data, outformat)
-            else:
-                return a
+            response = await cmd(request)
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)
+        return self.handle_response(response, command, outformat)
 
 
     async def send_command_for_aio(self, command:str, data=None, rethrow=None, outformat=None):
@@ -155,11 +232,7 @@ class GRPCDriver:
 
         try:
             async for s in cmd(request):
-                if outformat:
-                    from drunc.utils.grpc_utils import unpack_any
-                    yield unpack_any(s.data, outformat)
-                else:
-                    yield s
+                yield self.handle_response(s, command, outformat)
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command, rethrow = rethrow)

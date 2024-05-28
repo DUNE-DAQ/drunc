@@ -1,11 +1,11 @@
-from drunc.fsm.interface_factory import FSMInterfaceFactory
+from drunc.fsm.action_factory import FSMActionFactory
 from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
 
-class FSMInterface:
-    '''Abstract class defining a generic interface'''
+class FSMAction:
+    '''Abstract class defining a generic action'''
     def __init__(self, name):
         self.name = name
 
@@ -28,14 +28,14 @@ class PreOrPostTransitionSequence:
 
         self.sequence = []
         from logging import getLogger
-        self._log = getLogger()
+        self._log = getLogger("PreOrPostTransitionSequence")
 
-    def add_callback(self, interface, mandatory=True):
-        method = getattr(interface, f'{self.prefix}_{self.transition.name}')
+    def add_callback(self, action, mandatory=True):
+        method = getattr(action, f'{self.prefix}_{self.transition.name}')
 
         if not method:
             from drunc.exceptions import DruncSetupException
-            raise DruncSetupException(f'{self.prefix}_{self.transition.name} method not found in {interface.name}')
+            raise DruncSetupException(f'{self.prefix}_{self.transition.name} method not found in {action.name}')
 
         self.sequence += [
             Callback(
@@ -48,7 +48,7 @@ class PreOrPostTransitionSequence:
         return ', '.join([f'{cb.method.__name__} (mandatory={cb.mandatory})'for cb in self.sequence])
 
 
-    def execute(self, transition_data, transition_args):
+    def execute(self, transition_data, transition_args, ctx=None):
         self._log.debug(f'{transition_data=}, {transition_args=}')
         import json
         if not transition_data:
@@ -62,13 +62,13 @@ class PreOrPostTransitionSequence:
         for callback in self.sequence:
             try:
                 self._log.debug(f'data before callback: {input_data}')
-                input_data = callback.method(_input_data=input_data, **transition_args)
+                self._log.info(f'executing the callback: {callback.method.__name__}')
+                input_data = callback.method(_input_data=input_data, _context=ctx, **transition_args)
                 self._log.debug(f'data after callback: {input_data}')
             except Exception as e:
+                self._log.error(traceback.format_exc())
                 if callback.mandatory:
                     raise e
-                else:
-                    self._log.error(e)
 
         self._log.debug(f'data returned: {input_data}')
 
@@ -90,7 +90,7 @@ class PreOrPostTransitionSequence:
 
             for pname, p in s.parameters.items():
 
-                if pname in ["_input_data", "args", "kwargs"]:
+                if pname in ["_input_data", "_context", "args", "kwargs"]:
                     continue
 
                 if pname in all_the_parameter_names:
@@ -230,17 +230,19 @@ class FSM:
         return regex_match(transition.source, source_state)
 
 
-    def prepare_transition(self, transition, transition_data, transition_args):
+    def prepare_transition(self, transition, transition_data, transition_args, ctx=None):
         transition_data = self.pre_transition_sequences[transition].execute(
             transition_data,
-            transition_args
+            transition_args,
+            ctx
         )
         return transition_data
 
 
-    def finalise_transition(self, transition, transition_data, transition_args):
+    def finalise_transition(self, transition, transition_data, transition_args, ctx=None):
         transition_data = self.post_transition_sequences[transition].execute(
             transition_data,
             transition_args,
+            ctx
         )
         return transition_data

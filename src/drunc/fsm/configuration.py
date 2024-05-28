@@ -18,15 +18,14 @@ class FSMConfHandler(ConfHandler):
         seq_conf = empty_sequence_conf_data()
 
         for fsm_x_transition in data:
-            if fsm_x_transition.id == transition.name:
+            if fsm_x_transition.transition == transition.name:
                 seq_conf = fsm_x_transition
 
-        for interface in seq_conf.order:
+        for action_name in seq_conf.order:
             seq.add_callback(
-                interface = self.interfaces[interface],
-                mandatory = interface in seq_conf.mandatory,
+                action = self.actions[action_name],
+                mandatory = action_name in seq_conf.mandatory,
             )
-
 
         return seq
 
@@ -34,18 +33,18 @@ class FSMConfHandler(ConfHandler):
         self.log.info('_post_process_oks configuration')
         self.pre_transitions  = {}
         self.post_transitions = {}
-        self.interfaces = {}
+        self.actions = {}
         self.transitions = []
         self.states = self.data.states
         self.initial_state = self.data.initial_state
 
-        from drunc.fsm.interface_factory import FSMInterfaceFactory
+        from drunc.fsm.action_factory import FSMActionFactory
 
-        for interface in self.data.interfaces:
-            self.log.info(f'Setting up interface \'{interface.id}\'')
-            self.interfaces[interface.id] = FSMInterfaceFactory.get().get_interface(
-                interface.id,
-                interface
+        for action in self.data.actions:
+            self.log.info(f'Setting up action \'{action.id}\'')
+            self.actions[action.id] = FSMActionFactory.get().get_action(
+                action.id,
+                action
             )
 
 
@@ -62,7 +61,7 @@ class FSMConfHandler(ConfHandler):
             pre_transitions  = self._fill_pre_post_transition_sequence_oks('pre' , tr, self.data.pre_transitions)
             post_transitions = self._fill_pre_post_transition_sequence_oks('post', tr, self.data.post_transitions)
 
-            tr.arguments += pre_transitions .get_arguments()
+            tr.arguments += pre_transitions.get_arguments()
             tr.arguments += post_transitions.get_arguments()
 
             self.pre_transitions [tr] = pre_transitions
@@ -73,8 +72,8 @@ class FSMConfHandler(ConfHandler):
     # def _parse_dict(self, data):
     #     pass
 
-    def get_interfaces(self):
-        return self.interfaces
+    def get_actions(self):
+        return self.actions
 
     def get_initial_state(self):
         return self.data.initial_state
