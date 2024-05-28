@@ -80,3 +80,8 @@ class TransitionDataOfIncorrectFormat(FSMException):
     def __init__(self, data):
         self.message = f'The data "{data}" could not be interpreted as json'
         super(MethodSignatureMissingAnnotation, self).__init__(self.message)
+
+class CannotGetRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'The Run Number was not able to be set due to {data}'
+        super().__init__(self.message)

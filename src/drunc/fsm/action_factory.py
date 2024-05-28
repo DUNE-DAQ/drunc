@@ -57,6 +57,9 @@ class FSMActionFactory:
             case "user-provided-run-number":
                 from drunc.fsm.actions.user_provided_run_number import UserProvidedRunNumber
                 iface = UserProvidedRunNumber(configuration)
+            case "usvc-provided-run-number":
+                from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
+                iface = UsvcProvidedRunNumber(configuration)
             case 'test-action':
                 from drunc.fsm.actions.test_action import TestAction
                 iface = TestAction(configuration)
