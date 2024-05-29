@@ -120,6 +120,7 @@ class Controller(ControllerServicer):
 
         self.application_registry = None
         self.application_registry_thread = None
+        self.uri = ''
 
         if application_registry_endpoint:
             from drunc.application_registry.client import ApplicationRegistryClient
@@ -260,7 +261,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         )
 
     def advertise_control_address(self, address, raise_on_missing_registry=False):
-        my_address = f'grpc://{address}'
+        self.uri = f'grpc://{address}'
 
         if not self.application_registry:
             from drunc.application_registry.client import ApplicationRegistryNotPresent
@@ -270,7 +271,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         self.logger.info(f'Registering myself to the application registry')
         self.application_registry.register(
             name = self.name,
-            address = my_address
+            address = self.uri
         )
         from threading import Thread
         self.running = True
@@ -517,20 +518,31 @@ if nothing (None) is provided, return the transitions accessible from the curren
         from drunc.utils.grpc_utils import pack_to_any
         bd = self.describe_broadcast()
         d = Description(
+            endpoint = self.uri,
             type = 'controller',
             name = self.name,
             session = self.session,
             commands = self.commands,
+            children_endpoints = [child.get_endpoint() for child in self.children_nodes],
         )
+
         if bd:
             d.broadcast.CopyFrom(pack_to_any(bd))
+
+
+        response_children = self.propagate_to_list(
+            'describe',
+            command_data = None,
+            token = token,
+            node_to_execute = self.children_nodes
+        )
 
         return Response (
             name = self.name,
             token = None,
             data = pack_to_any(d),
             flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [],
+            children = response_children,
         )
 
     # ORDER MATTERS!
