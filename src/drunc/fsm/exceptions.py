@@ -85,3 +85,23 @@ class CannotGetRunNumber(FSMException):
     def __init__(self, data):
         self.message = f'The Run Number was not able to be set due to {data}'
         super().__init__(self.message)
+
+class InvalidDataReturnByFSMAction(FSMException):
+    def __init__(self, data):
+        self.message = f"The action returns an incorrect object which isn't serialisable: {data}"
+        super().__init__(self.message)
+
+# class HTTPError(FSMException):
+#     def __init__(self):
+#         self.message = f"HTTP Error (maybe failed auth, maybe ill-formed post message)"
+#         super().__init__(self.message)
+
+# class UnsuccessfulConnection(FSMException):
+#     def __init__(self, apisocket):
+#         self.message = f"Connection to {apisocket} wasn't successful"
+#         super().__init__(self.message)
+
+# class ConnectionTimedOut(FSMException):
+#     def __init__(self, apisocket):
+#         self.message = f"Connection to {apisocket} timed out"
+#         super().__init__(self.message)
