@@ -37,11 +37,13 @@ class ChildNode(abc.ABC):
     def propagate_command(self, command, data, token):
         pass
 
-
     @abc.abstractmethod
     def get_status(self, token):
         pass
 
+    @abc.abstractmethod
+    def get_endpoint(self):
+        pass
 
     @staticmethod
     def _get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:

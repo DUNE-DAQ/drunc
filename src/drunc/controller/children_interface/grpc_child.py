@@ -81,6 +81,8 @@ class gRPCChildNode(ChildNode):
     def __str__(self):
         return f'\'{self.name}@{self.uri}\' (type {self.node_type})'
 
+    def get_endpoint(self):
+        return self.uri
 
 
     def start_listening(self, bdesc):

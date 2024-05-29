@@ -447,6 +447,9 @@ class RESTAPIChildNode(ChildNode):
     def terminate(self):
         pass
 
+    def get_endpoint(self):
+        return f'rest://{self.app_host}:{self.app_port}'
+
     def get_status(self, token):
         from druncschema.controller_pb2 import Status
 
