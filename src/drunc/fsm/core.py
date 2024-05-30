@@ -3,6 +3,7 @@ from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
+import traceback
 
 class FSMAction:
     '''Abstract class defining a generic action'''
