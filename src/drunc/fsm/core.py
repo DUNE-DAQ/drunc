@@ -70,9 +70,8 @@ class PreOrPostTransitionSequence:
                 try:
                     import json 
                     json.dumps(input_data)
-                except InvalidDataReturnByFSMAction as e:
-                    raise e
-                self._log.debug(f'data after callback: {input_data}')
+                except TypeError as e:
+                    raise InvalidDataReturnByFSMAction(input_data)
             except DruncException as e:
                 self._log.error(traceback.format_exc())
                 if callback.mandatory:
