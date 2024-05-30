@@ -17,7 +17,7 @@ def CLI_to_ConfTypes(scheme:str) -> ConfTypes:
     match scheme:
         case 'file':
             return ConfTypes.JsonFileName
-        case 'oksconfig':
+        case 'oksconflibs':
             return ConfTypes.OKSFileName
         case _:
             raise DruncSetupException(f'{scheme} configuration type is not understood')
@@ -105,11 +105,11 @@ class ConfHandler:
         from drunc.exceptions import DruncSetupException
 
         try:
-            import oksdbinterfaces
-            self.dal = oksdbinterfaces.dal.module('x', self.oks_key.schema_file)
-            self.oks_path = f"oksconfig:{oks_path}"
+            import conffwk
+            self.dal = conffwk.dal.module('x', self.oks_key.schema_file)
+            self.oks_path = f"oksconflibs:{oks_path}"
             self.log.info(f'Using {self.oks_path} to configure')
-            self.db = oksdbinterfaces.Configuration(self.oks_path)
+            self.db = conffwk.Configuration(self.oks_path)
             return self.db.get_dal(
                 class_name=self.oks_key.class_name,
                 uid=self.oks_key.obj_uid
