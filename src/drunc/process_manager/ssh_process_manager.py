@@ -307,7 +307,7 @@ class SSHProcessManager(ProcessManager):
         return pil
 
 
-    def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
+    def _boot_impl(self, boot_request:BootRequest) -> ProcessInstance:
         import uuid
         this_uuid = str(uuid.uuid4())
         return self.__boot(boot_request, this_uuid)
