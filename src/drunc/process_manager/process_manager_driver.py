@@ -27,13 +27,13 @@ class ProcessManagerDriver(GRPCDriver):
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
         from drunc.process_manager.oks_parser import process_segment
-        import oksdbinterfaces
+        import conffwk
         from drunc.utils.configuration import find_configuration
         oks_conf = find_configuration(oks_conf)
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
-        db = oksdbinterfaces.Configuration(f"oksconfig:{oks_conf}")
+        db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = process_segment(db, session_dal, session_dal.segment)
