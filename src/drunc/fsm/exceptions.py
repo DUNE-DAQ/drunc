@@ -80,3 +80,9 @@ class TransitionDataOfIncorrectFormat(FSMException):
     def __init__(self, data):
         self.message = f'The data "{data}" could not be interpreted as json'
         super().__init__(self.message)
+
+        
+class ThreadPinningFailed(FSMException):
+    def __init__(self, host):
+        self.message = f'The thread pinning on "{host}" failed'
+        super().__init__(self.message)

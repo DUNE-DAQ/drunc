@@ -6,7 +6,9 @@ class FileLogbook(FSMAction):
         super().__init__(
             name = "file-logbook"
         )
-        self.file = configuration.file_name
+        self.conf_dict = {p.name: p.value for p in configuration.parameters}
+        print(f'{self.conf_dict=}')
+        self.file = self.conf_dict['file_name']
 
     def post_start(self, _input_data, _context, message:str="", **kwargs):
 
