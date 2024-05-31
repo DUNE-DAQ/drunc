@@ -29,9 +29,9 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, trace
         ctx.obj.critical(f'Could not connect to the process manager')
         raise e
 
-    ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
-    if desc.HasField('broadcast'):
-        ctx.obj.start_listening(desc.broadcast)
+    ctx.obj.info(f'{process_manager_address} is \'{desc.data.name}.{desc.data.session}\' (name.session), starting listening...')
+    if desc.data.HasField('broadcast'):
+        ctx.obj.start_listening(desc.data.broadcast)
 
     def cleanup():
         ctx.obj.terminate()
