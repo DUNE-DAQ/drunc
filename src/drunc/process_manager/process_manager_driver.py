@@ -73,6 +73,7 @@ class ProcessManagerDriver(GRPCDriver):
                     args=[session_dal.rte_script]))
 
             elif os.getenv("DBT_INSTALL_DIR") is not None:
+                env['DBT_INSTALL_DIR'] = os.getenv("DBT_INSTALL_DIR")
                 self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
                 rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
 
