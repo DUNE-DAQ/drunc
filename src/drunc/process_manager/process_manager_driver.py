@@ -25,7 +25,7 @@ class ProcessManagerDriver(GRPCDriver):
         return ProcessManagerStub(channel)
 
 
-    async def _convert_oks_to_boot_request(self, oks_conf, user, session) -> BootRequest:
+    async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
         from drunc.process_manager.oks_parser import process_segment
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -96,7 +96,10 @@ class ProcessManagerDriver(GRPCDriver):
 
 
             from drunc.utils.utils import now_str
-            log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
+            if override_logs:
+                log_path = f'{pwd}/log_{user}_{session}_{name}.log'
+            else:
+                log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
 
             breq =  BootRequest(
                 process_description = ProcessDescription(
@@ -118,7 +121,7 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, rethrow=None) -> ProcessInstance:
+    async def boot(self, conf:str, user:str, session_name:str, log_level:str, rethrow=None, override_logs=True) -> ProcessInstance:
         from drunc.exceptions import DruncShellException
         if rethrow is None:
             rethrow = self.rethrow_by_default
@@ -129,6 +132,7 @@ class ProcessManagerDriver(GRPCDriver):
                 user = user,
                 session = session_name,
                 # log_level = log_level
+                override_logs = override_logs,
                 ):
                 yield await self.send_command_aio(
                     'boot',
