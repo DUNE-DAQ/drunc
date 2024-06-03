@@ -6,10 +6,9 @@ class ControllerContext(ShellContext): # boilerplatefest
     status_receiver = None
     took_control = False
 
-    def reset(self, address:str=None, print_traceback:bool=False):
+    def reset(self, address:str=None):
         self.address = address
         super(ControllerContext, self)._reset(
-            print_traceback = print_traceback,
             name = 'controller',
             token_args = {},
             driver_args = {},

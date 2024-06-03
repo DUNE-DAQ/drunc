@@ -27,7 +27,6 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
             user = user,
             session_name = session_name,
             log_level = log_level,
-            rethrow = traceback,
             override_logs = override_logs,
         )
         async for result in results:
@@ -55,7 +54,6 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
 async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver('process_manager').kill(
         query = query,
-        rethrow = traceback,
     )
 
     if not result: return
@@ -72,7 +70,6 @@ async def kill(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) ->
 async def flush(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver('process_manager').flush(
         query = query,
-        rethrow = traceback,
     )
 
     if not result: return
@@ -102,7 +99,6 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
 
     async for result in obj.get_driver('process_manager').logs(
         log_req,
-        rethrow = traceback,
         ):
         if not result: break
 
@@ -139,7 +135,6 @@ async def logs(obj:ProcessManagerContext, how_far:int, grep:str, query:ProcessQu
 async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool) -> None:
     result = await obj.get_driver('process_manager').restart(
         query = query,
-        rethrow = traceback,
     )
 
     if not result: return
@@ -156,7 +151,6 @@ async def restart(obj:ProcessManagerContext, query:ProcessQuery, traceback:bool)
 async def ps(obj:ProcessManagerContext, query:ProcessQuery, long_format:bool, traceback:bool) -> None:
     results = await obj.get_driver('process_manager').ps(
         query=query,
-        rethrow = traceback,
     )
 
     if not results: return
