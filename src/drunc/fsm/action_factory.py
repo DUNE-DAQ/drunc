@@ -69,6 +69,9 @@ class FSMActionFactory:
             case "thread-pinning":
                 from drunc.fsm.actions.thread_pinning import ThreadPinning
                 iface = ThreadPinning(configuration)
+            case "send-master-fl-command":
+                from drunc.fsm.actions.timing.send_master_fl_command import SendMasterFLCommand
+                iface = SendMasterFLCommand(configuration)
             case _:
                 raise fsme.UnknownAction(action_name)
 
