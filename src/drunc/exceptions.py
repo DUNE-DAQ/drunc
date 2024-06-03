@@ -20,10 +20,11 @@ class DruncCommandException(DruncException): # Exceptions that gets thrown when 
         super().__init__(txt, *args, **kwargs)
 
 class DruncServerSideError(DruncException): # Exceptions that gets thrown when commands run
-    def __init__(self, error_txt, stack_txt, *args, **kwargs):
+    def __init__(self, error_txt, stack_txt, server_response, *args, **kwargs):
         self.error_txt = error_txt
         self.stack_txt = stack_txt
-        super().__init__(error_txt, stack_txt, *args, **kwargs)
+        self.server_response = server_response
+        super().__init__(error_txt, stack_txt, server_response, *args, **kwargs)
 
     def __str__(self):
-        return f'{self.stack_txt}\n{self.error_txt}'
+        return f'{self.stack_txt}\n{self.error_txt}\n{self.server_response}'
