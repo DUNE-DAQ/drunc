@@ -25,14 +25,20 @@ class DBRunRegistry(FSMAction):
             fname = f.name
             consolidate_db(fname, run_configuration)
 
-        
-        
+            with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as f:
+                with tarfile.open(fileobj=f, mode='w:gz') as tar:
+                    tar.add(fname, arcname=os.path.basename(fname))
+                f.flush()
+                f.seek(0)
+                fname = f.name
+    
         import shutil
         import os
 
         dest = os.getcwd()+"/run_conf"+str(run_number)+".data.xml"
-        shutil.copyfile(run_configuration, dest)
-        insertRun
+        shutil.copyfile(f"{fname}.tar.gz", dest)
+        # insertRun
+        
 
     def pre_drain_dataflow(self, _input_data, _context, **kwargs):
         run_number = _input_data['run']
@@ -42,4 +48,4 @@ class DBRunRegistry(FSMAction):
         import shutil
         import os
 
-        updateStopTime
+        # updateStopTime

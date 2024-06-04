@@ -13,13 +13,13 @@ class FileRunRegistry(FSMAction):
         run_number = _input_data['run']
         run_configuration = find_configuration(_context.configuration.initial_data)
 
-        # with open("namefile", 'w') as file:
-        #     consolidate_files("namefile", self.configuration)
+        with open("namefile", 'w') as file:
+            consolidate_db("namefile",run_configuration)
 
         import shutil
         import os
 
         dest = os.getcwd()+"/run_conf"+str(run_number)+".data.xml"
-        shutil.copyfile(self.configuration, dest)
+        shutil.copyfile(namefile, dest)
 
         return _input_data
