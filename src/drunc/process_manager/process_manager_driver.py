@@ -121,83 +121,64 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, rethrow=None, override_logs=True) -> ProcessInstance:
-        from drunc.exceptions import DruncShellException
-        if rethrow is None:
-            rethrow = self.rethrow_by_default
+    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
 
-        try:
-            async for br in self._convert_oks_to_boot_request(
-                oks_conf = conf,
-                user = user,
-                session = session_name,
-                # log_level = log_level
-                override_logs = override_logs,
-                ):
-                yield await self.send_command_aio(
-                    'boot',
-                    data = br,
-                    outformat = ProcessInstance,
-                    rethrow = rethrow,
-                )
-        except DruncShellException as e:
-            if rethrow:
-                raise e
-            else:
-                self._log.error(e)
-                from drunc.utils.shell_utils import InterruptedCommand
-                raise InterruptedCommand()
+        async for br in self._convert_oks_to_boot_request(
+            oks_conf = conf,
+            user = user,
+            session = session_name,
+            override_logs = override_logs,
+            ):
+            yield await self.send_command_aio(
+                'boot',
+                data = br,
+                outformat = ProcessInstance,
+            )
 
-
-    async def kill(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+    async def kill(self, query:ProcessQuery) -> ProcessInstance:
         return await self.send_command_aio(
             'kill',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
-    async def logs(self, req:LogRequest, rethrow=None) -> LogLine:
+    async def logs(self, req:LogRequest) -> LogLine:
         async for stream in self.send_command_for_aio(
             'logs',
             data = req,
             outformat = LogLine,
-            rethrow = rethrow,):
+            ):
             yield stream
 
 
-    async def ps(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+    async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.send_command_aio(
             'ps',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
 
-    async def flush(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.send_command_aio(
             'flush',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
-    async def restart(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+    async def restart(self, query:ProcessQuery) -> ProcessInstance:
         return await self.send_command_aio(
             'restart',
             data = query,
             outformat = ProcessInstance,
-            rethrow = rethrow,
         )
 
 
-    async def describe(self, rethrow=None) -> Description:
+    async def describe(self) -> Description:
         return await self.send_command_aio(
             'describe',
             outformat = Description,
-            rethrow = rethrow,
         )
