@@ -199,7 +199,7 @@ class FSM:
         right_name = [t for t in self.transitions if t == transition]
         for tr in right_name:
             if self.can_execute_transition(source_state, transition):
-                if tr.destination == ".*":
+                if tr.destination == "":
                     return source_state
                 else:
                     return tr.destination
