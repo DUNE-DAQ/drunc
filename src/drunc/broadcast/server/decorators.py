@@ -98,7 +98,6 @@ def async_broadcasted(cmd):
         try:
             log.debug('Executing wrapped function')
             async for a in cmd(obj, request):
-                raise RuntimeError("BLBABLABLAB")
                 yield a
 
         except DruncCommandException as e:
