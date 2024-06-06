@@ -75,6 +75,9 @@ class SSHProcessManager(ProcessManager):
         # self.children_logs = {}
         self.watchers = []
 
+        from sh import Command
+        self.ssh = Command('/usr/bin/ssh')
+
     def _terminate(self):
         self._log.info('Terminating')
 
@@ -197,7 +200,7 @@ class SSHProcessManager(ProcessManager):
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} &> {log_file}']
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
-                self.process_store[uuid] = sh.ssh (
+                self.process_store[uuid] = self.ssh (
                     *arguments,
                     # _out=partial(self._process_children_logs, uuid),
                     _bg=True,
@@ -307,7 +310,7 @@ class SSHProcessManager(ProcessManager):
         return pil
 
 
-    def _boot_impl(self, boot_request:BootRequest) -> ProcessUUID:
+    def _boot_impl(self, boot_request:BootRequest) -> ProcessInstance:
         import uuid
         this_uuid = str(uuid.uuid4())
         return self.__boot(boot_request, this_uuid)

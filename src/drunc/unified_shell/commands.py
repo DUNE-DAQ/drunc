@@ -1,7 +1,6 @@
 import click
 import getpass
 
-from drunc.utils.shell_utils import add_traceback_flag
 from drunc.utils.utils import run_coroutine, log_levels
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.interface.cli_argument import validate_conf_string
@@ -9,12 +8,12 @@ from drunc.process_manager.interface.cli_argument import validate_conf_string
 @click.command('boot')
 @click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@add_traceback_flag()
+@click.option('--override-logs/--no-override-logs', default=True)
 @click.argument('boot-configuration', type=str, callback=validate_conf_string)
 @click.argument('session-name', type=str)
 @click.pass_obj
 @run_coroutine
-async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_configuration:str, log_level:str, traceback:bool) -> None:
+async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_configuration:str, log_level:str, override_logs:bool) -> None:
 
     from drunc.utils.shell_utils import InterruptedCommand
     try:
@@ -23,7 +22,7 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
             user = user,
             session_name = session_name,
             log_level = log_level,
-            rethrow = traceback,
+            override_logs = override_logs,
         )
         async for result in results:
             if not result: break
@@ -35,16 +34,9 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
     if controller_address:
         obj.print(f'Controller endpoint is \'{controller_address}\'')
         obj.print(f'Connecting this shell to it...')
-        from drunc.exceptions import DruncException
-        try:
-            obj.set_controller_driver(controller_address, obj.print_traceback)
-            from drunc.controller.interface.shell_utils import controller_setup
-            controller_setup(obj, controller_address)
-        except DruncException as de:
-            if traceback:
-                raise de
-            else:
-                obj.error(de)
+        obj.set_controller_driver(controller_address)
+        from drunc.controller.interface.shell_utils import controller_setup
+        controller_setup(obj, controller_address)
 
     else:
         obj.error(f'Could not understand where the controller is!')

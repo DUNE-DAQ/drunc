@@ -1,10 +1,10 @@
 import sys
 
 import coredal
-import oksdbinterfaces
+import conffwk
 
 
-dal = oksdbinterfaces.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
+dal = conffwk.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
 
 # Process a dal::Variable object, placing key/value pairs in a dictionary
 def process_variables(variables, envDict):

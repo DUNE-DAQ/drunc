@@ -7,7 +7,7 @@ def controller_cleanup_wrapper(ctx):
         who = ''
         from drunc.utils.grpc_utils import unpack_any
         try:
-            who = ctx.get_driver('controller').who_is_in_charge(rethrow=True).text
+            who = ctx.get_driver('controller').who_is_in_charge().text
 
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
@@ -23,7 +23,7 @@ def controller_cleanup_wrapper(ctx):
         if who == ctx.get_token().user_name and ctx.took_control:
             ctx.info('You are in control. Surrendering control.')
             try:
-                ctx.get_driver('controller').surrender_control(rethrow=True)
+                ctx.get_driver('controller').surrender_control()
             except Exception as e:
                 ctx.error('Could not surrender control.')
                 ctx.error(e)
@@ -64,7 +64,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time()-start_time)
 
             try:
-                desc = ctx.get_driver('controller').describe(rethrow=True).data
+                desc = ctx.get_driver('controller').describe().data
                 stored_exception = None
                 break
             except ServerUnreachable as e:
@@ -87,12 +87,12 @@ def controller_setup(ctx, controller_address):
 
     ctx.print('Connected to the controller')
 
-    children = ctx.get_driver('controller').ls(rethrow=False).data
+    children = ctx.get_driver('controller').ls().data
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
-        ret = ctx.get_driver('controller').take_control(rethrow=True)
+        ret = ctx.get_driver('controller').take_control()
         from druncschema.request_response_pb2 import ResponseFlag
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
