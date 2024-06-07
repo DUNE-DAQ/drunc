@@ -42,6 +42,27 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
         obj.error(f'Could not understand where the controller is! You can look at the logs of the controller to see its address')
         return
 
+@click.command('dummy_boot')
+@click.argument('session-name', type=str)
+@click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
+@click.pass_obj
+@run_coroutine
+async def dummy_boot(obj:ProcessManagerContext, user:str, session_name:str) -> None:
+
+    from drunc.utils.shell_utils import InterruptedCommand
+    try:
+        results = obj.get_driver('process_manager').dummy_boot(
+            user = user,
+            session_name = session_name,
+            log_level = "0",
+            override_logs = True,
+        )
+        async for result in results:
+            if not result: break
+            obj.print(f'\'{result.data.process_description.metadata.name}\' ({result.data.uuid.uuid}) process started')
+    except InterruptedCommand:
+        return
+
 
 
 @click.command('kill')

@@ -135,6 +135,40 @@ class ProcessManagerDriver(GRPCDriver):
                 outformat = ProcessInstance,
             )
 
+
+    async def dummy_boot(self, user:str, session_name:str, log_level:str, override_logs=True):# -> ProcessInstance:
+        import os
+        pwd = os.getcwd()
+        breq =  BootRequest( ## make this N BRs with a parameter in dummy_boot
+            process_description = ProcessDescription(
+                metadata = ProcessMetadata(
+                    user = user,
+                    session = session_name,
+                    name = "dummy_boot",
+                ),
+                executable_and_arguments = [ ##make me pretty
+                    ProcessDescription.ExecAndArgs(exec='sleep',args=["30s"]),
+                    ProcessDescription.ExecAndArgs(exec='echo',args=["30s"]),
+                    ProcessDescription.ExecAndArgs(exec='sleep',args=["30s"]),
+                    ProcessDescription.ExecAndArgs(exec='echo',args=["60s"]),
+                    ProcessDescription.ExecAndArgs(exec='sleep',args=["30s"]),
+                    ProcessDescription.ExecAndArgs(exec='echo',args=["90s"])
+                    ],
+                env = {"placeholderEnvVar":"."},
+                process_execution_directory = pwd,
+                process_logs_path = f'{pwd}/log_{user}_{session_name}_dummy-boot.log',
+            ),
+            process_restriction = ProcessRestriction(
+                allowed_hosts = ["localhost"]
+            )
+        )
+        self._log.debug(f"{breq=}\n\n")
+        yield await self.send_command_aio(
+            'boot',
+            data = breq,
+            outformat = ProcessInstance,
+        )
+
     async def kill(self, query:ProcessQuery) -> ProcessInstance:
         return await self.send_command_aio(
             'kill',
