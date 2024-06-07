@@ -20,7 +20,10 @@ class ProcessManagerConfHandler(ConfHandler):
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
         from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
-        new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(data['broadcaster'])
+        if data.get('broadcaster'):
+            new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(data.get('broadcaster'))
+        else:
+            new_data.broadcaster = None
         new_data.authoriser = None
 
         match data['type'].lower():
