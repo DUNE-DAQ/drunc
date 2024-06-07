@@ -47,7 +47,7 @@ class ControllerConfHandler(ConfHandler):
         session = None
 
         try:
-            import coredal
+            import confmodel
             session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
 
         except ImportError as e:
@@ -62,7 +62,7 @@ class ControllerConfHandler(ConfHandler):
             self.log.debug(segment)
 
             if without_excluded:
-                if coredal.component_disabled(self.db._obj, session.id, segment.id):
+                if confmodel.component_disabled(self.db._obj, session.id, segment.id):
                     continue
 
             from drunc.process_manager.configuration import get_cla
@@ -78,7 +78,7 @@ class ControllerConfHandler(ConfHandler):
             self.log.debug(app)
 
             if without_excluded:
-                if coredal.component_disabled(self.db._obj, session.id, app.id):
+                if confmodel.component_disabled(self.db._obj, session.id, app.id):
                     continue
 
             from drunc.process_manager.configuration import get_cla
