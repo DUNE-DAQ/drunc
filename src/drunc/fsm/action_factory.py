@@ -69,6 +69,9 @@ class FSMActionFactory:
             case "file-run-registry":
                 from drunc.fsm.actions.file_run_registry import FileRunRegistry
                 iface = FileRunRegistry(configuration)
+            case "db-run-registry":
+                from drunc.fsm.actions.db_run_registry import DBRunRegistry
+                iface = DBRunRegistry(configuration)
             case "thread-pinning":
                 from drunc.fsm.actions.thread_pinning import ThreadPinning
                 iface = ThreadPinning(configuration)

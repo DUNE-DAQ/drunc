@@ -1,6 +1,7 @@
 from drunc.fsm.core import FSMAction
 from drunc.utils.configuration import find_configuration
 from oksconfgen.consolidate import consolidate_db
+import json
 
 class DBRunRegistry(FSMAction):
     def __init__(self, configuration):
@@ -12,6 +13,8 @@ class DBRunRegistry(FSMAction):
         self.API_SOCKET = dotdrunc["run_registry_configuration"]["socket"]
         self.API_USER = dotdrunc["run_registry_configuration"]["user"]
         self.API_PSWD = dotdrunc["run_registry_configuration"]["password"]
+
+        print(configuration)
 
         import logging
         self._log = logging.getLogger('microservice-run-registry')
@@ -40,7 +43,7 @@ class DBRunRegistry(FSMAction):
         # insertRun
         
 
-    def pre_drain_dataflow(self, _input_data, _context, **kwargs):
+    def post_drain_dataflow(self, _input_data, _context, **kwargs):
         run_number = _input_data['run']
         run_configuration = find_configuration(_context.configuration.initial_data)
         run_type = _input_data.get("run_type", "TEST")

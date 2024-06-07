@@ -7,13 +7,13 @@ import json
 class UsvcProvidedRunNumber(FSMAction):
     def __init__(self, configuration):
         super().__init__(
-            name = "run-number"
+            name = "usvc-provided-run-number"
         )
         f = open(".drunc.json")
         dotdrunc = json.load(f)
         self.API_SOCKET = dotdrunc["run_number_configuration"]["socket"]
-        self.API_USER = dotdrunc["authentication"]["user"]
-        self.API_PSWD = dotdrunc["authentication"]["password"]
+        self.API_USER = dotdrunc["run_number_configuration"]["user"]
+        self.API_PSWD = dotdrunc["run_number_configuration"]["password"]
         self.timeout = 0.5
 
         import logging
