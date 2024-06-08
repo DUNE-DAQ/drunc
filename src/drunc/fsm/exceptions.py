@@ -86,6 +86,16 @@ class CannotGetRunNumber(FSMException):
         self.message = f'Could not get Run Number because {data}'
         super().__init__(self.message)
 
+class CannotInsertRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not insert Run into RunRegistryDB because {data}'
+        super().__init__(self.message)
+
+class CannotUpdateStopTime(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not update stop time in RunRegistryDB because {data}'
+        super().__init__(self.message)
+
 class InvalidDataReturnByFSMAction(FSMException):
     def __init__(self, data):
         self.message = f"The action returns an incorrect object which isn't serialisable: {data}"
