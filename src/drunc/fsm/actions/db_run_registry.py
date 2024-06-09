@@ -22,11 +22,16 @@ class DBRunRegistry(FSMAction):
         import logging
         self._log = logging.getLogger('microservice-run-registry')
 
-    def pre_start(self, _input_data, _context, **kwargs):
+    def pre_start(self, _input_data:dict, _context, **kwargs):
         run_number = _input_data['run']
-        run_configuration = find_configuration(_context.configuration.initial_data) #
+        run_configuration = find_configuration(_context.configuration.initial_data) 
         run_type = _input_data.get("run_type", "TEST")
-        software_version = _input_data.get("software_version", "fddaq-test-v5.0.0")
+        software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
+        _input_data['software_version'] = software_version
+        from drunc.fsm.exceptions import CannotGetSoftwareVersion
+        if not version:
+            raise CannotGetSoftwareVersion()
+
         det_id = _input_data.get("det_id","np04_hd")
 
         with tempfile.NamedTemporaryFile(suffix='.data.xml', delete=True) as f:
@@ -51,7 +56,7 @@ class DBRunRegistry(FSMAction):
                 from drunc.fsm.exceptions import CannotInsertRunNumber
                 try:
                     r = requests.post(self.API_SOCKET+"/runregistry/insertRun/",
-                                      files=tar_fname,
+                                      files=files,
                                       data=post_data,
                                       auth=(self.API_USER, self.API_PSWD),
                                       timeout=self.timeout)
