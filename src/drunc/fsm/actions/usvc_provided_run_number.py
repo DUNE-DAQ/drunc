@@ -1,6 +1,6 @@
 from drunc.fsm.core import FSMAction
 import requests
-import os 
+import os
 import json
 
 
@@ -9,17 +9,18 @@ class UsvcProvidedRunNumber(FSMAction):
         super().__init__(
             name = "run-number"
         )
-        f = open(".drunc.json") # cp /nfs/home/titavare/dunedaq_work_area/drunc-n24.5.26-1/.drunc.json
+        from drunc.utils.utils import expand_path
+        f = open(expand_path("~/.drunc.json")) # cp /nfs/home/titavare/dunedaq_work_area/drunc-n24.5.26-1/.drunc.json
         dotdrunc = json.load(f)
         self.API_SOCKET = dotdrunc["run_number_configuration"]["socket"]
-        self.API_USER = dotdrunc["run_number_configuration"]["user"] 
+        self.API_USER = dotdrunc["run_number_configuration"]["user"]
         self.API_PSWD = dotdrunc["run_number_configuration"]["password"]
         self.timeout = 0.5
 
         import logging
         self._log = logging.getLogger('microservice')
 
-    def pre_start(self, _input_data:dict, _context, run_type:str="TEST", disable_data_storage:bool=False, trigger_rate:float=1.0, **kwargs): 
+    def pre_start(self, _input_data:dict, _context, run_type:str="TEST", disable_data_storage:bool=False, trigger_rate:float=1.0, **kwargs):
         _input_data["run"] = self._getnew_run_number()
         _input_data['disable_data_storage'] = disable_data_storage
         _input_data['trigger_rate'] = trigger_rate
