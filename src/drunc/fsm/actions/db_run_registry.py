@@ -23,16 +23,15 @@ class DBRunRegistry(FSMAction):
         self._log = logging.getLogger('microservice-run-registry')
 
     def pre_start(self, _input_data:dict, _context, **kwargs):
-        run_number = _input_data['run']
+        self.run_number = _input_data['run']
         run_configuration = find_configuration(_context.configuration.initial_data) 
         run_type = _input_data.get("run_type", "TEST")
+        det_id = _input_data.get("det_id","np04_hd") #How do you get detector id?
         software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
         _input_data['software_version'] = software_version
         from drunc.fsm.exceptions import CannotGetSoftwareVersion
-        if not version:
+        if software_version == None:
             raise CannotGetSoftwareVersion()
-
-        det_id = _input_data.get("det_id","np04_hd")
 
         with tempfile.NamedTemporaryFile(suffix='.data.xml', delete=True) as f:
             f.flush()
@@ -49,7 +48,7 @@ class DBRunRegistry(FSMAction):
 
             with open(tar_fname, "rb") as f:
                 files = {'file': f}
-                post_data = {"run_num": run_number,
+                post_data = {"run_num": self.run_number,
                 "det_id": det_id,
                 "run_type": run_type,
                 "software_version": software_version}
@@ -74,13 +73,13 @@ class DBRunRegistry(FSMAction):
                     self._log.error(error)
                     raise CannotInsertRunNumber(error) from exc
             os.remove(tar_fname)
+        return _input_data
         
 
     def post_drain_dataflow(self, _input_data, _context, **kwargs):
-        run_number = _input_data['run']
         from drunc.fsm.exceptions import CannotUpdateStopTime
         try:
-            r = requests.get(self.API_SOCKET+"/runregistry/updateStopTime/"+str(run_number), 
+            r = requests.get(self.API_SOCKET+"/runregistry/updateStopTime/"+str(self.run_number), 
             auth=(self.API_USER, self.API_PSWD),
             timeout=self.timeout)
 
