@@ -27,7 +27,7 @@ class BroadcastSenderConfHandler(ConfHandler):
         return self.impl_technology
 
     def __parse_dict(self, data):
-        if data is {}:
+        if data == {}:
             self.impl_technology = None
             return None
         return KafkaBroadcastSenderConfData.from_dict(data)
