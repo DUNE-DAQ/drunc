@@ -6,12 +6,10 @@ from drunc.utils.utils import validate_command_facility
 import pathlib
 
 @click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
-@click.option('-t', '--traceback', is_flag=True, default=False, help='Print full exception traceback')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.argument('process-manager-configuration', type=str)# callback=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path, resolve_path=True))
 @click.pass_context
-def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceback:bool) -> None:
-    ctx.obj.print_traceback = traceback,
+def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None:
 
     from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
     update_log_level(log_level)
@@ -53,20 +51,19 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str, traceba
     process_manager_address = f'localhost:{port.value}'
 
     ctx.obj.reset(
-        print_traceback = traceback,
         address_pm = process_manager_address,
     )
 
-    from drunc.utils.grpc_utils import ServerUnreachable
     desc = None
 
     try:
         import asyncio
         desc = asyncio.get_event_loop().run_until_complete(
-            ctx.obj.get_driver().describe(rethrow=True)
+            ctx.obj.get_driver().describe()
         )
         desc = desc.data
-    except ServerUnreachable as e:
+
+    except Exception as e:
         ctx.obj.critical(f'Could not connect to the process manager')
         if not ctx.obj.pm_process.is_alive():
             ctx.obj.critical(f'The process manager is dead, exit code {ctx.obj.pm_process.exitcode}')

@@ -154,7 +154,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
 
     @abc.abstractmethod
-    def _boot_impl(self, br:BootRequest) -> ProcessUUID:
+    def _boot_impl(self, br:BootRequest) -> ProcessInstance:
         raise NotImplementedError
 
     # ORDER MATTERS!

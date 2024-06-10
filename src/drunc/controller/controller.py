@@ -286,6 +286,7 @@ class Controller(ControllerServicer):
             )
 
             from drunc.exceptions import DruncException
+            import traceback
 
             try:
                 response = child.propagate_command(command, command_data, token)
@@ -306,16 +307,14 @@ class Controller(ControllerServicer):
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
+                    stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
                             name = child.name,
                             token = token,
                             data = pack_to_any(
                                 Stacktrace(
-                                    text=[
-                                        "Exception throw", # poor man's stack trace
-                                        str(e)
-                                    ]
+                                    text=stack
                                 )
                             ),
                             flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
@@ -326,16 +325,14 @@ class Controller(ControllerServicer):
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
+                    stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
                             name = child.name,
                             token = token,
                             data = pack_to_any(
                                 Stacktrace(
-                                    text=[
-                                        "Exception throw", # poor man's stack trace
-                                        str(e)
-                                    ]
+                                    text=stack
                                 )
                             ),
                             flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,

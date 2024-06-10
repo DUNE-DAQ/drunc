@@ -1,6 +1,8 @@
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.generic_pb2 import Stacktrace
 from drunc.utils.grpc_utils import pack_to_any
+import traceback
+
 def broadcasted(cmd):
 
     import functools
@@ -26,19 +28,19 @@ def broadcasted(cmd):
         try:
             log.debug('Executing wrapped function')
             ret = cmd(obj, request) # we strip the context here, no need for that anymore
-
         except DruncCommandException as e:
             # obj.interrupt_with_exception(
             #     exception = e,
             #     context = context
             # )
+            stack = traceback.format_exc().split("\n")
 
             return Response(
                 name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
-                        text = [str(e)]
+                        text = stack,
                     )
                 ),
                 flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
@@ -52,12 +54,13 @@ def broadcasted(cmd):
             #     stack = traceback.format_exc(),
             #     context = context
             # )
+            stack = traceback.format_exc().split("\n")
             return Response(
                 name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
-                        text = [str(e)]
+                        text = stack,
                     )
                 ),
                 flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
@@ -102,12 +105,14 @@ def async_broadcasted(cmd):
             #     exception = e,
             #     context = context
             # )
+            stack = traceback.format_exc().split("\n")
+
             yield Response(
                 name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
-                        text = [str(e)]
+                        text = stack,
                     )
                 ),
                 flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
@@ -122,12 +127,14 @@ def async_broadcasted(cmd):
             #     stack = traceback.format_exc(),
             #     context = context
             # )
+            stack = traceback.format_exc().split("\n")
+
             yield Response(
                 name = obj.name,
                 token = request.token,
                 data = pack_to_any(
                     Stacktrace(
-                        text = [str(e)]
+                        text = stack
                     )
                 ),
                 flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,

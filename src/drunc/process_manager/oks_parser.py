@@ -1,10 +1,10 @@
 import sys
 
-import coredal
-import oksdbinterfaces
+import confmodel
+import conffwk
 
 
-dal = oksdbinterfaces.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
+dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
 # Process a dal::Variable object, placing key/value pairs in a dictionary
 def process_variables(variables, envDict):
@@ -53,7 +53,7 @@ def process_segment(db, session, segment):
 
   # Recurse over nested segments
   for seg in segment.segments:
-    if coredal.component_disabled(db._obj, session.id, seg.id):
+    if confmodel.component_disabled(db._obj, session.id, seg.id):
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
 
     for app in process_segment(db, session, seg):
@@ -62,7 +62,7 @@ def process_segment(db, session, segment):
   # Get all the enabled applications of this segment
   for app in segment.applications:
     if 'Component' in app.oksTypes():
-      enabled = not coredal.component_disabled(db._obj, session.id, app.id)
+      enabled = not confmodel.component_disabled(db._obj, session.id, app.id)
       log.debug(f"{app.id} {enabled=}")
     else:
       enabled = True
@@ -107,11 +107,11 @@ def find_controlled_apps(db, session, mycontroller, segment):
     for app in segment.applications:
       apps.append(app.id)
     for seg in segment.segments:
-      if not coredal.component_disabled(db._obj, session.id, seg.id):
+      if not confmodel.component_disabled(db._obj, session.id, seg.id):
         controllers.append(seg.controller.id)
   else:
     for seg in segment.segments:
-      if not coredal.component_disabled(db._obj, session.id, seg.id):
+      if not confmodel.component_disabled(db._obj, session.id, seg.id):
         aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
         if len(apps) > 0:
           break;

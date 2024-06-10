@@ -10,18 +10,15 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
     address_pm = ''
     address_controller = ''
 
-    def reset(self, address_pm:str='', print_traceback:bool=False):
+    def reset(self, address_pm:str=''):
         self.address_pm = address_pm
         super(UnifiedShellContext, self)._reset(
-            print_traceback = print_traceback,
             name = 'unified',
             token_args = {},
-            driver_args = {
-                'print_traceback': print_traceback
-            },
+            driver_args = {},
         )
 
-    def create_drivers(self, print_traceback, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         ret = {}
 
         if self.address_pm != '':
@@ -30,7 +27,6 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
                 self.address_pm,
                 self._token,
                 aio_channel = True,
-                rethrow_by_default = print_traceback
             )
 
         if self.address_controller != '':
@@ -39,12 +35,11 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
                 self.address,
                 self._token,
                 aio_channel = False,
-                rethrow_by_default = print_traceback
             )
 
         return ret
 
-    def set_controller_driver(self, address_controller, print_traceback, **kwargs) -> None:
+    def set_controller_driver(self, address_controller, **kwargs) -> None:
         self.address_controller = address_controller
 
         from drunc.controller.controller_driver import ControllerDriver
@@ -53,7 +48,6 @@ class UnifiedShellContext(ShellContext): # boilerplatefest
             self.address_controller,
             self._token,
             aio_channel = False,
-            rethrow_by_default = print_traceback
         )
 
 
