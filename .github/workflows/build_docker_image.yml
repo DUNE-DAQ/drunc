@@ -1,0 +1,48 @@
+name: Build drunc docker image
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'v*'
+    paths:
+      - Dockerfile
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout drunc code
+        uses: actions/checkout@v4
+        with:
+          repository: DUNE-DAQ/drunc
+          path: drunc
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            ghcr.io/DUNE-DAQ/drunc
+          tags: |
+            type=raw,value=latest
+            type=ref,event=branch
+            type=ref,event=tag
+
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v3
+        with:
+          context: ${{ github.workspace }}/drunc/
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
