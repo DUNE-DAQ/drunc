@@ -36,10 +36,11 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str) -> No
 
     ctx.call_on_close(cleanup)
 
-    from drunc.process_manager.interface.commands import boot, kill, flush, logs, restart, ps
+    from drunc.process_manager.interface.commands import boot, kill, flush, logs, restart, ps, dummy_boot
     ctx.command.add_command(boot, 'boot')
     ctx.command.add_command(kill, 'kill')
     ctx.command.add_command(flush, 'flush')
     ctx.command.add_command(logs, 'logs')
     ctx.command.add_command(restart, 'restart')
     ctx.command.add_command(ps, 'ps')
+    ctx.command.add_command(dummy_boot, 'dummy_boot')
