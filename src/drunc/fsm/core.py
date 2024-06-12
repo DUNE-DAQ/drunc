@@ -66,14 +66,16 @@ class PreOrPostTransitionSequence:
                 self._log.debug(f'data before callback: {input_data}')
                 self._log.info(f'executing the callback: {callback.method.__name__}')
                 input_data = callback.method(_input_data=input_data, _context=ctx, **transition_args)
+                self._log.debug(f'data after callback: {input_data}')
                 from drunc.fsm.exceptions import InvalidDataReturnByFSMAction
                 try:
-                    import json 
+                    import json
                     json.dumps(input_data)
-                except InvalidDataReturnByFSMAction as e:
-                    raise e
-                self._log.debug(f'data after callback: {input_data}')
+                except TypeError as e:
+                    raise InvalidDataReturnByFSMAction(input_data)
+
             except DruncException as e:
+                import traceback
                 self._log.error(traceback.format_exc())
                 if callback.mandatory:
                     raise e

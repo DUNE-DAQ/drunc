@@ -41,7 +41,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             name = name,
             session = session,
             configuration = bsch,
-        )
+        ) if bsch.data else None
 
         from logging import getLogger
         self.log = getLogger("process_manager")
@@ -138,19 +138,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     A couple of simple pass-through functions to the broadcasting service
     '''
     def broadcast(self, *args, **kwargs):
-        return self.broadcast_service.broadcast(*args, **kwargs)
+        return self.broadcast_service.broadcast(*args, **kwargs) if self.broadcast_service else None
 
     def can_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.can_broadcast(*args, **kwargs)
+        return self.broadcast_service.can_broadcast(*args, **kwargs) if self.broadcast_service else False
 
     def describe_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.describe_broadcast(*args, **kwargs)
+        return self.broadcast_service.describe_broadcast(*args, **kwargs) if self.broadcast_service else None
 
     def interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
+        return self.broadcast_service._interrupt_with_exception(*args, **kwargs) if self.broadcast_service else None
 
     def async_interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
+        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs) if self.broadcast_service else None
 
 
     @abc.abstractmethod

@@ -108,5 +108,5 @@ class ThreadPinningFailed(FSMException):
 
 class CannotGetSoftwareVersion(FSMException):
     def __init__(self):
-        self.message = f'RunRegistryDB: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and\nexport DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n'
+        self.message = f'RunRegistryDB: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and export DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n'
         super().__init__(self.message)
