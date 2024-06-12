@@ -23,11 +23,12 @@ class DBRunRegistry(FSMAction):
         self._log = logging.getLogger('microservice-run-registry')
 
     def pre_start(self, _input_data:dict, _context, **kwargs):
-        self.run_number = _input_data['run']
+        self.run_number = _input_data['run'] #Seems like run_number isn't in _input_data in post_drain_dataflow so need to initialise it here
         run_configuration = find_configuration(_context.configuration.initial_data) 
         run_type = _input_data.get("run_type", "TEST")
-        det_id = _input_data.get("det_id","np04_hd") #How do you get detector id?
+        det_id = _context.configuration.db.get_dal(class_name = "Session", uid = _context.configuration.oks_key.session).detector_configuration.id
         software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
+        _input_data['det_id'] = det_id
         _input_data['software_version'] = software_version
         from drunc.fsm.exceptions import CannotGetSoftwareVersion
         if software_version == None:
