@@ -79,9 +79,19 @@ class MethodSignatureMissingAnnotation(FSMException):
 class TransitionDataOfIncorrectFormat(FSMException):
     def __init__(self, data):
         self.message = f'The data "{data}" could not be interpreted as json'
+        super(MethodSignatureMissingAnnotation, self).__init__(self.message)
+
+class CannotGetRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not get Run Number because {data}'
         super().__init__(self.message)
 
-        
+class InvalidDataReturnByFSMAction(FSMException):
+    def __init__(self, data):
+        self.message = f"The action returns an incorrect object which isn't serialisable: {data}"
+        super().__init__(self.message)
+
+
 class ThreadPinningFailed(FSMException):
     def __init__(self, host):
         self.message = f'The thread pinning on "{host}" failed'
