@@ -117,6 +117,18 @@ class SSHProcessManager(ProcessManager):
                 line =  f'Could not retrieve logs: {str(e)}'
             )
             yield ll
+            if uid in self.process_store:
+                llstdout = LogLine(
+                    uuid = ProcessUUID(uuid=uid),
+                    line =  f'stdout: {self.process_store[uid].stdout}'
+                )
+                llstderr = LogLine(
+                    uuid = ProcessUUID(uuid=uid),
+                    line =  f'stderr: {self.process_store[uid].stderr}'
+                )
+                yield llstdout
+                yield llstderr
+
         f.close()
         with open(f.name, 'r') as fi:
             lines = fi.readlines()
@@ -185,8 +197,10 @@ class SSHProcessManager(ProcessManager):
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
                 cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
-
-                cmd += f'; cd {boot_request.process_description.process_execution_directory} ;'
+                if cmd == '':
+                    cmd = f'cd {boot_request.process_description.process_execution_directory} ; '
+                else: 
+                    cmd += f'; cd {boot_request.process_description.process_execution_directory} ;'
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec
