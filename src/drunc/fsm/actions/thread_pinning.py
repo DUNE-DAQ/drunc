@@ -25,6 +25,8 @@ class ThreadPinning(FSMAction):
             rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
         elif not rte:
             self.log.error(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
+        if not os.path.isabs(rte):
+            rte = os.getcwd() + "/" + rte
 
         cmd = f"source {rte}; " if rte else ""
         cmd += f"readout-affinity.py --pinfile {thread_pinning_file}"
