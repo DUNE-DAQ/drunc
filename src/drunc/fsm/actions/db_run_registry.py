@@ -29,12 +29,9 @@ class DBRunRegistry(FSMAction):
         run_type = _input_data.get("run_type", "TEST")
         det_id = _context.configuration.db.get_dal(class_name = "Session", uid = _context.configuration.oks_key.session).detector_configuration.id
         software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
-        _input_data['det_id'] = det_id
-        _input_data['software_version'] = software_version
         from drunc.fsm.exceptions import CannotGetSoftwareVersion
         if software_version == None:
             raise CannotGetSoftwareVersion()
-
         with tempfile.NamedTemporaryFile(suffix='.data.xml', delete=True) as f:
             f.flush()
             f.seek(0)
