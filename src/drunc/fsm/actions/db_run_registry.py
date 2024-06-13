@@ -12,7 +12,8 @@ class DBRunRegistry(FSMAction):
         super().__init__(
             name = "db-run-registry"
         )        
-        f = open(".drunc.json")
+        from drunc.utils.utils import expand_path
+        f = open(expand_path("~/.drunc.json")) # cp /nfs/home/titavare/dunedaq_work_area/drunc-n24.5.26-1/.drunc.json        
         dotdrunc = json.load(f)
         self.API_SOCKET = dotdrunc["run_registry_configuration"]["socket"]
         self.API_USER = dotdrunc["run_registry_configuration"]["user"]
