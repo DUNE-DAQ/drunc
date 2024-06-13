@@ -18,9 +18,9 @@ class ElisaLogbook(FSMAction):
         import logging
         self._log = logging.getLogger('microservice')
 
-    def post_start(self, _input_data:dict, _context, **kwargs):
+    def post_start(self, _input_data:dict, _context, elisa_post:str='', **kwargs):
         text = ''
-        message = "hello"
+        message = elisa_post
         if message != '':
             self._log.info(f"Adding the message:\n--------\n{message}\n--------\nto the logbook")
             text += f"\n<p>{message}</p>"
@@ -53,6 +53,6 @@ class ElisaLogbook(FSMAction):
         print(data)
         #r = requests.post(f'{self.API_SOCKET}/v1/elisaLogbook/new_message', auth=(self.API_USER,self.API_PASS), data=data)
 
-    def post_drain_dataflow(self, _input_data, _context, message:str="", **kwargs):
+    def post_drain_dataflow(self, _input_data, _context, elisa_post:str='', **kwargs):
         pass
         #TODO finish this at some point
