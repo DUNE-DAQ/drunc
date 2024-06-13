@@ -2,6 +2,7 @@
     "type": "k8s",
     "name": "K8sProcessManager",
     "command_address": "0.0.0.0:10054",
+    "image": "ghcr.io/dune-daq/alma9:latest",
 
     "authoriser": {
         "type": "dummy"
