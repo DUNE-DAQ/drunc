@@ -66,7 +66,7 @@ class FSMActionFactory:
             case "file-logbook":
                 from drunc.fsm.actions.file_logbook import FileLogbook
                 iface = FileLogbook(configuration)
-            case "usvc-elisa-logbook":
+            case "elisa-logbook":
                 from drunc.fsm.actions.usvc_elisa_logbook import ElisaLogbook
                 iface = ElisaLogbook(configuration)
             case "file-run-registry":
