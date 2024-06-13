@@ -135,12 +135,40 @@ class K8sProcessManager(ProcessManager):
             return DruncK8sNamespaceAlreadyExists (f'\"{session}\" session already exists')
 
 
-    def _create_pod(self, podname, session, pod_image="ghcr.io/dune-daq/alma9:latest",env_vars=None, commands=""):
+    def _volume(self, name, host_path):
+        return self._k8s_client.V1Volume(
+            name=name,
+            host_path=self._k8s_client.V1HostPathVolumeSource(path=host_path)
+        )
+    
+    def _volume_mount(self, name, mount_path):
+        return self._k8s_client.V1VolumeMount(
+            name=name,
+            mount_path=mount_path
+        )
+
+    def _env_vars(self, env_var):
+        env_vars_list = [self._k8s_client.models.V1EnvVar(name=k, value=v) for k, v in env_var.items()]
+        return env_vars_list
+
+    def _execs_and_args(self, executable_and_arguments=[]):
+        exec_and_args = []
+        for e_and_a in executable_and_arguments:
+            args = [a for a in e_and_a.args]
+            exec_and_args += [" ".join([e_and_a.exec] + args)]
+            # exec_and_args = ["source rte", "daq_application --something argument"]
+        exec_and_args = '; '.join(exec_and_args)
+        return exec_and_args
+
+    def _create_pod(self, podname, session, boot_request:BootRequest):
         import os
         # HACK
         import socket
         hostname = socket.gethostname()
         #/ HACK
+
+        # pod_image = boot_request.{where_pod_image_is}
+        pod_image="ghcr.io/dune-daq/alma9:latest"
 
         pod = self._pod_v1_api(
             api_version="v1",
@@ -149,7 +177,6 @@ class K8sProcessManager(ProcessManager):
                 name=podname,
                 namespace=session
             ),
-
             spec=self._pod_spec_v1_api(
                 restart_policy="Never",
                 containers=[
@@ -158,9 +185,11 @@ class K8sProcessManager(ProcessManager):
                         image=pod_image,
                         command = ["sh"],
                         #args = ["-c", "exit 3"],
-                        args = ["-c", commands],
+                        args = ["-c", self._execs_and_args(boot_request.process_description.executable_and_arguments)],
                         #args = ["-c", "sleep 3600"],
-                        env=env_vars,
+                        env= self._env_vars(boot_request.process_description.env),
+                        volume_mounts=[self._volume_mount("pwd",os.getcwd()), self._volume_mount("cvmfs","/cvmfs/")],
+                        working_dir = boot_request.process_description.process_execution_directory,
                         restart_policy="Never",
                         security_context = self._security_context_v1_api(
                             run_as_user = os.getuid(),
@@ -176,6 +205,7 @@ class K8sProcessManager(ProcessManager):
                         ),
                     )
                 ],
+                volumes=[self._volume("pwd",os.getcwd()), self._volume("cvmfs","/cvmfs/")],
                 # HACK
                 affinity = self._k8s_client.V1Affinity(
                     self._k8s_client.V1NodeAffinity(
@@ -352,24 +382,13 @@ class K8sProcessManager(ProcessManager):
 
         session = boot_request.process_description.metadata.session
         podnames = boot_request.process_description.metadata.name
-
         if uuid in self.boot_request:
             raise DruncCommandException(f'\"{session}.{podnames}\":{uuid} already exists!')
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        env_var = boot_request.process_description.env
-        env_vars_list = [self._k8s_client.models.V1EnvVar(name=k, value=v) for k, v in env_var.items()]
-
         self._create_namespace(session)
-        exec_and_args = []
-        for e_and_a in boot_request.process_description.executable_and_arguments:
-            args = [a for a in e_and_a.args]
-            exec_and_args += [" ".join([e_and_a.exec] + args)]
-            # exec_and_args = ["source rte", "daq_application --something argument"]
-        exec_and_args = '; '.join(exec_and_args)
-        print(exec_and_args)
-        self._create_pod(podnames, session, env_vars=env_vars_list, commands=exec_and_args)
+        self._create_pod(podnames, session, boot_request)
         self._add_label(podnames, 'pod', 'uuid', uuid)
         self._log.info(f'\"{session}.{podnames}\":{uuid} booted')
 
