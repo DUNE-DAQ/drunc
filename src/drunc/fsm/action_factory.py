@@ -57,6 +57,9 @@ class FSMActionFactory:
             case "user-provided-run-number":
                 from drunc.fsm.actions.user_provided_run_number import UserProvidedRunNumber
                 iface = UserProvidedRunNumber(configuration)
+            case "usvc-provided-run-number":
+                from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
+                iface = UsvcProvidedRunNumber(configuration)
             case 'test-action':
                 from drunc.fsm.actions.test_action import TestAction
                 iface = TestAction(configuration)
@@ -69,6 +72,9 @@ class FSMActionFactory:
             case "file-run-registry":
                 from drunc.fsm.actions.file_run_registry import FileRunRegistry
                 iface = FileRunRegistry(configuration)
+            case "db-run-registry":
+                from drunc.fsm.actions.db_run_registry import DBRunRegistry
+                iface = DBRunRegistry(configuration)
             case "thread-pinning":
                 from drunc.fsm.actions.thread_pinning import ThreadPinning
                 iface = ThreadPinning(configuration)

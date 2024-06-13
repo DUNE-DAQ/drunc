@@ -79,10 +79,34 @@ class MethodSignatureMissingAnnotation(FSMException):
 class TransitionDataOfIncorrectFormat(FSMException):
     def __init__(self, data):
         self.message = f'The data "{data}" could not be interpreted as json'
+        super(MethodSignatureMissingAnnotation, self).__init__(self.message)
+
+class CannotGetRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not get Run Number because {data}'
         super().__init__(self.message)
 
-        
+class CannotInsertRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not insert Run into RunRegistryDB because {data}'
+        super().__init__(self.message)
+
+class CannotUpdateStopTime(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not update stop time in RunRegistryDB because {data}'
+        super().__init__(self.message)
+
+class InvalidDataReturnByFSMAction(FSMException):
+    def __init__(self, data):
+        self.message = f"The action returns an incorrect object which isn't serialisable: {data}"
+        super().__init__(self.message)
+
 class ThreadPinningFailed(FSMException):
     def __init__(self, host):
         self.message = f'The thread pinning on "{host}" failed'
+        super().__init__(self.message)
+
+class CannotGetSoftwareVersion(FSMException):
+    def __init__(self):
+        self.message = f'RunRegistryDB: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and export DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n'
         super().__init__(self.message)
