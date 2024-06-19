@@ -65,6 +65,7 @@ def update_log_level(loglevel):
         handler.setLevel(kafka_command_level)
 
     from rich.logging import RichHandler
+    from rich.console import Console
     import os
     try:
         width = os.get_terminal_size()[1]
@@ -77,7 +78,11 @@ def update_log_level(loglevel):
         datefmt="[%X]",
         handlers=[
             #logging.StreamHandler(),
-            RichHandler(rich_tracebacks=False, tracebacks_width=width) # Make this True, and everything crashes on exceptions (no clue why)
+            RichHandler(
+                console=Console(width=width),
+                rich_tracebacks=False,
+                tracebacks_width=width
+            ) # Make this True, and everything crashes on exceptions (no clue why)
         ]
     )
 
