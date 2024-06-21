@@ -68,7 +68,7 @@ def update_log_level(loglevel):
     from rich.console import Console
     import os
     try:
-        width = os.get_terminal_size()[1]
+        width = os.get_terminal_size()[0]
     except:
         width = 150
 
