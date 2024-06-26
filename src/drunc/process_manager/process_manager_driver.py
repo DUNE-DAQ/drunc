@@ -62,6 +62,7 @@ class ProcessManagerDriver(GRPCDriver):
             exe = app['type']
             args = app['args']
             env = app['env']
+            env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
 
             self._log.debug(f"{app=}")
 

@@ -7,7 +7,7 @@ import json
 class UsvcProvidedRunNumber(FSMAction):
     def __init__(self, configuration):
         super().__init__(
-            name = "run-number"
+            name = "usvc-provided-run-number"
         )
         from drunc.utils.utils import expand_path
         f = open(expand_path("~/.drunc.json")) # cp /nfs/home/titavare/dunedaq_work_area/drunc-n24.5.26-1/.drunc.json
@@ -24,6 +24,7 @@ class UsvcProvidedRunNumber(FSMAction):
         _input_data["run"] = self._getnew_run_number()
         _input_data['disable_data_storage'] = disable_data_storage
         _input_data['trigger_rate'] = trigger_rate
+        _input_data['run_type'] = run_type
         return _input_data
 
     def _getnew_run_number(self):
