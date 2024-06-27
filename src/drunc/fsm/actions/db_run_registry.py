@@ -1,6 +1,6 @@
 from drunc.fsm.core import FSMAction
 from drunc.utils.configuration import find_configuration
-from oksconfgen.consolidate import consolidate_db
+from daqconf.consolidate import consolidate_db
 import json
 import tempfile
 import tarfile
