@@ -61,7 +61,7 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         if hasattr(status, 'details'):
             for detail in status.details:
                 if detail.Is(Stacktrace.DESCRIPTOR):
-                    text = 'Stacktrace [bold red]on remote server![/]\n'
+                    text = '[bold red]Stacktrace on remote server![/bold red]\n'
                     stack = unpack_any(detail, Stacktrace)
                     for l in stack.text:
                         text += l+"\n"
