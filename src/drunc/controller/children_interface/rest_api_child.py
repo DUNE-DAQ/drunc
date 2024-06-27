@@ -522,7 +522,7 @@ class RESTAPIChildNode(ChildNode):
                 exit_state = exit_state.upper(),
             )
             self.log.debug(f'Sent \'{data.command_name}\' to \'{self.name}\'')
-            r = self.commander.check_response(10)
+            r = self.commander.check_response(150)
 
             self.log.debug(f'Got response from \'{data.command_name}\' to \'{self.name}\'')
 
