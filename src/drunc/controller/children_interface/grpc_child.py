@@ -33,7 +33,7 @@ class gRPCChildNode(ChildNode):
 
         from druncschema.request_response_pb2 import Description
         desc = Description()
-        ntries = 5
+        ntries = 20
         from drunc.utils.grpc_utils import ServerUnreachable
         from drunc.exceptions import DruncSetupException
 
