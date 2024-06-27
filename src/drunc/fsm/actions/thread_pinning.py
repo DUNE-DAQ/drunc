@@ -13,11 +13,11 @@ class ThreadPinning(FSMAction):
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 
     def pin_thread(self, thread_pinning_file, configuration, session):
-        from drunc.process_manager.oks_parser import process_segment
+        from drunc.process_manager.oks_parser import collect_apps
         import conffwk
         db = conffwk.Configuration(f"oksconflibs:{configuration}")
         session_dal = db.get_dal(class_name="Session", uid=session)
-        apps = process_segment(db, session_dal, session_dal.segment)
+        apps = collect_apps(db, session_dal, session_dal.segment)
 
         import os 
         rte=session_dal.rte_script
