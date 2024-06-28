@@ -26,6 +26,12 @@ class BroadcastClientConfHandler(ConfHandler):
 
         from druncschema.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
         from drunc.utils.grpc_utils import unpack_any, UnpackingError
+        if not data.ByteSize():
+            return BroadcastClientConfData(
+                type = None,
+                address = None,
+                topic = None
+            )
         try:
             data = unpack_any(data, KafkaBroadcastHandlerConfiguration)
             return BroadcastClientConfData(
@@ -36,4 +42,4 @@ class BroadcastClientConfHandler(ConfHandler):
 
         except UnpackingError as e:
             from drunc.exceptions import DruncSetupException
-            raise DruncSetupException(f'Input configuration to configure the broadcast was not understood, could not setup the broadcast handler: {e}')
+            raise DruncSetupException(f'Input configuration to configure the broadcast was not understood, could not setup the broadcast handler: {e}', e)

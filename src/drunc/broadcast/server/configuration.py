@@ -21,12 +21,13 @@ class KafkaBroadcastSenderConfData:
 class BroadcastSenderConfHandler(ConfHandler):
     def _post_process_oks(self):
         from drunc.broadcast.types import BroadcastTypes
-        self.impl_technology = BroadcastTypes.Kafka
+        self.impl_technology = BroadcastTypes.Kafka if self.data else None
         self.log.info(self.data)
+
     def get_impl_technology(self):
         return self.impl_technology
 
-    def __parse_dict(self, data):
+    def _parse_dict(self, data):
         if data == {}:
             self.impl_technology = None
             return None
