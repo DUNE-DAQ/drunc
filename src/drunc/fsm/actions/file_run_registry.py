@@ -1,6 +1,6 @@
 from drunc.fsm.core import FSMAction
 from drunc.utils.configuration import find_configuration
-from daqconf.consolidate import consolidate_files
+from daqconf.consolidate import consolidate_db
 
 class FileRunRegistry(FSMAction):
     def __init__(self, configuration):
