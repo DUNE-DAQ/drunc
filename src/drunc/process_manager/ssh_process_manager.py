@@ -229,7 +229,7 @@ class SSHProcessManager(ProcessManager):
                     session = meta.session,
                     process = self.process_store[uuid]
                 )
-                self._log.info(f'Command:\nssh \'{" ".join(arguments)}\'')
+                self._log.debug(f'Command:\nssh \'{" ".join(arguments)}\'')
                 break
 
             except Exception as e:

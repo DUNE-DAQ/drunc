@@ -7,18 +7,18 @@ import conffwk
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
 # Process a dal::Variable object, placing key/value pairs in a dictionary
-def process_variables(variables, envDict):
+def collect_variables(variables, envDict):
   for item in variables:
     if item.className() == 'VariableSet':
-      process_variables(item.contains, envDict)
+      collect_variables(item.contains, envDict)
     else:
       if item.className() == 'Variable':
         envDict[item.name] = item.value
 
 # Recursively process all Segments in given Segment extracting Applications
-def process_segment(db, session, segment):
+def collect_apps(db, session, segment):
   import logging
-  log = logging.getLogger('process_segment')
+  log = logging.getLogger('collect_apps')
   # Get default environment from Session
   defenv = {}
 
@@ -29,14 +29,14 @@ def process_segment(db, session, segment):
   else:
     defenv["DUNEDAQ_DB_PATH"] = DB_PATH
 
-  process_variables(session.environment, defenv)
+  collect_variables(session.environment, defenv)
 
   apps = []
 
   # Add controller for this segment to list of apps
   controller = segment.controller
   appenv = defenv
-  process_variables(controller.applicationEnvironment, appenv)
+  collect_variables(controller.applicationEnvironment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
 
@@ -56,7 +56,7 @@ def process_segment(db, session, segment):
     if confmodel.component_disabled(db._obj, session.id, seg.id):
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
 
-    for app in process_segment(db, session, seg):
+    for app in collect_apps(db, session, seg):
       apps.append(app)
 
   # Get all the enabled applications of this segment
@@ -70,11 +70,12 @@ def process_segment(db, session, segment):
 
     if not enabled:
       log.info(f"Ignoring disabled app {app.id}")
+      continue
 
     appenv = defenv
 
     # Override with any app specific environment from Application
-    process_variables(app.applicationEnvironment, appenv)
+    collect_variables(app.applicationEnvironment, appenv)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -90,7 +91,7 @@ def process_segment(db, session, segment):
 
   return apps
 
-def process_services(session):
+def collect_services(session):
   services = []
   for srv in session.services:
     if isinstance(srv, dal.Application) and srv.enabled:
