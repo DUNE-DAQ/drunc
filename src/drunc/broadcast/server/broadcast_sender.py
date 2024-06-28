@@ -24,7 +24,6 @@ class BroadcastSender:
         # TODO
         # self.broadcast_types_loglevels.update(self.configuration.get_raw('broadcast_types_loglevels', {}))
 
-        #self.logger.debug(f'{broadcast_configuration.data}, {self.identifier}')
         self.impl_technology = self.configuration.get_impl_technology()
 
         self.implementation = None
