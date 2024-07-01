@@ -10,21 +10,20 @@ class FileLogbook(FSMAction):
         print(f'{self.conf_dict=}')
         self.file = self.conf_dict['file_name']
 
-    def post_start(self, _input_data, _context, message:str="", **kwargs):
-
+    def post_start(self, _input_data, _context, file_logbook_post:str="", **kwargs):
         with open(self.file, 'a') as f:
             f.write(f"Run {_input_data['run']} started by {_context.actor.get_user_name()} at {now_str()}\n")
-            if message != "":
-                f.write(message)
+            if  file_logbook_post != "":
+                f.write(file_logbook_post)
                 f.write("\n")
 
         return _input_data
 
-    def post_drain_dataflow(self, _input_data, _context, message:str="", **kwargs):
+    def post_drain_dataflow(self, _input_data, _context, file_logbook_post:str="", **kwargs):
         with open(self.file, 'a') as f:
             f.write(f"Current run stopped by {_context.actor.get_user_name()} at {now_str()}\n")
-            if message != "":
-                f.write(message)
+            if file_logbook_post != "":
+                f.write(file_logbook_post)
                 f.write("\n")
 
         return _input_data
