@@ -36,7 +36,7 @@ def collect_apps(db, session, segment):
   # Add controller for this segment to list of apps
   controller = segment.controller
   appenv = defenv
-  collect_variables(controller.applicationEnvironment, appenv)
+  collect_variables(controller.application_environment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
 
@@ -76,7 +76,7 @@ def collect_apps(db, session, segment):
     appenv = defenv
 
     # Override with any app specific environment from Application
-    collect_variables(app.applicationEnvironment, appenv)
+    collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
     log.warn(app.id)
