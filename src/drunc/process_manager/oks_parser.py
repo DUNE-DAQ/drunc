@@ -79,6 +79,8 @@ def collect_apps(db, session, segment):
     collect_variables(app.applicationEnvironment, appenv)
 
     host = app.runs_on.runs_on.id
+    log.warn(app.id)
+    log.warn(app)
     apps.append(
       {
         "name": app.id,
@@ -92,12 +94,47 @@ def collect_apps(db, session, segment):
 
   return apps
 
-def collect_services(session):
-  services = []
-  for srv in session.services:
-    if isinstance(srv, dal.Application) and srv.enabled:
-      services.append((srv.className(), srv.runs_on))
-  return services
+# def collect_services(session):
+#   services = []
+#   for srv in session.services:
+#     if isinstance(srv, dal.Application) and srv.enabled:
+#       services.append((srv.className(), srv.runs_on))
+#   return services
+
+def collect_infra_apps(session):
+  import logging
+  log = logging.getLogger('collect_apps')
+
+  defenv = {}
+
+  import os
+  DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
+  if DB_PATH is None:
+    log.warning("DUNEDAQ_DB_PATH not set in this shell")
+  else:
+    defenv["DUNEDAQ_DB_PATH"] = DB_PATH
+
+  collect_variables(session.environment, defenv)
+
+  appenv = defenv
+
+  apps = []
+
+  for app in session.infrastructure_applications:
+    host = app.runs_on.runs_on.id
+
+    apps.append(
+      {
+        "name": app.id,
+        "type": app.application_name,
+        "args": app.commandline_parameters,
+        "restriction": host,
+        "host": host,
+        "env": appenv
+      }
+    )
+  
+  return apps
 
 
 # Search segment and all contained segments for apps controlled by

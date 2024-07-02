@@ -212,6 +212,7 @@ class SSHProcessManager(ProcessManager):
                     cmd = cmd[:-1]
 
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} &> {log_file}']
+                self._log.warning(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = self.ssh (

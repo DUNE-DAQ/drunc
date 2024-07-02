@@ -26,7 +26,7 @@ class ProcessManagerDriver(GRPCDriver):
 
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
-        from drunc.process_manager.oks_parser import collect_apps
+        from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
         oks_conf = find_configuration(oks_conf)
@@ -37,6 +37,9 @@ class ProcessManagerDriver(GRPCDriver):
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = collect_apps(db, session_dal, session_dal.segment)
+        iapps = collect_infra_apps(session_dal)
+
+        apps += iapps
 
         def get_controller_address(top_controller_conf):
             service_id = top_controller_conf.id + "_control"
@@ -55,6 +58,8 @@ class ProcessManagerDriver(GRPCDriver):
         self._log.debug(f"{apps=}")
         import os
         pwd = os.getcwd()
+
+            
 
         for app in apps:
             host = app['restriction']
@@ -84,12 +89,12 @@ class ProcessManagerDriver(GRPCDriver):
             else:
                 self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
 
-            executable_and_arguments.append(
-                ProcessDescription.ExecAndArgs(
-                    exec = "env",
-                    args = []
-                )
-            )
+            # executable_and_arguments.append(
+            #     ProcessDescription.ExecAndArgs(
+            #         exec = "env",
+            #         args = []
+            #     )
+            # )
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
