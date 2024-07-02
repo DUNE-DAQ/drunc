@@ -169,8 +169,9 @@ def who_is_in_charge(obj:ControllerContext) -> None:
 @click.command('fsm')
 @click.argument('command', type=str)
 @click.argument('arguments', type=str, nargs=-1)
+@click.option('-b', '--batch-mode', type=bool, default=False, help='Allow for a sequence of fsm commands')
 @click.pass_obj
-def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
+def fsm(obj:ControllerContext, command:str, arguments:str, batch_mode=False) -> None:
     from drunc.controller.interface.shell_utils import format_bool, tree_prefix, search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
     from drunc.utils.grpc_utils import unpack_any
     from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse, FSMCommand
@@ -236,6 +237,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
         return result
 
     # Create a new list for all the FSM commands
+    
     if command in ["start_run", "stop_run", "shutdown"]: # FSMsequence is provided
         match command:
         # TODO - make this come from the XML rather than being hard coded.
@@ -259,7 +261,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
 
     # If the last command failed, don't print the summary table
     if result != None:
-        print_execution_report(command, results[-1])
+        print_execution_report(command, result)
     return
 
 @click.command('include')
