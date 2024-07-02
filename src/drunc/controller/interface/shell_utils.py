@@ -146,8 +146,7 @@ class UnhandledArguments(ArgumentException):
         message = f'These arguments are not handled by this command: {arguments_and_values}'
         super(UnhandledArguments, self).__init__(message)
 
-
-def validate_and_format_fsm_arguments(arguments, arguments_desc):
+def validate_and_format_fsm_arguments(arguments:dict, command_arguments):
     from druncschema.controller_pb2 import Argument
     from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from drunc.utils.grpc_utils import pack_to_any
@@ -155,7 +154,7 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
 
     arguments_left = arguments
 
-    for argument_desc in arguments_desc:
+    for argument_desc in command_arguments:
         aname = argument_desc.name
         atype = Argument.Type.Name(argument_desc.type)
         adefa = argument_desc.default_value
@@ -215,8 +214,8 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
 
         out_dict[aname] = pack_to_any(value)
 
-    if arguments_left:
-        raise UnhandledArguments(arguments_left)
+    # if arguments_left:
+    #     raise UnhandledArguments(arguments_left)
 
     return out_dict
 
