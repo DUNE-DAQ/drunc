@@ -55,6 +55,7 @@ def collect_apps(db, session, segment):
   for seg in segment.segments:
     if confmodel.component_disabled(db._obj, session.id, seg.id):
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
+      continue
 
     for app in collect_apps(db, session, seg):
       apps.append(app)
