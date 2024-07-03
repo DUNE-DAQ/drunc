@@ -3,20 +3,39 @@ import sys
 import confmodel
 import conffwk
 
+from typing import List, Dict, Any
+
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
-# Process a dal::Variable object, placing key/value pairs in a dictionary
-def collect_variables(variables, envDict):
+def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
+  """!Process a dal::Variable object, placing key/value pairs in a dictionary
+
+  @param variables  A Variable/VariableSet object
+  @param env_dict   The desitnation dictionary
+
+  """
+
   for item in variables:
     if item.className() == 'VariableSet':
-      collect_variables(item.contains, envDict)
+      collect_variables(item.contains, env_dict)
     else:
       if item.className() == 'Variable':
-        envDict[item.name] = item.value
+        env_dict[item.name] = item.value
+
 
 # Recursively process all Segments in given Segment extracting Applications
-def collect_apps(db, session, segment):
+def collect_apps(db, session, segment) -> List[Dict]:
+  """
+  ! Recustively collect (daq) application belonging to segment and its subsegments
+
+  @param session  The session the segment belongs to
+  @param segment  Segment to collect applications from
+
+  @return The list of dictionaries holding application attributs
+
+  """
+
   import logging
   log = logging.getLogger('collect_apps')
   # Get default environment from Session
@@ -94,14 +113,15 @@ def collect_apps(db, session, segment):
 
   return apps
 
-# def collect_services(session):
-#   services = []
-#   for srv in session.services:
-#     if isinstance(srv, dal.Application) and srv.enabled:
-#       services.append((srv.className(), srv.runs_on))
-#   return services
 
-def collect_infra_apps(session):
+def collect_infra_apps(session) -> List[Dict]:
+  """! Collect infrastructure applications 
+
+  @param session  The session
+
+  @return The list of dictionaries holding application attributs
+  
+  """
   import logging
   log = logging.getLogger('collect_apps')
 
@@ -116,13 +136,21 @@ def collect_infra_apps(session):
 
   collect_variables(session.environment, defenv)
 
-  appenv = defenv
-
   apps = []
 
   for app in session.infrastructure_applications:
-    host = app.runs_on.runs_on.id
+    # Skip applications that do not define an application name
+    # i.e. treat them as "virtual applications"
+    # FIXME: modify schema to explicitly introduce non-runnable applications
+    if not app.application_name:
+      continue
 
+
+    appenv = defenv.copy()
+    collect_variables(app.application_environment, appenv)
+
+
+    host = app.runs_on.runs_on.id
     apps.append(
       {
         "name": app.id,

@@ -37,9 +37,9 @@ class ProcessManagerDriver(GRPCDriver):
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = collect_apps(db, session_dal, session_dal.segment)
-        iapps = collect_infra_apps(session_dal)
-
-        apps += iapps
+        infra_apps = collect_infra_apps(session_dal)
+        
+        apps += infra_apps
 
         def get_controller_address(top_controller_conf):
             service_id = top_controller_conf.id + "_control"
@@ -58,8 +58,6 @@ class ProcessManagerDriver(GRPCDriver):
         self._log.debug(f"{apps=}")
         import os
         pwd = os.getcwd()
-
-            
 
         for app in apps:
             host = app['restriction']

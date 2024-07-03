@@ -196,11 +196,16 @@ class SSHProcessManager(ProcessManager):
                 from drunc.utils.utils import now_str
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
-                cmd = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
-                if cmd == '':
-                    cmd = f'cd {boot_request.process_description.process_execution_directory} ; '
-                else: 
-                    cmd += f'; cd {boot_request.process_description.process_execution_directory} ;'
+                
+                # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
+                cmd ='trap "kill -SIGTERM -- -$$" EXIT;'
+
+                # Add exported environment variables
+                cmd_env = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
+                if cmd_env:
+                    cmd += cmd_env+';'
+
+                cmd += f'cd {boot_request.process_description.process_execution_directory} ; '
 
                 for exe_arg in boot_request.process_description.executable_and_arguments:
                     cmd += exe_arg.exec
@@ -212,7 +217,7 @@ class SSHProcessManager(ProcessManager):
                     cmd = cmd[:-1]
 
                 arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} &> {log_file}']
-                self._log.warning(f"{arguments}")
+                self._log.debug(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = self.ssh (
