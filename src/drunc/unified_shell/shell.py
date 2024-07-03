@@ -22,6 +22,21 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     ready_event = mp.Event()
     port = mp.Value('i', 0)
 
+    # Check if process_manager_configuration is a packaged config
+    from urllib.parse import urlparse
+    if urlparse(process_manager_configuration).scheme == "":
+        # Make the configuration name finding easier
+        if process_manager_configuration.find(".json") == -1:
+            process_manager_configuration+=".json"
+
+        # Check if the configuration is packaged. If it is, use it
+        from importlib.resources import path
+        from os import listdir
+        if process_manager_configuration in listdir(path('drunc.data.process_manager', '')):
+            process_manager_configuration = "file://" + str(path('drunc.data.process_manager', '')) + '/' + process_manager_configuration
+
+        # Exception not raised here as CLI_to_ConfTypes handles it.
+
     ctx.obj.pm_process = mp.Process(
         target = run_pm,
         kwargs = {
