@@ -1,0 +1,16 @@
+{
+    "type": "ssh",
+    "name": "SSHProcessManager",
+    "command_address": "localhost:0",
+    "kill_timeout": 0.5,
+
+    "authoriser": {
+        "type": "dummy"
+    },
+
+    "broadcaster": {
+        "type": "kafka",
+        "kafka_address": "monkafka.cern.ch:30092",
+        "publish_timeout": 2
+    }
+}
