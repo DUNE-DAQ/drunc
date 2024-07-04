@@ -41,7 +41,7 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
             process_manager_configuration = 'file://' + str(path('drunc.data.process_manager', '')) + '/' + process_manager_configuration
         else:
             from drunc.exceptions import DruncShellException
-            raise DruncShellException(f"Configuration {os.path.splitext(process_manager_configuration)[0]} is not found in the package. The packaged configurations are {[os.path.splitext(configuration)[0] for configuration in packaged_configurations]}")
+            raise DruncShellException(f"Configuration {process_manager_configuration} is not found in the package. The packaged configurations are {packaged_configurations}")
 
     ctx.obj.pm_process = mp.Process(
         target = run_pm,
