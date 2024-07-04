@@ -98,8 +98,6 @@ def collect_apps(db, session, segment) -> List[Dict]:
     collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
-    log.warn(app.id)
-    log.warn(app)
     apps.append(
       {
         "name": app.id,
@@ -123,7 +121,7 @@ def collect_infra_apps(session) -> List[Dict]:
   
   """
   import logging
-  log = logging.getLogger('collect_apps')
+  log = logging.getLogger('collect_infra_apps')
 
   defenv = {}
 
