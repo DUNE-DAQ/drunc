@@ -3,20 +3,39 @@ import sys
 import confmodel
 import conffwk
 
+from typing import List, Dict, Any
+
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
-# Process a dal::Variable object, placing key/value pairs in a dictionary
-def collect_variables(variables, envDict):
+def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
+  """!Process a dal::Variable object, placing key/value pairs in a dictionary
+
+  @param variables  A Variable/VariableSet object
+  @param env_dict   The desitnation dictionary
+
+  """
+
   for item in variables:
     if item.className() == 'VariableSet':
-      collect_variables(item.contains, envDict)
+      collect_variables(item.contains, env_dict)
     else:
       if item.className() == 'Variable':
-        envDict[item.name] = item.value
+        env_dict[item.name] = item.value
+
 
 # Recursively process all Segments in given Segment extracting Applications
-def collect_apps(db, session, segment):
+def collect_apps(db, session, segment) -> List[Dict]:
+  """
+  ! Recustively collect (daq) application belonging to segment and its subsegments
+
+  @param session  The session the segment belongs to
+  @param segment  Segment to collect applications from
+
+  @return The list of dictionaries holding application attributs
+
+  """
+
   import logging
   log = logging.getLogger('collect_apps')
   # Get default environment from Session
@@ -36,7 +55,7 @@ def collect_apps(db, session, segment):
   # Add controller for this segment to list of apps
   controller = segment.controller
   appenv = defenv
-  collect_variables(controller.applicationEnvironment, appenv)
+  collect_variables(controller.application_environment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
 
@@ -76,7 +95,7 @@ def collect_apps(db, session, segment):
     appenv = defenv
 
     # Override with any app specific environment from Application
-    collect_variables(app.applicationEnvironment, appenv)
+    collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -92,12 +111,56 @@ def collect_apps(db, session, segment):
 
   return apps
 
-def collect_services(session):
-  services = []
-  for srv in session.services:
-    if isinstance(srv, dal.Application) and srv.enabled:
-      services.append((srv.className(), srv.runs_on))
-  return services
+
+def collect_infra_apps(session) -> List[Dict]:
+  """! Collect infrastructure applications 
+
+  @param session  The session
+
+  @return The list of dictionaries holding application attributs
+  
+  """
+  import logging
+  log = logging.getLogger('collect_infra_apps')
+
+  defenv = {}
+
+  import os
+  DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
+  if DB_PATH is None:
+    log.warning("DUNEDAQ_DB_PATH not set in this shell")
+  else:
+    defenv["DUNEDAQ_DB_PATH"] = DB_PATH
+
+  collect_variables(session.environment, defenv)
+
+  apps = []
+
+  for app in session.infrastructure_applications:
+    # Skip applications that do not define an application name
+    # i.e. treat them as "virtual applications"
+    # FIXME: modify schema to explicitly introduce non-runnable applications
+    if not app.application_name:
+      continue
+
+
+    appenv = defenv.copy()
+    collect_variables(app.application_environment, appenv)
+
+
+    host = app.runs_on.runs_on.id
+    apps.append(
+      {
+        "name": app.id,
+        "type": app.application_name,
+        "args": app.commandline_parameters,
+        "restriction": host,
+        "host": host,
+        "env": appenv
+      }
+    )
+  
+  return apps
 
 
 # Search segment and all contained segments for apps controlled by
