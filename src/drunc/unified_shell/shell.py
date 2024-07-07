@@ -8,8 +8,9 @@ import pathlib
 @click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.argument('process-manager-configuration', type=str)# callback=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path, resolve_path=True))
+@click.option('-d','--debug', is_flag=True, default=False)
 @click.pass_context
-def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None:
+def unified_shell(ctx, process_manager_configuration:str, log_level:str, debug:bool=False) -> None:
 
     from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
     update_log_level(log_level)

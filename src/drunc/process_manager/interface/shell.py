@@ -7,8 +7,14 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,validate_command_faci
 @click_shell.shell(prompt='drunc-process-manager > ', chain=True, context_settings=CONTEXT_SETTINGS, hist_file=os.path.expanduser('~')+'/.drunc-pm-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.argument('process-manager-address', type=str, callback=validate_command_facility)
+@click.option('-d','--debug', is_flag=True, default=False)
 @click.pass_context
-def process_manager_shell(ctx, process_manager_address:str, log_level:str) -> None:
+def process_manager_shell(ctx, process_manager_address:str, log_level:str, debug:bool=False) -> None: 
+    
+    if debug: #Maybe too much to have this as a seperate flag
+        log_level = 'DEBUG'
+    print(log_level)
+
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
 
@@ -20,7 +26,7 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str) -> No
 
     try:
         import asyncio
-        desc = asyncio.get_event_loop().run_until_complete(
+        desc = asyncio.get_event_loop().run_ukntil_complete(
             ctx.obj.get_driver('process_manager').describe()
         )
     except ServerUnreachable as e:
