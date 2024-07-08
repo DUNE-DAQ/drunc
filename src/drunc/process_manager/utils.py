@@ -71,6 +71,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('session')
     t.add_column('friendly name')
     t.add_column('user')
+    t.add_column('host')
     t.add_column('uuid')
     t.add_column('alive')
     t.add_column('exit-code')
@@ -93,7 +94,9 @@ def tabulate_process_instance_list(pil, title, long=False):
     except TypeError:
         for result in pil.values:
             m = result.process_description.metadata
-            row = [m.session, m.name, m.user, result.uuid.uuid]
+            for env_var in result.process_description.env.key:
+                print(env_var)
+            row = [m.session, m.name, m.user,"localhost" ,result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
 
