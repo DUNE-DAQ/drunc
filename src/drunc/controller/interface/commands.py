@@ -169,18 +169,14 @@ def who_is_in_charge(obj:ControllerContext) -> None:
 @click.command('fsm')
 @click.argument('command', type=str)
 @click.argument('arguments', type=str, nargs=-1)
-@click.option('-b', '--batch-mode', type=bool, default=False, help='Allow for a sequence of fsm commands')
 @click.pass_obj
-def fsm(obj:ControllerContext, command:str, arguments:str, batch_mode=False) -> None:
+def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
     from drunc.controller.interface.shell_utils import format_bool, tree_prefix, search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
     from drunc.utils.grpc_utils import unpack_any
-    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse, FSMCommand
-    from rich.table import Table
-    
-    if len(arguments) % 2 != 0:
-        raise click.BadParameter('Arguments are pairs of key-value!')
-
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse, FSMCommand, FSMCommandDescription
     from druncschema.request_response_pb2 import ResponseFlag
+    from rich.table import Table
+
     def bool_to_success(flag_message, FSM):
         flag = False
         if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
@@ -208,60 +204,104 @@ def fsm(obj:ControllerContext, command:str, arguments:str, batch_mode=False) -> 
         obj.print(t)
         return
 
-    def construct_send_FSM_command(obj:ControllerContext, command:str, arguments:str = ""):
-        desc = obj.get_driver('controller').describe_fsm().data # desc is [FSMCommandDescription, ...] for each possible transition from the current FSMconfiguration.state
-        command_desc = search_fsm_command(command, desc.commands) # Search the commands retrieved by describe_fsm().data, return a grpc::FSMCommandDescription of command
-        if command_desc is None:
-            obj.error(f'Command "{command}" does not exist, or is not accessible right now')
-            return # TODO change the type of exception
+    def print_status_summary(obj:ControllerContext) -> None:
+        status = obj.get_driver('controller').get_status().data.state
+        available_actions = [command.name for command in obj.get_driver('controller').describe_fsm().data.commands]
+        obj.print(f"Current FSM status is [green]{status}[/green]. Available transitions are [green]{' '.join(available_actions)}[/green]")
+        return
 
+    def filter_sequence_commands(arguments:dict, command_desc:FSMCommandDescription) -> tuple[dict, dict]:
+        if not arguments:
+            return None, None
+        argument_desc = command_desc.arguments
+        cmd_argument_names = [argument.name for argument in argument_desc]
+        cmd_arguments = {}
+        for argument in list(arguments):
+            if argument in cmd_argument_names:
+                cmd_arguments[argument] = arguments[argument]
+                del arguments[argument]
+
+        from drunc.controller.interface.shell_utils import validate_and_format_fsm_arguments
+        #cmd_arguments = validate_and_format_fsm_arguments(cmd_arguments, argument_desc)
+        return arguments, cmd_arguments
+
+    def dict_arguments(arguments:str) -> dict:
+        if len(arguments) % 2 != 0:
+            raise click.BadParameter('Arguments are pairs of key-value!')
         keys = arguments[::2]
         values = arguments[1::2]
         arguments_dict = {keys[i]:values[i] for i in range(len(keys))}
+        return arguments_dict
+
+    def construct_FSM_command(obj:ControllerContext, command:str, arguments:dict, is_sequence:bool) -> tuple[FSMCommand, dict]:
+        desc = obj.get_driver('controller').describe_fsm().data # FSMCommandsDescription
+        command_desc = search_fsm_command(obj, command, desc.commands, is_sequence) # FSMCommandDescription
+
+        # Catch for sequences
+        if command_desc == None:
+            return None, None
+
+        # Construct the FSMCommand
+        from druncschema.controller_pb2 import FSMCommand
+
+        # Allocate the arguments to the correct commands
+        if is_sequence:
+            arguments, cmd_arguments = filter_sequence_commands(arguments, command_desc)
+        else:
+            cmd_arguments = arguments
+        cmd = FSMCommand( 
+            command_name = command, 
+            arguments = validate_and_format_fsm_arguments(cmd_arguments, command_desc.arguments)
+        )
+        return cmd, arguments
+
+    def send_FSM_command(obj:ControllerContext, command:FSMCommand) -> FSMCommandResponse:
         result = None
         try:
-            formated_args = validate_and_format_fsm_arguments(arguments_dict, command_desc.arguments)
-            data = FSMCommand(
-                command_name = command,
-                arguments = formated_args,
-            )
-            result = obj.get_driver('controller').execute_fsm_command(
-                arguments = data,
-            )
-        except ArgumentException as ae:
-            obj.print(str(ae))
-            return # TODO propagate this through
+            result = obj.get_driver('controller').execute_fsm_command(command)
+        except Exception as e: # TODO narrow this exception down
+            raise e
 
         print_execution_report(command, result)
         if not result: return
         return result
 
     # Create a new list for all the FSM commands
-    
+    arguments = dict_arguments(arguments)
     if command in ["start_run", "stop_run", "shutdown"]: # FSMsequence is provided
+        is_sequence = True
         match command:
-        # TODO - make this come from the XML rather than being hard coded.
             case "start_run":
-                FSMtransitions = ["conf", "start", "enable_triggers"]
+                commands = ["conf", "start", "enable_triggers"]
             case "stop_run":
-                FSMtransitions = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"]
+                commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"]
             case "shutdown":
-                FSMtransitions = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]
+                commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]
     elif command in ["conf", "start", "enable_triggers", "disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]: # FSMtransition is provided
-        FSMtransitions = [command]
+        is_sequence = False
+        commands = [command]
     else:
-        raise click.BadParameter('Unrecognised FSMtransition.')
+        raise click.BadParameter('Unrecognised FSMcommand.')
+
+    result = None
 
     # Execute all the FSM commands
-    for FSMtransition in FSMtransitions:
-        result = construct_send_FSM_command(obj, FSMtransition, arguments)
+    for command_name in commands:
+        grpc_command, arguments = construct_FSM_command(obj, command_name, arguments, is_sequence)
+        if grpc_command == None and arguments == None and is_sequence:
+            obj.print(f"{command_name} is not possible in current state, attempting next transition.")
+            continue
+
+        result = send_FSM_command(obj, grpc_command)
         if (result == None):
-            obj.print(f"Remaining commands not executed. Last command attempted: fsm {FSMtransition}")
+            obj.print(f"Transition {FSMtransition} did not execute")
             break
 
-    # If the last command failed, don't print the summary table
-    if result != None:
+    # If the last command failed and a sequence was used, don't print the summary table
+    if result != None and len(commands) > 1:
         print_execution_report(command, result)
+
+    print_status_summary(obj)
     return
 
 @click.command('include')

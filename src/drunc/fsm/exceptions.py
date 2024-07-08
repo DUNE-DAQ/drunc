@@ -40,6 +40,12 @@ class MissingArgument(FSMException):
         self.message = f"The mandatory argument \"{param}\" was not provided to the transition {name}"
         super().__init__(self.message)
 
+class MissingArgumentValue(FSMException):
+    '''Raised when a mandatory argument is not provided for a transition'''
+    def __init__(self):
+        self.message = f"A passed argument does not have an associated value, arguments are key-value pairs."
+        super().__init__(self.message)
+
 class DoubleArgument(FSMException):
     '''Raised when an argument is provided more than once'''
     def __init__(self, txt):
