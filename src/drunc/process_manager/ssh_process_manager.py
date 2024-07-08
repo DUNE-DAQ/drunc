@@ -198,7 +198,10 @@ class SSHProcessManager(ProcessManager):
                 env_var = boot_request.process_description.env
                 
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
-                cmd ='trap "kill -SIGTERM -- -$$" EXIT;'
+                cmd =f'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
+                # cmd +='trap "kill -SIGTERM -- -$$" EXIT;'
+                cmd +='trap "pkill -SIGTERM -g $$" EXIT;'
+                # cmd = ''
 
                 # Add exported environment variables
                 cmd_env = ';'.join([ f"export {n}=\"{v}\"" for n,v in env_var.items()])
