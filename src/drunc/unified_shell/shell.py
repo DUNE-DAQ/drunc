@@ -24,18 +24,24 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
 
     # Check if process_manager_configuration is a packaged config
     from urllib.parse import urlparse
-    if urlparse(process_manager_configuration).scheme == "":
-        # Make the configuration name finding easier
-        if process_manager_configuration.find(".json") == -1:
-            process_manager_configuration+=".json"
-
-        # Check if the configuration is packaged. If it is, use it
+    import os
+    ## Make the configuration name finding easier
+    if os.path.splitext(process_manager_configuration)[1] != '.json':
+        process_manager_configuration += '.json'
+    ## If no scheme is provided, assume that it is an internal packaged configuration.
+    ## First check it's not an existing external file
+    if os.path.isfile(process_manager_configuration):
+        if urlparse(process_manager_configuration).scheme == '':
+            process_manager_configuration = 'file://' + process_manager_configuration
+    else:
+        ## Check if the file is in the list of packaged configurations
         from importlib.resources import path
-        from os import listdir
-        if process_manager_configuration in listdir(path('drunc.data.process_manager', '')):
-            process_manager_configuration = "file://" + str(path('drunc.data.process_manager', '')) + '/' + process_manager_configuration
-
-        # Exception not raised here as CLI_to_ConfTypes handles it.
+        packaged_configurations = os.listdir(path('drunc.data.process_manager', ''))
+        if process_manager_configuration in packaged_configurations:
+            process_manager_configuration = 'file://' + str(path('drunc.data.process_manager', '')) + '/' + process_manager_configuration
+        else:
+            from drunc.exceptions import DruncShellException
+            raise DruncShellException(f"Configuration {process_manager_configuration} is not found in the package. The packaged configurations are {packaged_configurations}")
 
     ctx.obj.pm_process = mp.Process(
         target = run_pm,
