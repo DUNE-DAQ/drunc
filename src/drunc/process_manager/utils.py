@@ -77,15 +77,17 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('exit-code')
     if long:
         t.add_column('executable')
-
     tree_str = make_tree(pil, long)
     try:
         for result, line in zip(pil.values, tree_str):
             m = result.process_description.metadata
-            row = [m.session, line, m.user, result.uuid.uuid]
+            host = None
+            for env_var, env_val in result.process_description.env.items():
+                if env_var == "CONNECTION_SERVER":
+                    host = env_val
+            row = [m.session, line, m.user, host, result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-
             row += [alive, f'{result.return_code}']
             if long:
                 executables = [e.exec for e in result.process_description.executable_and_arguments]
@@ -94,9 +96,11 @@ def tabulate_process_instance_list(pil, title, long=False):
     except TypeError:
         for result in pil.values:
             m = result.process_description.metadata
-            for env_var in result.process_description.env.key:
-                print(env_var)
-            row = [m.session, m.name, m.user,"localhost" ,result.uuid.uuid]
+            host = None
+            for env_var, env_val in result.process_description.env.items():
+                if env_var == "CONNECTION_SERVER":
+                    host = env_val
+            row = [m.session, m.name, m.user, host ,result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
 
