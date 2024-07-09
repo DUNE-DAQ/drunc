@@ -110,11 +110,17 @@ def controller_setup(ctx, controller_address):
 
 
 
-def search_fsm_command(command_name, command_list):
+from drunc.controller.interface.context import ControllerContext
+from druncschema.controller_pb2 import FSMCommand
+def search_fsm_command(obj:ControllerContext, command_name:str, command_list:list[FSMCommand], is_sequence:bool=False):
     for command in command_list:
         if command_name == command.name:
             return command
-    return None
+    if is_sequence:
+        return None
+    else:
+        from drunc.fsm.exceptions import InvalidTransition
+        raise InvalidTransition(command_name, obj.get_driver('controller').get_status().data.state)
 
 
 from drunc.exceptions import DruncShellException
@@ -146,8 +152,8 @@ class UnhandledArguments(ArgumentException):
         message = f'These arguments are not handled by this command: {arguments_and_values}'
         super(UnhandledArguments, self).__init__(message)
 
-def validate_and_format_fsm_arguments(arguments:dict, command_arguments):
-    from druncschema.controller_pb2 import Argument
+from druncschema.controller_pb2 import Argument
+def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Argument]):
     from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from drunc.utils.grpc_utils import pack_to_any
     out_dict = {}
