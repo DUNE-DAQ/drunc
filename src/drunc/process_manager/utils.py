@@ -81,10 +81,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     try:
         for result, line in zip(pil.values, tree_str):
             m = result.process_description.metadata
-            host = None
-            for env_var, env_val in result.process_description.env.items():
-                if env_var == "CONNECTION_SERVER":
-                    host = env_val
+            host = result.process_restriction.allowed_hosts[0] #temporary whilst we figure out a way of getting the actual hosts by asking the precoesses themselves
             row = [m.session, line, m.user, host, result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
@@ -96,10 +93,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     except TypeError:
         for result in pil.values:
             m = result.process_description.metadata
-            host = None
-            for env_var, env_val in result.process_description.env.items():
-                if env_var == "CONNECTION_SERVER":
-                    host = env_val
+            host = result.process_restriction.allowed_hosts[0]
             row = [m.session, m.name, m.user, host ,result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
