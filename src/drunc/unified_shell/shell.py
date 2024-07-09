@@ -12,6 +12,9 @@ import pathlib
 @click.pass_context
 def unified_shell(ctx, process_manager_configuration:str, log_level:str, debug:bool=False) -> None:
 
+    if debug:
+        log_level = 'DEBUG'
+
     from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
     update_log_level(log_level)
     from logging import getLogger

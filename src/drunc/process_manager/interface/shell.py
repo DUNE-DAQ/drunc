@@ -11,9 +11,8 @@ from drunc.utils.utils import CONTEXT_SETTINGS, log_levels,validate_command_faci
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address:str, log_level:str, debug:bool=False) -> None: 
     
-    if debug: #Maybe too much to have this as a seperate flag
+    if debug:
         log_level = 'DEBUG'
-    print(log_level)
 
     from drunc.utils.utils import update_log_level
     update_log_level(log_level)
@@ -26,7 +25,7 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str, debug
 
     try:
         import asyncio
-        desc = asyncio.get_event_loop().run_ukntil_complete(
+        desc = asyncio.get_event_loop().run_until_complete(
             ctx.obj.get_driver('process_manager').describe()
         )
     except ServerUnreachable as e:
