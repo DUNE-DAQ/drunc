@@ -64,6 +64,7 @@ def make_tree(pil, long=False):
     tree_lines = flatten_tree(session_name)
     return tree_lines
 
+
 def tabulate_process_instance_list(pil, title, long=False):
     from rich.table import Table
 
@@ -81,7 +82,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     try:
         for result, line in zip(pil.values, tree_str):
             m = result.process_description.metadata
-            host = result.process_restriction.allowed_hosts[0] #temporary whilst we figure out a way of getting the actual hosts by asking the precoesses themselves
+            host = m.hostname.split('@')[1]
             row = [m.session, line, m.user, host, result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
@@ -93,7 +94,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     except TypeError:
         for result in pil.values:
             m = result.process_description.metadata
-            host = result.process_restriction.allowed_hosts[0]
+            host = m.hostname.split('@')[1]
             row = [m.session, m.name, m.user, host ,result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'

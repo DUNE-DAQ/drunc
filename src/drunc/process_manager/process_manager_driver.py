@@ -111,6 +111,7 @@ class ProcessManagerDriver(GRPCDriver):
                         user = user,
                         session = session,
                         name = name,
+                        hostname = ""
                     ),
                     executable_and_arguments = executable_and_arguments,
                     env = env,

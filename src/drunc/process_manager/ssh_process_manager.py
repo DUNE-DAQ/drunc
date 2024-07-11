@@ -188,6 +188,8 @@ class SSHProcessManager(ProcessManager):
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
+        user_host = ""
+
         for host in boot_request.process_restriction.allowed_hosts:
             try:
                 user = boot_request.process_description.metadata.user
@@ -246,6 +248,8 @@ class SSHProcessManager(ProcessManager):
                 print(f'Couldn\'t start on host {host}, reason:\n{str(e)}')
                 print(f'\nTrying on a different host')
                 continue
+        ## Saving the host to the metadata
+        self.boot_request[uuid].process_description.metadata.hostname = user_host
 
         self._log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
         pd = ProcessDescription()
@@ -302,13 +306,11 @@ class SSHProcessManager(ProcessManager):
                 )
                 ret += [pi]
                 continue
-
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[uuid].process_description)
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[uuid].process_restriction)
             pu = ProcessUUID(uuid=uuid)
-
             return_code = None
             if not self.process_store[uuid].is_alive():
                 try:
@@ -405,8 +407,7 @@ class SSHProcessManager(ProcessManager):
                     process_restriction = pr,
                     status_code = ProcessInstance.StatusCode.DEAD,
                     return_code = return_code,
-                    uuid = pu,
-
+                    uuid = pu
                 )
             ]
             del self.process_store[uuid]
