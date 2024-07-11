@@ -188,12 +188,13 @@ class SSHProcessManager(ProcessManager):
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        user_host = ""
+        hostname = ""
 
         for host in boot_request.process_restriction.allowed_hosts:
             try:
                 user = boot_request.process_description.metadata.user
                 user_host = host if not user else f'{user}@{host}'
+                hostname = host
 
                 from drunc.utils.utils import now_str
                 log_file = boot_request.process_description.process_logs_path
@@ -249,7 +250,7 @@ class SSHProcessManager(ProcessManager):
                 print(f'\nTrying on a different host')
                 continue
         ## Saving the host to the metadata
-        self.boot_request[uuid].process_description.metadata.hostname = user_host
+        self.boot_request[uuid].process_description.metadata.hostname = hostname
 
         self._log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
         pd = ProcessDescription()
