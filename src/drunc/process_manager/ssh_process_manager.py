@@ -200,7 +200,7 @@ class SSHProcessManager(ProcessManager):
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
                 cmd =f'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
                 # cmd +='trap "kill -SIGTERM -- -$$" EXIT;'
-                cmd +='trap "pkill -SIGTERM -g $$" EXIT;'
+                cmd +='trap "pkill -SIGINT -g $$" EXIT;'
                 # cmd = ''
 
                 # Add exported environment variables
