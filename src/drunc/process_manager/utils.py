@@ -52,7 +52,7 @@ def make_tree(pil, long=False):
         m = result.process_description.metadata
         env = result.process_description.executable_and_arguments
         for execu in env:
-            if execu.exec == "drunc-controller":
+            if execu.exec == "drunc-controller" or execu.exec == "gunicorn":
                 if not session_trees:
                     session_name = Tree("") 
                     session_trees = session_name.add(m.name)
