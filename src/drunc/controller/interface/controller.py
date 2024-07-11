@@ -76,7 +76,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         os.kill(os.getpid(), signal.SIGQUIT)
 
 
-    terminate_signals = [signal.SIGHUP, signal.SIGTERM, signal.SIGPIPE]
+    terminate_signals = [signal.SIGHUP, signal.SIGPIPE]
     # terminate_signals = set(signal.Signals) - set([signal.SIGKILL, signal.SIGSTOP])
     for sig in terminate_signals:
         signal.signal(sig, shutdown)
