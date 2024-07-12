@@ -98,7 +98,6 @@ class ProcessManagerDriver(GRPCDriver):
                 exec=exe,
                 args=args))
 
-
             from drunc.utils.utils import now_str
             if override_logs:
                 log_path = f'{pwd}/log_{user}_{session}_{name}.log'
@@ -111,6 +110,7 @@ class ProcessManagerDriver(GRPCDriver):
                         user = user,
                         session = session,
                         name = name,
+                        hostname = ""
                     ),
                     executable_and_arguments = executable_and_arguments,
                     env = env,
@@ -157,6 +157,7 @@ class ProcessManagerDriver(GRPCDriver):
                         user = user,
                         session = session_name,
                         name = "dummy_boot_"+str(process),
+                        hostname = ""
                     ),
                     executable_and_arguments = executable_and_arguments,
                     env = {},
