@@ -10,18 +10,6 @@ import pathlib
 @click.argument('process-manager-configuration', type=str)# callback=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path, resolve_path=True))
 @click.pass_context
 def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None:
-
-    from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
-    update_log_level(log_level)
-    from logging import getLogger
-    logger = getLogger('unified_shell')
-    logger.debug(pid_info_str())
-
-    from drunc.process_manager.interface.process_manager import run_pm
-    import multiprocessing as mp
-    ready_event = mp.Event()
-    port = mp.Value('i', 0)
-
     # Check if process_manager_configuration is a packaged config
     from urllib.parse import urlparse
     import os
@@ -40,8 +28,22 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
         if process_manager_configuration in packaged_configurations:
             process_manager_configuration = 'file://' + str(path('drunc.data.process_manager', '')) + '/' + process_manager_configuration
         else:
-            from drunc.exceptions import DruncShellException
-            raise DruncShellException(f"Configuration {process_manager_configuration} is not found in the package. The packaged configurations are {packaged_configurations}")
+            from rich import print as rprint
+            rprint(f"Configuration [red]{process_manager_configuration}[/red] not found, check filename spelling or use a packaged configuration as one of [green]{packaged_configurations}[/green]")
+            exit()
+            #from drunc.exceptions import DruncShellException
+            #raise DruncShellException(f"Configuration {process_manager_configuration} is not found in the package. The packaged configurations are {packaged_configurations}")
+
+    from drunc.utils.utils import update_log_level, pid_info_str, ignore_sigint_sighandler
+    update_log_level(log_level)
+    from logging import getLogger
+    logger = getLogger('unified_shell')
+    logger.debug(pid_info_str())
+
+    from drunc.process_manager.interface.process_manager import run_pm
+    import multiprocessing as mp
+    ready_event = mp.Event()
+    port = mp.Value('i', 0)
 
     ctx.obj.pm_process = mp.Process(
         target = run_pm,
