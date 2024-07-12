@@ -97,8 +97,8 @@ def controller_setup(ctx, controller_address):
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             ctx.info('You are in control.')
-            from rich import print as rprint
-            rprint(f"Current FSM status is [green]initial[/green]. Available transitions are [green]conf terminate[/green]")
+            from rich import print
+            print(f"Current FSM status is [green]initial[/green]. Available transitions are [green]conf terminate[/green]")
             ctx.took_control = True
         else:
             ctx.warn(f'You are NOT in control.')
