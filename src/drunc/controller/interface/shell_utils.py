@@ -1,3 +1,4 @@
+from rich import print
 
 def controller_cleanup_wrapper(ctx):
     def controller_cleanup():
@@ -97,7 +98,6 @@ def controller_setup(ctx, controller_address):
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             ctx.info('You are in control.')
-            from rich import print
             print(f"Current FSM status is [green]initial[/green]. Available transitions are [green]conf terminate[/green]")
             ctx.took_control = True
         else:
