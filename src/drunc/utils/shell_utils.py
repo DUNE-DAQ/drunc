@@ -146,7 +146,7 @@ class GRPCDriver:
 
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
-                stack_txt = 'Stacktrace [bold red]on remote server!\n'
+                stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n'
                 last_one = ""
                 for l in stack.text:
                     stack_txt += l+"\n"
