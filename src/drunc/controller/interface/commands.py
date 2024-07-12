@@ -262,7 +262,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
         except Exception as e: # TODO narrow this exception down
             raise e
 
-        print_execution_report(command, result)
+        print_execution_report(command.command_name, result)
         if not result: return
         return result
 
