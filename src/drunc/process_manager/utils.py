@@ -29,40 +29,21 @@ def generate_process_query(f, at_least_one:bool, all_processes_by_default:bool=F
     from functools import update_wrapper
     return update_wrapper(new_func, f)
 
-def flatten_tree(tree, prefix=''):
+def make_tree(pil, long=False):    
     lines = []
-
-    try:
-        for node in tree.children:
-            lines.append(f"{prefix}{node.label}")
-            lines.extend(flatten_tree(node, prefix + "  "))
-        return lines
-    except AttributeError:
-        pass
-        
-
-def make_tree(pil, long=False):
-    from rich.tree import Tree
-
-    session_name = None
-    session_trees = None
-    last_drunc_controller = None
+    drunc_controller_seen = False 
 
     for result in pil.values:
         m = result.process_description.metadata
-        env = result.process_description.executable_and_arguments
-        for execu in env:
-            if execu.exec == "drunc-controller" or execu.exec == "gunicorn":
-                if not session_trees:
-                    session_name = Tree("") 
-                    session_trees = session_name.add(m.name)
-                    last_drunc_controller = session_trees
-                else:
-                    last_drunc_controller = session_trees.add(m.name)
-            elif execu.exec == "daq_application" and last_drunc_controller:
-                last_drunc_controller.add(m.name)
-    tree_lines = flatten_tree(session_name)
-    return tree_lines
+        if m.hierarchy == "1":
+            if not drunc_controller_seen:
+                lines.append(m.name)
+                drunc_controller_seen = True
+            else:
+                lines.append("  " + m.name)
+        elif m.hierarchy == "2":
+            lines.append("    " + m.name)
+    return lines
 
 
 def tabulate_process_instance_list(pil, title, long=False):

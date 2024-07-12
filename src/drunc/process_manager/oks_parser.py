@@ -66,7 +66,8 @@ def collect_apps(db, session, segment) -> List[Dict]:
       "args": get_cla(db._obj, session.id, controller),
       "restriction": host,
       "host": host,
-      "env": appenv
+      "env": appenv,
+      "hierarchy": "1"
     }
   )
 
@@ -105,7 +106,8 @@ def collect_apps(db, session, segment) -> List[Dict]:
         "args": get_cla(db._obj, session.id, app),
         "restriction": host,
         "host": host,
-        "env": appenv
+        "env": appenv,
+        "hierarchy": "2"
       }
     )
 
@@ -156,7 +158,8 @@ def collect_infra_apps(session) -> List[Dict]:
         "args": app.commandline_parameters,
         "restriction": host,
         "host": host,
-        "env": appenv
+        "env": appenv,
+        "hierarchy": "1"
       }
     )
   

@@ -66,6 +66,7 @@ class ProcessManagerDriver(GRPCDriver):
             args = app['args']
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            hierarchy = app['hierarchy']
 
             self._log.debug(f"{app=}")
 
@@ -110,7 +111,8 @@ class ProcessManagerDriver(GRPCDriver):
                         user = user,
                         session = session,
                         name = name,
-                        hostname = ""
+                        hostname = "",
+                        hierarchy = hierarchy
                     ),
                     executable_and_arguments = executable_and_arguments,
                     env = env,
