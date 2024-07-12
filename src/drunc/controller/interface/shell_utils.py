@@ -97,6 +97,8 @@ def controller_setup(ctx, controller_address):
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             ctx.info('You are in control.')
+            from rich import print as rprint
+            rprint(f"Current FSM status is [green]initial[/green]. Available transitions are [green]conf terminate[/green]")
             ctx.took_control = True
         else:
             ctx.warn(f'You are NOT in control.')
@@ -159,6 +161,9 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
     out_dict = {}
 
     arguments_left = arguments
+    # If the argument dict is empty, don't bother trying to read it
+    if not arguments:
+        return
 
     for argument_desc in command_arguments:
         aname = argument_desc.name
