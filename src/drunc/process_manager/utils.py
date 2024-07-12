@@ -29,42 +29,6 @@ def generate_process_query(f, at_least_one:bool, all_processes_by_default:bool=F
     from functools import update_wrapper
     return update_wrapper(new_func, f)
 
-def flatten_tree(tree, prefix=''):
-    lines = []
-
-    try:
-        for node in tree.children:
-            lines.append(f"{prefix}{node.label}")
-            lines.extend(flatten_tree(node, prefix + "  "))
-        return lines
-    except AttributeError:
-        pass
-        
-
-def make_tree(pil, long=False):
-    from rich.tree import Tree
-
-    session_name = None
-    session_trees = None
-    last_drunc_controller = None
-
-    for result in pil.values:
-        m = result.process_description.metadata
-        env = result.process_description.executable_and_arguments
-        for execu in env:
-            if execu.exec == "drunc-controller" or execu.exec == "gunicorn":
-                if not session_trees:
-                    session_name = Tree("") 
-                    session_trees = session_name.add(m.name)
-                    last_drunc_controller = session_trees
-                else:
-                    last_drunc_controller = session_trees.add(m.name)
-            elif execu.exec == "daq_application" and last_drunc_controller:
-                last_drunc_controller.add(m.name)
-    tree_lines = flatten_tree(session_name)
-    return tree_lines
-
-
 def tabulate_process_instance_list(pil, title, long=False):
     from rich.table import Table
 
@@ -82,21 +46,9 @@ def tabulate_process_instance_list(pil, title, long=False):
     try:
         for result, line in zip(pil.values, tree_str):
             m = result.process_description.metadata
-            row = [m.session, line, m.user, m.hostname, result.uuid.uuid]
+            row = [m.session, m.name, m.user, m.hostname, result.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-            row += [alive, f'{result.return_code}']
-            if long:
-                executables = [e.exec for e in result.process_description.executable_and_arguments]
-                row += ['; '.join(executables)]
-            t.add_row(*row)
-    except TypeError:
-        for result in pil.values:
-            m = result.process_description.metadata
-            row = [m.session, m.name, m.user, m.hostname ,result.uuid.uuid]
-            from druncschema.process_manager_pb2 import ProcessInstance
-            alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-
             row += [alive, f'{result.return_code}']
             if long:
                 executables = [e.exec for e in result.process_description.executable_and_arguments]
