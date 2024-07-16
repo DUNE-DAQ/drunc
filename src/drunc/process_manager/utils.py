@@ -42,16 +42,15 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('exit-code')
     if long:
         t.add_column('executable')
-    tree_str = make_tree(pil, long)
     try:
-        for result, line in zip(pil.values, tree_str):
-            m = result.process_description.metadata
-            row = [m.session, m.name, m.user, m.hostname, result.uuid.uuid]
+        for process in pil.values:
+            m = process.process_description.metadata
+            row = [m.session, m.name, m.user, m.hostname, process.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
-            alive = 'True' if result.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-            row += [alive, f'{result.return_code}']
+            alive = 'True' if process.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
+            row += [alive, f'{process.return_code}']
             if long:
-                executables = [e.exec for e in result.process_description.executable_and_arguments]
+                executables = [e.exec for e in process.process_description.executable_and_arguments]
                 row += ['; '.join(executables)]
             t.add_row(*row)
     except:
