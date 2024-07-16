@@ -54,4 +54,7 @@ def tabulate_process_instance_list(pil, title, long=False):
                 executables = [e.exec for e in result.process_description.executable_and_arguments]
                 row += ['; '.join(executables)]
             t.add_row(*row)
+    except:
+        from drunc.exceptions import DruncCommandException
+        raise DruncCommandException("Unable to extract the parameters for tabulate_process_instance_list, exiting.")
     return t
