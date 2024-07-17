@@ -40,7 +40,29 @@ class ProcessManagerConfHandler(ConfHandler):
 
         return new_data
 
-
+    def create_id(self, obj, segment=None, **kwargs):
+        if hasattr(obj, "oksTypes"):
+            if 'RCApplication' in obj.oksTypes():
+                if segment.segments:
+                    self.root_id += 1
+                    self.controller_id = 0
+                    self.process_id = 0
+                    self.process_id_infra = 0
+                    id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                    return id
+                elif not segment.segments:
+                    self.controller_id += 1
+                    self.process_id = 0
+                    id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                    return id
+            elif 'SmartDaqApplication' in obj.oksTypes():
+                self.process_id += 1
+                id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                return id
+            else:
+                self.process_id_infra += 1
+                id = f"{self.root_id}.0.{self.process_id_infra}"
+                return id
 
 def get_cla(db, session_uid, obj):
 
