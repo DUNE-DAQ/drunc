@@ -70,14 +70,6 @@ def tabulate_process_instance_list(pil, title, long=False):
             row += [alive, f'{process.return_code}']
             t.add_row(*row)
     except TypeError:
-        for process, line in zip(pil.values, tree_str):
-            m = process.process_description.metadata
-            from druncschema.process_manager_pb2 import ProcessInstance
-            alive = 'True' if process.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-            row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
-            if long:
-                executables = [e.exec for e in process.process_description.executable_and_arguments]
-                row += ['; '.join(executables)]
-            row += [alive, f'{process.return_code}']
-            t.add_row(*row)
+        from drunc.exceptions import DruncCommandException
+        raise DruncCommandException("Unable to extract the parameters for tabulate_process_instance_list, exiting.")
     return t
