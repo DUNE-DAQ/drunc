@@ -29,9 +29,9 @@ def generate_process_query(f, at_least_one:bool, all_processes_by_default:bool=F
     from functools import update_wrapper
     return update_wrapper(new_func, f)
 
-def make_tree(pil):
+def make_tree(values):
     lines = []
-    for result in pil.values:
+    for result in values:
         m = result.process_description.metadata
         root_id, controller_id, process_id = m.tree_id.split('.')
         if int(root_id) and int(controller_id) == 0 and int(process_id) == 0: #root controller
@@ -56,10 +56,12 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('exit-code')
     if long:
         t.add_column('executable')
-    tree_str = make_tree(pil)
-    print(tree_str)
+    
+    from operator import attrgetter
+    sorted_pil = sorted(pil.values, key=attrgetter('process_description.metadata.tree_id'))
+    tree_str = make_tree(sorted_pil)
     try:
-        for process, line in zip(pil.values, tree_str):
+        for process, line in zip(sorted_pil, tree_str):
             m = process.process_description.metadata
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if process.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
