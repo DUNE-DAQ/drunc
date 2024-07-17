@@ -29,9 +29,23 @@ def generate_process_query(f, at_least_one:bool, all_processes_by_default:bool=F
     from functools import update_wrapper
     return update_wrapper(new_func, f)
 
+def make_tree(pil):
+    lines = []
+    for result in pil.values:
+        m = result.process_description.metadata
+        root_id, controller_id, process_id = m.id.split('.')
+        if int(root_id) and int(controller_id) == 0 and int(process_id) == 0:
+            lines.append(m.name)
+        elif int(controller_id) and int(process_id) == 0:
+            lines.append("  " + m.name)
+        elif int(controller_id) == 0 and int(process_id):
+            lines.append("  " + m.name)
+        elif int(process_id):
+            lines.append("    " + m.name)
+    return lines
+
 def tabulate_process_instance_list(pil, title, long=False):
     from rich.table import Table
-
     t = Table(title=title)
     t.add_column('session')
     t.add_column('friendly name')
@@ -42,18 +56,28 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('exit-code')
     if long:
         t.add_column('executable')
+    tree_str = make_tree(pil)
+    print(tree_str)
     try:
-        for process in pil.values:
+        for process, line in zip(pil.values, tree_str):
             m = process.process_description.metadata
-            row = [m.session, m.name, m.user, m.hostname, process.uuid.uuid]
             from druncschema.process_manager_pb2 import ProcessInstance
             alive = 'True' if process.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
-            row += [alive, f'{process.return_code}']
+            row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
             if long:
                 executables = [e.exec for e in process.process_description.executable_and_arguments]
                 row += ['; '.join(executables)]
+            row += [alive, f'{process.return_code}']
             t.add_row(*row)
-    except:
-        from drunc.exceptions import DruncCommandException
-        raise DruncCommandException("Unable to extract the parameters for tabulate_process_instance_list, exiting.")
+    except TypeError:
+        for process, line in zip(pil.values, tree_str):
+            m = process.process_description.metadata
+            from druncschema.process_manager_pb2 import ProcessInstance
+            alive = 'True' if process.status_code == ProcessInstance.StatusCode.RUNNING else '[danger]False[/danger]'
+            row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
+            if long:
+                executables = [e.exec for e in process.process_description.executable_and_arguments]
+                row += ['; '.join(executables)]
+            row += [alive, f'{process.return_code}']
+            t.add_row(*row)
     return t
