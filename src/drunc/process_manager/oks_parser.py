@@ -5,6 +5,9 @@ import conffwk
 
 from typing import List, Dict, Any
 
+from drunc.process_manager.configuration import ProcessManagerConfHandler
+
+pmch = ProcessManagerConfHandler()
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
@@ -58,7 +61,6 @@ def collect_apps(db, session, segment) -> List[Dict]:
   collect_variables(controller.application_environment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
-
   apps.append(
     {
       "name": controller.id,
@@ -66,7 +68,8 @@ def collect_apps(db, session, segment) -> List[Dict]:
       "args": get_cla(db._obj, session.id, controller),
       "restriction": host,
       "host": host,
-      "env": appenv
+      "env": appenv,
+      "tree_id": pmch.create_id(controller, segment)
     }
   )
 
@@ -105,7 +108,8 @@ def collect_apps(db, session, segment) -> List[Dict]:
         "args": get_cla(db._obj, session.id, app),
         "restriction": host,
         "host": host,
-        "env": appenv
+        "env": appenv,
+        "tree_id": pmch.create_id(app)
       }
     )
 
@@ -147,7 +151,6 @@ def collect_infra_apps(session) -> List[Dict]:
     appenv = defenv.copy()
     collect_variables(app.application_environment, appenv)
 
-
     host = app.runs_on.runs_on.id
     apps.append(
       {
@@ -156,7 +159,8 @@ def collect_infra_apps(session) -> List[Dict]:
         "args": app.commandline_parameters,
         "restriction": host,
         "host": host,
-        "env": appenv
+        "env": appenv,
+        "tree_id": pmch.create_id(app)
       }
     )
   
@@ -179,6 +183,6 @@ def find_controlled_apps(db, session, mycontroller, segment):
       if not confmodel.component_disabled(db._obj, session.id, seg.id):
         aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
         if len(apps) > 0:
-          break;
+          break
   return apps, controllers
 

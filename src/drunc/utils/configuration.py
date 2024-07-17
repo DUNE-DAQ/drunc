@@ -90,6 +90,10 @@ class ConfHandler:
         self.log = getLogger(self.class_name)
         self.initial_type = type
         self.initial_data = data
+        self.root_id = 0
+        self.controller_id = 0
+        self.process_id = 0
+        self.process_id_infra = 0
 
         if type == ConfTypes.OKSFileName and oks_key is None:
             raise DruncSetupException('Need to provide a key for the OKS file')
