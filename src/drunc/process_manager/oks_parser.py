@@ -5,6 +5,9 @@ import conffwk
 
 from typing import List, Dict, Any
 
+from drunc.process_manager.configuration import ProcessManagerConfHandler
+
+pmch = ProcessManagerConfHandler()
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
@@ -67,7 +70,7 @@ def collect_apps(db, session, segment) -> List[Dict]:
       "restriction": host,
       "host": host,
       "env": appenv,
-      "hierarchy": "1"
+      "id": pmch.create_id(controller, segment)
     }
   )
 
@@ -107,7 +110,7 @@ def collect_apps(db, session, segment) -> List[Dict]:
         "restriction": host,
         "host": host,
         "env": appenv,
-        "hierarchy": "2"
+        "id": pmch.create_id(app)
       }
     )
 
@@ -159,7 +162,7 @@ def collect_infra_apps(session) -> List[Dict]:
         "restriction": host,
         "host": host,
         "env": appenv,
-        "hierarchy": "1"
+        "id": pmch.create_id(app)
       }
     )
   
