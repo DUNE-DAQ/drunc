@@ -33,14 +33,14 @@ def make_tree(pil):
     lines = []
     for result in pil.values:
         m = result.process_description.metadata
-        root_id, controller_id, process_id = m.id.split('.')
-        if int(root_id) and int(controller_id) == 0 and int(process_id) == 0:
+        root_id, controller_id, process_id = m.tree_id.split('.')
+        if int(root_id) and int(controller_id) == 0 and int(process_id) == 0: #root controller
             lines.append(m.name)
-        elif int(controller_id) and int(process_id) == 0:
+        elif int(controller_id) and int(process_id) == 0: # controller
             lines.append("  " + m.name)
-        elif int(controller_id) == 0 and int(process_id):
+        elif int(controller_id) == 0 and int(process_id): # infra_app
             lines.append("  " + m.name)
-        elif int(process_id):
+        elif int(process_id): #daq app
             lines.append("    " + m.name)
     return lines
 
