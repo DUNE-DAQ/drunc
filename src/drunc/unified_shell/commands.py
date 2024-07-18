@@ -26,7 +26,7 @@ async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_confi
         )
         async for result in results:
             if not result: break
-            obj.print(f'\'{result.data.process_description.metadata.name}\' ({result.data.uuid.uuid}) process started')
+            #obj.print(f'\'{result.data.process_description.metadata.name}\' ({result.data.uuid.uuid}) process started')
     except InterruptedCommand:
         return
 
