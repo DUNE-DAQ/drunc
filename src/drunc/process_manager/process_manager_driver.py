@@ -7,6 +7,7 @@ from drunc.utils.shell_utils import GRPCDriver
 
 from drunc.exceptions import DruncSetupException, DruncShellException
 
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
 
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
@@ -32,7 +33,7 @@ class ProcessManagerDriver(GRPCDriver):
         oks_conf = find_configuration(oks_conf)
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
-        log.info(oks_conf)
+        # log.info(oks_conf) Make this better 
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
@@ -79,14 +80,14 @@ class ProcessManagerDriver(GRPCDriver):
 
             elif os.getenv("DBT_INSTALL_DIR") is not None:
                 env['DBT_INSTALL_DIR'] = os.getenv("DBT_INSTALL_DIR")
-                self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
+                #self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
                 rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
 
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
                     args=[rte]))
-            else:
-                self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
+            #else:
+                #self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
 
             # executable_and_arguments.append(
             #     ProcessDescription.ExecAndArgs(
@@ -128,18 +129,66 @@ class ProcessManagerDriver(GRPCDriver):
 
 
     async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
-
+        n_apps = 0
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
             session = session_name,
             override_logs = override_logs,
             ):
+            appname = br.process_description.metadata.name
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                TimeRemainingColumn(),
+                TimeElapsedColumn(),
+            ) as progress:
+                apps_tasks = {
+                    appname: progress.add_task(f"[blue]{appname}", total=1) 
+                }
             yield await self.send_command_aio(
                 'boot',
                 data = br,
                 outformat = ProcessInstance,
             )
+            n_apps += 1
+        timeout = 60
+        from drunc.utils.grpc_utils import ServerUnreachable
+        with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TimeRemainingColumn(),
+                TimeElapsedColumn(),
+            ) as progress:
+                total = progress.add_task("[yellow]# responses received", total = n_apps)
+
+                # waiting = progress.add_task("[yellow]timeout", total=timeout)
+        
+                # stored_exception = None
+                # import time
+                # start_time = time.time()
+                # while time.time()-start_time < timeout:
+                #     progress.update(waiting, completed=time.time()-start_time)
+        
+                #     try:
+                #         # desc = ctx.get_driver('controller').describe().data
+                #         stored_exception = None
+                #         break
+                #     except ServerUnreachable as e:
+                #         stored_exception = e
+                #         # time.sleep(1)
+        
+                #     except Exception as e:
+                #         self._log.critical('Could not get the controller\'s status')
+                #         self._log.critical(e)
+                #         self._log.critical('Exiting.')
+                #         raise e
+            
+                # if stored_exception is not None:
+                #     raise stored_exception
 
 
     async def dummy_boot(self, user:str, session_name:str, n_processes:int, sleep:int, n_sleeps:int):# -> ProcessInstance:
