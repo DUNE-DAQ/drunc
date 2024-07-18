@@ -148,7 +148,7 @@ class SSHProcessManager(ProcessManager):
         if exec:
             exit_code = exec.exit_code
         end_str = f"Process \'{name}\' (session: \'{session}\', user: \'{user}\') process exited with exit code {exit_code}"
-        self._log.info(end_str)
+        #self._log.info(end_str)
         if exec:
             self._log.debug(name+str(exec))
 
@@ -170,7 +170,7 @@ class SSHProcessManager(ProcessManager):
         self.watchers.append(t)
 
     def __boot(self, boot_request:BootRequest, uuid:str) -> ProcessInstance:
-        self._log.info(f'Booting {boot_request.process_description.metadata}')
+        #self._log.info(f'Booting {boot_request.process_description.metadata}')
         import os
         platform = os.uname().sysname.lower()
         macos = ("darwin" in platform)
@@ -249,7 +249,7 @@ class SSHProcessManager(ProcessManager):
         ## Saving the host to the metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
-        self._log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
+        # self._log.info(f'Booted {boot_request.process_description.metadata.name} uid: {uuid}')
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)
         pr = ProcessRestriction()
