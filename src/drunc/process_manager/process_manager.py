@@ -97,6 +97,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             ),
 
             CommandDescription(
+                name = 'terminate',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Kill all processes in session.',
+                return_type = 'process_manager_pb2.ProcessInstance'
+            ),
+
+            CommandDescription(
                 name = 'flush',
                 data_type = ['process_manager_pb2.ProcessQuery'],
                 help = 'Remove the processes from the list that are dead',
@@ -183,6 +190,36 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 children = [],
             )
 
+
+    @abc.abstractmethod
+    def _terminate_impl(self, q:ProcessQuery) -> ProcessInstanceList:
+        raise NotImplementedError
+
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    def terminate(self, q:ProcessQuery) -> Response:
+        try:
+            resp = self._terminate_impl(q)
+            return Response(
+                name = self.name,
+                token = None,
+                data = pack_to_any(resp),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
+            )
+        except NotImplementedError:
+            return Response(
+                name = self.name,
+                token = None,
+                data = pack_to_any(resp),
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
+            )
 
     @abc.abstractmethod
     def _restart_impl(self, q:ProcessQuery) -> ProcessInstanceList:

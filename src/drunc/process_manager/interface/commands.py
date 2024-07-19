@@ -68,6 +68,16 @@ async def dummy_boot(obj:ProcessManagerContext, user:str, n_processes:int, sleep
         return
 
 
+@click.command('terminate')
+@add_query_options(at_least_one=False)
+@click.pass_obj
+@run_coroutine
+async def terminate(obj:ProcessManagerContext, query:ProcessQuery) -> None:
+    result = await obj.get_driver('process_manager').terminate(
+        query = query,
+    )
+
+    return
 
 @click.command('kill')
 @add_query_options(at_least_one=False)
