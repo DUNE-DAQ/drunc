@@ -1,7 +1,5 @@
 import click
-
 from drunc.controller.interface.context import ControllerContext
-
 
 @click.command('describe')
 @click.option("--command", type=str, default='.*')#, help='Which command you are interested')
@@ -202,6 +200,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
 
         add_to_table(t, result)
         obj.print(t)
+        obj.print("") # For formatting
         return
 
     def print_status_summary(obj:ControllerContext) -> None:
@@ -212,7 +211,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
 
     def filter_sequence_commands(arguments:dict, command_desc:FSMCommandDescription) -> tuple[dict, dict]:
         if not arguments:
-            return None, None
+            return arguments, None
         argument_desc = command_desc.arguments
         cmd_argument_names = [argument.name for argument in argument_desc]
         cmd_arguments = {}
@@ -220,9 +219,6 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
             if argument in cmd_argument_names:
                 cmd_arguments[argument] = arguments[argument]
                 del arguments[argument]
-
-        from drunc.controller.interface.shell_utils import validate_and_format_fsm_arguments
-        #cmd_arguments = validate_and_format_fsm_arguments(cmd_arguments, argument_desc)
         return arguments, cmd_arguments
 
     def dict_arguments(arguments:str) -> dict:
@@ -236,10 +232,8 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
     def construct_FSM_command(obj:ControllerContext, command:str, arguments:dict, is_sequence:bool) -> tuple[FSMCommand, dict]:
         desc = obj.get_driver('controller').describe_fsm().data # FSMCommandsDescription
         command_desc = search_fsm_command(obj, command, desc.commands, is_sequence) # FSMCommandDescription
-
-        # Catch for sequences
         if command_desc == None:
-            return None, None
+            return None, arguments
 
         # Construct the FSMCommand
         from druncschema.controller_pb2 import FSMCommand
@@ -260,9 +254,10 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
         try:
             result = obj.get_driver('controller').execute_fsm_command(command)
         except Exception as e: # TODO narrow this exception down
+            obj.print(f"[red]{command.command_name}[/red] failed.")
             raise e
-
         print_execution_report(command.command_name, result)
+        obj.print(f"[green]{command.command_name}[/green] executed successfully.")
         if not result: return
         return result
 
@@ -283,16 +278,16 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
     else:
         raise click.BadParameter('Unrecognised FSMcommand.')
 
+    # Execute the FSM commands
     result = None
-
-    # Execute all the FSM commands
     for command_name in commands:
         grpc_command, arguments = construct_FSM_command(obj, command_name, arguments, is_sequence)
-        if grpc_command == None and arguments == None and is_sequence:
-            obj.print(f"{command_name} is not possible in current state, attempting next transition.")
+        if grpc_command == None and is_sequence:
+            obj.print(f"[red]{command_name}[/red] is not possible in current state, attempting to construct next transition in sequence [green]{command}[/green]: [green]{command_name}[/green].")
             continue
-
+        obj.print(f"Sending [green]{command_name}[/green].")
         result = send_FSM_command(obj, grpc_command)
+
         if (result == None):
             obj.print(f"Transition {FSMtransition} did not execute")
             break
