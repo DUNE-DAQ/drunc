@@ -108,8 +108,9 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     from drunc.unified_shell.commands import boot
     ctx.command.add_command(boot, 'boot')
 
-    from drunc.process_manager.interface.commands import kill, flush, logs, restart, ps, dummy_boot
+    from drunc.process_manager.interface.commands import kill, terminate, flush, logs, restart, ps, dummy_boot
     ctx.command.add_command(kill, 'kill')
+    ctx.command.add_command(terminate, 'terminate')
     ctx.command.add_command(flush, 'flush')
     ctx.command.add_command(logs, 'logs')
     ctx.command.add_command(restart, 'restart')

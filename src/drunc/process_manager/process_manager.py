@@ -100,7 +100,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 name = 'terminate',
                 data_type = ['process_manager_pb2.ProcessQuery'],
                 help = 'Kill all processes in session.',
-                return_type = 'process_manager_pb2.ProcessInstance'
+                return_type = 'process_manager_pb2.ProcessInstanceList'
             ),
 
             CommandDescription(
@@ -130,16 +130,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             btype = BroadcastType.SERVER_READY
         )
 
-    def terminate(self):
-        self.broadcast(
-            message='over_and_out',
-            btype=BroadcastType.SERVER_SHUTDOWN
-        )
-        self._terminate()
+    # def terminate(self):
+    #     self.broadcast(
+    #         message='over_and_out',
+    #         btype=BroadcastType.SERVER_SHUTDOWN
+    #     )
+    #     self._terminate()
 
-    @abc.abstractmethod
-    def _terminate(self):
-        pass
+    # @abc.abstractmethod
+    # def _terminate(self):
+    #     pass
 
     '''
     A couple of simple pass-through functions to the broadcasting service

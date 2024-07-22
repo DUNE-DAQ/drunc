@@ -178,7 +178,7 @@ class ProcessManagerDriver(GRPCDriver):
                 outformat = ProcessInstance,
             )
 
-    async def terminate(self, query:ProcessQuery) -> ProcessInstance:
+    async def terminate(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.send_command_aio(
             'terminate',
             data = query,
