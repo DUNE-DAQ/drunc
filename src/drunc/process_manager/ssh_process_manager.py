@@ -85,9 +85,9 @@ class SSHProcessManager(ProcessManager):
             if process.is_alive():
                 import signal
                 sequence = [
-                    signal.SIGINT,
-                    signal.SIGKILL,
-                    signal.SIGQUIT,
+                    # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
+                    signal.SIGQUIT, 
+                    signal.SIGKILL, # Kept as nuclear option
                 ]
                 for sig in sequence:
                     if not process.is_alive():
