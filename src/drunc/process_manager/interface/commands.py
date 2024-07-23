@@ -5,7 +5,7 @@ from drunc.utils.utils import run_coroutine, log_levels
 from drunc.process_manager.interface.cli_argument import add_query_options
 from drunc.process_manager.interface.context import ProcessManagerContext
 
-from druncschema.process_manager_pb2 import ProcessQuery
+from druncschema.process_manager_pb2 import ProcessQuery, ProcessInstanceList
 from drunc.process_manager.interface.cli_argument import validate_conf_string
 
 @click.command('boot')
@@ -68,6 +68,18 @@ async def dummy_boot(obj:ProcessManagerContext, user:str, n_processes:int, sleep
         return
 
 
+@click.command('terminate')
+@add_query_options(at_least_one=False)
+@click.pass_obj
+@run_coroutine
+async def terminate(obj:ProcessManagerContext, query:ProcessQuery) -> None:
+    result = await obj.get_driver('process_manager').terminate(
+        query = query,
+    )
+    if not result: return
+
+    from drunc.process_manager.utils import tabulate_process_instance_list
+    obj.print(tabulate_process_instance_list(result.data, 'Terminated process', False))
 
 @click.command('kill')
 @add_query_options(at_least_one=False)
