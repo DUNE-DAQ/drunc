@@ -67,10 +67,10 @@ def broadcasted(cmd):
                 children = []
             )
 
-        obj.broadcast(
-            message = f'User \'{request.token.user_name}\' successfully executed \'{cmd.__name__}\'',
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
-        )
+        # obj.broadcast(
+        #     message = f'User \'{request.token.user_name}\' successfully executed \'{cmd.__name__}\'',
+        #     btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
+        # )
         log.debug('Exiting')
         return ret
 
@@ -141,10 +141,10 @@ def async_broadcasted(cmd):
                 children = []
             )
 
-        obj.broadcast(
-            message = f'User \'{request.token.user_name}\' successfully executed \'{cmd.__name__}\'',
-            btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
-        )
+        # obj.broadcast(
+        #     message = f'User \'{request.token.user_name}\' successfully executed \'{cmd.__name__}\'',
+        #     btype = BroadcastType.COMMAND_EXECUTION_SUCCESS
+        # )
         log.debug('Exiting')
 
 
