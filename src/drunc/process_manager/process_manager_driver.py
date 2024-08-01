@@ -130,6 +130,8 @@ class ProcessManagerDriver(GRPCDriver):
 
     async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
         n_apps = 0
+        completed = 0
+        apps_tasks = {}
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
@@ -137,33 +139,27 @@ class ProcessManagerDriver(GRPCDriver):
             override_logs = override_logs,
             ):
             appname = br.process_description.metadata.name
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TimeRemainingColumn(),
-                TimeElapsedColumn(),
-            ) as progress:
-                apps_tasks = {
-                    appname: progress.add_task(f"[blue]{appname}", total=1) 
-                }
+            n_apps += 1
+            apps_tasks[appname] = 0
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            TimeElapsedColumn(),
+        ) as progress:
+            for appname in apps_tasks:
+                apps_tasks[appname] = progress.add_task(f"[blue]{appname}", total=100)            
+            total = progress.add_task("[yellow]# responses received", total = n_apps)
+            progress.update(apps_tasks[appname], completed=100)
+            completed += 1
+            progress.update(total, completed=completed)
             yield await self.send_command_aio(
                 'boot',
                 data = br,
                 outformat = ProcessInstance,
             )
-            n_apps += 1
-        timeout = 60
-        from drunc.utils.grpc_utils import ServerUnreachable
-        with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TimeRemainingColumn(),
-                TimeElapsedColumn(),
-            ) as progress:
-                total = progress.add_task("[yellow]# responses received", total = n_apps)
 
                 # waiting = progress.add_task("[yellow]timeout", total=timeout)
         
