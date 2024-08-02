@@ -150,11 +150,13 @@ class ProcessManagerDriver(GRPCDriver):
             TimeElapsedColumn(),
         ) as progress:
             for appname in apps_tasks:
-                apps_tasks[appname] = progress.add_task(f"[blue]{appname}", total=100)            
+                apps_tasks[appname] = progress.add_task(f"[blue]{appname}", total=100)
             total = progress.add_task("[yellow]# responses received", total = n_apps)
             progress.update(apps_tasks[appname], completed=100)
             completed += 1
             progress.update(total, completed=completed)
+            from rich import print
+            print(f"{completed}/{n_apps} apps have booted")            
             yield await self.send_command_aio(
                 'boot',
                 data = br,
