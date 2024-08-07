@@ -43,16 +43,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             configuration = bsch,
         ) if bsch.data else None
 
-        from logging import getLogger, basicConfig
+        import logging
         override_logs = True # RETURNTOME
         from os import getcwd
         if override_logs:
-            log_path = f'{getcwd()}/log_{session}_{name}_pm.log'
+            log_path = f'{getcwd()}/log_{session}_{name}.log'
         else:
-            log_path = f'{getcwd()}/log_{session}_{name}_pm_{now_str(True)}.log'
-        print(f"DEBUGGING PROCESSMANAGER: {log_path=}")#RETURNTOME
-        basicConfig(filename=log_path) # Doesn't work bc drunc.utils.utils.update_log_level sets a different config. 
-        self.log = getLogger("process_manager")
+            log_path = f'{getcwd()}/log_{session}_{name}_{now_str(True)}.log'
+        self.log = logging.getLogger("process_manager")
+        self.log.addHandler(logging.FileHandler(log_path))
 
         from drunc.authoriser.configuration import DummyAuthoriserConfHandler
         from drunc.utils.configuration import ConfTypes
