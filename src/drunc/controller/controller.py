@@ -5,8 +5,6 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
 
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.stateful_node import StatefulNode
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
