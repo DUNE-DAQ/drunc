@@ -265,11 +265,15 @@ class ShellContext:
         self._drivers[name] = driver
 
     def get_driver(self, name:str=None) -> GRPCDriver:
-        if name:
-            return self._drivers[name]
-        elif len(self._drivers)>1:
-            raise DruncShellException(f'More than one driver in this context')
-        return list(self._drivers.values())[0]
+        try:
+            if name:
+                return self._drivers[name]
+            elif len(self._drivers)>1:
+                raise DruncShellException(f'More than one driver in this context')
+            return list(self._drivers.values())[0]
+        except KeyError:
+            self._log.error(f'FSM Commands cannot be sent until the Session is booted')
+            raise SystemExit(1)
 
     def get_token(self) -> Token:
         return self._token
