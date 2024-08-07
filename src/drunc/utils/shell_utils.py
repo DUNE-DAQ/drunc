@@ -273,7 +273,7 @@ class ShellContext:
             return list(self._drivers.values())[0]
         except KeyError:
             self._log.error(f'FSM Commands cannot be sent until the Session is booted')
-            raise SystemExit(1)
+            raise SystemExit(1) # used to avoid having to catch multiple Attribute errors when this function gets called 
 
     def get_token(self) -> Token:
         return self._token
