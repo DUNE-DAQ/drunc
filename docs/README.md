@@ -69,7 +69,7 @@ The FSM has commands (black lines) that transition between the states (green box
 
 ## Running `drunc`
 ### With `drunc-unified-shell` - first time users
-![image info](docs/UnifiedShell.png)
+![image info](UnifiedShell.png)
 The completed system can be run in a single shell, the `drunc-unified-shell`. Running `drunc-unified-shell` is the equivalent of running the `process_manager`, the `process_manager_shell` and the `controller_shell` all wrapped together into a single command. This is currently the most convenient way to operate `drunc`. The full description of how `drunc-unified-shell` operates is presented [here](https://github.com/DUNE-DAQ/drunc/wiki/Unified-shell). `drunc-unified-shell` can be booted as
 ```bash
 drunc-unified-shell <process_manager_configuration>
