@@ -2,6 +2,10 @@ import grpc
 import sh
 from functools import partial
 import threading
+import logging
+from os import getcwd, get_terminal_size
+from rich.logging import RichHandler
+from rich.console import Console
 
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessUUID, ProcessMetadata, ProcessInstance, ProcessInstanceList, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 from drunc.process_manager.process_manager import ProcessManager
@@ -62,21 +66,33 @@ class SSHProcessManager(ProcessManager):
 
         import getpass
         self.session = getpass.getuser() # unfortunate
-
+        self.override_logs = kwargs.get('override_logs', True)
         super().__init__(
             configuration = configuration,
             session = self.session,
             **kwargs
         )
 
-        import logging
-        self._log = logging.getLogger('ssh-process-manager')
         # self.children_logs_depth = 1000
         # self.children_logs = {}
         self.watchers = []
 
+        if self.override_logs:
+            log_path = f'{getcwd()}/log_{self.session}_{self.name}.log'
+        else:
+            log_path = f'{getcwd()}/log_{self.session}_{self.name}_{now_str(True)}.log'
+
+        self._log = logging.getLogger('ssh-process-manager')
+        handler = logging.FileHandler(log_path)
+        handler.setLevel('INFO')
+        formatter = logging.Formatter("%(asctime)s[%(levelname)s] %(funcName)s: %(message)s", "(%Y-%m-%d) [%H:%M:%S]")
+        handler.setFormatter(formatter)
+        self._log.addHandler(handler)
+
         from sh import Command
         self.ssh = Command('/usr/bin/ssh')
+        import sh
+        print(sh.__name__)
 
     def kill_processes(self, uuids:list) -> ProcessInstanceList:
         ret = []
@@ -92,7 +108,7 @@ class SSHProcessManager(ProcessManager):
                 for sig in sequence:
                     if not process.is_alive():
                         break
-                    self.log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
+                    self._log.info(f'Sending signal \'{str(sig)}\' to \'{uuid}\'')
                     process.signal_group(sig) # TODO grab this from the inputs
                     if not process.is_alive():
                         break
