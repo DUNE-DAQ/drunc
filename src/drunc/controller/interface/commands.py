@@ -176,29 +176,29 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
 
     def split_FSM_args(obj:ControllerContext, passed_commands:tuple):
         # Note this is a placeholder - want to get this from OKS.
-        available_commands = ["conf", "start", "enable_triggers", "disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "start_run", "stop_run", "shutdown"]
-        available_command_mandatory_args = [[], ["run_number"], [], [], [], [], []]
+        available_commands = ["conf", "start", "enable_triggers", "disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap", "start_run", "stop_run", "shutdown"]
+        available_command_mandatory_args = [[], ["run_number"], [], [], [], [], [], [], ["run_number"], [], []]
+        available_sequences = ["start_run", "stop_run", "shutdown"]
+        available_sequence_commands = [["conf", "start", "enable_triggers"], ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"], ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]]
         available_command_opt_args = []
         available_args = ["run_number"]
 
         # Get the index of all the commands in the command str
         command_list = [command for command in passed_commands if command in available_commands]
         if len(command_list) == 0:
-                if len(passed_commands) == 1:
-                    obj.print(f"The passed command [red]{passed_commands}[/red] was not understood.")    
-                else:
-                    obj.print(f"None of the passed arguments were correctly identified.")
-                raise SystemExit(1)
-
-        command_index = [passed_commands.index(command) for command in command_list]
+            if len(passed_commands) == 1:
+                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")    
+            else:
+                obj.print(f"None of the passed arguments were correctly identified.")
+            raise SystemExit(1)
 
         # Get the arguments for each command
-        command_index.append(-1)
+        command_index = [passed_commands.index(command) for command in command_list]
         command_argument_list = []
-        for i in range(len(command_index)-2):
+        for i in range(len(command_index)-1):
             command_argument_list.append(list(passed_commands[command_index[i]+1:command_index[i + 1]]))
-        command_argument_list.append(list(passed_commands[command_index[-2]+1:]))
-        print(f"{command_argument_list=}")
+        command_argument_list.append(list(passed_commands[command_index[-1]+1:]))
+
         # Not elegant, would be better to check at the command level first but it does work
         for argument_list in command_argument_list:
             argument_names = argument_list[::2]
@@ -212,26 +212,6 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
                     from drunc.controller.exceptions import MalformedCommand
                     raise MalformedCommand(f"Argument '{argument}' has been repeated.")
 
-
-        # Extract commands from sequences
-        for command in command_list:
-            if command not in ["start_run", "stop_run", "shutdown"]:
-                continue
-            sequence_command_index = command_list.index(command)
-            sequence_command_args = command_argument_list[sequence_command_index]
-            match command:
-                case "start_run":
-                    sequence_commands = ["conf", "start", "enable_triggers"]
-                case "stop_run":
-                    sequence_commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"]
-                case "shutdown":
-                    sequence_commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]
-            del command_list[sequence_command_index]
-            command_list[sequence_command_index:sequence_command_index] = sequence_commands
-
-            for _ in range(len(sequence_commands)-1):
-                command_argument_list.insert(sequence_command_index, list(sequence_command_args))
-
         # Check the mandatory arguments
         for command in command_list:
             mandatory_command_arguments = available_command_mandatory_args[available_commands.index(command)]
@@ -241,8 +221,24 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
             for argument in mandatory_command_arguments:
                 if argument not in provided_command_arguments:
                     missing_command_arguments = list(set(mandatory_command_arguments) - set(provided_command_arguments))
-                    obj.print(f"There are missing arguments for command [green]{command}[/green]. Missing arguments: [red]{' '.join(missing_command_arguments)}[/red].")
+                    obj.print(f"There are missing arguments for command [green]{command}[/green]. Missing mandatory argument(s): [red]{' '.join(missing_command_arguments)}[/red].")
                     raise SystemExit(1)
+
+        # Extract commands from sequences
+        for command in command_list:
+            if command not in available_sequences:
+                continue
+            # Define the sequence command parameters
+            passed_sequence_command_index = command_list.index(command)
+            passed_sequence_command_args = list(command_argument_list[passed_sequence_command_index])
+            sequence_commands = available_sequence_commands[available_sequences.index(command)]
+            # Replace the sequence command with the correct fsm commands
+            del command_list[passed_sequence_command_index]
+            command_list[passed_sequence_command_index:passed_sequence_command_index] = sequence_commands
+            # Replace the sequence command arguments. Duplicates the sequence arguments for all FSM commands
+            del command_argument_list[passed_sequence_command_index]
+            for _ in range(len(sequence_commands)):
+                command_argument_list.insert(passed_sequence_command_index, passed_sequence_command_args)
 
         return command_list, command_argument_list
 
@@ -286,7 +282,13 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
     def print_status_summary(obj:ControllerContext) -> None:
         status = obj.get_driver('controller').get_status().data.state
         available_actions = [command.name for command in obj.get_driver('controller').describe_fsm().data.commands]
-        obj.print(f"Current FSM status is [green]{status}[/green]. Available transitions are [green]{' '.join(available_actions)}[/green]")
+        if len(available_actions) == 1:
+            obj.print(f"Current FSM status is [green]{status}[/green]. The available FSM transitions is [green]{' '.join(available_actions)}[/green]")
+        elif len(available_actions) > 1:
+            obj.print(f"Current FSM status is [green]{status}[/green]. The available FSM transitions are [green]{' '.join(available_actions)}[/green]")
+        else:
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"There are no commands available from the current state: {status}.")
         return
 
     def filter_arguments(arguments:dict, fsm_command:FSMCommandDescription) -> dict:
@@ -302,7 +304,6 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
 
     def construct_FSM_command(obj:ControllerContext, command:tuple[str, list]) -> FSMCommand:
         command_name = command[0]
-        print(f"{command[1]=}")
         command_args = dict_arguments(command[1])
         command_desc = search_fsm_command(command_name, obj.get_driver('controller').describe_fsm().data.commands) # FSMCommandDescription
         if command_desc == None:
@@ -330,9 +331,10 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         # if not result: return
         return result
 
+
     # Split command into a list of commands and a list of arguments
     command_list, argument_list = split_FSM_args(obj, fsm_command)
-    print(f"{argument_list=}")
+
     # Execute the FSM commands
     result = None
     for command in zip(command_list, argument_list):
@@ -343,7 +345,7 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         obj.print(f"Sending [green]{command[0]}[/green].")
         result = send_FSM_command(obj, grpc_command)
         if (result == None):
-            obj.print(f"Transition {FSMtransition} did not execute")
+            obj.print(f"Transition {FSMtransition} did not execute. Check logs for more info.")
             break
 
     print_status_summary(obj)
