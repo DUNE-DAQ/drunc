@@ -118,7 +118,7 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     ctx.command.add_command(dummy_boot, 'dummy_boot')
 
     from drunc.controller.interface.commands import (
-        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude
+        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
     ctx.command.add_command(describe, 'describe')
     ctx.command.add_command(ls, 'ls')
@@ -131,3 +131,4 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     ctx.command.add_command(fsm, 'fsm')
     ctx.command.add_command(include, 'include')
     ctx.command.add_command(exclude, 'exclude')
+    ctx.command.add_command(wait, 'wait')

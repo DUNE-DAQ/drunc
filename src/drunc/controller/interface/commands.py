@@ -82,6 +82,17 @@ def ls(obj:ControllerContext) -> None:
     obj.print(children.text)
 
 
+
+@click.command('wait')
+@click.argument("sleep_time", type=int, default=1)
+@click.pass_obj
+def wait(obj:ControllerContext, sleep_time:int) -> None:
+    # Requested to "allow processing of commands to pause for a specified number of seconds"
+    from time import sleep
+    sleep(sleep_time)
+    obj.print(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
+
+
 @click.command('status')
 @click.pass_obj
 def status(obj:ControllerContext) -> None:
