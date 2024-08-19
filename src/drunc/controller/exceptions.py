@@ -14,3 +14,9 @@ class OtherUserAlreadyInControl(ControllerException):
 
 class MalformedMessage(ControllerException):
     pass
+
+class MalformedCommand(ControllerException):
+    pass
+
+class MalformedCommandArgument(ControllerException):
+    pass

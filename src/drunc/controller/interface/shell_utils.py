@@ -98,7 +98,7 @@ def controller_setup(ctx, controller_address):
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             ctx.info('You are in control.')
-            print(f"Current FSM status is [green]initial[/green]. Available transitions are [green]conf[/green]")
+            print(f"Current FSM status is [green]initial[/green]. Available FSM transitions are [green]conf[/green]")
             ctx.took_control = True
         else:
             ctx.warn(f'You are NOT in control.')
@@ -114,16 +114,11 @@ def controller_setup(ctx, controller_address):
 
 from drunc.controller.interface.context import ControllerContext
 from druncschema.controller_pb2 import FSMCommand
-def search_fsm_command(obj:ControllerContext, command_name:str, command_list:list[FSMCommand], is_sequence:bool=False):
+def search_fsm_command(command_name:str, command_list:list[FSMCommand]):
     for command in command_list:
         if command_name == command.name:
             return command
-    if is_sequence:
-        return None
-    else:
-        from drunc.fsm.exceptions import InvalidTransition
-        raise InvalidTransition(command_name, obj.get_driver('controller').get_status().data.state)
-
+    return None
 
 from drunc.exceptions import DruncShellException
 class ArgumentException(DruncShellException):
@@ -163,7 +158,7 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
     arguments_left = arguments
     # If the argument dict is empty, don't bother trying to read it
     if not arguments:
-        return
+        return out_dict
 
     for argument_desc in command_arguments:
         aname = argument_desc.name
