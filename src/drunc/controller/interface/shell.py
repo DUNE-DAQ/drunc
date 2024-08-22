@@ -24,7 +24,7 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:
     controller_setup(ctx.obj, controller_address)
 
     from drunc.controller.interface.commands import (
-        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude
+        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
     ctx.command.add_command(describe, 'describe')
     ctx.command.add_command(ls, 'ls')
@@ -37,3 +37,4 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:
     ctx.command.add_command(fsm, 'fsm')
     ctx.command.add_command(include, 'include')
     ctx.command.add_command(exclude, 'exclude')
+    ctx.command.add_command(wait, 'wait')
