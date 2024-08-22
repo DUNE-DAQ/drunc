@@ -292,8 +292,7 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         obj.print("") # For formatting
         return
 
-    def filter_sequence_commands(arguments:dict, command_desc:FSMCommandDescription) -> tuple[dict, dict]:
-
+    def filter_arguments(arguments:dict, fsm_command:FSMCommandDescription) -> dict:
         if not arguments:
             return None
         cmd_arguments = {}
@@ -343,22 +342,9 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
     if obj.get_driver('controller').get_status().data.in_error:
         obj.print(f"[red]{command}[/red] not sent - node is in error.")
         return
-    # Create a new list for all the FSM commands
-    arguments = dict_arguments(arguments)
-    if command in ["start_run", "stop_run", "shutdown"]: # FSMsequence is provided
-        is_sequence = True
-        match command:
-            case "start_run":
-                commands = ["conf", "start", "enable_triggers"]
-            case "stop_run":
-                commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"]
-            case "shutdown":
-                commands = ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]
-    elif command in ["conf", "start", "enable_triggers", "disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]: # FSMtransition is provided
-        is_sequence = False
-        commands = [command]
-    else:
-        raise click.BadParameter('Unrecognised FSMcommand.')
+
+    # Split command into a list of commands and a list of arguments
+    command_list, argument_list = split_FSM_args(obj, fsm_command)
 
     # Execute the FSM commands
     result = None
@@ -372,10 +358,6 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         if (result == None):
             obj.print(f"Transition {FSMtransition} did not execute. Check logs for more info.")
             break
-
-    # If the last command failed and a sequence was used, don't print the summary table
-    if result != None and len(commands) > 1:
-        print_execution_report(command, result)
 
     obj.print_status_summary()
     return
