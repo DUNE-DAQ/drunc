@@ -232,6 +232,21 @@ class Controller(ControllerServicer):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
 
+    def construct_error_node_response(self, command_name:str, token:Token) -> Response:
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        fsm_result = FSMCommandResponse(
+            flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+            command_name = command_name,
+        )
+
+        return Response (
+            name = self.name,
+            token = token,
+            data = pack_to_any(fsm_result),
+            flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
+            children = [],
+        )
+
 
     def terminate(self):
 
@@ -500,6 +515,8 @@ class Controller(ControllerServicer):
         3. Return the result
         """
         from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        if self.stateful_node.node_is_in_error():
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
         if not self.stateful_node.node_is_included():
             fsm_result = FSMCommandResponse(
@@ -570,6 +587,8 @@ class Controller(ControllerServicer):
                 btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
                 message = f'Failed to execute {fsm_command.command_name}',
             )
+            self.stateful_node.to_error()
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
 
         self.stateful_node.finish_propagating_transition_mark(transition)
@@ -585,6 +604,8 @@ class Controller(ControllerServicer):
             ctx = self,
         )
 
+        if self.stateful_node.node_is_in_error():
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
         fsm_result = FSMCommandResponse(
             flag = success,

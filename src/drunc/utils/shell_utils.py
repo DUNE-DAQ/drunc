@@ -146,7 +146,8 @@ class GRPCDriver:
 
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
-                stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n'
+                #stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
+                stack_txt = 'Stacktrace on remote server!\n' 
                 last_one = ""
                 for l in stack.text:
                     stack_txt += l+"\n"
@@ -170,9 +171,9 @@ class GRPCDriver:
                     dr.children.append(self.handle_response(c_response, command, outformat))
                 except DruncServerSideError as e:
                     self._log.error(f"Exception thrown from child: {e}")
-            #return dr
+            return dr
     
-            raise DruncServerSideError(error_txt, stack_txt, server_response=dr)
+            # raise DruncServerSideError(error_txt, stack_txt, server_response=dr)
             
 
     def send_command(self, command:str, data=None, outformat=None, decode_children=False):
@@ -298,6 +299,17 @@ class ShellContext:
 
     def critical(self, *args, **kwargs) -> None:
         self._log.critical(*args, **kwargs)
+
+    
+    def print_status_summary(self) -> None:
+        status = self.get_driver('controller').get_status().data.state
+        available_actions = [command.name for command in self.get_driver('controller').describe_fsm().data.commands]
+        if status.find('(') == -1:
+            self.print(f"Current FSM status is [green]{status}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green].")
+        else:
+            self.print(f"[red] FSM is in error ({status})[/red], not currently accepting new commands.")
+        return
+
 
 def create_dummy_token_from_uname() -> Token:
     from drunc.utils.shell_utils import create_dummy_token_from_uname

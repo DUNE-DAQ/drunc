@@ -125,6 +125,8 @@ def status(obj:ControllerContext) -> None:
             format_bool(c_status.included)
         )
     obj.print(t)
+    obj.print_status_summary()
+    return
 
 @click.command('connect')
 @click.argument('controller_address', type=str)
@@ -203,12 +205,6 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
         obj.print("") # For formatting
         return
 
-    def print_status_summary(obj:ControllerContext) -> None:
-        status = obj.get_driver('controller').get_status().data.state
-        available_actions = [command.name for command in obj.get_driver('controller').describe_fsm().data.commands]
-        obj.print(f"Current FSM status is [green]{status}[/green]. Available transitions are [green]{' '.join(available_actions)}[/green]")
-        return
-
     def filter_sequence_commands(arguments:dict, command_desc:FSMCommandDescription) -> tuple[dict, dict]:
         if not arguments:
             return arguments, None
@@ -250,17 +246,27 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
         return cmd, arguments
 
     def send_FSM_command(obj:ControllerContext, command:FSMCommand) -> FSMCommandResponse:
-        result = None
         try:
             result = obj.get_driver('controller').execute_fsm_command(command)
         except Exception as e: # TODO narrow this exception down
             obj.print(f"[red]{command.command_name}[/red] failed.")
             raise e
+        print(f"Response flag: {result.flag=}")
+        if result.flag == FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR:
+            self.stateful_node.to_error()
+            obj.print(f"[red]{command.command_name}[/red] failed, there is a node in error.")
+        elif result.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            obj.print(f"[red]{command.command_name}[/red] failed.")
+        else:
+            obj.print(f"[green]{command.command_name}[/green] executed successfully.")
         print_execution_report(command.command_name, result)
-        obj.print(f"[green]{command.command_name}[/green] executed successfully.")
         if not result: return
         return result
 
+    # When FSM batch mode gets merged this will need updating
+    if obj.get_driver('controller').get_status().data.in_error:
+        obj.print(f"[red]{command}[/red] not sent - node is in error.")
+        return
     # Create a new list for all the FSM commands
     arguments = dict_arguments(arguments)
     if command in ["start_run", "stop_run", "shutdown"]: # FSMsequence is provided
@@ -296,7 +302,7 @@ def fsm(obj:ControllerContext, command:str, arguments:str) -> None:
     if result != None and len(commands) > 1:
         print_execution_report(command, result)
 
-    print_status_summary(obj)
+    obj.print_status_summary()
     return
 
 @click.command('include')
