@@ -1,0 +1,229 @@
+SSHPM: Starting process 807480 on host np04-srv-019 as user pplesnia
+[14:30:54] INFO     "ControllerConfHandler": Using                                                                                configuration.py:115
+                    oksconflibs:/nfs/home/pplesnia/nightlyDev/240827/sourcecode/appmodel/test/config/test-session.data.xml to                         
+                    configure                                                                                                                         
+           INFO     "BroadcastSenderConfHandler": None                                                                             configuration.py:25
+           INFO     "Broadcast": Initialising broadcast                                                                         broadcast_sender.py:19
+           WARNING  "Broadcast": There is no broadcasting service!                                                              broadcast_sender.py:32
+           INFO     "FSMConfHandler": _post_process_oks configuration                                                              configuration.py:33
+           INFO     "FSMConfHandler": Setting up action 'user-provided-run-number'                                                 configuration.py:44
+           INFO     "FSMConfHandler": Setting up action 'file-logbook'                                                             configuration.py:44
+self.conf_dict={'file_name': 'logbook.txt'}
+           INFO     "FSMConfHandler": Setting up action 'file-run-registry'                                                        configuration.py:44
+           INFO     "FSMConfHandler": Setting up action 'thread-pinning'                                                           configuration.py:44
+           INFO     "FSM": Initial state is "initial"                                                                                      core.py:177
+           INFO     "FSM": Allowed transitions are:                                                                                        core.py:178
+           INFO     "FSM": "conf": "initial" → "configured"                                                                                core.py:180
+           INFO     "FSM": Pre transition: pre_conf (mandatory=True)                                                                       core.py:181
+           INFO     "FSM": Post transition: post_conf (mandatory=True)                                                                     core.py:182
+           INFO     "FSM": "start": "configured" → "ready"                                                                                 core.py:180
+           INFO     "FSM": Pre transition: pre_start (mandatory=True), pre_start (mandatory=True)                                          core.py:181
+           INFO     "FSM": Post transition: post_start (mandatory=False), post_start (mandatory=True)                                      core.py:182
+           INFO     "FSM": "enable_triggers": "ready" → "running"                                                                          core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition:                                                                                                core.py:182
+           INFO     "FSM": "disable_triggers": "running" → "ready"                                                                         core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition:                                                                                                core.py:182
+           INFO     "FSM": "drain_dataflow": "ready" → "dataflow_drained"                                                                  core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition: post_drain_dataflow (mandatory=False)                                                          core.py:182
+           INFO     "FSM": "stop_trigger_sources": "dataflow_drained" → "trigger_sources_stopped"                                          core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition:                                                                                                core.py:182
+           INFO     "FSM": "stop": "trigger_sources_stopped" → "configured"                                                                core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition:                                                                                                core.py:182
+           INFO     "FSM": "scrap": "configured" → "initial"                                                                               core.py:180
+           INFO     "FSM": Pre transition:                                                                                                 core.py:181
+           INFO     "FSM": Post transition:                                                                                                core.py:182
+           INFO     "Controller": DummyAuthoriser ready                                                                         dummy_authoriser.py:13
+           INFO     "ru-controller-grpc-child": Could not connect to the controller (localhost:5500), trial 1 of 20                   grpc_child.py:53
+[14:30:59] INFO     "ru-controller-grpc-child": Connected to the controller (localhost:5500)!                                         grpc_child.py:60
+           WARNING  "BroadcastHandler": Could not understand the BroadcastHandler technology you want to use, you will get no  broadcast_handler.py:36
+                    broadcast!                                                                                                                        
+           INFO     "df-controller-grpc-child": Connected to the controller (localhost:5600)!                                         grpc_child.py:60
+           WARNING  "BroadcastHandler": Could not understand the BroadcastHandler technology you want to use, you will get no  broadcast_handler.py:36
+                    broadcast!                                                                                                                        
+           INFO     "trg-controller-grpc-child": Connected to the controller (localhost:5700)!                                        grpc_child.py:60
+           WARNING  "BroadcastHandler": Could not understand the BroadcastHandler technology you want to use, you will get no  broadcast_handler.py:36
+                    broadcast!                                                                                                                        
+           INFO     "hsi-controller-grpc-child": Connected to the controller (localhost:5800)!                                        grpc_child.py:60
+           WARNING  "BroadcastHandler": Could not understand the BroadcastHandler technology you want to use, you will get no  broadcast_handler.py:36
+                    broadcast!                                                                                                                        
+           INFO     "Controller": 'ru-controller@localhost:5500' (type ChildNodeType.gRPC)                                           controller.py:121
+           INFO     "Controller": 'df-controller@localhost:5600' (type ChildNodeType.gRPC)                                           controller.py:121
+           INFO     "Controller": 'trg-controller@localhost:5700' (type ChildNodeType.gRPC)                                          controller.py:121
+           INFO     "Controller": 'hsi-controller@localhost:5800' (type ChildNodeType.gRPC)                                          controller.py:121
+           INFO     "Broadcast": ready                                                                                          broadcast_sender.py:65
+root-controller was started on localhost:3333
+[14:31:02] INFO     "Broadcast": User 'pplesnia' successfully executed 'describe'                                               broadcast_sender.py:65
+           INFO     "Broadcast": User 'pplesnia' successfully executed 'ls'                                                     broadcast_sender.py:65
+           INFO     "Broadcast": Propagating take_control to children                                                           broadcast_sender.py:65
+           INFO     "Broadcast": Propagating take_control to children (ru-controller)                                           broadcast_sender.py:65
+           INFO     "Broadcast": Propagating take_control to children (df-controller)                                           broadcast_sender.py:65
+           INFO     "Broadcast": Propagating take_control to children (trg-controller)                                          broadcast_sender.py:65
+           INFO     "Broadcast": Propagating take_control to children (hsi-controller)                                          broadcast_sender.py:65
+           INFO     "Broadcast": Propagated take_control to children (ru-controller) successfully                               broadcast_sender.py:65
+           INFO     "Broadcast": Propagated take_control to children (hsi-controller) successfully                              broadcast_sender.py:65
+           INFO     "Broadcast": Propagated take_control to children (trg-controller) successfully                              broadcast_sender.py:65
+           INFO     "Broadcast": Propagated take_control to children (df-controller) successfully                               broadcast_sender.py:65
+           INFO     "Broadcast": User 'pplesnia' successfully executed 'take_control'                                           broadcast_sender.py:65
+[14:31:05] INFO     "Broadcast": User 'pplesnia' successfully executed 'describe_fsm'                                           broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from initial to preparing-conf                                      broadcast_sender.py:65
+           INFO     "PreOrPostTransitionSequence": executing the callback: pre_conf                                                         core.py:67
+           INFO     "collect_apps": Ignoring disabled app ru-02                                                                       oks_parser.py:95
+           INFO     "collect_apps": Ignoring disabled app ru-03                                                                       oks_parser.py:95
+           INFO     "thread-pinning": Executing 'source /nfs/home/pplesnia/nightlyDev/240827/install/daq_app_rte.sh;              thread_pinning.py:48
+                    readout-affinity.py --pinfile                                                                                                     
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on'                                                                                                                               
+           INFO     "thread-pinning": Applying thread pinning source /nfs/home/pplesnia/nightlyDev/240827/install/daq_app_rte.sh; thread_pinning.py:49
+                    readout-affinity.py --pinfile                                                                                                     
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on file                                                                                                                           
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on on localhost                                                                                                                   
+[14:31:09] INFO     "Broadcast": Changing operational_state from preparing-conf to conf-ready                                   broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from conf-ready to propagating-conf                                 broadcast_sender.py:65
+           INFO     "Broadcast": Propagating execute_fsm_command to children                                                    broadcast_sender.py:65
+           INFO     "Broadcast": Propagating execute_fsm_command to children (ru-controller)                                    broadcast_sender.py:65
+           INFO     "Broadcast": Propagating execute_fsm_command to children (df-controller)                                    broadcast_sender.py:65
+           INFO     "Broadcast": Propagating execute_fsm_command to children (trg-controller)                                   broadcast_sender.py:65
+           INFO     "Broadcast": Propagating execute_fsm_command to children (hsi-controller)                                   broadcast_sender.py:65
+           INFO     "Broadcast": Propagated execute_fsm_command to children (hsi-controller) successfully                       broadcast_sender.py:65
+           INFO     "Broadcast": Propagated execute_fsm_command to children (ru-controller) successfully                        broadcast_sender.py:65
+           INFO     "Broadcast": Propagated execute_fsm_command to children (trg-controller) successfully                       broadcast_sender.py:65
+           INFO     "Broadcast": Propagated execute_fsm_command to children (df-controller) successfully                        broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from propagating-conf to conf-propagated                            broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from conf-propagated to executing-conf                              broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from executing-conf to conf-terminated                              broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from initial to configured                                          broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from conf-terminated to finalising-conf                             broadcast_sender.py:65
+           INFO     "PreOrPostTransitionSequence": executing the callback: post_conf                                                        core.py:67
+           INFO     "collect_apps": Ignoring disabled app ru-02                                                                       oks_parser.py:95
+           INFO     "collect_apps": Ignoring disabled app ru-03                                                                       oks_parser.py:95
+           INFO     "thread-pinning": Executing 'source /nfs/home/pplesnia/nightlyDev/240827/install/daq_app_rte.sh;              thread_pinning.py:48
+                    readout-affinity.py --pinfile                                                                                                     
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on'                                                                                                                               
+           INFO     "thread-pinning": Applying thread pinning source /nfs/home/pplesnia/nightlyDev/240827/install/daq_app_rte.sh; thread_pinning.py:49
+                    readout-affinity.py --pinfile                                                                                                     
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on file                                                                                                                           
+                    /cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9                     
+                    -x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.js                     
+                    on on localhost                                                                                                                   
+[14:31:10] INFO     "Broadcast": Changing operational_state from finalising-conf to configured                                  broadcast_sender.py:65
+           INFO     "Broadcast": User 'pplesnia' successfully executed 'execute_fsm_command'                                    broadcast_sender.py:65
+           INFO     "Broadcast": User 'pplesnia' successfully executed 'get_status'                                             broadcast_sender.py:65
+           INFO     "Broadcast": User 'pplesnia' successfully executed 'describe_fsm'                                           broadcast_sender.py:65
+[14:31:13] INFO     "Broadcast": User 'pplesnia' successfully executed 'describe_fsm'                                           broadcast_sender.py:65
+           INFO     "Broadcast": Changing operational_state from configured to preparing-start                                  broadcast_sender.py:65
+           INFO     "PreOrPostTransitionSequence": executing the callback: pre_start                                                        core.py:67
+           INFO     "PreOrPostTransitionSequence": executing the callback: pre_start                                                        core.py:67
+Reading database
+Included schemas: ['schema/confmodel/dunedaq.schema.xml', 'schema/appmodel/wiec.schema.xml', 'schema/appmodel/application.schema.xml', 'schema/appmodel/trigger.schema.xml', 'schema/appmodel/fdmodules.schema.xml']
+Creating new database
+Reading dal objects from old db
+Copying objects to new db
+Loading object def-wib-settings@WIBSettings into cache
+Copying object: def-wib-settings@WIBSettings
+Loading object def-wib-pulser-setting@WIBPulserSettings into cache
+Copying object: def-wib-pulser-setting@WIBPulserSettings
+Loading object def-wib-conf@WIBModuleConf into cache
+Copying object: def-wib-conf@WIBModuleConf
+Loading object session-env-session-name-1@Variable into cache
+Copying object: session-env-session-name-1@Variable
+Loading object session-env-session-name-0@Variable into cache
+Copying object: session-env-session-name-0@Variable
+Loading object session-env-ers-warning@Variable into cache
+Copying object: session-env-ers-warning@Variable
+Loading object session-env-ers-verb@Variable into cache
+Copying object: session-env-ers-verb@Variable
+Loading object session-env-ers-info@Variable into cache
+Copying object: session-env-ers-info@Variable
+Loading object session-env-ers-fatal@Variable into cache
+Copying object: session-env-ers-fatal@Variable
+Loading object session-env-ers-error@Variable into cache
+Copying object: session-env-ers-error@Variable
+Loading object session-env-connectivity-server@Variable into cache
+Copying object: session-env-connectivity-server@Variable
+Loading object session-env-connectivity-port@Variable into cache
+Copying object: session-env-connectivity-port@Variable
+Loading object daqapp-cli-configuration@Variable into cache
+Copying object: daqapp-cli-configuration@Variable
+Loading object thread-pinning-file-post-start-test@Variable into cache
+Copying object: thread-pinning-file-post-start-test@Variable
+Loading object thread-pinning-file-post-start-prod@Variable into cache
+Copying object: thread-pinning-file-post-start-prod@Variable
+Loading object thread-pinning-file-post-conf@Variable into cache
+Copying object: thread-pinning-file-post-conf@Variable
+Loading object thread-pinning-file-pre-conf@Variable into cache
+Copying object: thread-pinning-file-pre-conf@Variable
+Loading object file-logbook-file-name@Variable into cache
+Copying object: file-logbook-file-name@Variable
+Loading object ttcm-off-2@TimingTriggerOffsetMap into cache
+Copying object: ttcm-off-2@TimingTriggerOffsetMap
+Loading object ttcm-off-1@TimingTriggerOffsetMap into cache
+Copying object: ttcm-off-1@TimingTriggerOffsetMap
+Loading object ttcm-off-0@TimingTriggerOffsetMap into cache
+Copying object: ttcm-off-0@TimingTriggerOffsetMap
+Loading object trb-01@TRBConf into cache
+Copying object: trb-01@TRBConf
+Loading object tp-stream-writer-conf@TPStreamWriterConf into cache
+Copying object: tp-stream-writer-conf@TPStreamWriterConf
+Loading object tp-stream-writer@TPStreamWriterApplication into cache
+Copying object: tp-stream-writer@TPStreamWriterApplication
+Loading object tp-processor@TPDataProcessor into cache
+Copying object: tp-processor@TPDataProcessor
+Loading object dummy-tp-processor@TPDataProcessor into cache
+Copying object: dummy-tp-processor@TPDataProcessor
+Loading object def-tc-map@TCReadoutMap into cache
+Copying object: def-tc-map@TCReadoutMap
+Loading object def-hsi-tc-map@TCReadoutMap into cache
+Copying object: def-hsi-tc-map@TCReadoutMap
+Loading object tc-pass-through-algo@TCMakerPrescaleAlgorithm into cache
+Copying object: tc-pass-through-algo@TCMakerPrescaleAlgorithm
+Loading object def-tc-processor@TCDataProcessor into cache
+Copying object: def-tc-processor@TCDataProcessor
+Loading object dummy-ta-maker@TAMakerPrescaleAlgorithm into cache
+Copying object: dummy-ta-maker@TAMakerPrescaleAlgorithm
+Loading object ta-maker-adcwindow@TAMakerADCSimpleWindowAlgorithm into cache
+Copying object: ta-maker-adcwindow@TAMakerADCSimpleWindowAlgorithm
+Loading object def-ta-processor@TADataProcessor into cache
+Copying object: def-ta-processor@TADataProcessor
+Loading object storage-01@StorageDevice into cache
+Copying object: storage-01@StorageDevice
+Loading object tc-srcid-1@SourceIDConf into cache
+Copying object: tc-srcid-1@SourceIDConf
+Loading object ta-srcid-1@SourceIDConf into cache
+Copying object: ta-srcid-1@SourceIDConf
+Loading object hsi-tc-srcid-1@SourceIDConf into cache
+Copying object: hsi-tc-srcid-1@SourceIDConf
+Loading object hsi-srcid-01@SourceIDConf into cache
+Copying object: hsi-srcid-01@SourceIDConf
+Loading object srcid-tp-stream-writer@SourceIDConf into cache
+Copying object: srcid-tp-stream-writer@SourceIDConf
+Loading object srcid-df-03@SourceIDConf into cache
+Copying object: srcid-df-03@SourceIDConf
+Loading object srcid-df-02@SourceIDConf into cache
+Copying object: srcid-df-02@SourceIDConf
+Loading object srcid-df-01@SourceIDConf into cache
+Copying object: srcid-df-01@SourceIDConf
+Loading object test-session@Session into cache
+Copying object: test-session@Session
+Received 1
+Requested termination
+[14:31:15] INFO     "Controller": Stopping children                                                                                  controller.py:244
+Received 13
+Requested termination
+           INFO     "Controller": Stopping children                                                                                  controller.py:244
+Received 13
+Requested termination
+           INFO     "Controller": Stopping children                                                                                  controller.py:244
