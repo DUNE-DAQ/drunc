@@ -1,9 +1,0 @@
-{
-    "type": "ssh",
-    "name": "SSHProcessManager",
-    "command_address": "0.0.0.0:10054",
-
-    "authoriser": {
-        "type": "dummy"
-    }
-}
