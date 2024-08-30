@@ -156,8 +156,12 @@ class Controller(ControllerServicer):
 
             CommandDescription(
                 name = 'describe_fsm',
-                data_type = ['None'],
-                help = 'List available FSM commands for the current state.',
+                data_type = ['generic_pb2.PlainText', 'None'],
+                help = '''Return a description of the FSM transitions:
+if a transition name is provided in its input, return that transition description;
+if a state is provided, return the transitions accessible from that state;
+if "all-transitions" is provided, return all the transitions;
+if nothing (None) is provided, return the transitions accessible from the current state.''',
                 return_type = 'request_response_pb2.Description'
             ),
 
@@ -480,10 +484,23 @@ class Controller(ControllerServicer):
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
-    def describe_fsm(self) -> Response:
+    @unpack_request_data_to(PlainText) # 4th step
+    def describe_fsm(self, input:PlainText) -> Response:
         from drunc.fsm.utils import convert_fsm_transition
-        desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+
+        if input.text == 'all-transitions':
+            desc = convert_fsm_transition(self.stateful_node.get_all_fsm_transitions())
+        elif input.text == '':
+            desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+        else:
+            all_transitions = self.stateful_node.get_all_fsm_transitions()
+            interesting_transitions = []
+            for transition in all_transitions:
+                if input.text == transition.source:
+                    interesting_transitions += [transition]
+                if input.text == transition.name:
+                    interesting_transitions += [transition]
+            desc = convert_fsm_transition(interesting_transitions)
         desc.type = 'controller'
         desc.name = self.name
         desc.session = self.session
