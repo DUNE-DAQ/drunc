@@ -18,14 +18,16 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:
     ctx.obj.reset(
         address = controller_address,
     )
-
-    from drunc.controller.interface.shell_utils import controller_setup, controller_cleanup_wrapper
+    from drunc.controller.interface.shell_utils import controller_setup, controller_cleanup_wrapper, generate_fsm_command
     ctx.call_on_close(controller_cleanup_wrapper(ctx.obj))
-    controller_setup(ctx.obj, controller_address)
+    controller_desc = controller_setup(ctx.obj, controller_address)
+
+    transitions = ctx.obj.get_driver('controller').describe_fsm(key="all-transitions").data
 
     from drunc.controller.interface.commands import (
         describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
+
     ctx.command.add_command(describe, 'describe')
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
@@ -34,7 +36,8 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:
     ctx.command.add_command(surrender_control, 'surrender-control')
     ctx.command.add_command(who_am_i, 'whoami')
     ctx.command.add_command(who_is_in_charge, 'who-is-in-charge')
-    ctx.command.add_command(fsm, 'fsm')
+    for transition in transitions.commands:
+        ctx.command.add_command(*generate_fsm_command(ctx.obj, transition, controller_desc.name))
     ctx.command.add_command(include, 'include')
     ctx.command.add_command(exclude, 'exclude')
     ctx.command.add_command(wait, 'wait')
