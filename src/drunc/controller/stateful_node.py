@@ -127,6 +127,10 @@ class StatefulNode(abc.ABC):
         r = self.__fsm.get_executable_transitions(self.get_node_operational_state())
         return r
 
+    def get_all_fsm_transitions(self):
+        r = self.__fsm.get_all_transitions()
+        return r
+
     def get_fsm_transition(self, transition_name):
         return self.__fsm.get_transition(transition_name)
 
