@@ -8,9 +8,9 @@ from drunc.process_manager.interface.cli_argument import validate_conf_string
 
 @click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.argument('process-manager-configuration', type=str)# callback=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path, resolve_path=True))
-@click.argument('boot-configuration', type=str, callback=validate_conf_string)
-@click.argument('session-name', type=str)
+@click.argument('process-manager-configuration', type=str, nargs=1)
+@click.argument('boot-configuration', type=str, nargs=1)
+@click.argument('session-name', type=str, nargs=1)
 @click.pass_context
 def unified_shell(
     ctx,

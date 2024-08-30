@@ -207,7 +207,7 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
 
 
             case Argument.Type.BOOL:
-                bvalue = value.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
+                bvalue = value#.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
 
                 try:
                     value = bool_msg(value=bvalue)
@@ -350,7 +350,7 @@ def generate_fsm_command(ctx, transition:FSMCommandDescription, controller_name:
             raise Exception(f'Unhandled argument type \'{argument.type}\'')
 
         if argument.presence == Argument.Presence.MANDATORY:
-            cmd = click.argument(argument.name, type=atype)(cmd)
+            cmd = click.argument(argument.name, type=atype, nargs=1)(cmd)
 
         else:
             argument_name = f'--{argument.name.lower().replace("_", "-")}'
