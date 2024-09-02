@@ -51,7 +51,6 @@ def find_configuration(path:str) -> str:
         return expanded_path
 
     configuration_files = []
-    print(path)
     for dir in os.getenv('DUNEDAQ_DB_PATH').split(":"):
         tentative = os.path.join(dir, path)
 

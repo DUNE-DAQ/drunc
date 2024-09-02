@@ -22,9 +22,10 @@ class ControllerDriver(GRPCDriver):
     def describe(self) -> Description:
         return self.send_command('describe', outformat = Description)
 
-    def describe_fsm(self) -> Description:
+    def describe_fsm(self, key:str=None) -> Description: # key can be: a state name, a transition name, none to get the currently accessible transitions, or all-transition for all the transitions
         from druncschema.controller_pb2 import FSMCommandsDescription
-        return self.send_command('describe_fsm', outformat = FSMCommandsDescription)
+        input = PlainText(text = key)
+        return self.send_command('describe_fsm', data = input, outformat = FSMCommandsDescription)
 
     def ls(self) -> Description:
         return self.send_command('ls', outformat = PlainTextVector)

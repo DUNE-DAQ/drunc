@@ -4,12 +4,25 @@ from drunc.utils.utils import log_levels
 import os
 from drunc.utils.utils import validate_command_facility
 import pathlib
+from drunc.process_manager.interface.cli_argument import validate_conf_string
 
 @click_shell.shell(prompt='drunc-unified-shell > ', chain=True, hist_file=os.path.expanduser('~')+'/.drunc-unified-shell.history')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.argument('process-manager-configuration', type=str)# callback=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True, path_type=pathlib.Path, resolve_path=True))
+@click.argument('process-manager-configuration', type=str, nargs=1)
+@click.argument('boot-configuration', type=str, nargs=1)
+@click.argument('session-name', type=str, nargs=1)
 @click.pass_context
-def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None:
+def unified_shell(
+    ctx,
+    process_manager_configuration:str,
+    boot_configuration:str,
+    session_name:str,
+    log_level:str,
+) -> None:
+    from drunc.utils.configuration import find_configuration
+    ctx.obj.boot_configuration = find_configuration(boot_configuration)
+    ctx.obj.session_name = session_name
+
     # Check if process_manager_configuration is a packaged config
     from urllib.parse import urlparse
     import os
@@ -117,9 +130,63 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     ctx.command.add_command(ps, 'ps')
     ctx.command.add_command(dummy_boot, 'dummy_boot')
 
+    # Not particularly proud of this...
+    # We instantiate a stateful node which has the same configuration as the one from this session
+    # Let's do this
+    import conffwk
+
+    db = conffwk.Configuration(f"oksconflibs:{ctx.obj.boot_configuration}")
+    session_dal = db.get_dal(class_name="Session", uid=session_name)
+
+    from drunc.utils.configuration import parse_conf_url, OKSKey
+    conf_path, conf_type = parse_conf_url(f"oksconflibs:{ctx.obj.boot_configuration}")
+    controller_name = session_dal.segment.controller.id
+    from drunc.controller.configuration import ControllerConfHandler
+    controller_configuration = ControllerConfHandler(
+        type = conf_type,
+        data = conf_path,
+        oks_key = OKSKey(
+            schema_file='schema/confmodel/dunedaq.schema.xml',
+            class_name="RCApplication",
+            obj_uid=controller_name,
+            session=session_name, # some of the function for enable/disable require the full dal of the session
+        ),
+    )
+
+    from drunc.fsm.configuration import FSMConfHandler
+    fsm_logger = getLogger("FSM")
+    fsm_log_level = fsm_logger.level
+    fsm_logger.setLevel("ERROR")
+    fsm_conf_logger = getLogger("FSMConfHandler")
+    fsm_conf_log_level = fsm_conf_logger.level
+    fsm_conf_logger.setLevel("ERROR")
+
+    fsmch = FSMConfHandler(
+        data = controller_configuration.data.controller.fsm,
+    )
+
+    from drunc.controller.stateful_node import StatefulNode
+    stateful_node = StatefulNode(
+        fsm_configuration = fsmch,
+        broadcaster = None,
+    )
+
+    from drunc.fsm.utils import convert_fsm_transition
+
+    transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
+    fsm_logger.setLevel(fsm_log_level)
+    fsm_conf_logger.setLevel(fsm_conf_log_level)
+    # End of shameful code
+
+    from drunc.controller.interface.shell_utils import generate_fsm_command
+    for transition in transitions.commands:
+        ctx.command.add_command(*generate_fsm_command(ctx.obj, transition, controller_name))
+
+
     from drunc.controller.interface.commands import (
         describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
+
     ctx.command.add_command(describe, 'describe')
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
@@ -128,7 +195,6 @@ def unified_shell(ctx, process_manager_configuration:str, log_level:str) -> None
     ctx.command.add_command(surrender_control, 'surrender-control')
     ctx.command.add_command(who_am_i, 'whoami')
     ctx.command.add_command(who_is_in_charge, 'who-is-in-charge')
-    ctx.command.add_command(fsm, 'fsm')
     ctx.command.add_command(include, 'include')
     ctx.command.add_command(exclude, 'exclude')
     ctx.command.add_command(wait, 'wait')

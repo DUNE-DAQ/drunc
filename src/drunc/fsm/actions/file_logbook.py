@@ -7,7 +7,6 @@ class FileLogbook(FSMAction):
             name = "file-logbook"
         )
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
-        print(f'{self.conf_dict=}')
         self.file = self.conf_dict['file_name']
 
     def post_start(self, _input_data, _context, file_logbook_post:str="", **kwargs):

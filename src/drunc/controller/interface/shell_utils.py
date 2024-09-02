@@ -1,4 +1,8 @@
 from rich import print
+from druncschema.controller_pb2 import FSMCommandsDescription
+
+import logging
+log = logging.getLogger('controller_shell_utils')
 
 def controller_cleanup_wrapper(ctx):
     def controller_cleanup():
@@ -6,29 +10,30 @@ def controller_cleanup_wrapper(ctx):
         dead = False
         import grpc
         who = ''
+
         from drunc.utils.grpc_utils import unpack_any
         try:
-            who = ctx.get_driver('controller').who_is_in_charge().text
+            who = ctx.get_driver('controller').who_is_in_charge().data
 
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
-            ctx.error('Could not understand who is in charge from the controller.')
-            ctx.error(e)
+            log.error('Could not understand who is in charge from the controller.')
+            log.error(e)
             who = 'no_one'
 
         if dead:
-            ctx.error('Controller is dead. Exiting.')
+            log.error('Controller is dead. Exiting.')
             return
 
         if who == ctx.get_token().user_name and ctx.took_control:
-            ctx.info('You are in control. Surrendering control.')
+            log.info('You are in control. Surrendering control.')
             try:
                 ctx.get_driver('controller').surrender_control()
             except Exception as e:
-                ctx.error('Could not surrender control.')
-                ctx.error(e)
-            ctx.info('Control surrendered.')
+                log.error('Could not surrender control.')
+                log.error(e)
+            log.info('Control surrendered.')
         ctx.terminate()
     return controller_cleanup
 
@@ -98,7 +103,6 @@ def controller_setup(ctx, controller_address):
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             ctx.info('You are in control.')
-            print(f"Current FSM status is [green]initial[/green]. Available FSM transitions are [green]conf[/green]")
             ctx.took_control = True
         else:
             ctx.warn(f'You are NOT in control.')
@@ -110,6 +114,7 @@ def controller_setup(ctx, controller_address):
         ctx.took_control = False
         raise e
 
+    return desc
 
 
 from drunc.controller.interface.context import ControllerContext
@@ -202,7 +207,7 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
 
 
             case Argument.Type.BOOL:
-                bvalue = value.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
+                bvalue = value#.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
 
                 try:
                     value = bool_msg(value=bvalue)
@@ -226,8 +231,6 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
     return out_dict
 
 
-
-
 def format_bool(b, format=['dark_green', 'bold white on red'], false_is_good = False):
     index_true = 0 if not false_is_good else 1
     index_false = 1 if not false_is_good else 0
@@ -248,3 +251,119 @@ def tree_prefix(i, n):
         return last
     else:
         return next
+
+
+def run_one_fsm_command(controller_name, transition_name, obj, **kwargs):
+    obj.print(f"Running transition \'{transition_name}\' on controller \'{controller_name}\'")
+    from druncschema.controller_pb2 import FSMCommand
+
+    description = obj.get_driver('controller').describe_fsm().data
+
+    from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
+
+    command_desc = search_fsm_command(transition_name, description.commands)
+
+    if command_desc is None:
+        obj.error(f'Command "{transition_name}" does not exist, or is not accessible right now')
+        return
+
+    try:
+        formated_args = validate_and_format_fsm_arguments(kwargs, command_desc.arguments)
+        data = FSMCommand(
+            command_name = transition_name,
+            arguments = formated_args,
+        )
+        result = obj.get_driver('controller').execute_fsm_command(
+            arguments = data,
+        )
+    except ArgumentException as ae:
+        obj.print(str(ae))
+        return
+
+    if not result: return
+
+    from drunc.controller.interface.shell_utils import format_bool, tree_prefix
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
+
+    from rich.table import Table
+    t = Table(title=f'{transition_name} execution report')
+    t.add_column('Name')
+    t.add_column('Command execution')
+    t.add_column('FSM transition')
+
+    from druncschema.request_response_pb2 import ResponseFlag
+    def bool_to_success(flag_message, FSM):
+        flag = False
+        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            flag = True
+        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            flag = True
+        return "success" if flag else "failed"
+
+    def add_to_table(table, response, prefix=''):
+        table.add_row(
+            prefix+response.name,
+            bool_to_success(response.flag, FSM=False),
+            bool_to_success(response.data.flag, FSM=True) if response.flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY else "failed",
+        )
+        for child_response in response.children:
+            add_to_table(table, child_response, "  "+prefix)
+
+    add_to_table(t, result)
+    obj.print(t)
+
+
+from druncschema.controller_pb2 import FSMCommandDescription
+
+def generate_fsm_command(ctx, transition:FSMCommandDescription, controller_name:str):
+    import click
+
+    from functools import partial
+    cmd = partial(run_one_fsm_command, controller_name, transition.name)
+
+    cmd = click.pass_obj(cmd)
+
+    from druncschema.controller_pb2 import Argument
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
+
+    for argument in transition.arguments:
+        atype = None
+        if argument.type == Argument.Type.STRING:
+            atype = str
+            default_value = unpack_any(argument.default_value, string_msg) if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, string_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type ==  Argument.Type.INT:
+            atype = int
+            default_value = unpack_any(argument.default_value, int_msg)    if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, int_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type == Argument.Type.FLOAT:
+            atype = float
+            default_value = unpack_any(argument.default_value, float_msg)  if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, float_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type == Argument.Type.BOOL:
+            atype = bool
+            default_value = unpack_any(argument.default_value, bool_msg)   if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, bool_msg).value for choice in argument.choices] if argument.choices else None
+        else:
+            raise Exception(f'Unhandled argument type \'{argument.type}\'')
+
+        if argument.presence == Argument.Presence.MANDATORY:
+            cmd = click.argument(argument.name, type=atype, nargs=1)(cmd)
+
+        else:
+            argument_name = f'--{argument.name.lower().replace("_", "-")}'
+            cmd = click.option(
+                f'{argument_name}',
+                type=atype,
+                default=atype(default_value.value),
+                help=argument.help,
+            )(cmd)
+
+    cmd = click.command(
+        name = transition.name.replace('_', '-').lower(),
+        help = f'Execute the transition {transition.name} on the controller {controller_name}'
+    )(cmd)
+
+    return cmd, transition.name.replace('_', '-').lower()
