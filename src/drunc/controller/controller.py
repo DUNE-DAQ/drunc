@@ -19,6 +19,8 @@ from drunc.controller.decorators import in_control
 
 from druncschema.controller_pb2 import FSMCommand
 
+import signal
+
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
         from logging import getLogger
@@ -84,6 +86,10 @@ class Controller(ControllerServicer):
         bsch = BroadcastSenderConfHandler(
             data = self.configuration.data.controller.broadcaster,
         )
+
+        terminate_signals = [signal.SIGHUP, signal.SIGQUIT] # signal.SIGPIPE
+        for sig in terminate_signals:
+            signal.signal(sig, self.shutdown)
 
         self.broadcast_service = BroadcastSender(
             name = name,
@@ -247,6 +253,17 @@ class Controller(ControllerServicer):
             children = [],
         )
 
+    def controller_shutdown(self):
+        console.print('Requested termination')
+        self.terminate()
+
+    def shutdown(self, sig, frame):
+        self.log.warning(f'Received {sig}')
+        try:
+            self.controller_shutdown()
+        except:
+            from drunc.utils.utils import print_traceback
+            print_traceback()
 
     def terminate(self):
 
