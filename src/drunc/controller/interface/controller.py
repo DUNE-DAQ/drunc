@@ -60,6 +60,25 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
 
         return server
 
+    def controller_shutdown():
+        console.print('Requested termination')
+        ctrlr.terminate()
+
+    def shutdown(sig, frame):
+        console.print(f'Received {sig}')
+        try:
+            controller_shutdown()
+        except:
+            from drunc.utils.utils import print_traceback
+            print_traceback()
+
+        import os
+        os.kill(os.getpid(), signal.SIGKILL)
+
+    terminate_signals = [signal.SIGHUP] # Only SIGHUP - killing the tunnels
+    for sig in terminate_signals:
+        signal.signal(sig, shutdown)
+
     try:
         server = serve(command_facility)
         server.wait_for_termination(timeout=None)

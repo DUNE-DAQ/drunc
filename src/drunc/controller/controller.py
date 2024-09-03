@@ -87,10 +87,6 @@ class Controller(ControllerServicer):
             data = self.configuration.data.controller.broadcaster,
         )
 
-        terminate_signals = [signal.SIGHUP, signal.SIGQUIT] # signal.SIGPIPE
-        for sig in terminate_signals:
-            signal.signal(sig, self.shutdown)
-
         self.broadcast_service = BroadcastSender(
             name = name,
             session = session,
@@ -252,21 +248,7 @@ class Controller(ControllerServicer):
             flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
             children = [],
         )
-
-    def controller_shutdown(self):
-        console.print('Requested termination')
-        self.terminate()
-
-    def shutdown(self, sig, frame):
-        self.log.warning(f'Received {sig}')
-        try:
-            self.controller_shutdown()
-        except:
-            from drunc.utils.utils import print_traceback
-            print_traceback()
-
     def terminate(self):
-
         if self.can_broadcast():
             self.broadcast(
                 btype = BroadcastType.SERVER_SHUTDOWN,
@@ -277,6 +259,7 @@ class Controller(ControllerServicer):
         for child in self.children_nodes:
             self.logger.debug(f'Stopping {child.name}')
             child.terminate()
+        self.children_nodes = []
 
         from drunc.controller.children_interface.rest_api_child import ResponseListener
 
