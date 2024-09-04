@@ -19,6 +19,8 @@ from drunc.controller.decorators import in_control
 
 from druncschema.controller_pb2 import FSMCommand
 
+import signal
+
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
         from logging import getLogger
@@ -250,10 +252,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
             flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
             children = [],
         )
-
-
     def terminate(self):
-
         if self.can_broadcast():
             self.broadcast(
                 btype = BroadcastType.SERVER_SHUTDOWN,
@@ -264,6 +263,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         for child in self.children_nodes:
             self.logger.debug(f'Stopping {child.name}')
             child.terminate()
+        self.children_nodes = []
 
         from drunc.controller.children_interface.rest_api_child import ResponseListener
 

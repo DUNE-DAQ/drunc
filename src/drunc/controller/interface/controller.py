@@ -73,11 +73,9 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
             print_traceback()
 
         import os
-        os.kill(os.getpid(), signal.SIGQUIT)
+        os.kill(os.getpid(), signal.SIGKILL)
 
-
-    terminate_signals = [signal.SIGHUP, signal.SIGPIPE]
-    # terminate_signals = set(signal.Signals) - set([signal.SIGKILL, signal.SIGSTOP])
+    terminate_signals = [signal.SIGHUP] # Only SIGHUP - killing the tunnels
     for sig in terminate_signals:
         signal.signal(sig, shutdown)
 
