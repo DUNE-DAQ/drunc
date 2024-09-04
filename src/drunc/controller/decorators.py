@@ -6,7 +6,7 @@ def in_control(cmd):
     @wraps(cmd)
     def wrap(obj, request):
         if not obj.actor.token_is_current_actor(request.token):
-            from druncschema.request_response_pb2 import Response
+            from druncschema.request_response_pb2 import Response, ResponseFlag
             from druncschema.generic_pb2 import PlainText
             return Response(
                 name = obj.name,
