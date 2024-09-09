@@ -72,18 +72,17 @@ The FSM has commands (black lines) that transition between the states (green box
 ![image info](UnifiedShell.png)
 The completed system can be run in a single shell, the `drunc-unified-shell`. Running `drunc-unified-shell` is the equivalent of running the `process_manager`, the `process_manager_shell` and the `controller_shell` all wrapped together into a single command. This is currently the most convenient way to operate `drunc`. The full description of how `drunc-unified-shell` operates is presented [here](https://github.com/DUNE-DAQ/drunc/wiki/Unified-shell). `drunc-unified-shell` can be booted as
 ```bash
-drunc-unified-shell <process_manager_configuration>
+drunc-unified-shell <process_manager_configuration> <configuration-file> <session-name>
 ```
-for which the `<process_manager_configuration>` is either a configuration packaged with `drunc` or a custom defined one. For first time users, it is recommended that this is `ssh-standalone`. 
-
+for which the `<process_manager_configuration>` is either a configuration packaged with `drunc` or a custom defined one, `<configuration-file>` is the session configuration file, which is searched for in the [`appmodel`](https://github.com/DUNE-DAQ/appmodel) root directory, and `<session-name>` is the session ID defined in `<configuration-file>`. For first time users, it is recommended to use
+```bash
+drunc-unified-shell ssh-standalone test/config/test-session.data.xml test-session
+```
 Once the `drunc-unified-shell` has been spawned, the `process_manger` commands are immediately available. The typical next step is to `boot` a DAQ configuration as 
 ```bash
-boot <configuration-file> <session-name>
+drunc-unified-shell > boot
 ```
-for which `<configuration-file>` is the `OKS` defined configuration, and `<session-name>` is the session defined within the configuration file. For first time users, it is recommended that the `test-session` is booted as 
-```bash
-boot test/config/test-session.data.xml test-session
-```
+
 ### With multiple shells - experienced users
 The `process_manager` is the first process that needs to be spawned as 
 ```bash
@@ -102,25 +101,25 @@ for which `<host>` and `<port>` point to the address of the `root_controller`.
 ## Operating `drunc`
 After the DAQ session has been `boot`ed, the FSM status is `INITIAL`. The configuration defined in the `<configuration file>` can be imported with 
 ```bash
-fsm conf
+conf
 ```
 which updates the FSM status to `CONFIGURED`, and then a run can be started with 
 ```bash
-fsm start run_number <X>
+start run_number <X>
 ```
 which updates the FSM status to `READY`. From here, data collection can be started with
 ```bash
-fsm enable_triggers
+enable_triggers
 ```
 which updates the FSM status to `RUNNING` and stopped with 
 ```bash
-fsm disable_triggers
+disable_triggers
 ```
 which returns the FSM status back to `READY`. The processes are then cleaned up with the FSM state returning to `CONFIGURED` with 
 ```bash
-fsm drain_dataflow # FSM state is DATAFLOW_DRAINED
-fsm stop_trigger_sources # FSM state is TRIGGER_SOURCES_STOPPED
-fsm stop # FSM state is CONFIGURED
+drain_dataflow # FSM state is DATAFLOW_DRAINED
+stop_trigger_sources # FSM state is TRIGGER_SOURCES_STOPPED
+stop # FSM state is CONFIGURED
 ```
 These examples provide the minimal example of how to operate `drunc`'s FSM, with more information available on the arguments that each command takes and sequence commands in [FSM](https://github.com/DUNE-DAQ/drunc/wiki/FSM). 
 
