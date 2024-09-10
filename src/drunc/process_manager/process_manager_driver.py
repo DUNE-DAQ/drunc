@@ -25,7 +25,13 @@ class ProcessManagerDriver(GRPCDriver):
         return ProcessManagerStub(channel)
 
 
-    async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
+    async def _convert_oks_to_boot_request(
+        self,
+        oks_conf:str,
+        user:str,
+        session:str,
+        override_logs:bool,
+        connectivity_service_port:int=5000) -> BootRequest:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -33,12 +39,20 @@ class ProcessManagerDriver(GRPCDriver):
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
+
+        env = {
+            'CONNECTION_PORT': connectivity_service_port,
+            'DUNEDAQ_PARTITION':session,
+            'DUNEDAQ_SESSION':session,
+            'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
+        }
+
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
-        apps = collect_apps(db, session_dal, session_dal.segment)
-        infra_apps = collect_infra_apps(session_dal)
-        
+        apps = collect_apps(db, session_dal, session_dal.segment, env)
+        infra_apps = collect_infra_apps(session_dal, env)
+
         apps += infra_apps
 
         def get_controller_address(top_controller_conf):
@@ -55,7 +69,7 @@ class ProcessManagerDriver(GRPCDriver):
             return f'{top_controller_conf.runs_on.runs_on.id}:{port_number}'
 
         self.controller_address = get_controller_address(session_dal.segment.controller)
-        self._log.debug(f"{apps=}")
+        import json
         import os
         pwd = os.getcwd()
 
@@ -68,7 +82,7 @@ class ProcessManagerDriver(GRPCDriver):
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
             tree_id = app['tree_id']
 
-            self._log.debug(f"{app=}")
+            self._log.debug(f"{name}:\n{json.dumps(apps, indent=4)}")
 
             executable_and_arguments = []
 
@@ -127,13 +141,14 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
+    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True, **kwargs) -> ProcessInstance:
 
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
             session = session_name,
             override_logs = override_logs,
+            **kwargs,
             ):
             yield await self.send_command_aio(
                 'boot',
@@ -151,7 +166,7 @@ class ProcessManagerDriver(GRPCDriver):
         for i in range(1,n_sleeps+1):
             executable_and_arguments += [ProcessDescription.ExecAndArgs(exec='sleep',args=[str(sleep)+"s"]), ProcessDescription.ExecAndArgs(exec='echo',args=[str(sleep*i)+"s"])]
         executable_and_arguments.append(ProcessDescription.ExecAndArgs(exec='echo',args=["Exiting."]))
-        
+
         for process in range(n_processes):
             breq =  BootRequest(
                 process_description = ProcessDescription(

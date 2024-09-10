@@ -6,12 +6,12 @@ import conffwk
 from typing import List, Dict, Any
 
 from drunc.process_manager.configuration import ProcessManagerConfHandler
-
+from drunc.exceptions import  DruncException
 pmch = ProcessManagerConfHandler()
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
-def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
+def collect_variables(variables, env_dict:Dict[str,Any]) -> None:
   """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
   @param variables  A Variable/VariableSet object
@@ -27,8 +27,20 @@ def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
         env_dict[item.name] = item.value
 
 
+class EnvironmentVariableCannotBeSet(DruncException):
+  pass
+
+def update_env(env:Dict[str,Any], env2:Dict[str,Any]) -> None:
+  for key, value in env.items():
+    if value == '':
+      if key in env:
+        env[key] = env2[key]
+      else:
+        raise EnvironmentVariableCannotBeSet(f'Environment variable \'{key}\' could not be set.')
+
+
 # Recursively process all Segments in given Segment extracting Applications
-def collect_apps(db, session, segment) -> List[Dict]:
+def collect_apps(db, session:str, segment:str, env:Dict[str,Any]) -> List[Dict]:
   """
   ! Recustively collect (daq) application belonging to segment and its subsegments
 
@@ -59,6 +71,8 @@ def collect_apps(db, session, segment) -> List[Dict]:
   controller = segment.controller
   appenv = defenv
   collect_variables(controller.application_environment, appenv)
+  update_env(appenv, env)
+
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
   apps.append(
@@ -79,7 +93,7 @@ def collect_apps(db, session, segment) -> List[Dict]:
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
       continue
 
-    for app in collect_apps(db, session, seg):
+    for app in collect_apps(db, session, seg, env):
       apps.append(app)
 
   # Get all the enabled applications of this segment
@@ -99,6 +113,7 @@ def collect_apps(db, session, segment) -> List[Dict]:
 
     # Override with any app specific environment from Application
     collect_variables(app.application_environment, appenv)
+    update_env(appenv, env)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -116,13 +131,13 @@ def collect_apps(db, session, segment) -> List[Dict]:
   return apps
 
 
-def collect_infra_apps(session) -> List[Dict]:
-  """! Collect infrastructure applications 
+def collect_infra_apps(session:str, env:dict) -> List[Dict]:
+  """! Collect infrastructure applications
 
   @param session  The session
 
   @return The list of dictionaries holding application attributs
-  
+
   """
   import logging
   log = logging.getLogger('collect_infra_apps')
@@ -150,6 +165,7 @@ def collect_infra_apps(session) -> List[Dict]:
 
     appenv = defenv.copy()
     collect_variables(app.application_environment, appenv)
+    update_env(defenv, env)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -163,7 +179,7 @@ def collect_infra_apps(session) -> List[Dict]:
         "tree_id": pmch.create_id(app)
       }
     )
-  
+
   return apps
 
 
