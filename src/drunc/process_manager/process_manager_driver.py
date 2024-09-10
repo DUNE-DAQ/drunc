@@ -41,9 +41,9 @@ class ProcessManagerDriver(GRPCDriver):
         log.info(oks_conf)
 
         env = {
-            'CONNECTION_PORT': connectivity_service_port,
-            'DUNEDAQ_PARTITION':session,
-            'DUNEDAQ_SESSION':session,
+            'CONNECTION_PORT': str(connectivity_service_port),
+            'DUNEDAQ_PARTITION': session,
+            'DUNEDAQ_SESSION': session,
             'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
         }
 
@@ -53,7 +53,7 @@ class ProcessManagerDriver(GRPCDriver):
         apps = collect_apps(db, session_dal, session_dal.segment, env)
         infra_apps = collect_infra_apps(session_dal, env)
 
-        apps += infra_apps
+        apps = infra_apps+apps
 
         def get_controller_address(top_controller_conf):
             service_id = top_controller_conf.id + "_control"
@@ -70,6 +70,8 @@ class ProcessManagerDriver(GRPCDriver):
 
         self.controller_address = get_controller_address(session_dal.segment.controller)
         import json
+        self._log.debug(f"{json.dumps(apps, indent=4)}")
+
         import os
         pwd = os.getcwd()
 
@@ -82,8 +84,7 @@ class ProcessManagerDriver(GRPCDriver):
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
             tree_id = app['tree_id']
 
-            self._log.debug(f"{name}:\n{json.dumps(apps, indent=4)}")
-
+            self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
             executable_and_arguments = []
 
             if session_dal.rte_script:
@@ -118,7 +119,7 @@ class ProcessManagerDriver(GRPCDriver):
                 log_path = f'{pwd}/log_{user}_{session}_{name}.log'
             else:
                 log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
-
+            self._log.debug(f'{name}\'s env:\n{env}')
             breq =  BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
