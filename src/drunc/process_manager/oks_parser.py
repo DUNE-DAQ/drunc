@@ -11,7 +11,7 @@ pmch = ProcessManagerConfHandler()
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
-def collect_variables(variables, env_dict:Dict[str,Any]) -> None:
+def collect_variables(variables, env_dict:Dict[str,str]) -> None:
   """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
   @param variables  A Variable/VariableSet object
@@ -30,7 +30,7 @@ def collect_variables(variables, env_dict:Dict[str,Any]) -> None:
 class EnvironmentVariableCannotBeSet(DruncException):
   pass
 
-def update_env(env:Dict[str,Any], env2:Dict[str,Any]) -> None:
+def update_env(env:Dict[str,Any], env2:Dict[str,str]) -> None:
   for key, value in env.items():
     if value == '':
       if key in env:
@@ -40,7 +40,7 @@ def update_env(env:Dict[str,Any], env2:Dict[str,Any]) -> None:
 
 
 # Recursively process all Segments in given Segment extracting Applications
-def collect_apps(db, session:str, segment:str, env:Dict[str,Any]) -> List[Dict]:
+def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
   """
   ! Recustively collect (daq) application belonging to segment and its subsegments
 
@@ -131,7 +131,7 @@ def collect_apps(db, session:str, segment:str, env:Dict[str,Any]) -> List[Dict]:
   return apps
 
 
-def collect_infra_apps(session:str, env:dict) -> List[Dict]:
+def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
   """! Collect infrastructure applications
 
   @param session  The session
@@ -165,7 +165,7 @@ def collect_infra_apps(session:str, env:dict) -> List[Dict]:
 
     appenv = defenv.copy()
     collect_variables(app.application_environment, appenv)
-    update_env(defenv, env)
+    update_env(appenv, env)
 
     host = app.runs_on.runs_on.id
     apps.append(
