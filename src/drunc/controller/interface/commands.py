@@ -73,16 +73,6 @@ def describe(obj:ControllerContext, command:str) -> None:
     obj.print(t)
 
 
-
-@click.command('ls')
-@click.pass_obj
-def ls(obj:ControllerContext) -> None:
-    children = obj.get_driver('controller').ls().data
-    if not children: return
-    obj.print(children.text)
-
-
-
 @click.command('wait')
 @click.argument("sleep_time", type=int, default=1)
 @click.pass_obj

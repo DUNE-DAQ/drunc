@@ -150,13 +150,6 @@ class Controller(ControllerServicer):
             ),
 
             CommandDescription(
-                name = 'ls',
-                data_type = ['None'],
-                help = 'List the children',
-                return_type = 'generic_pb2.PlainTextVector'
-            ),
-
-            CommandDescription(
                 name = 'describe_fsm',
                 data_type = ['generic_pb2.PlainText', 'None'],
                 help = '''Return a description of the FSM transitions:

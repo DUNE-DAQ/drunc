@@ -93,8 +93,8 @@ def controller_setup(ctx, controller_address):
 
     ctx.print('Connected to the controller')
 
-    children = ctx.get_driver('controller').ls().data
-    ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
+    # children = ctx.get_driver('controller').ls().data
+    # ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
