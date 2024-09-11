@@ -436,13 +436,21 @@ class RESTAPIChildNode(ChildNode):
 
     def get_status(self, token):
         from druncschema.controller_pb2 import Status
+        from druncschema.request_response_pb2 import Response, ResponseFlag
+        from drunc.utils.grpc_utils import pack_to_any
 
-        return Status(
-            name = self.name,
+        status = Status(
             state = self.state.get_operational_state(),
             sub_state = 'idle' if not self.state.get_executing_command() else 'executing_cmd',
             in_error = self.state.in_error() or not self.commander.ping(), # meh
             included = self.state.included(),
+        )
+        return Response(
+            name = self.name,
+            token = None,
+            data = pack_to_any(status),
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children = [],
         )
 
     def propagate_command(self, command:str, data, token:Token) -> Response:
