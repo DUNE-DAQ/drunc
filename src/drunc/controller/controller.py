@@ -325,6 +325,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
                     stack = traceback.format_exc().split("\n")
+                    self.logger.error(f"{child.name} returned {ResponseFlag.DRUNC_EXCEPTION_THROWN}.\n{stack}")
                     response_children.append(
                         Response(
                             name = child.name,
@@ -343,6 +344,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
                     stack = traceback.format_exc().split("\n")
+                    self.logger.error(f"{child.name} returned {ResponseFlag.UNHANDLED_EXCEPTION_THROWN}.\n{stack}")
                     response_children.append(
                         Response(
                             name = child.name,
@@ -536,6 +538,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
             return self.construct_error_node_response(fsm_command.command_name, token)
 
         if not self.stateful_node.node_is_included():
+            self.logger.error(f"Node is not included, not executing command {fsm_command.command_name}.")
             fsm_result = FSMCommandResponse(
                 flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 command_name = fsm_command.command_name,
@@ -555,7 +558,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         self.logger.debug(f'The transition requested is "{str(transition)}"')
 
         if not self.stateful_node.can_transition(transition):
-            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"'
+            self.logger.error(f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"')
+            
             fsm_result = FSMCommandResponse(
                 flag = FSMResponseFlag.FSM_INVALID_TRANSITION,
                 command_name = fsm_command.command_name,
@@ -597,6 +601,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
 
         success = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
         if any(cr.flag != success for cr in response_children): # if any child was unsuccessful
+            log_stacktrace(response_children)
             success = FSMResponseFlag.FSM_FAILED
             self.stateful_node.to_error()
 
