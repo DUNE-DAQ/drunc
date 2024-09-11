@@ -73,16 +73,6 @@ def describe(obj:ControllerContext, command:str) -> None:
     obj.print(t)
 
 
-
-@click.command('ls')
-@click.pass_obj
-def ls(obj:ControllerContext) -> None:
-    children = obj.get_driver('controller').ls().data
-    if not children: return
-    obj.print(children.text)
-
-
-
 @click.command('wait')
 @click.argument("sleep_time", type=int, default=1)
 @click.pass_obj
@@ -97,7 +87,7 @@ def wait(obj:ControllerContext, sleep_time:int) -> None:
 @click.pass_obj
 def status(obj:ControllerContext) -> None:
     from druncschema.controller_pb2 import Status, ChildrenStatus
-    status = obj.get_driver('controller').get_status().data
+    statuses = obj.get_driver('controller').status()
 
     if not status: return
 
@@ -110,31 +100,18 @@ def status(obj:ControllerContext) -> None:
     t.add_column('Substate')
     t.add_column('In error', justify='center')
     t.add_column('Included', justify='center')
-    t.add_row(
-        status.name,
-        status.state,
-        status.sub_state,
-        format_bool(status.in_error, false_is_good = True),
-        format_bool(status.included),
-    )
 
-    statuses = obj.get_driver('controller').get_children_status().data
-
-    if not statuses:
-        statuses = []
-
-    how_many = len(statuses.children_status)
-
-    for i, c_status in enumerate(statuses.children_status):
-        first_column = tree_prefix(i, how_many)+c_status.name
-
-        t.add_row(
-            first_column,
-            c_status.state,
-            c_status.sub_state,
-            format_bool(c_status.in_error, false_is_good=True),
-            format_bool(c_status.included)
+    def add_status_to_table(status, table, prefix):
+        table.add_row(
+            prefix+status.name,
+            status.data.state,
+            status.data.sub_state,
+            format_bool(status.data.in_error, false_is_good = True),
+            format_bool(status.data.included),
         )
+        for child in status.children:
+            add_status_to_table(child, table, prefix=prefix+'  ')
+    add_status_to_table(statuses, t, prefix='')
     obj.print(t)
     obj.print_status_summary()
     return
@@ -200,7 +177,7 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         command_list = [command for command in passed_commands if command in available_commands]
         if len(command_list) == 0:
             if len(passed_commands) == 1:
-                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")    
+                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")
             else:
                 obj.print(f"None of the passed arguments were correctly identified.")
             raise SystemExit(1)
@@ -314,8 +291,8 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         arguments = filter_arguments(command_args, command_desc)
         # Construct the FSMCommand
         from druncschema.controller_pb2 import FSMCommand
-        cmd = FSMCommand( 
-            command_name = command_name, 
+        cmd = FSMCommand(
+            command_name = command_name,
             arguments = validate_and_format_fsm_arguments(arguments, command_desc.arguments)
         )
         return cmd
