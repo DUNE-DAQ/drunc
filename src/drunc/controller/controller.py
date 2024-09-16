@@ -384,8 +384,23 @@ if nothing (None) is provided, return the transitions accessible from the curren
     @unpack_request_data_to(pass_token=True) # 3rd step
     def get_children_status(self, token:Token) -> Response:
         #from drunc.controller.utils import get_status_message
+        cs = []
+        for n in self.children_nodes:
+            try:
+                cs += [n.get_status(token)]
+            except Exception as e: # TEMPORARY hack
+                from druncschema.controller_pb2 import Status
+                cs += [
+                    Status(
+                        name = n.name,
+                        state = 'unknown',
+                        sub_state = 'unknown',
+                        in_error = True,
+                    )
+                ]
+
         response =  ChildrenStatus(
-            children_status = [n.get_status(token) for n in self.children_nodes]
+            children_status = cs
         )
         return Response(
             name = self.name,
