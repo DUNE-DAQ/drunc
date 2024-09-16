@@ -590,23 +590,20 @@ if nothing (None) is provided, return the transitions accessible from the curren
             node_to_execute = self.children_nodes,
         )
 
+        child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+        child_worst_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+
         for response_child in response_children:
+
+            if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+                child_worst_response_flag = response_child.flag
+                continue
+
             from drunc.utils.grpc_utils import unpack_any
             fsm_response = unpack_any(response_child.data, FSMCommandResponse)
 
-            if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY or fsm_response.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
-                self.stateful_node.to_error()
-
-                self.broadcast(
-                    btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    message = f'Failed to execute {fsm_command.command_name}',
-                )
-                self.stateful_node.to_error()
-                return self.construct_error_node_response(
-                    fsm_command.command_name,
-                    token,
-                    cause = FSMResponseFlag.FSM_CHILD_FAILED,
-                )
+            if fsm_response.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+                child_worst_fsm_flag = fsm_response.flag
 
 
         self.stateful_node.finish_propagating_transition_mark(transition)
@@ -622,15 +619,20 @@ if nothing (None) is provided, return the transitions accessible from the curren
             ctx = self,
         )
 
-        if self.stateful_node.node_is_in_error():
-            return self.construct_error_node_response(
-                fsm_command.command_name,
-                token,
-                cause = FSMResponseFlag.FSM_FAILED,
-            )
+        if (child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY or
+            child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY):
 
+            self.stateful_node.to_error()
+
+        #     return self.construct_error_node_response(
+        #         fsm_command.command_name,
+        #         token,
+        #         cause = FSMResponseFlag.FSM_FAILED,
+        #     )
+
+        self_response_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY # self has executed successfully, even if children have not
         fsm_result = FSMCommandResponse(
-            flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            flag = self_response_fsm_flag,
             command_name = fsm_command.command_name,
         )
 
