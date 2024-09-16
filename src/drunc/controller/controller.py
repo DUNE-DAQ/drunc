@@ -4,6 +4,7 @@ from druncschema.generic_pb2 import PlainText, PlainTextVector
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
+from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
 
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.stateful_node import StatefulNode
@@ -16,8 +17,6 @@ from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 from drunc.authoriser.decorators import authentified_and_authorised
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
-
-from druncschema.controller_pb2 import FSMCommand
 
 import signal
 
@@ -239,7 +238,6 @@ if nothing (None) is provided, return the transitions accessible from the curren
 
 
     def construct_error_node_response(self, command_name:str, token:Token, cause:FSMResponseFlag) -> Response:
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
         fsm_result = FSMCommandResponse(
             flag = cause,
             command_name = command_name,
@@ -521,7 +519,6 @@ if nothing (None) is provided, return the transitions accessible from the curren
         2. Execute the command on children controller, app, and self
         3. Return the result
         """
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
         from druncschema.request_response_pb2 import ResponseFlag
 
         if self.stateful_node.node_is_in_error():
