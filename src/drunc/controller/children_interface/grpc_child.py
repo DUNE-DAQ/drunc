@@ -54,7 +54,7 @@ class gRPCChildNode(ChildNode):
                     from time import sleep
                     sleep(5)
 
-            except grpc.RpcError as e:
+            except ServerUnreachable as e:
                 raise DruncSetupException from e
             else:
                 self.log.info(f'Connected to the controller ({self.uri})!')
