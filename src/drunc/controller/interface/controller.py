@@ -1,7 +1,7 @@
 import click
 import signal
 from drunc.utils.utils import log_levels,  update_log_level, validate_command_facility
-from icecream import ic
+
 @click.command()
 @click.argument('configuration', type=str)
 @click.argument('command-facility', type=str, callback=validate_command_facility)#, help=f'Command facility (protocol, host and port) grpc://{socket.gethostname()}:12345')
