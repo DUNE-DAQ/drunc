@@ -18,12 +18,12 @@ class ConnectivityServiceClient:
     def __init__(self, session:str, address:str):
         self.session = session
         from logging import getLogger
-        self.logger = getLogger('ApplicationRegistryClient')
+        self.logger = getLogger('ConnectivityServiceClient')
 
         if address.startswith('http'):
-            self.address = f'{address}/app-registry/v0.0.0/app-control-connection'
+            self.address = address
         else:
-            self.address = f'http://{address}/app-registry/v0.0.0/app-control-connection'
+            self.address = f'http://{address}'
 
     def retract(self, uid):
         from drunc.utils.utils import http_post
