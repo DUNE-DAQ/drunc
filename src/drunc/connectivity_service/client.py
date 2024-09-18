@@ -32,18 +32,14 @@ class ConnectivityServiceClient:
             'connection_id': uid,
             'data_type': 'protobuf-control-messages',
         }]
-        try:
-            http_post(
-                self.address+"/retract",
-                data = data,
-                headers = {
-                    'Content-Type': 'application/json'
-                },
-                timeout = 0.5,
-            )
-        except Exception as e:
-            self.logger.critical(f'Could not find the address of \'{name}\' on the application registry:\n{str(e)}')
-            raise ApplicationLookupUnsuccessful from e
+        http_post(
+            self.address+"/retract",
+            data = data,
+            headers = {
+                'Content-Type': 'application/json'
+            },
+            timeout = 0.5,
+        )
 
 
 
@@ -73,26 +69,21 @@ class ConnectivityServiceClient:
 
     def publish(self, uid, address):
         from drunc.utils.utils import http_post
-        try:
-            http_post(
-                self.address+"/publish",
-                data = {
-                    'partition': self.session,
-                    'connections':[
-                        {
-                            "connection_type": 0,
-                            "data_type": "protobuf-control-messages",
-                            "uid": name,
-                            "uri": address,
-                        }
-                    ]
-                },
-                headers = {
-                    'Content-Type': 'application/json'
-                },
-                timeout = 0.5,
-            )
-
-        except Exception as e: # do we still want to run if we cannot advertise ourselves?
-            self.logger.critical(f'Could not post the address of self ({address}) on the application registry:\n{str(e)}')
-            raise ApplicationRegistrationUnsuccessful from e
+        http_post(
+            self.address+"/publish",
+            data = {
+                'partition': self.session,
+                'connections':[
+                    {
+                        "connection_type": 0,
+                        "data_type": "protobuf-control-messages",
+                        "uid": name,
+                        "uri": address,
+                    }
+                ]
+            },
+            headers = {
+                'Content-Type': 'application/json'
+            },
+            timeout = 0.5,
+        )
