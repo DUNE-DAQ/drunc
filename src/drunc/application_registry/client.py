@@ -14,7 +14,7 @@ class ApplicationUpdateUnsuccessful(DruncException):
     pass
 
 
-class ApplicationRegistryClient:
+class ConnectivityServiceClient:
     def __init__(self, session:str, address:str):
         self.session = session
         from logging import getLogger
@@ -25,16 +25,21 @@ class ApplicationRegistryClient:
         else:
             self.address = f'http://{address}/app-registry/v0.0.0/app-control-connection'
 
-    def remove(self, name):
-        from drunc.utils.utils import http_delete
-        data = {
-            'session': self.session,
-            'name': name
-        }
+    def retract(self, uid):
+        from drunc.utils.utils import http_post
+        data = [{
+            'partition': self.session,
+            'connection_id': uid,
+            'data_type': 'protobuf-control-messages',
+        }]
         try:
-            http_delete(
-                self.address,
-                data = data
+            http_post(
+                self.address+"/retract",
+                data = data,
+                headers = {
+                    'Content-Type': 'application/json'
+                },
+                timeout = 0.5,
             )
         except Exception as e:
             self.logger.critical(f'Could not find the address of \'{name}\' on the application registry:\n{str(e)}')
@@ -43,70 +48,49 @@ class ApplicationRegistryClient:
 
 
 
-    def lookup(self, name):
-        from drunc.utils.utils import http_get
+    def resolve(self, uid_regex:str) -> dict:
+        from drunc.utils.utils import http_post
         data = {
             'session': self.session,
-            'name': name
+            'uid_regex': uid_regex
         }
         for _ in range(20):
             try:
-                response = http_get(
-                    self.address,
+                response = http_post(
+                    self.address + "/getconnection/" + self.session,
                     data = data,
                     timeout = 0.5,
                 )
-                print(response.json())
-                endpoint = response.json()[0]['endpoint']
-                return endpoint
+                return response.json()
             except HTTPError as e:
                 from time import sleep
-                sleep(0.5)
+                sleep(0.2)
                 continue
 
         self.logger.critical(f'Could not find the address of \'{name}\' on the application registry')
         raise ApplicationLookupUnsuccessful
 
 
-    def patch(self, name, endpoint=None):
-        from drunc.utils.utils import http_patch
-        data = {
-            'session': self.session,
-            'name': name
-        }
-        if endpoint:
-            data['endpoint'] = endpoint
-
-        for _ in range(5):
-            try:
-                response = http_patch(
-                    self.address,
-                    data = data
-                )
-                return response
-            except HTTPError as e:
-                from time import sleep
-                sleep(0.5)
-                continue
-
-        self.logger.critical(f'Could not update the address of \'{name}\' on the application registry')
-        raise ApplicationUpdateUnsuccessful
-
-
-    def register(self, name, address):
+    def publish(self, uid, address):
         from drunc.utils.utils import http_post
         try:
             http_post(
-                self.address,
+                self.address+"/publish",
                 data = {
-                    'session': self.session,
-                    'endpoints':[
+                    'partition': self.session,
+                    'connections':[
                         {
-                            'endpoint': address,
-                            'name': name
+                            "connection_type": 0,
+                            "data_type": "protobuf-control-messages",
+                            "uid": name,
+                            "uri": address,
                         }
                     ]
-                }
+                },
+                headers = {
+                    'Content-Type': 'application/json'
+                },
+                timeout = 0.5,
             )
 
         except Exception as e: # do we still want to run if we cannot advertise ourselves?
