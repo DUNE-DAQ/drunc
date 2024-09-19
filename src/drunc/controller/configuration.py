@@ -39,7 +39,6 @@ class ControllerConfHandler(ConfHandler):
         self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
 
-        self.application_registry_address = self.session_data.application_registry_address
         self.this_host = self.data.controller.runs_on.runs_on.id
         if self.this_host in ['localhost'] or self.this_host.startswith('127.'):
             import socket
