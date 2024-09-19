@@ -34,14 +34,16 @@ class gRPCChildNode(ChildNode):
         from urllib.parse import urlparse
         uri = urlparse(uri)
         print(uri)
-        port = (uri.scheme+uri.netloc).split(":")[1]
+        host, port = (uri.netloc).split(":")
         port = int(port)
+        import socket
+        host = socket.gethostbyaddr(host)[0]
 
         if port == 0:
             from drunc.exceptions import DruncSetupException
             raise DruncSetupException(f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable.")
 
-        self.uri = str(uri.netloc)
+        self.uri = f"{host}:{port}"
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
