@@ -192,7 +192,6 @@ def async_pack_response(cmd, with_children_responses=False):
     return pack_response
 
 
-# A simpler exception for simple error please!
 class ServerUnreachable(DruncException):
     def __init__(self, message):
         self.message = message
@@ -206,7 +205,7 @@ def server_is_reachable(grpc_error):
         if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
             return False
 
-    elif hasattr(grpc_error, '_code'): # the async server case AC#%4tg%^1:"|5!!!!
+    elif hasattr(grpc_error, '_code'):
         if grpc_error._code == grpc.StatusCode.UNAVAILABLE:
             return False
 
@@ -214,20 +213,18 @@ def server_is_reachable(grpc_error):
 
 
 def rethrow_if_unreachable_server(grpc_error):
-    # Come on ! Such a common error and I need to do all this crap to get the address of the service, not even it's own pre-defined message
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, '_state'):
             raise ServerUnreachable(grpc_error._state.details) from grpc_error
-        elif hasattr(grpc_error, '_details'): # -1 for gRPC not throwing the same exception in case the server is async
+        elif hasattr(grpc_error, '_details'):
             raise ServerUnreachable(grpc_error._details) from grpc_error
 
 
 def interrupt_if_unreachable_server(grpc_error):
-    # Come on ! Such a common error and I need to do all this crap to get the address of the service, not even it's own pre-defined message
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, '_state'):
             return grpc_error._state.details
-        elif hasattr(grpc_error, '_details'): # -1 for gRPC not throwing the same exception in case the server is async
+        elif hasattr(grpc_error, '_details'):
             return grpc_error._details
 
 
