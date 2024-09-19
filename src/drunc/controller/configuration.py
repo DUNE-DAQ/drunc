@@ -45,7 +45,9 @@ class ControllerConfHandler(ConfHandler):
             self.this_host = socket.gethostname()
 
 
-    def get_children(self, init_token, without_excluded=False, application_registry=None):
+    def get_children(self, init_token, without_excluded=False, connectivity_service=None):
+
+        enabled_only = not without_excluded
 
         if self.children != []:
             return self.get_children
@@ -77,7 +79,7 @@ class ControllerConfHandler(ConfHandler):
                 init_token = init_token,
                 name = segment.controller.id,
                 configuration = segment,
-                application_registry = application_registry,
+                connectivity_service = connectivity_service,
             )
             self.children.append(new_node)
 
@@ -95,7 +97,7 @@ class ControllerConfHandler(ConfHandler):
                 name = app.id,
                 configuration = app,
                 fsm_configuration = self.data.controller.fsm,
-                application_registry = application_registry,
+                connectivity_service = connectivity_service,
             )
             self.children.append(new_node)
 

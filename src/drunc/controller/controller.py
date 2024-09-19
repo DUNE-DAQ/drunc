@@ -71,7 +71,7 @@ class Controller(ControllerServicer):
 
     children_nodes = [] # type: List[ChildNode]
 
-    def __init__(self, configuration, name:str, session:str, token:Token, application_registry_endpoint:str=None):
+    def __init__(self, configuration, name:str, session:str, token:Token):
         super().__init__()
         self.name = name
         self.session = session
@@ -118,20 +118,25 @@ class Controller(ControllerServicer):
 
         self.actor = ControllerActor(token)
 
-        self.application_registry = None
-        self.application_registry_thread = None
+        self.connectivity_service = None
+        self.connectivity_service_thread = None
         self.uri = ''
+        import os
+        connection_server = os.getenv('CONNECTION_SERVER', None)
+        connection_port   = os.getenv('CONNECTION_PORT', None)
 
-        if application_registry_endpoint:
-            from drunc.application_registry.client import ApplicationRegistryClient
-            self.application_registry = ApplicationRegistryClient(
+        if connection_server and connection_port:
+            from drunc.connectivity_service.client import ConnectivityServiceClient
+            self.connectivity_service = ConnectivityServiceClient(
                 session = self.session,
-                address = application_registry_endpoint,
+                address = f'{connection_server}:{connection_port}',
             )
+        else:
+            self.logger.warning('No connectivity service found in env')
 
         self.children_nodes = self.configuration.get_children(
             init_token = self.actor.get_token(),
-            application_registry = self.application_registry
+            connectivity_service = self.connectivity_service
         )
 
         for child in self.children_nodes:
@@ -260,54 +265,48 @@ if nothing (None) is provided, return the transitions accessible from the curren
             command_name = command_name,
         )
 
-    def advertise_control_address(self, address, raise_on_missing_registry=False):
+    def advertise_control_address(self, address):
+        # import socket
+        # socket.getipaddress(socket.gethostname())
         self.uri = f'grpc://{address}'
 
-        if not self.application_registry:
-            from drunc.application_registry.client import ApplicationRegistryNotPresent
-            if throw:
-                raise ApplicationRegistryNotPresent
+        self.logger.info(f'Registering myself to the connectivity service')
 
-        self.logger.info(f'Registering myself to the application registry')
-        self.application_registry.register(
-            name = self.name,
-            address = self.uri
-        )
         from threading import Thread
         self.running = True
 
-        def update_application_registry(ctrler, application_registry, interval):
+        def update_connectivity_service(
+            ctrler,
+            connectivity_service,
+            interval
+        ):
             import time
             while ctrler.running:
                 ctrler.logger.info('Updating the endpoint')
-                application_registry.patch(ctrler.name, None)
+                ctrler.connectivity_service.publish(
+                    ctrler.name+"_control",
+                    ctrler.uri,
+                )
                 time.sleep(interval)
 
-        # self.application_registry_thread = Thread(
-        #     target = update_application_registry,
-        #     args = (self, self.application_registry, 10),
-        #     name = 'application_registry_updating_thread'
-        # )
-
-        # # lets roll
-        # self.application_registry_thread.start()
-
-
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(fsm_result),
-            flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
-            children = [],
+        self.connectivity_service_thread = Thread(
+            target = update_connectivity_service,
+            args = (self, self.connectivity_service, 2),
+            name = 'connectivity_service_updating_thread'
         )
+
+        # lets roll
+        self.connectivity_service_thread.start()
+
+
     def terminate(self):
         self.running = False
 
-        if self.application_registry:
-            if self.application_registry_thread:
-                self.application_registry_thread.join()
-            self.logger.info('Unregistering from the application registry')
-            self.application_registry.remove(self.name)
+        if self.connectivity_service:
+            if self.connectivity_service_thread:
+                self.connectivity_service_thread.join()
+            self.logger.info('Unregistering from the connectivity service')
+            self.connectivity_service.retract(self.name+"_control")
 
         if self.can_broadcast():
             self.broadcast(

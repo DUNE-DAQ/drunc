@@ -55,20 +55,39 @@ class ChildNode(abc.ABC):
         raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
 
     @staticmethod
-    def _get_children_type_and_uri_from_registry(application_registry, name) -> tuple[ChildNodeType, str]:
-        uri = application_registry.lookup(name)
+    def _get_children_type_and_uri_from_connectivity_service(connectivity_service, name) -> tuple[ChildNodeType, str]:
+        uris = []
+        from drunc.connectivity_service.client import ApplicationLookupUnsuccessful
+
+        for _ in range(5):
+            try:
+
+                uris = connectivity_service.resolve(name+'_control.*')
+                if len(uris) == 0:
+                    raise ApplicationLookupUnsuccessful
+
+            except ApplicationLookupUnsuccessful as e:
+                import time
+                time.sleep(1)
+                continue
+
+        if len(uris) != 1:
+            raise DruncSetupException(f"Could not resolve the URI for \'{name}_control\' in the connectivity service, got response {uris}")
+
+        uri = uris[0]['uri']
+
         return ChildNode._get_children_type_from_cli([uri]), uri
 
 
     @staticmethod
-    def get_child(name:str, cli, configuration, init_token=None, application_registry=None, **kwargs):
+    def get_child(name:str, cli, configuration, init_token=None, connectivity_service=None, **kwargs):
 
         from drunc.utils.configuration import ConfTypes
 
         ctype = ChildNodeType.Unknown
         uri = None
-        if application_registry:
-            ctype, uri = ChildNode._get_children_type_and_uri_from_registry(application_registry, name)
+        if connectivity_service:
+            ctype, uri = ChildNode._get_children_type_and_uri_from_connectivity_service(connectivity_service, name)
         import logging
         log = logging.getLogger("ChildNode.get_child")
 

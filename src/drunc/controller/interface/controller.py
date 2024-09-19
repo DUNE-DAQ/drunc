@@ -38,15 +38,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         ),
     )
 
-    import os
-    ars = os.getenv('APP_DISCOVERY_SERVICE', None)
-
     ctrlr = Controller(
         name = name,
         session = session,
         configuration = controller_configuration,
         token = token,
-        application_registry_endpoint = ars,
     )
 
     def serve(listen_addr:str) -> None:
@@ -58,11 +54,8 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         port = server.add_insecure_port(listen_addr)
 
         server.start()
-        listen_addr = listen_addr.split(':')[0] + ":" + str(port)
-        print(f'{listen_addr=}')
-        log.info(f'\'{ctrlr.name}\' was started on \'{listen_addr}\'')
-
-        return server, listen_addr
+        log.info(f'\'{ctrlr.name}\' was started on \'{port}\'')
+        return server, port
 
     def controller_shutdown():
         console.print('Requested termination')
@@ -84,9 +77,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
-        server, address = serve(command_facility)
+        server, port = serve(command_facility)
+        import socket
+        address = f'{socket.gethostbyname(socket.gethostname())}:{port}'
 
-        ctrlr.advertise_control_address(address, raise_on_missing_registry=(ars is not None))
+        ctrlr.advertise_control_address(address)
 
         server.wait_for_termination(timeout=None)
 
