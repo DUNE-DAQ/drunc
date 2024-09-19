@@ -35,7 +35,7 @@ def print_traceback():
     try:
         width = os.get_terminal_size()[0]
     except:
-        width = 150
+        width = 300
     c.print_exception(width=width)
 
 
@@ -206,7 +206,7 @@ def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     if as_json:
         r = post(address, json=data, **post_kwargs)
     else:
-        r = post(address, json=data, **post_kwargs)
+        r = post(address, data=data, **post_kwargs)
 
     if not ignore_errors:
         r.raise_for_status()
@@ -222,7 +222,7 @@ def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     if as_json:
         r = get(address, json=data, **post_kwargs)
     else:
-        r = get(address, json=data, **post_kwargs)
+        r = get(address, data=data, **post_kwargs)
 
     log.debug(r.text)
     log.debug(r.status_code)
@@ -240,7 +240,7 @@ def http_patch(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     if as_json:
         r = patch(address, json=data, **post_kwargs)
     else:
-        r = patch(address, json=data, **post_kwargs)
+        r = patch(address, data=data, **post_kwargs)
 
     if not ignore_errors:
         r.raise_for_status()
@@ -254,7 +254,7 @@ def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs)
     if as_json:
         r = delete(address, json=data, **post_kwargs)
     else:
-        r = delete(address, json=data, **post_kwargs)
+        r = delete(address, data=data, **post_kwargs)
 
     if not ignore_errors:
         r.raise_for_status()
