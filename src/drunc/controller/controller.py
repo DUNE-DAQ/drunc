@@ -5,8 +5,6 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
 
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.stateful_node import StatefulNode
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
@@ -20,6 +18,8 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
 
 from druncschema.controller_pb2 import FSMCommand
+
+import signal
 
 class ControllerActor:
     def __init__(self, token:Optional[Token]=None):
@@ -158,8 +158,12 @@ class Controller(ControllerServicer):
 
             CommandDescription(
                 name = 'describe_fsm',
-                data_type = ['None'],
-                help = 'List available FSM commands for the current state.',
+                data_type = ['generic_pb2.PlainText', 'None'],
+                help = '''Return a description of the FSM transitions:
+if a transition name is provided in its input, return that transition description;
+if a state is provided, return the transitions accessible from that state;
+if "all-transitions" is provided, return all the transitions;
+if nothing (None) is provided, return the transitions accessible from the current state.''',
                 return_type = 'request_response_pb2.Description'
             ),
 
@@ -234,9 +238,21 @@ class Controller(ControllerServicer):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
 
+    def construct_error_node_response(self, command_name:str, token:Token) -> Response:
+        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        fsm_result = FSMCommandResponse(
+            flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+            command_name = command_name,
+        )
 
+        return Response (
+            name = self.name,
+            token = token,
+            data = pack_to_any(fsm_result),
+            flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
+            children = [],
+        )
     def terminate(self):
-
         if self.can_broadcast():
             self.broadcast(
                 btype = BroadcastType.SERVER_SHUTDOWN,
@@ -247,6 +263,7 @@ class Controller(ControllerServicer):
         for child in self.children_nodes:
             self.logger.debug(f'Stopping {child.name}')
             child.terminate()
+        self.children_nodes = []
 
         from drunc.controller.children_interface.rest_api_child import ResponseListener
 
@@ -286,6 +303,7 @@ class Controller(ControllerServicer):
             )
 
             from drunc.exceptions import DruncException
+            import traceback
 
             try:
                 response = child.propagate_command(command, command_data, token)
@@ -306,16 +324,14 @@ class Controller(ControllerServicer):
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
+                    stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
                             name = child.name,
                             token = token,
                             data = pack_to_any(
                                 Stacktrace(
-                                    text=[
-                                        "Exception throw", # poor man's stack trace
-                                        str(e)
-                                    ]
+                                    text=stack
                                 )
                             ),
                             flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
@@ -326,16 +342,14 @@ class Controller(ControllerServicer):
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
+                    stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
                             name = child.name,
                             token = token,
                             data = pack_to_any(
                                 Stacktrace(
-                                    text=[
-                                        "Exception throw", # poor man's stack trace
-                                        str(e)
-                                    ]
+                                    text=stack
                                 )
                             ),
                             flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
@@ -470,10 +484,23 @@ class Controller(ControllerServicer):
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
-    def describe_fsm(self) -> Response:
+    @unpack_request_data_to(PlainText) # 4th step
+    def describe_fsm(self, input:PlainText) -> Response:
         from drunc.fsm.utils import convert_fsm_transition
-        desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+
+        if input.text == 'all-transitions':
+            desc = convert_fsm_transition(self.stateful_node.get_all_fsm_transitions())
+        elif input.text == '':
+            desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+        else:
+            all_transitions = self.stateful_node.get_all_fsm_transitions()
+            interesting_transitions = []
+            for transition in all_transitions:
+                if input.text == transition.source:
+                    interesting_transitions += [transition]
+                if input.text == transition.name:
+                    interesting_transitions += [transition]
+            desc = convert_fsm_transition(interesting_transitions)
         desc.type = 'controller'
         desc.name = self.name
         desc.session = self.session
@@ -505,6 +532,8 @@ class Controller(ControllerServicer):
         3. Return the result
         """
         from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        if self.stateful_node.node_is_in_error():
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
         if not self.stateful_node.node_is_included():
             fsm_result = FSMCommandResponse(
@@ -575,6 +604,8 @@ class Controller(ControllerServicer):
                 btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
                 message = f'Failed to execute {fsm_command.command_name}',
             )
+            self.stateful_node.to_error()
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
 
         self.stateful_node.finish_propagating_transition_mark(transition)
@@ -590,6 +621,8 @@ class Controller(ControllerServicer):
             ctx = self,
         )
 
+        if self.stateful_node.node_is_in_error():
+            return self.construct_error_node_response(fsm_command.command_name, token)
 
         fsm_result = FSMCommandResponse(
             flag = success,

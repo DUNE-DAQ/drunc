@@ -1,4 +1,7 @@
 from drunc.controller.stateful_node import StatefulNode
+from druncschema.request_response_pb2 import Response, ResponseFlag, Request
+from druncschema.token_pb2 import Token
+from drunc.utils.grpc_utils import pack_to_any
 
 def get_status_message(stateful:StatefulNode):
     from druncschema.controller_pb2 import Status
@@ -14,7 +17,6 @@ def get_status_message(stateful:StatefulNode):
     )
 
 def send_command(controller, token, command:str, data=None, rethrow=False):
-    from druncschema.request_response_pb2 import Request
     import grpc
     from google.protobuf import any_pb2
 
@@ -61,7 +63,8 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
         if hasattr(status, 'details'):
             for detail in status.details:
                 if detail.Is(Stacktrace.DESCRIPTOR):
-                    text = 'Stacktrace [bold red]on remote server![/]\n'
+                    # text = '[bold red]Stacktrace on remote server![/bold red]\n' # Temporary - bold red doesn't work
+                    text = 'Stacktrace on remote server!\n'
                     stack = unpack_any(detail, Stacktrace)
                     for l in stack.text:
                         text += l+"\n"

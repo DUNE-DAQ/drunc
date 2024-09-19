@@ -3,6 +3,7 @@ from typing import List, Set, Dict, Tuple
 from inspect import signature, Parameter
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
+import traceback
 
 class FSMAction:
     '''Abstract class defining a generic action'''
@@ -60,12 +61,20 @@ class PreOrPostTransitionSequence:
             raise fsme.TransitionDataOfIncorrectFormat(transition_data)
 
         for callback in self.sequence:
+            from drunc.exceptions import DruncException
             try:
                 self._log.debug(f'data before callback: {input_data}')
                 self._log.info(f'executing the callback: {callback.method.__name__}')
                 input_data = callback.method(_input_data=input_data, _context=ctx, **transition_args)
                 self._log.debug(f'data after callback: {input_data}')
-            except Exception as e:
+                from drunc.fsm.exceptions import InvalidDataReturnByFSMAction
+                try:
+                    import json
+                    json.dumps(input_data)
+                except TypeError as e:
+                    raise InvalidDataReturnByFSMAction(input_data)
+
+            except DruncException as e:
                 import traceback
                 self._log.error(traceback.format_exc())
                 if callback.mandatory:

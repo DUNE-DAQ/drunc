@@ -26,7 +26,7 @@ class ProcessManagerDriver(GRPCDriver):
 
 
     async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
-        from drunc.process_manager.oks_parser import process_segment
+        from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
         oks_conf = find_configuration(oks_conf)
@@ -36,7 +36,10 @@ class ProcessManagerDriver(GRPCDriver):
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
-        apps = process_segment(db, session_dal, session_dal.segment)
+        apps = collect_apps(db, session_dal, session_dal.segment)
+        infra_apps = collect_infra_apps(session_dal)
+        
+        apps += infra_apps
 
         def get_controller_address(top_controller_conf):
             service_id = top_controller_conf.id + "_control"
@@ -62,6 +65,8 @@ class ProcessManagerDriver(GRPCDriver):
             exe = app['type']
             args = app['args']
             env = app['env']
+            env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            tree_id = app['tree_id']
 
             self._log.debug(f"{app=}")
 
@@ -83,17 +88,16 @@ class ProcessManagerDriver(GRPCDriver):
             else:
                 self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
 
-            executable_and_arguments.append(
-                ProcessDescription.ExecAndArgs(
-                    exec = "env",
-                    args = []
-                )
-            )
+            # executable_and_arguments.append(
+            #     ProcessDescription.ExecAndArgs(
+            #         exec = "env",
+            #         args = []
+            #     )
+            # )
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
                 args=args))
-
 
             from drunc.utils.utils import now_str
             if override_logs:
@@ -107,6 +111,8 @@ class ProcessManagerDriver(GRPCDriver):
                         user = user,
                         session = session,
                         name = name,
+                        hostname = "",
+                        tree_id = tree_id
                     ),
                     executable_and_arguments = executable_and_arguments,
                     env = env,
@@ -121,83 +127,108 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, rethrow=None, override_logs=True) -> ProcessInstance:
-        from drunc.exceptions import DruncShellException
-        if rethrow is None:
-            rethrow = self.rethrow_by_default
+    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
 
-        try:
-            async for br in self._convert_oks_to_boot_request(
-                oks_conf = conf,
-                user = user,
-                session = session_name,
-                # log_level = log_level
-                override_logs = override_logs,
-                ):
-                yield await self.send_command_aio(
-                    'boot',
-                    data = br,
-                    outformat = ProcessInstance,
-                    rethrow = rethrow,
+        async for br in self._convert_oks_to_boot_request(
+            oks_conf = conf,
+            user = user,
+            session = session_name,
+            override_logs = override_logs,
+            ):
+            yield await self.send_command_aio(
+                'boot',
+                data = br,
+                outformat = ProcessInstance,
+            )
+
+
+    async def dummy_boot(self, user:str, session_name:str, n_processes:int, sleep:int, n_sleeps:int):# -> ProcessInstance:
+        import os
+        pwd = os.getcwd()
+
+        # Construct the list of commands to send to the dummy_boot process
+        executable_and_arguments = [ProcessDescription.ExecAndArgs(exec='echo',args=["Starting dummy_boot."])]
+        for i in range(1,n_sleeps+1):
+            executable_and_arguments += [ProcessDescription.ExecAndArgs(exec='sleep',args=[str(sleep)+"s"]), ProcessDescription.ExecAndArgs(exec='echo',args=[str(sleep*i)+"s"])]
+        executable_and_arguments.append(ProcessDescription.ExecAndArgs(exec='echo',args=["Exiting."]))
+        
+        for process in range(n_processes):
+            breq =  BootRequest(
+                process_description = ProcessDescription(
+                    metadata = ProcessMetadata(
+                        user = user,
+                        session = session_name,
+                        name = "dummy_boot_"+str(process),
+                        hostname = ""
+                    ),
+                    executable_and_arguments = executable_and_arguments,
+                    env = {},
+                    process_execution_directory = pwd,
+                    process_logs_path = f'{pwd}/log_{user}_{session_name}_dummy-boot_'+str(process)+'.log',
+                ),
+                process_restriction = ProcessRestriction(
+                    allowed_hosts = ["localhost"]
                 )
-        except DruncShellException as e:
-            if rethrow:
-                raise e
-            else:
-                self._log.error(e)
-                from drunc.utils.shell_utils import InterruptedCommand
-                raise InterruptedCommand()
+            )
+            self._log.debug(f"{breq=}\n\n")
 
+            yield await self.send_command_aio(
+                'boot',
+                data = breq,
+                outformat = ProcessInstance,
+            )
 
-    async def kill(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+    async def terminate(self, query:ProcessQuery) -> ProcessInstanceList:
+        return await self.send_command_aio(
+            'terminate',
+            data = query,
+            outformat = ProcessInstanceList,
+        )
+
+    async def kill(self, query:ProcessQuery) -> ProcessInstance:
         return await self.send_command_aio(
             'kill',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
-    async def logs(self, req:LogRequest, rethrow=None) -> LogLine:
+    async def logs(self, req:LogRequest) -> LogLine:
         async for stream in self.send_command_for_aio(
             'logs',
             data = req,
             outformat = LogLine,
-            rethrow = rethrow,):
+            ):
             yield stream
 
 
-    async def ps(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+    async def ps(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.send_command_aio(
             'ps',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
 
-    async def flush(self, query:ProcessQuery, rethrow=None) -> ProcessInstanceList:
+    async def flush(self, query:ProcessQuery) -> ProcessInstanceList:
         return await self.send_command_aio(
             'flush',
             data = query,
             outformat = ProcessInstanceList,
-            rethrow = rethrow,
         )
 
 
-    async def restart(self, query:ProcessQuery, rethrow=None) -> ProcessInstance:
+    async def restart(self, query:ProcessQuery) -> ProcessInstance:
         return await self.send_command_aio(
             'restart',
             data = query,
             outformat = ProcessInstance,
-            rethrow = rethrow,
         )
 
 
-    async def describe(self, rethrow=None) -> Description:
+    async def describe(self) -> Description:
         return await self.send_command_aio(
             'describe',
             outformat = Description,
-            rethrow = rethrow,
         )

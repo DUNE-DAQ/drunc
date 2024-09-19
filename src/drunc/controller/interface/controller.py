@@ -30,7 +30,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         type = conf_type,
         data = conf_path,
         oks_key = OKSKey(
-            schema_file='schema/coredal/dunedaq.schema.xml',
+            schema_file='schema/confmodel/dunedaq.schema.xml',
             class_name="RCApplication",
             obj_uid=name,
             session=session, # some of the function for enable/disable require the full dal of the session
@@ -73,11 +73,9 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
             print_traceback()
 
         import os
-        os.kill(os.getpid(), signal.SIGQUIT)
+        os.kill(os.getpid(), signal.SIGKILL)
 
-
-    terminate_signals = [signal.SIGHUP, signal.SIGPIPE]
-    # terminate_signals = set(signal.Signals) - set([signal.SIGKILL, signal.SIGSTOP])
+    terminate_signals = [signal.SIGHUP] # Only SIGHUP - killing the tunnels
     for sig in terminate_signals:
         signal.signal(sig, shutdown)
 

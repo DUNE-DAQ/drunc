@@ -39,7 +39,7 @@ class ControllerConfHandler(ConfHandler):
         self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
 
-    def get_children(self, init_token, without_excluded=False):
+    def get_children(self, init_token, enabled_only=True):
 
         if self.children != []:
             return self.get_children
@@ -47,13 +47,13 @@ class ControllerConfHandler(ConfHandler):
         session = None
 
         try:
-            import coredal
+            import confmodel
             session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
 
         except ImportError as e:
-            if without_excluded:
+            if enabled_only:
                 self.log.error('OKS was not set up, so configuration does not know about include/exclude. All the children nodes will be returned')
-                without_excluded=True
+                enabled_only=True
 
 
         self.log.debug(f'looping over children\n{self.data.segments}')
@@ -61,8 +61,8 @@ class ControllerConfHandler(ConfHandler):
         for segment in self.data.segments:
             self.log.debug(segment)
 
-            if without_excluded:
-                if coredal.component_disabled(self.db._obj, session.id, segment.id):
+            if enabled_only:
+                if confmodel.component_disabled(self.db._obj, session.id, segment.id):
                     continue
 
             from drunc.process_manager.configuration import get_cla
@@ -77,8 +77,8 @@ class ControllerConfHandler(ConfHandler):
         for app in self.data.applications:
             self.log.debug(app)
 
-            if without_excluded:
-                if coredal.component_disabled(self.db._obj, session.id, app.id):
+            if enabled_only:
+                if confmodel.component_disabled(self.db._obj, session.id, app.id):
                     continue
 
             from drunc.process_manager.configuration import get_cla

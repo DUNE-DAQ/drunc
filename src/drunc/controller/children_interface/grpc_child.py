@@ -33,7 +33,7 @@ class gRPCChildNode(ChildNode):
 
         from druncschema.request_response_pb2 import Description
         desc = Description()
-        ntries = 5
+        ntries = 20
         from drunc.utils.grpc_utils import ServerUnreachable
         from drunc.exceptions import DruncSetupException
 
@@ -94,6 +94,15 @@ class gRPCChildNode(ChildNode):
         return status
 
     def terminate(self):
+        if self.channel:
+            self.channel.close()
+            del self.channel
+        if self.controller:
+            del self.controller
+
+        self.controller = None
+        self.channel = None
+        self.broadcast.stop()
         pass
 
     def propagate_command(self, command, data, token) -> Response:

@@ -6,18 +6,15 @@ from drunc.utils.shell_utils import ShellContext, GRPCDriver
 class ProcessManagerContext(ShellContext): # boilerplatefest
     status_receiver = None
 
-    def reset(self, address:str=None, print_traceback:bool=False):
+    def reset(self, address:str=None):
         self.address = address
         super(ProcessManagerContext, self)._reset(
-            print_traceback = print_traceback,
             name = 'process_manager',
             token_args = {},
-            driver_args = {
-                'print_traceback': print_traceback
-            },
+            driver_args = {},
         )
 
-    def create_drivers(self, print_traceback, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         if not self.address:
             return {}
 
@@ -28,7 +25,6 @@ class ProcessManagerContext(ShellContext): # boilerplatefest
                 self.address,
                 self._token,
                 aio_channel = True,
-                rethrow_by_default = print_traceback
             )
         }
 

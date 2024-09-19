@@ -1,3 +1,8 @@
+from rich import print
+from druncschema.controller_pb2 import FSMCommandsDescription
+
+import logging
+log = logging.getLogger('controller_shell_utils')
 
 def controller_cleanup_wrapper(ctx):
     def controller_cleanup():
@@ -5,29 +10,30 @@ def controller_cleanup_wrapper(ctx):
         dead = False
         import grpc
         who = ''
+
         from drunc.utils.grpc_utils import unpack_any
         try:
-            who = ctx.get_driver('controller').who_is_in_charge(rethrow=True).text
+            who = ctx.get_driver('controller').who_is_in_charge().data
 
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
-            ctx.error('Could not understand who is in charge from the controller.')
-            ctx.error(e)
+            log.error('Could not understand who is in charge from the controller.')
+            log.error(e)
             who = 'no_one'
 
         if dead:
-            ctx.error('Controller is dead. Exiting.')
+            log.error('Controller is dead. Exiting.')
             return
 
         if who == ctx.get_token().user_name and ctx.took_control:
-            ctx.info('You are in control. Surrendering control.')
+            log.info('You are in control. Surrendering control.')
             try:
-                ctx.get_driver('controller').surrender_control(rethrow=True)
+                ctx.get_driver('controller').surrender_control()
             except Exception as e:
-                ctx.error('Could not surrender control.')
-                ctx.error(e)
-            ctx.info('Control surrendered.')
+                log.error('Could not surrender control.')
+                log.error(e)
+            log.info('Control surrendered.')
         ctx.terminate()
     return controller_cleanup
 
@@ -64,7 +70,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time()-start_time)
 
             try:
-                desc = ctx.get_driver('controller').describe(rethrow=True).data
+                desc = ctx.get_driver('controller').describe().data
                 stored_exception = None
                 break
             except ServerUnreachable as e:
@@ -87,12 +93,12 @@ def controller_setup(ctx, controller_address):
 
     ctx.print('Connected to the controller')
 
-    children = ctx.get_driver('controller').ls(rethrow=False).data
+    children = ctx.get_driver('controller').ls().data
     ctx.print(f'{desc.name}.{desc.session}\'s children :family:: {children.text}')
 
     ctx.info(f'Taking control of the controller as {ctx.get_token()}')
     try:
-        ret = ctx.get_driver('controller').take_control(rethrow=True)
+        ret = ctx.get_driver('controller').take_control()
         from druncschema.request_response_pb2 import ResponseFlag
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
@@ -108,14 +114,16 @@ def controller_setup(ctx, controller_address):
         ctx.took_control = False
         raise e
 
+    return desc
 
 
-def search_fsm_command(command_name, command_list):
+from drunc.controller.interface.context import ControllerContext
+from druncschema.controller_pb2 import FSMCommand
+def search_fsm_command(command_name:str, command_list:list[FSMCommand]):
     for command in command_list:
         if command_name == command.name:
             return command
     return None
-
 
 from drunc.exceptions import DruncShellException
 class ArgumentException(DruncShellException):
@@ -146,16 +154,18 @@ class UnhandledArguments(ArgumentException):
         message = f'These arguments are not handled by this command: {arguments_and_values}'
         super(UnhandledArguments, self).__init__(message)
 
-
-def validate_and_format_fsm_arguments(arguments, arguments_desc):
-    from druncschema.controller_pb2 import Argument
+from druncschema.controller_pb2 import Argument
+def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Argument]):
     from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
     from drunc.utils.grpc_utils import pack_to_any
     out_dict = {}
 
     arguments_left = arguments
+    # If the argument dict is empty, don't bother trying to read it
+    if not arguments:
+        return out_dict
 
-    for argument_desc in arguments_desc:
+    for argument_desc in command_arguments:
         aname = argument_desc.name
         atype = Argument.Type.Name(argument_desc.type)
         adefa = argument_desc.default_value
@@ -197,7 +207,7 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
 
 
             case Argument.Type.BOOL:
-                bvalue = value.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
+                bvalue = value#.lower() in ['true', '1', 't', 'y', 'yes', 'yeah', 'yup', 'certainly']
 
                 try:
                     value = bool_msg(value=bvalue)
@@ -215,12 +225,10 @@ def validate_and_format_fsm_arguments(arguments, arguments_desc):
 
         out_dict[aname] = pack_to_any(value)
 
-    if arguments_left:
-        raise UnhandledArguments(arguments_left)
+    # if arguments_left:
+    #     raise UnhandledArguments(arguments_left)
 
     return out_dict
-
-
 
 
 def format_bool(b, format=['dark_green', 'bold white on red'], false_is_good = False):
@@ -243,3 +251,119 @@ def tree_prefix(i, n):
         return last
     else:
         return next
+
+
+def run_one_fsm_command(controller_name, transition_name, obj, **kwargs):
+    obj.print(f"Running transition \'{transition_name}\' on controller \'{controller_name}\'")
+    from druncschema.controller_pb2 import FSMCommand
+
+    description = obj.get_driver('controller').describe_fsm().data
+
+    from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
+
+    command_desc = search_fsm_command(transition_name, description.commands)
+
+    if command_desc is None:
+        obj.error(f'Command "{transition_name}" does not exist, or is not accessible right now')
+        return
+
+    try:
+        formated_args = validate_and_format_fsm_arguments(kwargs, command_desc.arguments)
+        data = FSMCommand(
+            command_name = transition_name,
+            arguments = formated_args,
+        )
+        result = obj.get_driver('controller').execute_fsm_command(
+            arguments = data,
+        )
+    except ArgumentException as ae:
+        obj.print(str(ae))
+        return
+
+    if not result: return
+
+    from drunc.controller.interface.shell_utils import format_bool, tree_prefix
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
+
+    from rich.table import Table
+    t = Table(title=f'{transition_name} execution report')
+    t.add_column('Name')
+    t.add_column('Command execution')
+    t.add_column('FSM transition')
+
+    from druncschema.request_response_pb2 import ResponseFlag
+    def bool_to_success(flag_message, FSM):
+        flag = False
+        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            flag = True
+        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            flag = True
+        return "success" if flag else "failed"
+
+    def add_to_table(table, response, prefix=''):
+        table.add_row(
+            prefix+response.name,
+            bool_to_success(response.flag, FSM=False),
+            bool_to_success(response.data.flag, FSM=True) if response.flag == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY else "failed",
+        )
+        for child_response in response.children:
+            add_to_table(table, child_response, "  "+prefix)
+
+    add_to_table(t, result)
+    obj.print(t)
+
+
+from druncschema.controller_pb2 import FSMCommandDescription
+
+def generate_fsm_command(ctx, transition:FSMCommandDescription, controller_name:str):
+    import click
+
+    from functools import partial
+    cmd = partial(run_one_fsm_command, controller_name, transition.name)
+
+    cmd = click.pass_obj(cmd)
+
+    from druncschema.controller_pb2 import Argument
+    from drunc.utils.grpc_utils import unpack_any
+    from druncschema.generic_pb2 import int_msg, float_msg, string_msg, bool_msg
+
+    for argument in transition.arguments:
+        atype = None
+        if argument.type == Argument.Type.STRING:
+            atype = str
+            default_value = unpack_any(argument.default_value, string_msg) if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, string_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type ==  Argument.Type.INT:
+            atype = int
+            default_value = unpack_any(argument.default_value, int_msg)    if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, int_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type == Argument.Type.FLOAT:
+            atype = float
+            default_value = unpack_any(argument.default_value, float_msg)  if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, float_msg).value for choice in argument.choices] if argument.choices else None
+        elif argument.type == Argument.Type.BOOL:
+            atype = bool
+            default_value = unpack_any(argument.default_value, bool_msg)   if argument.HasField('default_value') else None
+            # choices = [unpack_any(choice, bool_msg).value for choice in argument.choices] if argument.choices else None
+        else:
+            raise Exception(f'Unhandled argument type \'{argument.type}\'')
+
+        if argument.presence == Argument.Presence.MANDATORY:
+            cmd = click.argument(argument.name, type=atype, nargs=1)(cmd)
+
+        else:
+            argument_name = f'--{argument.name.lower().replace("_", "-")}'
+            cmd = click.option(
+                f'{argument_name}',
+                type=atype,
+                default=atype(default_value.value),
+                help=argument.help,
+            )(cmd)
+
+    cmd = click.command(
+        name = transition.name.replace('_', '-').lower(),
+        help = f'Execute the transition {transition.name} on the controller {controller_name}'
+    )(cmd)
+
+    return cmd, transition.name.replace('_', '-').lower()

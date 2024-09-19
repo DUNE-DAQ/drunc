@@ -1,7 +1,7 @@
 {
-    "type": "ssh",
-    "name": "SSHProcessManager",
-    "command_address": "0.0.0.0:10054",
+    "type": "k8s",
+    "name": "K8sProcessManager",
+    "command_address": "0.0.0.0:0",
 
     "authoriser": {
         "type": "dummy"

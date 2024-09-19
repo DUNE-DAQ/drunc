@@ -20,7 +20,10 @@ class ProcessManagerConfHandler(ConfHandler):
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
         from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
-        new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(data['broadcaster'])
+        if data.get('broadcaster'):
+            new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(data.get('broadcaster'))
+        else:
+            new_data.broadcaster = None
         new_data.authoriser = None
 
         match data['type'].lower():
@@ -37,21 +40,43 @@ class ProcessManagerConfHandler(ConfHandler):
 
         return new_data
 
-
+    def create_id(self, obj, segment=None, **kwargs):
+        if hasattr(obj, "oksTypes"):
+            if 'RCApplication' in obj.oksTypes():
+                if segment.segments:
+                    self.root_id += 1
+                    self.controller_id = 0
+                    self.process_id = 0
+                    self.process_id_infra = 0
+                    id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                    return id
+                elif not segment.segments:
+                    self.controller_id += 1
+                    self.process_id = 0
+                    id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                    return id
+            elif 'SmartDaqApplication' in obj.oksTypes():
+                self.process_id += 1
+                id = f"{self.root_id}.{self.controller_id}.{self.process_id}"
+                return id
+            else:
+                self.process_id_infra += 1
+                id = f"{self.root_id}.0.{self.process_id_infra}"
+                return id
 
 def get_cla(db, session_uid, obj):
 
     if hasattr(obj, "oksTypes"):
         if 'RCApplication' in obj.oksTypes():
-            from coredal import rc_application_construct_commandline_parameters
+            from confmodel import rc_application_construct_commandline_parameters
             return rc_application_construct_commandline_parameters(db, session_uid, obj.id)
 
         elif 'SmartDaqApplication' in obj.oksTypes():
-            from appdal import smart_daq_application_construct_commandline_parameters
+            from appmodel import smart_daq_application_construct_commandline_parameters
             return smart_daq_application_construct_commandline_parameters(db, session_uid, obj.id)
 
         elif 'DaqApplication' in obj.oksTypes():
-            from coredal import daq_application_construct_commandline_parameters
+            from confmodel import daq_application_construct_commandline_parameters
             return daq_application_construct_commandline_parameters(db, session_uid, obj.id)
 
     return obj.commandline_parameters

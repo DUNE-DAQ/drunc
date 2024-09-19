@@ -41,7 +41,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             name = name,
             session = session,
             configuration = bsch,
-        )
+        ) if bsch.data else None
 
         from logging import getLogger
         self.log = getLogger("process_manager")
@@ -97,6 +97,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             ),
 
             CommandDescription(
+                name = 'terminate',
+                data_type = ['process_manager_pb2.ProcessQuery'],
+                help = 'Kill all processes in session.',
+                return_type = 'process_manager_pb2.ProcessInstanceList'
+            ),
+
+            CommandDescription(
                 name = 'flush',
                 data_type = ['process_manager_pb2.ProcessQuery'],
                 help = 'Remove the processes from the list that are dead',
@@ -123,34 +130,34 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             btype = BroadcastType.SERVER_READY
         )
 
-    def terminate(self):
-        self.broadcast(
-            message='over_and_out',
-            btype=BroadcastType.SERVER_SHUTDOWN
-        )
-        self._terminate()
+    # def terminate(self):
+    #     self.broadcast(
+    #         message='over_and_out',
+    #         btype=BroadcastType.SERVER_SHUTDOWN
+    #     )
+    #     self._terminate()
 
-    @abc.abstractmethod
-    def _terminate(self):
-        pass
+    # @abc.abstractmethod
+    # def _terminate(self):
+    #     pass
 
     '''
     A couple of simple pass-through functions to the broadcasting service
     '''
     def broadcast(self, *args, **kwargs):
-        return self.broadcast_service.broadcast(*args, **kwargs)
+        return self.broadcast_service.broadcast(*args, **kwargs) if self.broadcast_service else None
 
     def can_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.can_broadcast(*args, **kwargs)
+        return self.broadcast_service.can_broadcast(*args, **kwargs) if self.broadcast_service else False
 
     def describe_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.describe_broadcast(*args, **kwargs)
+        return self.broadcast_service.describe_broadcast(*args, **kwargs) if self.broadcast_service else None
 
     def interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
+        return self.broadcast_service._interrupt_with_exception(*args, **kwargs) if self.broadcast_service else None
 
     def async_interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
+        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs) if self.broadcast_service else None
 
 
     @abc.abstractmethod
@@ -183,6 +190,36 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 children = [],
             )
 
+
+    @abc.abstractmethod
+    def _terminate_impl(self, q:ProcessQuery) -> ProcessInstanceList:
+        raise NotImplementedError
+
+    # ORDER MATTERS!
+    @broadcasted # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.DELETE,
+        system=SystemType.PROCESS_MANAGER
+    ) # 2nd step
+    @unpack_request_data_to(ProcessQuery) # 3rd step
+    def terminate(self, q:ProcessQuery) -> Response:
+        try:
+            resp = self._terminate_impl(q)
+            return Response(
+                name = self.name,
+                token = None,
+                data = pack_to_any(resp),
+                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children = [],
+            )
+        except NotImplementedError:
+            return Response(
+                name = self.name,
+                token = None,
+                data = pack_to_any(resp),
+                flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                children = [],
+            )
 
     @abc.abstractmethod
     def _restart_impl(self, q:ProcessQuery) -> ProcessInstanceList:

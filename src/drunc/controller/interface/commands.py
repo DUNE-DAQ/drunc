@@ -1,21 +1,17 @@
 import click
-
 from drunc.controller.interface.context import ControllerContext
-from drunc.utils.shell_utils import add_traceback_flag
-
 
 @click.command('describe')
 @click.option("--command", type=str, default='.*')#, help='Which command you are interested')
-@add_traceback_flag()
 @click.pass_obj
-def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
+def describe(obj:ControllerContext, command:str) -> None:
     from druncschema.controller_pb2 import Argument
     from drunc.utils.shell_utils import InterruptedCommand
 
     if command == 'fsm':
-        desc = obj.get_driver('controller').describe_fsm(rethrow=traceback).data
+        desc = obj.get_driver('controller').describe_fsm().data
     else:
-        desc = obj.get_driver('controller').describe(rethrow=traceback).data
+        desc = obj.get_driver('controller').describe().data
 
     if not desc: return
 
@@ -79,20 +75,29 @@ def describe(obj:ControllerContext, command:str, traceback:bool) -> None:
 
 
 @click.command('ls')
-@add_traceback_flag()
 @click.pass_obj
-def ls(obj:ControllerContext, traceback:bool) -> None:
-    children = obj.get_driver('controller').ls(rethrow=traceback).data
+def ls(obj:ControllerContext) -> None:
+    children = obj.get_driver('controller').ls().data
     if not children: return
     obj.print(children.text)
 
 
-@click.command('status')
-@add_traceback_flag()
+
+@click.command('wait')
+@click.argument("sleep_time", type=int, default=1)
 @click.pass_obj
-def status(obj:ControllerContext, traceback:bool) -> None:
+def wait(obj:ControllerContext, sleep_time:int) -> None:
+    # Requested to "allow processing of commands to pause for a specified number of seconds"
+    from time import sleep
+    sleep(sleep_time)
+    obj.print(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
+
+
+@click.command('status')
+@click.pass_obj
+def status(obj:ControllerContext) -> None:
     from druncschema.controller_pb2 import Status, ChildrenStatus
-    status = obj.get_driver('controller').get_status(traceback).data
+    status = obj.get_driver('controller').get_status().data
 
     if not status: return
 
@@ -113,7 +118,7 @@ def status(obj:ControllerContext, traceback:bool) -> None:
         format_bool(status.included),
     )
 
-    statuses = obj.get_driver('controller').get_children_status(traceback).data
+    statuses = obj.get_driver('controller').get_children_status().data
 
     if not statuses:
         statuses = []
@@ -131,39 +136,31 @@ def status(obj:ControllerContext, traceback:bool) -> None:
             format_bool(c_status.included)
         )
     obj.print(t)
+    obj.print_status_summary()
+    return
 
 @click.command('connect')
-@add_traceback_flag()
 @click.argument('controller_address', type=str)
 @click.pass_obj
-def connect(obj:ControllerContext, traceback:bool, controller_address:str) -> None:
+def connect(obj:ControllerContext, controller_address:str) -> None:
     obj.print(f'Connecting this shell to it...')
     from drunc.exceptions import DruncException
 
-    try:
-        obj.set_controller_driver(controller_address, obj.print_traceback)
-        from drunc.controller.interface.shell_utils import controller_setup
-        controller_setup(obj, controller_address)
-    except DruncException as de:
-        if traceback:
-            raise de
-        else:
-            obj.error(de)
-
+    obj.set_controller_driver(controller_address)
+    from drunc.controller.interface.shell_utils import controller_setup
+    controller_setup(obj, controller_address)
 
 
 @click.command('take-control')
-@add_traceback_flag()
 @click.pass_obj
-def take_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver('controller').take_control(traceback).data
+def take_control(obj:ControllerContext) -> None:
+    obj.get_driver('controller').take_control().data
 
 
 @click.command('surrender-control')
-@add_traceback_flag()
 @click.pass_obj
-def surrender_control(obj:ControllerContext, traceback:bool) -> None:
-    obj.get_driver('controller').surrender_control(traceback).data
+def surrender_control(obj:ControllerContext) -> None:
+    obj.get_driver('controller').surrender_control().data
 
 
 @click.command('who-am-i')
@@ -173,68 +170,100 @@ def who_am_i(obj:ControllerContext) -> None:
 
 
 @click.command('who-is-in-charge')
-@add_traceback_flag()
 @click.pass_obj
-def who_is_in_charge(obj:ControllerContext, traceback:bool) -> None:
-    who = obj.get_driver('controller').who_is_in_charge(traceback).data
+def who_is_in_charge(obj:ControllerContext) -> None:
+    who = obj.get_driver('controller').who_is_in_charge().data
     if who:
         obj.print(who.text)
 
 
 @click.command('fsm')
-@add_traceback_flag()
-@click.argument('command', type=str)
-@click.argument('arguments', type=str, nargs=-1)
+@click.argument('fsm_command', type=str, nargs=-1)
 @click.pass_obj
-def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
-    from druncschema.controller_pb2 import FSMCommand
-
-    if len(arguments) % 2 != 0:
-        raise click.BadParameter('Arguments are pairs of key-value!')
-    desc = obj.get_driver('controller').describe_fsm(traceback).data
-
-    from drunc.controller.interface.shell_utils import search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
-
-    command_desc = search_fsm_command(command, desc.commands)
-    if command_desc is None:
-        obj.error(f'Command "{command}" does not exist, or is not accessible right now')
-        return
-
-    keys = arguments[::2]
-    values = arguments[1::2]
-    arguments_dict = {keys[i]:values[i] for i in range(len(keys))}
-    result = None
-    try:
-        formated_args = validate_and_format_fsm_arguments(arguments_dict, command_desc.arguments)
-        data = FSMCommand(
-            command_name = command,
-            arguments = formated_args,
-        )
-        result = obj.get_driver('controller').execute_fsm_command(
-            arguments = data,
-            rethrow = True, # we throw here any way
-        )
-    except ArgumentException as ae:
-        obj.print(str(ae))
-        return
-    except Exception as e:
-        obj.error(e)
-        if traceback:
-            raise e
-
-    if not result: return
-
-    from drunc.controller.interface.shell_utils import format_bool, tree_prefix
+def fsm(obj:ControllerContext, fsm_command:str) -> None:
+    from drunc.controller.interface.shell_utils import format_bool, tree_prefix, search_fsm_command, validate_and_format_fsm_arguments, ArgumentException
     from drunc.utils.grpc_utils import unpack_any
-    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse
-
-    from rich.table import Table
-    t = Table(title=f'{command} execution report')
-    t.add_column('Name')
-    t.add_column('Command execution')
-    t.add_column('FSM transition')
-
+    from druncschema.controller_pb2 import FSMResponseFlag, FSMCommandResponse, FSMCommand, FSMCommandDescription
     from druncschema.request_response_pb2 import ResponseFlag
+    from rich.table import Table
+
+    def split_FSM_args(obj:ControllerContext, passed_commands:tuple):
+        # Note this is a placeholder - want to get this from OKS.
+        available_commands = ["conf", "start", "enable_triggers", "disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap", "start_run", "stop_run", "shutdown"]
+        available_command_mandatory_args = [[], ["run_number"], [], [], [], [], [], [], ["run_number"], [], []]
+        available_sequences = ["start_run", "stop_run", "shutdown"]
+        available_sequence_commands = [["conf", "start", "enable_triggers"], ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop"], ["disable_triggers", "drain_dataflow", "stop_trigger_sources", "stop", "scrap"]]
+        available_command_opt_args = []
+        available_args = ["run_number"]
+
+        # Get the index of all the commands in the command str
+        command_list = [command for command in passed_commands if command in available_commands]
+        if len(command_list) == 0:
+            if len(passed_commands) == 1:
+                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")    
+            else:
+                obj.print(f"None of the passed arguments were correctly identified.")
+            raise SystemExit(1)
+
+        # Get the arguments for each command
+        command_index = [passed_commands.index(command) for command in command_list]
+        command_argument_list = []
+        for i in range(len(command_index)-1):
+            command_argument_list.append(list(passed_commands[command_index[i]+1:command_index[i + 1]]))
+        command_argument_list.append(list(passed_commands[command_index[-1]+1:]))
+
+        # Not elegant, would be better to check at the command level first but it does work
+        for argument_list in command_argument_list:
+            argument_names = argument_list[::2]
+            for argument in argument_names:
+                # Check if the argument is legal
+                if argument not in available_args:
+                    from drunc.controller.exceptions import MalformedCommandArgument
+                    raise MalformedCommandArgument(f"Argument '{argument}' not recognised as a valid argument.")
+                # Check for duplicates
+                if argument_names.count(argument) != 1:
+                    from drunc.controller.exceptions import MalformedCommand
+                    raise MalformedCommand(f"Argument '{argument}' has been repeated.")
+
+        # Check the mandatory arguments
+        for command in command_list:
+            mandatory_command_arguments = available_command_mandatory_args[available_commands.index(command)]
+            provided_command_arguments = command_argument_list[command_list.index(command)]
+            if mandatory_command_arguments == []:
+                continue
+            for argument in mandatory_command_arguments:
+                if argument not in provided_command_arguments:
+                    missing_command_arguments = list(set(mandatory_command_arguments) - set(provided_command_arguments))
+                    obj.print(f"There are missing arguments for command [green]{command}[/green]. Missing mandatory argument(s): [red]{' '.join(missing_command_arguments)}[/red].")
+                    raise SystemExit(1)
+
+        # Extract commands from sequences
+        for command in command_list:
+            if command not in available_sequences:
+                continue
+            # Define the sequence command parameters
+            passed_sequence_command_index = command_list.index(command)
+            passed_sequence_command_args = list(command_argument_list[passed_sequence_command_index])
+            sequence_commands = available_sequence_commands[available_sequences.index(command)]
+            # Replace the sequence command with the correct fsm commands
+            del command_list[passed_sequence_command_index]
+            command_list[passed_sequence_command_index:passed_sequence_command_index] = sequence_commands
+            # Replace the sequence command arguments. Duplicates the sequence arguments for all FSM commands
+            del command_argument_list[passed_sequence_command_index]
+            for _ in range(len(sequence_commands)):
+                command_argument_list.insert(passed_sequence_command_index, passed_sequence_command_args)
+
+        return command_list, command_argument_list
+
+
+    def dict_arguments(arguments:str) -> dict:
+        if len(arguments) % 2 != 0:
+            raise click.BadParameter('Arguments are pairs of key-value!')
+        keys = arguments[::2]
+        values = arguments[1::2]
+        arguments_dict = {keys[i]:values[i] for i in range(len(keys))}
+        return arguments_dict
+
     def bool_to_success(flag_message, FSM):
         flag = False
         if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
@@ -252,31 +281,106 @@ def fsm(obj:ControllerContext, command, arguments, traceback:bool) -> None:
         for child_response in response.children:
             add_to_table(table, child_response, "  "+prefix)
 
-    add_to_table(t, result)
-    obj.print(t)
+    def print_execution_report(command:str, result:FSMCommandResponse) -> None:
+        t = Table(title=f'{command} execution report')
+        t.add_column('Name')
+        t.add_column('Command execution')
+        t.add_column('FSM transition')
 
+        add_to_table(t, result)
+        obj.print(t)
+        obj.print("") # For formatting
+        return
+
+    def filter_arguments(arguments:dict, fsm_command:FSMCommandDescription) -> dict:
+        if not arguments:
+            return None
+        cmd_arguments = {}
+        command_arguments = fsm_command.arguments
+        cmd_argument_names = [argument.name for argument in command_arguments]
+        for argument in list(arguments):
+            if argument in cmd_argument_names:
+                cmd_arguments[argument] = arguments[argument]
+        return cmd_arguments
+
+    def construct_FSM_command(obj:ControllerContext, command:tuple[str, list]) -> FSMCommand:
+        command_name = command[0]
+        command_args = dict_arguments(command[1])
+        command_desc = search_fsm_command(command_name, obj.get_driver('controller').describe_fsm().data.commands) # FSMCommandDescription
+        if command_desc == None:
+            return None
+
+        # Apply the appropriate arguments for this command
+        arguments = filter_arguments(command_args, command_desc)
+        # Construct the FSMCommand
+        from druncschema.controller_pb2 import FSMCommand
+        cmd = FSMCommand( 
+            command_name = command_name, 
+            arguments = validate_and_format_fsm_arguments(arguments, command_desc.arguments)
+        )
+        return cmd
+
+    def send_FSM_command(obj:ControllerContext, command:FSMCommand) -> FSMCommandResponse:
+        try:
+            result = obj.get_driver('controller').execute_fsm_command(command)
+        except Exception as e: # TODO narrow this exception down
+            obj.print(f"[red]{command.command_name}[/red] failed.")
+            raise e
+        print(f"Response flag: {result.flag=}")
+        if result.flag == FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR:
+            self.stateful_node.to_error()
+            obj.print(f"[red]{command.command_name}[/red] failed, there is a node in error.")
+        elif result.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+            obj.print(f"[red]{command.command_name}[/red] failed.")
+        else:
+            obj.print(f"[green]{command.command_name}[/green] executed successfully.")
+        print_execution_report(command.command_name, result)
+        if not result: return
+        return result
+
+    # When FSM batch mode gets merged this will need updating
+    if obj.get_driver('controller').get_status().data.in_error:
+        obj.print(f"[red]{command}[/red] not sent - node is in error.")
+        return
+
+    # Split command into a list of commands and a list of arguments
+    command_list, argument_list = split_FSM_args(obj, fsm_command)
+
+    # Execute the FSM commands
+    result = None
+    for command in zip(command_list, argument_list):
+        grpc_command = construct_FSM_command(obj, command)
+        if grpc_command == None:
+            obj.print(f"[red]{command[0]}[/red] is not possible in current state, not executing.")
+            continue
+        obj.print(f"Sending [green]{command[0]}[/green].")
+        result = send_FSM_command(obj, grpc_command)
+        if (result == None):
+            obj.print(f"Transition {FSMtransition} did not execute. Check logs for more info.")
+            break
+
+    obj.print_status_summary()
+    return
 
 @click.command('include')
-@add_traceback_flag()
 @click.pass_obj
-def include(obj:ControllerContext, traceback:bool) -> None:
+def include(obj:ControllerContext) -> None:
     from druncschema.controller_pb2 import FSMCommand
     data = FSMCommand(
         command_name = 'include',
     )
-    result = obj.get_driver('controller').include(rethrow=traceback, arguments=data).data
+    result = obj.get_driver('controller').include(arguments=data).data
     if not result: return
     obj.print(result.text)
 
 
 @click.command('exclude')
-@add_traceback_flag()
 @click.pass_obj
-def exclude(obj:ControllerContext, traceback:bool) -> None:
+def exclude(obj:ControllerContext) -> None:
     from druncschema.controller_pb2 import FSMCommand
     data = FSMCommand(
         command_name = 'exclude',
     )
-    result = obj.get_driver('controller').exclude(rethrow=traceback, arguments=data).data
+    result = obj.get_driver('controller').exclude(arguments=data).data
     if not result: return
     obj.print(result.text)

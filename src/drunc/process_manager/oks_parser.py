@@ -1,24 +1,46 @@
 import sys
 
-import coredal
+import confmodel
 import conffwk
 
+from typing import List, Dict, Any
 
-dal = conffwk.dal.module('x', 'schema/coredal/dunedaq.schema.xml')
+from drunc.process_manager.configuration import ProcessManagerConfHandler
 
-# Process a dal::Variable object, placing key/value pairs in a dictionary
-def process_variables(variables, envDict):
+pmch = ProcessManagerConfHandler()
+
+dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
+
+def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
+  """!Process a dal::Variable object, placing key/value pairs in a dictionary
+
+  @param variables  A Variable/VariableSet object
+  @param env_dict   The desitnation dictionary
+
+  """
+
   for item in variables:
     if item.className() == 'VariableSet':
-      process_variables(item.contains, envDict)
+      collect_variables(item.contains, env_dict)
     else:
       if item.className() == 'Variable':
-        envDict[item.name] = item.value
+        env_dict[item.name] = item.value
+
 
 # Recursively process all Segments in given Segment extracting Applications
-def process_segment(db, session, segment):
+def collect_apps(db, session, segment) -> List[Dict]:
+  """
+  ! Recustively collect (daq) application belonging to segment and its subsegments
+
+  @param session  The session the segment belongs to
+  @param segment  Segment to collect applications from
+
+  @return The list of dictionaries holding application attributs
+
+  """
+
   import logging
-  log = logging.getLogger('process_segment')
+  log = logging.getLogger('collect_apps')
   # Get default environment from Session
   defenv = {}
 
@@ -29,17 +51,16 @@ def process_segment(db, session, segment):
   else:
     defenv["DUNEDAQ_DB_PATH"] = DB_PATH
 
-  process_variables(session.environment, defenv)
+  collect_variables(session.environment, defenv)
 
   apps = []
 
   # Add controller for this segment to list of apps
   controller = segment.controller
   appenv = defenv
-  process_variables(controller.applicationEnvironment, appenv)
+  collect_variables(controller.application_environment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
-
   apps.append(
     {
       "name": controller.id,
@@ -47,22 +68,24 @@ def process_segment(db, session, segment):
       "args": get_cla(db._obj, session.id, controller),
       "restriction": host,
       "host": host,
-      "env": appenv
+      "env": appenv,
+      "tree_id": pmch.create_id(controller, segment)
     }
   )
 
   # Recurse over nested segments
   for seg in segment.segments:
-    if coredal.component_disabled(db._obj, session.id, seg.id):
+    if confmodel.component_disabled(db._obj, session.id, seg.id):
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
+      continue
 
-    for app in process_segment(db, session, seg):
+    for app in collect_apps(db, session, seg):
       apps.append(app)
 
   # Get all the enabled applications of this segment
   for app in segment.applications:
     if 'Component' in app.oksTypes():
-      enabled = not coredal.component_disabled(db._obj, session.id, app.id)
+      enabled = not confmodel.component_disabled(db._obj, session.id, app.id)
       log.debug(f"{app.id} {enabled=}")
     else:
       enabled = True
@@ -70,11 +93,12 @@ def process_segment(db, session, segment):
 
     if not enabled:
       log.info(f"Ignoring disabled app {app.id}")
+      continue
 
     appenv = defenv
 
     # Override with any app specific environment from Application
-    process_variables(app.applicationEnvironment, appenv)
+    collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -84,18 +108,63 @@ def process_segment(db, session, segment):
         "args": get_cla(db._obj, session.id, app),
         "restriction": host,
         "host": host,
-        "env": appenv
+        "env": appenv,
+        "tree_id": pmch.create_id(app)
       }
     )
 
   return apps
 
-def process_services(session):
-  services = []
-  for srv in session.services:
-    if isinstance(srv, dal.Application) and srv.enabled:
-      services.append((srv.className(), srv.runs_on))
-  return services
+
+def collect_infra_apps(session) -> List[Dict]:
+  """! Collect infrastructure applications 
+
+  @param session  The session
+
+  @return The list of dictionaries holding application attributs
+  
+  """
+  import logging
+  log = logging.getLogger('collect_infra_apps')
+
+  defenv = {}
+
+  import os
+  DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
+  if DB_PATH is None:
+    log.warning("DUNEDAQ_DB_PATH not set in this shell")
+  else:
+    defenv["DUNEDAQ_DB_PATH"] = DB_PATH
+
+  collect_variables(session.environment, defenv)
+
+  apps = []
+
+  for app in session.infrastructure_applications:
+    # Skip applications that do not define an application name
+    # i.e. treat them as "virtual applications"
+    # FIXME: modify schema to explicitly introduce non-runnable applications
+    if not app.application_name:
+      continue
+
+
+    appenv = defenv.copy()
+    collect_variables(app.application_environment, appenv)
+
+    host = app.runs_on.runs_on.id
+    apps.append(
+      {
+        "name": app.id,
+        "type": app.application_name,
+        "args": app.commandline_parameters,
+        "restriction": host,
+        "host": host,
+        "env": appenv,
+        "tree_id": pmch.create_id(app)
+      }
+    )
+  
+  return apps
 
 
 # Search segment and all contained segments for apps controlled by
@@ -107,13 +176,13 @@ def find_controlled_apps(db, session, mycontroller, segment):
     for app in segment.applications:
       apps.append(app.id)
     for seg in segment.segments:
-      if not coredal.component_disabled(db._obj, session.id, seg.id):
+      if not confmodel.component_disabled(db._obj, session.id, seg.id):
         controllers.append(seg.controller.id)
   else:
     for seg in segment.segments:
-      if not coredal.component_disabled(db._obj, session.id, seg.id):
+      if not confmodel.component_disabled(db._obj, session.id, seg.id):
         aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
         if len(apps) > 0:
-          break;
+          break
   return apps, controllers
 

@@ -10,11 +10,8 @@ def main():
     except Exception as e:
         from rich import print as rprint
         rprint(f'[red bold]:fire::fire: Exception thrown :fire::fire:')
-        if context.print_traceback:
-            from drunc.utils.utils import print_traceback
-            print_traceback()
-        else:
-            rprint(f'[yellow]{e}[/]\nUse [blue]--traceback[/] for more information')
+        from drunc.utils.utils import print_traceback
+        print_traceback()
         rprint(f'Exiting...')
 
         if context.pm_process and context.pm_process.is_alive():

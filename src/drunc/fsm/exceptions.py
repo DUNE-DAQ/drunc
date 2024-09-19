@@ -40,6 +40,12 @@ class MissingArgument(FSMException):
         self.message = f"The mandatory argument \"{param}\" was not provided to the transition {name}"
         super().__init__(self.message)
 
+class MissingArgumentValue(FSMException):
+    '''Raised when a mandatory argument is not provided for a transition'''
+    def __init__(self):
+        self.message = f"A passed argument does not have an associated value, arguments are key-value pairs."
+        super().__init__(self.message)
+
 class DoubleArgument(FSMException):
     '''Raised when an argument is provided more than once'''
     def __init__(self, txt):
@@ -79,10 +85,39 @@ class MethodSignatureMissingAnnotation(FSMException):
 class TransitionDataOfIncorrectFormat(FSMException):
     def __init__(self, data):
         self.message = f'The data "{data}" could not be interpreted as json'
+        super(MethodSignatureMissingAnnotation, self).__init__(self.message)
+
+class CannotGetRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not get Run Number because {data}'
         super().__init__(self.message)
 
-        
+class CannotInsertRunNumber(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not insert Run into RunRegistryDB because {data}'
+        super().__init__(self.message)
+
+class CannotUpdateStopTime(FSMException):
+    def __init__(self, data):
+        self.message = f'Could not update stop time in RunRegistryDB because {data}'
+        super().__init__(self.message)
+
+class InvalidDataReturnByFSMAction(FSMException):
+    def __init__(self, data):
+        self.message = f"The action returns an incorrect object which isn't serialisable: {data}"
+        super().__init__(self.message)
+
 class ThreadPinningFailed(FSMException):
     def __init__(self, host):
         self.message = f'The thread pinning on "{host}" failed'
+        super().__init__(self.message)
+
+class CannotGetSoftwareVersion(FSMException):
+    def __init__(self):
+        self.message = f'RunRegistryDB: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and export DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n'
+        super().__init__(self.message)
+
+class CannotSendElisaMessage(FSMException):
+    def __init__(self, data):
+        self.message = f'Cannot send message to ELisA because {data}. Do it manually at https://np-vd-coldbox-elog.app.cern.ch or https://pdsp-elog.app.cern.ch!'
         super().__init__(self.message)
