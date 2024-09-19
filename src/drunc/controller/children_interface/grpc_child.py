@@ -33,11 +33,8 @@ class gRPCChildNode(ChildNode):
 
         from urllib.parse import urlparse
         uri = urlparse(uri)
-        print(uri)
         host, port = (uri.netloc).split(":")
         port = int(port)
-        import socket
-        host = socket.gethostbyaddr(host)[0]
 
         if port == 0:
             from drunc.exceptions import DruncSetupException
@@ -47,6 +44,8 @@ class gRPCChildNode(ChildNode):
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
+        self.log.info(f'Connecting to {self.uri}, {type(self.uri)}')
+
         self.channel = grpc.insecure_channel(self.uri)
         self.controller = ControllerStub(self.channel)
 

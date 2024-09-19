@@ -79,7 +79,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     try:
         server, port = serve(command_facility)
         import socket
-        address = f'{socket.gethostbyname(socket.gethostname())}:{port}'
+        address = f'{socket.gethostname()}:{port}'
 
         ctrlr.advertise_control_address(address)
 
