@@ -10,10 +10,7 @@ import abc
 
 from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
 from drunc.process_manager.configuration import ProcessManagerConfHandler, ProcessManagerTypes
-
-
 from drunc.exceptions import DruncCommandException
-
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -42,9 +39,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             session = session,
             configuration = bsch,
         ) if bsch.data else None
-
-        from logging import getLogger
-        self.log = getLogger("process_manager")
 
         from drunc.authoriser.configuration import DummyAuthoriserConfHandler
         from drunc.utils.configuration import ConfTypes
