@@ -55,7 +55,7 @@ class FSMConfHandler(ConfHandler):
                 name = transition.id,
                 source = transition.source,
                 destination = transition.dest,
-                arguments = [] # not needed in principle, but I getting transition from the previous iteration I don't add this (?!?!)
+                arguments = [] # /!\
             )
 
             pre_transitions  = self._fill_pre_post_transition_sequence_oks('pre' , tr, self.data.pre_transitions)
