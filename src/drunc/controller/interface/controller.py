@@ -7,7 +7,7 @@ from drunc.utils.utils import log_levels,  update_log_level, validate_command_fa
 @click.argument('command-facility', type=str, callback=validate_command_facility)#, help=f'Command facility (protocol, host and port) grpc://{socket.gethostname()}:12345')
 @click.argument('name', type=str)
 @click.argument('session', type=str)
-@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='DEBUG', help='Set the log level')
 def controller_cli(configuration:str, command_facility:str, name:str, session:str, log_level:str):
 
     from rich.console import Console
@@ -77,9 +77,15 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
+        from socket import gethostname
+        if 'localhost' in command_facility:
+            command_facility = command_facility.replace('localhost', gethostname())
+        if command_facility.startswith('grpc://127.'):
+            ip = command_facility.split(':')[0].replace('grpc://', '')
+            command_facility = command_facility.replace(ip, gethostname())
+
         server, port = serve(command_facility)
-        import socket
-        address = f'{socket.gethostname()}:{port}'
+        address = f'{gethostname()}:{port}'
 
         ctrlr.advertise_control_address(address)
 
