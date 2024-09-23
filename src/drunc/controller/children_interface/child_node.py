@@ -62,7 +62,7 @@ class ChildNode(abc.ABC):
         for _ in range(5):
             try:
 
-                uris = connectivity_service.resolve(name+'_control.*')
+                uris = connectivity_service.resolve(name+'_control')
                 if len(uris) == 0:
                     raise ApplicationLookupUnsuccessful
 
