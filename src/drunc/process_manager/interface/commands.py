@@ -12,7 +12,7 @@ from drunc.process_manager.interface.cli_argument import validate_conf_string
 @click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
 @click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
 @click.option('--override-logs/--no-override-logs', default=True)
-@click.option('--connectivity-service-port', default=5000)
+@click.option('--connectivity-service-port', default=None, type=int, help='Set the port for the connectivity service. By default (None), use the one from the configuration')
 @click.argument('boot-configuration', type=str, callback=validate_conf_string)
 @click.argument('session-name', type=str)
 @click.pass_obj

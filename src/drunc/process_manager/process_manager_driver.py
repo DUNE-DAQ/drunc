@@ -31,7 +31,7 @@ class ProcessManagerDriver(GRPCDriver):
         user:str,
         session:str,
         override_logs:bool,
-        connectivity_service_port:int=5000) -> BootRequest:
+        connectivity_service_port:int=None) -> BootRequest:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -40,11 +40,15 @@ class ProcessManagerDriver(GRPCDriver):
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
 
+        if connectivity_service_port == 0:
+            from drunc.utils.utils import get_new_port
+            connectivity_service_port = get_new_port()
+
         env = {
-            'CONNECTION_PORT': str(connectivity_service_port),
             'DUNEDAQ_PARTITION': session,
             'DUNEDAQ_SESSION': session,
             'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
+            'CONNECTION_PORT': str(connectivity_service_port) if connectivity_service_port is not None else None,
         }
 
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
