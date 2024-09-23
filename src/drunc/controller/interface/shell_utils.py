@@ -177,7 +177,7 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
             raise MissingArgument(aname, atype)
 
         value = arguments.get(aname)
-        if not value:
+        if value is None:
             out_dict[aname] = adefa
             continue
 
