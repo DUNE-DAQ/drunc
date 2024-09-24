@@ -17,9 +17,12 @@ class ThreadPinning(FSMAction):
         import conffwk
         db = conffwk.Configuration(f"oksconflibs:{configuration}")
         session_dal = db.get_dal(class_name="Session", uid=session)
-        apps = collect_apps(db, session_dal, session_dal.segment)
+        from os import environ
 
-        import os 
+
+        apps = collect_apps(db, session_dal, session_dal.segment, environ)
+
+        import os
         rte=session_dal.rte_script
         if not rte and os.getenv("DBT_INSTALL_DIR"):
             rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
