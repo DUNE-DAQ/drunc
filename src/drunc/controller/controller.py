@@ -4,6 +4,7 @@ from druncschema.generic_pb2 import PlainText, PlainTextVector
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.controller_pb2 import Status, ChildrenStatus
+from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
 
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.stateful_node import StatefulNode
@@ -16,8 +17,6 @@ from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 from drunc.authoriser.decorators import authentified_and_authorised
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
-
-from druncschema.controller_pb2 import FSMCommand
 
 import signal
 
@@ -238,10 +237,9 @@ if nothing (None) is provided, return the transitions accessible from the curren
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
 
-    def construct_error_node_response(self, command_name:str, token:Token) -> Response:
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+    def construct_error_node_response(self, command_name:str, token:Token, cause:FSMResponseFlag) -> Response:
         fsm_result = FSMCommandResponse(
-            flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+            flag = cause,
             command_name = command_name,
         )
 
@@ -249,9 +247,10 @@ if nothing (None) is provided, return the transitions accessible from the curren
             name = self.name,
             token = token,
             data = pack_to_any(fsm_result),
-            flag = ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,
+            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
             children = [],
         )
+
     def terminate(self):
         if self.can_broadcast():
             self.broadcast(
@@ -302,9 +301,6 @@ if nothing (None) is provided, return the transitions accessible from the curren
                 message = f'Propagating {command} to children ({child.name})',
             )
 
-            from drunc.exceptions import DruncException
-            import traceback
-
             try:
                 response = child.propagate_command(command, command_data, token)
                 with response_lock:
@@ -316,14 +312,23 @@ if nothing (None) is provided, return the transitions accessible from the curren
                         message = f'Propagated {command} to children ({child.name}) successfully',
                     )
                 else:
+
                     self.broadcast(
                         btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                        message = f'Propagating {command} to children ({child.name}) failed: {str(response.flag)}',
+                        message = f'Propagating {command} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace.',
                     )
-            except DruncException as e:
+
+            except Exception as e: # Catch all, we are in a thread and want to do something sensible when an exception is thrown
+                self.logger.error(f"Something wrong happened while sending the command to {child.name}: Error raised: {str(e)}")
+                from drunc.utils.utils import print_traceback
+                print_traceback()
+                from drunc.exceptions import DruncException
+                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+
                 with response_lock:
                     from druncschema.request_response_pb2 import Response
                     from druncschema.generic_pb2 import PlainText, Stacktrace
+                    import traceback
                     stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
@@ -334,28 +339,11 @@ if nothing (None) is provided, return the transitions accessible from the curren
                                     text=stack
                                 )
                             ),
-                            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                            flag = flag,
                             children = [],
                         )
                     )
-            except Exception as e:
-                with response_lock:
-                    from druncschema.request_response_pb2 import Response
-                    from druncschema.generic_pb2 import PlainText, Stacktrace
-                    stack = traceback.format_exc().split("\n")
-                    response_children.append(
-                        Response(
-                            name = child.name,
-                            token = token,
-                            data = pack_to_any(
-                                Stacktrace(
-                                    text=stack
-                                )
-                            ),
-                            flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
-                            children = [],
-                        )
-                    )
+
                 self.broadcast(
                     btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
                     message = f'Failed to propagate {command} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}',
@@ -396,8 +384,23 @@ if nothing (None) is provided, return the transitions accessible from the curren
     @unpack_request_data_to(pass_token=True) # 3rd step
     def get_children_status(self, token:Token) -> Response:
         #from drunc.controller.utils import get_status_message
+        cs = []
+        for n in self.children_nodes:
+            try:
+                cs += [n.get_status(token)]
+            except Exception as e: # TEMPORARY hack
+                from druncschema.controller_pb2 import Status
+                cs += [
+                    Status(
+                        name = n.name,
+                        state = 'unknown',
+                        sub_state = 'unknown',
+                        in_error = True,
+                    )
+                ]
+
         response =  ChildrenStatus(
-            children_status = [n.get_status(token) for n in self.children_nodes]
+            children_status = cs
         )
         return Response(
             name = self.name,
@@ -531,11 +534,17 @@ if nothing (None) is provided, return the transitions accessible from the curren
         2. Execute the command on children controller, app, and self
         3. Return the result
         """
-        from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+        from druncschema.request_response_pb2 import ResponseFlag
+
         if self.stateful_node.node_is_in_error():
-            return self.construct_error_node_response(fsm_command.command_name, token)
+            return self.construct_error_node_response(
+                fsm_command.command_name,
+                token,
+                cause = FSMResponseFlag.FSM_NODE_IN_ERROR
+            )
 
         if not self.stateful_node.node_is_included():
+            self.logger.error(f"Node is not included, not executing command {fsm_command.command_name}.")
             fsm_result = FSMCommandResponse(
                 flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 command_name = fsm_command.command_name,
@@ -555,7 +564,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         self.logger.debug(f'The transition requested is "{str(transition)}"')
 
         if not self.stateful_node.can_transition(transition):
-            message = f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"'
+            self.logger.error(f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"')
+
             fsm_result = FSMCommandResponse(
                 flag = FSMResponseFlag.FSM_INVALID_TRANSITION,
                 command_name = fsm_command.command_name,
@@ -595,17 +605,20 @@ if nothing (None) is provided, return the transitions accessible from the curren
             node_to_execute = self.children_nodes,
         )
 
-        success = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-        if any(cr.flag != success for cr in response_children): # if any child was unsuccessful
-            success = FSMResponseFlag.FSM_FAILED
-            self.stateful_node.to_error()
+        child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+        child_worst_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
 
-            self.broadcast(
-                btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                message = f'Failed to execute {fsm_command.command_name}',
-            )
-            self.stateful_node.to_error()
-            return self.construct_error_node_response(fsm_command.command_name, token)
+        for response_child in response_children:
+
+            if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+                child_worst_response_flag = response_child.flag
+                continue
+
+            from drunc.utils.grpc_utils import unpack_any
+            fsm_response = unpack_any(response_child.data, FSMCommandResponse)
+
+            if fsm_response.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
+                child_worst_fsm_flag = fsm_response.flag
 
 
         self.stateful_node.finish_propagating_transition_mark(transition)
@@ -621,11 +634,20 @@ if nothing (None) is provided, return the transitions accessible from the curren
             ctx = self,
         )
 
-        if self.stateful_node.node_is_in_error():
-            return self.construct_error_node_response(fsm_command.command_name, token)
+        if (child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY or
+            child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY):
 
+            self.stateful_node.to_error()
+
+        #     return self.construct_error_node_response(
+        #         fsm_command.command_name,
+        #         token,
+        #         cause = FSMResponseFlag.FSM_FAILED,
+        #     )
+
+        self_response_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY # self has executed successfully, even if children have not
         fsm_result = FSMCommandResponse(
-            flag = success,
+            flag = self_response_fsm_flag,
             command_name = fsm_command.command_name,
         )
 

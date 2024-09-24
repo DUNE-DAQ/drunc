@@ -554,20 +554,12 @@ class RESTAPIChildNode(ChildNode):
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY # /!\ The command executed successfully, but the FSM command was not successful
                 return response
 
-        except ChildError as e:
+        except Exception as e: # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
             self.log.error(f'Got error from \'{data.command_name}\' to \'{self.name}\': {str(e)}')
             self.state.to_error()
-            return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    Stacktrace(
-                        text=[str(e)]
-                    )
-                ),
-                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                children = []
-            )
+            from drunc.utils.utils import print_traceback # for good measure, since I'm not sure the stack will be printed in propagate_to_child in the controller
+            print_traceback()
+            raise e
 
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
