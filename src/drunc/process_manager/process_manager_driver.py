@@ -40,7 +40,14 @@ class ProcessManagerDriver(GRPCDriver):
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
 
-        if connectivity_service_port == 0:
+
+        db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
+        session_dal = db.get_dal(class_name="Session", uid=session)
+        from drunc.process_manager.oks_parser import collect_variables
+        env_throwaway = {}
+        collect_variables(session_dal.environment, env_throwaway)
+
+        if connectivity_service_port == 0 or not env_throwaway.get('CONNECTION_PORT'):
             from drunc.utils.utils import get_new_port
             connectivity_service_port = get_new_port()
 
@@ -50,9 +57,6 @@ class ProcessManagerDriver(GRPCDriver):
             'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
             'CONNECTION_PORT': str(connectivity_service_port) if connectivity_service_port is not None else None,
         }
-
-        db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
-        session_dal = db.get_dal(class_name="Session", uid=session)
 
         apps = collect_apps(db, session_dal, session_dal.segment, env)
         infra_apps = collect_infra_apps(session_dal, env)
