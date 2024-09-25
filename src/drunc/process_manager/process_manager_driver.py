@@ -1,4 +1,7 @@
 import asyncio
+
+from typing import Dict
+
 from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 
@@ -31,7 +34,9 @@ class ProcessManagerDriver(GRPCDriver):
         user:str,
         session:str,
         override_logs:bool,
-        connectivity_service_port:int=None) -> BootRequest:
+        connectivity_service_port:int=None,
+        env_overrides:Dict[str, str]={}) -> BootRequest:
+
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -54,9 +59,9 @@ class ProcessManagerDriver(GRPCDriver):
         env = {
             'DUNEDAQ_PARTITION': session,
             'DUNEDAQ_SESSION': session,
-            'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
             'CONNECTION_PORT': str(connectivity_service_port) if connectivity_service_port is not None else None,
         }
+        env.update(env_overrides)
 
         apps = collect_apps(db, session_dal, session_dal.segment, env)
         infra_apps = collect_infra_apps(session_dal, env)
@@ -150,13 +155,23 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True, **kwargs) -> ProcessInstance:
+    async def boot(
+        self,
+        conf:str,
+        user:str,
+        session_name:str,
+        log_level:str,
+        override_logs:bool=True,
+        env_overrides:Dict[str,str]={},
+        **kwargs
+        ) -> ProcessInstance:
 
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
             session = session_name,
             override_logs = override_logs,
+            env_overrides = env_overrides,
             **kwargs,
             ):
             yield await self.send_command_aio(
