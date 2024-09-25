@@ -64,7 +64,7 @@ class PreOrPostTransitionSequence:
             from drunc.exceptions import DruncException
             try:
                 self._log.debug(f'data before callback: {input_data}')
-                self._log.info(f'executing the callback: {callback.method.__name__} from {callback.method.__module__}')
+                self._log.info(f'executing the callback: {callback.method.__name__}')
                 input_data = callback.method(_input_data=input_data, _context=ctx, **transition_args)
                 self._log.debug(f'data after callback: {input_data}')
                 from drunc.fsm.exceptions import InvalidDataReturnByFSMAction

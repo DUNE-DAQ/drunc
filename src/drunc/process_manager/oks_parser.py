@@ -6,12 +6,12 @@ import conffwk
 from typing import List, Dict, Any
 
 from drunc.process_manager.configuration import ProcessManagerConfHandler
-from drunc.exceptions import  DruncException
+
 pmch = ProcessManagerConfHandler()
 
 dal = conffwk.dal.module('x', 'schema/confmodel/dunedaq.schema.xml')
 
-def collect_variables(variables, env_dict:Dict[str,str]) -> None:
+def collect_variables(variables, env_dict: Dict[str, Any]) -> None:
   """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
   @param variables  A Variable/VariableSet object
@@ -27,35 +27,8 @@ def collect_variables(variables, env_dict:Dict[str,str]) -> None:
         env_dict[item.name] = item.value
 
 
-class EnvironmentVariableCannotBeSet(DruncException):
-  pass
-
-def update_env_and_check(env:Dict[str,Any], env2:Dict[str,str], required:list[str]|str='all') -> None:
-
-  def update_carefully(env, env2): # standard dict.update, except it doesn't update if value is None
-    for key, value in env2.items():
-      if value is not None: # ... as seen here
-          env[key] = value
-
-  update_carefully(env, env2)
-
-  for key, value in env.items():
-    if value == '' or value is None:
-      if key in required or required == 'all':
-        raise EnvironmentVariableCannotBeSet(f'Environment variable \'{key}\' is empty.')
-
-
-required_env_keys = [
-  'DUNEDAQ_DB_PATH',
-  'DUNEDAQ_PARTITION',
-  'DUNEDAQ_SESSION',
-  'CONNECTION_PORT',
-  'CONNECTION_SERVER',
-  'DUNEDAQ_APPLICATION_NAME'
-]
-
 # Recursively process all Segments in given Segment extracting Applications
-def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
+def collect_apps(db, session, segment) -> List[Dict]:
   """
   ! Recustively collect (daq) application belonging to segment and its subsegments
 
@@ -84,11 +57,8 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
 
   # Add controller for this segment to list of apps
   controller = segment.controller
-  rc_env = defenv.copy()
-  collect_variables(controller.application_environment, rc_env)
-  rc_env['DUNEDAQ_APPLICATION_NAME'] = controller.id
-  update_env_and_check(rc_env, env, required_env_keys)
-
+  appenv = defenv
+  collect_variables(controller.application_environment, appenv)
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
   apps.append(
@@ -98,7 +68,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
       "args": get_cla(db._obj, session.id, controller),
       "restriction": host,
       "host": host,
-      "env": rc_env,
+      "env": appenv,
       "tree_id": pmch.create_id(controller, segment)
     }
   )
@@ -109,7 +79,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
       log.info(f'Ignoring segment \'{seg.id}\' as it is disabled')
       continue
 
-    for app in collect_apps(db, session, seg, env):
+    for app in collect_apps(db, session, seg):
       apps.append(app)
 
   # Get all the enabled applications of this segment
@@ -125,12 +95,10 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
       log.info(f"Ignoring disabled app {app.id}")
       continue
 
-    app_env = defenv.copy()
+    appenv = defenv
 
     # Override with any app specific environment from Application
-    collect_variables(app.application_environment, app_env)
-    app_env['DUNEDAQ_APPLICATION_NAME'] = app.id
-    update_env_and_check(app_env, env, required_env_keys)
+    collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -140,7 +108,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
         "args": get_cla(db._obj, session.id, app),
         "restriction": host,
         "host": host,
-        "env": app_env,
+        "env": appenv,
         "tree_id": pmch.create_id(app)
       }
     )
@@ -148,13 +116,13 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
   return apps
 
 
-def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
-  """! Collect infrastructure applications
+def collect_infra_apps(session) -> List[Dict]:
+  """! Collect infrastructure applications 
 
   @param session  The session
 
   @return The list of dictionaries holding application attributs
-
+  
   """
   import logging
   log = logging.getLogger('collect_infra_apps')
@@ -180,10 +148,8 @@ def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
       continue
 
 
-    app_env = defenv.copy()
-    collect_variables(app.application_environment, app_env)
-    app_env['DUNEDAQ_APPLICATION_NAME'] = app.id
-    update_env_and_check(app_env, env, required_env_keys)
+    appenv = defenv.copy()
+    collect_variables(app.application_environment, appenv)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -193,11 +159,11 @@ def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
         "args": app.commandline_parameters,
         "restriction": host,
         "host": host,
-        "env": app_env,
+        "env": appenv,
         "tree_id": pmch.create_id(app)
       }
     )
-
+  
   return apps
 
 
