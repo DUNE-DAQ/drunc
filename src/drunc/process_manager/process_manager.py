@@ -33,11 +33,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self.log = getLogger("process_manager")
         # update_log_level()
-        self.OpMonTopic = "control." + str(self.name) + ".process_manager"
+        import getpass
+        self.OpMonTopic = "control." + str(self.name) + ".process_manager" + str(getpass.getuser())
         self.publisher = OpMonPublisher(self.OpMonTopic)
 
         from druncschema.generic_pb2 import string_msg
-        boot_msg = string_msg(value=f"Booted the process manager in session {self.session}")
+        boot_msg = string_msg(value=f"User {getpass.getuser()} booted the process manager in session {self.session}")
         self.publisher.publish(self.session, "process_manager", boot_msg)
 
         from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
