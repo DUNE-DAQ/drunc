@@ -3,6 +3,7 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest, LogLine
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
+from druncschema.generic_pb2 import string_msg
 
 from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to,pack_to_any
@@ -10,9 +11,10 @@ from drunc.authoriser.decorators import authentified_and_authorised, async_authe
 from drunc.process_manager.configuration import ProcessManagerConfHandler, ProcessManagerTypes
 from drunc.exceptions import DruncCommandException
 
-from kafkaopmon import OpMonPublisher
+from kafkaopmon.OpMonPublisher import OpMonPublisher
 import abc
-
+from logging import getLogger
+from drunc.utils.utils import update_log_level
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -29,13 +31,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.name = name
         self.session = session
 
-        from logging import getLogger
         self.log = getLogger("process_manager")
+        # update_log_level()
+        self.OpMonTopic = "control." + str(self.name) + ".process_manager"
+        self.publisher = OpMonPublisher(self.OpMonTopic)
 
-        self.publisher = kafkaopmon.OpMonPublisher("control."+str(self.name)+".process_manager")
         from druncschema.generic_pb2 import string_msg
-        boot_notification = string_msg(value=f"Booted the process manager in session {self.session}")
-        self.publisher.publish(boot_notification)
+        boot_msg = string_msg(value=f"Booted the process manager in session {self.session}")
+        self.publisher.publish(self.session, "process_manager", boot_msg)
 
         from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
         from drunc.utils.configuration import ConfTypes
