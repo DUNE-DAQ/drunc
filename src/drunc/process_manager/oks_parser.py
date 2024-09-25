@@ -30,7 +30,7 @@ def collect_variables(variables, env_dict:Dict[str,str]) -> None:
 class EnvironmentVariableCannotBeSet(DruncException):
   pass
 
-def update_env(env:Dict[str,Any], env2:Dict[str,str]) -> None:
+def update_env_and_check(env:Dict[str,Any], env2:Dict[str,str], required:list[str]|str='all') -> None:
 
   def update_carefully(env, env2): # standard dict.update, except it doesn't update if value is None
     for key, value in env2.items():
@@ -41,8 +41,18 @@ def update_env(env:Dict[str,Any], env2:Dict[str,str]) -> None:
 
   for key, value in env.items():
     if value == '' or value is None:
-      raise EnvironmentVariableCannotBeSet(f'Environment variable \'{key}\' is empty.')
+      if key in required or required == 'all':
+        raise EnvironmentVariableCannotBeSet(f'Environment variable \'{key}\' is empty.')
 
+
+required_env_keys = [
+  'DUNEDAQ_DB_PATH',
+  'DUNEDAQ_PARTITION',
+  'DUNEDAQ_SESSION',
+  'CONNECTION_PORT',
+  'CONNECTION_SERVER',
+  'DUNEDAQ_APPLICATION_NAME'
+]
 
 # Recursively process all Segments in given Segment extracting Applications
 def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
@@ -77,7 +87,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
   rc_env = defenv.copy()
   collect_variables(controller.application_environment, rc_env)
   rc_env['DUNEDAQ_APPLICATION_NAME'] = controller.id
-  update_env(rc_env, env)
+  update_env_and_check(rc_env, env, required_env_keys)
 
   from drunc.process_manager.configuration import get_cla
   host = controller.runs_on.runs_on.id
@@ -120,7 +130,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
     # Override with any app specific environment from Application
     collect_variables(app.application_environment, app_env)
     app_env['DUNEDAQ_APPLICATION_NAME'] = app.id
-    update_env(app_env, env)
+    update_env_and_check(app_env, env, required_env_keys)
 
     host = app.runs_on.runs_on.id
     apps.append(
@@ -173,7 +183,7 @@ def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
     app_env = defenv.copy()
     collect_variables(app.application_environment, app_env)
     app_env['DUNEDAQ_APPLICATION_NAME'] = app.id
-    update_env(app_env, env)
+    update_env_and_check(app_env, env, required_env_keys)
 
     host = app.runs_on.runs_on.id
     apps.append(
