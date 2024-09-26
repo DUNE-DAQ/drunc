@@ -25,7 +25,13 @@ class ProcessManagerDriver(GRPCDriver):
         return ProcessManagerStub(channel)
 
 
-    async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
+    async def _convert_oks_to_boot_request(
+        self,
+        oks_conf:str,
+        user:str,
+        session:str,
+        override_logs:bool,
+        connectivity_service_port:int=None) -> BootRequest:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -33,13 +39,29 @@ class ProcessManagerDriver(GRPCDriver):
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
+
+
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
+        from drunc.process_manager.oks_parser import collect_variables
+        env_throwaway = {}
+        collect_variables(session_dal.environment, env_throwaway)
 
-        apps = collect_apps(db, session_dal, session_dal.segment)
-        infra_apps = collect_infra_apps(session_dal)
-        
-        apps += infra_apps
+        if connectivity_service_port == 0 or not env_throwaway.get('CONNECTION_PORT'):
+            from drunc.utils.utils import get_new_port
+            connectivity_service_port = get_new_port()
+
+        env = {
+            'DUNEDAQ_PARTITION': session,
+            'DUNEDAQ_SESSION': session,
+            'DAQAPP_CLI_CONFIG_SVC': f"oksconflibs:{oks_conf}",
+            'CONNECTION_PORT': str(connectivity_service_port) if connectivity_service_port is not None else None,
+        }
+
+        apps = collect_apps(db, session_dal, session_dal.segment, env)
+        infra_apps = collect_infra_apps(session_dal, env)
+
+        apps = infra_apps+apps
 
         def get_controller_address(top_controller_conf):
             service_id = top_controller_conf.id + "_control"
@@ -55,7 +77,9 @@ class ProcessManagerDriver(GRPCDriver):
             return f'{top_controller_conf.runs_on.runs_on.id}:{port_number}'
 
         self.controller_address = get_controller_address(session_dal.segment.controller)
-        self._log.debug(f"{apps=}")
+        import json
+        self._log.debug(f"{json.dumps(apps, indent=4)}")
+
         import os
         pwd = os.getcwd()
 
@@ -68,8 +92,7 @@ class ProcessManagerDriver(GRPCDriver):
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
             tree_id = app['tree_id']
 
-            self._log.debug(f"{app=}")
-
+            self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
             executable_and_arguments = []
 
             if session_dal.rte_script:
@@ -104,7 +127,7 @@ class ProcessManagerDriver(GRPCDriver):
                 log_path = f'{pwd}/log_{user}_{session}_{name}.log'
             else:
                 log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
-
+            self._log.debug(f'{name}\'s env:\n{env}')
             breq =  BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
@@ -127,13 +150,14 @@ class ProcessManagerDriver(GRPCDriver):
             yield breq
 
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
+    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True, **kwargs) -> ProcessInstance:
 
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
             session = session_name,
             override_logs = override_logs,
+            **kwargs,
             ):
             yield await self.send_command_aio(
                 'boot',
@@ -151,7 +175,7 @@ class ProcessManagerDriver(GRPCDriver):
         for i in range(1,n_sleeps+1):
             executable_and_arguments += [ProcessDescription.ExecAndArgs(exec='sleep',args=[str(sleep)+"s"]), ProcessDescription.ExecAndArgs(exec='echo',args=[str(sleep*i)+"s"])]
         executable_and_arguments.append(ProcessDescription.ExecAndArgs(exec='echo',args=["Exiting."]))
-        
+
         for process in range(n_processes):
             breq =  BootRequest(
                 process_description = ProcessDescription(
