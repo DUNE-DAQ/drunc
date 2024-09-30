@@ -33,9 +33,8 @@ class ProcessManagerDriver(GRPCDriver):
         oks_conf:str,
         user:str,
         session:str,
-        override_logs:bool,
-        connectivity_service_port:int=None,
-        env_overrides:Dict[str, str]={}) -> BootRequest:
+        override_logs:bool
+        ) -> BootRequest:
 
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
@@ -49,19 +48,10 @@ class ProcessManagerDriver(GRPCDriver):
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
         from drunc.process_manager.oks_parser import collect_variables
-        env_throwaway = {}
-        collect_variables(session_dal.environment, env_throwaway)
-
-        if connectivity_service_port == 0 or not env_throwaway.get('CONNECTION_PORT'):
-            from drunc.utils.utils import get_new_port
-            connectivity_service_port = get_new_port()
 
         env = {
-            'DUNEDAQ_PARTITION': session,
             'DUNEDAQ_SESSION': session,
-            'CONNECTION_PORT': str(connectivity_service_port) if connectivity_service_port is not None else None,
         }
-        env.update(env_overrides)
 
         apps = collect_apps(db, session_dal, session_dal.segment, env)
         infra_apps = collect_infra_apps(session_dal, env)
@@ -162,7 +152,6 @@ class ProcessManagerDriver(GRPCDriver):
         session_name:str,
         log_level:str,
         override_logs:bool=True,
-        env_overrides:Dict[str,str]={},
         **kwargs
         ) -> ProcessInstance:
 
@@ -171,7 +160,6 @@ class ProcessManagerDriver(GRPCDriver):
             user = user,
             session = session_name,
             override_logs = override_logs,
-            env_overrides = env_overrides,
             **kwargs,
             ):
             yield await self.send_command_aio(

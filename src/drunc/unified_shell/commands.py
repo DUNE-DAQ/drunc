@@ -22,19 +22,6 @@ from drunc.process_manager.interface.cli_argument import validate_conf_string
     '--override-logs/--no-override-logs',
     default=True
 )
-@click.option(
-    '--connectivity-service-port',
-    default=None,
-    type=int,
-    help='Set the port for the connectivity service. By default (None), use the one from the configuration'
-)
-@click.option(
-    '-e', '--env',
-    default=[],
-    type=str,
-    multiple=True,
-    help='Override environment variables in the form of -e key=value'
-)
 @click.pass_obj
 @run_coroutine
 async def boot(
@@ -42,11 +29,8 @@ async def boot(
     user:str,
     log_level:str,
     override_logs:bool,
-    connectivity_service_port:int,
-    env:tuple[str],
     ) -> None:
 
-    env = dict(e.split('=') for e in env)
 
     from drunc.utils.shell_utils import InterruptedCommand
     try:
@@ -56,8 +40,6 @@ async def boot(
             session_name = obj.session_name,
             log_level = log_level,
             override_logs = override_logs,
-            connectivity_service_port = connectivity_service_port,
-            env_overrides = env,
         )
         async for result in results:
             if not result: break
