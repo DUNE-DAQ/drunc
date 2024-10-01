@@ -46,7 +46,7 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
   import logging
   log = logging.getLogger('collect_apps')
   # Get default environment from Session
-  defenv = {}
+  defenv = env
 
   import os
   DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
@@ -134,7 +134,7 @@ def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
   import logging
   log = logging.getLogger('collect_infra_apps')
 
-  defenv = {}
+  defenv = env
 
   import os
   DB_PATH = os.getenv("DUNEDAQ_DB_PATH")
