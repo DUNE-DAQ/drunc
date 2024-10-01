@@ -13,16 +13,13 @@ class ThreadPinning(FSMAction):
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 
     def pin_thread(self, thread_pinning_file, configuration, session):
-        from drunc.process_manager.oks_parser import collect_apps, required_env_keys
+        from drunc.process_manager.oks_parser import collect_apps
         import conffwk
         db = conffwk.Configuration(f"oksconflibs:{configuration}")
         session_dal = db.get_dal(class_name="Session", uid=session)
 
         from os import environ
         env = environ.copy()
-        for key in required_env_keys:
-            if key not in required_env_keys:
-                del env[key]
 
         apps = collect_apps(db, session_dal, session_dal.segment, environ)
 
