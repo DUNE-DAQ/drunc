@@ -276,7 +276,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         # socket.getipaddress(socket.gethostname())
         self.uri = f'grpc://{address}'
 
-        self.logger.info(f'Registering myself to the connectivity service')
+        self.logger.info(f'Registering {self.name} to the connectivity service at {address}')
 
         from threading import Thread
         self.running = True
@@ -288,10 +288,10 @@ if nothing (None) is provided, return the transitions accessible from the curren
         ):
             import time
             while ctrler.running:
-                ctrler.logger.info('Updating the endpoint')
                 ctrler.connectivity_service.publish(
                     ctrler.name+"_control",
                     ctrler.uri,
+                    'RunControlMessage',
                 )
                 time.sleep(interval)
 

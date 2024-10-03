@@ -1,5 +1,8 @@
 import logging
 from rich.theme import Theme
+from enum import Enum
+from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.exceptions import DruncSetupException
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 CONSOLE_THEMES = Theme({
@@ -158,8 +161,23 @@ def validate_command_facility(ctx, param, value):
             raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
 
 
+def resolve_localhost_and_127_ip_to_network_ip(address):
+    from socket import gethostbyname, gethostname
+    this_ip = gethostbyname(gethostname())
+    if 'localhost' in address:
+        address = address.replace('localhost', this_ip)
 
+    import re
+    ip_match = re.search(
+        "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        address
+    )
+    # https://stackoverflow.com/a/25969006
 
+    if ip_match.group(0).startswith('127.'):
+        address = address.replace(ip_match.group(0), this_ip)
+
+    return address
 
 def pid_info_str():
     import os
@@ -258,3 +276,66 @@ def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs)
 
     if not ignore_errors:
         r.raise_for_status()
+
+class ControlType(Enum):
+    Unknown = 0
+    gRPC = 1
+    REST_API = 2
+
+
+def get_control_type_from_cli(CLAs:list[str]) -> ControlType:
+    for CLA in CLAs:
+        if   CLA.startswith("rest://"): return ControlType.REST_API
+        elif CLA.startswith("grpc://"): return ControlType.gRPC
+
+    raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
+
+def get_control_type_and_uri_from_connectivity_service(
+    connectivity_service:ConnectivityServiceClient,
+    name:str,
+    timeout:int=10, # seconds
+    retry_wait:float=0.1, # seconds
+    progress_bar:bool=False,
+    title:str=None,
+) -> tuple[ControlType, str]:
+
+    uris = []
+    from drunc.connectivity_service.client import ApplicationLookupUnsuccessful
+    logger = logging.getLogger('get_control_type_and_uri_from_connectivity_service')
+    import time
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TimeRemainingColumn(),
+        TimeElapsedColumn()
+    ) as progress:
+
+        task = progress.add_task(title, total=timeout, visible=progress_bar)
+        start = time.time()
+
+        while time.time() - start < timeout:
+            progress.update(task, completed=time.time() - start)
+
+            try:
+                uris = connectivity_service.resolve(name+'_control', 'RunControlMessage')
+                if len(uris) == 0:
+                    raise ApplicationLookupUnsuccessful
+                else:
+                    break
+
+            except ApplicationLookupUnsuccessful as e:
+                el = time.time() - start
+                logger.debug(f"Could not resolve \'{name}_control\' elapsed {el:.2f}s/{timeout}s")
+                time.sleep(retry_wait)
+
+
+
+    if len(uris) != 1:
+        raise ApplicationLookupUnsuccessful(f"Could not resolve the URI for \'{name}_control\' in the connectivity service, got response {uris}")
+
+    uri = uris[0]['uri']
+
+    return get_control_type_from_cli([uri]), uri

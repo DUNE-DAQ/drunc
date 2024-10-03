@@ -65,10 +65,10 @@ class ConnectivityServiceClient:
 
 
 
-    def resolve(self, uid_regex:str) -> dict:
+    def resolve(self, uid_regex:str, data_type:str) -> dict:
         from drunc.utils.utils import http_post
         data = {
-            'data_type': 'run-control-messages',
+            'data_type': data_type,
             'uid_regex': uid_regex
         }
         for i in range(50):
@@ -95,7 +95,7 @@ class ConnectivityServiceClient:
         raise ApplicationLookupUnsuccessful
 
 
-    def publish(self, uid, uri):
+    def publish(self, uid, uri, data_type:str):
         from drunc.utils.utils import http_post
         for i in range(50):
             try:
@@ -108,7 +108,7 @@ class ConnectivityServiceClient:
                         'connections':[
                             {
                                 "connection_type": 0,
-                                "data_type": "run-control-messages",
+                                "data_type": data_type,
                                 "uid": uid,
                                 "uri": uri,
                             }

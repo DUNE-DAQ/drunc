@@ -1,4 +1,5 @@
-from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.utils.utils import ControlType
 from druncschema.request_response_pb2 import Response
 from druncschema.token_pb2 import Token
 import threading
@@ -393,7 +394,7 @@ class RESTAPIChildNode(ChildNode):
     def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler, uri=None):
         super(RESTAPIChildNode, self).__init__(
             name = name,
-            node_type = ChildNodeType.REST_API
+            node_type = ControlType.REST_API
         )
 
         from logging import getLogger

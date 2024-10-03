@@ -1,4 +1,5 @@
-from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.utils.utils import ControlType
 from drunc.controller.utils import send_command
 from drunc.utils.configuration import ConfHandler
 import grpc as grpc
@@ -18,7 +19,7 @@ class gRPCChildNode(ChildNode):
     def __init__(self, name, configuration:gRCPChildConfHandler, init_token, uri=None):
         super().__init__(
             name = name,
-            node_type = ChildNodeType.gRPC
+            node_type = ControlType.gRPC
         )
 
         from logging import getLogger
@@ -29,7 +30,6 @@ class gRPCChildNode(ChildNode):
         port = 0
         if uri is None:
             uri = configuration.get_uri()
-        print(uri)
 
         from urllib.parse import urlparse
         uri = urlparse(uri)
@@ -44,7 +44,6 @@ class gRPCChildNode(ChildNode):
 
         from druncschema.controller_pb2_grpc import ControllerStub
         import grpc
-        self.log.info(f'Connecting to {self.uri}, {type(self.uri)}')
 
         self.channel = grpc.insecure_channel(self.uri)
         self.controller = ControllerStub(self.channel)
