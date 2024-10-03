@@ -519,18 +519,18 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
-    def describe(self) -> Response:
+    @unpack_request_data_to(None, pass_token=True) # 3rd step
+    def describe(self, token:Token) -> Response:
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
         bd = self.describe_broadcast()
         d = Description(
-            endpoint = self.uri,
+            # endpoint = self.uri,
             type = 'controller',
             name = self.name,
             session = self.session,
             commands = self.commands,
-            children_endpoints = [child.get_endpoint() for child in self.children_nodes],
+            # children_endpoints = [child.get_endpoint() for child in self.children_nodes],
         )
 
         if bd:
