@@ -51,7 +51,11 @@ class ConnectivityServiceClient:
                     timeout = 0.5,
                     ignore_errors = True
                 )
-                self.logger.info(r.reason)
+
+                if r.status_code == 404:
+                    self.logger.warning(f'Connection \'{uid}\' not found on the application registry')
+                    break
+
                 r.raise_for_status()
                 break
             except (HTTPError, ConnectionError) as e:
