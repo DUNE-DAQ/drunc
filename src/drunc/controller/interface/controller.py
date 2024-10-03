@@ -77,17 +77,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
-        from socket import gethostname
-        if 'localhost' in command_facility:
-            command_facility = command_facility.replace('localhost', gethostname())
-        if command_facility.startswith('grpc://127.'):
-            ip = command_facility.split(':')[0].replace('grpc://', '')
-            command_facility = command_facility.replace(ip, gethostname())
-
+        from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
+        command_facility = resolve_localhost_and_127_ip_to_network_ip(command_facility)
         server, port = serve(command_facility)
-        address = f'{gethostname()}:{port}'
 
-        ctrlr.advertise_control_address(address)
+        ctrlr.advertise_control_address(f'grpc://{command_facility}')
 
         server.wait_for_termination(timeout=None)
 

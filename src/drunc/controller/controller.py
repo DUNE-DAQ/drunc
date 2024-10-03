@@ -272,9 +272,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         )
 
     def advertise_control_address(self, address):
-        # import socket
-        # socket.getipaddress(socket.gethostname())
-        self.uri = f'grpc://{address}'
+        self.uri = address
 
         self.logger.info(f'Registering {self.name} to the connectivity service at {address}')
 
