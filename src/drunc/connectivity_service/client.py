@@ -39,7 +39,7 @@ class ConnectivityServiceClient:
         }
         for i in range(50):
             try:
-                self.logger.info(f'Retracting \'{uid}\' on the application registry, attempt {i+1}')
+                self.logger.debug(f'Retracting \'{uid}\' on the connectivity service, attempt {i+1}')
 
                 r = http_post(
                     self.address+"/retract",
@@ -69,7 +69,7 @@ class ConnectivityServiceClient:
         }
         for i in range(50):
             try:
-                self.logger.info(f'Looking up \'{uid_regex}\' on the application registry, attempt {i+1}')
+                self.logger.debug(f'Looking up \'{uid_regex}\' on the connectivity service, attempt {i+1}')
                 response = http_post(
                     self.address + "/getconnection/" + self.session,
                     data = data,
@@ -80,7 +80,6 @@ class ConnectivityServiceClient:
                     timeout = 0.5,
                     ignore_errors = True
                 )
-                self.logger.info(response.reason)
                 response.raise_for_status()
                 return response.json()
             except (HTTPError, ConnectionError) as e:
@@ -96,7 +95,7 @@ class ConnectivityServiceClient:
         from drunc.utils.utils import http_post
         for i in range(50):
             try:
-                self.logger.info(f'Publishing \'{uid}\' on the application registry, attempt {i+1}')
+                self.logger.debug(f'Publishing \'{uid}\' on the connectivity service, attempt {i+1}')
 
                 http_post(
                     self.address+"/publish",
