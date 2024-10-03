@@ -72,7 +72,7 @@ class gRPCChildNode(ChildNode):
                     from time import sleep
                     sleep(5)
 
-            except grpc.RpcError as e:
+            except ServerUnreachable as e:
                 raise DruncSetupException from e
             else:
                 self.log.info(f'Connected to the controller ({self.uri})!')
@@ -126,28 +126,13 @@ class gRPCChildNode(ChildNode):
         pass
 
     def propagate_command(self, command, data, token) -> Response:
-        from druncschema.generic_pb2 import PlainText, Stacktrace
-        from drunc.utils.grpc_utils import pack_to_any
 
-        try:
-            return send_command(
-                controller = self.controller,
-                token = token,
-                command = command,
-                rethrow = True,
-                data = data
-            )
-        except DruncException as e:
-            return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    Stacktrace(
-                        text=[str(e)]
-                    )
-                ),
-                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                children = []
-            )
+        return send_command(
+            controller = self.controller,
+            token = token,
+            command = command,
+            rethrow = True,
+            data = data
+        )
 
 
