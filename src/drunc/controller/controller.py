@@ -17,6 +17,7 @@ from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 from drunc.authoriser.decorators import authentified_and_authorised
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
+from drunc.exceptions import DruncException
 
 import signal
 
@@ -120,18 +121,20 @@ class Controller(ControllerServicer):
         self.connectivity_service = None
         self.connectivity_service_thread = None
         self.uri = ''
-        import os
-        connection_server = os.getenv('CONNECTION_SERVER', None)
-        connection_port   = os.getenv('CONNECTION_PORT', None)
+        if self.configuration.session.use_connectivity_server:
+            self.logger.info('Connectivity server is enabled')
+            import os
+            connection_server = os.getenv('CONNECTION_SERVER', None)
+            connection_port   = os.getenv('CONNECTION_PORT'  , None)
 
-        if connection_server and connection_port:
-            from drunc.connectivity_service.client import ConnectivityServiceClient
-            self.connectivity_service = ConnectivityServiceClient(
-                session = self.session,
-                address = f'{connection_server}:{connection_port}',
-            )
-        else:
-            self.logger.warning('No connectivity service found in env')
+            if connection_server and connection_port:
+                from drunc.connectivity_service.client import ConnectivityServiceClient
+                self.connectivity_service = ConnectivityServiceClient(
+                    session = self.session,
+                    address = f'{connection_server}:{connection_port}',
+                )
+            else:
+                raise DruncException('Connectivity server is enabled but env var \'CONNECTION_SERVER\' and/or \'CONNECTION_PORT\' were not set')
 
         self.children_nodes = self.configuration.get_children(
             init_token = self.actor.get_token(),
@@ -273,6 +276,9 @@ if nothing (None) is provided, return the transitions accessible from the curren
 
     def advertise_control_address(self, address):
         self.uri = address
+
+        if not self.configuration.session.use_connectivity_server:
+            return
 
         self.logger.info(f'Registering {self.name} to the connectivity service at {address}')
 
