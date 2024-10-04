@@ -7,9 +7,9 @@ from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQue
 
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
+from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-
 
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
@@ -135,8 +135,9 @@ class ProcessManagerDriver(GRPCDriver):
             env = {}
             collect_variables(session_dal.environment, env)
             top_controller_name = session_dal.segment.controller.id
-
-            if 'CONNECTION_SERVER' in env and 'CONNECTION_PORT' in env:
+            if session_dal.use_connectivity_server:
+                if not 'CONNECTION_SERVER' in env or not 'CONNECTION_PORT' in env:
+                    raise DruncSetupException('CONNECTION_SERVER and CONNECTION_PORT must be defined in the environment if use_connectivity_server =1')
                 connection_server = env['CONNECTION_SERVER']
                 connection_port = env['CONNECTION_PORT']
 
@@ -166,7 +167,9 @@ class ProcessManagerDriver(GRPCDriver):
                     break
             if port_number is None or protocol is None:
                 return None
-            return f'{session_dal.segment.controller.runs_on.runs_on.id}:{port_number}'
+
+            ip = resolve_localhost_and_127_ip_to_network_ip(session_dal.segment.controller.runs_on.runs_on.id)
+            return f'{ip}:{port_number}'
 
         self.controller_address = get_controller_address(session_dal, session)
 
