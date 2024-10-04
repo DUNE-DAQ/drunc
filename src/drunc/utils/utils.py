@@ -77,13 +77,14 @@ def update_log_level(loglevel):
 
     logging.basicConfig(
         level=log_level,
-        format="\"%(name)s\": %(message)s",
+        format="%(filename)s:%(lineno)i\t%(name)s:\t%(message)s",
         datefmt="[%X]",
         handlers=[
             #logging.StreamHandler(),
             RichHandler(
                 console=Console(width=width),
                 rich_tracebacks=False,
+                show_path=False,
                 tracebacks_width=width
             ) # Make this True, and everything crashes on exceptions (no clue why)
         ]
