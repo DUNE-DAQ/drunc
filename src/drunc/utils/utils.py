@@ -314,7 +314,7 @@ def get_control_type_and_uri_from_connectivity_service(
         TimeElapsedColumn()
     ) as progress:
 
-        task = progress.add_task(title, total=timeout, visible=progress_bar)
+        task = progress.add_task(f'[yellow]{title}', total=timeout, visible=progress_bar)
         start = time.time()
 
         while time.time() - start < timeout:
