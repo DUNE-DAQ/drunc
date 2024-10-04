@@ -16,7 +16,7 @@ class gRCPChildConfHandler(ConfHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration:gRCPChildConfHandler, init_token, uri=None):
+    def __init__(self, name, configuration:gRCPChildConfHandler, init_token, uri):
         super().__init__(
             name = name,
             node_type = ControlType.gRPC
@@ -26,14 +26,7 @@ class gRPCChildNode(ChildNode):
         self.log = getLogger(f'{self.name}-grpc-child')
         self.configuration = configuration
 
-
-        port = 0
-        if uri is None:
-            uri = configuration.get_uri()
-
-        from urllib.parse import urlparse
-        uri = urlparse(uri)
-        host, port = (uri.netloc).split(":")
+        host, port = uri.split(":")
         port = int(port)
 
         if port == 0:
