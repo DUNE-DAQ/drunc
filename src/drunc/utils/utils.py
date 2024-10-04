@@ -284,10 +284,10 @@ class ControlType(Enum):
     REST_API = 2
 
 
-def get_control_type_from_cli(CLAs:list[str]) -> ControlType:
+def get_control_type_and_uri_from_cli(CLAs:list[str]) -> ControlType:
     for CLA in CLAs:
-        if   CLA.startswith("rest://"): return ControlType.REST_API
-        elif CLA.startswith("grpc://"): return ControlType.gRPC
+        if   CLA.startswith("rest://"): return ControlType.REST_API, resolve_localhost_and_127_ip_to_network_ip(CLA.replace("rest://", ""))
+        elif CLA.startswith("grpc://"): return ControlType.gRPC, resolve_localhost_and_127_ip_to_network_ip(CLA.replace("grpc://", ""))
 
     raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
 
@@ -339,4 +339,4 @@ def get_control_type_and_uri_from_connectivity_service(
 
     uri = uris[0]['uri']
 
-    return get_control_type_from_cli([uri]), uri
+    return get_control_type_and_uri_from_cli([uri])[0], uri
