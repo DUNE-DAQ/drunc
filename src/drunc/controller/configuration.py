@@ -28,8 +28,8 @@ class ControllerConfHandler(ConfHandler):
         return None
 
     def _grab_segment_conf_from_controller(self, configuration):
-        session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
-        this_segment = ControllerConfHandler.find_segment(session.segment, self.oks_key.obj_uid)
+        self.session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
+        this_segment = ControllerConfHandler.find_segment(self.session.segment, self.oks_key.obj_uid)
         if this_segment is None:
             CouldNotFindSegment(self.oks_key.obj_uid)
         return this_segment
