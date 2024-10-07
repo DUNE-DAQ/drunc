@@ -339,4 +339,4 @@ def get_control_type_and_uri_from_connectivity_service(
 
     uri = uris[0]['uri']
 
-    return get_control_type_and_uri_from_cli([uri])[0], uri
+    return get_control_type_and_uri_from_cli([uri])
