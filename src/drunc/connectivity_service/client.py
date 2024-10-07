@@ -85,8 +85,14 @@ class ConnectivityServiceClient:
                     ignore_errors = True
                 )
                 response.raise_for_status()
-                return response.json()
+                content = response.json()
+                if content['connections']:
+                    return content
+                else:
+                    self.logger.debug(f'Could not find the address of \'{uid_regex}\' on the application registry')
+
             except (HTTPError, ConnectionError) as e:
+                self.logger.debug(e)
                 from time import sleep
                 sleep(0.2)
                 continue
