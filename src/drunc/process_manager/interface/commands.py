@@ -16,7 +16,14 @@ from drunc.process_manager.interface.cli_argument import validate_conf_string
 @click.argument('session-name', type=str)
 @click.pass_obj
 @run_coroutine
-async def boot(obj:ProcessManagerContext, user:str, session_name:str, boot_configuration:str, log_level:str, override_logs:bool) -> None:
+async def boot(
+    obj:ProcessManagerContext,
+    user:str,
+    session_name:str,
+    boot_configuration:str,
+    log_level:str,
+    override_logs:bool,
+    ) -> None:
 
     from drunc.utils.shell_utils import InterruptedCommand
     try:
