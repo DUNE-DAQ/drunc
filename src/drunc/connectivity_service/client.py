@@ -97,7 +97,7 @@ class ConnectivityServiceClient:
                 sleep(0.2)
                 continue
 
-        self.logger.critical(f'Could not find the address of \'{uid_regex}\' on the application registry')
+        self.logger.debug(f'Could not find the address of \'{uid_regex}\' on the application registry')
         raise ApplicationLookupUnsuccessful
 
 
