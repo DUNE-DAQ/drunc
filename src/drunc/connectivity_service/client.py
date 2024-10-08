@@ -86,7 +86,7 @@ class ConnectivityServiceClient:
                 )
                 response.raise_for_status()
                 content = response.json()
-                if content['connections']:
+                if content:
                     return content
                 else:
                     self.logger.debug(f'Could not find the address of \'{uid_regex}\' on the application registry')
