@@ -6,7 +6,7 @@ class UserProvidedRunNumber(FSMAction):
             name = "run-number"
         )
 
-    def pre_start(self, _input_data:dict, _context, run_number:int, disable_data_storage:bool=False, trigger_rate:float=1.0, run_type:str='TEST', **kwargs):
+    def pre_start(self, _input_data:dict, _context, run_number:int, disable_data_storage:bool=False, trigger_rate:float=0., run_type:str='TEST', **kwargs):
         from drunc.fsm.actions.utils import validate_run_type
         run_type = validate_run_type(run_type.upper())
         _input_data['production_vs_test'] = run_type
