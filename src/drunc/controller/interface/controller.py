@@ -79,9 +79,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     try:
         from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
         command_facility = resolve_localhost_and_127_ip_to_network_ip(command_facility)
-        print(command_facility)
         server_name = command_facility.split(':')[0]
-        print(server_name)
         server, port = serve(command_facility)
 
         ctrlr.advertise_control_address(f'grpc://{server_name}:{port}')
