@@ -1,11 +1,6 @@
 import abc
-from enum import Enum
 from drunc.exceptions import DruncSetupException
-
-class ChildNodeType(Enum):
-    gRPC = 1
-    REST_API = 2
-
+from drunc.utils.utils import ControlType, get_control_type_and_uri_from_connectivity_service, get_control_type_and_uri_from_cli
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):
     def __init__(self, t, name):
@@ -13,7 +8,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 
 class ChildNode(abc.ABC):
-    def __init__(self, name:str, node_type:ChildNodeType, **kwargs) -> None:
+    def __init__(self, name:str, node_type:ControlType, **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.node_type = node_type
@@ -36,52 +31,59 @@ class ChildNode(abc.ABC):
     def propagate_command(self, command, data, token):
         pass
 
-
     @abc.abstractmethod
     def get_status(self, token):
         pass
 
-
-    @staticmethod
-    def _get_children_type_from_cli(CLAs:list[str]) -> ChildNodeType:
-        for CLA in CLAs:
-            if "rest://" in CLA:
-                return ChildNodeType.REST_API
-            if "grpc://" in CLA:
-                return ChildNodeType.gRPC
-
-        from drunc.exceptions import DruncSetupException
-        raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
-
+    @abc.abstractmethod
+    def get_endpoint(self):
+        pass
 
 
     @staticmethod
-    def get_child(name:str, cli, configuration, init_token=None, **kwargs):
+    def get_child(name:str, cli, configuration, init_token=None, connectivity_service=None, **kwargs):
+
         from drunc.utils.configuration import ConfTypes
 
-        type = ChildNode._get_children_type_from_cli(cli)
+        ctype = ControlType.Unknown
+        uri = None
+        if connectivity_service:
+            ctype, uri = get_control_type_and_uri_from_connectivity_service(connectivity_service, name, timeout=60)
+        import logging
+        log = logging.getLogger("ChildNode.get_child")
 
-        match type:
-            case ChildNodeType.gRPC:
+        if ctype == ControlType.Unknown:
+            ctype, uri = get_control_type_and_uri_from_cli(cli)
+
+        if uri is None or ctype == ControlType.Unknown:
+            log.error(f"Could not understand how to talk to \'{name}\'")
+            raise DruncSetupException(f"Could not understand how to talk to \'{name}\'")
+
+        log.info(f"Child {name} is of type {ctype} and has the URI {uri}")
+
+        match ctype:
+            case ControlType.gRPC:
                 from drunc.controller.children_interface.grpc_child import gRPCChildNode, gRCPChildConfHandler
 
                 return gRPCChildNode(
                     configuration = gRCPChildConfHandler(configuration, ConfTypes.PyObject),
                     init_token = init_token,
                     name = name,
+                    uri = uri,
                     **kwargs,
                 )
 
 
-            case ChildNodeType.REST_API:
+            case ControlType.REST_API:
                 from drunc.controller.children_interface.rest_api_child import RESTAPIChildNode,RESTAPIChildNodeConfHandler
 
                 return RESTAPIChildNode(
                     configuration =  RESTAPIChildNodeConfHandler(configuration, ConfTypes.PyObject),
                     name = name,
+                    uri = uri,
                     # init_token = init_token, # No authentication for RESTAPI
                     **kwargs,
                 )
             case _:
-                raise ChildInterfaceTechnologyUnknown(type, name)
+                raise ChildInterfaceTechnologyUnknown(ctype, name)
 

@@ -17,6 +17,7 @@ from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 from drunc.authoriser.decorators import authentified_and_authorised
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from drunc.controller.decorators import in_control
+from drunc.exceptions import DruncException
 
 import signal
 
@@ -117,7 +118,29 @@ class Controller(ControllerServicer):
 
         self.actor = ControllerActor(token)
 
-        self.children_nodes = self.configuration.get_children(self.actor.get_token())
+        self.connectivity_service = None
+        self.connectivity_service_thread = None
+        self.uri = ''
+        if self.configuration.session.use_connectivity_server:
+            self.logger.info('Connectivity server is enabled')
+            import os
+            connection_server = os.getenv('CONNECTION_SERVER', None)
+            connection_port   = os.getenv('CONNECTION_PORT'  , None)
+
+            if connection_server and connection_port:
+                from drunc.connectivity_service.client import ConnectivityServiceClient
+                self.connectivity_service = ConnectivityServiceClient(
+                    session = self.session,
+                    address = f'{connection_server}:{connection_port}',
+                )
+            else:
+                raise DruncException('Connectivity server is enabled but env var \'CONNECTION_SERVER\' and/or \'CONNECTION_PORT\' were not set')
+
+        self.children_nodes = self.configuration.get_children(
+            init_token = self.actor.get_token(),
+            connectivity_service = self.connectivity_service
+        )
+
         for child in self.children_nodes:
             self.logger.info(child)
             child.propagate_command('take_control', None, self.actor.get_token())
@@ -251,7 +274,50 @@ if nothing (None) is provided, return the transitions accessible from the curren
             children = [],
         )
 
+    def advertise_control_address(self, address):
+        self.uri = address
+
+        if not self.configuration.session.use_connectivity_server:
+            return
+
+        self.logger.info(f'Registering {self.name} to the connectivity service at {address}')
+
+        from threading import Thread
+        self.running = True
+
+        def update_connectivity_service(
+            ctrler,
+            connectivity_service,
+            interval
+        ):
+            import time
+            while ctrler.running:
+                ctrler.connectivity_service.publish(
+                    ctrler.name+"_control",
+                    ctrler.uri,
+                    'RunControlMessage',
+                )
+                time.sleep(interval)
+
+        self.connectivity_service_thread = Thread(
+            target = update_connectivity_service,
+            args = (self, self.connectivity_service, 2),
+            name = 'connectivity_service_updating_thread'
+        )
+
+        # lets roll
+        self.connectivity_service_thread.start()
+
+
     def terminate(self):
+        self.running = False
+
+        if self.connectivity_service:
+            if self.connectivity_service_thread:
+                self.connectivity_service_thread.join()
+            self.logger.info('Unregistering from the connectivity service')
+            self.connectivity_service.retract(self.name+"_control")
+
         if self.can_broadcast():
             self.broadcast(
                 btype = BroadcastType.SERVER_SHUTDOWN,
@@ -459,26 +525,37 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
-    def describe(self) -> Response:
+    @unpack_request_data_to(None, pass_token=True) # 3rd step
+    def describe(self, token:Token) -> Response:
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
         bd = self.describe_broadcast()
         d = Description(
+            # endpoint = self.uri,
             type = 'controller',
             name = self.name,
             session = self.session,
             commands = self.commands,
+            # children_endpoints = [child.get_endpoint() for child in self.children_nodes],
         )
+
         if bd:
             d.broadcast.CopyFrom(pack_to_any(bd))
+
+
+        response_children = self.propagate_to_list(
+            'describe',
+            command_data = None,
+            token = token,
+            node_to_execute = self.children_nodes
+        )
 
         return Response (
             name = self.name,
             token = None,
             data = pack_to_any(d),
             flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [],
+            children = response_children,
         )
 
     # ORDER MATTERS!
