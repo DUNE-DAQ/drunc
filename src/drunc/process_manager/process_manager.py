@@ -1,19 +1,20 @@
 from druncschema.request_response_pb2 import Request, Response, ResponseFlag
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.authoriser_pb2 import ActionType, SystemType
-
 from druncschema.process_manager_pb2 import BootRequest, ProcessQuery, ProcessInstance, ProcessRestriction, ProcessDescription, ProcessUUID, ProcessInstanceList, LogRequest, LogLine
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
+from druncschema.generic_pb2 import string_msg
+
 from drunc.broadcast.server.decorators import broadcasted, async_broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, async_unpack_request_data_to,pack_to_any
-import abc
-
 from drunc.authoriser.decorators import authentified_and_authorised, async_authentified_and_authorised
 from drunc.process_manager.configuration import ProcessManagerConfHandler, ProcessManagerTypes
-
-
 from drunc.exceptions import DruncCommandException
 
+from kafkaopmon.OpMonPublisher import OpMonPublisher
+import abc
+from logging import getLogger
+from drunc.utils.utils import update_log_level
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -29,6 +30,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self.name = name
         self.session = session
+
+        self.log = getLogger("process_manager")
+        # update_log_level()
+        import getpass
+        self.OpMonTopic = "control." + str(self.name) + ".process_manager" + str(getpass.getuser())
+        self.publisher = OpMonPublisher(self.OpMonTopic)
+
+        from druncschema.generic_pb2 import string_msg
+        boot_msg = string_msg(value=f"User {getpass.getuser()} booted the process manager in session {self.session}")
+        self.publisher.publish(self.session, "process_manager", boot_msg)
+
         from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
         from drunc.utils.configuration import ConfTypes
         bsch = BroadcastSenderConfHandler(
@@ -42,9 +54,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             session = session,
             configuration = bsch,
         ) if bsch.data else None
-
-        from logging import getLogger
-        self.log = getLogger("process_manager")
 
         from drunc.authoriser.configuration import DummyAuthoriserConfHandler
         from drunc.utils.configuration import ConfTypes
