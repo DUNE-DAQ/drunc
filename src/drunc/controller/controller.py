@@ -121,20 +121,17 @@ class Controller(ControllerServicer):
         self.connectivity_service = None
         self.connectivity_service_thread = None
         self.uri = ''
-        if self.configuration.session.use_connectivity_server:
-            self.logger.info('Connectivity server is enabled')
+        if self.configuration.session.connectivity_service:
             import os
-            connection_server = os.getenv('CONNECTION_SERVER', None)
-            connection_port   = os.getenv('CONNECTION_PORT'  , None)
+            connection_server = self.configuration.session.connectivity_service.host
+            connection_port   = self.configuration.session.connectivity_service.service.port
+            self.logger.info(f'Connectivity server {connection_server}:{connection_port} is enabled')
 
-            if connection_server and connection_port:
-                from drunc.connectivity_service.client import ConnectivityServiceClient
-                self.connectivity_service = ConnectivityServiceClient(
+            from drunc.connectivity_service.client import ConnectivityServiceClient
+            self.connectivity_service = ConnectivityServiceClient(
                     session = self.session,
                     address = f'{connection_server}:{connection_port}',
                 )
-            else:
-                raise DruncException('Connectivity server is enabled but env var \'CONNECTION_SERVER\' and/or \'CONNECTION_PORT\' were not set')
 
         self.children_nodes = self.configuration.get_children(
             init_token = self.actor.get_token(),
@@ -277,7 +274,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
     def advertise_control_address(self, address):
         self.uri = address
 
-        if not self.configuration.session.use_connectivity_server:
+        if not self.connectivity_service:
             return
 
         self.logger.info(f'Registering {self.name} to the connectivity service at {address}')
