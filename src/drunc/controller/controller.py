@@ -378,9 +378,9 @@ if nothing (None) is provided, return the transitions accessible from the curren
                         message = f'Propagated {command} to children ({child.name}) successfully',
                     )
                 else:
-
+                    level = BroadcastType.DEBUG if response.flag == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED else BroadcastType.CHILD_COMMAND_EXECUTION_FAILED
                     self.broadcast(
-                        btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
+                        btype = level,
                         message = f'Propagating {command} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace.',
                     )
 
