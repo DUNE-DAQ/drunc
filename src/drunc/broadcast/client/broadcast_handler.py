@@ -33,7 +33,7 @@ class BroadcastHandler:
                     message_format = BroadcastMessage,
                 )
             case _:
-                self.log.warning('Could not understand the BroadcastHandler technology you want to use, you will get no broadcast!')
+                self.log.info('Could not understand the BroadcastHandler technology you want to use, you will get no broadcast!')
 
     def stop(self):
         if self.implementation:
