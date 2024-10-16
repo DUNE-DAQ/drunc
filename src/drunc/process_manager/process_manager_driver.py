@@ -135,11 +135,9 @@ class ProcessManagerDriver(GRPCDriver):
             env = {}
             collect_variables(session_dal.environment, env)
             top_controller_name = session_dal.segment.controller.id
-            if session_dal.use_connectivity_server:
-                if not 'CONNECTION_SERVER' in env or not 'CONNECTION_PORT' in env:
-                    raise DruncSetupException('CONNECTION_SERVER and CONNECTION_PORT must be defined in the environment if use_connectivity_server =1')
-                connection_server = env['CONNECTION_SERVER']
-                connection_port = env['CONNECTION_PORT']
+            if session_dal.connectivity_service:
+                connection_server = session_dal.connectivity_service.host
+                connection_port = session_dal.connectivity_service.service.port
 
                 from drunc.connectivity_service.client import ConnectivityServiceClient
                 csc = ConnectivityServiceClient(session_name, f'{connection_server}:{connection_port}')
