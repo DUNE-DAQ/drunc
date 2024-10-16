@@ -313,7 +313,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
             if self.connectivity_service_thread:
                 self.connectivity_service_thread.join()
             self.logger.info('Unregistering from the connectivity service')
-            self.connectivity_service.retract(self.name+"_control")
+            self.connectivity_service.retract(self.name+"_control", 'RunControlMessage', break_on_unreachable=True)
 
         if self.can_broadcast():
             self.broadcast(
@@ -331,6 +331,10 @@ if nothing (None) is provided, return the transitions accessible from the curren
 
         if ResponseListener.exists():
             ResponseListener.get().terminate()
+
+        import logging
+        if self.logger.level != logging.DEBUG:
+            return
 
         import threading
         self.logger.debug("Threading threads")
