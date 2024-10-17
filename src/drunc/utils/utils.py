@@ -175,6 +175,9 @@ def resolve_localhost_and_127_ip_to_network_ip(address):
     )
     # https://stackoverflow.com/a/25969006
 
+    if not ip_match:
+        return address
+
     if ip_match.group(0).startswith('127.'):
         address = address.replace(ip_match.group(0), this_ip)
 
