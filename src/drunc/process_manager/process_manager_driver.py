@@ -162,9 +162,9 @@ To get to the reason why the controller died, you can restart this shell with [y
 
 2. The controller did not die, but is still setting up and has not advertised itself on the connection service.
 You may be able to \'connect grpc://<controller address>\' in a bit: Check the logs of the controller:
-[yellow]logs --name {top_controller_name} --grep grpc[\]
+[yellow]logs --name {top_controller_name} --grep grpc[/]
 And look for messages like:
-[yello]Registering root-controller to the connectivity service at grpc://xx.xx.xxx.xx:xxxxx[\]
+[yello]Registering root-controller to the connectivity service at grpc://xx.xx.xxx.xx:xxxxx[/]
 To find the controller address, look up \'{top_controller_name}_control\' on {connection_server}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs above.
 ''', extra={"markup": True})
                     return
