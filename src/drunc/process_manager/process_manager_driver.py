@@ -7,9 +7,9 @@ from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQue
 
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
+from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-
 
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
@@ -58,20 +58,6 @@ class ProcessManagerDriver(GRPCDriver):
 
         apps = infra_apps+apps
 
-        def get_controller_address(top_controller_conf):
-            service_id = top_controller_conf.id + "_control"
-            port_number = None
-            protocol = None
-            for service in top_controller_conf.exposes_service:
-                if service.id == service_id:
-                    port_number = service.port
-                    protocol = service.protocol
-                    break
-            if port_number is None or protocol is None:
-                return None
-            return f'{top_controller_conf.runs_on.runs_on.id}:{port_number}'
-
-        self.controller_address = get_controller_address(session_dal.segment.controller)
         import json
         self._log.debug(f"{json.dumps(apps, indent=4)}")
 
@@ -144,6 +130,46 @@ class ProcessManagerDriver(GRPCDriver):
             self._log.debug(f"{breq=}\n\n")
             yield breq
 
+        def get_controller_address(session_dal, session_name):
+            from drunc.process_manager.oks_parser import collect_variables
+            env = {}
+            collect_variables(session_dal.environment, env)
+            top_controller_name = session_dal.segment.controller.id
+            if session_dal.connectivity_service:
+                connection_server = session_dal.connectivity_service.host
+                connection_port = session_dal.connectivity_service.service.port
+
+                from drunc.connectivity_service.client import ConnectivityServiceClient
+                csc = ConnectivityServiceClient(session_name, f'{connection_server}:{connection_port}')
+
+                from drunc.utils.utils import get_control_type_and_uri_from_connectivity_service
+                _, uri = get_control_type_and_uri_from_connectivity_service(
+                    csc,
+                    name = top_controller_name,
+                    timeout = 60,
+                    retry_wait = 1,
+                    progress_bar = True,
+                    title = f'Looking for \'{top_controller_name}\' on the connectivity service...',
+                )
+
+                return uri.replace('grpc://', '')
+
+            service_id = top_controller_name + "_control"
+            port_number = None
+            protocol = None
+
+            for service in session_dal.segment.controller.exposes_service:
+                if service.id == service_id:
+                    port_number = service.port
+                    protocol = service.protocol
+                    break
+            if port_number is None or protocol is None:
+                return None
+
+            ip = resolve_localhost_and_127_ip_to_network_ip(session_dal.segment.controller.runs_on.runs_on.id)
+            return f'{ip}:{port_number}'
+
+        self.controller_address = get_controller_address(session_dal, session)
 
     async def boot(
         self,

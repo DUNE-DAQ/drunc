@@ -14,7 +14,8 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     console = Console()
 
     update_log_level(log_level)
-
+    from logging import getLogger
+    log = getLogger('controller_cli')
     from drunc.controller.controller import Controller
     from drunc.controller.configuration import ControllerConfHandler
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
@@ -50,15 +51,11 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
 
         add_ControllerServicer_to_server(ctrlr, server)
-
-        import socket
-        server.add_insecure_port(listen_addr)
+        port = server.add_insecure_port(listen_addr)
 
         server.start()
-
-        console.print(f'{ctrlr.name} was started on {listen_addr}')
-
-        return server
+        log.info(f'\'{ctrlr.name}\' was started on \'{port}\'')
+        return server, port
 
     def controller_shutdown():
         console.print('Requested termination')
@@ -80,7 +77,13 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         signal.signal(sig, shutdown)
 
     try:
-        server = serve(command_facility)
+        from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
+        command_facility = resolve_localhost_and_127_ip_to_network_ip(command_facility)
+        server_name = command_facility.split(':')[0]
+        server, port = serve(command_facility)
+
+        ctrlr.advertise_control_address(f'grpc://{server_name}:{port}')
+
         server.wait_for_termination(timeout=None)
 
     except Exception as e:

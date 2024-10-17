@@ -61,7 +61,7 @@ def controller_setup(ctx, controller_address):
         console=ctx._console,
     ) as progress:
 
-        waiting = progress.add_task("[yellow]timeout", total=timeout)
+        waiting = progress.add_task("[yellow]Trying to talk to the top controller...", total=timeout)
 
         stored_exception = None
         import time

@@ -1,76 +1,27 @@
 import click
 from drunc.controller.interface.context import ControllerContext
 
-@click.command('describe')
-@click.option("--command", type=str, default='.*')#, help='Which command you are interested')
+@click.command('list-transitions')
+@click.option('--all', is_flag=True, help='List all transitions (available and unavailable)')
 @click.pass_obj
-def describe(obj:ControllerContext, command:str) -> None:
-    from druncschema.controller_pb2 import Argument
-    from drunc.utils.shell_utils import InterruptedCommand
+def list_transitions(obj:ControllerContext, all:bool) -> None:
+    desc = obj.get_driver('controller').describe_fsm('all-transitions' if all else None)
 
-    if command == 'fsm':
-        desc = obj.get_driver('controller').describe_fsm().data
-    else:
-        desc = obj.get_driver('controller').describe().data
-
-    if not desc: return
+    if not desc:
+        obj.print('Could not get the list of commands available')
+        return
 
     from rich.table import Table
-    t = Table(title=f'{desc.name}.{desc.session} ({desc.type}) commands')
-    t.add_column('name')
-    t.add_column('input type')
-    t.add_column('return type')
-    t.add_column('help')
+    if all:
+        obj.print(f'\nAvailable transitions on \'{desc.name}\' are ([underline]some may not be accessible now, use list-transition without --all to see what transitions can be issued now[/]):')
+    else:
+        obj.print(f'\nCurrently available controller transitions on \'{desc.name}\' are:')
 
-    if command == 'fsm':
-        t.add_column('Command arguments')
-
-    from drunc.utils.utils import regex_match
-
-    def format_fsm_argument(arg):
-        d = '<no_default>'
-        from druncschema.generic_pb2 import string_msg, float_msg, int_msg, bool_msg
-        from drunc.utils.grpc_utils import unpack_any
-
-        if arg.HasField('default_value'):
-            if arg.type == Argument.Type.STRING:
-                d = unpack_any(arg.default_value, string_msg).value
-
-            elif arg.type == Argument.Type.FLOAT:
-                d = str(unpack_any(arg.default_value, float_msg).value)
-
-            elif arg.type == Argument.Type.INT:
-                d = str(unpack_any(arg.default_value, int_msg).value)
-
-            elif arg.type == Argument.Type.BOOL:
-                d = str(unpack_any(arg.default_value, bool_msg).value)
-
-            else:
-                d = arg.default_value
-
-        return f'{arg.name} ({Argument.Type.Name(arg.type)} {Argument.Presence.Name(arg.presence)}) default: {d} help: {arg.help}'
-
-    for c in desc.commands:
-
-        if not regex_match(command, c.name) and command != 'fsm':
-            continue
-
-        if command == 'fsm':
-            args = c.arguments
-            if len(args) == 0:
-                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,)
-            elif len(args) == 1:
-                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,format_fsm_argument(args[0]))
-            else:
-                t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help,format_fsm_argument(args[0]))
-                for i in range(1, len(args)):
-                    t.add_row('', '', '', '', format_fsm_argument(args[i]))
-
-        else:
-            t.add_row(c.name, ','.join(c.data_type), c.return_type, c.help)
+    for c in desc.data.commands:
+        obj.print(f' - [yellow]{c.name.replace("_","-").lower()}[/]')
 
 
-    obj.print(t)
+    obj.print('\nUse [yellow]help <command>[/] for more information on a command.\n')
 
 
 
@@ -200,7 +151,7 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         command_list = [command for command in passed_commands if command in available_commands]
         if len(command_list) == 0:
             if len(passed_commands) == 1:
-                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")    
+                obj.print(f"The passed command [red]{' '.join(passed_commands)}[/red] was not understood.")
             else:
                 obj.print(f"None of the passed arguments were correctly identified.")
             raise SystemExit(1)
@@ -314,8 +265,8 @@ def fsm(obj:ControllerContext, fsm_command:str) -> None:
         arguments = filter_arguments(command_args, command_desc)
         # Construct the FSMCommand
         from druncschema.controller_pb2 import FSMCommand
-        cmd = FSMCommand( 
-            command_name = command_name, 
+        cmd = FSMCommand(
+            command_name = command_name,
             arguments = validate_and_format_fsm_arguments(arguments, command_desc.arguments)
         )
         return cmd

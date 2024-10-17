@@ -129,7 +129,7 @@ class GRPCDriver:
             if response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             ]:
-                self._log.info(text())
+                self._log.debug(text())
             elif response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
             ]:
@@ -147,7 +147,7 @@ class GRPCDriver:
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
                 #stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
-                stack_txt = 'Stacktrace on remote server!\n' 
+                stack_txt = 'Stacktrace on remote server!\n'
                 last_one = ""
                 for l in stack.text:
                     stack_txt += l+"\n"
@@ -172,9 +172,9 @@ class GRPCDriver:
                 except DruncServerSideError as e:
                     self._log.error(f"Exception thrown from child: {e}")
             return dr
-    
+
             # raise DruncServerSideError(error_txt, stack_txt, server_response=dr)
-            
+
 
     def send_command(self, command:str, data=None, outformat=None, decode_children=False):
         import grpc
@@ -274,7 +274,7 @@ class ShellContext:
             return list(self._drivers.values())[0]
         except KeyError:
             self._log.error(f'FSM Commands cannot be sent until the Session is booted')
-            raise SystemExit(1) # used to avoid having to catch multiple Attribute errors when this function gets called 
+            raise SystemExit(1) # used to avoid having to catch multiple Attribute errors when this function gets called
 
     def get_token(self) -> Token:
         return self._token
@@ -300,7 +300,7 @@ class ShellContext:
     def critical(self, *args, **kwargs) -> None:
         self._log.critical(*args, **kwargs)
 
-    
+
     def print_status_summary(self) -> None:
         status = self.get_driver('controller').get_status().data.state
         available_actions = [command.name for command in self.get_driver('controller').describe_fsm().data.commands]
