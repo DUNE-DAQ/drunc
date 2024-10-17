@@ -71,6 +71,7 @@ class ProcessManagerDriver(GRPCDriver):
             args = app['args']
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            env['SPACK_RELEASES_DIR'] = os.getenv("SPACK_RELEASES_DIR")
             tree_id = app['tree_id']
 
             self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
@@ -83,7 +84,7 @@ class ProcessManagerDriver(GRPCDriver):
 
             else:
                 from drunc.process_manager.utils import get_rte_script
-                rte_script = get_rte_script(session_dal)
+                rte_script = get_rte_script()
                 if not rte_script:
                     raise DruncSetupException("No RTE script found.")
 
