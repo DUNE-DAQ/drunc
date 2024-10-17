@@ -617,7 +617,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
             return self.construct_error_node_response(
                 fsm_command.command_name,
                 token,
-                cause = FSMResponseFlag.FSM_NODE_IN_ERROR
+                cause = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             )
 
         if not self.stateful_node.node_is_included():
