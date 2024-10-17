@@ -100,10 +100,14 @@ def unified_shell(
         desc = desc.data
 
     except Exception as e:
-        ctx.obj.critical(f'Could not connect to the process manager')
+        ctx.obj.critical(f'Could not connect to the process manager, use --log-level DEBUG for more information')
+        ctx.obj.debug(f'Error: {e}')
         if not ctx.obj.pm_process.is_alive():
             ctx.obj.critical(f'The process manager is dead, exit code {ctx.obj.pm_process.exitcode}')
-        raise e
+        else:
+            ctx.obj.print(f'\nOn the NP04 cluster, this usually happens when you have the web proxy enabled. Try to disable it by doing:\n\n[yellow]source ~np04daq/bin/web_proxy.sh -u[/]\n')
+            ctx.obj.pm_process.terminate()
+        exit(1)
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     if desc.HasField('broadcast'):
