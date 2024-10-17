@@ -139,18 +139,22 @@ class ProcessManagerDriver(GRPCDriver):
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
 
-                from drunc.connectivity_service.client import ConnectivityServiceClient
+                from drunc.connectivity_service.client import ConnectivityServiceClient, ApplicationLookupUnsuccessful
                 csc = ConnectivityServiceClient(session_name, f'{connection_server}:{connection_port}')
 
                 from drunc.utils.utils import get_control_type_and_uri_from_connectivity_service
-                _, uri = get_control_type_and_uri_from_connectivity_service(
-                    csc,
-                    name = top_controller_name,
-                    timeout = 60,
-                    retry_wait = 1,
-                    progress_bar = True,
-                    title = f'Looking for \'{top_controller_name}\' on the connectivity service...',
-                )
+                try:
+                    _, uri = get_control_type_and_uri_from_connectivity_service(
+                        csc,
+                        name = top_controller_name,
+                        timeout = 60,
+                        retry_wait = 1,
+                        progress_bar = True,
+                        title = f'Looking for \'{top_controller_name}\' on the connectivity service...',
+                    )
+                except ApplicationLookupUnsuccessful as e:
+                    self._log.error(f'Could not find \'{top_controller_name}\' on the connectivity service, this likely means that the controller died. Try running \'ps\' to see if the controller is still running. You may be able to \'connect grpc://<controller address>\' later on, if the controller took too long to start. To find the controller address, look up \'{top_controller_name}_control\' {connection_server}:{connection_port} (you may need a socks proxy from outside CERN)')
+                    return
 
                 return uri.replace('grpc://', '')
 
