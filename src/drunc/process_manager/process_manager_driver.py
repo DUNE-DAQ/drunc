@@ -156,13 +156,17 @@ class ProcessManagerDriver(GRPCDriver):
                     import getpass
                     self._log.error(f'''Could not find \'{top_controller_name}\' on the connectivity service. 2 possibilities:
 1. The most likely, the controller died. You can check that by looking for error like:
-Process \'{top_controller_name}\' (session: \'{session_name}\', user: \'{getpass.getuser()}\') process exited with exit code 1).
+[yellow]Process \'{top_controller_name}\' (session: \'{session_name}\', user: \'{getpass.getuser()}\') process exited with exit code 1).[/]
 Try running \'ps\' to see if the {top_controller_name} is still running.
+To get to the reason why the controller died, you can restart this shell with [yellow]--log-level debug[/], and look out for \'STDOUT\' and \'STDERR\'.
 
 2. The controller did not die, but is still setting up and has not advertised itself on the connection service.
-You may be able to \'connect grpc://<controller address>\' on in a bit.
-To find the controller address, look up \'{top_controller_name}_control\' on {connection_server}:{connection_port} (you may need a SOCKS proxy from outside CERN).
-''')
+You may be able to \'connect grpc://<controller address>\' in a bit: Check the logs of the controller:
+[yellow]logs --name {top_controller_name} --grep grpc[\]
+And look for messages like:
+[yello]Registering root-controller to the connectivity service at grpc://xx.xx.xxx.xx:xxxxx[\]
+To find the controller address, look up \'{top_controller_name}_control\' on {connection_server}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs above.
+''', extra={"markup": True})
                     return
 
                 return uri.replace('grpc://', '')
