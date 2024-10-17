@@ -161,18 +161,18 @@ Two possibilities:
 
 1. The most likely, the controller died. You can check that by looking for error like:
 [yellow]Process \'{top_controller_name}\' (session: \'{session_name}\', user: \'{getpass.getuser()}\') process exited with exit code 1).[/]
-Try running \'ps\' to see if the {top_controller_name} is still running.
+Try running [yellow]ps[/] to see if the {top_controller_name} is still running.
 You may also want to check the logs of the controller, try typing:
-[yellow]logs --name {top_controller_name} --grep grpc[/]
-To get to the reason why the controller died, you can restart this shell with [yellow]--log-level debug[/], and look out for \'STDOUT\' and \'STDERR\'.
+[yellow]logs --name {top_controller_name} --how-far 1000[/]
+If that's not helping, you can restart this shell with [yellow]--log-level debug[/], and look out for \'STDOUT\' and \'STDERR\'.
 
 2. The controller did not die, but is still setting up and has not advertised itself on the connection service.
 You may be able to connect to the {top_controller_name} in a bit. Check the logs of the controller:
 [yellow]logs --name {top_controller_name} --grep grpc[/]
 And look for messages like:
-[yellow]Registering root-controller to the connectivity service at grpc://xx.xx.xxx.xx:xxxxx[/]
-To find the controller address, look up \'{top_controller_name}_control\' on http://{connection_server}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs above. Then just connect this shell with:
-[yellow]connect grpc://<controller address>[/]
+[yellow]Registering root-controller to the connectivity service at grpc://xxx.xxx.xxx.xxx:xxxxx[/]
+To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_and_127_ip_to_network_ip(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
+[yellow]connect grpc://{{controller_address}}:{{controller_port}}>[/]
 ''', extra={"markup": True})
                     return
 
