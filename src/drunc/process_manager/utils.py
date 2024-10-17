@@ -92,14 +92,14 @@ def get_version():
     from os import getenv
     version = getenv("DUNE_DAQ_BASE_RELEASE")
     if not version:
-        raise RuntimeError('Utils: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit nanorc and\nexport DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n')
+        raise RuntimeError('Utils: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and\nexport DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n')
     return version
 
 def get_releases_dir():
     from os import getenv
     releases_dir = getenv("SPACK_RELEASES_DIR")
     if not releases_dir:
-        raise RuntimeError('Utils: cannot get env SPACK_RELEASES_DIR! Exit nanorc and\nrun dbt-workarea-env or dbt-setup-release.')
+        raise RuntimeError('Utils: cannot get env SPACK_RELEASES_DIR! Exit drunc and\nrun dbt-workarea-env or dbt-setup-release.')
     return releases_dir
 
 def release_or_dev():
