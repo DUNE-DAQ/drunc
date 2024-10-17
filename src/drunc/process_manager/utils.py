@@ -56,7 +56,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     t.add_column('exit-code')
     if long:
         t.add_column('executable')
-    
+
     from operator import attrgetter
     sorted_pil = sorted(pil.values, key=attrgetter('process_description.metadata.tree_id'))
     tree_str = make_tree(sorted_pil)
@@ -75,3 +75,56 @@ def tabulate_process_instance_list(pil, title, long=False):
         from drunc.exceptions import DruncCommandException
         raise DruncCommandException("Unable to extract the parameters for tabulate_process_instance_list, exiting.")
     return t
+
+
+def strip_env_for_rte(env):
+    import copy as cp
+    import re
+    env_stripped = cp.deepcopy(env)
+    for key in env.keys():
+        if key in ["PATH","CET_PLUGIN_PATH","DUNEDAQ_SHARE_PATH","LD_LIBRARY_PATH","LIBRARY_PATH","PYTHONPATH"]:
+            del env_stripped[key]
+        if re.search(".*_SHARE", key) and key in env_stripped:
+            del env_stripped[key]
+    return env_stripped
+
+def get_version():
+    from os import getenv
+    version = getenv("DUNE_DAQ_BASE_RELEASE")
+    if not version:
+        raise RuntimeError('Utils: dunedaq version not in the variable env DUNE_DAQ_BASE_RELEASE! Exit drunc and\nexport DUNE_DAQ_BASE_RELEASE=dunedaq-vX.XX.XX\n')
+    return version
+
+def get_releases_dir():
+    from os import getenv
+    releases_dir = getenv("SPACK_RELEASES_DIR")
+    if not releases_dir:
+        raise RuntimeError('Utils: cannot get env SPACK_RELEASES_DIR! Exit drunc and\nrun dbt-workarea-env or dbt-setup-release.')
+    return releases_dir
+
+def release_or_dev():
+    from os import getenv
+    is_release = getenv("DBT_SETUP_RELEASE_SCRIPT_SOURCED")
+    if is_release:
+        return 'rel'
+    is_devenv = getenv("DBT_WORKAREA_ENV_SCRIPT_SOURCED")
+    if is_devenv:
+        return 'dev'
+    return 'rel'
+
+def get_rte_script():
+    from os import path,getenv
+    script = ''
+    if release_or_dev() == 'rel':
+        ver = get_version()
+        releases_dir = get_releases_dir()
+        script = path.join(releases_dir, ver, 'daq_app_rte.sh')
+
+    else:
+        dbt_install_dir = getenv('DBT_INSTALL_DIR')
+        script = path.join(dbt_install_dir, 'daq_app_rte.sh')
+
+    if not path.exists(script):
+        from drunc.exceptions import DruncSetupException
+        raise DruncSetupException(f'Couldn\'t understand where to find the rte script tentative: {script}')
+    return script

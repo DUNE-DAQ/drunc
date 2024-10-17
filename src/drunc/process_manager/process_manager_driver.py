@@ -71,6 +71,7 @@ class ProcessManagerDriver(GRPCDriver):
             args = app['args']
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            env['SPACK_RELEASES_DIR'] = os.getenv("SPACK_RELEASES_DIR")
             tree_id = app['tree_id']
 
             self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
@@ -81,23 +82,15 @@ class ProcessManagerDriver(GRPCDriver):
                     exec='source',
                     args=[session_dal.rte_script]))
 
-            elif os.getenv("DBT_INSTALL_DIR") is not None:
-                env['DBT_INSTALL_DIR'] = os.getenv("DBT_INSTALL_DIR")
-                self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
-                rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
+            else:
+                from drunc.process_manager.utils import get_rte_script
+                rte_script = get_rte_script()
+                if not rte_script:
+                    raise DruncSetupException("No RTE script found.")
 
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
-                    args=[rte]))
-            else:
-                self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
-
-            # executable_and_arguments.append(
-            #     ProcessDescription.ExecAndArgs(
-            #         exec = "env",
-            #         args = []
-            #     )
-            # )
+                    args=[rte_script]))
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
