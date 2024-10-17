@@ -153,7 +153,16 @@ class ProcessManagerDriver(GRPCDriver):
                         title = f'Looking for \'{top_controller_name}\' on the connectivity service...',
                     )
                 except ApplicationLookupUnsuccessful as e:
-                    self._log.error(f'Could not find \'{top_controller_name}\' on the connectivity service, this likely means that the controller died. Try running \'ps\' to see if the controller is still running. You may be able to \'connect grpc://<controller address>\' later on, if the controller took too long to start. To find the controller address, look up \'{top_controller_name}_control\' {connection_server}:{connection_port} (you may need a socks proxy from outside CERN)')
+                    import getpass
+                    self._log.error(f'''Could not find \'{top_controller_name}\' on the connectivity service. 2 possibilities:
+1. The most likely, the controller died. You can check that by looking for error like:
+Process \'{top_controller_name}\' (session: \'{session_name}\', user: \'{getpass.getuser()}\') process exited with exit code 1).
+Try running \'ps\' to see if the {top_controller_name} is still running.
+
+2. The controller did not die, but is still setting up and has not advertised itself on the connection service.
+You may be able to \'connect grpc://<controller address>\' on in a bit.
+To find the controller address, look up \'{top_controller_name}_control\' on {connection_server}:{connection_port} (you may need a SOCKS proxy from outside CERN).
+''')
                     return
 
                 return uri.replace('grpc://', '')
