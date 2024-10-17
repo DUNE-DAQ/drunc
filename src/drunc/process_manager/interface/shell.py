@@ -16,16 +16,16 @@ def process_manager_shell(ctx, process_manager_address:str, log_level:str) -> No
         address = process_manager_address,
     )
 
-    from drunc.utils.grpc_utils import ServerUnreachable
-
     try:
         import asyncio
         desc = asyncio.get_event_loop().run_until_complete(
             ctx.obj.get_driver('process_manager').describe()
         )
-    except ServerUnreachable as e:
-        ctx.obj.critical(f'Could not connect to the process manager')
-        raise e
+    except Exception as e:
+        ctx.obj.critical(f'Could not connect to the process manager, use --log-level DEBUG for more information')
+        ctx.obj.debug(f'Error: {e}')
+        ctx.obj.print(f'\nIf you are sure that the process manager exists, on the NP04 cluster, this error usually happens when you have the web proxy enabled. Try to disable it by doing:\n\n[yellow]source ~np04daq/bin/web_proxy.sh -u[/]\n')
+        exit(1)
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.data.name}.{desc.data.session}\' (name.session), starting listening...')
     if desc.data.HasField('broadcast'):
