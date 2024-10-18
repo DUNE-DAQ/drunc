@@ -26,14 +26,14 @@ class ConnectivityServiceClient:
             # assume the simplest case here
             self.address = f'http://{address}'
 
-    def retract(self, uid, data_type:str, break_on_unreachable:bool=False):
+    def retract(self, uid):
         from drunc.utils.utils import http_post
         data = {
             'partition': self.session,
             'connections': [
                 {
                     'connection_id': uid,
-                    'data_type': data_type,
+                    'data_type': 'run-control-messages',
                 }
             ]
         }
@@ -59,14 +59,9 @@ class ConnectivityServiceClient:
                 r.raise_for_status()
                 break
             except (HTTPError, ConnectionError) as e:
-
-                if break_on_unreachable and isinstance(e, ConnectionError):
-                    self.logger.warning('Connectivity service seems unreachable, assuming it\'s already been killed')
-                    break
-
                 from time import sleep
                 sleep(0.5)
-
+                continue
 
 
 
