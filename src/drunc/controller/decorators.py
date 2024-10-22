@@ -26,6 +26,7 @@ def in_control(cmd):
                 children = []
             )
 
+        log.debug(f'Actor is {obj.actor._token}, requester is in control, executing command')
         return cmd(obj, request)
 
     return wrap
