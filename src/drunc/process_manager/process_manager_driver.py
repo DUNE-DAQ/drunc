@@ -50,7 +50,11 @@ class ProcessManagerDriver(GRPCDriver):
             f.flush()
             f.seek(0)
             fname = f.name
-            consolidate_db(oks_conf, f"{fname}")
+            try:
+                consolidate_db(oks_conf, f"{fname}")
+            except Exception as e:
+                log.error("Invalid configuration passed")
+                raise e
 
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
