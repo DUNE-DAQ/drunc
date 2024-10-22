@@ -5,7 +5,11 @@ def in_control(cmd):
 
     @wraps(cmd)
     def wrap(obj, request):
+        print(f'actor is {obj.actor._token}, requester is {request.token}')
+
         if not obj.actor.token_is_current_actor(request.token):
+            print(f'FAILED actor is {obj.actor._token}, requester is {request.token}')
+
             from druncschema.request_response_pb2 import Response, ResponseFlag
             from druncschema.generic_pb2 import PlainText
             from drunc.utils.grpc_utils import pack_to_any
@@ -23,5 +27,30 @@ def in_control(cmd):
             )
 
         return cmd(obj, request)
+
+    return wrap
+
+
+def with_command_lock(cmd):
+    from functools import wraps
+
+    @wraps(cmd)
+    def wrap(obj, request):
+
+        if obj._command_lock.acquire(timeout=10):
+            ret = cmd(obj, request)
+            obj._command_lock.release()
+            return ret
+        else:
+            return Response(
+                name = obj.name,
+                token = request.token,
+                data = pack_to_any(
+                    PlainText(
+                        text = f"Another command is being executed on {obj.__class__.__name__}",
+                    )
+                ),
+                flag = ResponseFlag.FAILED
+            )
 
     return wrap

@@ -16,7 +16,7 @@ from drunc.broadcast.server.decorators import broadcasted
 from drunc.utils.grpc_utils import unpack_request_data_to, pack_response
 from drunc.authoriser.decorators import authentified_and_authorised
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from drunc.controller.decorators import in_control
+from drunc.controller.decorators import in_control, with_command_lock
 from drunc.exceptions import DruncException
 
 import signal
@@ -30,12 +30,14 @@ class ControllerActor:
             token="",
             user_name="",
         )
-
-        if token is not None:
-            self._token.CopyFrom(token)
-
         from threading import Lock
         self._lock = Lock()
+
+        if token is not None:
+            with self._lock:
+                self._token.CopyFrom(token)
+
+
 
     def get_token(self) -> Token:
         return self._token
@@ -66,7 +68,10 @@ class ControllerActor:
     def take_control(self, token) -> None:
         # if not self.compare_token(self._token, token):
         #     raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
+        print(f'making {token} the actor')
         self._update_actor(token)
+        print(f'current actor is {self._token}')
+
         return 0
 
 
@@ -96,6 +101,8 @@ class Controller(ControllerServicer):
             configuration = bsch,
         )
 
+        from threading import Lock
+        self._command_lock = Lock()
 
         from drunc.fsm.configuration import FSMConfHandler
         fsmch = FSMConfHandler(
@@ -371,7 +378,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
                 response = child.propagate_command(command, command_data, token)
                 with response_lock:
                     response_children.append(response)
-
+                print(response)
                 if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self.broadcast(
                         btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
@@ -447,7 +454,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(pass_token=True) # 3rd step
+    @with_command_lock # 3rd step
+    @unpack_request_data_to(pass_token=True) # 4th step
     def get_children_status(self, token:Token) -> Response:
         #from drunc.controller.utils import get_status_message
         cs = []
@@ -482,7 +490,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
+    @with_command_lock # 3rd step
+    @unpack_request_data_to(None) # 4th step
     def get_status(self) -> Response:
         from drunc.controller.utils import get_status_message
         status = get_status_message(self.stateful_node)
@@ -503,7 +512,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
+    @with_command_lock # 3rd step
+    @unpack_request_data_to(None) # 4th step
     def ls(self) -> PlainTextVector:
         nodes = [node.name for node in self.children_nodes]
         response = PlainTextVector(
@@ -525,7 +535,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None, pass_token=True) # 3rd step
+    @with_command_lock # 3rd step
+    @unpack_request_data_to(None, pass_token=True) # 4rd step
     def describe(self, token:Token) -> Response:
         from druncschema.request_response_pb2 import Description
         from drunc.utils.grpc_utils import pack_to_any
@@ -564,6 +575,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
+    @with_command_lock # 3rd step
     @unpack_request_data_to(PlainText) # 4th step
     def describe_fsm(self, input:PlainText) -> Response:
         from drunc.fsm.utils import convert_fsm_transition
@@ -603,7 +615,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         system=SystemType.CONTROLLER
     ) # 2nd step
     @in_control # 3rd step
-    @unpack_request_data_to(FSMCommand, pass_token=True) # 4th step
+    @with_command_lock # 4th step
+    @unpack_request_data_to(FSMCommand, pass_token=True) # 5th step
     def execute_fsm_command(self, fsm_command:FSMCommand, token:Token) -> Response:
         """
         A generic way to execute the controller commands from a user.
@@ -641,7 +654,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
         self.logger.debug(f'The transition requested is "{str(transition)}"')
 
         if not self.stateful_node.can_transition(transition):
-            self.logger.error(f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"')
+            self.logger.error(f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.get_node_operational_state()}\"')
 
             fsm_result = FSMCommandResponse(
                 flag = FSMResponseFlag.FSM_INVALID_TRANSITION,
@@ -744,7 +757,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         system=SystemType.CONTROLLER
     ) # 2nd step
     @in_control # 3rd step
-    @unpack_request_data_to(pass_token=True) # 4th step
+    @with_command_lock # 4th step
+    @unpack_request_data_to(pass_token=True) # 5th step
     def include(self, token:Token) -> PlainText:
         response_children = self.propagate_to_list('include', command_data=None, token=token, node_to_execute=self.children_nodes)
         self.stateful_node.include_node()
@@ -765,8 +779,9 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.UPDATE,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @in_control
-    @unpack_request_data_to(pass_token=True) # 3rd step
+    @in_control # 3rd step
+    @with_command_lock # 4th step
+    @unpack_request_data_to(pass_token=True) # 5th step
     def exclude(self, token:Token) -> Response:
         response_children = self.propagate_to_list('exclude', command_data=None, token=token, node_to_execute=self.children_nodes)
         self.stateful_node.exclude_node()
@@ -791,20 +806,24 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.UPDATE,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(pass_token=True) # 3rd step
+    @with_command_lock # 3rd step
+    @unpack_request_data_to(pass_token=True) # 4th step
     def take_control(self, token:Token) -> PlainText:
+        print(f'taking control with {token}')
         if self.actor.take_control(token) != 0:
+            print(f'{token} didnt take control')
             return Response(
                 name = self.name,
                 token = token,
                 data = pack_to_any(
                     PlainText(
-                        text='Could not take control'
+                        text=f'Could not take control of {self.name}'
                     )
                 ),
                 flag = ResponseFlag.FAILED,
                 children = [],
             )
+        print(f'{token} took control')
 
         response_children = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
         if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
@@ -820,7 +839,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
                 children = response_children,
             )
 
-        resp = PlainText(text = f'{token.user_name} took control')
+        resp = PlainText(text = f'{token.user_name} took control of {self.name}: {self.actor._token} is now the actor\'s token.')
         return Response(
             name = self.name,
             token = token,
@@ -836,7 +855,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         system=SystemType.CONTROLLER
     ) # 2nd step
     @in_control # 3rd step
-    @unpack_request_data_to(pass_token=True) # 4th step
+    @with_command_lock # 4th step
+    @unpack_request_data_to(pass_token=True) # 5th step
     def surrender_control(self, token:Token) -> PlainText:
         user = self.actor.get_user_name()
         if self.actor.surrender_control(token) != 0:
@@ -881,7 +901,8 @@ if nothing (None) is provided, return the transitions accessible from the curren
         action=ActionType.READ,
         system=SystemType.CONTROLLER
     ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
+    @with_command_lock # 3th step
+    @unpack_request_data_to(None) # 4th step
     def who_is_in_charge(self) -> PlainText:
         user = self.actor.get_user_name()
         return Response (

@@ -42,9 +42,9 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
             data_detail.Pack(data)
             request.data.CopyFrom(data_detail)
 
-        log.debug(f'Sending: {command} to the controller, with {request=}')
-
+        log.info(f'Sending: {command} to the controller, with {request=}')
         response = cmd(request)
+        log.info(f'Received: {response=}')
     except grpc.RpcError as e:
         from drunc.utils.grpc_utils import rethrow_if_unreachable_server
         rethrow_if_unreachable_server(e)
