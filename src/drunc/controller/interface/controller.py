@@ -85,6 +85,28 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
         server_name = command_facility.split(':')[0]
         server, port = serve(command_facility)
 
+        from druncschema.controller_pb2_grpc import ControllerStub
+        from druncschema.request_response_pb2 import Response, Request
+
+        import grpc
+        channel_throwaway = grpc.insecure_channel(f'{server_name}:{port}')
+        cs_throwaway = ControllerStub(channel_throwaway)
+        request_throwaway = Request(token = ctrlr.actor.get_token())
+
+        n_iter = 100
+        for i in range(n_iter):
+            try:
+                print(f'Connecting to {server_name}:{port}')
+                resp = cs_throwaway.describe(request_throwaway)
+                break
+            except Exception as e:
+                print('Waiting for server to start')
+                if i == n_iter - 1:
+                    raise e
+
+                from time import sleep
+                sleep(0.1)
+
         ctrlr.advertise_control_address(f'grpc://{server_name}:{port}')
 
         server.wait_for_termination(timeout=None)
