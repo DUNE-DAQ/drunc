@@ -228,3 +228,8 @@ def interrupt_if_unreachable_server(grpc_error):
             return grpc_error._details
 
 
+def set_grpc_debug(grpc_debug:bool):
+    if grpc_debug:
+        import os
+        os.environ["GRPC_VERBOSITY"] = "debug"
+        os.environ["GRPC_TRACE"] = "all"

@@ -7,8 +7,11 @@ from drunc.utils.utils import log_levels,  update_log_level, validate_command_fa
 @click.argument('command-facility', type=str, callback=validate_command_facility)#, help=f'Command facility (protocol, host and port) grpc://{socket.gethostname()}:12345')
 @click.argument('name', type=str)
 @click.argument('session', type=str)
-@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-def controller_cli(configuration:str, command_facility:str, name:str, session:str, log_level:str):
+@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='DEBUG', help='Set the log level')
+@click.option('-gd', '--grpc-debug',  is_flag=True, default=False, help='Whether to include the (very very verbose) grpc debug output')
+def controller_cli(configuration:str, command_facility:str, name:str, session:str, log_level:str, grpc_debug:bool):
+    from drunc.utils.grpc_utils import set_grpc_debug
+    set_grpc_debug(grpc_debug)
 
     from rich.console import Console
     console = Console()
@@ -21,7 +24,7 @@ def controller_cli(configuration:str, command_facility:str, name:str, session:st
     from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
     from druncschema.token_pb2 import Token
     token = Token(
-        user_name = "controller_init_token",
+        user_name = f"{name}_init_token",
         token = '',
     )
 
