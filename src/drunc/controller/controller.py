@@ -68,9 +68,7 @@ class ControllerActor:
     def take_control(self, token) -> None:
         # if not self.compare_token(self._token, token):
         #     raise ctler_excpt.OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
-        print(f'making {token} the actor')
         self._update_actor(token)
-        print(f'current actor is {self._token}')
 
         return 0
 
@@ -101,7 +99,7 @@ class Controller(ControllerServicer):
             configuration = bsch,
         )
 
-        from threading import Lock
+        from multiprocessing import Lock
         self._command_lock = Lock()
 
         from drunc.fsm.configuration import FSMConfHandler
@@ -378,7 +376,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
                 response = child.propagate_command(command, command_data, token)
                 with response_lock:
                     response_children.append(response)
-                print(response)
+
                 if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self.broadcast(
                         btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
@@ -809,9 +807,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
     @with_command_lock # 3rd step
     @unpack_request_data_to(pass_token=True) # 4th step
     def take_control(self, token:Token) -> PlainText:
-        print(f'taking control with {token}')
         if self.actor.take_control(token) != 0:
-            print(f'{token} didnt take control')
             return Response(
                 name = self.name,
                 token = token,
@@ -823,7 +819,6 @@ if nothing (None) is provided, return the transitions accessible from the curren
                 flag = ResponseFlag.FAILED,
                 children = [],
             )
-        print(f'{token} took control')
 
         response_children = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
         if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
