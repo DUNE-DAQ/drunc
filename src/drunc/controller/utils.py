@@ -16,7 +16,7 @@ def get_status_message(stateful:StatefulNode):
         included = stateful.node_is_included(),
     )
 
-def send_command(controller, token, command:str, data=None, rethrow=False):
+def send_command(controller, token, command:str, data=None, rethrow=False, n_tries=2):
     import grpc
     from google.protobuf import any_pb2
 
@@ -35,46 +35,51 @@ def send_command(controller, token, command:str, data=None, rethrow=False):
     request = Request(
         token = token,
     )
+    from drunc.utils.grpc_utils import rethrow_if_unreachable_server, server_is_reachable
 
-    try:
-        if data:
-            data_detail = any_pb2.Any()
-            data_detail.Pack(data)
-            request.data.CopyFrom(data_detail)
+    for i_try in range(n_tries):
+        try:
+            if data:
+                data_detail = any_pb2.Any()
+                data_detail.Pack(data)
+                request.data.CopyFrom(data_detail)
 
-        log.info(f'Sending: {command} to the controller, with {request=}')
-        response = cmd(request)
-        log.info(f'Received: {response=}')
-    except grpc.RpcError as e:
-        from drunc.utils.grpc_utils import rethrow_if_unreachable_server
-        rethrow_if_unreachable_server(e)
+            log.debug(f'Sending: {command} to the controller, with {request=}')
+            response = cmd(request)
+            log.debug(f'Received: {response=}')
+            break
+        except grpc.RpcError as e:
+            if not server_is_reachable(e) and i_try < n_tries: # we only retry if the server is unreachable
+                continue
 
-        from grpc_status import rpc_status
-        status = rpc_status.from_call(e)
+            rethrow_if_unreachable_server(e)
 
-        log.error(f'Error sending command "{command}" to controller')
+            from grpc_status import rpc_status
+            status = rpc_status.from_call(e)
 
-        from druncschema.generic_pb2 import Stacktrace, PlainText
-        from drunc.utils.grpc_utils import unpack_any
+            log.error(f'Error sending command "{command}" to controller')
 
-        if hasattr(status, 'message'):
-            log.error(status.message)
+            from druncschema.generic_pb2 import Stacktrace, PlainText
+            from drunc.utils.grpc_utils import unpack_any
 
-        if hasattr(status, 'details'):
-            for detail in status.details:
-                if detail.Is(Stacktrace.DESCRIPTOR):
-                    # text = '[bold red]Stacktrace on remote server![/bold red]\n' # Temporary - bold red doesn't work
-                    text = 'Stacktrace on remote server!\n'
-                    stack = unpack_any(detail, Stacktrace)
-                    for l in stack.text:
-                        text += l+"\n"
-                    log.error(text, extra={"markup": True})
-                elif detail.Is(PlainText.DESCRIPTOR):
-                    txt = unpack_any(detail, PlainText)
-                    log.error(txt)
+            if hasattr(status, 'message'):
+                log.error(status.message)
 
-        if rethrow:
-            raise e
-        return None
+            if hasattr(status, 'details'):
+                for detail in status.details:
+                    if detail.Is(Stacktrace.DESCRIPTOR):
+                        # text = '[bold red]Stacktrace on remote server![/bold red]\n' # Temporary - bold red doesn't work
+                        text = 'Stacktrace on remote server!\n'
+                        stack = unpack_any(detail, Stacktrace)
+                        for l in stack.text:
+                            text += l+"\n"
+                        log.error(text, extra={"markup": True})
+                    elif detail.Is(PlainText.DESCRIPTOR):
+                        txt = unpack_any(detail, PlainText)
+                        log.error(txt)
+
+            if rethrow:
+                raise e
+            return None
 
     return response
