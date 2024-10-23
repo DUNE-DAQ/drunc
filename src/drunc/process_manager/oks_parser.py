@@ -75,7 +75,8 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
       "restriction": host,
       "host": host,
       "env": rc_env,
-      "tree_id": pmch.create_id(controller, segment)
+      "tree_id": pmch.create_id(controller, segment),
+      "log_path": controller.log_path,
     }
   )
 
@@ -116,7 +117,8 @@ def collect_apps(db, session, segment, env:Dict[str,str]) -> List[Dict]:
         "restriction": host,
         "host": host,
         "env": app_env,
-        "tree_id": pmch.create_id(app)
+        "tree_id": pmch.create_id(app),
+        "log_path": app.log_path,
       }
     )
 
@@ -168,7 +170,8 @@ def collect_infra_apps(session, env:Dict[str, str]) -> List[Dict]:
         "restriction": host,
         "host": host,
         "env": app_env,
-        "tree_id": pmch.create_id(app)
+        "tree_id": pmch.create_id(app),
+        "log_path": app.log_path,
       }
     )
 
