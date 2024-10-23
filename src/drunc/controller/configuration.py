@@ -28,8 +28,8 @@ class ControllerConfHandler(ConfHandler):
         return None
 
     def _grab_segment_conf_from_controller(self, configuration):
-        session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
-        this_segment = ControllerConfHandler.find_segment(session.segment, self.oks_key.obj_uid)
+        self.session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
+        this_segment = ControllerConfHandler.find_segment(self.session.segment, self.oks_key.obj_uid)
         if this_segment is None:
             CouldNotFindSegment(self.oks_key.obj_uid)
         return this_segment
@@ -39,7 +39,15 @@ class ControllerConfHandler(ConfHandler):
         self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
 
-    def get_children(self, init_token, enabled_only=True):
+        self.this_host = self.data.controller.runs_on.runs_on.id
+        if self.this_host in ['localhost'] or self.this_host.startswith('127.'):
+            import socket
+            self.this_host = socket.gethostname()
+
+
+    def get_children(self, init_token, without_excluded=False, connectivity_service=None):
+
+        enabled_only = not without_excluded
 
         if self.children != []:
             return self.get_children
@@ -71,6 +79,7 @@ class ControllerConfHandler(ConfHandler):
                 init_token = init_token,
                 name = segment.controller.id,
                 configuration = segment,
+                connectivity_service = connectivity_service,
             )
             self.children.append(new_node)
 
@@ -87,7 +96,8 @@ class ControllerConfHandler(ConfHandler):
                 cli = get_cla(self.db._obj, session.id, app),
                 name = app.id,
                 configuration = app,
-                fsm_configuration = self.data.controller.fsm
+                fsm_configuration = self.data.controller.fsm,
+                connectivity_service = connectivity_service,
             )
             self.children.append(new_node)
 

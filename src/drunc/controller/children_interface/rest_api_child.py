@@ -1,4 +1,5 @@
-from drunc.controller.children_interface.child_node import ChildNode, ChildNodeType
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.utils.utils import ControlType
 from druncschema.request_response_pb2 import Response
 from druncschema.token_pb2 import Token
 import threading
@@ -390,10 +391,10 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
 from drunc.fsm.configuration import FSMConfHandler
 
 class RESTAPIChildNode(ChildNode):
-    def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler):
+    def __init__(self, name, configuration:RESTAPIChildNodeConfHandler, fsm_configuration:FSMConfHandler, uri):
         super(RESTAPIChildNode, self).__init__(
             name = name,
-            node_type = ChildNodeType.REST_API
+            node_type = ControlType.REST_API
         )
 
         from logging import getLogger
@@ -403,7 +404,13 @@ class RESTAPIChildNode(ChildNode):
 
         import socket
         response_listener_host = socket.gethostname()
-        self.app_host, self.app_port = configuration.get_host_port()
+
+        self.app_host, app_port = uri.split(":")
+        self.app_port = int(app_port)
+
+        if self.app_port == 0:
+            from drunc.exceptions import DruncSetupException
+            raise DruncSetupException(f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable.")
 
         proxy_host, proxy_port = getattr(configuration.data, "proxy", [None, None])
         proxy_port = int(proxy_port) if proxy_port is not None else None
@@ -433,6 +440,9 @@ class RESTAPIChildNode(ChildNode):
 
     def terminate(self):
         pass
+
+    def get_endpoint(self):
+        return f'rest://{self.app_host}:{self.app_port}'
 
     def get_status(self, token):
         from druncschema.controller_pb2 import Status
@@ -554,20 +564,12 @@ class RESTAPIChildNode(ChildNode):
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY # /!\ The command executed successfully, but the FSM command was not successful
                 return response
 
-        except ChildError as e:
+        except Exception as e: # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
             self.log.error(f'Got error from \'{data.command_name}\' to \'{self.name}\': {str(e)}')
             self.state.to_error()
-            return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    Stacktrace(
-                        text=[str(e)]
-                    )
-                ),
-                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                children = []
-            )
+            from drunc.utils.utils import print_traceback # for good measure, since I'm not sure the stack will be printed in propagate_to_child in the controller
+            print_traceback()
+            raise e
 
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)

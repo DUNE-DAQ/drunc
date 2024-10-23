@@ -38,7 +38,7 @@ def controller_cleanup_wrapper(ctx):
     return controller_cleanup
 
 
-def controller_setup(ctx, controller_address):
+def controller_setup(ctx, controller_address, timeout=60):
     if not hasattr(ctx, 'took_control'):
         from drunc.exceptions import DruncSetupException
         raise DruncSetupException('This context is not compatible with a controller, you need to add a \'took_control\' bool member')
@@ -47,42 +47,51 @@ def controller_setup(ctx, controller_address):
     from druncschema.request_response_pb2 import Description
     desc = Description()
 
-    timeout = 60
-
     from drunc.utils.grpc_utils import ServerUnreachable
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+    stored_exception = None
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TimeRemainingColumn(),
-        TimeElapsedColumn(),
-        console=ctx._console,
-    ) as progress:
+    if timeout == 0: # we break directly
+        try:
+            desc = ctx.get_driver('controller').describe().data
+        except Exception as e:
+            ctx.critical(f'Could not connect to the process manager, use --log-level DEBUG for more information')
+            ctx.debug(f'Error: {e}')
+            ctx.print(f'\nIf you are sure that the controller exists, on the NP04 cluster, this error usually happens when you have the web proxy enabled. Try to disable it by doing:\n\n[yellow]source ~np04daq/bin/web_proxy.sh -u[/]\n')
+            raise e
 
-        waiting = progress.add_task("[yellow]timeout", total=timeout)
+    else:
+        from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
 
-        stored_exception = None
-        import time
-        start_time = time.time()
-        while time.time()-start_time < timeout:
-            progress.update(waiting, completed=time.time()-start_time)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TimeRemainingColumn(),
+            TimeElapsedColumn(),
+            console=ctx._console,
+        ) as progress:
 
-            try:
-                desc = ctx.get_driver('controller').describe().data
-                stored_exception = None
-                break
-            except ServerUnreachable as e:
-                stored_exception = e
-                time.sleep(1)
+            waiting = progress.add_task("[yellow]Trying to talk to the top controller...", total=timeout)
 
-            except Exception as e:
-                ctx.critical('Could not get the controller\'s status')
-                ctx.critical(e)
-                ctx.critical('Exiting.')
-                ctx.terminate()
-                raise e
+            import time
+            start_time = time.time()
+            while time.time()-start_time < timeout:
+                progress.update(waiting, completed=time.time()-start_time)
+
+                try:
+                    desc = ctx.get_driver('controller').describe().data
+                    stored_exception = None
+                    break
+                except ServerUnreachable as e:
+                    stored_exception = e
+                    time.sleep(1)
+
+                except Exception as e:
+                    ctx.critical('Could not get the controller\'s status')
+                    ctx.critical(e)
+                    ctx.critical('Exiting.')
+                    ctx.terminate()
+                    raise e
 
     if stored_exception is not None:
         raise stored_exception
@@ -177,7 +186,7 @@ def validate_and_format_fsm_arguments(arguments:dict, command_arguments:list[Arg
             raise MissingArgument(aname, atype)
 
         value = arguments.get(aname)
-        if not value:
+        if value is None:
             out_dict[aname] = adefa
             continue
 

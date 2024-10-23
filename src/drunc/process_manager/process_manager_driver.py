@@ -1,12 +1,15 @@
 import asyncio
+
+from typing import Dict
+
 from druncschema.request_response_pb2 import Request, Response, Description
 from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQuery, ProcessInstance, ProcessInstanceList, ProcessMetadata, ProcessDescription, ProcessRestriction, LogRequest, LogLine
 
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
+from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-
 
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
@@ -25,7 +28,14 @@ class ProcessManagerDriver(GRPCDriver):
         return ProcessManagerStub(channel)
 
 
-    async def _convert_oks_to_boot_request(self, oks_conf, user, session, override_logs) -> BootRequest:
+    async def _convert_oks_to_boot_request(
+        self,
+        oks_conf:str,
+        user:str,
+        session:str,
+        override_logs:bool
+        ) -> BootRequest:
+
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
         import conffwk
         from drunc.utils.configuration import find_configuration
@@ -33,29 +43,24 @@ class ProcessManagerDriver(GRPCDriver):
         from logging import getLogger
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
+
+
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
+        from drunc.process_manager.oks_parser import collect_variables
 
-        apps = collect_apps(db, session_dal, session_dal.segment)
-        infra_apps = collect_infra_apps(session_dal)
-        
-        apps += infra_apps
+        env = {
+            'DUNEDAQ_SESSION': session,
+        }
 
-        def get_controller_address(top_controller_conf):
-            service_id = top_controller_conf.id + "_control"
-            port_number = None
-            protocol = None
-            for service in top_controller_conf.exposes_service:
-                if service.id == service_id:
-                    port_number = service.port
-                    protocol = service.protocol
-                    break
-            if port_number is None or protocol is None:
-                return None
-            return f'{top_controller_conf.runs_on.runs_on.id}:{port_number}'
+        apps = collect_apps(db, session_dal, session_dal.segment, env)
+        infra_apps = collect_infra_apps(session_dal, env)
 
-        self.controller_address = get_controller_address(session_dal.segment.controller)
-        self._log.debug(f"{apps=}")
+        apps = infra_apps+apps
+
+        import json
+        self._log.debug(f"{json.dumps(apps, indent=4)}")
+
         import os
         pwd = os.getcwd()
 
@@ -66,10 +71,10 @@ class ProcessManagerDriver(GRPCDriver):
             args = app['args']
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            env['SPACK_RELEASES_DIR'] = os.getenv("SPACK_RELEASES_DIR")
             tree_id = app['tree_id']
 
-            self._log.debug(f"{app=}")
-
+            self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
             executable_and_arguments = []
 
             if session_dal.rte_script:
@@ -77,23 +82,15 @@ class ProcessManagerDriver(GRPCDriver):
                     exec='source',
                     args=[session_dal.rte_script]))
 
-            elif os.getenv("DBT_INSTALL_DIR") is not None:
-                env['DBT_INSTALL_DIR'] = os.getenv("DBT_INSTALL_DIR")
-                self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
-                rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
+            else:
+                from drunc.process_manager.utils import get_rte_script
+                rte_script = get_rte_script()
+                if not rte_script:
+                    raise DruncSetupException("No RTE script found.")
 
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
-                    args=[rte]))
-            else:
-                self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
-
-            # executable_and_arguments.append(
-            #     ProcessDescription.ExecAndArgs(
-            #         exec = "env",
-            #         args = []
-            #     )
-            # )
+                    args=[rte_script]))
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,
@@ -104,7 +101,7 @@ class ProcessManagerDriver(GRPCDriver):
                 log_path = f'{pwd}/log_{user}_{session}_{name}.log'
             else:
                 log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
-
+            self._log.debug(f'{name}\'s env:\n{env}')
             breq =  BootRequest(
                 process_description = ProcessDescription(
                     metadata = ProcessMetadata(
@@ -126,14 +123,63 @@ class ProcessManagerDriver(GRPCDriver):
             self._log.debug(f"{breq=}\n\n")
             yield breq
 
+        def get_controller_address(session_dal, session_name):
+            from drunc.process_manager.oks_parser import collect_variables
+            env = {}
+            collect_variables(session_dal.environment, env)
+            top_controller_name = session_dal.segment.controller.id
+            if session_dal.connectivity_service:
+                connection_server = session_dal.connectivity_service.host
+                connection_port = session_dal.connectivity_service.service.port
 
-    async def boot(self, conf:str, user:str, session_name:str, log_level:str, override_logs=True) -> ProcessInstance:
+                from drunc.connectivity_service.client import ConnectivityServiceClient
+                csc = ConnectivityServiceClient(session_name, f'{connection_server}:{connection_port}')
+
+                from drunc.utils.utils import get_control_type_and_uri_from_connectivity_service
+                _, uri = get_control_type_and_uri_from_connectivity_service(
+                    csc,
+                    name = top_controller_name,
+                    timeout = 60,
+                    retry_wait = 1,
+                    progress_bar = True,
+                    title = f'Looking for \'{top_controller_name}\' on the connectivity service...',
+                )
+
+                return uri.replace('grpc://', '')
+
+            service_id = top_controller_name + "_control"
+            port_number = None
+            protocol = None
+
+            for service in session_dal.segment.controller.exposes_service:
+                if service.id == service_id:
+                    port_number = service.port
+                    protocol = service.protocol
+                    break
+            if port_number is None or protocol is None:
+                return None
+
+            ip = resolve_localhost_and_127_ip_to_network_ip(session_dal.segment.controller.runs_on.runs_on.id)
+            return f'{ip}:{port_number}'
+
+        self.controller_address = get_controller_address(session_dal, session)
+
+    async def boot(
+        self,
+        conf:str,
+        user:str,
+        session_name:str,
+        log_level:str,
+        override_logs:bool=True,
+        **kwargs
+        ) -> ProcessInstance:
 
         async for br in self._convert_oks_to_boot_request(
             oks_conf = conf,
             user = user,
             session = session_name,
             override_logs = override_logs,
+            **kwargs,
             ):
             yield await self.send_command_aio(
                 'boot',
@@ -151,7 +197,7 @@ class ProcessManagerDriver(GRPCDriver):
         for i in range(1,n_sleeps+1):
             executable_and_arguments += [ProcessDescription.ExecAndArgs(exec='sleep',args=[str(sleep)+"s"]), ProcessDescription.ExecAndArgs(exec='echo',args=[str(sleep*i)+"s"])]
         executable_and_arguments.append(ProcessDescription.ExecAndArgs(exec='echo',args=["Exiting."]))
-        
+
         for process in range(n_processes):
             breq =  BootRequest(
                 process_description = ProcessDescription(

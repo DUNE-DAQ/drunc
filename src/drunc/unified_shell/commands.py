@@ -6,14 +6,31 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.interface.cli_argument import validate_conf_string
 
 @click.command('boot')
-@click.option('-u','--user', type=str, default=getpass.getuser(), help='Select the process of a particular user (default $USER)')
-@click.option('-l', '--log-level', type=click.Choice(log_levels.keys(), case_sensitive=False), default='INFO', help='Set the log level')
-@click.option('--override-logs/--no-override-logs', default=True)
-# @click.argument('boot-configuration', type=str, callback=validate_conf_string)
-# @click.argument('session-name', type=str)
+@click.option(
+    '-u','--user',
+    type=str,
+    default=getpass.getuser(),
+    help='Select the process of a particular user (default $USER)'
+)
+@click.option(
+    '-l', '--log-level',
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    default='INFO',
+    help='Set the log level'
+)
+@click.option(
+    '--override-logs/--no-override-logs',
+    default=True
+)
 @click.pass_obj
 @run_coroutine
-async def boot(obj:ProcessManagerContext, user:str, log_level:str, override_logs:bool) -> None:
+async def boot(
+    obj:ProcessManagerContext,
+    user:str,
+    log_level:str,
+    override_logs:bool,
+    ) -> None:
+
 
     from drunc.utils.shell_utils import InterruptedCommand
     try:

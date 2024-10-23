@@ -1,5 +1,8 @@
 import logging
 from rich.theme import Theme
+from enum import Enum
+from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.exceptions import DruncSetupException
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 CONSOLE_THEMES = Theme({
@@ -35,7 +38,7 @@ def print_traceback():
     try:
         width = os.get_terminal_size()[0]
     except:
-        width = 150
+        width = 300
     c.print_exception(width=width)
 
 
@@ -74,13 +77,14 @@ def update_log_level(loglevel):
 
     logging.basicConfig(
         level=log_level,
-        format="\"%(name)s\": %(message)s",
+        format="%(filename)s:%(lineno)i\t%(name)s:\t%(message)s",
         datefmt="[%X]",
         handlers=[
             #logging.StreamHandler(),
             RichHandler(
                 console=Console(width=width),
                 rich_tracebacks=False,
+                show_path=False,
                 tracebacks_width=width
             ) # Make this True, and everything crashes on exceptions (no clue why)
         ]
@@ -153,13 +157,31 @@ def validate_command_facility(ctx, param, value):
 
     match parsed.scheme:
         case 'grpc':
-            return parsed.netloc
+            return str(parsed.netloc)
         case _:
             raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
 
 
+def resolve_localhost_and_127_ip_to_network_ip(address):
+    from socket import gethostbyname, gethostname
+    this_ip = gethostbyname(gethostname())
+    if 'localhost' in address:
+        address = address.replace('localhost', this_ip)
 
+    import re
+    ip_match = re.search(
+        "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        address
+    )
+    # https://stackoverflow.com/a/25969006
 
+    if not ip_match:
+        return address
+
+    if ip_match.group(0).startswith('127.'):
+        address = address.replace(ip_match.group(0), this_ip)
+
+    return address
 
 def pid_info_str():
     import os
@@ -189,3 +211,135 @@ def parent_death_pact(signal=signal.SIGHUP):
     retcode = libc.prctl(PR_SET_PDEATHSIG, signal, 0, 0, 0)
     if retcode != 0:
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
+
+from drunc.exceptions import DruncException
+class IncorrectAddress(DruncException):
+    pass
+
+def https_or_http_present(address:str):
+    if not address.startswith('https://') and not address.startswith('http://'):
+        raise IncorrectAddress('Endpoint should start with http:// or https://')
+
+
+def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import post
+    if as_json:
+        r = post(address, json=data, **post_kwargs)
+    else:
+        r = post(address, data=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+    return r
+
+def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import get
+    log = logging.getLogger("http_get")
+
+    log.debug(f"GETTING {address} {data}")
+    if as_json:
+        r = get(address, json=data, **post_kwargs)
+    else:
+        r = get(address, data=data, **post_kwargs)
+
+    log.debug(r.text)
+    log.debug(r.status_code)
+
+    if not ignore_errors:
+        log.error(r.text)
+        r.raise_for_status()
+    return r
+
+
+def http_patch(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import patch
+    if as_json:
+        r = patch(address, json=data, **post_kwargs)
+    else:
+        r = patch(address, data=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+    return r
+
+
+def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+    https_or_http_present(address)
+
+    from requests import delete
+    if as_json:
+        r = delete(address, json=data, **post_kwargs)
+    else:
+        r = delete(address, data=data, **post_kwargs)
+
+    if not ignore_errors:
+        r.raise_for_status()
+
+class ControlType(Enum):
+    Unknown = 0
+    gRPC = 1
+    REST_API = 2
+
+
+def get_control_type_and_uri_from_cli(CLAs:list[str]) -> ControlType:
+    for CLA in CLAs:
+        if   CLA.startswith("rest://"): return ControlType.REST_API, resolve_localhost_and_127_ip_to_network_ip(CLA.replace("rest://", ""))
+        elif CLA.startswith("grpc://"): return ControlType.gRPC, resolve_localhost_and_127_ip_to_network_ip(CLA.replace("grpc://", ""))
+
+    raise DruncSetupException("Could not find if the child was controlled by gRPC or a REST API")
+
+def get_control_type_and_uri_from_connectivity_service(
+    connectivity_service:ConnectivityServiceClient,
+    name:str,
+    timeout:int=10, # seconds
+    retry_wait:float=0.1, # seconds
+    progress_bar:bool=False,
+    title:str=None,
+) -> tuple[ControlType, str]:
+
+    uris = []
+    from drunc.connectivity_service.client import ApplicationLookupUnsuccessful
+    logger = logging.getLogger('get_control_type_and_uri_from_connectivity_service')
+    import time
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn, TimeElapsedColumn
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TimeRemainingColumn(),
+        TimeElapsedColumn()
+    ) as progress:
+
+        task = progress.add_task(f'[yellow]{title}', total=timeout, visible=progress_bar)
+        start = time.time()
+
+        while time.time() - start < timeout:
+            progress.update(task, completed=time.time() - start)
+
+            try:
+                uris = connectivity_service.resolve(name+'_control', 'RunControlMessage')
+                if len(uris) == 0:
+                    raise ApplicationLookupUnsuccessful
+                else:
+                    break
+
+            except ApplicationLookupUnsuccessful as e:
+                el = time.time() - start
+                logger.debug(f"Could not resolve \'{name}_control\' elapsed {el:.2f}s/{timeout}s")
+                time.sleep(retry_wait)
+
+
+
+    if len(uris) != 1:
+        raise ApplicationLookupUnsuccessful(f"Could not resolve the URI for \'{name}_control\' in the connectivity service, got response {uris}")
+
+    uri = uris[0]['uri']
+
+    return get_control_type_and_uri_from_cli([uri])

@@ -100,10 +100,14 @@ def unified_shell(
         desc = desc.data
 
     except Exception as e:
-        ctx.obj.critical(f'Could not connect to the process manager')
+        ctx.obj.critical(f'Could not connect to the process manager, use --log-level DEBUG for more information')
+        ctx.obj.debug(f'Error: {e}')
         if not ctx.obj.pm_process.is_alive():
             ctx.obj.critical(f'The process manager is dead, exit code {ctx.obj.pm_process.exitcode}')
-        raise e
+        else:
+            ctx.obj.print(f'\nOn the NP04 cluster, this usually happens when you have the web proxy enabled. Try to disable it by doing:\n\n[yellow]source ~np04daq/bin/web_proxy.sh -u[/]\n')
+            ctx.obj.pm_process.terminate()
+        exit(1)
 
     ctx.obj.info(f'{process_manager_address} is \'{desc.name}.{desc.session}\' (name.session), starting listening...')
     if desc.HasField('broadcast'):
@@ -184,10 +188,10 @@ def unified_shell(
 
 
     from drunc.controller.interface.commands import (
-        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
+        list_transitions, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
 
-    ctx.command.add_command(describe, 'describe')
+    ctx.command.add_command(list_transitions, 'list-transitions')
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
     ctx.command.add_command(connect, 'connect')

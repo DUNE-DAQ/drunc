@@ -20,11 +20,13 @@ class UsvcProvidedRunNumber(FSMAction):
         import logging
         self._log = logging.getLogger('microservice')
 
-    def pre_start(self, _input_data:dict, _context, run_type:str="TEST", disable_data_storage:bool=False, trigger_rate:float=1.0, **kwargs):
+    def pre_start(self, _input_data:dict, _context, run_type:str="TEST", disable_data_storage:bool=False, trigger_rate:float=0., **kwargs):
+        from drunc.fsm.actions.utils import validate_run_type
+        run_type = validate_run_type(run_type.upper())
+        _input_data['production_vs_test'] = run_type
         _input_data["run"] = self._getnew_run_number()
         _input_data['disable_data_storage'] = disable_data_storage
         _input_data['trigger_rate'] = trigger_rate
-        _input_data['run_type'] = run_type
         return _input_data
 
     def _getnew_run_number(self):

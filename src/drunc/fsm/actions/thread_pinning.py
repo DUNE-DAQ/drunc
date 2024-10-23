@@ -17,16 +17,22 @@ class ThreadPinning(FSMAction):
         import conffwk
         db = conffwk.Configuration(f"oksconflibs:{configuration}")
         session_dal = db.get_dal(class_name="Session", uid=session)
-        apps = collect_apps(db, session_dal, session_dal.segment)
 
-        import os 
-        rte=session_dal.rte_script
-        if not rte and os.getenv("DBT_INSTALL_DIR"):
-            rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
-        elif not rte:
-            self.log.error(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
-        if not os.path.isabs(rte):
-            rte = os.getcwd() + "/" + rte
+        from os import environ
+        env = environ.copy()
+
+        apps = collect_apps(db, session_dal, session_dal.segment, environ)
+
+        if session_dal.rte_script:
+            rte = session_dal.rte_script
+
+        else:
+            from drunc.process_manager.utils import get_rte_script
+            rte_script = get_rte_script()
+            if not rte_script:
+                raise DruncSetupException("No RTE script found.")
+
+            rte = rte_script
 
         cmd = f"source {rte}; " if rte else ""
         cmd += f"readout-affinity.py --pinfile {thread_pinning_file}"
@@ -51,11 +57,11 @@ class ThreadPinning(FSMAction):
             except ErrorReturnCode as e:
                 self.log.error(e.stdout.decode('ascii'))
                 self.log.error(e.stderr.decode('ascii'))
-                failed_hosts.add(host)
+                failed_hosts.add(f'{host}: {e.stderr.decode("ascii")}')
                 continue
             except Exception as e:
                 self.log.critical(str(e))
-                failed_hosts.add(host)
+                failed_hosts.add(f'{host}: {e}')
                 continue
             self.log.debug(proc)
 

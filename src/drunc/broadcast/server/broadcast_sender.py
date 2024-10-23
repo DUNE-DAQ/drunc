@@ -29,7 +29,7 @@ class BroadcastSender:
         self.implementation = None
 
         if self.impl_technology is None:
-            self.logger.warning('There is no broadcasting service!')
+            self.logger.info('There is no broadcasting service!')
             return
 
         from drunc.broadcast.types import BroadcastTypes

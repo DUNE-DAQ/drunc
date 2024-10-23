@@ -19,16 +19,20 @@ def controller_shell(ctx, controller_address:str, log_level:str) -> None:
         address = controller_address,
     )
     from drunc.controller.interface.shell_utils import controller_setup, controller_cleanup_wrapper, generate_fsm_command
+    try:
+        controller_desc = controller_setup(ctx.obj, controller_address, timeout=0)
+    except Exception as e:
+        exit(1)
+
     ctx.call_on_close(controller_cleanup_wrapper(ctx.obj))
-    controller_desc = controller_setup(ctx.obj, controller_address)
 
     transitions = ctx.obj.get_driver('controller').describe_fsm(key="all-transitions").data
 
     from drunc.controller.interface.commands import (
-        describe, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
+        list_transitions, ls, status, connect, take_control, surrender_control, who_am_i, who_is_in_charge, fsm, include, exclude, wait
     )
 
-    ctx.command.add_command(describe, 'describe')
+    ctx.command.add_command(list_transitions, 'list-transitions')
     ctx.command.add_command(ls, 'ls')
     ctx.command.add_command(status, 'status')
     ctx.command.add_command(connect, 'connect')

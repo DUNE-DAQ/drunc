@@ -32,7 +32,10 @@ def broadcasted(cmd):
         except Exception as e:
             from drunc.utils.utils import print_traceback
             print_traceback()
+
             stack = traceback.format_exc().split("\n")
+            from drunc.exceptions import DruncException
+            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
             return Response(
                 name = obj.name,
                 token = request.token,
@@ -41,7 +44,7 @@ def broadcasted(cmd):
                         text = stack,
                     )
                 ),
-                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN if not isinstance(e, DruncCommandException) else ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                flag = flag,
                 children = []
             )
 
@@ -82,6 +85,8 @@ def async_broadcasted(cmd):
             stack = traceback.format_exc().split("\n")
             from drunc.utils.utils import print_traceback
             print_traceback()
+            from drunc.exceptions import DruncException
+            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
 
             yield Response(
                 name = obj.name,
@@ -91,9 +96,10 @@ def async_broadcasted(cmd):
                         text = stack
                     )
                 ),
-                flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN if not isinstance(e, DruncCommandException) else ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                flag = flag,
                 children = []
             )
+
 
         obj.broadcast(
             message = f'User \'{request.token.user_name}\' successfully executed \'{cmd.__name__}\'',
