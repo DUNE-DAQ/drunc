@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 
 from typing import Dict
 
@@ -11,6 +12,7 @@ from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
 
 from drunc.exceptions import DruncSetupException, DruncShellException
 
+from daqconf.consolidate import consolidate_db
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
 
@@ -44,6 +46,19 @@ class ProcessManagerDriver(GRPCDriver):
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
 
+        with tempfile.NamedTemporaryFile(suffix='.data.xml', delete=True) as f:
+            f.flush()
+            f.seek(0)
+            fname = f.name
+            try:
+                consolidate_db(oks_conf, f"{fname}")
+            except Exception as e:
+                log.critical(f'''\nInvalid configuration passed (cannot consolidate your configuration). To debug it, close drunc and run the following command:
+
+[yellow]oks_dump --files-only {oks_conf}[/]
+
+''', extra={'markup': True})
+                return
 
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
