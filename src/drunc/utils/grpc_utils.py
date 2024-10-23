@@ -1,5 +1,5 @@
-
 from drunc.exceptions import DruncCommandException,DruncException
+from druncschema.request_response_pb2 import Response
 
 class UnpackingError(DruncCommandException):
     def __init__(self, data, format):
