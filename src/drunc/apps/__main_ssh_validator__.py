@@ -23,9 +23,11 @@ def validate_config(confiuguration_filename:str, session_name:str):
             if segment_application not in session_dal.disabled: # If it is not disabled
                 hosts.add(segment_application.runs_on.runs_on.id)
 
+    hosts.add("abc12") # case to throw, not throwing as expected
     ssh = Command('/usr/bin/ssh')
     runnning_tunnels = []
     failed_hosts = []
+
     for host in hosts:
         user_host = f"{getpass.getuser()}@{host}"
         ssh_args = [user_host, "sleep 2s; exit;"]
@@ -39,10 +41,11 @@ def validate_config(confiuguration_filename:str, session_name:str):
                     _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
                 )
             )
-        except Exception as e:
-            print(f"Failed to SSH onto host {user_host}, with error {str(e)}")
+        except sh.ErrorReturnCode_255:
+            print(f"Failed to SSH onto host {user_host}")
             failed_hosts.append(host)
             continue
+
     for tunnel in runnning_tunnels:
         tunnel.wait(timeout=10)
 
