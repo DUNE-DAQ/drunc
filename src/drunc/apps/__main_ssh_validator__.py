@@ -24,22 +24,32 @@ def validate_config(confiuguration_filename:str, session_name:str):
                 hosts.add(segment_application.runs_on.runs_on.id)
 
     ssh = Command('/usr/bin/ssh')
+    runnning_tunnels = []
+    failed_hosts = []
     for host in hosts:
         user_host = f"{getpass.getuser()}@{host}"
-        print(f"{user_host=}")
         ssh_args = [user_host, "sleep 2s; exit;"]
         try:
-            self.ssh(
-                *ssh_args,
-                _bg=True,
-                _bg_exc=True,
-                _new_session=True,
-                _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
+            runnning_tunnels.append(
+                ssh(
+                    *ssh_args,
+                    _bg=True,
+                    _bg_exc=True,
+                    _new_session=True,
+                    _preexec_fn = on_parent_exit(signal.SIGTERM) if not macos else None
+                )
             )
         except Exception as e:
-            print(f"Failed to SSH onto host {user_host}")
+            print(f"Failed to SSH onto host {user_host}, with error {str(e)}")
+            failed_hosts.append(host)
             continue
+    for tunnel in runnning_tunnels:
+        tunnel.wait(timeout=10)
 
+    if (len(failed_hosts) != 0):
+        print(f"Failed to connect to hosts {failed_hosts}")
+    else:
+        print(f"Connected to hosts {hosts} successfully")
 
 def main():
     parser = argparse.ArgumentParser(
