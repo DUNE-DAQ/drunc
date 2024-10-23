@@ -1,4 +1,4 @@
-from requests.exceptions import HTTPError, ConnectionError
+from requests.exceptions import HTTPError, ConnectionError, ReadTimeout
 from drunc.exceptions import DruncException
 
 class ApplicationRegistryNotPresent(DruncException):
@@ -96,7 +96,7 @@ class ConnectivityServiceClient:
                 else:
                     self.logger.debug(f'Could not find the address of \'{uid_regex}\' on the application registry')
 
-            except (HTTPError, ConnectionError) as e:
+            except (HTTPError, ConnectionError, ReadTimeout) as e:
                 self.logger.debug(e)
                 from time import sleep
                 sleep(0.2)
