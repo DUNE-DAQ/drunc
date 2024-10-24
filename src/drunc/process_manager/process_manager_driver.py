@@ -94,7 +94,7 @@ class ProcessManagerDriver(GRPCDriver):
 
             if session_dal.rte_script:
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
-                    exec='source',
+                    exec='sourc' if name != 'local-connection-server' else 'source',
                     args=[session_dal.rte_script]))
 
             else:
@@ -104,7 +104,7 @@ class ProcessManagerDriver(GRPCDriver):
                     raise DruncSetupException("No RTE script found.")
 
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
-                    exec='source',
+                    exec='sourc' if name != 'local-connection-server' else 'source',
                     args=[rte_script]))
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
