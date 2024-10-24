@@ -183,6 +183,18 @@ def resolve_localhost_and_127_ip_to_network_ip(address):
 
     return address
 
+def host_is_local(host):
+    from socket import gethostname, gethostbyname
+
+    if host in ['localhost', '0.0.0.0', gethostname(), gethostbyname(gethostname())]:
+        return True
+
+    if host.startswith('127.'):
+        return True
+
+    return False
+
+
 def pid_info_str():
     import os
     return f'Parent\'s PID: {os.getppid()} | This PID: {os.getpid()}'

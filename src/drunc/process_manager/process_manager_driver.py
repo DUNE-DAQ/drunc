@@ -79,12 +79,15 @@ class ProcessManagerDriver(GRPCDriver):
         import os
         pwd = os.getcwd()
 
+        session_log_path = session_dal.log_path
+
         for app in apps:
             host = app['restriction']
             name = app['name']
             exe = app['type']
             args = app['args']
             env = app['env']
+            app_log_path = app['log_path']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
             env['SPACK_RELEASES_DIR'] = os.getenv("SPACK_RELEASES_DIR")
             tree_id = app['tree_id']
@@ -112,10 +115,21 @@ class ProcessManagerDriver(GRPCDriver):
                 args=args))
 
             from drunc.utils.utils import now_str
-            if override_logs:
-                log_path = f'{pwd}/log_{user}_{session}_{name}.log'
+
+            if app_log_path:
+                log_path = f'{app_log_path}/log_{user}_{session}_{name}_{now_str(True)}.txt'
+            elif session_log_path:
+                log_path = f'{session_log_path}/log_{user}_{session}_{name}_{now_str(True)}.txt'
+            elif override_logs:
+                log_path = f'{pwd}/log_{user}_{session}_{name}.txt'
             else:
-                log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.log'
+                log_path = f'{pwd}/log_{user}_{session}_{name}_{now_str(True)}.txt'
+
+            import os, socket
+            from drunc.utils.utils import host_is_local
+            if host_is_local(host) and not os.path.exists(os.path.dirname(log_path)):
+                raise DruncShellException(f"Log path {log_path} does not exist.")
+
             self._log.debug(f'{name}\'s env:\n{env}')
             breq =  BootRequest(
                 process_description = ProcessDescription(
