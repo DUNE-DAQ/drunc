@@ -8,7 +8,7 @@ from druncschema.process_manager_pb2 import BootRequest, ProcessUUID, ProcessQue
 
 from drunc.utils.grpc_utils import unpack_any
 from drunc.utils.shell_utils import GRPCDriver
-from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
+from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip, resolve_localhost_to_hostname
 
 from drunc.exceptions import DruncSetupException, DruncShellException
 
@@ -179,7 +179,7 @@ You may be able to connect to the {top_controller_name} in a bit. Check the logs
 [yellow]logs --name {top_controller_name} --grep grpc[/]
 And look for messages like:
 [yellow]Registering root-controller to the connectivity service at grpc://xxx.xxx.xxx.xxx:xxxxx[/]
-To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_and_127_ip_to_network_ip(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
+To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_to_hostname(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
 [yellow]connect grpc://{{controller_address}}:{{controller_port}}>[/]
 ''', extra={"markup": True})
                     return

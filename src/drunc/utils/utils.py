@@ -161,6 +161,30 @@ def validate_command_facility(ctx, param, value):
         case _:
             raise BadParameter(message=f'Command factory for drunc-controller only allows \'grpc\'', ctx=ctx, param=param)
 
+def resolve_localhost_to_hostname(address):
+    from socket import gethostbyname, gethostname
+    hostname = gethostname()
+    if 'localhost' in address:
+        address = address.replace('localhost', hostname)
+
+    import re
+    ip_match = re.search(
+        "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        address
+    )
+    # https://stackoverflow.com/a/25969006
+
+    if not ip_match:
+        return address
+
+    if ip_match.group(0).startswith('127.'):
+        address = address.replace(ip_match.group(0), hostname)
+
+    if ip_match.group(0).startswith('0.'):
+        address = address.replace(ip_match.group(0), hostname)
+
+    return address
+
 
 def resolve_localhost_and_127_ip_to_network_ip(address):
     from socket import gethostbyname, gethostname
@@ -179,6 +203,9 @@ def resolve_localhost_and_127_ip_to_network_ip(address):
         return address
 
     if ip_match.group(0).startswith('127.'):
+        address = address.replace(ip_match.group(0), this_ip)
+
+    if ip_match.group(0).startswith('0.'):
         address = address.replace(ip_match.group(0), this_ip)
 
     return address
