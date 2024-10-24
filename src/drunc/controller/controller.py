@@ -49,7 +49,10 @@ class ControllerActor:
         self._lock.release()
 
     def compare_token(self, token1, token2):
-        return token1.user_name == token2.user_name and token1.token == token2.token #!! come on protobuf, you can compare messages
+        self._lock.acquire()
+        result = token1.user_name == token2.user_name and token1.token == token2.token #!! come on protobuf, you can compare messages
+        self._lock.release()
+        return result
 
     def token_is_current_actor(self, token):
         return self.compare_token(token, self._token)
@@ -614,7 +617,7 @@ if nothing (None) is provided, return the transitions accessible from the curren
             return self.construct_error_node_response(
                 fsm_command.command_name,
                 token,
-                cause = FSMResponseFlag.FSM_NODE_IN_ERROR
+                cause = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             )
 
         if not self.stateful_node.node_is_included():

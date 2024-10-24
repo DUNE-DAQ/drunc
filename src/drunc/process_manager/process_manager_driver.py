@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 
 from typing import Dict
 
@@ -11,6 +12,7 @@ from drunc.utils.utils import resolve_localhost_and_127_ip_to_network_ip
 
 from drunc.exceptions import DruncSetupException, DruncShellException
 
+from daqconf.consolidate import consolidate_db
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ''
 
@@ -44,6 +46,19 @@ class ProcessManagerDriver(GRPCDriver):
         log = getLogger('_convert_oks_to_boot_request')
         log.info(oks_conf)
 
+        with tempfile.NamedTemporaryFile(suffix='.data.xml', delete=True) as f:
+            f.flush()
+            f.seek(0)
+            fname = f.name
+            try:
+                consolidate_db(oks_conf, f"{fname}")
+            except Exception as e:
+                log.critical(f'''\nInvalid configuration passed (cannot consolidate your configuration). To debug it, close drunc and run the following command:
+
+[yellow]oks_dump --files-only {oks_conf}[/]
+
+''', extra={'markup': True})
+                return
 
         db = conffwk.Configuration(f"oksconflibs:{oks_conf}")
         session_dal = db.get_dal(class_name="Session", uid=session)
@@ -71,6 +86,7 @@ class ProcessManagerDriver(GRPCDriver):
             args = app['args']
             env = app['env']
             env['DUNE_DAQ_BASE_RELEASE'] = os.getenv("DUNE_DAQ_BASE_RELEASE")
+            env['SPACK_RELEASES_DIR'] = os.getenv("SPACK_RELEASES_DIR")
             tree_id = app['tree_id']
 
             self._log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
@@ -81,23 +97,15 @@ class ProcessManagerDriver(GRPCDriver):
                     exec='source',
                     args=[session_dal.rte_script]))
 
-            elif os.getenv("DBT_INSTALL_DIR") is not None:
-                env['DBT_INSTALL_DIR'] = os.getenv("DBT_INSTALL_DIR")
-                self._log.info(f'RTE script was not supplied in the OKS configuration, using the one from local enviroment instead')
-                rte = os.getenv("DBT_INSTALL_DIR") + "/daq_app_rte.sh"
+            else:
+                from drunc.process_manager.utils import get_rte_script
+                rte_script = get_rte_script()
+                if not rte_script:
+                    raise DruncSetupException("No RTE script found.")
 
                 executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                     exec='source',
-                    args=[rte]))
-            else:
-                self._log.warning(f'RTE was not supplied in the OKS configuration or in the environment, running without it')
-
-            # executable_and_arguments.append(
-            #     ProcessDescription.ExecAndArgs(
-            #         exec = "env",
-            #         args = []
-            #     )
-            # )
+                    args=[rte_script]))
 
             executable_and_arguments.append(ProcessDescription.ExecAndArgs(
                 exec=exe,

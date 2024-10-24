@@ -28,15 +28,14 @@ def broadcasted(cmd):
         try:
             log.debug('Executing wrapped function')
             ret = cmd(obj, request) # we strip the context here, no need for that anymore
+
         except Exception as e:
-            stack = traceback.format_exc().split("\n")
-
-            from drunc.exceptions import DruncException
-            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-
             from drunc.utils.utils import print_traceback
             print_traceback()
 
+            stack = traceback.format_exc().split("\n")
+            from drunc.exceptions import DruncException
+            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
             return Response(
                 name = obj.name,
                 token = request.token,
@@ -84,11 +83,10 @@ def async_broadcasted(cmd):
 
         except Exception as e:
             stack = traceback.format_exc().split("\n")
-            from drunc.exceptions import DruncException
-            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-
             from drunc.utils.utils import print_traceback
             print_traceback()
+            from drunc.exceptions import DruncException
+            flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
 
             yield Response(
                 name = obj.name,

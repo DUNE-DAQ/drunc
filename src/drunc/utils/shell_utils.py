@@ -303,7 +303,7 @@ class ShellContext:
 
     def print_status_summary(self) -> None:
         status = self.get_driver('controller').get_status().data.state
-        available_actions = [command.name for command in self.get_driver('controller').describe_fsm().data.commands]
+        available_actions = [command.name.replace("_", "-") for command in self.get_driver('controller').describe_fsm().data.commands]
         if status.find('(') == -1:
             self.print(f"Current FSM status is [green]{status}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green].")
         else:
