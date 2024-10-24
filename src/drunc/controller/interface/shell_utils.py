@@ -358,17 +358,14 @@ def generate_fsm_command(ctx, transition:FSMCommandDescription, controller_name:
         else:
             raise Exception(f'Unhandled argument type \'{argument.type}\'')
 
-        if argument.presence == Argument.Presence.MANDATORY:
-            cmd = click.argument(argument.name, type=atype, nargs=1)(cmd)
-
-        else:
-            argument_name = f'--{argument.name.lower().replace("_", "-")}'
-            cmd = click.option(
-                f'{argument_name}',
-                type=atype,
-                default=atype(default_value.value),
-                help=argument.help,
-            )(cmd)
+        argument_name = f'--{argument.name.lower().replace("_", "-")}'
+        cmd = click.option(
+            f'{argument_name}',
+            type=atype,
+            default = atype(default_value.value) if argument.presence != Argument.Presence.MANDATORY else None,
+            required= argument.presence == Argument.Presence.MANDATORY,
+            help=argument.help,
+        )(cmd)
 
     cmd = click.command(
         name = transition.name.replace('_', '-').lower(),
