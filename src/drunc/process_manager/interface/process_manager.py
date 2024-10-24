@@ -7,7 +7,7 @@ from drunc.utils.utils import log_levels
 
 _cleanup_coroutines = []
 
-def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_port=None):
+def run_pm(pm_conf, pm_address, log_level, ready_event=None, signal_handler=None, generated_port=None):
     if signal_handler is not None:
         signal_handler()
 
@@ -61,7 +61,7 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
             # grace period, the server won't accept new connections and allow
             # existing RPCs to continue within the grace period.
             await server.stop(5)
-            pm.terminate()
+            pm._terminate_impl(None)
 
         _cleanup_coroutines.append(server_shutdown())
         if ready_event is not None:
@@ -72,7 +72,7 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
 
     try:
         loop.run_until_complete(
-            serve(pm.get_address())
+            serve(pm_address)
         )
     except Exception as e:
         import os
@@ -84,6 +84,7 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
 
 @click.command()
 @click.argument('pm-conf', type=str)
+@click.argument('pm-port', type=int)
 @click.option(
     '-l',
     '--log-level',
@@ -94,5 +95,7 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
     default='INFO',
     help='Set the log level'
 )
-def process_manager_cli(pm_conf:str, log_level):
-    run_pm(pm_conf, log_level)
+def process_manager_cli(pm_conf:str, pm_port:int, log_level):
+    from drunc.process_manager.configuration import get_process_manager_configuration
+    pm_conf = get_process_manager_configuration(pm_conf)
+    run_pm(pm_conf, f'0.0.0.0:{pm_port}', log_level)
