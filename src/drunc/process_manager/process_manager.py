@@ -482,10 +482,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return processes
 
-
-    def get_address(self):
-        return self.configuration.data.command_address
-
     @staticmethod
     def get(conf, **kwargs):
         from rich.console import Console

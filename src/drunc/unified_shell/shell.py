@@ -50,6 +50,7 @@ def unified_shell(
             target = run_pm,
             kwargs = {
                 "pm_conf": process_manager,
+                "pm_address": "localhost:0",
                 "log_level": log_level,
                 "ready_event": ready_event,
                 "signal_handler": ignore_sigint_sighandler,

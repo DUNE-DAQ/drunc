@@ -36,8 +36,6 @@ class ProcessManagerConfHandler(ConfHandler):
                 from drunc.process_manager.exceptions import UnknownProcessManagerType
                 raise UnknownProcessManagerType(data['type'])
 
-        new_data.command_address = data['command_address']
-
         return new_data
 
     def create_id(self, obj, segment=None, **kwargs):
