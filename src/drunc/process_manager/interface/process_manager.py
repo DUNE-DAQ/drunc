@@ -61,7 +61,7 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
             # grace period, the server won't accept new connections and allow
             # existing RPCs to continue within the grace period.
             await server.stop(5)
-            pm.terminate()
+            pm._terminate_impl(None)
 
         _cleanup_coroutines.append(server_shutdown())
         if ready_event is not None:
@@ -95,4 +95,6 @@ def run_pm(pm_conf, log_level, ready_event=None, signal_handler=None, generated_
     help='Set the log level'
 )
 def process_manager_cli(pm_conf:str, log_level):
+    from drunc.process_manager.configuration import get_process_manager_configuration
+    pm_conf = get_process_manager_configuration(pm_conf)
     run_pm(pm_conf, log_level)
