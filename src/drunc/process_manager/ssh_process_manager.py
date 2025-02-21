@@ -86,7 +86,7 @@ class SSHProcessManager(ProcessManager):
                 import signal
                 sequence = [
                     # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
-                    signal.SIGQUIT, 
+                    signal.SIGQUIT,
                     signal.SIGKILL, # Kept as nuclear option
                 ]
                 for sig in sequence:
@@ -143,6 +143,9 @@ class SSHProcessManager(ProcessManager):
     async def _logs_impl(self, log_request:LogRequest) -> LogLine:
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         logfile = self.boot_request[uid].process_description.process_logs_path
+        user = self.boot_request[uid].process_description.metadata.user
+        host = self.boot_request[uid].process_description.metadata.hostname
+        user_host = f'{user}@{host}'
         # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
         # "Not the straight forward way"...
         import tempfile
@@ -153,8 +156,15 @@ class SSHProcessManager(ProcessManager):
             nlines = 100
 
         try:
-            sh.tail(
-                f'-{nlines}', logfile,
+            cmd = [
+                "tail",
+                f'-{nlines}',
+                logfile,
+            ]
+            self._log.debug(f"cmd: {cmd}")
+            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"] + cmd
+            self.ssh (
+                *arguments,
                 _out=f.name,
                 _err_to_out=True,
             )
@@ -246,7 +256,7 @@ class SSHProcessManager(ProcessManager):
                 from drunc.utils.utils import now_str
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
-                
+
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
                 cmd =f'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
 
@@ -404,7 +414,7 @@ class SSHProcessManager(ProcessManager):
         del self.process_store[uuid]
         del self.boot_request[uuid]
         del uuid
-        
+
         ret = self.__boot(same_uuid_br, same_uuid)
 
         del same_uuid_br
