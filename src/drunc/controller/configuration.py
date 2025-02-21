@@ -17,13 +17,14 @@ class ControllerConfData: # the bastardised OKS
 
 class ControllerConfHandler(ConfHandler):
     @staticmethod
-    def find_segment(segment, id):
-        if segment.controller.id == id:
+    def find_segment(segment, id_):
+        if segment.controller.id == id_:
             return segment
 
         for child_segment in segment.segments:
-            if ControllerConfHandler.find_segment(child_segment, id) is not None:
-                return child_segment
+            c = ControllerConfHandler.find_segment(child_segment, id_)
+            if c is not None:
+                return c
 
         return None
 
@@ -31,7 +32,7 @@ class ControllerConfHandler(ConfHandler):
         self.session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
         this_segment = ControllerConfHandler.find_segment(self.session.segment, self.oks_key.obj_uid)
         if this_segment is None:
-            CouldNotFindSegment(self.oks_key.obj_uid)
+            raise CouldNotFindSegment(self.oks_key.obj_uid)
         return this_segment
 
     def _post_process_oks(self):
