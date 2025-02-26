@@ -3,5 +3,6 @@ exclude = ["tests/*"]
 [lint]
 ignore = ["ALL"]
 select = [
-    "F"   # PyFlakes
+    "F",   # PyFlakes
+    "I"   # Isort
 ]
