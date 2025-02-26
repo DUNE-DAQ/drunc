@@ -4,8 +4,10 @@ __pycache__
 *.egg-info
 *.#*
 venv/
+.venv/
 build
 .DS_Store
 log*
 .nfs*
 info.*.json
+.python-version
