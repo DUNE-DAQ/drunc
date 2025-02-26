@@ -2,6 +2,8 @@
 
 from drunc.exceptions import DruncCommandException
 
+
 class ChangeMeException(DruncCommandException):
     """TODO: Change this exception to something more useful."""
+
     pass

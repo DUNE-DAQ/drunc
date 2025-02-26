@@ -4,6 +4,25 @@ import time
 import traceback
 from typing import Optional
 
+from druncschema.authoriser_pb2 import ActionType, SystemType
+from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.controller_pb2 import (
+    FSMCommand,
+    FSMCommandResponse,
+    FSMResponseFlag,
+    Status,
+)
+from druncschema.controller_pb2_grpc import ControllerServicer
+from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.request_response_pb2 import (
+    CommandDescription,
+    Description,
+    Response,
+    ResponseFlag,
+)
+from druncschema.token_pb2 import Token
+from kafkaopmon.OpMonPublisher import OpMonPublisher
+
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
@@ -22,24 +41,11 @@ from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import pack_to_any, unpack_any, unpack_request_data_to
 from drunc.utils.utils import get_logger
 
-from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag, Status
-from druncschema.controller_pb2_grpc import ControllerServicer
-from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import CommandDescription, Description, Response, ResponseFlag
-from druncschema.token_pb2 import Token
-
-from kafkaopmon.OpMonPublisher import OpMonPublisher
-
 
 class ControllerActor:
-    def __init__(self, token:Optional[Token]=None):
+    def __init__(self, token: Optional[Token] = None):
         self.log = get_logger("controller.actor")
-        self._token = Token(
-            token="",
-            user_name=""
-        )
+        self._token = Token(token="", user_name="")
         if token is not None:
             self._token.CopyFrom(token)
         self._lock = threading.Lock()
@@ -50,14 +56,16 @@ class ControllerActor:
     def get_user_name(self) -> str:
         return self._token.user_name
 
-    def _update_actor(self, token:Optional[Token]=Token()) -> None:
+    def _update_actor(self, token: Optional[Token] = Token()) -> None:
         self._lock.acquire()
         self._token.CopyFrom(token)
         self._lock.release()
 
     def compare_token(self, token1, token2):
         self._lock.acquire()
-        result = token1.user_name == token2.user_name and token1.token == token2.token #!! come on protobuf, you can compare messages
+        result = (
+            token1.user_name == token2.user_name and token1.token == token2.token
+        )  #!! come on protobuf, you can compare messages
         self._lock.release()
         return result
 
@@ -68,7 +76,9 @@ class ControllerActor:
         if self.compare_token(self._token, token):
             self._update_actor(Token())
             return
-        raise CannotSurrenderControl(f'Token {token} cannot release control of {self._token}')
+        raise CannotSurrenderControl(
+            f"Token {token} cannot release control of {self._token}"
+        )
 
     def take_control(self, token) -> None:
         # if not self.compare_token(self._token, token):
@@ -78,33 +88,31 @@ class ControllerActor:
 
 
 class Controller(ControllerServicer):
+    children_nodes = []  # type: List[ChildNode]
 
-    children_nodes = [] # type: List[ChildNode]
-
-    def __init__(self, configuration, name:str, session:str, token:Token):
+    def __init__(self, configuration, name: str, session: str, token: Token):
         super().__init__()
 
         self.name = name
         self.session = session
         self.broadcast_service = None
 
-        self.log = get_logger('controller')
-        self.log.info(f'Initialising controller \'{name}\' with session \'{session}\'')
+        self.log = get_logger("controller")
+        self.log.info(f"Initialising controller '{name}' with session '{session}'")
         self.configuration = configuration
 
         bsch = BroadcastSenderConfHandler(
-            data = self.configuration.data.controller.broadcaster,
+            data=self.configuration.data.controller.broadcaster,
         )
 
         self.broadcast_service = BroadcastSender(
-            name = name,
-            session = session,
-            configuration = bsch,
+            name=name,
+            session=session,
+            configuration=bsch,
         )
 
-
         fsmch = FSMConfHandler(
-            data = self.configuration.data.controller.fsm,
+            data=self.configuration.data.controller.fsm,
         )
 
         self.opmon_publisher = None
@@ -113,56 +121,54 @@ class Controller(ControllerServicer):
             opmon_path = self.configuration.session.opmon_uri.path
             opmon_type = self.configuration.session.opmon_uri.type
 
-            self.log.info(f'OpMon path {opmon_path} and type {opmon_type} is enabled')
+            self.log.info(f"OpMon path {opmon_path} and type {opmon_type} is enabled")
 
-            if '/' in opmon_path:
-                opmon_bootstrap, opmon_topic = opmon_path.split('/', 1)
+            if "/" in opmon_path:
+                opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
             else:
                 opmon_bootstrap = opmon_path
-                opmon_topic = 'opmon_stream'
+                opmon_topic = "opmon_stream"
 
-            if opmon_type == 'stream':
+            if opmon_type == "stream":
                 self.opmon_publisher = OpMonPublisher(
-                    default_topic=opmon_topic,
-                    bootstrap=opmon_bootstrap
+                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
                 )
 
-
         self.stateful_node = StatefulNode(
-            fsm_configuration = fsmch,
-            publisher = self.opmon_publisher,
-            broadcaster = self.broadcast_service
+            fsm_configuration=fsmch,
+            publisher=self.opmon_publisher,
+            broadcaster=self.broadcast_service,
         )
 
         dach = DummyAuthoriserConfHandler(
-            data = self.configuration.authoriser,
+            data=self.configuration.authoriser,
         )
 
-        self.authoriser = DummyAuthoriser(
-            dach,
-            SystemType.CONTROLLER
-        )
+        self.authoriser = DummyAuthoriser(dach, SystemType.CONTROLLER)
 
         self.actor = ControllerActor(token)
 
         self.connectivity_service = None
         self.connectivity_service_thread = None
-        self.uri = ''
+        self.uri = ""
         if self.configuration.session.connectivity_service:
             connection_server = self.configuration.session.connectivity_service.host
-            connection_port   = self.configuration.session.connectivity_service.service.port
-            self.log.info(f'Connectivity server {connection_server}:{connection_port} is enabled')
+            connection_port = (
+                self.configuration.session.connectivity_service.service.port
+            )
+            self.log.info(
+                f"Connectivity server {connection_server}:{connection_port} is enabled"
+            )
 
             self.connectivity_service = ConnectivityServiceClient(
-                    session = self.session,
-                    address = f'{connection_server}:{connection_port}',
-                )
+                session=self.session,
+                address=f"{connection_server}:{connection_port}",
+            )
 
         self.children_nodes = self.configuration.get_children(
-            init_token = self.actor.get_token(),
-            connectivity_service = self.connectivity_service
+            init_token=self.actor.get_token(),
+            connectivity_service=self.connectivity_service,
         )
-
 
         for child in self.children_nodes:
             response = child.get_status(token)
@@ -170,99 +176,87 @@ class Controller(ControllerServicer):
             status = unpack_any(response.data, Status)
 
             if status.in_error:
-                #self.state.to_error()  # Set the parent node's state to error
+                # self.state.to_error()  # Set the parent node's state to error
                 self.stateful_node.to_error()
-
 
         for child in self.children_nodes:
             if child is None:
                 self.log.info("Child is None")
             else:
                 self.log.info(child)
-                child.propagate_command('take_control', None, self.actor.get_token())
+                child.propagate_command("take_control", None, self.actor.get_token())
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
         # Not particularly pretty...
         self.commands = [
             CommandDescription(
-                name = 'describe',
-                data_type = ['None'],
-                help = 'Describe self (return a list of commands, the type of endpoint, the name and session).',
-                return_type = 'request_response_pb2.Description'
+                name="describe",
+                data_type=["None"],
+                help="Describe self (return a list of commands, the type of endpoint, the name and session).",
+                return_type="request_response_pb2.Description",
             ),
-
             CommandDescription(
-                name = 'status',
-                data_type = ['None'],
-                help = 'Get the status of self',
-                return_type = 'controller_pb2.Status'
+                name="status",
+                data_type=["None"],
+                help="Get the status of self",
+                return_type="controller_pb2.Status",
             ),
-
             CommandDescription(
-                name = 'describe_fsm',
-                data_type = ['generic_pb2.PlainText', 'None'],
-                help = '''Return a description of the FSM transitions:
+                name="describe_fsm",
+                data_type=["generic_pb2.PlainText", "None"],
+                help="""Return a description of the FSM transitions:
                     if a transition name is provided in its input, return that transition description;
                     if a state is provided, return the transitions accessible from that state;
                     if "all-transitions" is provided, return all the transitions;
-                    if nothing (None) is provided, return the transitions accessible from the current state.''',
-                return_type = 'request_response_pb2.Description'
+                    if nothing (None) is provided, return the transitions accessible from the current state.""",
+                return_type="request_response_pb2.Description",
             ),
-
             CommandDescription(
-                name = 'execute_fsm_command',
-                data_type = ['controller_pb2.FSMCommand'],
-                help = 'Execute an FSM command',
-                return_type = 'controller_pb2.FSMCommandResponse'
+                name="execute_fsm_command",
+                data_type=["controller_pb2.FSMCommand"],
+                help="Execute an FSM command",
+                return_type="controller_pb2.FSMCommandResponse",
             ),
-
             CommandDescription(
-                name = 'include',
-                data_type = ['None'],
-                help = 'Include self in the current session, if a children is provided, include it and its eventual children',
-                return_type = 'controller_pb2.FSMCommandResponse'
+                name="include",
+                data_type=["None"],
+                help="Include self in the current session, if a children is provided, include it and its eventual children",
+                return_type="controller_pb2.FSMCommandResponse",
             ),
-
             CommandDescription(
-                name = 'exclude',
-                data_type = ['None'],
-                help = 'Exclude self in the current session, if a children is provided, exclude it and its eventual children',
-                return_type = 'controller_pb2.FSMCommandResponse'
+                name="exclude",
+                data_type=["None"],
+                help="Exclude self in the current session, if a children is provided, exclude it and its eventual children",
+                return_type="controller_pb2.FSMCommandResponse",
             ),
-
             CommandDescription(
-                name = 'take_control',
-                data_type = ['None'],
-                help = 'Take control of self and children',
-                return_type = 'generic_pb2.PlainText'
+                name="take_control",
+                data_type=["None"],
+                help="Take control of self and children",
+                return_type="generic_pb2.PlainText",
             ),
-
             CommandDescription(
-                name = 'surrender_control',
-                data_type = ['None'],
-                help = 'Surrender control of self and children',
-                return_type = 'generic_pb2.PlainText'
+                name="surrender_control",
+                data_type=["None"],
+                help="Surrender control of self and children",
+                return_type="generic_pb2.PlainText",
             ),
-
             CommandDescription(
-                name = 'who_is_in_charge',
-                data_type = ['None'],
-                help = 'Get who is in control of self',
-                return_type = 'generic_pb2.PlainText'
+                name="who_is_in_charge",
+                data_type=["None"],
+                help="Get who is in control of self",
+                return_type="generic_pb2.PlainText",
             ),
         ]
 
         # do this at the end, otherwise we need to self.terminate() if an exception is raised
-        self.broadcast(
-            message = 'ready',
-            btype = BroadcastType.SERVER_READY
-        )
+        self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
 
-
-    '''
+    """
     A couple of simple pass-through functions to the broadcasting service
-    '''
+    """
+
     def broadcast(self, *args, **kwargs):
         return self.broadcast_service.broadcast(*args, **kwargs)
 
@@ -280,19 +274,20 @@ class Controller(ControllerServicer):
     def async_interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
-
-    def construct_error_node_response(self, command_name:str, token:Token, cause:FSMResponseFlag) -> Response:
+    def construct_error_node_response(
+        self, command_name: str, token: Token, cause: FSMResponseFlag
+    ) -> Response:
         fsm_result = FSMCommandResponse(
-            flag = cause,
-            command_name = command_name,
+            flag=cause,
+            command_name=command_name,
         )
 
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(fsm_result),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [],
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(fsm_result),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
         )
 
     def advertise_control_address(self, address):
@@ -301,85 +296,80 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
-        self.log.info(f'Registering {self.name} to the connectivity service at {address}')
+        self.log.info(
+            f"Registering {self.name} to the connectivity service at {address}"
+        )
 
         self.running = True
 
-        def update_connectivity_service(
-            ctrler,
-            connectivity_service,
-            interval
-        ):
+        def update_connectivity_service(ctrler, connectivity_service, interval):
             while ctrler.running:
                 ctrler.connectivity_service.publish(
-                    ctrler.name+"_control",
+                    ctrler.name + "_control",
                     ctrler.uri,
-                    'RunControlMessage',
+                    "RunControlMessage",
                 )
                 time.sleep(interval)
 
         self.connectivity_service_thread = threading.Thread(
-            target = update_connectivity_service,
-            args = (self, self.connectivity_service, 2),
-            name = 'connectivity_service_updating_thread'
+            target=update_connectivity_service,
+            args=(self, self.connectivity_service, 2),
+            name="connectivity_service_updating_thread",
         )
 
         # lets roll
         self.connectivity_service_thread.start()
 
-
     def terminate(self):
         self.running = False
 
-        if hasattr(self, 'connectivity_service') and self.connectivity_service:
+        if hasattr(self, "connectivity_service") and self.connectivity_service:
             if self.connectivity_service_thread:
                 self.connectivity_service_thread.join()
-            self.log.info('Unregistering from the connectivity service')
-            self.connectivity_service.retract(self.name+"_control")
+            self.log.info("Unregistering from the connectivity service")
+            self.connectivity_service.retract(self.name + "_control")
 
         if self.can_broadcast():
             self.broadcast(
-                btype = BroadcastType.SERVER_SHUTDOWN,
-                message = 'over_and_out',
+                btype=BroadcastType.SERVER_SHUTDOWN,
+                message="over_and_out",
             )
 
-        self.log.info('Stopping children')
+        self.log.info("Stopping children")
         for child in self.children_nodes:
-            self.log.debug(f'Stopping {child.name}')
+            self.log.debug(f"Stopping {child.name}")
             child.terminate()
         self.children_nodes = []
-
 
         if ResponseListener.exists():
             ResponseListener.get().terminate()
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
-            self.log.debug(f'{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}')
+            self.log.debug(f"{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}")
 
         with multiprocessing.Manager() as manager:
             self.log.debug("Multiprocess threads")
             self.log.debug(manager.list())
 
-
     def __del__(self):
         self.terminate()
 
-    def propagate_to_list(self, command:str, command_data, token, node_to_execute):
-
+    def propagate_to_list(self, command: str, command_data, token, node_to_execute):
         self.broadcast(
-            btype = BroadcastType.COMMAND_EXECUTION_START,
-            message = f'Propagating {command} to children',
+            btype=BroadcastType.COMMAND_EXECUTION_START,
+            message=f"Propagating {command} to children",
         )
 
         response_children = []
         response_lock = threading.Lock()
 
-        def propagate_to_child(child, command, command_data, token, response_lock, response_children):
-
+        def propagate_to_child(
+            child, command, command_data, token, response_lock, response_children
+        ):
             self.broadcast(
-                btype = BroadcastType.CHILD_COMMAND_EXECUTION_START,
-                message = f'Propagating {command} to children ({child.name})',
+                btype=BroadcastType.CHILD_COMMAND_EXECUTION_START,
+                message=f"Propagating {command} to children ({child.name})",
             )
 
             try:
@@ -389,55 +379,61 @@ class Controller(ControllerServicer):
 
                 if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self.broadcast(
-                        btype = BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
-                        message = f'Propagated {command} to children ({child.name}) successfully',
+                        btype=BroadcastType.CHILD_COMMAND_EXECUTION_SUCCESS,
+                        message=f"Propagated {command} to children ({child.name}) successfully",
                     )
                 else:
-                    level = BroadcastType.DEBUG if response.flag == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED else BroadcastType.CHILD_COMMAND_EXECUTION_FAILED
+                    level = (
+                        BroadcastType.DEBUG
+                        if response.flag == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+                        else BroadcastType.CHILD_COMMAND_EXECUTION_FAILED
+                    )
                     self.broadcast(
-                        btype = level,
-                        message = f'Propagating {command} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace.',
+                        btype=level,
+                        message=f"Propagating {command} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace.",
                     )
 
-            except Exception as e: # Catch all, we are in a thread and want to do something sensible when an exception is thrown
-                self.log.error(f"Something wrong happened while sending the command to {child.name}: Error raised: {str(e)}")
+            except Exception as e:  # Catch all, we are in a thread and want to do something sensible when an exception is thrown
+                self.log.error(
+                    f"Something wrong happened while sending the command to {child.name}: Error raised: {str(e)}"
+                )
                 self.log.exception(e)
-                flag = ResponseFlag.DRUNC_EXCEPTION_THROWN if isinstance(e, DruncException) else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+                flag = (
+                    ResponseFlag.DRUNC_EXCEPTION_THROWN
+                    if isinstance(e, DruncException)
+                    else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+                )
 
                 with response_lock:
                     stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
-                            name = child.name,
-                            token = token,
-                            data = pack_to_any(
-                                Stacktrace(
-                                    text=stack
-                                )
-                            ),
-                            flag = flag,
-                            children = [],
+                            name=child.name,
+                            token=token,
+                            data=pack_to_any(Stacktrace(text=stack)),
+                            flag=flag,
+                            children=[],
                         )
                     )
 
                 self.broadcast(
-                    btype = BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    message = f'Failed to propagate {command} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}',
+                    btype=BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
+                    message=f"Failed to propagate {command} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}",
                 )
 
         threads = []
         for child in node_to_execute:
-            self.log.debug(f'Propagating to {child.name}')
+            self.log.debug(f"Propagating to {child.name}")
             t = threading.Thread(
-                target = propagate_to_child,
-                kwargs = {
+                target=propagate_to_child,
+                kwargs={
                     "child": child,
                     "command": command,
                     "command_data": command_data,
                     "token": token,
                     "response_lock": response_lock,
                     "response_children": response_children,
-                }
+                },
             )
             t.start()
             threads.append(t)
@@ -446,79 +442,71 @@ class Controller(ControllerServicer):
             thread.join()
         return response_children
 
-
     ########################################################
     ############# Status, description commands #############
     ########################################################
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-
-    @unpack_request_data_to(None, pass_token=True) # 3rd step
-    def status(self, token:Token) -> Response:
+        action=ActionType.READ, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @unpack_request_data_to(None, pass_token=True)  # 3rd step
+    def status(self, token: Token) -> Response:
         status = get_status_message(self.stateful_node)
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(status),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [n.get_status(token) for n in self.children_nodes]
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(status),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[n.get_status(token) for n in self.children_nodes],
         )
 
-
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @unpack_request_data_to(None, pass_token=True) # 3rd step
-    def describe(self, token:Token) -> Response:
+        action=ActionType.READ, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @unpack_request_data_to(None, pass_token=True)  # 3rd step
+    def describe(self, token: Token) -> Response:
         bd = self.describe_broadcast()
         d = Description(
-            type = 'controller',
-            name = self.name,
-            endpoint = self.uri if self.uri is not None else "unknown",
-            info = get_detector_name(self.configuration),
-            session = self.session,
-            commands = self.commands,
+            type="controller",
+            name=self.name,
+            endpoint=self.uri if self.uri is not None else "unknown",
+            info=get_detector_name(self.configuration),
+            session=self.session,
+            commands=self.commands,
         )
 
         if bd:
             d.broadcast.CopyFrom(pack_to_any(bd))
 
-
         children_description = self.propagate_to_list(
-            'describe',
-            command_data = None,
-            token = token,
-            node_to_execute = self.children_nodes
+            "describe",
+            command_data=None,
+            token=token,
+            node_to_execute=self.children_nodes,
         )
 
-        return Response (
-            name = self.name,
-            token = None,
-            data = pack_to_any(d),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = children_description,
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(d),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=children_description,
         )
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @unpack_request_data_to(PlainText) # 4th step
-    def describe_fsm(self, input:PlainText) -> Response:
-
-        if input.text == 'all-transitions':
+        action=ActionType.READ, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @unpack_request_data_to(PlainText)  # 4th step
+    def describe_fsm(self, input: PlainText) -> Response:
+        if input.text == "all-transitions":
             desc = convert_fsm_transition(self.stateful_node.get_all_fsm_transitions())
-        elif input.text == '':
+        elif input.text == "":
             desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
         else:
             all_transitions = self.stateful_node.get_all_fsm_transitions()
@@ -529,30 +517,28 @@ class Controller(ControllerServicer):
                 if input.text == transition.name:
                     interesting_transitions += [transition]
             desc = convert_fsm_transition(interesting_transitions)
-        desc.type = 'controller'
+        desc.type = "controller"
         desc.name = self.name
         desc.session = self.session
-        return Response (
-            name = self.name,
-            token = None,
-            data = pack_to_any(desc),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [],
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(desc),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
         )
-
 
     ########################################
     ############# FSM commands #############
     ########################################
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @in_control # 3rd step
-    @unpack_request_data_to(FSMCommand, pass_token=True) # 4th step
-    def execute_fsm_command(self, fsm_command:FSMCommand, token:Token) -> Response:
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control  # 3rd step
+    @unpack_request_data_to(FSMCommand, pass_token=True)  # 4th step
+    def execute_fsm_command(self, fsm_command: FSMCommand, token: Token) -> Response:
         """
         A generic way to execute the controller commands from a user.
         1. Check if the command can be executed (correct FSM transition)
@@ -564,54 +550,57 @@ class Controller(ControllerServicer):
             return self.construct_error_node_response(
                 fsm_command.command_name,
                 token,
-                cause = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
+                cause=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
             )
 
         if not self.stateful_node.node_is_included():
-            self.log.error(f"Node is not included, not executing command {fsm_command.command_name}.")
+            self.log.error(
+                f"Node is not included, not executing command {fsm_command.command_name}."
+            )
             fsm_result = FSMCommandResponse(
-                flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                command_name = fsm_command.command_name,
+                flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                command_name=fsm_command.command_name,
             )
 
-            return Response (
-                name = self.name,
-                token = token,
-                data = pack_to_any(fsm_result),
-                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children = [],
+            return Response(
+                name=self.name,
+                token=token,
+                data=pack_to_any(fsm_result),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=[],
             )
-
 
         transition = self.stateful_node.get_fsm_transition(fsm_command.command_name)
 
         self.log.debug(f'The transition requested is "{str(transition)}"')
 
         if not self.stateful_node.can_transition(transition):
-            self.log.error(f'Cannot \"{transition.name}\" as this is an invalid command in state \"{self.stateful_node.node_operational_state()}\"')
+            self.log.error(
+                f'Cannot "{transition.name}" as this is an invalid command in state "{self.stateful_node.node_operational_state()}"'
+            )
 
             fsm_result = FSMCommandResponse(
-                flag = FSMResponseFlag.FSM_INVALID_TRANSITION,
-                command_name = fsm_command.command_name,
+                flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
+                command_name=fsm_command.command_name,
             )
 
-            return Response (
-                name = self.name,
-                token = token,
-                data = pack_to_any(fsm_result),
-                flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children = [],
+            return Response(
+                name=self.name,
+                token=token,
+                data=pack_to_any(fsm_result),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=[],
             )
 
-        self.log.debug(f'FSM command data: {fsm_command}')
+        self.log.debug(f"FSM command data: {fsm_command}")
 
         fsm_args = self.stateful_node.decode_fsm_arguments(fsm_command)
 
         fsm_data = self.stateful_node.prepare_transition(
-            transition = transition,
-            transition_args = fsm_args,
-            transition_data = fsm_command.data,
-            ctx = self,
+            transition=transition,
+            transition_args=fsm_args,
+            transition_data=fsm_command.data,
+            ctx=self,
         )
 
         self.stateful_node.propagate_transition_mark(transition)
@@ -619,30 +608,29 @@ class Controller(ControllerServicer):
         children_fsm_command = FSMCommand()
         children_fsm_command.CopyFrom(fsm_command)
         children_fsm_command.data = fsm_data
-        children_fsm_command.ClearField("children_nodes") # we strip the children node, since when we feed them to the children they are meaningless
+        children_fsm_command.ClearField(
+            "children_nodes"
+        )  # we strip the children node, since when we feed them to the children they are meaningless
 
         response_children = self.propagate_to_list(
-            'execute_fsm_command',
-            command_data = children_fsm_command,
-            token = token,
-            node_to_execute = self.children_nodes,
+            "execute_fsm_command",
+            command_data=children_fsm_command,
+            token=token,
+            node_to_execute=self.children_nodes,
         )
 
         child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
         child_worst_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
 
         for response_child in response_children:
-
             if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
                 child_worst_response_flag = response_child.flag
                 continue
-
 
             fsm_response = unpack_any(response_child.data, FSMCommandResponse)
 
             if fsm_response.flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
                 child_worst_fsm_flag = fsm_response.flag
-
 
         self.stateful_node.finish_propagating_transition_mark(transition)
 
@@ -651,15 +639,16 @@ class Controller(ControllerServicer):
         self.stateful_node.terminate_transition_mark(transition)
 
         fsm_data = self.stateful_node.finalise_transition(
-            transition = transition,
-            transition_args = fsm_args,
-            transition_data = fsm_data,
-            ctx = self,
+            transition=transition,
+            transition_args=fsm_args,
+            transition_data=fsm_data,
+            ctx=self,
         )
 
-        if (child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY or
-            child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY):
-
+        if (
+            child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY
+            or child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        ):
             self.stateful_node.to_error()
 
         #     return self.construct_error_node_response(
@@ -668,172 +657,187 @@ class Controller(ControllerServicer):
         #         cause = FSMResponseFlag.FSM_FAILED,
         #     )
 
-        self_response_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY # self has executed successfully, even if children have not
+        self_response_fsm_flag = (
+            FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        )  # self has executed successfully, even if children have not
         fsm_result = FSMCommandResponse(
-            flag = self_response_fsm_flag,
-            command_name = fsm_command.command_name,
+            flag=self_response_fsm_flag,
+            command_name=fsm_command.command_name,
         )
 
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(fsm_result),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = response_children,
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(fsm_result),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=response_children,
         )
-
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @in_control # 3rd step
-    @unpack_request_data_to(pass_token=True) # 4th step
-    def include(self, token:Token) -> PlainText:
-        response_children = self.propagate_to_list('include', command_data=None, token=token, node_to_execute=self.children_nodes)
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control  # 3rd step
+    @unpack_request_data_to(pass_token=True)  # 4th step
+    def include(self, token: Token) -> PlainText:
+        response_children = self.propagate_to_list(
+            "include",
+            command_data=None,
+            token=token,
+            node_to_execute=self.children_nodes,
+        )
         self.stateful_node.include_node()
-        resp = PlainText(text = f'{self.name} and children included')
+        resp = PlainText(text=f"{self.name} and children included")
 
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(resp),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = response_children,
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(resp),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=response_children,
         )
-
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
     @in_control
-    @unpack_request_data_to(pass_token=True) # 3rd step
-    def exclude(self, token:Token) -> Response:
-        response_children = self.propagate_to_list('exclude', command_data=None, token=token, node_to_execute=self.children_nodes)
-        self.stateful_node.exclude_node()
-        resp =  PlainText(text = f'{self.name} and children excluded')
-        return Response (
-            name = self.name,
-            token = token,
-            data = pack_to_any(resp),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = response_children,
+    @unpack_request_data_to(pass_token=True)  # 3rd step
+    def exclude(self, token: Token) -> Response:
+        response_children = self.propagate_to_list(
+            "exclude",
+            command_data=None,
+            token=token,
+            node_to_execute=self.children_nodes,
         )
-
-
+        self.stateful_node.exclude_node()
+        resp = PlainText(text=f"{self.name} and children excluded")
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(resp),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=response_children,
+        )
 
     ##########################################
     ############# Actor commands #############
     ##########################################
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @unpack_request_data_to(pass_token=True) # 3rd step
-    def take_control(self, token:Token) -> PlainText:
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @unpack_request_data_to(pass_token=True)  # 3rd step
+    def take_control(self, token: Token) -> PlainText:
         if self.actor.take_control(token) != 0:
             return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    PlainText(
-                        text='Could not take control'
-                    )
-                ),
-                flag = ResponseFlag.FAILED,
-                children = [],
+                name=self.name,
+                token=token,
+                data=pack_to_any(PlainText(text="Could not take control")),
+                flag=ResponseFlag.FAILED,
+                children=[],
             )
 
-        response_children = self.propagate_to_list('take_control', command_data=None, token=token, node_to_execute=self.children_nodes)
-        if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
+        response_children = self.propagate_to_list(
+            "take_control",
+            command_data=None,
+            token=token,
+            node_to_execute=self.children_nodes,
+        )
+        if any(
+            cr.flag
+            not in [
+                ResponseFlag.EXECUTED_SUCCESSFULLY,
+                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            ]
+            for cr in response_children
+        ):
             return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    PlainText(
-                        text='Could not take control on all children'
-                    )
+                name=self.name,
+                token=token,
+                data=pack_to_any(
+                    PlainText(text="Could not take control on all children")
                 ),
-                flag = ResponseFlag.FAILED,
-                children = response_children,
+                flag=ResponseFlag.FAILED,
+                children=response_children,
             )
 
-        resp = PlainText(text = f'{token.user_name} took control')
+        resp = PlainText(text=f"{token.user_name} took control")
         return Response(
-            name = self.name,
-            token = token,
-            data = pack_to_any(resp),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = response_children,
+            name=self.name,
+            token=token,
+            data=pack_to_any(resp),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=response_children,
         )
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.UPDATE,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @in_control # 3rd step
-    @unpack_request_data_to(pass_token=True) # 4th step
-    def surrender_control(self, token:Token) -> PlainText:
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control  # 3rd step
+    @unpack_request_data_to(pass_token=True)  # 4th step
+    def surrender_control(self, token: Token) -> PlainText:
         user = self.actor.get_user_name()
         if self.actor.surrender_control(token) != 0:
             return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    PlainText(
-                        text='Could not surrender control'
-                    )
-                ),
-                flag = ResponseFlag.FAILED,
-                children = [],
+                name=self.name,
+                token=token,
+                data=pack_to_any(PlainText(text="Could not surrender control")),
+                flag=ResponseFlag.FAILED,
+                children=[],
             )
 
-        response_children = self.propagate_to_list('surrender_control', command_data=None, token=token, node_to_execute=self.children_nodes)
-        if any(cr.flag not in [ResponseFlag.EXECUTED_SUCCESSFULLY, ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED] for cr in response_children):
+        response_children = self.propagate_to_list(
+            "surrender_control",
+            command_data=None,
+            token=token,
+            node_to_execute=self.children_nodes,
+        )
+        if any(
+            cr.flag
+            not in [
+                ResponseFlag.EXECUTED_SUCCESSFULLY,
+                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            ]
+            for cr in response_children
+        ):
             return Response(
-                name = self.name,
-                token = token,
-                data = pack_to_any(
-                    PlainText(
-                        text='Could not surrender control on all children'
-                    )
+                name=self.name,
+                token=token,
+                data=pack_to_any(
+                    PlainText(text="Could not surrender control on all children")
                 ),
-                flag = ResponseFlag.FAILED,
-                children = response_children,
+                flag=ResponseFlag.FAILED,
+                children=response_children,
             )
 
-        resp = PlainText(text = f'{user} surrendered control')
+        resp = PlainText(text=f"{user} surrendered control")
         return Response(
-            name = self.name,
-            token = token,
-            data = pack_to_any(resp),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = response_children,
+            name=self.name,
+            token=token,
+            data=pack_to_any(resp),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=response_children,
         )
 
     # ORDER MATTERS!
-    @broadcasted # outer most wrapper 1st step
+    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ,
-        system=SystemType.CONTROLLER
-    ) # 2nd step
-    @unpack_request_data_to(None) # 3rd step
+        action=ActionType.READ, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @unpack_request_data_to(None)  # 3rd step
     def who_is_in_charge(self) -> PlainText:
         user = self.actor.get_user_name()
-        return Response (
-            name = self.name,
-            token = None,
-            data = pack_to_any(PlainText(text=user)),
-            flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children = [],
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(PlainText(text=user)),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
         )

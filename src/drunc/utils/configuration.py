@@ -1,86 +1,104 @@
-from enum import Enum
 import json
 import os
+from enum import Enum
 from urllib.parse import urlparse
+
+import conffwk
 
 from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import expand_path, get_logger
-
-import conffwk
 
 
 class ConfTypes(Enum):
     Unknown = 0
 
     # End product
-    PyObject = 1 # this is the OKS object under the hood, or something that "fakes" it
+    PyObject = 1  # this is the OKS object under the hood, or something that "fakes" it
 
     # Raw types that need to be converted
     JsonFileName = 2
     ProtobufAny = 3
     OKSFileName = 4
 
-def CLI_to_ConfTypes(scheme:str) -> ConfTypes:
+
+def CLI_to_ConfTypes(scheme: str) -> ConfTypes:
     match scheme:
-        case 'file':
+        case "file":
             return ConfTypes.JsonFileName
-        case 'oksconflibs' | '':
+        case "oksconflibs" | "":
             return ConfTypes.OKSFileName
         case _:
-            raise DruncSetupException(f'{scheme} configuration type is not understood')
+            raise DruncSetupException(f"{scheme} configuration type is not understood")
 
-def parse_conf_url(url:str) ->tuple[ConfTypes,str]:
+
+def parse_conf_url(url: str) -> tuple[ConfTypes, str]:
     u = urlparse(url)
     # urlparse("scheme://netloc/path;parameters?query#fragment")
     t = CLI_to_ConfTypes(u.scheme)
 
-    if u.path: #ugly ugly ugly
-        return f'{u.netloc}{u.path}', t
+    if u.path:  # ugly ugly ugly
+        return f"{u.netloc}{u.path}", t
     else:
-        return f'{u.netloc}', t
+        return f"{u.netloc}", t
+
 
 class ConfigurationNotFound(DruncSetupException):
     def __init__(self, requested_path):
-        super().__init__(f'The configuration \'{requested_path}\' is not in $DUNEDAQ_DB_PATH, perhaps you forgot to \'dbt-workarea-env && dbt-build\'?')
+        super().__init__(
+            f"The configuration '{requested_path}' is not in $DUNEDAQ_DB_PATH, perhaps you forgot to 'dbt-workarea-env && dbt-build'?"
+        )
 
-def find_configuration(path:str) -> str:
-    log = get_logger('utils.find_configuration')
+
+def find_configuration(path: str) -> str:
+    log = get_logger("utils.find_configuration")
     expanded_path = expand_path(urlparse(path).path, turn_to_abs_path=False)
     if os.path.exists(expanded_path):
         return expanded_path
 
     configuration_files = []
-    for dir in os.getenv('DUNEDAQ_DB_PATH').split(":"):
+    for dir in os.getenv("DUNEDAQ_DB_PATH").split(":"):
         tentative = os.path.join(dir, path)
 
         if os.path.exists(tentative):
             configuration_files += [tentative]
 
-    if len(configuration_files)>1:
+    if len(configuration_files) > 1:
         l = "\n - ".join(configuration_files)
-        log.warning(f'The configuration \'{path}\' matches >1 configurations in $DUNEDAQ_SHARED_PATH:\n - {l}\n:heavy_exclamation_mark:Using the first one: :heavy_exclamation_mark:')
+        log.warning(
+            f"The configuration '{path}' matches >1 configurations in $DUNEDAQ_SHARED_PATH:\n - {l}\n:heavy_exclamation_mark:Using the first one: :heavy_exclamation_mark:"
+        )
 
     if not configuration_files:
         raise ConfigurationNotFound(path)
 
     return configuration_files[0]
 
+
 class ConfTypeNotSupported(DruncSetupException):
-    def __init__(self, conf_type:ConfTypes, class_name:str):
+    def __init__(self, conf_type: ConfTypes, class_name: str):
         if not isinstance(class_name, str):
             class_name = class_name.__class__.__name__
-        message = f'\'{conf_type}\' is not supported by \'{class_name}\''
+        message = f"'{conf_type}' is not supported by '{class_name}'"
         super().__init__(message)
 
+
 class OKSKey:
-    def __init__(self, schema_file:str, class_name:str, obj_uid:str, session:str):
+    def __init__(self, schema_file: str, class_name: str, obj_uid: str, session: str):
         self.schema_file = schema_file
         self.class_name = class_name
         self.obj_uid = obj_uid
         self.session = session
 
+
 class ConfHandler:
-    def __init__(self, data=None, type=ConfTypes.PyObject, oks_key:OKSKey=None, *args, **kwargs):
+    def __init__(
+        self,
+        data=None,
+        type=ConfTypes.PyObject,
+        oks_key: OKSKey = None,
+        *args,
+        **kwargs,
+    ):
         self.class_name = self.__class__.__name__
         self.log = get_logger("utils." + self.class_name)
         self.initial_type = type
@@ -91,7 +109,7 @@ class ConfHandler:
         self.process_id_infra = 0
 
         if type == ConfTypes.OKSFileName and oks_key is None:
-            raise DruncSetupException('Need to provide a key for the OKS file')
+            raise DruncSetupException("Need to provide a key for the OKS file")
 
         self.oks_key = oks_key
         self.validate_and_parse_configuration_location(*args, **kwargs)
@@ -102,19 +120,21 @@ class ConfHandler:
     def _parse_oks_file(self, oks_path):
         try:
             self.oks_path = f"oksconflibs:{oks_path}"
-            self.log.debug(f'Using {self.oks_path} to configure')
+            self.log.debug(f"Using {self.oks_path} to configure")
             self.db = conffwk.Configuration(self.oks_path)
             return self.db.get_dal(
-                class_name=self.oks_key.class_name,
-                uid=self.oks_key.obj_uid
+                class_name=self.oks_key.class_name, uid=self.oks_key.obj_uid
             )
 
         except ImportError as e:
-           raise DruncSetupException('OKS is not setup in this python environment, cannot parse OKS configurations') from e
+            raise DruncSetupException(
+                "OKS is not setup in this python environment, cannot parse OKS configurations"
+            ) from e
 
         except KeyError as e:
-           raise DruncSetupException('OKS params where not passed to this ConfigurationHandler, cannot parse OKS configurations') from e
-
+            raise DruncSetupException(
+                "OKS params where not passed to this ConfigurationHandler, cannot parse OKS configurations"
+            ) from e
 
     def _post_process_oks(self):
         pass
@@ -122,10 +142,8 @@ class ConfHandler:
     def _parse_pbany(self, pbany_data):
         raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self)
 
-
     def _parse_dict(self, data):
         raise ConfTypeNotSupported(ConfTypes.JsonFileName, self)
-
 
     def validate_and_parse_configuration_location(self, *args, **kwargs):
         match self.initial_type:
@@ -137,7 +155,9 @@ class ConfHandler:
             case ConfTypes.JsonFileName:
                 resolved = expand_path(self.initial_data, True)
                 if not os.path.exists(expand_path(self.initial_data)):
-                    raise DruncSetupException(f'Location {resolved} ({self.initial_data}) is empty!')
+                    raise DruncSetupException(
+                        f"Location {resolved} ({self.initial_data}) is empty!"
+                    )
 
                 with open(resolved) as f:
                     data = json.loads(f.read())
@@ -148,7 +168,9 @@ class ConfHandler:
             case ConfTypes.OKSFileName:
                 resolved = find_configuration(self.initial_data)
                 if not os.path.exists(resolved):
-                    raise DruncSetupException(f'Location {resolved} ({self.initial_data}) is empty!')
+                    raise DruncSetupException(
+                        f"Location {resolved} ({self.initial_data}) is empty!"
+                    )
 
                 self.data = self._parse_oks_file(resolved)
                 self.type = ConfTypes.PyObject
@@ -161,6 +183,3 @@ class ConfHandler:
 
             case _:
                 raise ConfTypeNotSupported(self.initial_type, self.class_name)
-
-
-

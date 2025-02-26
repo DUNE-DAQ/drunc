@@ -1,7 +1,8 @@
 import abc
-from kafkaopmon.OpMonPublisher import OpMonPublisher
-
 from typing import Optional
+
+from druncschema.broadcast_pb2 import BroadcastType
+from kafkaopmon.OpMonPublisher import OpMonPublisher
 
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.exceptions import DruncCommandException
@@ -9,8 +10,6 @@ from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
 from drunc.fsm.utils import decode_fsm_arguments
 from drunc.utils.utils import get_logger
-
-from druncschema.broadcast_pb2 import BroadcastType
 
 
 class Observed:
@@ -25,20 +24,20 @@ class Observed:
             return
 
         self._broadcast_on_change.broadcast(
-            message = f'Changing {self._name} from {self._value} to {value}',
-            btype = self._broadcast_key,
+            message=f"Changing {self._name} from {self._value} to {value}",
+            btype=self._broadcast_key,
         )
 
         self._value = value
 
     def __init__(
-            self,
-            name:str,
-            broadcast_on_change:Optional[BroadcastSender]=None,
-            opmon_publisher:Optional[OpMonPublisher]=None,
-            broadcast_key=None, # Optional[BroadcastType]=None
-            initial_value:Optional[str]=None
-        ):
+        self,
+        name: str,
+        broadcast_on_change: Optional[BroadcastSender] = None,
+        opmon_publisher: Optional[OpMonPublisher] = None,
+        broadcast_key=None,  # Optional[BroadcastType]=None
+        initial_value: Optional[str] = None,
+    ):
         self._name = name
         self._broadcast_on_change = broadcast_on_change
         self._opmon_publisher = opmon_publisher
@@ -48,84 +47,85 @@ class Observed:
 
 class OperationalState(Observed):
     def __init__(self, **kwargs):
-        super(OperationalState, self).__init__(
-            name = 'operational_state',
-            **kwargs
-        )
+        super(OperationalState, self).__init__(name="operational_state", **kwargs)
 
 
 class ErrorState(Observed):
     def __init__(self, **kwargs):
-        super(ErrorState, self).__init__(
-            name = 'error_state',
-            **kwargs
-        )
+        super(ErrorState, self).__init__(name="error_state", **kwargs)
 
 
 class InclusionState(Observed):
     def __init__(self, **kwargs):
-        super(InclusionState, self).__init__(
-            name = 'inclusion_state',
-            **kwargs
-        )
+        super(InclusionState, self).__init__(name="inclusion_state", **kwargs)
+
 
 class StatefulNodeException(DruncCommandException):
     pass
 
+
 class CannotInclude(StatefulNodeException):
     def __init__(self):
-        super().__init__('Cannot include node (most likely, it is already included)')
+        super().__init__("Cannot include node (most likely, it is already included)")
+
 
 class CannotExclude(StatefulNodeException):
     def __init__(self):
-        super().__init__('Cannot exclude node (most likely, it is already excluded)')
+        super().__init__("Cannot exclude node (most likely, it is already excluded)")
+
 
 class InvalidSubTransition(StatefulNodeException):
     def __init__(self, current_state, expected_state, action):
         message = f'SubTransition "{action}" cannot be executed, state needs to be "{expected_state}", it is now "{current_state}"'
         super(InvalidSubTransition, self).__init__(message)
 
+
 class TransitionNotTerminated(StatefulNodeException):
     def __init__(self):
-        super().__init__('The transition did not finished successfully')
+        super().__init__("The transition did not finished successfully")
+
 
 class TransitionExecuting(StatefulNodeException):
     def __init__(self):
-        super().__init__('A transition is already executing')
+        super().__init__("A transition is already executing")
+
 
 class StatefulNode(abc.ABC):
-    def __init__(self, fsm_configuration, publisher:Optional[OpMonPublisher] = None, broadcaster:Optional[BroadcastSender]=None):
-
+    def __init__(
+        self,
+        fsm_configuration,
+        publisher: Optional[OpMonPublisher] = None,
+        broadcaster: Optional[BroadcastSender] = None,
+    ):
         self.broadcast = broadcaster
 
         self.publisher = publisher
 
-
         self.__fsm = FSM(fsm_configuration)
-        self.log = get_logger('controller.StatefulNode')
+        self.log = get_logger("controller.StatefulNode")
         self.__operational_state = OperationalState(
-            broadcast_on_change = self.broadcast,
-            opmon_publisher = self.publisher,
-            broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
-            initial_value = self.__fsm.initial_state
+            broadcast_on_change=self.broadcast,
+            opmon_publisher=self.publisher,
+            broadcast_key=BroadcastType.FSM_STATUS_UPDATE,
+            initial_value=self.__fsm.initial_state,
         )
         self.__operational_sub_state = OperationalState(
-            broadcast_on_change = self.broadcast,
-            opmon_publisher = self.publisher,
-            broadcast_key = BroadcastType.FSM_STATUS_UPDATE,
-            initial_value = self.__fsm.initial_state
+            broadcast_on_change=self.broadcast,
+            opmon_publisher=self.publisher,
+            broadcast_key=BroadcastType.FSM_STATUS_UPDATE,
+            initial_value=self.__fsm.initial_state,
         )
         self.__included = InclusionState(
-            broadcast_on_change = self.broadcast,
-            opmon_publisher = self.publisher,
-            broadcast_key = BroadcastType.STATUS_UPDATE,
-            initial_value = True
+            broadcast_on_change=self.broadcast,
+            opmon_publisher=self.publisher,
+            broadcast_key=BroadcastType.STATUS_UPDATE,
+            initial_value=True,
         )
         self.__in_error = ErrorState(
-            broadcast_on_change = self.broadcast,
-            opmon_publisher = self.publisher,
-            broadcast_key = BroadcastType.STATUS_UPDATE,
-            initial_value = False
+            broadcast_on_change=self.broadcast,
+            opmon_publisher=self.publisher,
+            broadcast_key=BroadcastType.STATUS_UPDATE,
+            initial_value=False,
         )
 
     def get_node_operational_state(self):
@@ -168,23 +168,35 @@ class StatefulNode(abc.ABC):
         return self.__in_error.value
 
     def can_transition(self, transition):
-        self.log.debug(f'{self.__operational_state.value} == {self.__operational_sub_state.value} ?')
+        self.log.debug(
+            f"{self.__operational_state.value} == {self.__operational_sub_state.value} ?"
+        )
         if self.__operational_state.value != self.__operational_sub_state.value:
             return False
-        return self.__fsm.can_execute_transition(self.get_node_operational_state(), transition)
+        return self.__fsm.can_execute_transition(
+            self.get_node_operational_state(), transition
+        )
 
     def decode_fsm_arguments(self, fsm_command):
         transition = self.get_fsm_transition(fsm_command.command_name)
         return decode_fsm_arguments(fsm_command.arguments, transition.arguments)
 
-    def prepare_transition(self, transition, transition_data, transition_args, ctx=None):
+    def prepare_transition(
+        self, transition, transition_data, transition_args, ctx=None
+    ):
         if self.get_node_operational_state() != self.get_node_operational_sub_state():
-            raise InvalidSubTransition(self.get_node_sub_operational_state(), self.get_node_operational_state(), 'prepare_transition')
+            raise InvalidSubTransition(
+                self.get_node_sub_operational_state(),
+                self.get_node_operational_state(),
+                "prepare_transition",
+            )
 
-        if not self.__fsm.can_execute_transition(self.get_node_operational_state(), transition):
+        if not self.__fsm.can_execute_transition(
+            self.get_node_operational_state(), transition
+        ):
             raise InvalidTransition(transition, self.get_node_operational_state())
 
-        self.__operational_sub_state.value = f'preparing-{transition.name}'
+        self.__operational_sub_state.value = f"preparing-{transition.name}"
 
         transition_data = self.__fsm.prepare_transition(
             transition,
@@ -193,49 +205,64 @@ class StatefulNode(abc.ABC):
             ctx,
         )
 
-        self.__operational_sub_state.value = f'{transition.name}-ready'
+        self.__operational_sub_state.value = f"{transition.name}-ready"
 
         return transition_data
 
     def propagate_transition_mark(self, transition):
+        if self.get_node_operational_sub_state() != f"{transition.name}-ready":
+            raise InvalidSubTransition(
+                self.get_node_operational_sub_state(),
+                f"{transition.name}-ready",
+                "propagate_transition",
+            )
 
-        if self.get_node_operational_sub_state() != f'{transition.name}-ready':
-            raise InvalidSubTransition(self.get_node_operational_sub_state(), f'{transition.name}-ready', 'propagate_transition')
-
-        self.__operational_sub_state.value = f'propagating-{transition.name}'
-
+        self.__operational_sub_state.value = f"propagating-{transition.name}"
 
     def finish_propagating_transition_mark(self, transition):
+        if self.get_node_operational_sub_state() != f"propagating-{transition.name}":
+            raise InvalidSubTransition(
+                self.get_node_operational_sub_state(),
+                f"propagating-{transition.name}",
+                "finish_propagating_transition",
+            )
 
-        if self.get_node_operational_sub_state() != f'propagating-{transition.name}':
-            raise InvalidSubTransition(self.get_node_operational_sub_state(), f'propagating-{transition.name}', 'finish_propagating_transition')
-
-        self.__operational_sub_state.value = f'{transition.name}-propagated'
-
+        self.__operational_sub_state.value = f"{transition.name}-propagated"
 
     def start_transition_mark(self, transition):
+        if self.get_node_operational_sub_state() != f"{transition.name}-propagated":
+            raise InvalidSubTransition(
+                self.get_node_operational_sub_state(),
+                f"{transition.name}-propagated",
+                "start_transition",
+            )
 
-        if self.get_node_operational_sub_state() != f'{transition.name}-propagated':
-            raise InvalidSubTransition(self.get_node_operational_sub_state(), f'{transition.name}-propagated', 'start_transition')
-
-        self.__operational_sub_state.value = f'executing-{transition.name}'
-
+        self.__operational_sub_state.value = f"executing-{transition.name}"
 
     def terminate_transition_mark(self, transition):
+        if self.get_node_operational_sub_state() != f"executing-{transition.name}":
+            raise InvalidSubTransition(
+                self.get_node_operational_sub_state(),
+                f"executing-{transition.name}",
+                "terminate_transition",
+            )
 
-        if self.get_node_operational_sub_state() != f'executing-{transition.name}':
-            raise InvalidSubTransition(self.get_node_operational_sub_state(), f'executing-{transition.name}', 'terminate_transition')
+        self.__operational_sub_state.value = f"{transition.name}-terminated"
+        self.__operational_state.value = self.__fsm.get_destination_state(
+            self.__operational_state.value, transition
+        )
 
-        self.__operational_sub_state.value = f'{transition.name}-terminated'
-        self.__operational_state.value = self.__fsm.get_destination_state(self.__operational_state.value, transition)
+    def finalise_transition(
+        self, transition, transition_data, transition_args, ctx=None
+    ):
+        if self.get_node_operational_sub_state() != f"{transition.name}-terminated":
+            raise InvalidSubTransition(
+                self.get_node_operational_sub_state(),
+                f"{transition.name}-terminated",
+                "finalise_transition",
+            )
 
-
-    def finalise_transition(self, transition, transition_data, transition_args, ctx=None):
-
-        if self.get_node_operational_sub_state() != f'{transition.name}-terminated':
-            raise InvalidSubTransition(self.get_node_operational_sub_state(), f'{transition.name}-terminated', 'finalise_transition')
-
-        self.__operational_sub_state.value = f'finalising-{transition.name}'
+        self.__operational_sub_state.value = f"finalising-{transition.name}"
         transition_data = self.__fsm.finalise_transition(
             transition,
             transition_data,
@@ -245,4 +272,3 @@ class StatefulNode(abc.ABC):
         self.__operational_sub_state.value = self.__operational_state.value
 
         return transition_data
-    

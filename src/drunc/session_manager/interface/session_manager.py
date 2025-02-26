@@ -1,13 +1,13 @@
-import click
 from concurrent import futures
-import grpc
 from logging import getLogger
 
+import click
+import grpc
 from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_server
 
-from drunc.utils.utils import get_logger, setup_root_logger #log_levels,
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
+from drunc.utils.utils import get_logger, setup_root_logger  # log_levels,
 
 
 def serve(session_manager: SessionManager, address: str) -> None:
@@ -37,10 +37,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
 def session_manager_cli():
     log_level = "DEBUG"
     setup_root_logger(log_level)
-    logger = get_logger(
-        logger_name="drunc.session_manager",
-        rich_handler=True
-    )
+    logger = get_logger(logger_name="drunc.session_manager", rich_handler=True)
 
     # Load the configuration for the session manager.
     config = SessionManagerConfHandler()

@@ -2,5 +2,6 @@
 
 from drunc.utils.configuration import ConfHandler
 
+
 class SessionManagerConfHandler(ConfHandler):
     pass

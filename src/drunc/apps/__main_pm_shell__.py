@@ -6,7 +6,7 @@ from drunc.utils.utils import get_logger, setup_root_logger
 def main():
     context = ProcessManagerContext()
     try:
-        process_manager_shell(obj = context)
+        process_manager_shell(obj=context)
     except Exception as e:
         setup_root_logger("ERROR")
         log = get_logger("unified_shell_app", rich_handler=True)
@@ -14,5 +14,6 @@ def main():
         log.exception(e)
         exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

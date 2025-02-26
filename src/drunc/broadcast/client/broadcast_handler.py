@@ -1,13 +1,14 @@
-
-from drunc.broadcast.types import BroadcastTypes
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+from drunc.broadcast.types import BroadcastTypes
+
 
 class BroadcastHandler:
-    def __init__(self, broadcast_configuration:BroadcastClientConfHandler):
+    def __init__(self, broadcast_configuration: BroadcastClientConfHandler):
         super().__init__()
 
         from logging import getLogger
-        self.log = getLogger('BroadcastHandler')
+
+        self.log = getLogger("BroadcastHandler")
 
         self.configuration = broadcast_configuration
         self.implementation = None
@@ -18,14 +19,19 @@ class BroadcastHandler:
             # For now, 1 server type <-> 1 client type...
             # Maybe in the future some sort of callback-based functionality would be preferable.
             case BroadcastTypes.Kafka:
-                from drunc.broadcast.client.kafka_stdout_broadcast_handler import KafkaStdoutBroadcastHandler
                 from druncschema.broadcast_pb2 import BroadcastMessage
+
+                from drunc.broadcast.client.kafka_stdout_broadcast_handler import (
+                    KafkaStdoutBroadcastHandler,
+                )
+
                 self.implementation = KafkaStdoutBroadcastHandler(
-                    message_format = BroadcastMessage,
-                    conf = self.configuration
+                    message_format=BroadcastMessage, conf=self.configuration
                 )
             case _:
-                self.log.info('Could not understand the BroadcastHandler technology you want to use, you will get no broadcast!')
+                self.log.info(
+                    "Could not understand the BroadcastHandler technology you want to use, you will get no broadcast!"
+                )
 
     def stop(self):
         if self.implementation:

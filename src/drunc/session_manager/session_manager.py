@@ -1,6 +1,14 @@
 """The session manager service."""
 
-from druncschema.request_response_pb2 import CommandDescription, Description, Response, ResponseFlag
+import abc
+import logging
+
+from druncschema.request_response_pb2 import (
+    CommandDescription,
+    Description,
+    Response,
+    ResponseFlag,
+)
 from druncschema.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from druncschema.token_pb2 import Token
@@ -9,11 +17,8 @@ from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.utils.grpc_utils import pack_to_any, unpack_request_data_to
 from drunc.utils.utils import pid_info_str
 
-import abc
-import logging
 
 class SessionManager(abc.ABC, SessionManagerServicer):
-
     def __init__(self, name: str, configuration: SessionManagerConfHandler):
         super().__init__()
 

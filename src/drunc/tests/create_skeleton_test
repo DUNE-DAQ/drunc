@@ -4,7 +4,6 @@ from pathlib import Path
 
 from drunc.utils.utils import get_logger, setup_root_logger
 
-
 setup_root_logger("ERROR")
 log = get_logger("skeleton_test", rich_handler=True)
 drunc_srcs = (Path(os.path.abspath(__file__)) / ".." / "..").resolve()

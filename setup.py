@@ -14,12 +14,7 @@ setup(
         "kafka-python",
         "nest_asyncio",
         "rich",
-        "sh"
+        "sh",
     ],
-    extras_require={"develop": [
-        "ipdb",
-        "ipython",
-        "ruff",
-        "pre-commit"
-    ]},
+    extras_require={"develop": ["ipdb", "ipython", "ruff", "pre-commit"]},
 )

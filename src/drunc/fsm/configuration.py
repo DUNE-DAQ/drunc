@@ -1,8 +1,8 @@
 from drunc.fsm.action_factory import FSMActionFactory
 from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
-from drunc.utils.utils import get_logger
 from drunc.utils.configuration import ConfHandler
+from drunc.utils.utils import get_logger
 
 
 class FSMConfHandler(ConfHandler):
@@ -28,44 +28,46 @@ class FSMConfHandler(ConfHandler):
 
         for action_name in seq_conf.order:
             seq.add_callback(
-                action = self.actions[action_name],
-                mandatory = action_name in seq_conf.mandatory,
+                action=self.actions[action_name],
+                mandatory=action_name in seq_conf.mandatory,
             )
 
         return seq
 
     def _post_process_oks(self):
-        self.log.debug('_post_process_oks configuration')
-        self.pre_transitions  = {}
+        self.log.debug("_post_process_oks configuration")
+        self.pre_transitions = {}
         self.post_transitions = {}
         self.actions = {}
         self.transitions = []
         self.states = self.data.states
         self.initial_state = self.data.initial_state
 
-
         for action in self.data.actions:
-            self.log.debug(f'Setting up action \'{action.id}\'')
+            self.log.debug(f"Setting up action '{action.id}'")
             self.actions[action.id] = FSMActionFactory.get().get_action(
-                action.id,
-                action
+                action.id, action
             )
 
         for transition in self.data.transitions:
             tr = Transition(
-                name = transition.id,
-                source = transition.source,
-                destination = transition.dest,
-                arguments = [] # /!\
+                name=transition.id,
+                source=transition.source,
+                destination=transition.dest,
+                arguments=[],  # /!\
             )
 
-            pre_transitions  = self._fill_pre_post_transition_sequence_oks('pre' , tr, self.data.pre_transitions)
-            post_transitions = self._fill_pre_post_transition_sequence_oks('post', tr, self.data.post_transitions)
+            pre_transitions = self._fill_pre_post_transition_sequence_oks(
+                "pre", tr, self.data.pre_transitions
+            )
+            post_transitions = self._fill_pre_post_transition_sequence_oks(
+                "post", tr, self.data.post_transitions
+            )
 
             tr.arguments += pre_transitions.get_arguments()
             tr.arguments += post_transitions.get_arguments()
 
-            self.pre_transitions [tr] = pre_transitions
+            self.pre_transitions[tr] = pre_transitions
             self.post_transitions[tr] = post_transitions
 
             self.transitions += [tr]
@@ -90,4 +92,3 @@ class FSMConfHandler(ConfHandler):
 
     def get_post_transitions_sequences(self):
         return self.post_transitions
-
