@@ -148,8 +148,8 @@ class ThreadPinningFailed(FSMException):
 
 
 class EnableDFOFailed(FSMException):
-    def __init__(self, dfo):
-        self.message = f'Could not enable DFO "{dfo}" failed'
+    def __init__(self, dfo, session):
+        self.message = f'Could not enable DFO "{dfo}" in session "{session}"'
         super().__init__(self.message)
 
 
