@@ -75,7 +75,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
                         self._log.debug(f"{decoded=}, {type(decoded)=}")
                     except Exception as e:
                         self._log.error(
-                            f"Unhandled broadcast message: {message} (error: {str(e)})"
+                            f"Unhandled broadcast message: {message} (error: {e!s})"
                         )
                         pass
 
@@ -99,7 +99,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
 
                     except Exception as e:
                         self._log.error(
-                            f"Weird broadcast message: {message} (error: {str(e)})"
+                            f"Weird broadcast message: {message} (error: {e!s})"
                         )
                         text_proto = text_format.MessageToString(decoded)
                         self._log.info(text_proto)

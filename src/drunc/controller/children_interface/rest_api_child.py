@@ -142,8 +142,7 @@ class ResponseListener:
 
     @classmethod
     def register(cls, app: str, handler):
-        """
-        Register a new notification handler
+        """Register a new notification handler
 
         :param      app:           The application
         :type       app:           str
@@ -163,14 +162,13 @@ class ResponseListener:
 
     @classmethod
     def unregister(cls, app: str):
-        """
-        De-register a notification handler
+        """De-register a notification handler
 
         Args:
             app (str): application name
 
         """
-        if not app in cls.handlers:
+        if app not in cls.handlers:
             raise DruncException(f"No handler registered for app {app}")
         del cls.handlers[app]
 
@@ -181,7 +179,7 @@ class ResponseListener:
 
         app = reply["appname"]
 
-        if not app in cls.handlers:
+        if app not in cls.handlers:
             cls.log.warning(f"Received notification for unregistered app '{app}'")
             return
 
@@ -237,7 +235,7 @@ class AppCommander:
             self.log.debug(f"'{self.app}' pings")
             return True
         except Exception as e:
-            self.log.error(f"'{self.app}' does not ping, reason: '{str(e)}'")
+            self.log.error(f"'{self.app}' does not ping, reason: '{e!s}'")
             return False
 
     def send_command(
@@ -258,7 +256,7 @@ class AppCommander:
             "content-type": "application/json",
             "X-Answer-Port": str(self.response_port),
         }
-        if not self.response_host is None:
+        if self.response_host is not None:
             headers["X-Answer-Host"] = self.response_host
 
         self.log.debug(headers)
@@ -294,6 +292,7 @@ class AppCommander:
         Raises:
             NoResponse: Description
             ResponseTimeout: Description
+
         """
         try:
             # self.log.info(f"Checking for answers from {self.app} {self.sent_cmd}")
@@ -510,7 +509,7 @@ class RESTAPIChildNode(ClientSideChild):
 
         except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
             self.log.error(
-                f"Got error from '{data.command_name}' to '{self.name}': {str(e)}"
+                f"Got error from '{data.command_name}' to '{self.name}': {e!s}"
             )
             self.state.to_error()
             self.log.exception(e)

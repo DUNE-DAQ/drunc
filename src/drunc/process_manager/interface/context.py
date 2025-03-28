@@ -1,4 +1,4 @@
-from typing import Mapping
+from collections.abc import Mapping
 
 from druncschema.token_pb2 import Token
 

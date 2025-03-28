@@ -409,7 +409,7 @@ class Controller(ControllerServicer):
 
             except Exception as e:  # Catch all, we are in a thread and want to do something sensible when an exception is thrown
                 self.log.error(
-                    f"Something wrong happened while sending the command to {child.name}: Error raised: {str(e)}"
+                    f"Something wrong happened while sending the command to {child.name}: Error raised: {e!s}"
                 )
                 self.log.exception(e)
                 flag = (
@@ -432,7 +432,7 @@ class Controller(ControllerServicer):
 
                 self.broadcast(
                     btype=BroadcastType.CHILD_COMMAND_EXECUTION_FAILED,
-                    message=f"Failed to propagate {command} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}",
+                    message=f"Failed to propagate {command} to {child.name} ({child.name}) EXCEPTION THROWN: {e!s}",
                 )
 
         threads = []
@@ -561,13 +561,11 @@ class Controller(ControllerServicer):
     @in_control  # 3rd step
     @unpack_request_data_to(FSMCommand, pass_token=True)  # 4th step
     def execute_fsm_command(self, fsm_command: FSMCommand, token: Token) -> Response:
-        """
-        A generic way to execute the controller commands from a user.
+        """A generic way to execute the controller commands from a user.
         1. Check if the command can be executed (correct FSM transition)
         2. Execute the command on children controller, app, and self
         3. Return the result
         """
-
         if self.stateful_node.node_is_in_error():
             return self.construct_error_node_response(
                 fsm_command.command_name,
@@ -594,7 +592,7 @@ class Controller(ControllerServicer):
 
         transition = self.stateful_node.get_fsm_transition(fsm_command.command_name)
 
-        self.log.debug(f'The transition requested is "{str(transition)}"')
+        self.log.debug(f'The transition requested is "{transition!s}"')
 
         if not self.stateful_node.can_transition(transition):
             self.log.error(

@@ -51,7 +51,5 @@ def validate_ssh_connection(configuration: str, session_name: str):
 @click.argument("configuration", type=str, nargs=1)
 @click.argument("session", type=str, nargs=1)
 def main(configuration: str, session: str):
-    """
-    The script validates the ability to SSH onto all of the hosts required by the configuration <configuration> session <session> applications.
-    """
+    """The script validates the ability to SSH onto all of the hosts required by the configuration <configuration> session <session> applications."""
     validate_ssh_connection(configuration, session)

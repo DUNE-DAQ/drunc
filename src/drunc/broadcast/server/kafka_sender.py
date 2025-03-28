@@ -51,11 +51,11 @@ class KafkaSender(BroadcastSenderImplementation):
             record_metadata = future.get(timeout=self.publish_timeout)
         except KafkaError as e:
             # Decide what to do if produce request failed...
-            self._log.error(f"Kafka exception sending message {bm}: {str(e)}")
+            self._log.error(f"Kafka exception sending message {bm}: {e!s}")
             pass
         except Exception as e:
             # Decide what to do if produce request failed...
-            self._log.error(f"Unhandled exception sending message {bm}: {str(e)}")
+            self._log.error(f"Unhandled exception sending message {bm}: {e!s}")
             pass
 
         self._log.debug(f"{record_metadata} published")

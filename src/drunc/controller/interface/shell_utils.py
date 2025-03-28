@@ -306,7 +306,7 @@ def validate_and_format_fsm_arguments(
 
         if (
             argument_desc.presence == Argument.Presence.MANDATORY
-            and not aname in arguments
+            and aname not in arguments
         ):
             raise MissingArgument(aname, atype)
 

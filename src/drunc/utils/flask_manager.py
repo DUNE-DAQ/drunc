@@ -38,8 +38,7 @@ class CannotStartFlaskManager(DruncCommandException):
 
 
 class FlaskManager(threading.Thread):
-    """
-    This class is a manager for flask.
+    """This class is a manager for flask.
     It allows to have a Flask server under a thread, start and stop it.
     Note that it creates another -trivial- endpoint accessible at the route /readystatus.
     This is used to poll if the service is up, however the user can provide it, and

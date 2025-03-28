@@ -12,9 +12,7 @@ class NoTransitionOfName(FSMException):
 
 
 class DuplicateTransition(FSMException):
-    """
-    If a transition has the same name as another
-    """
+    """If a transition has the same name as another"""
 
     def __init__(self, transition_name):
         self.message = f'Transition "{transition_name}" is a duplicate'

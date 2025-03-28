@@ -24,7 +24,7 @@ def get_broadcast_level_from_broadcast_type(
     from druncschema.broadcast_pb2 import BroadcastType
 
     bt = BroadcastType.Name(btype)
-    if not bt in levels:
+    if bt not in levels:
         return logger.info
     else:
         return getattr(logger, levels[bt].lower())

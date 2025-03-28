@@ -95,8 +95,7 @@ class PreOrPostTransitionSequence:
         return json.dumps(input_data)
 
     def get_arguments(self):
-        """
-        Creates a list of arguments
+        """Creates a list of arguments
         This is a bit sloppy, as really, I shouldn't be using protobuf here, and convert them later, but...
         """
         retr = []
@@ -195,21 +194,15 @@ class FSM:
             a_set.add(t.name)
 
     def get_all_states(self) -> List[str]:
-        """
-        grabs all the states
-        """
+        """Grabs all the states"""
         return self.states
 
     def get_all_transitions(self) -> List[Transition]:
-        """
-        grab all the transitions
-        """
+        """Grab all the transitions"""
         return self.transitions
 
     def get_destination_state(self, source_state, transition) -> str:
-        """
-        Tells us where a particular transition will take us, given the source_state
-        """
+        """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
         for tr in right_name:
             if self.can_execute_transition(source_state, transition):
@@ -222,7 +215,7 @@ class FSM:
         valid_transitions = []
 
         for tr in self.transitions:
-            debug_txt = f'Testing if transition {str(tr)} is executable from state "{source_state}"...'
+            debug_txt = f'Testing if transition {tr!s} is executable from state "{source_state}"...'
             if self.can_execute_transition(source_state, tr):
                 self.log.debug(f"{debug_txt} Yes")
                 valid_transitions.append(tr)
@@ -238,12 +231,8 @@ class FSM:
         return transition[0]
 
     def can_execute_transition(self, source_state, transition) -> bool:
-        """
-        Check that this transition is allowed given the source_state
-        """
-        self.log.debug(
-            f"can_execute_transition {str(transition.source)} {source_state}"
-        )
+        """Check that this transition is allowed given the source_state"""
+        self.log.debug(f"can_execute_transition {transition.source!s} {source_state}")
         return regex_match(transition.source, source_state)
 
     def prepare_transition(

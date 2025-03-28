@@ -9,8 +9,7 @@ from drunc.utils.utils import expand_path
 
 
 def validate_run_type(run_type: str) -> str:
-    """
-    Validate the run type
+    """Validate the run type
     :param run_type: the run type
     :return: the validated run type
     """

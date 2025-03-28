@@ -113,7 +113,7 @@ class K8sProcessManager(ProcessManager):
         )
         ns_names = [ns.metadata.name for ns in ns_list.items]
 
-        if not session in ns_names:
+        if session not in ns_names:
             self.log.info(f'Creating "{session}" session')
             namespace_manifest = {
                 "apiVersion": "v1",
@@ -351,7 +351,7 @@ class K8sProcessManager(ProcessManager):
     def _return_code(self, podname, session):
         pods = self._core_v1_api.list_namespaced_pod(session)
         pod_names = [pod.metadata.name for pod in pods.items]
-        if not podname in pod_names:
+        if podname not in pod_names:
             return_code = None
         else:
             if not self.is_alive(podname, session):
@@ -403,7 +403,7 @@ class K8sProcessManager(ProcessManager):
         pod_names = [pod.metadata.name for pod in pods.items]
 
         for _ in range(10):
-            if not podnames in pod_names:
+            if podnames not in pod_names:
                 sleep(1)
             else:
                 break

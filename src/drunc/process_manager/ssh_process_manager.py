@@ -36,8 +36,7 @@ class PrCtlError(DruncException):
 
 
 def on_parent_exit(signum):
-    """
-    Return a function to be run in a child process which will trigger
+    """Return a function to be run in a child process which will trigger
     SIGNAME to be sent when the parent process dies
     """
 
@@ -176,7 +175,7 @@ class SSHProcessManager(ProcessManager):
             )
         except Exception as e:
             ll = LogLine(
-                uuid=ProcessUUID(uuid=uid), line=f"Could not retrieve logs: {str(e)}"
+                uuid=ProcessUUID(uuid=uid), line=f"Could not retrieve logs: {e!s}"
             )
             yield ll
             if uid in self.process_store:
@@ -192,7 +191,7 @@ class SSHProcessManager(ProcessManager):
                 yield llstderr
 
         f.close()
-        with open(f.name, "r") as fi:
+        with open(f.name) as fi:
             lines = fi.readlines()
             for line in lines:
                 ll = LogLine(uuid=ProcessUUID(uuid=uid), line=line)
@@ -301,7 +300,7 @@ class SSHProcessManager(ProcessManager):
 
             except Exception as e:
                 error += str(e)
-                print(f"Couldn't start on host {host}, reason:\n{str(e)}")
+                print(f"Couldn't start on host {host}, reason:\n{e!s}")
                 print("\nTrying on a different host")
                 continue
         ## Saving the host to the metadata

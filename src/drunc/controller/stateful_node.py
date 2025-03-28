@@ -90,7 +90,7 @@ class StatefulNode(abc.ABC):
     def __init__(
         self,
         fsm_configuration,
-        publisher: Optional["OpMonPublisher"] = None,
+        publisher: Optional[OpMonPublisher] = None,
         session: str = "",
         name: str = "",
     ):

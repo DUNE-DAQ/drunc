@@ -12,5 +12,5 @@ def load_test_config():
     cwd = Path(os.path.abspath(__file__))
     test_configs = cwd.parent / ".." / ".." / ".." / "config" / "tests"
     test_configs = test_configs.resolve()
-    DUNEDAQ_DB_PATH += f":{str(test_configs)}"
+    DUNEDAQ_DB_PATH += f":{test_configs!s}"
     os.environ["DUNEDAQ_DB_PATH"] = DUNEDAQ_DB_PATH

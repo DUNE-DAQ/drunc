@@ -473,12 +473,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             raise BadQuery("There are more than 1 processes corresponding to the query")
 
         if in_boot_request:
-            if not uuids[0] in self.boot_request:
+            if uuids[0] not in self.boot_request:
                 raise BadQuery(
                     f"Couldn't find the process corresponding to the UUID {uuids[0]} in the boot requests"
                 )
         else:
-            if not uuids[0] in self.process_store:
+            if uuids[0] not in self.process_store:
                 raise BadQuery(
                     f"Couldn't find the process corresponding to the UUID {uuids[0]} in the process store"
                 )

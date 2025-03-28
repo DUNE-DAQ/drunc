@@ -1,6 +1,4 @@
-"""
-This is a fake DAQ application that doesn't do anything, but should talk in the same way to the run control
-"""
+"""This is a fake DAQ application that doesn't do anything, but should talk in the same way to the run control"""
 
 import argparse
 import copy as cp

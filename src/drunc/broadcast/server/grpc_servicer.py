@@ -154,7 +154,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
         try:
             stub.handle_broadcast(message)
         except Exception as e:
-            self._log.error(f"Could not Ack to {address}: {str(e)}")
+            self._log.error(f"Could not Ack to {address}: {e!s}")
 
     def shutdown(self):
         from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType

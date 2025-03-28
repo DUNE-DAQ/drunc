@@ -1,6 +1,6 @@
 import abc
 import getpass
-from typing import Mapping
+from collections.abc import Mapping
 
 import click
 import grpc
@@ -20,9 +20,7 @@ from drunc.utils.utils import get_logger, print_traceback, setup_root_logger
 
 
 class InterruptedCommand(DruncShellException):
-    """
-    This exception gets thrown if we don't want to have a full stack, but still want to interrupt a **shell** command
-    """
+    """This exception gets thrown if we don't want to have a full stack, but still want to interrupt a **shell** command"""
 
     pass
 

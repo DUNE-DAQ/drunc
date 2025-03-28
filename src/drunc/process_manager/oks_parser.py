@@ -18,7 +18,6 @@ def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     @param env_dict   The desitnation dictionary
 
     """
-
     for item in variables:
         if item.className() == "VariableSet":
             collect_variables(item.contains, env_dict)
@@ -43,8 +42,7 @@ def collect_apps(
         0,
     ],
 ) -> List[Dict]:
-    """
-    ! Recustively collect (daq) application belonging to segment and its subsegments
+    """! Recustively collect (daq) application belonging to segment and its subsegments
 
     @param session_obj  The session the segment belongs to
     @param segment_obj  Segment to collect applications from
@@ -52,7 +50,6 @@ def collect_apps(
     @return The list of dictionaries holding application attributs
 
     """
-
     log = get_logger("process_manager.collect_apps")
     # Get default environment from Session
     defenv = env.copy()

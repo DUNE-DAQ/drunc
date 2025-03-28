@@ -320,8 +320,7 @@ def ignore_sigint_sighandler():
 
 
 def parent_death_pact(signal=signal.SIGHUP):
-    """
-    Commit to kill current process when parent process dies.
+    """Commit to kill current process when parent process dies.
     Each time you spawn a new process, run this to set signal
     handler appropriately (e.g put it at the beginning of each
     script, and in multiprocessing startup code).

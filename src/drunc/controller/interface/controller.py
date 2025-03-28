@@ -26,21 +26,21 @@ from drunc.utils.utils import (
     "--sessionName",
     type=str,
     required=True,
-    help="Name of session e.g. 'local-2x3-config-username'"
+    help="Name of session e.g. 'local-2x3-config-username'",
 )
 @click.option(
     "-k",
     "--configurationId",
     type=str,
     required=True,
-    help="Id of session in configuration, e.g. 'local-2x3-config'"
+    help="Id of session in configuration, e.g. 'local-2x3-config'",
 )
 @click.option(
     "-n",
     "--name",
     type=str,
     required=True,
-    help="Name of application, e.g. 'root-controller'"
+    help="Name of application, e.g. 'root-controller'",
 )
 @click.option(
     "-c",
@@ -48,14 +48,14 @@ from drunc.utils.utils import (
     type=str,
     callback=validate_command_facility,
     required=True,
-    help="Facility through which commands should be sent, e.g. grpc://localhost:12345"
+    help="Facility through which commands should be sent, e.g. grpc://localhost:12345",
 )
 @click.option(
     "-d",
     "--configurationService",
     type=str,
     required=True,
-    help="Service to retrieve configuration, e.g. file://config/daqsystemtest/example-configs.data.xml"
+    help="Service to retrieve configuration, e.g. file://config/daqsystemtest/example-configs.data.xml",
 )
 @click.option(
     "-l",
@@ -72,10 +72,7 @@ def controller_cli(
     configurationid: str,
     log_level: str,
 ):
-    """
-    Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n
-    """
-
+    """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
     setup_root_logger(log_level)
     log = get_logger("controller.controller_cli")
     create_logger_handler(

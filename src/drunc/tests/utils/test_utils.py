@@ -101,7 +101,7 @@ def test_setup_logger(caplog):
     assert good_record == 1
     assert bad_record == 0
 
-    with open(log_path, "r") as f:
+    with open(log_path) as f:
         assert "VISIBLE" in f.read()
         assert "invisible" not in f.read()
 
