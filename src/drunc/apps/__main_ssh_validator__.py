@@ -47,6 +47,7 @@ def validate_ssh_connection(configuration: str, session_name: str, log_level: st
         ssh_args = [
             user_host,
             "-tt",
+            "-o IdentitiesOnly=yes",
             "-o StrictHostKeyChecking=no",
             f'echo "{user_host} established SSH successfully";',
         ]
