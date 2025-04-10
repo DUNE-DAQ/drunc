@@ -92,7 +92,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data=self.configuration.data.authoriser, type=ConfTypes.PyObject
         )
 
-        self.opmon_publisher = getattr(self.configuration.data,"opmon_publisher",None)
+        self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
         opmon_sleep_time = getattr(self.configuration.data, "opmon_sleep_time", 5)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
@@ -603,6 +603,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             log.info("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
+        elif conf.data.type == ProcessManagerTypes.Popen:
+            from drunc.process_manager.popen_process_manager import PopenProcessManager
+
+            log.info("Starting [green]Popen process_manager[/green]")
+            return PopenProcessManager(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
             raise RuntimeError(

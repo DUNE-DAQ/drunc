@@ -16,6 +16,7 @@ class ProcessManagerTypes(Enum):
     Unknown = 0
     SSH = 1
     K8s = 2
+    Popen = 3
 
 
 class ProcessManagerConfData:
@@ -50,6 +51,8 @@ class ProcessManagerConfHandler(ConfHandler):
             case "ssh":
                 new_data.type = ProcessManagerTypes.SSH
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
+            case "popen":
+                new_data.type = ProcessManagerTypes.Popen
             case "k8s":
                 new_data.type = ProcessManagerTypes.K8s
                 new_data.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
