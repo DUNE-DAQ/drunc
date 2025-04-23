@@ -1,12 +1,12 @@
 import getpass
 
 import click
-from druncschema.process_manager_pb2 import ProcessQuery
+from drunc_messages.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
-from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, run_coroutine
+from drunc_core.utils.shell_utils import InterruptedCommand
+from drunc_core.utils.utils import get_logger, run_coroutine
 
 
 @click.command("boot")

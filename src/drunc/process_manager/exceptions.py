@@ -1,4 +1,4 @@
-from drunc.exceptions import DruncException, DruncSetupException
+from drunc_core.exceptions import DruncException, DruncSetupException
 
 
 class UnknownProcessManagerType(DruncSetupException):

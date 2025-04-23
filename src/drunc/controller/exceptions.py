@@ -1,4 +1,4 @@
-from drunc.exceptions import DruncCommandException
+from drunc_core.exceptions import DruncCommandException
 
 
 class ControllerException(DruncCommandException):

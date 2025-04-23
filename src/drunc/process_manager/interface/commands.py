@@ -1,7 +1,7 @@
 import getpass
 
 import click
-from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
+from drunc_messages.process_manager_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
 
@@ -11,8 +11,8 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, run_coroutine
+from drunc_core.utils.shell_utils import InterruptedCommand
+from drunc_core.utils.utils import get_logger, run_coroutine
 
 
 @click.command("boot")

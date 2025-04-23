@@ -9,22 +9,22 @@ from typing import NoReturn
 
 import requests
 import socks
-from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from drunc_messages.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
+from drunc_messages.generic_pb2 import PlainText
+from drunc_messages.request_response_pb2 import Response, ResponseFlag
+from drunc_messages.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
 from drunc.controller.children_interface.client_side_child import ClientSideChild
 from drunc.controller.exceptions import ChildError, ExpertCommandException
-from drunc.exceptions import DruncException, DruncSetupException
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.core import FSM
-from drunc.utils.configuration import ConfHandler
-from drunc.utils.flask_manager import FlaskManager
-from drunc.utils.grpc_utils import pack_to_any
-from drunc.utils.utils import ControlType, get_logger, get_new_port
+from drunc_core.exceptions import DruncException, DruncSetupException
+from drunc_core.fsm.configuration import FSMConfHandler
+from drunc_core.fsm.core import FSM
+from drunc_core.utils.configuration import ConfHandler
+from drunc_core.utils.flask_manager import FlaskManager
+from drunc_core.utils.grpc_utils import pack_to_any
+from drunc_core.utils.utils import ControlType, get_logger, get_new_port
 
 
 class ResponseTimeout(ChildError):
@@ -76,7 +76,6 @@ class ResponseDispatcher(threading.Thread):
 class ResponseListener:
     _instance = None
     manager = None
-    import threading
 
     _lock = threading.Lock()
 

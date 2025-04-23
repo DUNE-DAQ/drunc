@@ -7,8 +7,8 @@ import uuid
 from time import sleep
 
 import sh
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.process_manager_pb2 import (
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -20,7 +20,7 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 
-from drunc.exceptions import DruncCommandException
+from drunc_core.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit
 

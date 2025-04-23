@@ -4,13 +4,13 @@ import signal
 
 import click
 import grpc
-from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
-from druncschema.token_pb2 import Token
+from drunc_messages.controller_pb2_grpc import add_ControllerServicer_to_server
+from drunc_messages.token_pb2 import Token
 
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.controller import Controller
-from drunc.utils.configuration import ConfTypes, OKSKey
-from drunc.utils.utils import (
+from drunc_core.utils.configuration import ConfTypes, OKSKey
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     log_levels,

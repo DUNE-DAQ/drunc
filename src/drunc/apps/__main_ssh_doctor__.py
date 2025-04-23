@@ -10,7 +10,7 @@ from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import (
+from drunc_core.utils.utils import (
     log_levels,
 )
 
@@ -20,7 +20,7 @@ kKerberosAuth='gssapi-with-mic'
 
 def test_host_connection(host: str, preferred_auth:str=kDefaultAuth) -> bool:
     ssh = Command("/usr/bin/ssh")
-    
+
     print(f"[blue]{host}[/blue] \[{preferred_auth}]: ", end='')
 
     user_host = f"{getpass.getuser()}@{host}"
@@ -49,7 +49,7 @@ def test_host_connection(host: str, preferred_auth:str=kDefaultAuth) -> bool:
         # print(f"Failed to SSH onto host [red]{user_host}[/red]")
         # print(e)
         return e
-    
+
     return True
 
 def test_session_ssh_connections(configuration: str, session_name: str, log_level: str, preferred_auth=kDefaultAuth):
@@ -105,7 +105,7 @@ def check_session(configuration: str, session: str) -> None:
         print('-'*80)
         print(f"Testing SSH connection to '{session}' host(s) " + (f"enforcing '{auth}' authentication" if auth != kDefaultAuth else "with default authentication"))
         print()
-        
+
         results[auth] = test_session_ssh_connections(configuration, session, auth)
     print()
 
@@ -125,7 +125,7 @@ def check_host(host):
 
     results = {}
     for auth in auths:
-         
+
         results[auth] = test_host_connection(host, auth)
 
     print()

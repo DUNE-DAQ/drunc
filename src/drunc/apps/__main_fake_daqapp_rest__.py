@@ -12,8 +12,8 @@ import requests
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
 
-from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.utils.utils import (
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.utils.utils import (
     get_logger,
     get_new_port,
     resolve_localhost_and_127_ip_to_network_ip,

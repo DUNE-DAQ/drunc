@@ -1,8 +1,16 @@
 from collections.abc import Mapping
 
-from druncschema.token_pb2 import Token
+from drunc_messages.token_pb2 import Token
 
-from drunc.utils.shell_utils import GRPCDriver, ShellContext
+from drunc_core.utils.shell_utils import GRPCDriver, ShellContext
+from drunc_core.broadcast.client.broadcast_handler import BroadcastHandler
+from drunc_core.broadcast.client.configuration import BroadcastClientConfHandler
+from drunc_core.utils.configuration import ConfTypes
+from drunc.process_manager.process_manager_driver import (
+    ProcessManagerDriver,
+)
+from drunc.controller.controller_driver import ControllerDriver
+from drunc_core.utils.shell_utils import create_dummy_token_from_uname
 
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
@@ -25,9 +33,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
     def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         ret = {}
         if self.address_pm != "":
-            from drunc.process_manager.process_manager_driver import (
-                ProcessManagerDriver,
-            )
 
             ret["process_manager"] = ProcessManagerDriver(
                 self.address_pm,
@@ -35,7 +40,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
                 aio_channel=True,
             )
         if self.address_controller != "":
-            from drunc.controller.controller_driver import ControllerDriver
 
             ret["controller"] = ControllerDriver(
                 self.address,
@@ -46,7 +50,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
 
     def set_controller_driver(self, address_controller, **kwargs) -> None:
         self.address_controller = address_controller
-        from drunc.controller.controller_driver import ControllerDriver
 
         if address_controller is None:
             del self._drivers["controller"]
@@ -59,15 +62,12 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         )
 
     def create_token(self, **kwargs) -> Token:
-        from drunc.utils.shell_utils import create_dummy_token_from_uname
 
         token = create_dummy_token_from_uname()
         return token
 
     def start_listening_pm(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
+
 
         bcch = BroadcastClientConfHandler(
             type=ConfTypes.ProtobufAny,
@@ -76,9 +76,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
 
     def start_listening_controller(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
+
 
         bcch = BroadcastClientConfHandler(
             type=ConfTypes.ProtobufAny,

@@ -3,9 +3,9 @@ from typing import Dict, List
 
 import confmodel
 
-from drunc.exceptions import DruncException
+from drunc_core.exceptions import DruncException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.utils import get_logger
+from drunc_core.utils.utils import get_logger
 
 
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:

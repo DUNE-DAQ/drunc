@@ -23,8 +23,8 @@ from drunc.controller.interface.shell_utils import (
     controller_setup,
     generate_fsm_command,
 )
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import (
+from drunc_core.utils.grpc_utils import ServerUnreachable
+from drunc_core.utils.utils import (
     CONTEXT_SETTINGS,
     create_logger_handler,
     get_logger,

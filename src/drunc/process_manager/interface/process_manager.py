@@ -4,17 +4,17 @@ import os
 
 import click
 import grpc
-from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
+from drunc_messages.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
-from drunc.exceptions import DruncSetupException
+from drunc_core.exceptions import DruncSetupException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     get_process_manager_configuration,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path, get_pm_conf_name_from_dir
-from drunc.utils.configuration import parse_conf_url
-from drunc.utils.utils import (
+from drunc_core.utils.configuration import parse_conf_url
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     log_levels,

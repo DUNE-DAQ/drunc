@@ -7,7 +7,7 @@ from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import (
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     log_levels,

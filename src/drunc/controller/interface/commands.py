@@ -5,7 +5,7 @@ import click
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, print_status_table
-from drunc.utils.utils import get_logger
+from drunc_core.utils.utils import get_logger
 
 logger_params = {"logger_name": "controller.interface", "rich_handler": True}
 

@@ -4,7 +4,7 @@ import os
 import signal
 import tempfile
 
-from druncschema.process_manager_pb2 import (
+from drunc_messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -15,16 +15,16 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
     ProcessRestriction,
 )
-from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.request_response_pb2 import Description
+from drunc_messages.process_manager_pb2_grpc import ProcessManagerStub
+from drunc_messages.request_response_pb2 import Description
 
-from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
-from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc_core.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc.utils.shell_utils import GRPCDriver
-from drunc.utils.utils import (
+from drunc_core.utils.shell_utils import GRPCDriver
+from drunc_core.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,

@@ -15,8 +15,8 @@ from drunc.process_manager.interface.commands import (
     restart,
     terminate,
 )
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import (
+from drunc_core.utils.grpc_utils import ServerUnreachable
+from drunc_core.utils.utils import (
     CONTEXT_SETTINGS,
     create_logger_handler,
     get_logger,

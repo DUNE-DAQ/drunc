@@ -1,23 +1,35 @@
+import click
 import logging
 from collections import defaultdict
 from functools import partial
+import grpc
+import time
+from rich.table import Table
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
-import click
-from druncschema.controller_pb2 import (
+from drunc_messages.controller_pb2 import (
     Argument,
     FSMCommand,
     FSMCommandDescription,
     FSMResponseFlag,
     Status,
 )
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from druncschema.request_response_pb2 import Description, ResponseFlag
-from rich.table import Table
 
-from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.utils.grpc_utils import pack_to_any, unpack_any
-from drunc.utils.shell_utils import DecodedResponse
-from drunc.utils.utils import get_logger
+from drunc_messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from drunc_messages.request_response_pb2 import Description, ResponseFlag
+
+from drunc_core.exceptions import DruncSetupException, DruncShellException
+from drunc_core.utils.grpc_utils import pack_to_any, unpack_any
+from drunc_core.utils.shell_utils import DecodedResponse
+from drunc_core.utils.utils import get_logger
+from drunc_core.utils.grpc_utils import ServerUnreachable
 
 
 def generate_none_status() -> Status:
@@ -121,7 +133,6 @@ def controller_cleanup_wrapper(ctx):
         log = logging.getLogger("controller.shell_utils")
         # remove the shell from the controller broadcast list
         dead = False
-        import grpc
 
         who = ""
 
@@ -159,22 +170,13 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    from druncschema.request_response_pb2 import Description
 
     desc = Description()
 
     timeout = 60
 
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-        TimeRemainingColumn,
-    )
 
-    from drunc.utils.grpc_utils import ServerUnreachable
+
 
     with Progress(
         SpinnerColumn(),
@@ -189,7 +191,6 @@ def controller_setup(ctx, controller_address):
         )
 
         stored_exception = None
-        import time
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -225,7 +226,6 @@ def controller_setup(ctx, controller_address):
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
         ret = ctx.get_driver("controller").take_control()
-        from druncschema.request_response_pb2 import ResponseFlag
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             log.debug("You are in control.")

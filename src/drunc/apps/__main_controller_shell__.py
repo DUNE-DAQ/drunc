@@ -1,6 +1,6 @@
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell import controller_shell
-from drunc.utils.utils import (
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     setup_root_logger,

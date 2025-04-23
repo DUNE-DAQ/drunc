@@ -10,7 +10,7 @@ import click
 import click_shell
 import conffwk
 
-from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
     connect,
@@ -28,9 +28,9 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.exceptions import DruncSetupException
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.utils import convert_fsm_transition
+from drunc_core.exceptions import DruncSetupException
+from drunc_core.fsm.configuration import FSMConfHandler
+from drunc_core.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import get_process_manager_configuration
 from drunc.process_manager.interface.commands import (
     flush,
@@ -42,9 +42,9 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import boot
-from drunc.utils.configuration import ConfTypes, OKSKey
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import (
+from drunc_core.utils.configuration import ConfTypes, OKSKey
+from drunc_core.utils.grpc_utils import ServerUnreachable
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     ignore_sigint_sighandler,

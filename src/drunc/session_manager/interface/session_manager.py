@@ -3,11 +3,11 @@ from logging import getLogger
 
 import click
 import grpc
-from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_server
+from drunc_messages.session_manager_pb2_grpc import add_SessionManagerServicer_to_server
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.utils import (
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     setup_root_logger,

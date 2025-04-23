@@ -1,24 +1,24 @@
 import abc
 import os
 
-from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
+from drunc_core.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
-from drunc.exceptions import DruncSetupException
-from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import pack_to_any
-from drunc.utils.utils import (
+from drunc_core.exceptions import DruncSetupException
+from drunc_core.utils.configuration import ConfTypes
+from drunc_core.utils.grpc_utils import pack_to_any
+from drunc_core.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
 )
 
-from druncschema.request_response_pb2 import (  # isort: skip
+from drunc_messages.request_response_pb2 import (  # isort: skip
     Description,
     Response,
     ResponseFlag,
 )
-from druncschema.token_pb2 import Token  # isort: skip
+from drunc_messages.token_pb2 import Token  # isort: skip
 
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):

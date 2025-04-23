@@ -1,20 +1,20 @@
 from threading import Lock
 
-from druncschema.controller_pb2 import (
+from drunc_messages.controller_pb2 import (
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
 )
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from drunc_messages.generic_pb2 import PlainText
+from drunc_messages.request_response_pb2 import Response, ResponseFlag
+from drunc_messages.token_pb2 import Token
 
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.core import FSM
-from drunc.utils.grpc_utils import pack_to_any, unpack_any
-from drunc.utils.utils import ControlType, get_logger
+from drunc_core.fsm.configuration import FSMConfHandler
+from drunc_core.fsm.core import FSM
+from drunc_core.utils.grpc_utils import pack_to_any, unpack_any
+from drunc_core.utils.utils import ControlType, get_logger
 
 
 class ClientSideState:

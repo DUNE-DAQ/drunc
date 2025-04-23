@@ -1,6 +1,6 @@
 """Exceptions for the drunc session manager."""
 
-from drunc.exceptions import DruncCommandException
+from drunc_core.exceptions import DruncCommandException
 
 
 class ChangeMeException(DruncCommandException):

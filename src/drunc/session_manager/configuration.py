@@ -1,6 +1,6 @@
 """Configuration for the session manager service."""
 
-from drunc.utils.configuration import ConfHandler
+from drunc_core.utils.configuration import ConfHandler
 
 
 class SessionManagerConfHandler(ConfHandler):

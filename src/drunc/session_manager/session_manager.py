@@ -3,19 +3,19 @@
 import abc
 import logging
 
-from druncschema.request_response_pb2 import (
+from drunc_messages.request_response_pb2 import (
     CommandDescription,
     Description,
     Response,
     ResponseFlag,
 )
-from druncschema.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
-from druncschema.session_manager_pb2_grpc import SessionManagerServicer
-from druncschema.token_pb2 import Token
+from drunc_messages.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
+from drunc_messages.session_manager_pb2_grpc import SessionManagerServicer
+from drunc_messages.token_pb2 import Token
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any, unpack_request_data_to
-from drunc.utils.utils import pid_info_str
+from drunc_core.utils.grpc_utils import pack_to_any, unpack_request_data_to
+from drunc_core.utils.utils import pid_info_str
 
 
 class SessionManager(abc.ABC, SessionManagerServicer):

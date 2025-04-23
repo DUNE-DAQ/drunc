@@ -3,10 +3,10 @@ import re
 import threading
 import time
 
-from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.opmon.process_manager_pb2 import ProcessStatus
-from druncschema.process_manager_pb2 import (
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.opmon.process_manager_pb2 import ProcessStatus
+from drunc_messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -17,8 +17,8 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
-from druncschema.request_response_pb2 import (
+from drunc_messages.process_manager_pb2_grpc import ProcessManagerServicer
+from drunc_messages.request_response_pb2 import (
     CommandDescription,
     Description,
     Request,
@@ -27,27 +27,29 @@ from druncschema.request_response_pb2 import (
 )
 from google.rpc import code_pb2
 
-from drunc.authoriser.configuration import DummyAuthoriserConfHandler
-from drunc.authoriser.decorators import (
+from drunc_core.authoriser.configuration import DummyAuthoriserConfHandler
+from drunc_core.authoriser.decorators import (
     async_authentified_and_authorised,
     authentified_and_authorised,
 )
-from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import async_broadcasted, broadcasted
-from drunc.exceptions import DruncCommandException
+from drunc_core.authoriser.dummy_authoriser import DummyAuthoriser
+from drunc_core.broadcast.server.broadcast_sender import BroadcastSender
+from drunc_core.broadcast.server.configuration import BroadcastSenderConfHandler
+from drunc_core.broadcast.server.decorators import async_broadcasted, broadcasted
+from drunc_core.exceptions import DruncCommandException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
-from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import (
+from drunc_core.utils.configuration import ConfTypes
+from drunc_core.utils.grpc_utils import (
     async_unpack_request_data_to,
     pack_to_any,
     unpack_request_data_to,
 )
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc_core.utils.utils import get_logger, pid_info_str
+from drunc.process_manager.ssh_process_manager import SSHProcessManager
+from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
 
 class BadQuery(DruncCommandException):
@@ -594,12 +596,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         log = get_logger("process_manager.get")
 
         if conf.data.type == ProcessManagerTypes.SSH:
-            from drunc.process_manager.ssh_process_manager import SSHProcessManager
 
             log.info("Starting [green]SSH process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
         elif conf.data.type == ProcessManagerTypes.K8s:
-            from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.info("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)

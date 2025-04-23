@@ -1,6 +1,6 @@
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.unified_shell.shell import unified_shell
-from drunc.utils.utils import (
+from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     setup_root_logger,

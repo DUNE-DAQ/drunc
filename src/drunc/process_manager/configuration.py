@@ -5,11 +5,11 @@ from urllib.parse import urlparse
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher
 
-from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
-from drunc.exceptions import DruncCommandException
+from drunc_core.broadcast.server.configuration import KafkaBroadcastSenderConfData
+from drunc_core.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
-from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger
+from drunc_core.utils.configuration import ConfHandler
+from drunc_core.utils.utils import get_logger
 
 
 class ProcessManagerTypes(Enum):

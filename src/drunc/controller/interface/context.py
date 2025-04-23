@@ -1,17 +1,17 @@
 from collections.abc import Mapping
 
-from druncschema.token_pb2 import Token
+from drunc_messages.token_pb2 import Token
 
-from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+from drunc_core.broadcast.client.broadcast_handler import BroadcastHandler
+from drunc_core.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.controller_driver import ControllerDriver
-from drunc.utils.configuration import ConfTypes
-from drunc.utils.shell_utils import (
+from drunc_core.utils.configuration import ConfTypes
+from drunc_core.utils.shell_utils import (
     GRPCDriver,
     ShellContext,
     create_dummy_token_from_uname,
 )
-from drunc.utils.utils import resolve_localhost_to_hostname
+from drunc_core.utils.utils import resolve_localhost_to_hostname
 
 
 class ControllerContext(ShellContext):  # boilerplatefest

@@ -4,46 +4,46 @@ import time
 import traceback
 from typing import Optional
 
-from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.controller_pb2 import (
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.controller_pb2 import (
     AddressedCommand,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
 )
-from druncschema.controller_pb2_grpc import ControllerServicer
-from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import (
+from drunc_messages.controller_pb2_grpc import ControllerServicer
+from drunc_messages.generic_pb2 import PlainText, Stacktrace
+from drunc_messages.request_response_pb2 import (
     Description,
     Response,
     ResponseFlag,
 )
-from druncschema.token_pb2 import Token
+from drunc_messages.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
-from drunc.authoriser.configuration import DummyAuthoriserConfHandler
-from drunc.authoriser.decorators import authentified_and_authorised
-from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import broadcasted
-from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.authoriser.configuration import DummyAuthoriserConfHandler
+from drunc_core.authoriser.decorators import authentified_and_authorised
+from drunc_core.authoriser.dummy_authoriser import DummyAuthoriser
+from drunc_core.broadcast.server.broadcast_sender import BroadcastSender
+from drunc_core.broadcast.server.configuration import BroadcastSenderConfHandler
+from drunc_core.broadcast.server.decorators import broadcasted
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import in_control, unpack_addressed_command_to
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import get_detector_name, get_status_message
-from drunc.exceptions import DruncException
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import (
+from drunc_core.exceptions import DruncException
+from drunc_core.fsm.configuration import FSMConfHandler
+from drunc_core.fsm.utils import convert_fsm_transition
+from drunc_core.utils.grpc_utils import (
     UnpackingError,
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.utils import get_logger
+from drunc_core.utils.utils import get_logger
 
 
 class ControllerActor:
@@ -131,7 +131,7 @@ class Controller(ControllerServicer):
                 self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
             else:
                 self.opmon_sleep_time = 10
-                self.log.info("Couldn't find sleep time in opmon_uri configuration, use default value of 10s")            
+                self.log.info("Couldn't find sleep time in opmon_uri configuration, use default value of 10s")
 
             self.log.info(f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s")
 
@@ -152,7 +152,7 @@ class Controller(ControllerServicer):
             name=name,
             session=session,
         )
-        
+
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
@@ -161,7 +161,7 @@ class Controller(ControllerServicer):
                 daemon=True,
                 )
             self.thread.start()
-      
+
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,

@@ -5,11 +5,11 @@ from functools import update_wrapper
 from operator import attrgetter
 
 import click
-from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
+from drunc_messages.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
 from rich.table import Table
 
-from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
-from drunc.utils.utils import now_str
+from drunc_core.exceptions import DruncCommandException, DruncException, DruncSetupException
+from drunc_core.utils.utils import now_str
 
 
 def generate_process_query(
