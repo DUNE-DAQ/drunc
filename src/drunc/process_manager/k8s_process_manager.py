@@ -5,6 +5,11 @@ import socket
 import uuid
 from time import sleep
 
+from drunc_core.authoriser.decorators import authentified_and_authorised
+from drunc_core.broadcast.server.decorators import broadcasted
+from drunc_core.exceptions import DruncCommandException, DruncException
+from drunc_core.utils.grpc_utils import pack_response, unpack_request_data_to
+from drunc_core.utils.utils import get_logger
 from drunc_messages.authoriser_pb2 import ActionType, SystemType
 from drunc_messages.process_manager_pb2 import (
     BootRequest,
@@ -20,13 +25,8 @@ from drunc_messages.process_manager_pb2 import (
 from drunc_messages.request_response_pb2 import Response
 from kubernetes import client, config
 
-from drunc_core.authoriser.decorators import authentified_and_authorised
-from drunc_core.broadcast.server.decorators import broadcasted
-from drunc_core.exceptions import DruncCommandException, DruncException
-from drunc_core.k8s_exceptions import DruncK8sNamespaceAlreadyExists
+from drunc.process_manager.exceptions import DruncK8sNamespaceAlreadyExists
 from drunc.process_manager.process_manager import ProcessManager
-from drunc_core.utils.grpc_utils import pack_response, unpack_request_data_to
-from drunc_core.utils.utils import get_logger
 
 
 class K8sProcessManager(ProcessManager):
