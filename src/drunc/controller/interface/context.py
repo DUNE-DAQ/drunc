@@ -11,7 +11,7 @@ from drunc_core.utils.shell_utils import (
 from drunc_core.utils.utils import resolve_localhost_to_hostname
 from drunc_messages.token_pb2 import Token
 
-from drunc.controller.controller_driver import ControllerDriver
+from drunc.controller.driver import ControllerDriver
 
 
 class ControllerContext(ShellContext):  # boilerplatefest

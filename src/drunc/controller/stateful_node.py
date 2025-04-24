@@ -8,6 +8,7 @@ from drunc_core.fsm.core import FSM
 from drunc_core.fsm.exceptions import InvalidTransition
 from drunc_core.fsm.utils import decode_fsm_arguments
 from drunc_core.utils.utils import get_logger
+from drunc_messages.opmon.FSM_pb2 import FSMStatus
 
 if TYPE_CHECKING:
     from kafkaopmon.OpMonPublisher import OpMonPublisher
@@ -110,8 +111,6 @@ class StatefulNode(abc.ABC):
         self.__in_error = ErrorState(stateful_node=self, initial_value=False)
 
     def publish_state(self):
-        from druncschema.opmon.FSM_pb2 import FSMStatus
-
         if self.publisher is not None:
             self.publisher.publish(
                 session=self.session,

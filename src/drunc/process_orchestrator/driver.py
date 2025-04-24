@@ -7,6 +7,7 @@ import tempfile
 from drunc_core.connectivity_service.client import ConnectivityServiceClient
 from drunc_core.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc_core.exceptions import DruncSetupException, DruncShellException
+from drunc_core.utils.runtime import get_rte_script
 from drunc_core.utils.shell_utils import GRPCDriver
 from drunc_core.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
@@ -29,7 +30,7 @@ from drunc_messages.process_orchestrator_pb2_grpc import ProcessOrchestratorStub
 from drunc_messages.request_response_pb2 import Description
 
 from drunc.controller.utils import get_segment_lookup_timeout
-from drunc.process_orchestrator.utils import get_log_path, get_rte_script
+from drunc.process_orchestrator.utils import get_log_path
 
 
 class ProcessOrchestratorDriver(GRPCDriver):
@@ -53,8 +54,9 @@ class ProcessOrchestratorDriver(GRPCDriver):
         session_name: str,
         override_logs: bool,
     ) -> BootRequest:
+        from drunc_core.utils.configuration import collect_apps
+
         from drunc.process_orchestrator.oks_parser import (
-            collect_apps,
             collect_infra_apps,
         )
 
