@@ -6,6 +6,9 @@ from pathlib import Path
 from subprocess import Popen
 
 import pytest
+from drunc_core.utils.configuration import collect_apps
+
+from drunc.process_orchestrator.oks_parser import collect_infra_apps
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +30,6 @@ def load_test_config():
 
 
 def boot_session(configuration_name, request):
-    from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
-
     req_name = request.node.name
     configuration_file = f"{configuration_name}.data.xml"
     configuration_consolidated_file = f"{consolidated_conf_path}/{configuration_name}.{req_name}.consolidated.data.xml"

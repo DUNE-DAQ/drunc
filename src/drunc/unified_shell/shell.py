@@ -42,8 +42,10 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.process_manager.configuration import get_process_manager_configuration
-from drunc.process_manager.interface.commands import (
+from drunc.process_orchestrator.configuration import (
+    get_process_orchestrator_configuration,
+)
+from drunc.process_orchestrator.interface.commands import (
     flush,
     kill,
     logs,
@@ -51,7 +53,7 @@ from drunc.process_manager.interface.commands import (
     restart,
     terminate,
 )
-from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_orchestrator.interface.main import run_pm
 from drunc.unified_shell.commands import boot
 
 
@@ -83,12 +85,12 @@ from drunc.unified_shell.commands import boot
     "--log-path",
     type=str,
     default=None,
-    help="Log path of process_manager logs.",
+    help="Log path of process orchestrator logs.",
 )
 @click.pass_context
 def unified_shell(
     ctx,
-    process_manager: str,
+    process_orchestrator: str,
     configuration_file: str,
     configuration_id: str,
     session_name: str,
@@ -104,15 +106,15 @@ def unified_shell(
     unified_shell_log.debug("Set up [green]unified_shell[/green] logger")
     unified_shell_log.debug(pid_info_str())
 
-    process_manager_url = urlparse(process_manager)
+    process_orchestrator_url = urlparse(process_orchestrator)
     if (
-        process_manager_url.scheme != "grpc"
+        process_orchestrator_url.scheme != "grpc"
     ):  # slightly hacky to see if the process manager is an address
         internal_pm = True
     else:
         internal_pm = False
 
-    # Set up process_manager logger
+    # Set up process_orchestrator logger
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
@@ -124,26 +126,28 @@ def unified_shell(
     connectivity_service_address = f"{session_dal.connectivity_service.host}:{session_dal.connectivity_service.service.port}"
 
     unified_shell_log.info(
-        f'Setting up to use [green]process_manager[/green] with configuration [green]{process_manager}[/green] and [green]configuration id "{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
+        f'Setting up to use [green]process_orchestrator[/green] with configuration [green]{process_orchestrator}[/green] and [green]configuration id "{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
     )
 
     if internal_pm:
         unified_shell_log.debug(
-            f"Spawning [green]process_manager[/green] with configuration {process_manager}"
+            f"Spawning [green]process_orchestrator[/green] with configuration {process_orchestrator}"
         )
-        # Check if process_manager is a packaged config
-        process_manager_conf_file = get_process_manager_configuration(process_manager)
+        # Check if process_orchestrator is a packaged config
+        process_orchestrator_conf_file = get_process_orchestrator_configuration(
+            process_orchestrator
+        )
 
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 
         unified_shell_log.debug(
-            "Starting [green]process_manager[/green] as separate process"
+            "Starting [green]process_orchestrator[/green] as separate process"
         )
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
             kwargs={
-                "pm_conf": process_manager_conf_file,
+                "pm_conf": process_orchestrator_conf_file,
                 "pm_address": "localhost:0",
                 "override_logs": override_logs,
                 "log_level": log_level,
@@ -155,7 +159,7 @@ def unified_shell(
             },
         )
         ctx.obj.pm_process.start()
-        unified_shell_log.debug("[green]process_manager[/green] started")
+        unified_shell_log.debug("[green]process_orchestrator[/green] started")
 
         for _ in range(100):
             if ready_event.is_set():
@@ -163,24 +167,24 @@ def unified_shell(
             sleep(0.1)
         if not ready_event.is_set():
             raise DruncSetupException(
-                "[green]process_manager[/green] [red]did not start in time[/red]"
+                "[green]process_orchestrator[/green] [red]did not start in time[/red]"
             )
-        process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
+        process_orchestrator_address = resolve_localhost_and_127_ip_to_network_ip(
             f"localhost:{port.value}"
         )
 
     else:  # user provided an address
-        process_manager_address = process_manager.replace(
+        process_orchestrator_address = process_orchestrator.replace(
             "grpc://", ""
         )  # remove the grpc scheme
         unified_shell_log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager[/green] ([green]{process_manager}[/green]) at address [green]{process_manager_address}[/green]"
+            f"[green]unified_shell[/green] connected to the [green]process_orchestrator[/green] ([green]{process_orchestrator}[/green]) at address [green]{process_orchestrator_address}[/green]"
         )
 
     unified_shell_log.debug(
-        f"[green]process_manager[/green] started, communicating through address [green]{process_manager_address}[/green]"
+        f"[green]process_orchestrator[/green] started, communicating through address [green]{process_orchestrator_address}[/green]"
     )
-    ctx.obj.reset(address_pm=process_manager_address)
+    ctx.obj.reset(address_pm=process_orchestrator_address)
 
     desc = None
     try:
@@ -191,7 +195,7 @@ def unified_shell(
         desc = desc.data
     except Exception as e:
         unified_shell_log.error(
-            f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
+            f"[red]Could not connect to the process manager at the address[/red] [green]{process_orchestrator_address}[/]"
         )
         unified_shell_log.error(f"Reason: {e}")
 
@@ -202,7 +206,7 @@ def unified_shell(
 
         if internal_pm and not ctx.obj.pm_process.is_alive():
             unified_shell_log.error(
-                f"[red]The process_manager is dead[/red], exit code {ctx.obj.pm_process.exitcode}"
+                f"[red]The process_orchestrator is dead[/red], exit code {ctx.obj.pm_process.exitcode}"
             )
 
         if ctx.obj.pm_process.is_alive():
@@ -242,7 +246,7 @@ def unified_shell(
     ctx.command.add_command(boot, "boot")
 
     unified_shell_log.debug(
-        "Adding [green]process_manager[/green] commands to the context"
+        "Adding [green]process_orchestrator[/green] commands to the context"
     )
     ctx.command.add_command(kill, "kill")
     ctx.command.add_command(terminate, "terminate")
@@ -316,5 +320,5 @@ def unified_shell(
     ctx.command.add_command(expert_command, "expert-command")
 
     unified_shell_log.info(
-        "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
+        "[green]unified_shell[/green] ready with [green]process_orchestrator[/green] and [green]controller[/green] commands"
     )

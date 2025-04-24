@@ -3,10 +3,10 @@ import getpass
 import click
 from drunc_core.utils.shell_utils import InterruptedCommand
 from drunc_core.utils.utils import get_logger, run_coroutine
-from drunc_messages.process_manager_pb2 import ProcessQuery
+from drunc_messages.process_orchestrator_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
-from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_orchestrator.interface.context import ProcessOrchestratorContext
 
 
 @click.command("boot")
@@ -14,13 +14,13 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 @click.pass_obj
 @run_coroutine
 async def boot(
-    obj: ProcessManagerContext,
+    obj: ProcessOrchestratorContext,
     override_logs: bool,
 ) -> None:
     log = get_logger("unified_shell.boot")
     session_name = obj.session_name
     user = getpass.getuser()
-    processes = await obj.get_driver("process_manager").ps(
+    processes = await obj.get_driver("process_orchestrator").ps(
         ProcessQuery(user=user, session=session_name)
     )
 
@@ -31,7 +31,7 @@ async def boot(
         )
 
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = obj.get_driver("process_orchestrator").boot(
             conf_file=obj.configuration_file,
             conf_id=obj.configuration_id,
             user=user,
@@ -49,7 +49,7 @@ async def boot(
         log.warning("Booting interrupted")
         return
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = obj.get_driver("process_orchestrator").controller_address
     if controller_address:
         log.debug(f"Controller endpoint is '{controller_address}'")
         log.debug("Connecting the unified_shell to the controller endpoint")

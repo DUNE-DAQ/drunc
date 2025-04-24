@@ -10,9 +10,9 @@ from drunc_core.utils.shell_utils import (
 )
 from drunc_messages.token_pb2 import Token
 
-from drunc.controller.controller_driver import ControllerDriver
-from drunc.process_manager.process_manager_driver import (
-    ProcessManagerDriver,
+from drunc.controller.driver import ControllerDriver
+from drunc.process_orchestrator.driver import (
+    ProcessOrchestratorDriver,
 )
 
 
@@ -36,7 +36,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
     def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         ret = {}
         if self.address_pm != "":
-            ret["process_manager"] = ProcessManagerDriver(
+            ret["process_orchestrator"] = ProcessOrchestratorDriver(
                 self.address_pm,
                 self._token,
                 aio_channel=True,
