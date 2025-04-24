@@ -1,10 +1,11 @@
-from drunc.unified_shell.context import UnifiedShellContext
-from drunc.unified_shell.shell import unified_shell
 from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     setup_root_logger,
 )
+
+from drunc.unified_shell.context import UnifiedShellContext
+from drunc.unified_shell.shell import unified_shell
 
 
 def main():
@@ -14,7 +15,7 @@ def main():
         unified_shell(obj=context)
 
     except Exception as e:
-        setup_root_logger("INFO")
+        setup_root_logger()
         log = get_logger("unified_shell")
         create_logger_handler(rich_handler=True)
         log.error("[red bold]:fire::fire: Exception thrown :fire::fire:")

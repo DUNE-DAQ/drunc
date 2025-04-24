@@ -9,9 +9,6 @@ from urllib.parse import urlparse
 
 import conffwk
 import requests
-from flask import Flask, Response, request
-from flask_restful import Api, Resource
-
 from drunc_core.connectivity_service.client import ConnectivityServiceClient
 from drunc_core.utils.utils import (
     get_logger,
@@ -20,6 +17,8 @@ from drunc_core.utils.utils import (
     setup_root_logger,
     setup_standard_loggers,
 )
+from flask import Flask, Response, request
+from flask_restful import Api, Resource
 
 __version__ = "1.0.0"
 setup_root_logger(log_level="info")
