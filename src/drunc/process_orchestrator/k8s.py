@@ -8,7 +8,7 @@ from time import sleep
 from drunc_core.authoriser.decorators import authentified_and_authorised
 from drunc_core.broadcast.server.decorators import broadcasted
 from drunc_core.exceptions import DruncCommandException, DruncException
-from drunc_core.utils.grpc_utils import pack_response, unpack_request_data_to
+from drunc_core.utils.grpc_utils import unpack_request_data_to
 from drunc_core.utils.utils import get_logger
 from drunc_messages.authoriser_pb2 import ActionType, SystemType
 from drunc_messages.process_orchestrator_pb2 import (
@@ -464,7 +464,7 @@ class K8sProcessOrchestrator(ProcessOrchestrator):
         action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
-    @pack_response  # 4th step
+    # @pack_response  # 4th step
     def flush(self, query: ProcessQuery) -> Response:
         ret = []
         self.log.info("Flushing dead processes")
