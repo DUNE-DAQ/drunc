@@ -146,8 +146,10 @@ def get_log_path(
     return log_path
 
 
-def get_pm_conf_name_from_dir(pm_conf_path: str) -> str:
-    return pm_conf_path.split("/")[-1].split(".")[0]
+def get_process_orchestrator_conf_name_from_dir(
+    process_orchestrator_conf_path: str,
+) -> str:
+    return process_orchestrator_conf_path.split("/")[-1].split(".")[0]
 
 
 # # ------------------------------------------------

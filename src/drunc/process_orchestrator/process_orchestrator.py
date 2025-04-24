@@ -63,9 +63,7 @@ class ProcessOrchestrator(abc.ABC, ProcessOrchestratorServicer):
         **kwargs,
     ):
         super().__init__()
-        self.log = get_logger(
-            f"process_orchestrator.{configuration.data.type._name_}_process_orchestrator"
-        )
+        self.log = get_logger(f"process_orchestrator.{configuration.data.type._name_}")
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessOrchestrator")
 

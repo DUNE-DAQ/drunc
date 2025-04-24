@@ -22,15 +22,18 @@ from drunc.process_orchestrator.configuration import (
     ProcessOrchestratorConfHandler,
     get_process_orchestrator_configuration,
 )
-from drunc.process_orchestrator.process_orchestrator import ProcessOrchestrator
-from drunc.process_orchestrator.utils import get_log_path, get_pm_conf_name_from_dir
+from drunc.process_orchestrator.factory import get_process_orchestrator
+from drunc.process_orchestrator.utils import (
+    get_log_path,
+    get_process_orchestrator_conf_name_from_dir,
+)
 
 _cleanup_coroutines = []
 
 
-def run_pm(
-    pm_conf: str,
-    pm_address: str,
+def run_process_orchestrator(
+    process_orchestrator_conf: str,
+    process_orchestrator_address: str,
     log_level: str,
     override_logs: bool,
     log_path: str = None,
@@ -39,13 +42,13 @@ def run_pm(
     generated_port: bool = None,
 ) -> None:
     appName = "process_orchestrator"
-    pmConfFileName = get_pm_conf_name_from_dir(
-        pm_conf
-    )  # Treating the pm conf data filename as the session
+    process_orchestrator_conf_name = get_process_orchestrator_conf_name_from_dir(
+        process_orchestrator_conf
+    )  # Treating the process_orchestrator conf data filename as the session
 
     log_path = get_log_path(
         user=getpass.getuser(),
-        session_name=pmConfFileName,
+        session_name=process_orchestrator_conf_name,
         application_name=appName,
         override_logs=override_logs,
         app_log_path=log_path,
@@ -56,23 +59,27 @@ def run_pm(
         rich_handler=True,
     )
 
-    log.debug("Running [green]run_pm[/green]")
+    log.debug("Running [green]run_process_orchestrator[/green]")
     if signal_handler is not None:
         signal_handler()
 
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
 
-    log.debug(f"Using '{pm_conf}' as the ProcessOrchestrator configuration")
+    log.debug(
+        f"Using '{process_orchestrator_conf}' as the ProcessOrchestrator configuration"
+    )
 
-    conf_path, conf_type = parse_conf_url(pm_conf)
-    pmch = ProcessOrchestratorConfHandler(
+    conf_path, conf_type = parse_conf_url(process_orchestrator_conf)
+    process_orchestrator_conf_handler = ProcessOrchestratorConfHandler(
         log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
     )
 
-    for key, value in pmch.data.environment.items():
+    for key, value in process_orchestrator_conf_handler.data.environment.items():
         os.environ[key] = value
 
-    pm = ProcessOrchestrator.get(pmch, name="process_orchestrator")
+    process_orchestrator = get_process_orchestrator(
+        process_orchestrator_conf_handler, name="process_orchestrator"
+    )
     log.debug("Setup up ProcessOrchestrator")
 
     loop = asyncio.get_event_loop()
@@ -85,7 +92,7 @@ def run_pm(
                 "The address on which to expect commands/send status wasn't specified"
             )
         server = grpc.aio.server()
-        add_ProcessOrchestratorServicer_to_server(pm, server)
+        add_ProcessOrchestratorServicer_to_server(process_orchestrator, server)
         port = server.add_insecure_port(address)
         if generated_port is not None:
             generated_port.value = port
@@ -103,7 +110,7 @@ def run_pm(
             # grace period, the server won't accept new connections and allow
             # existing RPCs to continue within the grace period.
             await server.stop(5)
-            pm._terminate_impl()
+            process_orchestrator._terminate()
 
         _cleanup_coroutines.append(server_shutdown())
         if ready_event is not None:
@@ -112,7 +119,7 @@ def run_pm(
 
     try:
         log.debug("Serving process_orchestrator")
-        loop.run_until_complete(serve(pm_address))
+        loop.run_until_complete(serve(process_orchestrator_address))
     except Exception as e:
         log.error("Serving the ProcessOrchestrator received an Exception")
         log.exception(e)
@@ -124,8 +131,8 @@ def run_pm(
 
 
 @click.command()
-@click.argument("pm-conf", type=str)
-@click.argument("pm-port", type=int)
+@click.argument("process-orchestrator-conf", type=str)
+@click.argument("process-orchestrator-port", type=int)
 @click.option(
     "-l",
     "--log-level",
@@ -148,13 +155,19 @@ def run_pm(
     help="Log path of process_orchestrator logs.",
 )
 def process_orchestrator_cli(
-    pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
+    process_orchestrator_conf: str,
+    process_orchestrator_port: int,
+    log_level: str,
+    override_logs: bool,
+    log_path: str,
 ) -> None:
     setup_root_logger(log_level)
-    pm_conf = get_process_orchestrator_configuration(pm_conf)
-    run_pm(
-        pm_conf=pm_conf,
-        pm_address=f"0.0.0.0:{pm_port}",
+    process_orchestrator_conf = get_process_orchestrator_configuration(
+        process_orchestrator_conf
+    )
+    run_process_orchestrator(
+        process_orchestrator_conf=process_orchestrator_conf,
+        process_orchestrator_address=f"0.0.0.0:{process_orchestrator_port}",
         log_level=log_level,
         override_logs=override_logs,
         log_path=log_path,

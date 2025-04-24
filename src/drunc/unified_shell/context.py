@@ -18,26 +18,26 @@ from drunc.process_orchestrator.driver import (
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
     def __init__(self):
-        self.status_receiver_pm = None
+        self.status_receiver_process_orchestrator = None
         self.status_receiver_controller = None
         self.took_control = False
-        self.pm_process = None
-        self.address_pm = ""
+        self.process_orchestrator_process = None
+        self.address_process_orchestrator = ""
         self.address_controller = ""
         self.configuration_file = ""
         self.configuration_id = ""
         self.session_name = ""
         super(UnifiedShellContext, self).__init__()
 
-    def reset(self, address_pm: str = ""):
-        self.address_pm = address_pm
+    def reset(self, address_process_orchestrator: str = ""):
+        self.address_process_orchestrator = address_process_orchestrator
         super(UnifiedShellContext, self)._reset(name="unified_shell")
 
     def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         ret = {}
-        if self.address_pm != "":
+        if self.address_process_orchestrator != "":
             ret["process_orchestrator"] = ProcessOrchestratorDriver(
-                self.address_pm,
+                self.address_process_orchestrator,
                 self._token,
                 aio_channel=True,
             )
@@ -66,12 +66,14 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         token = create_dummy_token_from_uname()
         return token
 
-    def start_listening_pm(self, broadcaster_conf) -> None:
+    def start_listening_process_orchestrator(self, broadcaster_conf) -> None:
         bcch = BroadcastClientConfHandler(
             type=ConfTypes.ProtobufAny,
             data=broadcaster_conf,
         )
-        self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
+        self.status_receiver_process_orchestrator = BroadcastHandler(
+            broadcast_configuration=bcch
+        )
 
     def start_listening_controller(self, broadcaster_conf) -> None:
         bcch = BroadcastClientConfHandler(
@@ -81,7 +83,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
 
     def terminate(self) -> None:
-        if self.status_receiver_pm:
-            self.status_receiver_pm.stop()
+        if self.status_receiver_process_orchestrator:
+            self.status_receiver_process_orchestrator.stop()
         if self.status_receiver_controller:
             self.status_receiver_controller.stop()

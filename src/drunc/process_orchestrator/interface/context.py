@@ -11,7 +11,7 @@ from drunc_core.utils.shell_utils import (
 from drunc_core.utils.utils import get_logger, resolve_localhost_to_hostname
 from drunc_messages.token_pb2 import Token
 
-from drunc.process_orchestrator.process_orchestrator_driver import (
+from drunc.process_orchestrator.driver import (
     ProcessOrchestratorDriver,
 )
 

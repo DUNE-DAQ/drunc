@@ -53,7 +53,7 @@ from drunc.process_orchestrator.interface.commands import (
     restart,
     terminate,
 )
-from drunc.process_orchestrator.interface.main import run_pm
+from drunc.process_orchestrator.interface.main import run_process_orchestrator
 from drunc.unified_shell.commands import boot
 
 
@@ -69,7 +69,7 @@ from drunc.unified_shell.commands import boot
     default=os.getenv("DRUNC_LOG_LEVEL", "INFO"),
     help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
-@click.argument("process-manager", type=str, nargs=1)
+@click.argument("process-orchestrator", type=str, nargs=1)
 @click.argument("configuration-file", type=str, nargs=1)
 @click.argument("configuration-id", type=str, nargs=1)
 @click.argument("session-name", type=str, nargs=1)
@@ -110,9 +110,9 @@ def unified_shell(
     if (
         process_orchestrator_url.scheme != "grpc"
     ):  # slightly hacky to see if the process manager is an address
-        internal_pm = True
+        internal_process_orchestrator = True
     else:
-        internal_pm = False
+        internal_process_orchestrator = False
 
     # Set up process_orchestrator logger
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
@@ -129,7 +129,7 @@ def unified_shell(
         f'Setting up to use [green]process_orchestrator[/green] with configuration [green]{process_orchestrator}[/green] and [green]configuration id "{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
     )
 
-    if internal_pm:
+    if internal_process_orchestrator:
         unified_shell_log.debug(
             f"Spawning [green]process_orchestrator[/green] with configuration {process_orchestrator}"
         )
@@ -144,21 +144,21 @@ def unified_shell(
         unified_shell_log.debug(
             "Starting [green]process_orchestrator[/green] as separate process"
         )
-        ctx.obj.pm_process = mp.Process(
-            target=run_pm,
+        ctx.obj.process_orchestrator_process = mp.Process(
+            target=run_process_orchestrator,
             kwargs={
-                "pm_conf": process_orchestrator_conf_file,
-                "pm_address": "localhost:0",
+                "process_orchestrator_conf": process_orchestrator_conf_file,
+                "process_orchestrator_address": "localhost:0",
                 "override_logs": override_logs,
                 "log_level": log_level,
                 "log_path": app_log_path,
                 "ready_event": ready_event,
                 "signal_handler": ignore_sigint_sighandler,
-                # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
+                # sigint gets sent to the ProcessOrchestrator, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the ProcessOrchestrator goes down
                 "generated_port": port,
             },
         )
-        ctx.obj.pm_process.start()
+        ctx.obj.process_orchestrator_process.start()
         unified_shell_log.debug("[green]process_orchestrator[/green] started")
 
         for _ in range(100):
@@ -184,7 +184,7 @@ def unified_shell(
     unified_shell_log.debug(
         f"[green]process_orchestrator[/green] started, communicating through address [green]{process_orchestrator_address}[/green]"
     )
-    ctx.obj.reset(address_pm=process_orchestrator_address)
+    ctx.obj.reset(address_process_orchestrator=process_orchestrator_address)
 
     desc = None
     try:
@@ -204,29 +204,32 @@ def unified_shell(
                 "This can happen if you have the webproxy enabled at CERN"
             )
 
-        if internal_pm and not ctx.obj.pm_process.is_alive():
+        if (
+            internal_process_orchestrator
+            and not ctx.obj.process_orchestrator_process.is_alive()
+        ):
             unified_shell_log.error(
-                f"[red]The process_orchestrator is dead[/red], exit code {ctx.obj.pm_process.exitcode}"
+                f"[red]The process_orchestrator is dead[/red], exit code {ctx.obj.process_orchestrator_process.exitcode}"
             )
 
-        if ctx.obj.pm_process.is_alive():
-            ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join()
+        if ctx.obj.process_orchestrator_process.is_alive():
+            ctx.obj.process_orchestrator_process.terminate()
+            ctx.obj.process_orchestrator_process.join()
 
         sys.exit(1)
 
     if desc.HasField("broadcast"):
         unified_shell_log.debug("Broadcasting")
-        ctx.obj.start_listening_pm(
+        ctx.obj.start_listening_process_orchestrator(
             broadcaster_conf=desc.broadcast,
         )
 
     def cleanup():
         unified_shell_log.debug("Cleanup")
         ctx.obj.terminate()
-        if internal_pm:
-            ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join()
+        if internal_process_orchestrator:
+            ctx.obj.process_orchestrator_process.terminate()
+            ctx.obj.process_orchestrator_process.join()
 
         csc = ConnectivityServiceClient(
             ctx.obj.session_name, connectivity_service_address
