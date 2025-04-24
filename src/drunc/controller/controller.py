@@ -4,6 +4,22 @@ import time
 import traceback
 from typing import Optional
 
+from drunc_core.authoriser.configuration import DummyAuthoriserConfHandler
+from drunc_core.authoriser.decorators import authentified_and_authorised
+from drunc_core.authoriser.dummy_authoriser import DummyAuthoriser
+from drunc_core.broadcast.server.broadcast_sender import BroadcastSender
+from drunc_core.broadcast.server.configuration import BroadcastSenderConfHandler
+from drunc_core.broadcast.server.decorators import broadcasted
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.exceptions import DruncException
+from drunc_core.fsm.configuration import FSMConfHandler
+from drunc_core.fsm.utils import convert_fsm_transition
+from drunc_core.utils.grpc_utils import (
+    UnpackingError,
+    pack_to_any,
+    unpack_any,
+)
+from drunc_core.utils.utils import get_logger
 from drunc_messages.authoriser_pb2 import ActionType, SystemType
 from drunc_messages.broadcast_pb2 import BroadcastType
 from drunc_messages.controller_pb2 import (
@@ -23,27 +39,11 @@ from drunc_messages.request_response_pb2 import (
 from drunc_messages.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
-from drunc_core.authoriser.configuration import DummyAuthoriserConfHandler
-from drunc_core.authoriser.decorators import authentified_and_authorised
-from drunc_core.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc_core.broadcast.server.broadcast_sender import BroadcastSender
-from drunc_core.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc_core.broadcast.server.decorators import broadcasted
-from drunc_core.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import in_control, unpack_addressed_command_to
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import get_detector_name, get_status_message
-from drunc_core.exceptions import DruncException
-from drunc_core.fsm.configuration import FSMConfHandler
-from drunc_core.fsm.utils import convert_fsm_transition
-from drunc_core.utils.grpc_utils import (
-    UnpackingError,
-    pack_to_any,
-    unpack_any,
-)
-from drunc_core.utils.utils import get_logger
 
 
 class ControllerActor:
@@ -131,9 +131,13 @@ class Controller(ControllerServicer):
                 self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
             else:
                 self.opmon_sleep_time = 10
-                self.log.info("Couldn't find sleep time in opmon_uri configuration, use default value of 10s")
+                self.log.info(
+                    "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
+                )
 
-            self.log.info(f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s")
+            self.log.info(
+                f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
+            )
 
             if "/" in opmon_path:
                 opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
@@ -159,9 +163,8 @@ class Controller(ControllerServicer):
                 target=self.threading_publish_state,
                 args=(self.opmon_sleep_time,),
                 daemon=True,
-                )
+            )
             self.thread.start()
-
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,

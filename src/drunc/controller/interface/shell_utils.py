@@ -1,10 +1,23 @@
-import click
 import logging
+import time
 from collections import defaultdict
 from functools import partial
+
+import click
 import grpc
-import time
-from rich.table import Table
+from drunc_core.exceptions import DruncSetupException, DruncShellException
+from drunc_core.utils.grpc_utils import ServerUnreachable, pack_to_any, unpack_any
+from drunc_core.utils.shell_utils import DecodedResponse
+from drunc_core.utils.utils import get_logger
+from drunc_messages.controller_pb2 import (
+    Argument,
+    FSMCommand,
+    FSMCommandDescription,
+    FSMResponseFlag,
+    Status,
+)
+from drunc_messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from drunc_messages.request_response_pb2 import Description, ResponseFlag
 from rich.progress import (
     BarColumn,
     Progress,
@@ -13,23 +26,7 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-
-from drunc_messages.controller_pb2 import (
-    Argument,
-    FSMCommand,
-    FSMCommandDescription,
-    FSMResponseFlag,
-    Status,
-)
-
-from drunc_messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from drunc_messages.request_response_pb2 import Description, ResponseFlag
-
-from drunc_core.exceptions import DruncSetupException, DruncShellException
-from drunc_core.utils.grpc_utils import pack_to_any, unpack_any
-from drunc_core.utils.shell_utils import DecodedResponse
-from drunc_core.utils.utils import get_logger
-from drunc_core.utils.grpc_utils import ServerUnreachable
+from rich.table import Table
 
 
 def generate_none_status() -> Status:
@@ -170,13 +167,9 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-
     desc = Description()
 
     timeout = 60
-
-
-
 
     with Progress(
         SpinnerColumn(),

@@ -1,17 +1,17 @@
 import time
 
 import grpc
-from drunc_messages.controller_pb2_grpc import ControllerStub
-from drunc_messages.request_response_pb2 import Description, Response
-
 from drunc_core.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc_core.broadcast.client.configuration import BroadcastClientConfHandler
-from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import send_command
 from drunc_core.exceptions import DruncSetupException
 from drunc_core.utils.configuration import ConfHandler, ConfTypes
 from drunc_core.utils.grpc_utils import ServerUnreachable
 from drunc_core.utils.utils import ControlType, get_logger
+from drunc_messages.controller_pb2_grpc import ControllerStub
+from drunc_messages.request_response_pb2 import Description, Response
+
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.utils import send_command
 
 
 class gRCPChildConfHandler(ConfHandler):

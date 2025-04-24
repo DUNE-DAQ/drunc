@@ -1,18 +1,16 @@
 import re
 
 import grpc
+from drunc_core.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
+from drunc_core.utils.utils import get_logger
+from drunc_messages.controller_pb2 import AddressedCommand, Status
+from drunc_messages.generic_pb2 import PlainText, Stacktrace
+from drunc_messages.request_response_pb2 import Request
 from google.protobuf import any_pb2
 from grpc_status import rpc_status
 
 from drunc.controller.exceptions import DruncCommandException
 from drunc.controller.stateful_node import StatefulNode
-from drunc.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
-from drunc.utils.utils import get_logger
-
-from druncschema.controller_pb2 import Status  # isort: skip
-from druncschema.generic_pb2 import PlainText, Stacktrace  # isort: skip
-from druncschema.request_response_pb2 import Request  # isort: skip
-from druncschema.controller_pb2 import AddressedCommand  # isort: skip
 
 
 def get_status_message(stateful: StatefulNode):

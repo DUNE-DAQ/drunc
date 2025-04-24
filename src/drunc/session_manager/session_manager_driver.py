@@ -1,10 +1,9 @@
 """Provides an interface to the session manager service."""
 
+from drunc_core.utils.shell_utils import DecodedResponse, GRPCDriver
 from drunc_messages.request_response_pb2 import Description
 from drunc_messages.session_manager_pb2 import AllActiveSessions
 from drunc_messages.session_manager_pb2_grpc import SessionManagerStub
-
-from drunc_core.utils.shell_utils import DecodedResponse, GRPCDriver
 
 
 class SessionManagerDriver(GRPCDriver):

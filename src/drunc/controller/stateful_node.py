@@ -3,11 +3,11 @@ from __future__ import annotations
 import abc
 from typing import TYPE_CHECKING, Optional
 
-from drunc.exceptions import DruncCommandException
-from drunc.fsm.core import FSM
-from drunc.fsm.exceptions import InvalidTransition
-from drunc.fsm.utils import decode_fsm_arguments
-from drunc.utils.utils import get_logger
+from drunc_core.exceptions import DruncCommandException
+from drunc_core.fsm.core import FSM
+from drunc_core.fsm.exceptions import InvalidTransition
+from drunc_core.fsm.utils import decode_fsm_arguments
+from drunc_core.utils.utils import get_logger
 
 if TYPE_CHECKING:
     from kafkaopmon.OpMonPublisher import OpMonPublisher
@@ -123,7 +123,6 @@ class StatefulNode(abc.ABC):
                     included=self.__included.value,
                 ),
             )
-
 
     def get_node_operational_state(self):
         return self.__operational_state.value

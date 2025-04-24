@@ -1,16 +1,19 @@
 from collections.abc import Mapping
 
-from drunc_messages.token_pb2 import Token
-
-from drunc_core.utils.shell_utils import GRPCDriver, ShellContext
 from drunc_core.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc_core.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc_core.utils.configuration import ConfTypes
+from drunc_core.utils.shell_utils import (
+    GRPCDriver,
+    ShellContext,
+    create_dummy_token_from_uname,
+)
+from drunc_messages.token_pb2 import Token
+
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.process_manager.process_manager_driver import (
     ProcessManagerDriver,
 )
-from drunc.controller.controller_driver import ControllerDriver
-from drunc_core.utils.shell_utils import create_dummy_token_from_uname
 
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
@@ -33,14 +36,12 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
     def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
         ret = {}
         if self.address_pm != "":
-
             ret["process_manager"] = ProcessManagerDriver(
                 self.address_pm,
                 self._token,
                 aio_channel=True,
             )
         if self.address_controller != "":
-
             ret["controller"] = ControllerDriver(
                 self.address,
                 self._token,
@@ -62,13 +63,10 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         )
 
     def create_token(self, **kwargs) -> Token:
-
         token = create_dummy_token_from_uname()
         return token
 
     def start_listening_pm(self, broadcaster_conf) -> None:
-
-
         bcch = BroadcastClientConfHandler(
             type=ConfTypes.ProtobufAny,
             data=broadcaster_conf,
@@ -76,8 +74,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
 
     def start_listening_controller(self, broadcaster_conf) -> None:
-
-
         bcch = BroadcastClientConfHandler(
             type=ConfTypes.ProtobufAny,
             data=broadcaster_conf,

@@ -1,13 +1,13 @@
 from functools import wraps
 
+from drunc_core.exceptions import DruncCommandException
+from drunc_core.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
+from drunc_core.utils.utils import get_logger
 from drunc_messages.controller_pb2 import AddressedCommand
 from drunc_messages.generic_pb2 import PlainText
 from drunc_messages.request_response_pb2 import Response, ResponseFlag
 
 from drunc.controller.utils import address_command
-from drunc_core.exceptions import DruncCommandException
-from drunc_core.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
-from drunc_core.utils.utils import get_logger
 
 
 def in_control(cmd):

@@ -1,12 +1,12 @@
 import socket
 import threading
 
-from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import get_segment_lookup_timeout
-from drunc.process_manager.configuration import get_commandline_parameters
-
 from drunc_core.exceptions import DruncSetupException
 from drunc_core.utils.configuration import ConfHandler
+
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.utils import get_segment_lookup_timeout
+from drunc.process_orchestrator.configuration import get_commandline_parameters
 
 import confmodel  # isort: skip
 
