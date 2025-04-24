@@ -3,6 +3,15 @@ import os
 
 import click
 import click_shell
+from drunc_core.utils.grpc_utils import ServerUnreachable
+from drunc_core.utils.utils import (
+    CONTEXT_SETTINGS,
+    create_logger_handler,
+    get_logger,
+    log_levels,
+    setup_root_logger,
+    validate_command_facility,
+)
 
 from drunc.controller.interface.commands import (
     connect,
@@ -23,15 +32,6 @@ from drunc.controller.interface.shell_utils import (
     controller_setup,
     generate_fsm_command,
 )
-from drunc_core.utils.grpc_utils import ServerUnreachable
-from drunc_core.utils.utils import (
-    CONTEXT_SETTINGS,
-    create_logger_handler,
-    get_logger,
-    log_levels,
-    setup_root_logger,
-    validate_command_facility,
-)
 
 
 @click_shell.shell(
@@ -44,8 +44,8 @@ from drunc_core.utils.utils import (
     "-l",
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
-    default="INFO",
-    help="Set the log level",
+    default=os.getenv("DRUNC_LOG_LEVEL", "INFO"),
+    help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
 @click.argument("controller-address", type=str, callback=validate_command_facility)
 @click.pass_context

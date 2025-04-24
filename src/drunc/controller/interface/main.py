@@ -4,11 +4,6 @@ import signal
 
 import click
 import grpc
-from drunc_messages.controller_pb2_grpc import add_ControllerServicer_to_server
-from drunc_messages.token_pb2 import Token
-
-from drunc.controller.configuration import ControllerConfHandler
-from drunc.controller.controller import Controller
 from drunc_core.utils.configuration import ConfTypes, OKSKey
 from drunc_core.utils.utils import (
     create_logger_handler,
@@ -18,6 +13,11 @@ from drunc_core.utils.utils import (
     setup_root_logger,
     validate_command_facility,
 )
+from drunc_messages.controller_pb2_grpc import add_ControllerServicer_to_server
+from drunc_messages.token_pb2 import Token
+
+from drunc.controller.configuration import ControllerConfHandler
+from drunc.controller.controller import Controller
 
 
 @click.command()
@@ -61,8 +61,8 @@ from drunc_core.utils.utils import (
     "-l",
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
-    default="INFO",
-    help="Set the log level",
+    default=os.getenv("DRUNC_LOG_LEVEL", "INFO"),
+    help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
 def controller_cli(
     sessionname: str,
