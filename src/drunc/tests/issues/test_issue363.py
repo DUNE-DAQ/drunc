@@ -1,8 +1,9 @@
 # https://github.com/DUNE-DAQ/drunc/issues/363
 
+from drunc_core.utils.configuration import OKSKey, parse_conf_url
+from drunc_core.utils.utils import setup_root_logger
+
 from drunc.controller.configuration import ControllerConfHandler
-from drunc.utils.configuration import OKSKey, parse_conf_url
-from drunc.utils.utils import setup_root_logger
 
 
 def test_issue363(load_test_config):

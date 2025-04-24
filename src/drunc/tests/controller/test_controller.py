@@ -2,9 +2,8 @@ import os
 import time
 
 import pytest
-
-from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.exceptions import DruncException
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.exceptions import DruncException
 
 
 def test_controller_init(one_controller_running):

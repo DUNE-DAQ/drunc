@@ -1,13 +1,15 @@
 import pytest
+from drunc_core.utils.configuration import parse_conf_url
+from drunc_messages.controller_pb2 import AddressedCommand
+from drunc_messages.generic_pb2 import PlainText
+from google.protobuf import any_pb2
 
 from drunc.controller.exceptions import DruncCommandException
+from drunc.controller.utils import address_command, get_segment_lookup_timeout
 
 
 def test_get_segment_lookup_timeout(load_test_config):
-    from drunc.utils.configuration import parse_conf_url
-
     conf_path, conf_type = parse_conf_url("oksconflibs:deep-segments-config.data.xml")
-    from drunc.controller.utils import get_segment_lookup_timeout
 
     try:
         import conffwk
@@ -39,12 +41,6 @@ def test_get_segment_lookup_timeout(load_test_config):
 
 
 def test_address_command():
-    from druncschema.controller_pb2 import AddressedCommand
-    from druncschema.generic_pb2 import PlainText
-    from google.protobuf import any_pb2
-
-    from drunc.controller.utils import address_command
-
     class MockNode:
         def __init__(self, name):
             self.name = name

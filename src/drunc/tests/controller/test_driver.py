@@ -1,11 +1,11 @@
 import pytest
-from druncschema.request_response_pb2 import Description
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.exceptions import DruncException
+from drunc_core.utils.shell_utils import create_dummy_token_from_uname
+from drunc_messages.request_response_pb2 import Description
 from google.protobuf.json_format import MessageToDict
 
-from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.controller.controller_driver import ControllerDriver
-from drunc.exceptions import DruncException
-from drunc.utils.shell_utils import create_dummy_token_from_uname
+from drunc.controller.driver import ControllerDriver
 
 
 def setup_controller_driver(processes_and_logs, dal, session_name) -> ControllerDriver:
