@@ -77,7 +77,7 @@ def validate_ssh_connection(configuration: str, session_name: str, log_level: st
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="INFO",
-    help="Set the log level",
+    help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
 def main(configuration: str, session: str, log_level: str) -> None:
     """The script validates the ability to SSH onto all of the hosts required by the configuration <configuration> session <session> applications."""

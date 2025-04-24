@@ -37,7 +37,7 @@ from drunc.process_orchestrator.interface.commands import (
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
     default=os.getenv("DRUNC_LOG_LEVEL", "INFO"),
-    help="Set the log level",
+    help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
 @click.argument(
     "process-orchestrator-address", type=str, callback=validate_command_facility

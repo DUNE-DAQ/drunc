@@ -95,7 +95,7 @@ def test_session_ssh_connections(
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="WARNING",
-    help="Set the log level",
+    help="Set the log level, if not set, it will be set to the environment variable DRUNC_LOG_LEVEL, if that variable is not set, it will be set to INFO",
 )
 def main(log_level: str):
     FORMAT = "%(message)s"
