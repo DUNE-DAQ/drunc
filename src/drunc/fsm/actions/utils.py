@@ -45,4 +45,11 @@ def get_dotdrunc_json(path: str = "~/.drunc.json"):
 
     return dotdrunc
 
+def publish_runinfo(_context, _message):   
+    if _context.opmon_publisher:
+                _context.opmon_publisher.publish(
+                    session=_context.session,
+                    application=_context.name,
+                    message=_message,
+                )
 
