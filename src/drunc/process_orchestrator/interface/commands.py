@@ -1,18 +1,18 @@
 import getpass
 
 import click
-from drunc_messages.process_manager_pb2 import LogRequest, ProcessQuery
+from drunc_core.utils.shell_utils import InterruptedCommand
+from drunc_core.utils.utils import get_logger, run_coroutine
+from drunc_messages.process_orchestrator_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
 
-from drunc.process_manager.interface.cli_argument import (
+from drunc.process_orchestrator.interface.cli_argument import (
     add_query_options,
     validate_conf_string,
 )
-from drunc.process_manager.interface.context import ProcessManagerContext
-from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc_core.utils.shell_utils import InterruptedCommand
-from drunc_core.utils.utils import get_logger, run_coroutine
+from drunc.process_orchestrator.interface.context import ProcessOrchestratorContext
+from drunc.process_orchestrator.utils import tabulate_process_instance_list
 
 
 @click.command("boot")
@@ -36,15 +36,15 @@ from drunc_core.utils.utils import get_logger, run_coroutine
 @click.pass_obj
 @run_coroutine
 async def boot(
-    obj: ProcessManagerContext,
+    obj: ProcessOrchestratorContext,
     user: str,
     session_name: str,
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
 ) -> None:
-    log = get_logger("process_manager.shell")
-    processes = await obj.get_driver("process_manager").ps(ProcessQuery(user=user))
+    log = get_logger("process_orchestrator.shell")
+    processes = await obj.get_driver("process_orchestrator").ps(ProcessQuery(user=user))
 
     if len(processes.data.values) > 0:
         click.confirm(
@@ -56,7 +56,7 @@ async def boot(
         f"Booting session {session_name} with boot configuration file {configuration_file} and id {configuration_id}, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = obj.get_driver("process_orchestrator").boot(
             conf_file=configuration_file,
             conf_id=configuration_id,
             user=user,
@@ -76,7 +76,7 @@ async def boot(
         log.exception(e)
         raise e
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = obj.get_driver("process_orchestrator").controller_address
     if controller_address:
         obj.print(
             Panel(
@@ -123,19 +123,19 @@ async def boot(
 @click.pass_obj
 @run_coroutine
 async def dummy_boot(
-    obj: ProcessManagerContext,
+    obj: ProcessOrchestratorContext,
     user: str,
     n_processes: int,
     sleep: int,
     n_sleeps: int,
     session_name: str,
 ) -> None:
-    log = get_logger("process_manager.shell")
+    log = get_logger("process_orchestrator.shell")
     log.debug(
         f"Running dummy_boot with {n_processes} processes for {sleep} seconds {n_sleeps} times, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").dummy_boot(
+        results = obj.get_driver("process_orchestrator").dummy_boot(
             user=user,
             session_name=session_name,
             n_processes=n_processes,
@@ -155,10 +155,10 @@ async def dummy_boot(
 @click.command("terminate")
 @click.pass_obj
 @run_coroutine
-async def terminate(obj: ProcessManagerContext) -> None:
-    log = get_logger("process_manager.shell")
+async def terminate(obj: ProcessOrchestratorContext) -> None:
+    log = get_logger("process_orchestrator.shell")
     log.debug("Terminating")
-    result = await obj.get_driver("process_manager").terminate()
+    result = await obj.get_driver("process_orchestrator").terminate()
     if not result:
         return
     obj.print(
@@ -172,10 +172,10 @@ async def terminate(obj: ProcessManagerContext) -> None:
 @add_query_options(at_least_one=True)
 @click.pass_obj
 @run_coroutine
-async def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
-    log = get_logger("process_manager.shell")
+async def kill(obj: ProcessOrchestratorContext, query: ProcessQuery) -> None:
+    log = get_logger("process_orchestrator.shell")
     log.debug(f"Killing with query {query}")
-    result = await obj.get_driver("process_manager").kill(query=query)
+    result = await obj.get_driver("process_orchestrator").kill(query=query)
     if not result:
         return
     obj.print(
@@ -189,10 +189,10 @@ async def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @click.pass_obj
 @run_coroutine
-async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
-    log = get_logger("process_manager.shell")
+async def flush(obj: ProcessOrchestratorContext, query: ProcessQuery) -> None:
+    log = get_logger("process_orchestrator.shell")
     log.debug(f"Flushing with query {query}")
-    result = await obj.get_driver("process_manager").flush(query=query)
+    result = await obj.get_driver("process_orchestrator").flush(query=query)
     if not result:
         return
     obj.print(
@@ -213,9 +213,9 @@ async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @click.pass_obj
 @run_coroutine
 async def logs(
-    obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
+    obj: ProcessOrchestratorContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
-    log = get_logger("process_manager.shell")
+    log = get_logger("process_orchestrator.shell")
     log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
@@ -223,7 +223,7 @@ async def logs(
     )
 
     uuid = None
-    async for result in obj.get_driver("process_manager").logs(log_req):
+    async for result in obj.get_driver("process_orchestrator").logs(log_req):
         if not result:
             break
 
@@ -255,10 +255,10 @@ async def logs(
 @add_query_options(at_least_one=True)
 @click.pass_obj
 @run_coroutine
-async def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
-    log = get_logger("process_manager.shell")
+async def restart(obj: ProcessOrchestratorContext, query: ProcessQuery) -> None:
+    log = get_logger("process_orchestrator.shell")
     log.debug(f"Restarting with query {query}")
-    await obj.get_driver("process_manager").restart(query=query)
+    await obj.get_driver("process_orchestrator").restart(query=query)
 
 
 @click.command("ps")
@@ -274,11 +274,11 @@ async def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @click.pass_obj
 @run_coroutine
 async def ps(
-    obj: ProcessManagerContext, query: ProcessQuery, long_format: bool
+    obj: ProcessOrchestratorContext, query: ProcessQuery, long_format: bool
 ) -> None:
-    log = get_logger("process_manager.shell")
+    log = get_logger("process_orchestrator.shell")
     log.debug(f"Running ps with query {query}")
-    results = await obj.get_driver("process_manager").ps(query=query)
+    results = await obj.get_driver("process_orchestrator").ps(query=query)
     if not results:
         return
     obj.print(

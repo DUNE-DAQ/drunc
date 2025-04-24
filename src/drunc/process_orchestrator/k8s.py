@@ -11,7 +11,7 @@ from drunc_core.exceptions import DruncCommandException, DruncException
 from drunc_core.utils.grpc_utils import pack_response, unpack_request_data_to
 from drunc_core.utils.utils import get_logger
 from drunc_messages.authoriser_pb2 import ActionType, SystemType
-from drunc_messages.process_manager_pb2 import (
+from drunc_messages.process_orchestrator_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -25,15 +25,15 @@ from drunc_messages.process_manager_pb2 import (
 from drunc_messages.request_response_pb2 import Response
 from kubernetes import client, config
 
-from drunc.process_manager.exceptions import DruncK8sNamespaceAlreadyExists
-from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_orchestrator.exceptions import DruncK8sNamespaceAlreadyExists
+from drunc.process_orchestrator.process_orchestrator import ProcessOrchestrator
 
 
-class K8sProcessManager(ProcessManager):
+class K8sProcessOrchestrator(ProcessOrchestrator):
     def __init__(self, configuration, **kwargs):
         self.session = getpass.getuser()  # unfortunate
         super().__init__(configuration=configuration, session=self.session, **kwargs)
-        self.log = get_logger("process_manager.k8s-process-manager")
+        self.log = get_logger("process_orchestrator.k8s-process-orchestrator")
         config.load_kube_config()
 
         self._k8s_client = client
@@ -461,7 +461,7 @@ class K8sProcessManager(ProcessManager):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
     @pack_response  # 4th step

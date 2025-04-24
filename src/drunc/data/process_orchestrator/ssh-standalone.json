@@ -1,6 +1,6 @@
 {
     "type": "ssh",
-    "name": "SSHProcessManager",
+    "name": "SSHProcessOrchestrator",
 
     "authoriser": {
         "type": "dummy"

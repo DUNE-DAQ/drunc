@@ -3,30 +3,6 @@ import re
 import threading
 import time
 
-from drunc_messages.authoriser_pb2 import ActionType, SystemType
-from drunc_messages.broadcast_pb2 import BroadcastType
-from drunc_messages.opmon.process_manager_pb2 import ProcessStatus
-from drunc_messages.process_manager_pb2 import (
-    BootRequest,
-    LogLine,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstance,
-    ProcessInstanceList,
-    ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
-)
-from drunc_messages.process_manager_pb2_grpc import ProcessManagerServicer
-from drunc_messages.request_response_pb2 import (
-    CommandDescription,
-    Description,
-    Request,
-    Response,
-    ResponseFlag,
-)
-from google.rpc import code_pb2
-
 from drunc_core.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc_core.authoriser.decorators import (
     async_authentified_and_authorised,
@@ -37,10 +13,6 @@ from drunc_core.broadcast.server.broadcast_sender import BroadcastSender
 from drunc_core.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc_core.broadcast.server.decorators import async_broadcasted, broadcasted
 from drunc_core.exceptions import DruncCommandException
-from drunc.process_manager.configuration import (
-    ProcessManagerConfHandler,
-    ProcessManagerTypes,
-)
 from drunc_core.utils.configuration import ConfTypes
 from drunc_core.utils.grpc_utils import (
     async_unpack_request_data_to,
@@ -48,8 +20,33 @@ from drunc_core.utils.grpc_utils import (
     unpack_request_data_to,
 )
 from drunc_core.utils.utils import get_logger, pid_info_str
-from drunc.process_manager.ssh_process_manager import SSHProcessManager
-from drunc.process_manager.k8s_process_manager import K8sProcessManager
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.opmon.process_orchestrator_pb2 import ProcessStatus
+from drunc_messages.process_orchestrator_pb2 import (
+    BootRequest,
+    LogLine,
+    LogRequest,
+    ProcessDescription,
+    ProcessInstance,
+    ProcessInstanceList,
+    ProcessQuery,
+    ProcessRestriction,
+    ProcessUUID,
+)
+from drunc_messages.process_orchestrator_pb2_grpc import ProcessOrchestratorServicer
+from drunc_messages.request_response_pb2 import (
+    CommandDescription,
+    Description,
+    Request,
+    Response,
+    ResponseFlag,
+)
+from google.rpc import code_pb2
+
+from drunc.process_orchestrator.configuration import (
+    ProcessOrchestratorConfHandler,
+)
 
 
 class BadQuery(DruncCommandException):
@@ -57,20 +54,20 @@ class BadQuery(DruncCommandException):
         super(BadQuery, self).__init__(txt, code_pb2.INVALID_ARGUMENT)
 
 
-class ProcessManager(abc.ABC, ProcessManagerServicer):
+class ProcessOrchestrator(abc.ABC, ProcessOrchestratorServicer):
     def __init__(
         self,
-        configuration: ProcessManagerConfHandler,
+        configuration: ProcessOrchestratorConfHandler,
         name: str,
         session: str = None,
         **kwargs,
     ):
         super().__init__()
         self.log = get_logger(
-            f"process_manager.{configuration.data.type._name_}_process_manager"
+            f"process_orchestrator.{configuration.data.type._name_}_process_orchestrator"
         )
         self.log.debug(pid_info_str())
-        self.log.debug("Initialized ProcessManager")
+        self.log.debug("Initialized ProcessOrchestrator")
 
         self.configuration = configuration
         self.name = name
@@ -94,9 +91,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data=self.configuration.data.authoriser, type=ConfTypes.PyObject
         )
 
-        self.opmon_publisher = getattr(self.configuration.data,"opmon_publisher",None)
+        self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
         opmon_sleep_time = getattr(self.configuration.data, "opmon_sleep_time", 5)
-        self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
+        self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_ORCHESTRATOR)
 
         self.process_store = {}  # dict[str, sh.RunningCommand]
         self.boot_request = {}  # dict[str, BootRequest]
@@ -113,45 +110,45 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             ),
             CommandDescription(
                 name="kill",
-                data_type=["process_manager_pb2.ProcessQuery"],
+                data_type=["process_orchestrator_pb2.ProcessQuery"],
                 help="Kill listed process from the process query input (can be multiple).",
-                return_type="process_manager_pb2.ProcessInstanceList",
+                return_type="process_orchestrator_pb2.ProcessInstanceList",
             ),
             CommandDescription(
                 name="restart",
-                data_type=["process_manager_pb2.ProcessQuery"],
+                data_type=["process_orchestrator_pb2.ProcessQuery"],
                 help="Restart the process from the process query (which must correspond to one process).",
-                return_type="process_manager_pb2.ProcessInstance",
+                return_type="process_orchestrator_pb2.ProcessInstance",
             ),
             CommandDescription(
                 name="boot",
                 data_type=["generic_pb2.BootRequest", "None"],
                 help="Start a process.",
-                return_type="process_manager_pb2.ProcessInstance",
+                return_type="process_orchestrator_pb2.ProcessInstance",
             ),
             CommandDescription(
                 name="terminate",
-                data_type=["process_manager_pb2.ProcessQuery"],
+                data_type=["process_orchestrator_pb2.ProcessQuery"],
                 help="Kill all processes in session.",
-                return_type="process_manager_pb2.ProcessInstanceList",
+                return_type="process_orchestrator_pb2.ProcessInstanceList",
             ),
             CommandDescription(
                 name="flush",
-                data_type=["process_manager_pb2.ProcessQuery"],
+                data_type=["process_orchestrator_pb2.ProcessQuery"],
                 help="Remove the processes from the list that are dead",
-                return_type="process_manager_pb2.ProcessInstanceList",
+                return_type="process_orchestrator_pb2.ProcessInstanceList",
             ),
             CommandDescription(
                 name="logs",
-                data_type=["process_manager_pb2.LogRequest"],
+                data_type=["process_orchestrator_pb2.LogRequest"],
                 help="Returns the logs from the process ( must correspond to one process). Note this is an ASYNC function",
-                return_type="process_manager_pb2.LogLine",
+                return_type="process_orchestrator_pb2.LogLine",
             ),
             CommandDescription(
                 name="ps",
-                data_type=["process_manager_pb2.ProcessQuery"],
+                data_type=["process_orchestrator_pb2.ProcessQuery"],
                 help="Get the status of the listed process from the process query input (can be multiple).",
-                return_type="process_manager_pb2.ProcessInstance",
+                return_type="process_orchestrator_pb2.ProcessInstance",
             ),
         ]
 
@@ -253,7 +250,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  #  outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.CREATE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(BootRequest)  # 3rd step
     def boot(self, br: BootRequest) -> Response:
@@ -286,7 +283,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(None)  # 3rd step
     def terminate(self) -> Response:
@@ -316,7 +313,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
     def restart(self, q: ProcessQuery) -> Response:
@@ -346,7 +343,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
     def kill(self, q: ProcessQuery) -> Response:
@@ -376,7 +373,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+        action=ActionType.READ, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
     def ps(self, q: ProcessQuery) -> Response:
@@ -402,7 +399,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+        action=ActionType.DELETE, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(ProcessQuery)  # 3rd step
     def flush(self, query: ProcessQuery) -> Response:
@@ -463,14 +460,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+        action=ActionType.READ, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @unpack_request_data_to(None)  # 3rd step
     def describe(self) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(
-            type="process_manager",
+            type="process_orchestrator",
             name=self.name,
             info=self.configuration.log_path,
             session="no_session" if not self.session else self.session,
@@ -494,7 +491,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     # ORDER MATTERS!
     @async_broadcasted  # outer most wrapper 1st step
     @async_authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+        action=ActionType.READ, system=SystemType.PROCESS_ORCHESTRATOR
     )  # 2nd step
     @async_unpack_request_data_to(LogRequest)  # 3rd step
     async def logs(self, lr: LogRequest) -> Response:
@@ -590,21 +587,3 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             if order_by == "leaf_first":
                 processes.reverse()
         return processes
-
-    @staticmethod
-    def get(conf, **kwargs):
-        log = get_logger("process_manager.get")
-
-        if conf.data.type == ProcessManagerTypes.SSH:
-
-            log.info("Starting [green]SSH process_manager[/green]")
-            return SSHProcessManager(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.K8s:
-
-            log.info("Starting [green]K8s process_manager[/green]")
-            return K8sProcessManager(conf, **kwargs)
-        else:
-            log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
-            raise RuntimeError(
-                f"ProcessManager type {conf.get('type')} is unsupported!"
-            )

@@ -1,17 +1,18 @@
-from drunc.process_manager.interface.process_manager import process_manager_cli
 from drunc_core.utils.utils import (
     create_logger_handler,
     get_logger,
     setup_root_logger,
 )
 
+from drunc.process_orchestrator.interface.main import process_orchestrator_cli
+
 
 def main():
     try:
-        process_manager_cli()
+        process_orchestrator_cli()
     except Exception as e:
-        setup_root_logger("INFO")
-        log = get_logger("process_manager")
+        setup_root_logger()
+        log = get_logger("process_orchestrator")
         create_logger_handler(rich_handler=False)
         log.error("Exception thrown!")
         log.exception(e)

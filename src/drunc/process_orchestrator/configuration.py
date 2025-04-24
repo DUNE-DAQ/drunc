@@ -3,40 +3,40 @@ from enum import Enum
 from importlib.resources import path
 from urllib.parse import urlparse
 
-from kafkaopmon.OpMonPublisher import OpMonPublisher
-
 from drunc_core.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc_core.exceptions import DruncCommandException
-from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc_core.utils.configuration import ConfHandler
 from drunc_core.utils.utils import get_logger
+from kafkaopmon.OpMonPublisher import OpMonPublisher
+
+from drunc.process_orchestrator.exceptions import UnknownProcessOrchestratorType
 
 
-class ProcessManagerTypes(Enum):
+class ProcessOrchestratorTypes(Enum):
     Unknown = 0
     SSH = 1
     K8s = 2
 
 
-class ProcessManagerConfData:
+class ProcessOrchestratorConfData:
     def __init__(self):
         self.broadcaster = None
         self.authoriser = None
-        self.type = ProcessManagerTypes.Unknown
+        self.type = ProcessOrchestratorTypes.Unknown
         self.command_address = ""
         self.environment = {}
         self.opmon_uri = None
         self.opmon_publisher = None
 
 
-class ProcessManagerConfHandler(ConfHandler):
+class ProcessOrchestratorConfHandler(ConfHandler):
     def __init__(self, log_path: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.log_path = log_path
-        self.log = get_logger("process_manager.conf_handler")
+        self.log = get_logger("process_orchestrator.conf_handler")
 
     def _parse_dict(self, data):
-        new_data = ProcessManagerConfData()
+        new_data = ProcessOrchestratorConfData()
         if data.get("broadcaster"):
             new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(
                 data.get("broadcaster")
@@ -48,13 +48,13 @@ class ProcessManagerConfHandler(ConfHandler):
 
         match data["type"].lower():
             case "ssh":
-                new_data.type = ProcessManagerTypes.SSH
+                new_data.type = ProcessOrchestratorTypes.SSH
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
-                new_data.type = ProcessManagerTypes.K8s
+                new_data.type = ProcessOrchestratorTypes.K8s
                 new_data.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
             case _:
-                raise UnknownProcessManagerType(data["type"])
+                raise UnknownProcessOrchestratorType(data["type"])
 
         new_data.opmon_publisher = None
         opmon_uri = data.get("opmon_uri", None)
@@ -102,60 +102,35 @@ class ProcessManagerConfHandler(ConfHandler):
         return new_data
 
 
-def get_commandline_parameters(db, config_filename, session_id, session_name, obj):
-    runs_on = obj.runs_on.runs_on.id
-    control_service_port = -1
-    control_service_protocol = ""
-    for svc in obj.exposes_service:
-        if svc.id.endswith("_control"):
-            control_service_port = svc.port
-            control_service_protocol = svc.protocol
-            break
-
-    commandline_parameters = [
-        "-s",
-        session_name,
-        "-k",
-        session_id,
-        "-n",
-        obj.id,
-        "-c",
-        f"{control_service_protocol}://{runs_on}:{control_service_port}",
-        "-d",
-        config_filename,
-    ]
-    if "RCApplication" in obj.oksTypes():
-        commandline_parameters += [
-            "-l",
-            db.get_dal("Session", session_id).controller_log_level,
-        ]
-
-    return commandline_parameters
-
-
-def get_process_manager_configuration(process_manager_conf_filename: str) -> str:
+def get_process_orchestrator_configuration(
+    process_orchestrator_conf_filename: str,
+) -> str:
     ## Make the configuration name finding easier
-    if os.path.splitext(process_manager_conf_filename)[1] != ".json":
-        process_manager_conf_filename += ".json"
+    if os.path.splitext(process_orchestrator_conf_filename)[1] != ".json":
+        process_orchestrator_conf_filename += ".json"
     ## If no scheme is provided, assume that it is an internal packaged configuration.
     ## First check it's not an existing external file
-    if os.path.isfile(process_manager_conf_filename):
-        if urlparse(process_manager_conf_filename).scheme == "":
-            process_manager_conf_filename = "file://" + process_manager_conf_filename
+    if os.path.isfile(process_orchestrator_conf_filename):
+        if urlparse(process_orchestrator_conf_filename).scheme == "":
+            process_orchestrator_conf_filename = (
+                "file://" + process_orchestrator_conf_filename
+            )
     else:
         ## Check if the file is in the list of packaged configurations
-        packaged_configurations = os.listdir(path("drunc.data.process_manager", ""))
-        if process_manager_conf_filename in packaged_configurations:
-            process_manager_conf_filename = (
+        packaged_configurations = os.listdir(
+            path("drunc.data.process_orchestrator", "")
+        )
+        if process_orchestrator_conf_filename in packaged_configurations:
+            process_orchestrator_conf_filename = (
                 "file://"
-                + str(path("drunc.data.process_manager", ""))
+                + str(path("drunc.data.process_orchestrator", ""))
                 + "/"
-                + process_manager_conf_filename
+                + process_orchestrator_conf_filename
             )
         else:
-            log = get_logger("process_manager.ConfHandler")
+            log = get_logger("process_orchestrator.ConfHandler")
             log.error(
-                f"Configuration [red]{process_manager_conf_filename}[/red] not found, check filename spelling or use a packaged configuration as one of [green]{'[/green], [green]'.join(packaged_configurations)}[/green]."
+                f"Configuration [red]{process_orchestrator_conf_filename}[/red] not found, check filename spelling or use a packaged configuration as one of [green]{'[/green], [green]'.join(packaged_configurations)}[/green]."
             )
             exit()
-    return process_manager_conf_filename
+    return process_orchestrator_conf_filename

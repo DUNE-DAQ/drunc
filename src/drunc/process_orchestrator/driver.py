@@ -4,7 +4,17 @@ import os
 import signal
 import tempfile
 
-from drunc_messages.process_manager_pb2 import (
+from drunc_core.connectivity_service.client import ConnectivityServiceClient
+from drunc_core.connectivity_service.exceptions import ApplicationLookupUnsuccessful
+from drunc_core.exceptions import DruncSetupException, DruncShellException
+from drunc_core.utils.shell_utils import GRPCDriver
+from drunc_core.utils.utils import (
+    get_control_type_and_uri_from_connectivity_service,
+    host_is_local,
+    resolve_localhost_and_127_ip_to_network_ip,
+    resolve_localhost_to_hostname,
+)
+from drunc_messages.process_orchestrator_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -15,34 +25,24 @@ from drunc_messages.process_manager_pb2 import (
     ProcessQuery,
     ProcessRestriction,
 )
-from drunc_messages.process_manager_pb2_grpc import ProcessManagerStub
+from drunc_messages.process_orchestrator_pb2_grpc import ProcessOrchestratorStub
 from drunc_messages.request_response_pb2 import Description
 
-from drunc_core.connectivity_service.client import ConnectivityServiceClient
-from drunc_core.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
-from drunc_core.exceptions import DruncSetupException, DruncShellException
-from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc_core.utils.shell_utils import GRPCDriver
-from drunc_core.utils.utils import (
-    get_control_type_and_uri_from_connectivity_service,
-    host_is_local,
-    resolve_localhost_and_127_ip_to_network_ip,
-    resolve_localhost_to_hostname,
-)
+from drunc.process_orchestrator.utils import get_log_path, get_rte_script
 
 
-class ProcessManagerDriver(GRPCDriver):
+class ProcessOrchestratorDriver(GRPCDriver):
     controller_address = ""
 
     def __init__(self, address: str, token, **kwargs):
-        super(ProcessManagerDriver, self).__init__(
-            name="process_manager.driver", address=address, token=token, **kwargs
+        super(ProcessOrchestratorDriver, self).__init__(
+            name="process_orchestrator.driver", address=address, token=token, **kwargs
         )
-        self.log.debug("set up process_manager.driver")
+        self.log.debug("set up process_orchestrator.driver")
 
     def create_stub(self, channel):
-        return ProcessManagerStub(channel)
+        return ProcessOrchestratorStub(channel)
 
     async def _convert_oks_to_boot_request(
         self,
@@ -53,7 +53,10 @@ class ProcessManagerDriver(GRPCDriver):
         session_name: str,
         override_logs: bool,
     ) -> BootRequest:
-        from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
+        from drunc.process_orchestrator.oks_parser import (
+            collect_apps,
+            collect_infra_apps,
+        )
 
         env = {
             "DUNEDAQ_SESSION": session_name,
@@ -203,7 +206,7 @@ To debug it, close drunc and run the following command:
         top_controller_name = session_dal.segment.controller.id
 
         def get_controller_address(session_dal, session_name):
-            from drunc.process_manager.oks_parser import collect_variables
+            from drunc.process_orchestrator.oks_parser import collect_variables
 
             env = {}
             collect_variables(session_dal.environment, env)

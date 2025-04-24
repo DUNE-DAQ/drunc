@@ -7,8 +7,9 @@ import uuid
 from time import sleep
 
 import sh
+from drunc_core.exceptions import DruncCommandException
 from drunc_messages.broadcast_pb2 import BroadcastType
-from drunc_messages.process_manager_pb2 import (
+from drunc_messages.process_orchestrator_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -20,9 +21,8 @@ from drunc_messages.process_manager_pb2 import (
     ProcessUUID,
 )
 
-from drunc_core.exceptions import DruncCommandException
-from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import on_parent_exit
+from drunc.process_orchestrator.process_orchestrator import ProcessOrchestrator
+from drunc.process_orchestrator.utils import on_parent_exit
 
 
 class AppProcessWatcherThread(threading.Thread):
@@ -46,7 +46,7 @@ class AppProcessWatcherThread(threading.Thread):
         )
 
 
-class SSHProcessManager(ProcessManager):
+class SSHProcessOrchestrator(ProcessOrchestrator):
     def __init__(self, configuration, **kwargs):
         self.session = getpass.getuser()  # unfortunate
 
@@ -251,7 +251,7 @@ class SSHProcessManager(ProcessManager):
                 ]
                 self.log.debug(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
-                # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
+                # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process orchestrator CPU.
                 self.process_store[uuid] = self.ssh(
                     *arguments,
                     # _out=partial(self._process_children_logs, uuid),

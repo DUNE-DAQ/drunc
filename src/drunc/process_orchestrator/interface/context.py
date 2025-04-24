@@ -1,10 +1,7 @@
 from collections.abc import Mapping
 
-from drunc_messages.token_pb2 import Token
-
 from drunc_core.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc_core.broadcast.client.configuration import BroadcastClientConfHandler
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc_core.utils.configuration import ConfTypes
 from drunc_core.utils.shell_utils import (
     GRPCDriver,
@@ -12,17 +9,22 @@ from drunc_core.utils.shell_utils import (
     create_dummy_token_from_uname,
 )
 from drunc_core.utils.utils import get_logger, resolve_localhost_to_hostname
+from drunc_messages.token_pb2 import Token
+
+from drunc.process_orchestrator.process_orchestrator_driver import (
+    ProcessOrchestratorDriver,
+)
 
 
-class ProcessManagerContext(ShellContext):  # boilerplatefest
+class ProcessOrchestratorContext(ShellContext):  # boilerplatefest
     def __init__(self, *args, **kwargs):
         self.status_receiver = None
-        super(ProcessManagerContext, self).__init__(*args, **kwargs)
+        super(ProcessOrchestratorContext, self).__init__(*args, **kwargs)
 
     def reset(self, address: str = None):
         self.address = resolve_localhost_to_hostname(address)
-        super(ProcessManagerContext, self)._reset(
-            name="process_manager_context",
+        super(ProcessOrchestratorContext, self)._reset(
+            name="process_orchestrator_context",
             token_args={},
             driver_args={},
         )
@@ -31,7 +33,7 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
         if not self.address:
             return {}
         return {
-            "process_manager": ProcessManagerDriver(
+            "process_orchestrator": ProcessOrchestratorDriver(
                 self.address,
                 self._token,
                 aio_channel=True,
@@ -47,8 +49,8 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             type=ConfTypes.ProtobufAny,
         )
         self.status_receiver = BroadcastHandler(bcch)
-        get_logger("process_manager.shell").info(
-            f":ear: Listening to the Process Manager at {self.address}"
+        get_logger("process_orchestrator.shell").info(
+            f":ear: Listening to the Process Orchestrator at {self.address}"
         )
 
     def terminate(self):

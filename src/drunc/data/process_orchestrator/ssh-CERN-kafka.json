@@ -1,6 +1,6 @@
 {
     "type": "ssh",
-    "name": "SSHProcessManager",
+    "name": "SSHProcessOrchestrator",
     "command_address": "localhost:0",
     "kill_timeout": 0.5,
 

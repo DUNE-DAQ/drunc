@@ -1,8 +1,8 @@
 {
-    "type": "k8s",
-    "name": "K8sProcessManager",
-    "command_address": "0.0.0.0:10054",
-    "image": "ghcr.io/dune-daq/alma9:latest",
+    "type": "ssh",
+    "name": "SSHProcessOrchestrator",
+    "command_address": "localhost:0",
+    "kill_timeout": 0.5,
 
     "authoriser": {
         "type": "dummy"
@@ -15,5 +15,10 @@
     },
     "environment": {
         "GRPC_ENABLE_FORK_SUPPORT": "false"
+    },
+    "opmon_uri": {
+        "path": "monkafka.cern.ch:30092/opmon_stream",
+        "type": "stream",
+        "sleep_time" : 10
     }
 }
