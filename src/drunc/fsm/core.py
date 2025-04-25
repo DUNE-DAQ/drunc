@@ -80,6 +80,7 @@ class PreOrPostTransitionSequence:
                     _input_data=input_data, _context=ctx, **transition_args
                 )
                 self.log.debug(f"data after callback: {input_data}")
+                ctx.runinfo = input_data
                 try:
                     json.dumps(input_data)
                 except TypeError:
@@ -225,9 +226,9 @@ class FSM:
         return valid_transitions
 
     def get_transition(self, transition_name) -> bool:
-        self.log.debug(f'Searching for transition {transition_name}')
+        self.log.debug(f"Searching for transition {transition_name}")
         transition = [t for t in self.transitions if t.name == transition_name]
-        self.log.debug(f'Found transition {transition}')
+        self.log.debug(f"Found transition {transition}")
         if not transition:
             raise fsme.NoTransitionOfName(transition_name)
         return transition[0]

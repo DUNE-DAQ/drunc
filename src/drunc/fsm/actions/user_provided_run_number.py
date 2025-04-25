@@ -1,6 +1,7 @@
-from druncschema.opmon.generic_pb2 import RunInfo
+
 import time
-from drunc.fsm.actions.utils import validate_run_type, publish_runinfo
+from drunc.fsm.actions.utils import validate_run_type
+
 from drunc.fsm.core import FSMAction
 
 
@@ -23,17 +24,5 @@ class UserProvidedRunNumber(FSMAction):
         _input_data["run"] = run_number
         _input_data["disable_data_storage"] = disable_data_storage
         _input_data["trigger_rate"] = trigger_rate
-
-        _message=RunInfo(
-                    run_type=run_type,
-                    trigger_rate=trigger_rate,
-                    run_number=run_number,
-                    disable_data_storage=disable_data_storage,
-                    run_time = int(time.time()),
-                    running=True,
-                    data_taking=False,
-                )
-        publish_runinfo(_context,_message)
-
 
         return _input_data
