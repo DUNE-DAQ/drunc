@@ -15,6 +15,7 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import (
     Description,
     Response,
@@ -298,13 +299,6 @@ class Controller(ControllerServicer):
 
     def controllr_publisher(self, message, custom_origin: Optional[dict] = None):
         if self.opmon_publisher is not None:
-            # if self.runinfo is not None:
-            #     message=RunInfo(
-            #         run_type=self.runinfo["production_vs_test"],
-            #         trigger_rate=self.runinfo["trigger_rate"]
-            #         run_number=self.runinfo["run"],
-            #         disable_data_storage=self.runinfo["disable_data_storage"],
-            #         )
             try:
                 if custom_origin is None:
                     custom_origin = {}
@@ -324,6 +318,17 @@ class Controller(ControllerServicer):
             try:
                 self.log.debug(f"Publishing periodic FSM status every {sleep_time}s")
                 self.stateful_node.publish_state()
+                if self.runinfo is not None:
+                    self.log.debug(f"Publishing periodic run info every {sleep_time}s")
+                    self.controllr_publisher(
+                        message=RunInfo(
+                            run_type=self.runinfo["production_vs_test"],
+                            trigger_rate=self.runinfo["trigger_rate"],
+                            run_number=self.runinfo["run"],
+                            disable_data_storage=self.runinfo["disable_data_storage"],
+                        )
+                    )
+
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic FSM status: {e}")
             time.sleep(sleep_time)
