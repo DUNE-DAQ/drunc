@@ -13,12 +13,14 @@ class Callback:
 
 
 import json
+import time
 import traceback
 from inspect import Parameter, signature
 from typing import List
 
 from druncschema.controller_pb2 import Argument
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from druncschema.opmon.generic_pb2 import RunInfo
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException
@@ -80,7 +82,22 @@ class PreOrPostTransitionSequence:
                     _input_data=input_data, _context=ctx, **transition_args
                 )
                 self.log.debug(f"data after callback: {input_data}")
-                ctx.runinfo = input_data
+                if input_data is not None:
+                    ctx.runinfo = input_data
+                    if callback.method.__name__ == "start":
+                        ctx.controllr_publisher(
+                            message=RunInfo(
+                                run_type=input_data["production_vs_test"],
+                                trigger_rate=input_data["trigger_rate"],
+                                run_number=input_data["run"],
+                                disable_data_storage=input_data["disable_data_storage"],
+                                run_time_at_start=input_data["run_time_at_start"],
+                                run_time_since_start=int(
+                                    time.time() - input_data["run_time_at_start"]
+                                ),
+                            )
+                        )
+
                 try:
                     json.dumps(input_data)
                 except TypeError:

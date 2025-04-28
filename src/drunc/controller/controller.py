@@ -327,28 +327,17 @@ class Controller(ControllerServicer):
                     trigger_rate = 0.0
                     run_number = 0
                     disable_data_storage = False
-                else:
-                    run_type = (
-                        self.runinfo["production_vs_test"] if self.runinfo else ""
-                    )
-                    run_number = self.runinfo["run"] if self.runinfo else 0
-                    disable_data_storage = (
-                        self.runinfo["disable_data_storage"] if self.runinfo else False
-                    )
-                    trigger_rate = self.runinfo["trigger_rate"] if self.runinfo else 0.0
+                    run_time_at_start = 0
+                    run_time_since_start = 0
 
-                if current_state == "ready" and self.run_start_time is None:
-                    self.run_start_time = int(time.time())
-                    self.run_start_monotonic = time.monotonic()
+                elif self.runinfo is not None:
+                    run_type = self.runinfo["production_vs_test"]
+                    run_number = self.runinfo["run"]
+                    disable_data_storage = self.runinfo["disable_data_storage"]
+                    trigger_rate = self.runinfo["trigger_rate"]
+                    run_time_at_start = self.runinfo["run_time_at_start"]
 
-                run_time_at_start = (
-                    self.run_start_time if self.run_start_time is not None else 0
-                )
-                run_time_since_start = (
-                    int(time.monotonic() - self.run_start_monotonic)
-                    if self.run_start_monotonic is not None
-                    else 0
-                )
+                run_time_since_start = int(time.time() - run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controllr_publisher(
@@ -357,7 +346,7 @@ class Controller(ControllerServicer):
                         trigger_rate=trigger_rate,
                         run_number=run_number,
                         disable_data_storage=disable_data_storage,
-                        run_time_at_start=run_time_at_start,
+                        run_time_at_start=int(run_time_at_start),
                         run_time_since_start=run_time_since_start,
                     )
                 )

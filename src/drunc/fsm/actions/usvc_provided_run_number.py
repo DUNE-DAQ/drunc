@@ -1,3 +1,5 @@
+import time
+
 import requests
 
 from drunc.fsm.actions.utils import (
@@ -40,6 +42,8 @@ class UsvcProvidedRunNumber(FSMAction):
         _input_data["run"] = self._getnew_run_number()
         _input_data["disable_data_storage"] = disable_data_storage
         _input_data["trigger_rate"] = trigger_rate
+
+        _input_data["run_time_at_start"] = time.time()
 
         return _input_data
 
