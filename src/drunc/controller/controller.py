@@ -321,14 +321,16 @@ class Controller(ControllerServicer):
                 self.log.debug(f"Publishing periodic FSM status every {sleep_time}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
+                print('debug runinfo: ', self.runinfo)
 
                 if current_state in ("initial", "configured"):
                     run_type = ""
                     trigger_rate = 0.0
                     run_number = 0
                     disable_data_storage = False
-                    run_time_at_start = 0
+                    run_time_at_start = 0 
                     run_time_since_start = 0
+                    self.runinfo = None
 
                 elif self.runinfo is not None:
                     run_type = self.runinfo["production_vs_test"]
@@ -336,8 +338,7 @@ class Controller(ControllerServicer):
                     disable_data_storage = self.runinfo["disable_data_storage"]
                     trigger_rate = self.runinfo["trigger_rate"]
                     run_time_at_start = self.runinfo["run_time_at_start"]
-
-                run_time_since_start = int(time.time() - run_time_at_start)
+                    run_time_since_start = int(time.time() - run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controllr_publisher(

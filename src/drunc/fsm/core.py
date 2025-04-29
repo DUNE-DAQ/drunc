@@ -92,9 +92,7 @@ class PreOrPostTransitionSequence:
                                 run_number=input_data["run"],
                                 disable_data_storage=input_data["disable_data_storage"],
                                 run_time_at_start=input_data["run_time_at_start"],
-                                run_time_since_start=int(
-                                    time.time() - input_data["run_time_at_start"]
-                                ),
+                                run_time_since_start=0,
                             )
                         )
 
