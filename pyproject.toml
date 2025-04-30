@@ -31,7 +31,7 @@ dependencies = [
 
 
 [tool.hatch.version]
-path = "VERSION.py"
+path = "version.py"
 
 [tool.hatch.packages.find]
 where = ["src"]
