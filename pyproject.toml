@@ -1,11 +1,14 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [project]
 name = "drunc"
 requires-python = ">=3.10,<3.11"
-dynamic = ["version", "readme"]
+readme = "docs/README.md"
+dynamic = ["version"]
+description = "DUNE Run Control"
+
 dependencies = [
     "click==8.1.7",
     "click-shell==2.1",
@@ -26,8 +29,18 @@ dependencies = [
     "psutil==6.1.0",
 ]
 
+
+[tool.hatch.version]
+path = "VERSION.py"
+
+[tool.hatch.packages.find]
+where = ["src"]
+
+[tool.hatch.package-data]
+"drunc.data.process_manager" = ["*.json"]
+
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest",]
+dev = ["ruff", "pre-commit", "pytest"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
@@ -41,13 +54,3 @@ drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
 application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
 drunc-ssh-validator = "drunc.apps.__main_ssh_validator__:main"
 drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
-
-[tool.setuptools.dynamic]
-version = {attr = "drunc.__version__"}
-readme = {file = ["docs/README.md"]}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-"drunc.data.process_manager" = ["*.json"]
