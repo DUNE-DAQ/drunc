@@ -42,6 +42,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import boot
+from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -300,6 +301,11 @@ def unified_shell(
     for transition in transitions.commands:
         ctx.command.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
+        )
+
+    for sequence in session_dal.segment.controller.fsm.command_sequences:
+        ctx.command.add_command(
+            *generate_fsm_sequence_command(ctx, sequence, controller_name)
         )
 
     ctx.command.add_command(status, "status")
