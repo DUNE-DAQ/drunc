@@ -1,10 +1,10 @@
 import time
 import traceback
 
-from drunc-messages.controller_pb2 import AddressedCommand, FSMCommand
-from drunc-messages.generic_pb2 import Stacktrace
-from drunc-messages.opmon.FSM_pb2 import CommandTime
-from drunc-messages.request_response_pb2 import Response, ResponseFlag
+from drunc_messages.controller_pb2 import AddressedCommand, FSMCommand
+from drunc_messages.generic_pb2 import Stacktrace
+from drunc_messages.opmon.FSM_pb2 import CommandTime
+from drunc_messages.request_response_pb2 import Response, ResponseFlag
 
 from drunc.exceptions import DruncException
 from drunc.utils.grpc_utils import pack_to_any
@@ -24,7 +24,7 @@ def broadcasted(cmd):
         # https://docs.python.org/3/howto/logging.html#custom-levels
         # lets not
         log.debug("Entering")
-        from drunc-messages.broadcast_pb2 import BroadcastType
+        from drunc_messages.broadcast_pb2 import BroadcastType
 
         msg = f"User '{request.token.user_name}' executing '{cmd.__name__}'"
 
@@ -106,7 +106,7 @@ def async_broadcasted(cmd):
 
         log = getLogger("async_broadcasted_decorator")
         log.debug("Entering")
-        from drunc-messages.broadcast_pb2 import BroadcastType
+        from drunc_messages.broadcast_pb2 import BroadcastType
 
         obj.broadcast(
             message=f"User '{request.token.user_name}' attempting to execute '{cmd.__name__}'",

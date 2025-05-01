@@ -4,8 +4,8 @@ import signal
 
 import click
 import grpc
-from drunc-messages.controller_pb2_grpc import add_ControllerServicer_to_server
-from drunc-messages.token_pb2 import Token
+from drunc_messages.controller_pb2_grpc import add_ControllerServicer_to_server
+from drunc_messages.token_pb2 import Token
 
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.controller import Controller

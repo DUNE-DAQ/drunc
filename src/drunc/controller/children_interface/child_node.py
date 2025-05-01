@@ -13,12 +13,12 @@ from drunc.utils.utils import (
     get_logger,
 )
 
-from drunc-messages.request_response_pb2 import (  # isort: skip
+from drunc_messages.request_response_pb2 import (  # isort: skip
     Description,
     Response,
     ResponseFlag,
 )
-from drunc-messages.token_pb2 import Token  # isort: skip
+from drunc_messages.token_pb2 import Token  # isort: skip
 
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):

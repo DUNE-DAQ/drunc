@@ -4,23 +4,23 @@ import time
 import traceback
 from typing import Optional
 
-from drunc-messages.authoriser_pb2 import ActionType, SystemType
-from drunc-messages.broadcast_pb2 import BroadcastType
-from drunc-messages.controller_pb2 import (
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.controller_pb2 import (
     AddressedCommand,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
 )
-from drunc-messages.controller_pb2_grpc import ControllerServicer
-from drunc-messages.generic_pb2 import PlainText, Stacktrace
-from drunc-messages.request_response_pb2 import (
+from drunc_messages.controller_pb2_grpc import ControllerServicer
+from drunc_messages.generic_pb2 import PlainText, Stacktrace
+from drunc_messages.request_response_pb2 import (
     Description,
     Response,
     ResponseFlag,
 )
-from drunc-messages.token_pb2 import Token
+from drunc_messages.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler

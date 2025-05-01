@@ -5,7 +5,7 @@ from functools import update_wrapper
 from operator import attrgetter
 
 import click
-from drunc-messages.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
+from drunc_messages.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException

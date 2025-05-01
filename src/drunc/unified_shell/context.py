@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 
-from drunc-messages.token_pb2 import Token
+from drunc_messages.token_pb2 import Token
 
 from drunc.utils.shell_utils import GRPCDriver, ShellContext
 

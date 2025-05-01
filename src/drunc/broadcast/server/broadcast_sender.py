@@ -81,8 +81,8 @@ class BroadcastSender:
             # nice and easy case
             return
 
-        from drunc-messages.broadcast_pb2 import BroadcastMessage, Emitter
-        from drunc-messages.generic_pb2 import PlainText
+        from drunc_messages.broadcast_pb2 import BroadcastMessage, Emitter
+        from drunc_messages.generic_pb2 import PlainText
 
         from drunc.utils.grpc_utils import pack_to_any
 
@@ -101,7 +101,7 @@ class BroadcastSender:
         self.implementation._send(bm)
 
     def _interrupt_with_exception(self, exception, context, stack=""):
-        from drunc-messages.broadcast_pb2 import BroadcastType
+        from drunc_messages.broadcast_pb2 import BroadcastType
 
         txt = f"'{exception.__class__.__name__}' exception thrown: {exception}"
 
@@ -126,7 +126,7 @@ class BroadcastSender:
         )
 
     async def _async_interrupt_with_exception(self, exception, context, stack=""):
-        from drunc-messages.broadcast_pb2 import BroadcastType
+        from drunc_messages.broadcast_pb2 import BroadcastType
 
         txt = f"'{exception.__class__.__name__}' exception thrown: {exception}"
 

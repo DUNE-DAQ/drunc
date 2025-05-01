@@ -1,7 +1,7 @@
 import getpass
 
 import click
-from drunc-messages.process_manager_pb2 import LogRequest, ProcessQuery
+from drunc_messages.process_manager_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
 

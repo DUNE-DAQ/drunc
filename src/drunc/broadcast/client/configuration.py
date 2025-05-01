@@ -22,7 +22,7 @@ class BroadcastClientConfHandler(ConfHandler):
         #    case KafkaBroadcastHandlerConfiguration
         #    ...
 
-        from drunc-messages.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
+        from drunc_messages.broadcast_pb2 import KafkaBroadcastHandlerConfiguration
 
         from drunc.utils.grpc_utils import UnpackingError, unpack_any
 

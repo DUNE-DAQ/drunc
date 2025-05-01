@@ -1,4 +1,4 @@
-from drunc-messages.authoriser_pb2 import ActionType
+from drunc_messages.authoriser_pb2 import ActionType
 from google.rpc import code_pb2
 
 from drunc.exceptions import DruncCommandException

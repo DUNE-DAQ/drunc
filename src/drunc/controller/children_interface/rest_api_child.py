@@ -9,10 +9,10 @@ from typing import NoReturn
 
 import requests
 import socks
-from drunc-messages.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
-from drunc-messages.generic_pb2 import PlainText
-from drunc-messages.request_response_pb2 import Response, ResponseFlag
-from drunc-messages.token_pb2 import Token
+from drunc_messages.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
+from drunc_messages.generic_pb2 import PlainText
+from drunc_messages.request_response_pb2 import Response, ResponseFlag
+from drunc_messages.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 

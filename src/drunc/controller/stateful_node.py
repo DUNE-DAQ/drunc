@@ -110,7 +110,7 @@ class StatefulNode(abc.ABC):
         self.__in_error = ErrorState(stateful_node=self, initial_value=False)
 
     def publish_state(self):
-        from drunc-messages.opmon.FSM_pb2 import FSMStatus
+        from drunc_messages.opmon.FSM_pb2 import FSMStatus
 
         if self.publisher is not None:
             self.publisher.publish(

@@ -9,10 +9,10 @@ from drunc.controller.stateful_node import StatefulNode
 from drunc.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
 from drunc.utils.utils import get_logger
 
-from drunc-messages.controller_pb2 import Status  # isort: skip
-from drunc-messages.generic_pb2 import PlainText, Stacktrace  # isort: skip
-from drunc-messages.request_response_pb2 import Request  # isort: skip
-from drunc-messages.controller_pb2 import AddressedCommand  # isort: skip
+from drunc_messages.controller_pb2 import Status  # isort: skip
+from drunc_messages.generic_pb2 import PlainText, Stacktrace  # isort: skip
+from drunc_messages.request_response_pb2 import Request  # isort: skip
+from drunc_messages.controller_pb2 import AddressedCommand  # isort: skip
 
 
 def get_status_message(stateful: StatefulNode):

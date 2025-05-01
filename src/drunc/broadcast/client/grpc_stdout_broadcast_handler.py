@@ -1,7 +1,7 @@
 import grpc
-from drunc-messages.broadcast_pb2 import BroadcastMessage, BroadcastType
-from drunc-messages.broadcast_pb2_grpc import BroadcastReceiverServicer
-from drunc-messages.generic_pb2 import Empty
+from drunc_messages.broadcast_pb2 import BroadcastMessage, BroadcastType
+from drunc_messages.broadcast_pb2_grpc import BroadcastReceiverServicer
+from drunc_messages.generic_pb2 import Empty
 
 from drunc.controller.configuration import ControllerConfHandler
 
@@ -28,7 +28,7 @@ class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
         self._log.debug("Broadcast receiver stopped")
 
     def connect(self) -> None:
-        from drunc-messages.broadcast_pb2 import BroadcastRequest
+        from drunc_messages.broadcast_pb2 import BroadcastRequest
 
         from drunc.utils.grpc_utils import send_command
 
@@ -48,7 +48,7 @@ class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
             raise e
 
     def disconnect(self) -> None:
-        from drunc-messages.broadcast_receiver_pb2 import BroadcastRequest
+        from drunc_messages.broadcast_receiver_pb2 import BroadcastRequest
 
         from drunc.utils.grpc_utils import send_command
 
@@ -76,7 +76,7 @@ class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
 
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
 
-        from drunc-messages.broadcast_pb2_grpc import (
+        from drunc_messages.broadcast_pb2_grpc import (
             add_BroadcastReceiverServicer_to_server,
         )
 
@@ -93,7 +93,7 @@ class gRPCStdoutBroadcastHandler(BroadcastReceiverServicer):
     def handle_broadcast(
         self, bm: BroadcastMessage, context: grpc.aio.ServicerContext = None
     ) -> Empty:
-        from drunc-messages.generic_pb2 import PlainText
+        from drunc_messages.generic_pb2 import PlainText
 
         from drunc.utils.grpc_utils import unpack_any
 

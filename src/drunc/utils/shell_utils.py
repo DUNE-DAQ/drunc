@@ -4,9 +4,9 @@ from collections.abc import Mapping
 
 import click
 import grpc
-from drunc-messages.generic_pb2 import PlainText, Stacktrace
-from drunc-messages.request_response_pb2 import Request, ResponseFlag
-from drunc-messages.token_pb2 import Token
+from drunc_messages.generic_pb2 import PlainText, Stacktrace
+from drunc_messages.request_response_pb2 import Request, ResponseFlag
+from drunc_messages.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 from rich.console import Console
 
@@ -52,7 +52,7 @@ def add_traceback_flag():
 
 
 class DecodedResponse:
-    ## Warning! This should be kept in sync with drunc-messages/request_response.proto/Response class
+    ## Warning! This should be kept in sync with drunc_messages/request_response.proto/Response class
     name = None
     token = None
     data = None

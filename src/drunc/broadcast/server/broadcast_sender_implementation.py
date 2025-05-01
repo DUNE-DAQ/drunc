@@ -1,6 +1,6 @@
 import abc
 
-from drunc-messages.broadcast_pb2 import BroadcastMessage
+from drunc_messages.broadcast_pb2 import BroadcastMessage
 
 
 class BroadcastSenderImplementation(abc.ABC):

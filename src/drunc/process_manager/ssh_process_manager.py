@@ -7,8 +7,8 @@ import uuid
 from time import sleep
 
 import sh
-from drunc-messages.broadcast_pb2 import BroadcastType
-from drunc-messages.process_manager_pb2 import (
+from drunc_messages.broadcast_pb2 import BroadcastType
+from drunc_messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,

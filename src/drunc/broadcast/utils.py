@@ -21,7 +21,7 @@ broadcast_types_loglevels = {
 def get_broadcast_level_from_broadcast_type(
     btype, logger, levels=broadcast_types_loglevels
 ):
-    from drunc-messages.broadcast_pb2 import BroadcastType
+    from drunc_messages.broadcast_pb2 import BroadcastType
 
     bt = BroadcastType.Name(btype)
     if bt not in levels:

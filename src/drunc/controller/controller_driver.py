@@ -1,14 +1,14 @@
 from functools import wraps
 
-from drunc-messages.controller_pb2 import (
+from drunc_messages.controller_pb2 import (
     AddressedCommand,
     FSMCommandResponse,
     FSMCommandsDescription,
     Status,
 )
-from drunc-messages.controller_pb2_grpc import ControllerStub
-from drunc-messages.generic_pb2 import PlainText
-from drunc-messages.request_response_pb2 import Description
+from drunc_messages.controller_pb2_grpc import ControllerStub
+from drunc_messages.generic_pb2 import PlainText
+from drunc_messages.request_response_pb2 import Description
 
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 

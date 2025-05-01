@@ -1,7 +1,7 @@
 import getpass
 
 import click
-from drunc-messages.process_manager_pb2 import ProcessQuery
+from drunc_messages.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext

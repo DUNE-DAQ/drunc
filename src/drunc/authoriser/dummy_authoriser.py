@@ -1,5 +1,5 @@
-from drunc-messages.authoriser_pb2 import ActionType, SystemType
-from drunc-messages.token_pb2 import Token
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.token_pb2 import Token
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.utils.utils import get_logger

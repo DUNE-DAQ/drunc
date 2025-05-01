@@ -19,7 +19,7 @@ class BroadcastHandler:
             # For now, 1 server type <-> 1 client type...
             # Maybe in the future some sort of callback-based functionality would be preferable.
             case BroadcastTypes.Kafka:
-                from drunc-messages.broadcast_pb2 import BroadcastMessage
+                from drunc_messages.broadcast_pb2 import BroadcastMessage
 
                 from drunc.broadcast.client.kafka_stdout_broadcast_handler import (
                     KafkaStdoutBroadcastHandler,

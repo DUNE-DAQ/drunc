@@ -5,8 +5,8 @@ import socket
 import uuid
 from time import sleep
 
-from drunc-messages.authoriser_pb2 import ActionType, SystemType
-from drunc-messages.process_manager_pb2 import (
+from drunc_messages.authoriser_pb2 import ActionType, SystemType
+from drunc_messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -17,7 +17,7 @@ from drunc-messages.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from drunc-messages.request_response_pb2 import Response
+from drunc_messages.request_response_pb2 import Response
 from kubernetes import client, config
 
 from drunc.authoriser.decorators import authentified_and_authorised
