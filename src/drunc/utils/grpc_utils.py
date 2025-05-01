@@ -1,9 +1,9 @@
 import functools
 
 import grpc
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from drunc-messages.generic_pb2 import PlainText
+from drunc-messages.request_response_pb2 import Response, ResponseFlag
+from drunc-messages.token_pb2 import Token
 from google.protobuf import any_pb2
 from google.protobuf.any_pb2 import Any
 from google.rpc import code_pb2

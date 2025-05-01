@@ -1,4 +1,4 @@
-from druncschema.opmon.generic_pb2 import RunInfo
+from drunc-messages.opmon.generic_pb2 import RunInfo
 
 from drunc.fsm.actions.utils import validate_run_type
 from drunc.fsm.core import FSMAction

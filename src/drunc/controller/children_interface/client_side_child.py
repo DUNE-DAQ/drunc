@@ -1,14 +1,14 @@
 from threading import Lock
 
-from druncschema.controller_pb2 import (
+from drunc-messages.controller_pb2 import (
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
 )
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from drunc-messages.generic_pb2 import PlainText
+from drunc-messages.request_response_pb2 import Response, ResponseFlag
+from drunc-messages.token_pb2 import Token
 
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.fsm.configuration import FSMConfHandler

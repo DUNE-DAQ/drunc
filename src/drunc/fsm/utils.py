@@ -1,9 +1,9 @@
-from druncschema.controller_pb2 import (
+from drunc-messages.controller_pb2 import (
     Argument,
     FSMCommandDescription,
     FSMCommandsDescription,
 )
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from drunc-messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 
 import drunc.fsm.exceptions as fsme
 from drunc.utils.grpc_utils import unpack_any

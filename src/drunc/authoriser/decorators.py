@@ -1,7 +1,7 @@
 import functools
 
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
+from drunc-messages.generic_pb2 import PlainText
+from drunc-messages.request_response_pb2 import Response, ResponseFlag
 
 from drunc.utils.utils import get_logger
 

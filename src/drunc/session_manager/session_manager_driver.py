@@ -1,8 +1,8 @@
 """Provides an interface to the session manager service."""
 
-from druncschema.request_response_pb2 import Description
-from druncschema.session_manager_pb2 import AllActiveSessions
-from druncschema.session_manager_pb2_grpc import SessionManagerStub
+from drunc-messages.request_response_pb2 import Description
+from drunc-messages.session_manager_pb2 import AllActiveSessions
+from drunc-messages.session_manager_pb2_grpc import SessionManagerStub
 
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 

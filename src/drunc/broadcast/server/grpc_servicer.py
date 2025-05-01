@@ -2,11 +2,11 @@ from queue import Queue
 from threading import Lock, Thread
 
 import grpc
-from druncschema.authoriser_pb2 import ActionType
-from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastRequest, BroadcastType
-from druncschema.broadcast_pb2_grpc import BroadcastSenderServicer
-from druncschema.generic_pb2 import PlainText, StringStringMap
-from druncschema.request_response_pb2 import Request, Response
+from drunc-messages.authoriser_pb2 import ActionType
+from drunc-messages.broadcast_pb2 import BroadcastMessage, BroadcastRequest, BroadcastType
+from drunc-messages.broadcast_pb2_grpc import BroadcastSenderServicer
+from drunc-messages.generic_pb2 import PlainText, StringStringMap
+from drunc-messages.request_response_pb2 import Request, Response
 from google.protobuf.any_pb2 import Any
 
 import drunc.controller.exceptions as ctler_excpt
@@ -17,7 +17,7 @@ class ListenerRepresentation:
     def __init__(self, configuration):
         self.address = configuration["address"]
         self.channel = grpc.insecure_channel(self.address)
-        from druncschema.broadcast_pb2_grpc import BroadcastReceiverStub
+        from drunc-messages.broadcast_pb2_grpc import BroadcastReceiverStub
 
         self.stub = BroadcastReceiverStub(self.channel)
 
@@ -53,7 +53,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
             return ret
 
     def broadcast(self, txt, type=BroadcastType.TEXT_MESSAGE):
-        from druncschema.broadcast_pb2 import BroadcastMessage
+        from drunc-messages.broadcast_pb2 import BroadcastMessage
         from google.protobuf import any_pb2
 
         message = PlainText(text=txt)
@@ -67,7 +67,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
         return self._message_queue.put(bm)
 
     def broadcast_exception(self, exception):
-        from druncschema.broadcast_pb2 import BroadcastMessage
+        from drunc-messages.broadcast_pb2 import BroadcastMessage
         from google.protobuf import any_pb2
 
         message = PlainText(text=str(exception))
@@ -147,7 +147,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
         stub = self._listeners[address]
         self._log.debug(f"Ack to {address}")
 
-        from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
+        from drunc-messages.broadcast_pb2 import BroadcastMessage, BroadcastType
 
         message = BroadcastMessage(emitter=self.name, type=BroadcastType.ACK)
 
@@ -157,7 +157,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
             self._log.error(f"Could not Ack to {address}: {e!s}")
 
     def shutdown(self):
-        from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
+        from drunc-messages.broadcast_pb2 import BroadcastMessage, BroadcastType
 
         bm = BroadcastMessage(emitter=self.name, type=BroadcastType.SERVER_SHUTDOWN)
 
@@ -189,7 +189,7 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
         return self._consumer_thread.join()
 
     def _consumer(self):
-        from druncschema.broadcast_pb2 import BroadcastType
+        from drunc-messages.broadcast_pb2 import BroadcastType
 
         while True:
             message = (
@@ -212,9 +212,9 @@ class GRCPBroadcastSender(BroadcastSenderServicer):
 
 
 def main():
-    from druncschema.broadcast_pb2 import BroadcastMessage, BroadcastType
-    from druncschema.broadcast_pb2_grpc import BroadcastReceiver
-    from druncschema.generic_pb2 import Empty
+    from drunc-messages.broadcast_pb2 import BroadcastMessage, BroadcastType
+    from drunc-messages.broadcast_pb2_grpc import BroadcastReceiver
+    from drunc-messages.generic_pb2 import Empty
 
     class StatusReceiver(BroadcastReceiver):
         def __init__(self, port):
@@ -239,7 +239,7 @@ def main():
         from concurrent import futures
 
         server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
-        from druncschema.broadcast_pb2_grpc import (
+        from drunc-messages.broadcast_pb2_grpc import (
             add_BroadcastReceiverServicer_to_server,
         )
 

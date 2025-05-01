@@ -17,8 +17,8 @@ import traceback
 from inspect import Parameter, signature
 from typing import List
 
-from druncschema.controller_pb2 import Argument
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from drunc-messages.controller_pb2 import Argument
+from drunc-messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException

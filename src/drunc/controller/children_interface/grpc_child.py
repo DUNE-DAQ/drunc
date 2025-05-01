@@ -1,8 +1,8 @@
 import time
 
 import grpc
-from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.request_response_pb2 import Description, Response
+from drunc-messages.controller_pb2_grpc import ControllerStub
+from drunc-messages.request_response_pb2 import Description, Response
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler

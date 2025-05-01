@@ -2,7 +2,7 @@
 
 [This page](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Messaging-format) provides an entry point to the way the drunc processes should be interfaced.
 
-This document refers to the Process manager in particular. Its proto file can be found [here](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/process_manager.proto)
+This document refers to the Process manager in particular. Its proto file can be found [here](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/process_manager.proto)
 
 ## Messages
 Remember that all the messages sent to and received from the process manager follow the `drunc` schema described [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Interfacing-with-drunc#command-structure). All the messages described here will end up in some form or another in the `data` fields of the `Request` and `Response` after being `Any`fied.

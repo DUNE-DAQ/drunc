@@ -1,5 +1,5 @@
 import pytest
-from druncschema.request_response_pb2 import Description
+from drunc-messages.request_response_pb2 import Description
 from google.protobuf.json_format import MessageToDict
 
 from drunc.connectivity_service.client import ConnectivityServiceClient

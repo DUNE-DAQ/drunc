@@ -3,15 +3,15 @@ from collections import defaultdict
 from functools import partial
 
 import click
-from druncschema.controller_pb2 import (
+from drunc-messages.controller_pb2 import (
     Argument,
     FSMCommand,
     FSMCommandDescription,
     FSMResponseFlag,
     Status,
 )
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from druncschema.request_response_pb2 import Description, ResponseFlag
+from drunc-messages.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from drunc-messages.request_response_pb2 import Description, ResponseFlag
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
@@ -159,7 +159,7 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    from druncschema.request_response_pb2 import Description
+    from drunc-messages.request_response_pb2 import Description
 
     desc = Description()
 
@@ -225,7 +225,7 @@ def controller_setup(ctx, controller_address):
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
         ret = ctx.get_driver("controller").take_control()
-        from druncschema.request_response_pb2 import ResponseFlag
+        from drunc-messages.request_response_pb2 import ResponseFlag
 
         if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
             log.debug("You are in control.")

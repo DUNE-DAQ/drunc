@@ -59,8 +59,8 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         self.thread.join()
 
     def consume(self):
-        from druncschema.broadcast_pb2 import BroadcastType
-        from druncschema.generic_pb2 import PlainText
+        from drunc-messages.broadcast_pb2 import BroadcastType
+        from drunc-messages.generic_pb2 import PlainText
         from google.protobuf import text_format
 
         from drunc.utils.grpc_utils import unpack_any
@@ -85,7 +85,7 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
                         else:
                             txt = decoded.data
 
-                        from druncschema.broadcast_pb2 import BroadcastType
+                        from drunc-messages.broadcast_pb2 import BroadcastType
 
                         from drunc.broadcast.utils import (
                             get_broadcast_level_from_broadcast_type,

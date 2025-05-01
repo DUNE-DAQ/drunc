@@ -1,8 +1,8 @@
 from functools import wraps
 
-from druncschema.controller_pb2 import AddressedCommand
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
+from drunc-messages.controller_pb2 import AddressedCommand
+from drunc-messages.generic_pb2 import PlainText
+from drunc-messages.request_response_pb2 import Response, ResponseFlag
 
 from drunc.controller.utils import address_command
 from drunc.exceptions import DruncCommandException

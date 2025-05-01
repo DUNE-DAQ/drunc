@@ -18,7 +18,7 @@ jobs:
     steps:
       - name: Check URLs
         run: |
-          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git
+          echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc-messages.git
           echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git
 
       - name: Set up dev nightly
@@ -34,15 +34,15 @@ jobs:
           dbt-build
           dbt-workarea-env
 
-      - name: Install druncschema and drunc
+      - name: Install drunc-messages and drunc
         if: success()
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
           python -m pip install --upgrade pip
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc-messages.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/drunc-messages.git
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }}
-          cd druncschema
+          cd drunc-messages
           pip install .
           cd -
           cd drunc

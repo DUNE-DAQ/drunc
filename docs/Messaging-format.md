@@ -3,7 +3,7 @@
 We use [Google's Remote Procedural Call](https://grpc.io/) to handle network calls between the client and server. The format of the messages is protobuf.
 
 ## Command structure
-Any command sent to a `drunc` server has the same basic structure, defined [here](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/request_response.proto):
+Any command sent to a `drunc` server has the same basic structure, defined [here](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/request_response.proto):
 ```
 message Request {
   Token token = 1;
@@ -32,7 +32,7 @@ enum ResponseFlag {
 ```
 
 ## `Token`s
-Have the following form, defined [here](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/token.proto):
+Have the following form, defined [here](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/token.proto):
 ```
 message Token {
   string token = 1;
@@ -56,7 +56,7 @@ You can send RPC from python, node, C++ [and many more](https://grpc.io/docs/).
 
 ## Exception handling
 
-If any of the steps above fails, the RPC is interrupted, and a `Stacktrace` object is returned data is returned, you may otherwise get a `PlainText` message. The `Stacktrace` message has the [format](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/generic.proto):
+If any of the steps above fails, the RPC is interrupted, and a `Stacktrace` object is returned data is returned, you may otherwise get a `PlainText` message. The `Stacktrace` message has the [format](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/generic.proto):
 ```
 message Stacktrace{
   repeated string text = 1;
@@ -115,7 +115,7 @@ message KafkaBroadcastHandlerConfiguration{
 More formats of broadcasting may be added in the future (potentially using [ERS's python binding](https://github.com/DUNE-DAQ/erskafka/tree/develop/python/erskafka)).
 
 # Broadcasting
-As mentioned earlier, the only working solution for broadcasting is Kafka. All messages feed to Kafka by drunc have the [form](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/broadcast.proto#L51):
+As mentioned earlier, the only working solution for broadcasting is Kafka. All messages feed to Kafka by drunc have the [form](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/broadcast.proto#L51):
 ```
 message BroadcastMessage{
   Emitter emitter = 1;
@@ -154,6 +154,6 @@ enum BroadcastType {
 }
 ```
 
-Note that for now, the `data` field is only filled with [PlainText](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/generic.proto#L7C1-L9C2) messages.
+Note that for now, the `data` field is only filled with [PlainText](https://github.com/DUNE-DAQ/drunc-messages/blob/develop/schema/drunc-messages/generic.proto#L7C1-L9C2) messages.
 
 In the future, this may change.

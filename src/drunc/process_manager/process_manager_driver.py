@@ -4,7 +4,7 @@ import os
 import signal
 import tempfile
 
-from druncschema.process_manager_pb2 import (
+from drunc-messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -15,8 +15,8 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
     ProcessRestriction,
 )
-from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.request_response_pb2 import Description
+from drunc-messages.process_manager_pb2_grpc import ProcessManagerStub
+from drunc-messages.request_response_pb2 import Description
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful

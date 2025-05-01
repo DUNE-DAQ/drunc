@@ -39,8 +39,8 @@ def test_get_segment_lookup_timeout(load_test_config):
 
 
 def test_address_command():
-    from druncschema.controller_pb2 import AddressedCommand
-    from druncschema.generic_pb2 import PlainText
+    from drunc-messages.controller_pb2 import AddressedCommand
+    from drunc-messages.generic_pb2 import PlainText
     from google.protobuf import any_pb2
 
     from drunc.controller.utils import address_command

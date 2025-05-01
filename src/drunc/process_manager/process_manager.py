@@ -3,10 +3,10 @@ import re
 import threading
 import time
 
-from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.opmon.process_manager_pb2 import ProcessStatus
-from druncschema.process_manager_pb2 import (
+from drunc-messages.authoriser_pb2 import ActionType, SystemType
+from drunc-messages.broadcast_pb2 import BroadcastType
+from drunc-messages.opmon.process_manager_pb2 import ProcessStatus
+from drunc-messages.process_manager_pb2 import (
     BootRequest,
     LogLine,
     LogRequest,
@@ -17,8 +17,8 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
-from druncschema.request_response_pb2 import (
+from drunc-messages.process_manager_pb2_grpc import ProcessManagerServicer
+from drunc-messages.request_response_pb2 import (
     CommandDescription,
     Description,
     Request,
