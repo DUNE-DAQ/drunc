@@ -140,7 +140,10 @@ class SSHProcessManager(ProcessManager):
                 logfile,
             ]
             self.log.debug(f"cmd: {cmd}")
-            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"] + cmd
+            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
+            arguments += ["-o LogLevel=error", "-o GlobalKnownHostsFile=/dev/null", "-o UserKnownHostsFile=/dev/null"] if host in ('localhost', '127.0.0.1', '::1') else []
+            arguments += cmd
+
             self.ssh(
                 *arguments,
                 _out=f.name,
@@ -246,10 +249,12 @@ class SSHProcessManager(ProcessManager):
                 arguments = [
                     user_host,
                     "-tt",
-                    "-o StrictHostKeyChecking=no",
+                    "-o StrictHostKeyChecking=no"
+                ]
+                arguments += ["-o LogLevel=error", "-o GlobalKnownHostsFile=/dev/null", "-o UserKnownHostsFile=/dev/null"]  if host in ('localhost', '127.0.0.1', '::1') else []
+                arguments += [
                     f"{{ {cmd} ; }} &> {log_file}",
                 ]
-                self.log.debug(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = self.ssh(
