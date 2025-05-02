@@ -52,6 +52,13 @@ class SSHProcessManager(ProcessManager):
 
         super().__init__(configuration=configuration, session=self.session, **kwargs)
 
+        self.disable_localhost_host_key_check = False
+        self.disable_host_key_check = False
+
+        if self.configuration.data.settings:
+            self.disable_localhost_host_key_check = self.configuration.data.settings.get('disable_localhost_host_key_check', False)
+            self.disable_host_key_check = self.configuration.data.settings.get('disable_host_key_check', False)
+
         # self.children_logs_depth = 1000
         # self.children_logs = {}
         self.watchers = []
@@ -126,12 +133,15 @@ class SSHProcessManager(ProcessManager):
         user = self.boot_request[uid].process_description.metadata.user
         host = self.boot_request[uid].process_description.metadata.hostname
         user_host = f"{user}@{host}"
+        disable_host_key_check = self.disable_host_key_check or (self.disable_localhost_host_key_check and host in ('localhost', '127.0.0.1', '::1'))
+
         # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
         # "Not the straight forward way"...
         f = tempfile.NamedTemporaryFile(delete=False)
         nlines = log_request.how_far
         if not nlines:
             nlines = 100
+
 
         try:
             cmd = [
@@ -140,7 +150,10 @@ class SSHProcessManager(ProcessManager):
                 logfile,
             ]
             self.log.debug(f"cmd: {cmd}")
-            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"] + cmd
+            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
+            arguments += ["-o LogLevel=error", "-o GlobalKnownHostsFile=/dev/null", "-o UserKnownHostsFile=/dev/null"] if disable_host_key_check else []
+            arguments += cmd
+
             self.ssh(
                 *arguments,
                 _out=f.name,
@@ -219,6 +232,8 @@ class SSHProcessManager(ProcessManager):
 
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
+                disable_host_key_check = self.disable_host_key_check or (self.disable_localhost_host_key_check and host in ('localhost', '127.0.0.1', '::1'))
+
 
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
                 cmd = (
@@ -246,10 +261,12 @@ class SSHProcessManager(ProcessManager):
                 arguments = [
                     user_host,
                     "-tt",
-                    "-o StrictHostKeyChecking=no",
+                    "-o StrictHostKeyChecking=no"
+                ]
+                arguments += ["-o LogLevel=error", "-o GlobalKnownHostsFile=/dev/null", "-o UserKnownHostsFile=/dev/null"]  if disable_host_key_check else []
+                arguments += [
                     f"{{ {cmd} ; }} &> {log_file}",
                 ]
-                self.log.debug(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = self.ssh(
