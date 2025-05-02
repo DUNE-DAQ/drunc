@@ -25,6 +25,7 @@ class ProcessOrchestratorConfData:
         self.type = ProcessOrchestratorTypes.Unknown
         self.command_address = ""
         self.environment = {}
+        self.settings = {}
         self.opmon_uri = None
         self.opmon_publisher = None
 
@@ -45,6 +46,7 @@ class ProcessOrchestratorConfHandler(ConfHandler):
             new_data.broadcaster = None
         new_data.authoriser = None
         new_data.environment = data.get("environment", {})
+        new_data.settings = data.get("settings", {})
 
         match data["type"].lower():
             case "ssh":

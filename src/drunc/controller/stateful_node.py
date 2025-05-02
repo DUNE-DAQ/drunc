@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Optional
+from typing import Any, Callable, Optional
+
+from druncschema.opmon.FSM_pb2 import FSMStatus
 
 from drunc_core.exceptions import DruncCommandException
 from drunc_core.fsm.core import FSM
@@ -9,9 +11,6 @@ from drunc_core.fsm.exceptions import InvalidTransition
 from drunc_core.fsm.utils import decode_fsm_arguments
 from drunc_core.utils.utils import get_logger
 from drunc_messages.opmon.FSM_pb2 import FSMStatus
-
-if TYPE_CHECKING:
-    from kafkaopmon.OpMonPublisher import OpMonPublisher
 
 
 class Observed:
@@ -91,7 +90,7 @@ class StatefulNode(abc.ABC):
     def __init__(
         self,
         fsm_configuration,
-        publisher: Optional[OpMonPublisher] = None,
+        publisher: Optional[Callable[[Any], None]] = None,
         session: str = "",
         name: str = "",
     ):
@@ -112,15 +111,13 @@ class StatefulNode(abc.ABC):
 
     def publish_state(self):
         if self.publisher is not None:
-            self.publisher.publish(
-                session=self.session,
-                application=self.name,
-                message=FSMStatus(
+            self.publisher(
+                FSMStatus(
                     state=self.__operational_state.value,
                     sub_state=self.__operational_sub_state.value,
                     in_error=self.__in_error.value,
                     included=self.__included.value,
-                ),
+                )
             )
 
     def get_node_operational_state(self):
