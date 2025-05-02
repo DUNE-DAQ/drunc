@@ -84,7 +84,7 @@ class PreOrPostTransitionSequence:
                 if input_data is not None:
                     ctx.runinfo = input_data
                     if callback.method.__name__ == "start":
-                        ctx.controllr_publisher(
+                        ctx.controller_publisher(
                             message=RunInfo(
                                 run_type=input_data["production_vs_test"],
                                 trigger_rate=input_data["trigger_rate"],

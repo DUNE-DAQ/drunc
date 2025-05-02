@@ -72,7 +72,10 @@ def broadcasted(cmd):
 
         getattr(request, "data", None)
 
-        if hasattr(obj, "controllr_publisher") and obj.controllr_publisher is not None:
+        if (
+            hasattr(obj, "controller_publisher")
+            and obj.controller_publisher is not None
+        ):
             if cmd.__name__ == "execute_fsm_command" and request.data is not None:
                 addressed_command = AddressedCommand()
                 request.data.Unpack(addressed_command)
@@ -82,7 +85,7 @@ def broadcasted(cmd):
             else:
                 custom_origin = {"Command": cmd.__name__}
 
-            obj.controllr_publisher(
+            obj.controller_publisher(
                 message=CommandTime(execution_time_ns=int(cmd_exe_time * 1e9)),
                 custom_origin=custom_origin,
             )

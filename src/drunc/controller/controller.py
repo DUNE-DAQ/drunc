@@ -159,7 +159,7 @@ class Controller(ControllerServicer):
 
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
-            publisher=self.controllr_publisher,
+            publisher=self.controller_publisher,
             name=name,
             session=session,
         )
@@ -297,7 +297,7 @@ class Controller(ControllerServicer):
     def async_interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
-    def controllr_publisher(self, message, custom_origin: Optional[dict] = None):
+    def controller_publisher(self, message, custom_origin: Optional[dict] = None):
         if self.opmon_publisher is not None:
             try:
                 if custom_origin is None:
@@ -342,7 +342,7 @@ class Controller(ControllerServicer):
                     run_time_since_start = int(time.time() - run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
-                self.controllr_publisher(
+                self.controller_publisher(
                     message=RunInfo(
                         run_type=run_type,
                         trigger_rate=trigger_rate,

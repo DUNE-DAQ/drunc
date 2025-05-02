@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import Any, Callable, Optional
 
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
@@ -10,9 +10,6 @@ from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
 from drunc.fsm.utils import decode_fsm_arguments
 from drunc.utils.utils import get_logger
-
-if TYPE_CHECKING:
-    pass
 
 
 class Observed:
