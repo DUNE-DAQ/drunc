@@ -15,5 +15,11 @@
     },
     "environment": {
         "GRPC_ENABLE_FORK_SUPPORT": "false"
+    },
+    "opmon_uri": {
+        "path": "monkafka.cern.ch:30092/opmon_stream",
+        "type": "stream",
+        "sleep_time" : 10
     }
+
 }

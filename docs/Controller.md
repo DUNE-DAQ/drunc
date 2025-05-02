@@ -21,16 +21,15 @@ This interface is very similar to the `drunc-unified-shell`. All the commands on
 
 ### `conf`, `start`, `enable-triggers`, `change-rate`, `disable-triggers`, `drain-dataflow`, `stop-trigger-sources`, `stop` and `scrap`
 More details on the available FSM commands is provided [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/FSM).
-
- - See `conf`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
- - See `start`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
- - See `enable-triggers`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
- - See `change-rate`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#change-rate)
- - See `disable-triggers`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
- - See `drain-dataflow`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
- - See `stop-trigger-sources`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
- - See `stop`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop)
- - See `scrap`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
+* See `conf`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
+* See `start`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* See `enable-triggers`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
+* See `change-rate`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#change-rate)
+* See `disable-triggers`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
+* See `drain-dataflow`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
+* See `stop-trigger-sources`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
+* See `stop`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop)
+* See `scrap`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
 
 ### `connect`
 See `connect`'s documentation [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#connect)

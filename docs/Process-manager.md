@@ -5,11 +5,11 @@ For a standalone `process_manager` you will need two shells - one shell to run t
 
 ## Configurations
 To boot a `process_manager`, you will need to choose the most appropriate configuration that applies to the use case. The configurations that are packaged with `drunc` are defined in `drunc/src/data/process_manager/`, which are
- - `ssh-standalone.json`: `ssh` based standalone implementation without a `kafka` feed.
- - `ssh-pocket-kafka.json`: `ssh` based implementation with `pocket`'s `kafka` for message broadcasting.
- - `ssh-CERN-kafka.json`: `ssh` based implementation with `kafka` service running at ENH1.
- - `ssh-CERN-kafka-OpMon.json`: `ssh` based implementation with `kafka` service running at ENH1, and with Opmon.
- - `k8s.json`: `kubernetes` implementation (not recommended nor working, so don't use this unless you are an working on getting it to work).
+* `ssh-standalone.json`: `ssh` based standalone implementation without a `kafka` feed.
+* `ssh-pocket-kafka.json`: `ssh` based implementation with `pocket`'s `kafka` for message broadcasting.
+* `ssh-CERN-kafka.json`: `ssh` based implementation with `kafka` service running at ENH1.
+* `ssh-CERN-kafka-OpMon.json`: `ssh` based implementation with `kafka` service running at ENH1, and with Opmon.
+* `k8s.json`: `kubernetes` implementation (not recommended nor working, so don't use this unless you are an working on getting it to work).
 
 ## Starting
 Note that this runs the process manager service, _you will not be able to do anything else with it other than starting it and ctrl-c it_.
@@ -55,16 +55,16 @@ This command spawns the processes that are used by the DAQ. In most cases, it SS
 The `boot` command will check if there are processes running in the process manager with the same session name and ask for confirmation if it detects other process running under the same session name.
 
 Command arguments (in this order):
- - `configuration_file`: path to the system configuration file (xml `OKS` file).
- - `configuration_session_id`: name of the session defined in the system configuration file.
- - `session_name`: name of the session.
+* `configuration_file`: path to the system configuration file (xml `OKS` file).
+* `configuration_session_id`: name of the session defined in the system configuration file.
+* `session_name`: name of the session.
 
 Command options:
- - `--override-logs/--no-override-logs` (optional), this flags adds a timestamp to the log files of the application, effectively making them non-overriding. Note this happens only in the case where the `log_path` is _not_ set in your configuration's `Session` or `Application` objects. If the configuration's `log_path` is not `./` in either of these, the run control will use that, and the log will not be overriding (in this case, _this flag is ignored_).
- - `-u/--user` (optional), assigns an owner to the spawned processes, default is `$USER`.
+* `--override-logs/--no-override-logs` (optional), this flags adds a timestamp to the log files of the application, effectively making them non-overriding. Note this happens only in the case where the `log_path` is _not_ set in your configuration's `Session` or `Application` objects. If the configuration's `log_path` is not `./` in either of these, the run control will use that, and the log will not be overriding (in this case, _this flag is ignored_).
+* `-u/--user` (optional), assigns an owner to the spawned processes, default is `$USER`.
 
 Caveats:
- - It is most likely impossible to specify a `user` different from the one that is running the `process_manager`, simply because that user will likely not have the ssh keys necessary to ssh on a different host as a different user.
+* It is most likely impossible to specify a `user` different from the one that is running the `process_manager`, simply because that user will likely not have the ssh keys necessary to ssh on a different host as a different user.
 
 #### Example
 ```bash

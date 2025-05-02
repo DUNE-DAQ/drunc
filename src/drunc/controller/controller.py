@@ -15,6 +15,7 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import (
     Description,
     Response,
@@ -102,6 +103,7 @@ class Controller(ControllerServicer):
         self.name = name
         self.session = session
         self.broadcast_service = None
+        self.runinfo = {}
 
         self.log = get_logger("controller")
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
@@ -131,9 +133,13 @@ class Controller(ControllerServicer):
                 self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
             else:
                 self.opmon_sleep_time = 10
-                self.log.info("Couldn't find sleep time in opmon_uri configuration, use default value of 10s")            
+                self.log.info(
+                    "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
+                )
 
-            self.log.info(f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s")
+            self.log.info(
+                f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
+            )
 
             if "/" in opmon_path:
                 opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
@@ -148,20 +154,19 @@ class Controller(ControllerServicer):
 
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
-            publisher=self.opmon_publisher,
+            publisher=self.controller_publisher,
             name=name,
             session=session,
         )
-        
+
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
                 target=self.threading_publish_state,
                 args=(self.opmon_sleep_time,),
                 daemon=True,
-                )
+            )
             self.thread.start()
-      
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
@@ -319,13 +324,63 @@ class Controller(ControllerServicer):
     def async_interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
+    def controller_publisher(self, message, custom_origin: Optional[dict] = None):
+        if self.opmon_publisher is not None:
+            try:
+                if custom_origin is None:
+                    custom_origin = {}
+
+                self.opmon_publisher.publish(
+                    session=self.session,
+                    application=self.name,
+                    message=message,
+                    custom_origin=custom_origin,
+                )
+                self.log.debug(f"Published {type(message)} to OpMon")
+            except Exception as e:
+                self.log.error(f"Failed to publish to OpMon: {e}")
+
     def threading_publish_state(self, sleep_time: float = 10.0):
         while not self.stop_event.is_set():
             try:
                 self.log.debug(f"Publishing periodic FSM status every {sleep_time}s")
                 self.stateful_node.publish_state()
+                current_state = self.stateful_node.get_node_operational_state()
+
+                if current_state in ("initial", "configured"):
+                    run_type = ""
+                    trigger_rate = 0.0
+                    run_number = 0
+                    disable_data_storage = False
+                    run_time_at_start = 0
+                    run_time_since_start = 0
+                    self.runinfo = {}
+
+                if self.runinfo:
+                    run_type = self.runinfo.get("production_vs_test", "")
+                    run_number = self.runinfo.get("run", 0)
+                    disable_data_storage = self.runinfo.get(
+                        "disable_data_storage", False
+                    )
+                    trigger_rate = self.runinfo.get("trigger_rate", 0.0)
+                    run_time_at_start = self.runinfo.get("run_time_at_start", 0)
+
+                if run_time_at_start:
+                    run_time_since_start = int(time.time() - run_time_at_start)
+
+                self.log.debug(f"Publishing periodic run info every {sleep_time}s")
+                self.controller_publisher(
+                    message=RunInfo(
+                        run_type=run_type,
+                        trigger_rate=trigger_rate,
+                        run_number=run_number,
+                        disable_data_storage=disable_data_storage,
+                        run_time_at_start=int(run_time_at_start),
+                        run_time_since_start=run_time_since_start,
+                    )
+                )
             except Exception as e:
-                self.log.warning(f"Error while publishing periodic FSM status: {e}")
+                self.log.warning(f"Error while publishing periodic status: {e}")
             time.sleep(sleep_time)
 
     def construct_error_node_response(

@@ -30,7 +30,7 @@ This command spawns the processes that are used by the DAQ. In most cases, it SS
 The `boot` command will check if there are processes running in the process manager with the same session name and ask for confirmation if it detects other process running under the same session name.
 
 The `boot` command can take the following option:
- - `--override-logs/--no-override-logs` (optional), this flags adds a timestamp to the log files of the application, effectively making them non-overriding. Note this happens only in the case where the `log_path` is _not_ set in your configuration's `Session` or `Application` objects. If the configuration's `log_path` is not `./` in either of these, the run control will use that, and the log will not be overriding (in this case, _this flag is ignored_).
+* `--override-logs/--no-override-logs` (optional), this flags adds a timestamp to the log files of the application, effectively making them non-overriding. Note this happens only in the case where the `log_path` is _not_ set in your configuration's `Session` or `Application` objects. If the configuration's `log_path` is not `./` in either of these, the run control will use that, and the log will not be overriding (in this case, _this flag is ignored_).
 
 ### Example
 ```bash
@@ -38,8 +38,8 @@ boot --override-logs
 ```
 
 ### Related commands
- - [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
 
 ## change-rate
 ### Description
@@ -50,8 +50,8 @@ boot --override-logs
 This command allows you to change the trigger rate of the system, when it is `running` or `ready`, this command does not change the state of the system.
 
 The `change-rate` command can take the following options:
- - `--trigger-rate` (mandatory), is a float to specify the trigger rate in Hz you want the system to be running at.
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--trigger-rate` (mandatory), is a float to specify the trigger rate in Hz you want the system to be running at.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `change-rate` to the whole of the DAQ:
@@ -68,10 +68,10 @@ change-rate --trigger-rate 0.01 --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
- - [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
- - [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
- - [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
+* [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
+* [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
 
 ## conf
 ### Description
@@ -82,7 +82,7 @@ change-rate --trigger-rate 0.01 --target root-controller/trg-controller/mlt
 This command allows you to configure the system, when it is `initialised`, and thus to reach the `configured` state.
 
 The `conf` command can take the following option:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `conf` to the whole of the DAQ:
@@ -99,8 +99,8 @@ conf --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`scrap`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`scrap`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
 
 ## connect
 ### Description
@@ -111,7 +111,7 @@ The `connect` command takes the control address of the controller as argument
 If you are already connected to a controller, you will be asked to confirm that you want to connect to another controller.
 
 The `connect` command take the following options:
- - `-f/--force`, which can be used to skip the confirmation step in case you are already connected to another controller.
+* `-f/--force`, which can be used to skip the confirmation step in case you are already connected to another controller.
 
 ### Example
 ```bash
@@ -119,7 +119,7 @@ connect grpc://np04-srv-019:56582
 ```
 
 ### Related command
- - [`disconnect`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disconnect)
+* [`disconnect`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disconnect)
 
 ## disable-triggers
 ### Description
@@ -130,7 +130,7 @@ connect grpc://np04-srv-019:56582
 This command allows you to disable the triggers of the system, when it is `running`, and thus to reach the `ready` state.
 
 The `disable-triggers` command can take the following option:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `disable-triggers` to the whole of the DAQ:
@@ -147,8 +147,8 @@ disable-triggers --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
- - [`change-rate`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#change-rate)
+* [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
+* [`change-rate`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#change-rate)
 
 ## disconnect
 ### Description
@@ -159,7 +159,7 @@ The `disconnect` command takes the control address of the controller as argument
 If you are connected to a controller, you will be asked to confirm that you want to disconnect.
 
 The `disconnect` command take the following options:
- - `-f/--force`, which can be used to skip the confirmation step in case you are already connected to another controller.
+* `-f/--force`, which can be used to skip the confirmation step in case you are already connected to another controller.
 
 ### Example
 ```bash
@@ -167,7 +167,7 @@ disconnect
 ```
 
 ### Related command
- - [`connect`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#connect)
+* [`connect`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#connect)
 
 ## drain-dataflow
 ### Description
@@ -178,9 +178,9 @@ disconnect
 This command allows you to drain the dataflow of the system, when it is `ready`, and thus to reach the `dataflow-drained` state.
 
 The `drain-dataflow` command can take the following options, depending on your FSM configuration:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--elisa-post` (optional), allows you to add a message on the ELisA logbook post that gets created when the run finishes.
- - `--file-logbook-post` (optional), allows you to add a message on the file logbook post that gets create when the run finishes.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--elisa-post` (optional), allows you to add a message on the ELisA logbook post that gets created when the run finishes.
+* `--file-logbook-post` (optional), allows you to add a message on the file logbook post that gets create when the run finishes.
 ### Examples
 To send `drain-dataflow` to the whole of the DAQ:
 ```bash
@@ -196,9 +196,9 @@ drain-dataflow --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
- - [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
- - [`stop-trigger-sources`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
+* [`stop-trigger-sources`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
 
 ## enable-triggers
 ### Description
@@ -209,7 +209,7 @@ drain-dataflow --target root-controller/trg-controller/mlt
 This command allows you to enable the trigger of the system, when it is `ready`, and thus to reach the `running` state.
 
 The `enable-triggers` command can take the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `enable-triggers` to the whole of the DAQ:
@@ -226,8 +226,8 @@ enable-triggers --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
- - [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`disable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#disable-triggers)
 
 ## exclude
 ### Description
@@ -236,7 +236,7 @@ enable-triggers --target root-controller/trg-controller/mlt
 Allows you to exclude a segment or an application from the DAQ system. All commands to the excluded part of the system are then ignored, and the next time `recompute-status` is issued, excluded nodes states are ignored.
 
 The `exclude` command can take the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To `exclude` to the whole trigger segment:
@@ -249,9 +249,9 @@ exclude --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
- - [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
- - [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
+* [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
+* [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
+* [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
 
 ## expert-command
 ### Description
@@ -278,17 +278,17 @@ The format of the JSON is:
 }
 ```
 Where:
- - `entry_state` and `exit_state` need to be set to _the same state in the FSM_, written in capital.
- - `id` is the command name the application will respond to (`register_command` in your module).
- - `data.modules[:].data` is the data you are sending to the modules.
- - `data.modules[:].match` is the name of the module, if left blank (""), the command will be propagated to all the module that have registered the command `id`.
+* `entry_state` and `exit_state` need to be set to _the same state in the FSM_, written in capital.
+* `id` is the command name the application will respond to (`register_command` in your module).
+* `data.modules[:].data` is the data you are sending to the modules.
+* `data.modules[:].match` is the name of the module, if left blank (""), the command will be propagated to all the module that have registered the command `id`.
 
 `expert-command` command take the following mandatory argument:
- - `command`, which is either the path to a json file that will be sent to the application(s) or, an actual json string (wrapped in `"`). An example of the file can be found in [here](https://github.com/DUNE-DAQ/drunc/blob/develop/src/drunc/data/expert-command/record.json).
+* `command`, which is either the path to a json file that will be sent to the application(s) or, an actual json string (wrapped in `"`). An example of the file can be found in [here](https://github.com/DUNE-DAQ/drunc/blob/develop/src/drunc/data/expert-command/record.json).
 
 The `expert-command` command can take the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
- - `-s/--string` (optional), a flag to signify that you are sending raw json, rather than a json file.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
+* `-s/--string` (optional), a flag to signify that you are sending raw json, rather than a json file.
 
 ### Examples
 To send an expert command to the whole readout segment application:
@@ -302,10 +302,10 @@ expert-command --target root-controller/ru-controller data/record.json
 This command removes the dead processes from the `ps` list, after issuing `flush`, you will not be able to send `restart` to that process.
 
 The `flush` command can take the following options:
- - `--uuid`, to select a process to flush based on its UUID.
- - `-u/--user`, to select the processes to flush based on its user.
- - `-n/--name`, to select a process to flush based on its "friendly name".
- - `-s/--session`, to select the processes to flush based on a session name.
+* `--uuid`, to select a process to flush based on its UUID.
+* `-u/--user`, to select the processes to flush based on its user.
+* `-n/--name`, to select a process to flush based on its "friendly name".
+* `-s/--session`, to select the processes to flush based on a session name.
 
 By default, `flush` will flush all the dead processes from all sessions, users and names.
 
@@ -326,8 +326,8 @@ flush -s your-session-name
 ```
 
 ### Related commands
- - [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
 
 ## include
 ### Description
@@ -336,7 +336,7 @@ flush -s your-session-name
 Allows you to include a segment or an application (that was previously excluded) from the DAQ system.
 
 The `include` command can take the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To `include` to the whole trigger segment:
@@ -349,19 +349,19 @@ include --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
- - [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
- - [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
+* [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
+* [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
+* [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
 
 ## kill
 ### Description
 This command kills running processes.
 
 The `kill` command must take at least one the following options:
- - `--uuid`, to select a process to flush based on its UUID.
- - `-u/--user`, to select the processes to flush based on its user.
- - `-n/--name`, to select a process to flush based on its "friendly name".
- - `-s/--session`, to select the processes to flush based on a session name.
+* `--uuid`, to select a process to flush based on its UUID.
+* `-u/--user`, to select the processes to flush based on its user.
+* `-n/--name`, to select a process to flush based on its "friendly name".
+* `-s/--session`, to select the processes to flush based on a session name.
 
 By default, `kill` does nothing, you need to supply one of the options.
 
@@ -384,10 +384,10 @@ kill -s your-session-name
 ```
 
 ### Related commands
- - [`terminate`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#terminate)
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
- - [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
- - [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
+* [`terminate`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#terminate)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
+* [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
 
 
 ## logs
@@ -395,12 +395,12 @@ kill -s your-session-name
 This command prints the log of a processes.
 
 The `logs` command must take at least one the following options:
- - `--uuid`, to select a process to flush based on its UUID.
- - `-u/--user`, to select the processes to flush based on its user.
- - `-n/--name`, to select a process to flush based on its "friendly name".
- - `-s/--session`, to select the processes to flush based on a session name.
- - `--how-far`, how many lines to print, by default it `logs` print the last 100 lines of log.
- - `--grep`, to select a particular string in the logs. Works with regex too.
+* `--uuid`, to select a process to flush based on its UUID.
+* `-u/--user`, to select the processes to flush based on its user.
+* `-n/--name`, to select a process to flush based on its "friendly name".
+* `-s/--session`, to select the processes to flush based on a session name.
+* `--how-far`, how many lines to print, by default it `logs` print the last 100 lines of log.
+* `--grep`, to select a particular string in the logs. Works with regex too.
 
 By default, `logs` does nothing, you need to supply one or more of the options `--uuid`, `-u/--user`, `-n/--name`, `-s/-session`, and the logical _AND_ of this options must correspond to exactly one process.
 
@@ -424,7 +424,7 @@ logs --name mlt --grep ERROR
 ```
 
 ### Related command
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
 
 
 ## ps
@@ -432,11 +432,11 @@ logs --name mlt --grep ERROR
 This command list running processes.
 
 The `ps` command must take at least one the following options:
- - `--uuid`, to select a process to flush based on its UUID.
- - `-u/--user`, to select the processes to flush based on its user.
- - `-n/--name`, to select a process to flush based on its "friendly name".
- - `-s/--session`, to select the processes to flush based on a session name.
- - `--long-format/-l`, to get a long listing format.
+* `--uuid`, to select a process to flush based on its UUID.
+* `-u/--user`, to select the processes to flush based on its user.
+* `-n/--name`, to select a process to flush based on its "friendly name".
+* `-s/--session`, to select the processes to flush based on a session name.
+* `--long-format/-l`, to get a long listing format.
 
 By default, `ps` list all the processes.
 
@@ -475,10 +475,10 @@ ps
 ```
 
 ### Related commands
- - [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
- - [`logs`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#logs)
- - [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
- - [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
+* [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
+* [`logs`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#logs)
+* [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
+* [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
 
 ## recompute-status
 ### Description
@@ -487,9 +487,9 @@ ps
 Figure out the status the status of the controller, from the state of its _included_ children.
 
 The `recompute-status` command takes the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
- - `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
+* `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
 
 By default, the `recompute-status` recomputes the status of all the system.
 
@@ -508,9 +508,9 @@ recompute-status --target root-controller/trg-controller --dont-execute-along-pa
 ```
 
 ### Related commands
- - [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
- - [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
- - [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
+* [`status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#status)
+* [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
+* [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
 
 
 ## restart
@@ -520,10 +520,10 @@ recompute-status --target root-controller/trg-controller --dont-execute-along-pa
 Restart a process that was booted.
 
 The `restart` command must take at least one the following options:
- - `--uuid`, to select a process to flush based on its UUID.
- - `-u/--user`, to select the processes to flush based on its user.
- - `-n/--name`, to select a process to flush based on its "friendly name".
- - `-s/--session`, to select the processes to flush based on a session name.
+* `--uuid`, to select a process to flush based on its UUID.
+* `-u/--user`, to select the processes to flush based on its user.
+* `-n/--name`, to select a process to flush based on its "friendly name".
+* `-s/--session`, to select the processes to flush based on a session name.
 
 By default, `restart` does nothing, you need to supply one or more of the options `--uuid`, `-u/--user`, `-n/--name`, `-s/-session`, and the logical _AND_ of this options must correspond to exactly one process.
 
@@ -534,9 +534,9 @@ restart --name mlt
 ```
 
 ### Related commands
- - [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
- - [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
+* [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
 
 
 ## scrap
@@ -548,7 +548,7 @@ restart --name mlt
 This command allows you to "unconfigure" the system, when it is `configured`, and thus to reach the `initial` state.
 
 The `scrap` command can take the following option:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `scrap` to the whole of the DAQ:
@@ -565,8 +565,8 @@ scrap --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`conf`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`conf`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
 
 ## start
 ### Description
@@ -577,13 +577,13 @@ scrap --target root-controller/trg-controller/mlt
 This command allows you to "start" the run on system, when it is `configured`, and thus to reach the `ready` state.
 
 The `start` command can take the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--elisa-post` (optional), allows you to add a message on the ELisA logbook post that gets created when the run ends. By default, nothing is added on the post.
- - `--file-logbook-post` (optional), allows you to add a message on the file logbook post that gets create when the run ends. By default, nothing is added on the post.
- - `--run-type` (optional), either _PROD_ or _TEST_, depending on how you think the data will be used. By default, _TEST_ is used.
- - `--trigger-rate` (optional), the trigger rate you want to set. By default it's 0 Hz, but the system will use the trigger rate from the configuration.
- - `--disable-data-storage` (optional), wether to disable the writing of the data and have a "dry run" of the DAQ. By default, write data.
- - `--run-number` (required, in some cases), which run number to use.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--elisa-post` (optional), allows you to add a message on the ELisA logbook post that gets created when the run ends. By default, nothing is added on the post.
+* `--file-logbook-post` (optional), allows you to add a message on the file logbook post that gets create when the run ends. By default, nothing is added on the post.
+* `--run-type` (optional), either _PROD_ or _TEST_, depending on how you think the data will be used. By default, _TEST_ is used.
+* `--trigger-rate` (optional), the trigger rate you want to set. By default it's 0 Hz, but the system will use the trigger rate from the configuration.
+* `--disable-data-storage` (optional), wether to disable the writing of the data and have a "dry run" of the DAQ. By default, write data.
+* `--run-number` (required, in some cases), which run number to use.
 
 ### Examples
 To send `start`:
@@ -596,9 +596,9 @@ start --elisa-post "A run with the TDE and PDS" --run-type PROD
 ```
 
 ### Related commands
- - [`conf`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
- - [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
- - [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
+* [`conf`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#conf)
+* [`enable-triggers`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#enable-triggers)
+* [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
 
 ## status
 ### Description
@@ -607,9 +607,9 @@ start --elisa-post "A run with the TDE and PDS" --run-type PROD
 Prints the status the status of the controller.
 
 The `status` command takes the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
- - `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
+* `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
 
 By default, the `status` prints the status of all the system.
 
@@ -628,9 +628,9 @@ status --target root-controller/trg-controller --dont-execute-along-path
 ```
 
 ### Related commands
- - [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
- - [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
- - [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
+* [`recompute-status`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#recompute-status)
+* [`exclude`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#exclude)
+* [`include`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#include)
 
 ## stop
 ### Description
@@ -641,7 +641,7 @@ status --target root-controller/trg-controller --dont-execute-along-path
 This command allows you to stop the system, when it is in the `trigger-sources-stopped` state, and thus to reach the `configured` state.
 
 The `stop` command can take the following option:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `stop` to the whole of the DAQ:
@@ -658,9 +658,9 @@ stop --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`scrap`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
- - [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
- - [`stop-trigger-sources`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
+* [`scrap`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#scrap)
+* [`start`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#start)
+* [`stop-trigger-sources`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop-trigger-sources)
 
 ## stop-trigger-sources
 ### Description
@@ -671,7 +671,7 @@ stop --target root-controller/trg-controller/mlt
 This command allows you to stop the trigger sources of the system, when it is in the `dataflow-drained` state, and thus to reach the `trigger-sources-stopped` state.
 
 The `stop-trigger-sources` command can take the following option:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
 
 ### Examples
 To send `stop-trigger-sources` to the whole of the DAQ:
@@ -688,8 +688,8 @@ stop-trigger-sources --target root-controller/trg-controller/mlt
 ```
 
 ### Related commands
- - [`stop`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop)
- - [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
+* [`stop`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#stop)
+* [`drain-dataflow`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#drain-dataflow)
 
 ## surrender-control
 ### Description
@@ -700,9 +700,9 @@ stop-trigger-sources --target root-controller/trg-controller/mlt
 This commands allows you to give up the control of a controller and its children. Note the user must be in control to be able to send commands to the controller
 
 The `surrender-control` command takes the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
- - `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
+* `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
 
 By default, `surrender-control` surrenders the control on the whole system.
 
@@ -717,9 +717,9 @@ surrender-control --target root-controller/trg-controller
 ```
 
 ### Related commands
- - [`take-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#take-control)
- - [`who-is-in-charge`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#who-is-in-charge)
- - [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
+* [`take-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#take-control)
+* [`who-is-in-charge`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#who-is-in-charge)
+* [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
 
 ## take-control
 ### Description
@@ -730,9 +730,9 @@ surrender-control --target root-controller/trg-controller
 This commands allows you to take the control of a controller and its children. Note the user must be in control to be able to send commands to the controller
 
 The `take-control` command takes the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
- - `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
+* `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
 
 By default, `take-control` surrenders the control on the whole system.
 
@@ -747,9 +747,9 @@ take-control --target root-controller/trg-controller
 ```
 
 ### Related commands
- - [`surrender-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#surrender-control)
- - [`who-is-in-charge`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#who-is-in-charge)
- - [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
+* [`surrender-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#surrender-control)
+* [`who-is-in-charge`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#who-is-in-charge)
+* [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
 
 ## terminate
 ### Description
@@ -782,10 +782,10 @@ terminate
 ```
 
 ### Related commands
- - [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
- - [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
- - [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
- - [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
+* [`kill`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#kill)
+* [`ps`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#ps)
+* [`boot`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#boot)
+* [`restart`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#restart)
 
 ## wait
 ### Description
@@ -810,9 +810,9 @@ wait 10
 This commands displays who is has the control of a controller and its children. Note the user must be in control to be able to send commands to the controller
 
 The `who-is-in-charge` command takes the following options:
- - `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
- - `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
- - `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
+* `--target` (optional), allows you to specify a target application/segment for the command. The command will only be run on that application or segment and children if you specify it. By default, the target is the top segment for the whole session.
+* `--execute-along-path/--dont-execute-along-path` (optional), the command gets executed along the path of the target, starting with the top controller, etc. By default, execute along path is true.
+* `--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path` (optional), the command gets executed on all the children (applications and controllers) that are controlled by target (similar to `-r/--recursive` for `rm` or `grep`). By default, execute on all subsequent children in path.
 
 By default, `who-is-in-charge` surrenders the control on the whole system.
 
@@ -827,9 +827,9 @@ who-is-in-charge --target root-controller/trg-controller
 ```
 
 ### Related commands
- - [`take-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#take-control)
- - [`surrender-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#surrender-control)
- - [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
+* [`take-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#take-control)
+* [`surrender-control`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#surrender-control)
+* [`whoami`](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference#whoami)
 
 ## whoami### Description
 **NOTE**: This command isn't typically used right now.

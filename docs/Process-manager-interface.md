@@ -50,10 +50,10 @@ message ProcessUUID {
 
 ### `ProcessMetadata`
 This message encodes all the metadata used for a process. In theory, this is not strictly needed by the process to be executed, but I realise there is a `user` field here, which does not fall in that category... Oh well.
- - `uuid` is the process unique identifier ([ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid))
- - `user` is the user who started the process
- - `session` is the DAQ session that is associated with this process. There may be some processes that are not associated with any session (or associated with all the sessions?) hence this is an optional field.
- - `name` is a "friendly name" that can be used to query the process (for example in a [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery))
+* `uuid` is the process unique identifier ([ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid))
+* `user` is the user who started the process
+* `session` is the DAQ session that is associated with this process. There may be some processes that are not associated with any session (or associated with all the sessions?) hence this is an optional field.
+* `name` is a "friendly name" that can be used to query the process (for example in a [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery))
 
 ```
 message ProcessMetadata {
@@ -66,10 +66,10 @@ message ProcessMetadata {
 
 ### `ProcessQuery`
 This message can be used to query the processes run by the process manager. ProcessQuery can correspond to one or more processes (or even zero). Generally, an `OR` is formed between all the field by the process manager to get the corresponding processes.
- - `uuids` is a vector of [ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid) to directly get process by UUIDs.
- - `names` is a vector of processes friendly names.
- - `user` is the user
- - `session`: the session associated with the process.
+* `uuids` is a vector of [ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid) to directly get process by UUIDs.
+* `names` is a vector of processes friendly names.
+* `user` is the user
+* `session`: the session associated with the process.
 
 ```
 message ProcessQuery {
@@ -82,11 +82,11 @@ message ProcessQuery {
 
 ### `ProcessDescription`
 A ProcessDescription carries all the information necessary to start a process on any host. It uses two sub-message types, the StringList and ExecAndArgs. The fields mean:
- - `metadata`: to carry the [ProcessMetadata](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processmetadata) of the process
- - `env`: this is a key: value map (string to string) that stores the environment variables that need to be set for the process to run.
- - `executable_and_arguments` is a vector of executable and argument in the [ExecAndArgs](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#execandargs) format. Multiple executables can be specified and executed sequentially.
- - `process_execution_directory` (new after 27th Sept 2023) is the place where the process should be executed.
- - `process_logs_path` (new after 27th Sept 2023) is the place where the log will be stored.
+* `metadata`: to carry the [ProcessMetadata](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processmetadata) of the process
+* `env`: this is a key: value map (string to string) that stores the environment variables that need to be set for the process to run.
+* `executable_and_arguments` is a vector of executable and argument in the [ExecAndArgs](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#execandargs) format. Multiple executables can be specified and executed sequentially.
+* `process_execution_directory` (new after 27th Sept 2023) is the place where the process should be executed.
+* `process_logs_path` (new after 27th Sept 2023) is the place where the log will be stored.
 
 ```
 message ProcessDescription {
@@ -114,11 +114,11 @@ message ExecAndArgs{
 
 ### `ProcessInstance`
 This message carries the description of a running process, and, eventually, the exit code.
- - `process_description` carries the [ProcessDescription](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processdescription) of the process, hence information like which executable, arguments, environment, etc.
- - `process_restriction` carries information about the host on which the process is running (well, really just the name of the host for now).
- - `status_code` is a very simple enum that show if a process is running or not (0: Running, 1: Dead).
- - `return_code` is the return code of the process.
- - `uuid` is the process unique identifier [ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid)
+* `process_description` carries the [ProcessDescription](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processdescription) of the process, hence information like which executable, arguments, environment, etc.
+* `process_restriction` carries information about the host on which the process is running (well, really just the name of the host for now).
+* `status_code` is a very simple enum that show if a process is running or not (0: Running, 1: Dead).
+* `return_code` is the return code of the process.
+* `uuid` is the process unique identifier [ProcessUUID](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processuuid)
 
 ```
 message ProcessInstance {
@@ -136,8 +136,8 @@ message ProcessInstance {
 
 ### `BootRequest`
 Describes requests to start a process.
- - `process_description` is used to start the process, it uses the [ProcessDescription](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processdescription) format.
- - `process_restriction` is used to choose the host on which the process will run. This follows the [ProcessRestriction](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processrestriction).
+* `process_description` is used to start the process, it uses the [ProcessDescription](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processdescription) format.
+* `process_restriction` is used to choose the host on which the process will run. This follows the [ProcessRestriction](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processrestriction).
 
 ```
 message BootRequest {
@@ -197,44 +197,44 @@ Each RPC call is described here.
 
 ### `boot`
 Is used to boot processes. No resolution whatsoever is done for the executable arguments, they need to be formatted correctly by the client.
- - input: [BootRequest](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#bootrequest)
- - output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) of all the process started
- - interrupts/exceptions:
-   - `allowed_hosts` is empty
+* input: [BootRequest](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#bootrequest)
+* output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) of all the process started
+* interrupts/exceptions:
+  * `allowed_hosts` is empty
 
 For the SSH process manager, the `allowed_host_types` are not allowed in the [ProcessRestriction](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processrestriction). The process manager will try each host listed in the `allowed_hosts` until it one leads to successful execution of the process (which can itself fail).
 
 ### `restart`
 Restart one (and only one) process. If the process is running, it will be killed and restarted. If the process is already dead, it simply boots it.
- - input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
- - output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the one process that was started (should be `ProcessInstance` instead).
- - interrupts/exceptions:
-   - The input process query leads to more than one processes, or zero process.
+* input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
+* output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the one process that was started (should be `ProcessInstance` instead).
+* interrupts/exceptions:
+  * The input process query leads to more than one processes, or zero process.
 
 ### `kill`
 Kill one or more processes.
- - input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
- - output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes that were killed.
- - interrupts/exceptions:
-   - None known.
+* input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
+* output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes that were killed.
+* interrupts/exceptions:
+  * None known.
 
 ### `flush`
 Remove the **dead** processes from the process manager. One cannot restart processes that have been flushed, and they will not appear in the [ps](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#ps).
- - input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
- - output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes that were flushed.
- - interrupts/exceptions:
-   - None known.
+* input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
+* output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes that were flushed.
+* interrupts/exceptions:
+  * None known.
 
 ### `ps`
 List the processes
- - input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
- - output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes queried.
- - interrupts/exceptions:
-   - None known.
+* input: [ProcessQuery](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processquery)
+* output: [ProcessInstanceList](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#processinstancelist) containing the processes queried.
+* interrupts/exceptions:
+  * None known.
 
 ### `logs`
 Stream the logs from a specific process
- - input: [LogRequest](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#logrequest)
- - output (streamed): [LogLine](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#logline)
- - interrupt/exceptions:
-   - The input process query leads to more than one processes, or zero process.
+* input: [LogRequest](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#logrequest)
+* output (streamed): [LogLine](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-Manager-interface#logline)
+* interrupt/exceptions:
+  * The input process query leads to more than one processes, or zero process.
