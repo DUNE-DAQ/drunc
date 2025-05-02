@@ -2,6 +2,11 @@
     "type": "ssh",
     "name": "SSHProcessManager",
 
+    "settings" : {
+        "disable_localhost_host_key_check": true,
+        "disable_host_key_check": true
+    },
+
     "authoriser": {
         "type": "dummy"
     },
