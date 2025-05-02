@@ -1,5 +1,6 @@
-import requests
 import time
+
+import requests
 
 from drunc.fsm.actions.utils import (
     get_dotdrunc_json,
