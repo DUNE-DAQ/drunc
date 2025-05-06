@@ -99,8 +99,6 @@ class Controller(ControllerServicer):
     children_nodes = []  # type: List[ChildNode]
 
     def __init__(self, configuration, name: str, session: str, token: Token):
-        from kafkaopmon.OpMonPublisher import OpMonPublisher
-
         super().__init__()
 
         self.name = name
@@ -128,34 +126,17 @@ class Controller(ControllerServicer):
             data=self.configuration.data.controller.fsm,
         )
 
-        self.opmon_publisher = None
+        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
+        opmon_sleep_time = getattr(self.configuration, "opmon_sleep_time", 10.0)
 
-        if self.configuration.session.opmon_uri:
-            opmon_path = self.configuration.session.opmon_uri.path
-            opmon_type = self.configuration.session.opmon_uri.type
-            if hasattr(self.configuration.session.opmon_uri, "sleep_time"):
-                self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
-            else:
-                self.opmon_sleep_time = 10
-
-                log_init.info(
-                    "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
-                )
-
-            log_init.info(
-                f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
+        if self.opmon_publisher is not None:
+            self.stop_event = threading.Event()
+            self.thread = threading.Thread(
+                target=self.threading_publish_state,
+                args=(opmon_sleep_time,),
+                daemon=True,
             )
-
-            if "/" in opmon_path:
-                opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
-            else:
-                opmon_bootstrap = opmon_path
-                opmon_topic = "opmon_stream"
-
-            if opmon_type == "stream":
-                self.opmon_publisher = OpMonPublisher(
-                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
-                )
+            self.thread.start()
 
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
@@ -163,15 +144,6 @@ class Controller(ControllerServicer):
             name=name,
             session=session,
         )
-
-        if self.opmon_publisher is not None:
-            self.stop_event = threading.Event()
-            self.thread = threading.Thread(
-                target=self.threading_publish_state,
-                args=(self.opmon_sleep_time,),
-                daemon=True,
-            )
-            self.thread.start()
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
