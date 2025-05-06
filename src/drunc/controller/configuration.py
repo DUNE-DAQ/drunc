@@ -101,6 +101,10 @@ class ControllerConfHandler(ConfHandler):
             except Exception as e:
                 self.log.error(f"Failed to initialize OpMonPublisher: {e}")
                 raise DruncCommandException("Failed to initialize OpMonPublisher.")
+
+        elif opmon_type == "file":
+            pass
+
         else:
             self.log.error(f"Unsupported OpMon type: {opmon_type}")
             raise DruncCommandException(f"Unsupported OpMon type: {opmon_type}")
