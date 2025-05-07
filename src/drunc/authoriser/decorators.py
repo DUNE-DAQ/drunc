@@ -11,7 +11,7 @@ def authentified_and_authorised(action, system):
         @functools.wraps(
             cmd
         )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        def check_token(obj, request):
+        def check_token(obj, request, context):
             log = get_logger("utils.authentified_and_authorised_decorator")
             log.debug("Entering")
             if not obj.authoriser.is_authorised(
@@ -34,7 +34,7 @@ def authentified_and_authorised(action, system):
                 #     drunc_system = obj.name,
                 # )
             log.debug("Executing wrapped function")
-            ret = cmd(obj, request)
+            ret = cmd(obj, request, context)
             log.debug("Exiting")
             return ret
 
@@ -48,7 +48,7 @@ def async_authentified_and_authorised(action, system):
         @functools.wraps(
             cmd
         )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        async def check_token(obj, request):
+        async def check_token(obj, request, context):
             log = get_logger("utils.authentified_and_authorised_decorator")
             log.debug("Entering")
             if not obj.authoriser.is_authorised(
@@ -64,7 +64,7 @@ def async_authentified_and_authorised(action, system):
                     children=[],
                 )
             log.debug("Executing wrapped function")
-            async for a in cmd(obj, request):
+            async for a in cmd(obj, request, context):
                 yield a
             log.debug("Exiting")
 

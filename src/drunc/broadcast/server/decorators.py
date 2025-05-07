@@ -36,9 +36,7 @@ def broadcasted(cmd):
         cmd_start_time = time.time()
         try:
             log.debug("Executing wrapped function")
-            ret = cmd(
-                obj, request
-            )  # we strip the context here, no need for that anymore
+            ret = cmd(obj, request, context)
 
         except Exception as e:
             log.exception(e)
@@ -116,7 +114,7 @@ def async_broadcasted(cmd):
 
         try:
             log.debug("Executing wrapped function")
-            async for a in cmd(obj, request):
+            async for a in cmd(obj, request, context):
                 yield a
 
         except Exception as e:
