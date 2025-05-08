@@ -12,13 +12,13 @@ def run_fsm_sequence(sequence_commands, cmd_to_options_and_args, ctx, obj, **kwa
     logger.info(f"Running sequence: {sequence_commands}")
 
     for command in sequence_commands:
-        accepted_command = ["boot"]
+        accepted_command = ["boot", "terminate"]  # Always accept boot and terminate
 
         cd = obj.get_driver("controller", quiet_fail=True)
 
         if cd:
             accepted_command_raw = cd.describe_fsm()
-            accepted_command = [
+            accepted_command += [
                 c.name.lower().replace("_", "-")
                 for c in accepted_command_raw.data.commands
             ]
