@@ -289,7 +289,7 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None) -> GRPCDriver:
+    def get_driver(self, name: str = None, quiet_fail: bool = False) -> GRPCDriver:
         try:
             if name:
                 return self._drivers[name]
@@ -297,6 +297,8 @@ class ShellContext:
                 raise DruncShellException("More than one driver in this context")
             return list(self._drivers.values())[0]
         except KeyError:
+            if quiet_fail:
+                return None
             log = get_logger("utils.ShellContext")
             log.exception(
                 "Controller-specific commands cannot be sent until the session is booted"
