@@ -32,7 +32,11 @@ from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.rest_api_child import ResponseListener
-from drunc.controller.decorators import in_control, unpack_addressed_command_to
+from drunc.controller.decorators import (
+    in_control,
+    publish_command_time,
+    unpack_addressed_command_to,
+)
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
@@ -551,6 +555,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def status(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -581,6 +586,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def describe(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -622,6 +628,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to(PlainText)  # 4th step
+    @publish_command_time
     def describe_fsm(
         self,
         payload: PlainText,
@@ -674,6 +681,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to(FSMCommand)  # 4th step
+    @publish_command_time
     def execute_fsm_command(
         self,
         payload: FSMCommand,
@@ -853,6 +861,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def recompute_status(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -958,6 +967,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to()  # 4th step
+    @publish_command_time
     def include(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1000,6 +1010,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def exclude(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1042,6 +1053,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to(PlainText)  # 3rd step
+    @publish_command_time
     def execute_expert_command(
         self,
         payload: PlainText,
@@ -1073,6 +1085,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def take_control(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1116,6 +1129,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to()  # 4th step
+    @publish_command_time
     def surrender_control(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1160,6 +1174,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def who_is_in_charge(
         self,
         addressed_commands: dict[str, AddressedCommand],
