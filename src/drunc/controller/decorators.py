@@ -12,7 +12,7 @@ from drunc.utils.utils import get_logger
 
 def in_control(cmd):
     @wraps(cmd)
-    def wrap(obj, request):
+    def wrap(obj, request, context):
         if not obj.actor.token_is_current_actor(request.token):
             return Response(
                 name=obj.name,
@@ -25,7 +25,7 @@ def in_control(cmd):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
                 children=[],
             )
-        return cmd(obj, request)
+        return cmd(obj, request, context)
 
     return wrap
 
@@ -36,7 +36,7 @@ def unpack_addressed_command_to(data_type=None):
         logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
 
         @wraps(cmd)
-        def wrap(obj, request):
+        def wrap(obj, request, context):
             try:
                 if request.HasField("data"):
                     command = unpack_any(request.data, AddressedCommand)

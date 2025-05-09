@@ -40,7 +40,7 @@ def unpack_any(data, format):
 def unpack_request_data_to(data_type=None, pass_token=False):
     def decor(cmd):
         @functools.wraps(cmd)
-        def unpack_request(obj, request):
+        def unpack_request(obj, request, context):
             log = get_logger("utils.unpack_request_data_to_decorator")
             log.debug("Entering")
 
@@ -81,7 +81,7 @@ def unpack_request_data_to(data_type=None, pass_token=False):
 def async_unpack_request_data_to(data_type=None, pass_token=False):
     def decor(cmd):
         @functools.wraps(cmd)
-        async def unpack_request(obj, request):
+        async def unpack_request(obj, request, context):
             log = get_logger("utils.async_unpack_request_data_to_decorator")
             log.debug("Executing wrapped function")
             kwargs = {}
