@@ -60,6 +60,7 @@ class ControllerConfHandler(ConfHandler):
 
         self.opmon_publisher = None
         opmon_uri = self.session.opmon_uri
+        opmon_conf = self.data.controller.opmon_conf
 
         if not opmon_uri:
             self.log.info("Missing 'opmon_uri' in configuration.")
@@ -67,16 +68,20 @@ class ControllerConfHandler(ConfHandler):
 
         opmon_path = getattr(opmon_uri, "path", "")
         opmon_type = getattr(opmon_uri, "type", "")
-        self.opmon_sleep_time = getattr(opmon_uri, "sleep_time", 10.0)
+        self.interval_s = getattr(opmon_conf, "interval_s", 0.0)
 
         if not opmon_path or not opmon_type:
             self.log.error("Invalid 'opmon_uri' format: Missing required fields.")
             raise DruncCommandException(
                 "Invalid 'opmon_uri' format: Missing required fields."
             )
+        if not self.interval_s:
+            self.log.error("Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s")
+            self.interval_s = 10.0
+            
 
         self.log.info(
-            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.opmon_sleep_time} s"
+            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.interval_s} s"
         )
 
         if "/" in opmon_path:
