@@ -63,7 +63,11 @@ class ControllerConfHandler(ConfHandler):
         opmon_conf = self.data.controller.opmon_conf
 
         if not opmon_uri:
-            self.log.info("Missing 'opmon_uri' in configuration.")
+            self.log.error("Missing 'opmon_uri' in configuration.")
+            return
+
+        if not opmon_conf:
+            self.log.error("Missing 'opmon_conf' in configuration.")
             return
 
         opmon_path = getattr(opmon_uri, "path", "")
@@ -76,9 +80,10 @@ class ControllerConfHandler(ConfHandler):
                 "Invalid 'opmon_uri' format: Missing required fields."
             )
         if not self.interval_s:
-            self.log.error("Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s")
+            self.log.info(
+                "Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s"
+            )
             self.interval_s = 10.0
-            
 
         self.log.info(
             f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.interval_s} s"
