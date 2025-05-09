@@ -130,18 +130,6 @@ class Controller(ControllerServicer):
             data=self.configuration.data.controller.fsm,
         )
 
-        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
-        opmon_sleep_time = getattr(self.configuration, "opmon_sleep_time", 10.0)
-
-        if self.opmon_publisher is not None:
-            self.stop_event = threading.Event()
-            self.thread = threading.Thread(
-                target=self.threading_publish_state,
-                args=(opmon_sleep_time,),
-                daemon=True,
-            )
-            self.thread.start()
-
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
             publisher=self.controller_publisher,
@@ -248,6 +236,18 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.propagate_command("take_control", None, self.actor.get_token())
 
+        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
+        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+
+        if self.opmon_publisher is not None:
+            self.stop_event = threading.Event()
+            self.thread = threading.Thread(
+                target=self.threading_publish_state,
+                args=(interval_s,),
+                daemon=True,
+            )
+            self.thread.start()
+
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
         self.stateful_node.set_ready_state(True)
         log_init_controller.info("Controller ready")
@@ -289,10 +289,10 @@ class Controller(ControllerServicer):
             except Exception as e:
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
-    def threading_publish_state(self, sleep_time: float = 10.0):
+    def threading_publish_state(self, interval_s: float = 10.0):
         while not self.stop_event.is_set():
             try:
-                self.log.debug(f"Publishing periodic FSM status every {sleep_time}s")
+                self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
 
@@ -317,7 +317,7 @@ class Controller(ControllerServicer):
                 if run_time_at_start:
                     run_time_since_start = int(time.time() - run_time_at_start)
 
-                self.log.debug(f"Publishing periodic run info every {sleep_time}s")
+                self.log.debug(f"Publishing periodic run info every {interval_s}s")
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=run_type,
@@ -330,7 +330,7 @@ class Controller(ControllerServicer):
                 )
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic status: {e}")
-            time.sleep(sleep_time)
+            time.sleep(interval_s)
 
     def construct_error_node_response(
         self, command_name: str, token: Token, cause: FSMResponseFlag
