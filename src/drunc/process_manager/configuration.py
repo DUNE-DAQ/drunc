@@ -60,23 +60,33 @@ class ProcessManagerConfHandler(ConfHandler):
 
         new_data.opmon_publisher = None
         opmon_uri = data.get("opmon_uri", None)
+        opmon_conf = data.get("opmon_conf", None)
 
         if not opmon_uri:
-            self.log.info("Missing 'opmon_uri' in configuration.")
+            self.log.error("Missing 'opmon_uri' in configuration.")
+            return new_data
+
+        if not opmon_conf:
+            self.log.error("Missing 'opmon_conf' in configuration.")
             return new_data
 
         opmon_path = opmon_uri.get("path", "")
         opmon_type = opmon_uri.get("type", "")
-        new_data.opmon_sleep_time = opmon_uri.get("sleep_time", 5.0)
+        new_data.interval_s = opmon_conf.get("interval_s", 0.0)
 
         if not opmon_path or not opmon_type:
             self.log.error("Invalid 'opmon_uri' format: Missing required fields.")
             raise DruncCommandException(
                 "Invalid 'opmon_uri' format: Missing required fields."
             )
+        if not new_data.interval_s:
+            self.log.info(
+                "Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s"
+            )
+            new_data.interval_s = 10.0
 
         self.log.info(
-            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {new_data.opmon_sleep_time} s"
+            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {new_data.interval_s} s"
         )
 
         if "/" in opmon_path:
