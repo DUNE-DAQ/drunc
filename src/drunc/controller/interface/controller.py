@@ -139,6 +139,7 @@ def controller_cli(
         server, port = serve(commandfacility)
         server_name = commandfacility.split(":")[0]
         ctrlr.advertise_control_address(f"grpc://{server_name}:{port}")
+        ctrlr.init_controller()
         server.wait_for_termination(timeout=None)
 
     except Exception as e:

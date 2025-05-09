@@ -131,9 +131,13 @@ class Controller(ControllerServicer):
                 self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
             else:
                 self.opmon_sleep_time = 10
-                self.log.info("Couldn't find sleep time in opmon_uri configuration, use default value of 10s")            
+                self.log.info(
+                    "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
+                )
 
-            self.log.info(f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s")
+            self.log.info(
+                f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
+            )
 
             if "/" in opmon_path:
                 opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
@@ -149,19 +153,19 @@ class Controller(ControllerServicer):
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
             publisher=self.opmon_publisher,
+            init_state="initialising",
             name=name,
             session=session,
         )
-        
+
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
                 target=self.threading_publish_state,
                 args=(self.opmon_sleep_time,),
                 daemon=True,
-                )
+            )
             self.thread.start()
-      
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
@@ -188,6 +192,7 @@ class Controller(ControllerServicer):
                 address=f"{connection_server}:{connection_port}",
             )
 
+    def init_children(self):
         self.children_nodes = self.configuration.get_children(
             init_token=self.actor.get_token(),
             connectivity_service=self.connectivity_service,
@@ -230,72 +235,8 @@ class Controller(ControllerServicer):
                 self.log.info(child)
                 child.propagate_command("take_control", None, self.actor.get_token())
 
-        # # TODO, probably need to think of a better way to do this?
-        # # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
-        # # Not particularly pretty...
-        # self.commands = [
-        #     CommandDescription(
-        #         name="describe",
-        #         data_type=["None"],
-        #         help="Describe self (return a list of commands, the type of endpoint, the name and session).",
-        #         return_type="request_response_pb2.Description",
-        #     ),
-        #     CommandDescription(
-        #         name="status",
-        #         data_type=["None"],
-        #         help="Get the status of self",
-        #         return_type="controller_pb2.Status",
-        #     ),
-        #     CommandDescription(
-        #         name="describe_fsm",
-        #         data_type=["generic_pb2.PlainText", "None"],
-        #         help="""Return a description of the FSM transitions:
-        #             if a transition name is provided in its input, return that transition description;
-        #             if a state is provided, return the transitions accessible from that state;
-        #             if "all-transitions" is provided, return all the transitions;
-        #             if nothing (None) is provided, return the transitions accessible from the current state.""",
-        #         return_type="request_response_pb2.Description",
-        #     ),
-        #     CommandDescription(
-        #         name="execute_fsm_command",
-        #         data_type=["controller_pb2.FSMCommand"],
-        #         help="Execute an FSM command",
-        #         return_type="controller_pb2.FSMCommandResponse",
-        #     ),
-        #     CommandDescription(
-        #         name="include",
-        #         data_type=["generic_pb2.PlainText"],
-        #         help="Include self in the current session, if a children is provided, include it and its eventual children",
-        #         return_type="controller_pb2.FSMCommandResponse",
-        #     ),
-        #     CommandDescription(
-        #         name="exclude",
-        #         data_type=["generic_pb2.PlainText"],
-        #         help="Exclude self in the current session, if a children is provided, exclude it and its eventual children",
-        #         return_type="controller_pb2.FSMCommandResponse",
-        #     ),
-        #     CommandDescription(
-        #         name="take_control",
-        #         data_type=["None"],
-        #         help="Take control of self and children",
-        #         return_type="generic_pb2.PlainText",
-        #     ),
-        #     CommandDescription(
-        #         name="surrender_control",
-        #         data_type=["None"],
-        #         help="Surrender control of self and children",
-        #         return_type="generic_pb2.PlainText",
-        #     ),
-        #     CommandDescription(
-        #         name="who_is_in_charge",
-        #         data_type=["None"],
-        #         help="Get who is in control of self",
-        #         return_type="generic_pb2.PlainText",
-        #     ),
-        # ]
-
-        # do this at the end, otherwise we need to self.terminate() if an exception is raised
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
+        self.stateful_node.set_ready(True)
         self.log.info("Controller ready")
 
     """
@@ -681,6 +622,16 @@ class Controller(ControllerServicer):
         execute_on_self: bool,
         token: Token,
     ) -> Response:
+        if not self.stateful_node.get_ready_state():
+            self.log.warning("Controller is not ready, not executing command")
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                children=[],
+            )
+
         if execute_on_self:
             if self.stateful_node.node_is_in_error():
                 return self.construct_error_node_response(

@@ -91,23 +91,34 @@ class StatefulNode(abc.ABC):
         self,
         fsm_configuration,
         publisher: Optional[OpMonPublisher] = None,
+        init_state: str = "",
         session: str = "",
         name: str = "",
     ):
         self.publisher = publisher
         self.session = session
         self.name = name
-
+        self._ready_state = False
         self.__fsm = FSM(fsm_configuration)
         self.log = get_logger("controller.StatefulNode")
         self.__operational_state = OperationalState(
-            stateful_node=self, initial_value=self.__fsm.initial_state
+            stateful_node=self,
+            initial_value=init_state,
         )
         self.__operational_sub_state = OperationalState(
-            stateful_node=self, initial_value=self.__fsm.initial_state
+            stateful_node=self, initial_value=init_state
         )
         self.__included = InclusionState(stateful_node=self, initial_value=True)
         self.__in_error = ErrorState(stateful_node=self, initial_value=False)
+
+    def set_ready_state(self, ready: bool = True):
+        self._ready_state = ready
+        if self.ready_state:
+            self.__operational_state.value = self.__fsm.initial_state
+            self.__operational_sub_state.value = self.__fsm.initial_state
+
+    def get_ready_state(self):
+        return self._ready_state
 
     def publish_state(self):
         from druncschema.opmon.FSM_pb2 import FSMStatus
@@ -123,7 +134,6 @@ class StatefulNode(abc.ABC):
                     included=self.__included.value,
                 ),
             )
-
 
     def get_node_operational_state(self):
         return self.__operational_state.value
