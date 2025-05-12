@@ -104,7 +104,8 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
 
         self.log = get_logger("controller")
-        self.log.info(f"Initialising controller '{name}' with session '{session}'")
+        log_init = get_logger("controller.__init__")
+        log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
 
@@ -131,11 +132,11 @@ class Controller(ControllerServicer):
                 self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
             else:
                 self.opmon_sleep_time = 10
-                self.log.info(
+                log_init.info(
                     "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
                 )
 
-            self.log.info(
+            log_init.info(
                 f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
             )
 
@@ -183,7 +184,7 @@ class Controller(ControllerServicer):
             connection_port = (
                 self.configuration.session.connectivity_service.service.port
             )
-            self.log.info(
+            log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"
             )
 
@@ -192,52 +193,72 @@ class Controller(ControllerServicer):
                 address=f"{connection_server}:{connection_port}",
             )
 
-    def init_children(self):
-        self.children_nodes = self.configuration.get_children(
+        self.children_nodes = self.configuration.get_dummy_children()
+
+    def init_controller(self):
+        log_init_controller = get_logger("controller.init_controller")
+        log_init_controller.info("Finishing initialisation of controller")
+        self.configuration.update_children(
+            self.children_nodes,
             init_token=self.actor.get_token(),
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
 
-        children_statuses = self.propagate_to_all_children(
-            command_name="status",
-            token=self.actor.get_token(),
-        )
+        timeout = 60
+        time_start = time.time()
 
-        for response in children_statuses:
-            in_error = False
-            try:
-                status = unpack_any(response.data, Status)
-                in_error = status.in_error
-            except UnpackingError:
-                self.log.error(f"Failed to unpack status from {response.name}:")
-                if response.data.Is(Stacktrace.DESCRIPTOR):
-                    stack = unpack_any(response.data, Stacktrace)
-                    for line in stack.text:
-                        self.log.error(f"{response.name}: {line}")
-                elif response.data.Is(PlainText.DESCRIPTOR):
-                    self.log.error(
-                        f"{response.name}: {unpack_any(response.data, PlainText).text}"
-                    )
-                else:
-                    self.log.error(
-                        f"{response.name}: Unknown data type: {type(response.data)}"
-                    )
+        while time.time() - time_start < timeout and self.stateful_node.node_is_in_error() == False:
 
-            if in_error:
-                # self.state.to_error()  # Set the parent node's state to error
-                self.stateful_node.to_error()
+            children_statuses = self.propagate_to_all_children(
+                command_name="status",
+                token=self.actor.get_token(),
+            )
+            children_states = {}
+            for response in children_statuses:
+                in_error = False
+                try:
+                    status = unpack_any(response.data, Status)
+                    in_error = status.in_error
+                    children_states[response.name] = status.state
+                except UnpackingError:
+                    log_init_controller.error(f"Failed to unpack status from {response.name}:")
+                    if response.data.Is(Stacktrace.DESCRIPTOR):
+                        stack = unpack_any(response.data, Stacktrace)
+                        for line in stack.text:
+                            log_init_controller.error(f"{response.name}: {line}")
+                    elif response.data.Is(PlainText.DESCRIPTOR):
+                        log_init_controller.error(
+                            f"{response.name}: {unpack_any(response.data, PlainText).text}"
+                        )
+                    else:
+                        log_init_controller.error(
+                            f"{response.name}: Unknown data type: {type(response.data)}"
+                        )
+
+                if in_error:
+                    self.stateful_node.to_error()
+                    break
+
+            if any([c.lower() != "initial" for c in children_states.values()]):
+                time.sleep(0.5)
+            else:
+                break
+
+        if any([c.lower() != "initial" for c in children_states.values()]):
+            log_init_controller.error("Children did not initialise in time")
+            return
 
         for child in self.children_nodes:
             if child is None:
-                self.log.info("Child is None")
+                log_init_controller.info("Child is None")
             else:
-                self.log.info(child)
+                log_init_controller.info(child)
                 child.propagate_command("take_control", None, self.actor.get_token())
 
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
-        self.stateful_node.set_ready(True)
-        self.log.info("Controller ready")
+        self.stateful_node.set_ready_state(True)
+        log_init_controller.info("Controller ready")
 
     """
     A couple of simple pass-through functions to the broadcasting service

@@ -113,7 +113,7 @@ class StatefulNode(abc.ABC):
 
     def set_ready_state(self, ready: bool = True):
         self._ready_state = ready
-        if self.ready_state:
+        if self._ready_state:
             self.__operational_state.value = self.__fsm.initial_state
             self.__operational_sub_state.value = self.__fsm.initial_state
 
