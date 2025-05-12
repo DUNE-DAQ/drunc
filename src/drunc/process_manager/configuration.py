@@ -63,11 +63,11 @@ class ProcessManagerConfHandler(ConfHandler):
         opmon_conf = data.get("opmon_conf", None)
 
         if not opmon_uri:
-            self.log.error("Missing 'opmon_uri' in configuration.")
+            self.log.info("Missing 'opmon_uri' in configuration.")
             return new_data
 
         if not opmon_conf:
-            self.log.error("Missing 'opmon_conf' in configuration.")
+            self.log.info("Missing 'opmon_conf' in configuration.")
             return new_data
 
         opmon_path = opmon_uri.get("path", "")
@@ -80,7 +80,7 @@ class ProcessManagerConfHandler(ConfHandler):
                 "Invalid 'opmon_uri' format: Missing required fields."
             )
         if not new_data.interval_s:
-            self.log.info(
+            self.log.warning(
                 "Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s"
             )
             new_data.interval_s = 10.0

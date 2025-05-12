@@ -8,7 +8,7 @@ from druncschema.opmon.FSM_pb2 import CommandTime
 from druncschema.request_response_pb2 import Response, ResponseFlag
 
 from drunc.controller.utils import address_command
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandException, DruncException
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
@@ -135,7 +135,6 @@ def publish_command_time(cmd):
             log.exception(e)
 
             stack = traceback.format_exc().split("\n")
-            from drunc.exceptions import DruncException
 
             flag = (
                 ResponseFlag.DRUNC_EXCEPTION_THROWN
