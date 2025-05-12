@@ -1,11 +1,11 @@
-import abc
 import os
+
+from druncschema.controller_pb2 import Status
+from druncschema.request_response_pb2 import Response
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncSetupException
-from druncschema.controller_pb2 import Status
-from druncschema.request_response_pb2 import Response
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import (
@@ -17,7 +17,6 @@ from drunc.utils.utils import (
 
 from druncschema.request_response_pb2 import (  # isort: skip
     Description,
-    Response,
     ResponseFlag,
 )
 from druncschema.token_pb2 import Token  # isort: skip
@@ -28,7 +27,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode(): # abc.ABC):
+class ChildNode:  # abc.ABC):
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
@@ -68,13 +67,13 @@ class ChildNode(): # abc.ABC):
             name=self.name,
             token=token,
             data=pack_to_any(
-                    Status(
-                        state="unknown",
-                        sub_state="unknown",
-                        in_error=False,
-                        included=True,
-                    )
-                ),
+                Status(
+                    state="unknown",
+                    sub_state="unknown",
+                    in_error=False,
+                    included=True,
+                )
+            ),
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=[],
         )

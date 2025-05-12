@@ -2,14 +2,17 @@ import socket
 import threading
 
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import ControlType
+
 import confmodel  # isort: skip
+from drunc.controller.children_interface.rest_api_child import (
+    RESTAPIChildNodeConfHandler,
+)
 from drunc.utils.configuration import ConfTypes
-from drunc.controller.children_interface.rest_api_child import RESTAPIChildNodeConfHandler
+
 
 class ControllerConfData:  # the bastardised OKS
     def __init__(self):
@@ -67,9 +70,7 @@ class ControllerConfHandler(ConfHandler):
             ret.append(
                 ChildNode(
                     name=seg.controller.id,
-                    configuration=RESTAPIChildNodeConfHandler(
-                        seg, ConfTypes.PyObject
-                    ),
+                    configuration=RESTAPIChildNodeConfHandler(seg, ConfTypes.PyObject),
                     node_type=ControlType.Unknown,
                 )
             )
@@ -79,9 +80,7 @@ class ControllerConfHandler(ConfHandler):
             ret.append(
                 ChildNode(
                     name=app.id,
-                    configuration=RESTAPIChildNodeConfHandler(
-                        app, ConfTypes.PyObject
-                    ),
+                    configuration=RESTAPIChildNodeConfHandler(app, ConfTypes.PyObject),
                     node_type=ControlType.Unknown,
                 )
             )
