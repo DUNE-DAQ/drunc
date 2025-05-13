@@ -95,15 +95,9 @@ class ControllerConfHandler(ConfHandler):
         session_name=None,
     ):
         enabled_only = not without_excluded
-        timeout = 60
-        # get_segment_lookup_timeout(
-        #     self.data,  # the current segment
-        #     base_timeout=60,
-        # )
+        timeout = 60  # 60s for each application to start and show up on the connectivity service
 
         self.log.debug(f"get_children: connectivity service lookup timeout={timeout}")
-        # if self.children != []:
-        #    return self.get_children(init_token, without_excluded, connectivity_service)
 
         session = None
         self.children = []
