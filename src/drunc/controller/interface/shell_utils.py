@@ -1,6 +1,7 @@
 import logging
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 import click
@@ -234,11 +235,6 @@ def controller_setup(ctx, controller_address):
 
     log.debug("Connected to the controller")
 
-    def generate_status_table(ctx):
-        statuses = ctx.get_driver("controller").status()
-        descriptions = ctx.get_driver("controller").describe()
-        return get_status_table(statuses, descriptions)
-
     timeout = 60  # 1 min
     time_start = time.time()
     controller_status = ctx.get_driver("controller").status().data.state.lower()
@@ -250,7 +246,7 @@ def controller_setup(ctx, controller_address):
             controller_status = ctx.get_driver("controller").status().data.state.lower()
             updater.update_table()
             updater.update(task, completed=time.time() - time_start)
-            time.sleep(0.1)
+            time.sleep(0.2)
 
     if controller_status == "initialising":
         log.error("Controller did not initialise in time")
@@ -463,12 +459,35 @@ def run_one_fsm_command(
             command_name=transition_name,
             arguments=formated_args,
         )
-        result = obj.get_driver("controller").execute_fsm_command(
-            arguments=data,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-        )
+
+        timeout = 60
+        time_start = time.time()
+        result = None
+
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                obj.get_driver("controller").execute_fsm_command,
+                arguments=data,
+                target=target,
+                execute_along_path=execute_along_path,
+                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            )
+
+            with StatusTableUpdater(obj) as updater:
+                task = updater.add_task(
+                    f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
+                    total=timeout,
+                )
+                while time.time() - time_start < timeout and future.running():
+                    updater.update_table()
+                    updater.update(task, completed=time.time() - time_start)
+                    time.sleep(0.2)
+
+            if future.running():
+                log.error(f"{transition_name} timed out")
+            else:
+                result = future.result()
+
     except ArgumentException as ae:
         log.exception(
             str(ae)
@@ -477,6 +496,7 @@ def run_one_fsm_command(
 
     if not result:
         return
+
     t = Table(title=f"{transition_name} execution report")
     t.add_column("Name")
     t.add_column("Command execution")
