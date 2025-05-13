@@ -239,7 +239,10 @@ def controller_setup(ctx, controller_address):
         descriptions = ctx.get_driver("controller").describe()
         return get_status_table(statuses, descriptions)
 
-    timeout = 60  # 1 min
+    timeout = (
+        60 + 10
+    )  # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+
     time_start = time.time()
     controller_status = ctx.get_driver("controller").status().data.state.lower()
     with StatusTableUpdater(ctx) as updater:

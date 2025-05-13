@@ -34,7 +34,10 @@ from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import in_control, unpack_addressed_command_to
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
-from drunc.controller.utils import get_detector_name, get_status_message
+from drunc.controller.utils import (
+    get_detector_name,
+    get_status_message,
+)
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
@@ -204,8 +207,13 @@ class Controller(ControllerServicer):
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
+        # At this point, we already waited for 60s for the children applications to start and show up on the connectivity service
+        # We now wait for each application to get from "initialising" to "ready"
+        # Unfortunately, if an application crashed on boot and never made it to the connectivity service,
+        # its parent controller will only notice it after 60s, so we need to wait for a _bit more_ than 60s for that controller to come out of initialising state.
+        # Let's assume that parent controller takes 10s to get from initialising to ready, in error state.
+        timeout = 60 + 10
 
-        timeout = 60
         time_start = time.time()
 
         while (
@@ -249,16 +257,18 @@ class Controller(ControllerServicer):
             else:
                 break
 
-        if any([c.lower() != "initial" for c in children_states.values()]):
-            log_init_controller.error("Children did not initialise in time")
-            return
+        bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
+        if bad_children:
+            log_init_controller.error(
+                f"Children that did not initialise in time: {bad_children}"
+            )
+            self.stateful_node.to_error()
 
         for child in self.children_nodes:
-            if child is None:
-                log_init_controller.info("Child is None")
-            else:
-                log_init_controller.info(child)
-                child.propagate_command("take_control", None, self.actor.get_token())
+            if child.name in bad_children:
+                continue
+            log_init_controller.info(f"Taking control of {child.name}")
+            child.propagate_command("take_control", None, self.actor.get_token())
 
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
         self.stateful_node.set_ready_state(True)
