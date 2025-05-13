@@ -208,8 +208,10 @@ class Controller(ControllerServicer):
         timeout = 60
         time_start = time.time()
 
-        while time.time() - time_start < timeout and self.stateful_node.node_is_in_error() == False:
-
+        while (
+            time.time() - time_start < timeout
+            and self.stateful_node.node_is_in_error() == False
+        ):
             children_statuses = self.propagate_to_all_children(
                 command_name="status",
                 token=self.actor.get_token(),
@@ -222,7 +224,9 @@ class Controller(ControllerServicer):
                     in_error = status.in_error
                     children_states[response.name] = status.state
                 except UnpackingError:
-                    log_init_controller.error(f"Failed to unpack status from {response.name}:")
+                    log_init_controller.error(
+                        f"Failed to unpack status from {response.name}:"
+                    )
                     if response.data.Is(Stacktrace.DESCRIPTOR):
                         stack = unpack_any(response.data, Stacktrace)
                         for line in stack.text:
@@ -409,7 +413,7 @@ class Controller(ControllerServicer):
         token: Token,
         override_payload: Any = None,
     ):
-        self.log.info(f"Propagating {command_name} to children")
+        self.log.debug(f"Propagating {command_name} to children")
         response_children = []
         response_lock = threading.Lock()
 
@@ -446,7 +450,7 @@ class Controller(ControllerServicer):
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
                     ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ]:
-                    self.log.info(
+                    self.log.debug(
                         f"Propagated {command_name} to children ({child.name}) successfully"
                     )
                 else:
