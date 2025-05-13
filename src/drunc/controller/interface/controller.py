@@ -106,7 +106,7 @@ def controller_cli(
     )
 
     def serve(listen_addr: str) -> None:
-        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=1))
+        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)
 
