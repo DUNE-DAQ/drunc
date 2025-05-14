@@ -1,4 +1,7 @@
 import time
+from typing import Optional
+
+import requests
 
 import requests
 
@@ -31,16 +34,17 @@ class UsvcProvidedRunNumber(FSMAction):
         self,
         _input_data: dict,
         _context,
-        run_type: str = "TEST",
+        run_type: str,
         disable_data_storage: bool = False,
-        trigger_rate: float = 0.0,
+        trigger_rate: Optional[float] = None,
         **kwargs,
     ):
         run_type = validate_run_type(run_type.upper())
         _input_data["production_vs_test"] = run_type
         _input_data["run"] = self._getnew_run_number()
         _input_data["disable_data_storage"] = disable_data_storage
-        _input_data["trigger_rate"] = trigger_rate
+        if trigger_rate is not None:
+            _input_data["trigger_rate"] = trigger_rate
 
         _input_data["run_time_at_start"] = time.time()
 
