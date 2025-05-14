@@ -505,21 +505,30 @@ def run_one_fsm_command(
     t.add_column("Command execution")
     t.add_column("FSM transition")
 
-    def bool_to_success(flag_message, FSM):
-        flag = False
-        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
-            flag = True
-        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            flag = True
-        return "[dark_green]success[/]" if flag else "[red]failed[/]"
+    def bool_to_success(flag_message, message_type):
+        flag = message_type.Name(flag_message).replace("_", " ").title()
+        success = False
+
+        if (
+            message_type == FSMResponseFlag
+            and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+        if (
+            message_type == ResponseFlag
+            and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+
+        return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
     def add_to_table(table, response, prefix=""):
-        executed_command = response.data is not None
+        executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
         table.add_row(
             prefix + response.name,
-            bool_to_success(response.flag, FSM=False),
-            bool_to_success(response.data.flag, FSM=True)
+            bool_to_success(response.flag, message_type=ResponseFlag),
+            bool_to_success(response.data.flag, message_type=FSMResponseFlag)
             if executed_command
             else "[red]NA[/]",
         )
