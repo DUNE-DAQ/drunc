@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -562,6 +563,7 @@ def run_one_fsm_command(
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
+    log = get_logger("controller.shell_utils")
     cmd = partial(run_one_fsm_command, controller_name, transition.name)
     cmd = click.pass_obj(cmd)
     cmd = click.option(
@@ -609,14 +611,29 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
         argument_name = f"--{argument.name.lower().replace('_', '-')}"
+        default_value = atype(default_value.value) if default_value else None
+
+        def grab_default_value_from_env(argument_name):
+            env_var = f"DRUNC_{argument_name}_DEFAULT".upper().replace("-", "_")
+            env_var_value = os.getenv(env_var, None)
+            if env_var_value:
+                log.info(
+                    f"Using environment variable '{env_var}' as default value for argument '--{argument.name.lower().replace('_', '-')}' of {transition.name.replace('_', '-').lower()} ('{env_var_value}')"
+                )
+                return atype(env_var_value)
+            return None
+
+        env_default_value = grab_default_value_from_env(argument.name)
+        if env_default_value is not None:
+            default_value = env_default_value
+
         cmd = click.option(
             f"{argument_name}",
             type=atype,
-            default=atype(default_value.value)
-            if argument.presence != Argument.Presence.MANDATORY
-            else None,
+            default=default_value,
             show_default=True,
-            required=argument.presence == Argument.Presence.MANDATORY,
+            required=argument.presence == Argument.Presence.MANDATORY
+            and default_value is None,
             help=argument.help,
         )(cmd)
 
