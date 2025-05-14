@@ -60,4 +60,7 @@ async def boot(
         log.error("Could not understand where the controller is!")
         return
 
-    log.info("Booted successfully")
+    if not obj.get_driver("controller").status().data.in_error:
+        log.info("Booted successfully")
+    else:
+        log.error("Booted, but the top controller is in error")
