@@ -663,7 +663,7 @@ class Controller(ControllerServicer):
                 name=self.name,
                 token=token,
                 data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                flag=ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,  ### TODO: Add a ResponseFlag.NOT_EXECUTED_NOT_READY
                 children=[],
             )
 
@@ -785,16 +785,18 @@ class Controller(ControllerServicer):
                 transition_data=fsm_data,
                 ctx=self,
             )
-
             if (
                 child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY
                 or child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
             ):
                 self.stateful_node.to_error()
 
-            self_response_fsm_flag = (
-                FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-            )  # self has executed successfully, even if children have not
+            self_response_fsm_flag = child_worst_fsm_flag
+            if child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+                self_response_fsm_flag = (
+                    FSMResponseFlag.FSM_FAILED
+                )  ## TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
+
             fsm_result = FSMCommandResponse(
                 flag=self_response_fsm_flag,
                 command_name=payload.command_name,
