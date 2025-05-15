@@ -82,7 +82,7 @@ class PreOrPostTransitionSequence:
                 )
                 self.log.debug(f"data after callback: {input_data}")
                 if input_data:
-                    ctx.runinfo = input_data
+                    ctx.runinfo.update(input_data)
                     if callback.method.__name__ == "start":
                         ctx.controller_publisher(
                             message=RunInfo(
