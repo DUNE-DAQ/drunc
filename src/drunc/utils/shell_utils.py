@@ -17,6 +17,7 @@ from drunc.exceptions import (
 )
 from drunc.utils.grpc_utils import (
     UnpackingError,
+    rethrow_if_timeout,
     rethrow_if_unreachable_server,
     unpack_any,
 )
@@ -122,19 +123,8 @@ class GRPCDriver:
 
     def __handle_grpc_error(self, error, command):
         rethrow_if_unreachable_server(error)
-        # else:
-        #     from drunc.utils.grpc_utils import interrupt_if_server_unreachable
-        #     text = interrupt_if_unreachable_server(error)
-        #     if text:
-        #         self.log.error(text)
-
-        # if hasattr(error, 'details'): #ARGG asyncio gRPC so different from synchronous one!!
-        #     self.log.error(error.details())
-
-        #     # of course, right now asyncio servers are not able to reply with a stacktrace (yet)
-        #     # we just throw the client-side error and call it a day for now
-        #     if rethrow:
-        #         raise error
+        rethrow_if_timeout(error)
+        raise error
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
@@ -210,7 +200,12 @@ class GRPCDriver:
             return dr
 
     def send_command(
-        self, command: str, data=None, outformat=None, decode_children=False
+        self,
+        command: str,
+        data=None,
+        outformat=None,
+        decode_children=False,
+        timeout: int | float = 60,
     ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
@@ -220,12 +215,14 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            response = cmd(request)
+            response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command)
         return self.handle_response(response, command, outformat)
 
-    async def send_command_aio(self, command: str, data=None, outformat=None):
+    async def send_command_aio(
+        self, command: str, data=None, outformat=None, timeout: int | float = 60
+    ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
 
@@ -234,13 +231,15 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            response = await cmd(request)
+            response = await cmd(request, timeout=timeout)
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command)
         return self.handle_response(response, command, outformat)
 
-    async def send_command_for_aio(self, command: str, data=None, outformat=None):
+    async def send_command_for_aio(
+        self, command: str, data=None, outformat=None, timeout: int | float = 60
+    ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
 
@@ -249,7 +248,7 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            async for s in cmd(request):
+            async for s in cmd(request, timeout=timeout):
                 yield self.handle_response(s, command, outformat)
 
         except grpc.aio.AioRpcError as e:

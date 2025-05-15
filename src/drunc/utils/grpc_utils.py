@@ -174,6 +174,12 @@ class ServerUnreachable(DruncException):
         super(ServerUnreachable, self).__init__(message)
 
 
+class ServerTimeout(DruncException):
+    def __init__(self, message):
+        self.message = message
+        super(ServerTimeout, self).__init__(message)
+
+
 def server_is_reachable(grpc_error):
     if hasattr(grpc_error, "_state"):
         if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
@@ -192,6 +198,12 @@ def rethrow_if_unreachable_server(grpc_error):
             raise ServerUnreachable(grpc_error._state.details) from grpc_error
         elif hasattr(grpc_error, "_details"):
             raise ServerUnreachable(grpc_error._details) from grpc_error
+
+
+def rethrow_if_timeout(grpc_error):
+    if hasattr(grpc_error, "_state"):
+        if grpc_error._state.code == grpc.StatusCode.DEADLINE_EXCEEDED:
+            raise ServerTimeout(grpc_error._state.details) from grpc_error
 
 
 def interrupt_if_unreachable_server(grpc_error):

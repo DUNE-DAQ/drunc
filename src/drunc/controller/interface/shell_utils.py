@@ -27,7 +27,12 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.utils.grpc_utils import ServerUnreachable, pack_to_any, unpack_any
+from drunc.utils.grpc_utils import (
+    ServerTimeout,
+    ServerUnreachable,
+    pack_to_any,
+    unpack_any,
+)
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
@@ -473,6 +478,7 @@ def run_one_fsm_command(
                 target=target,
                 execute_along_path=execute_along_path,
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+                timeout=timeout,
             )
 
             with StatusTableUpdater(obj) as updater:
@@ -480,19 +486,25 @@ def run_one_fsm_command(
                     f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
                     total=timeout,
                 )
-                while time.time() - time_start < timeout and future.running():
+                while time.time() - time_start < timeout and not future.done():
                     updater.update(task, completed=time.time() - time_start)
                     time.sleep(0.5)
 
-            if future.running():
-                log.error(f"{transition_name} timed out")
-            else:
-                result = future.result()
+            result = future.result(timeout=1)
 
     except ArgumentException as ae:
         log.exception(
             str(ae)
         )  # TODO: Manually raise exception, see if the str declaration is needed with rich handling
+        return
+    except ServerTimeout as e:
+        log.error(e)
+        log.error(
+            "The command timed out, unfortunately this means the server is in undefined state, and [red]your best option at this stage is to [bold]terminate[/bold] and [bold]boot[/bold][/]."
+        )
+        log.error(
+            "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
+        )
         return
 
     if not result:
