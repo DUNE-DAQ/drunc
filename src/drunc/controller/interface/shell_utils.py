@@ -85,10 +85,11 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
 
     runinfo_table = Table(title="[blue]Run Info[/blue]")
     runinfo_table.add_column("Run Number")
-    runinfo_table.add_column("Run Time at Start")
+    runinfo_table.add_column("Run Type")
+    runinfo_table.add_column("Start time")
     runinfo_table.add_column("Duration")
     runinfo_table.add_column("Trigger Rate")
-    runinfo_table.add_column("Run Type")   
+    runinfo_table.add_column("Data storage disabled")   
 
 
     def add_status_to_table(table, status, description, prefix):
@@ -124,11 +125,12 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             )
     def add_runinfo_to_table(table, status):
         table.add_row(str(status.data.run_info.run_number),
-            datetime.fromtimestamp(status.data.run_info.run_time_at_start).strftime("%Y-%m-%d %H:%M:%S"),
-            f"{status.data.run_info.run_time_since_start}s",
-            f"{status.data.run_info.trigger_rate}Hz",
-            status.data.run_info.run_type,
-            )
+                    status.data.run_info.run_type,
+                    datetime.fromtimestamp(status.data.run_info.run_time_at_start).strftime("%Y-%m-%d %H:%M:%S"),
+                    f"{status.data.run_info.run_time_since_start}s",
+                    f"{status.data.run_info.trigger_rate}Hz",
+                    str(status.data.run_info.disable_data_storage),
+                    )
 
 
     add_status_to_table(t, status, description, prefix="") 

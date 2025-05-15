@@ -31,9 +31,6 @@ def get_status_message(controller):
     if state_string in ("initial", "configured"):
         return msg
     
-    
-    print("debug runinfo: ",controller.runinfo)
-
     if controller.runinfo:
         run_time_since_start = 0
         run_time_at_start = controller.runinfo.get("run_time_at_start", 0)

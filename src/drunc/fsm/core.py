@@ -81,7 +81,7 @@ class PreOrPostTransitionSequence:
                     _input_data=input_data, _context=ctx, **transition_args
                 )
                 self.log.debug(f"data after callback: {input_data}")
-                if input_data is not None:
+                if input_data:
                     ctx.runinfo = input_data
                     if callback.method.__name__ == "start":
                         ctx.controller_publisher(
