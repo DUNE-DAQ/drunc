@@ -128,10 +128,10 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
 
 
 class StatusTableUpdater(Progress):
-    def __init__(self, ctx, *args, **kwargs) -> None:
+    def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
         self.ctx = ctx
         self.update_table()
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
         self.table = get_status_table(
@@ -247,7 +247,6 @@ def controller_setup(ctx, controller_address):
             time.time() - time_start < timeout and controller_status == "initialising"
         ):
             controller_status = ctx.get_driver("controller").status().data.state.lower()
-            updater.update_table()
             updater.update(task, completed=time.time() - time_start)
             time.sleep(0.2)
 
@@ -482,9 +481,8 @@ def run_one_fsm_command(
                     total=timeout,
                 )
                 while time.time() - time_start < timeout and future.running():
-                    updater.update_table()
                     updater.update(task, completed=time.time() - time_start)
-                    time.sleep(0.2)
+                    time.sleep(0.5)
 
             if future.running():
                 log.error(f"{transition_name} timed out")
