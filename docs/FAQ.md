@@ -31,6 +31,7 @@ name-of-your-host [gssapi-with-mic]: ❌
 ```
 
 ### SSH keys (preferred solution)
+**Note**: You need to follow these instructions from the host you are running `drunc`, _not_ your laptop (so on `np04-srv-019`, or `daq.fnal`...).
 
 Simplest is to use SSH keys, here is how to do it:
 ```bash
@@ -62,6 +63,8 @@ name-of-the-host [publickey]: ✅
 ```
 
 ### Kerberos
+**Note**: You need to follow these instructions from the host you are running `drunc`, _not_ your laptop (so on `np04-srv-019`, or `daq.fnal`...).
+
 Only use this if the approach above with SSH keys didn't work. Drunc does not multiplex SSH connections, so if you start 20 applications, the kerberos server gets hit 20 times with authorisation request, more or less at the same time. This makes this a bit less reliable that standard SSH keys.
 
 To get this to work, create or edit  `~/.ssh/config` and add:
