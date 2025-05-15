@@ -105,7 +105,6 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.runinfo = {}
         self.run_time_at_start = 0
-        self.run_time_since_start = 0
 
         self.log = get_logger("controller")
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
@@ -354,8 +353,8 @@ class Controller(ControllerServicer):
                     trigger_rate = 0.0
                     run_number = 0
                     disable_data_storage = False
+                    run_time_since_start = 0
                     self.run_time_at_start = 0
-                    self.run_time_since_start = 0
                     self.runinfo = {}
 
                 if self.runinfo:
@@ -368,7 +367,7 @@ class Controller(ControllerServicer):
                     self.run_time_at_start = self.runinfo.get("run_time_at_start", 0)
 
                 if self.run_time_at_start:
-                    self.run_time_since_start = int(time.time() - self.run_time_at_start)
+                    run_time_since_start = int(time.time() - self.run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controller_publisher(
@@ -378,7 +377,7 @@ class Controller(ControllerServicer):
                         run_number=run_number,
                         disable_data_storage=disable_data_storage,
                         run_time_at_start=int(self.run_time_at_start),
-                        run_time_since_start=self.run_time_since_start,
+                        run_time_since_start=run_time_since_start,
                     )
                 )
             except Exception as e:
@@ -616,6 +615,7 @@ class Controller(ControllerServicer):
         token: Token,
     ) -> Response:
         status = None
+        runinfo = None
         if execute_on_self:
             status = pack_to_any(get_status_message(self))
 

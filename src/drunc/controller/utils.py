@@ -1,5 +1,5 @@
 import re
-
+import time
 import grpc
 from google.protobuf import any_pb2
 from grpc_status import rpc_status
@@ -29,7 +29,13 @@ def get_status_message(controller):
     )
 
     if state_string in ("initial", "configured"):
-        msg.ClearField("run_info")
+        return msg
+    
+    run_time_since_start = 0
+    if controller.run_time_at_start:
+        run_time_since_start = int(time.time() - controller.run_time_at_start)
+
+    print("debug runinfo: ",controller.runinfo)
 
     if controller.runinfo:
         msg.run_info.CopyFrom(RunInfo(
@@ -37,8 +43,8 @@ def get_status_message(controller):
             trigger_rate=controller.runinfo.get("trigger_rate", 0.0),
             run_number=controller.runinfo.get("run", 0),
             disable_data_storage=controller.runinfo.get("disable_data_storage", False),
-            run_time_at_start=int(controller.run_time_at_start),
-            run_time_since_start=controller.run_time_since_start,
+            run_time_at_start=int(controller.runinfo.get("run_time_at_start", 0)),
+            run_time_since_start=run_time_since_start,
         ))
 
     print("debug msg: ",msg)

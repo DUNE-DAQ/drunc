@@ -1,6 +1,8 @@
 import logging
 from collections import defaultdict
 from functools import partial
+from datetime import datetime
+
 
 import click
 from druncschema.controller_pb2 import (
@@ -80,11 +82,13 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
-    t.add_column("Run Number")
-    t.add_column("Run Time at Start")
-    t.add_column("Run Time since Start")
-    t.add_column("Trigger Rate")
-    t.add_column("Run Type")   
+
+    runinfo_table = Table(title="[blue]Run Info[/blue]")
+    runinfo_table.add_column("Run Number")
+    runinfo_table.add_column("Run Time at Start")
+    runinfo_table.add_column("Run Time since Start")
+    runinfo_table.add_column("Trigger Rate")
+    runinfo_table.add_column("Run Type")   
 
 
     def add_status_to_table(table, status, description, prefix):
@@ -95,15 +99,7 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             return
 
         NA = "[red]NA[/]"
-        run_number = run_time_at_start = run_time_since_start = trigger_rate = run_type = NA
-
-        if valid_status and status.data.HasField("run_info"):
-            run_info = status.data.run_info
-            run_number = str(run_info.run_number)
-            run_time_at_start = f"{run_info.run_time_at_start}s"
-            run_time_since_start = f"{run_info.run_time_since_start}s"
-            trigger_rate = f"{run_info.trigger_rate:.2f} Hz"
-
+        
         table.add_row(
             prefix + status.name if valid_status else NA,
             description.data.info if valid_description else NA,
@@ -114,12 +110,8 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             else NA,
             format_bool(status.data.included) if valid_status else NA,
             description.data.endpoint if valid_description else NA,
-            run_number,
-            run_time_at_start,
-            run_time_since_start,
-            trigger_rate,
-            run_type,
-        )
+            )
+        
 
         children = match_children(status.children, description.children)
         children_list = sorted(list(children.keys()))
@@ -130,9 +122,21 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
                 children[child]["description"],
                 prefix=prefix + "  ",
             )
+    def add_runinfo_to_table(table, status):
+        table.add_row(str(status.data.run_info.run_number),
+            datetime.fromtimestamp(status.data.run_info.run_time_at_start).strftime("%Y-%m-%d %H:%M:%S"),
+            f"{status.data.run_info.run_time_since_start}s",
+            f"{status.data.run_info.trigger_rate}Hz",
+            status.data.run_info.run_type,
+            )
 
-    add_status_to_table(t, status, description, prefix="")
+
+    add_status_to_table(t, status, description, prefix="") 
     obj.print(t)
+    if status.data.HasField("run_info"):
+        add_runinfo_to_table(runinfo_table,status)
+        obj.print(runinfo_table)
+
     obj.print_status_summary()
 
 
