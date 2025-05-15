@@ -1,8 +1,7 @@
+import datetime
 import logging
 from collections import defaultdict
 from functools import partial
-import datetime
-
 
 import click
 from druncschema.controller_pb2 import (

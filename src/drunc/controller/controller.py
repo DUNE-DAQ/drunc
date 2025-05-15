@@ -614,7 +614,6 @@ class Controller(ControllerServicer):
         token: Token,
     ) -> Response:
         status = None
-        runinfo = None
         if execute_on_self:
             status = pack_to_any(get_status_message(self))
 
