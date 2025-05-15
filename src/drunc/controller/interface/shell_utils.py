@@ -80,6 +80,12 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
+    t.add_column("Run Number")
+    t.add_column("Run Time at Start")
+    t.add_column("Run Time since Start")
+    t.add_column("Trigger Rate")
+    t.add_column("Run Type")   
+
 
     def add_status_to_table(table, status, description, prefix):
         valid_description = check_message_type(description, "Description")
@@ -89,6 +95,15 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             return
 
         NA = "[red]NA[/]"
+        run_number = run_time_at_start = run_time_since_start = trigger_rate = run_type = NA
+
+        if valid_status and status.data.HasField("run_info"):
+            run_info = status.data.run_info
+            run_number = str(run_info.run_number)
+            run_time_at_start = f"{run_info.run_time_at_start}s"
+            run_time_since_start = f"{run_info.run_time_since_start}s"
+            trigger_rate = f"{run_info.trigger_rate:.2f} Hz"
+
         table.add_row(
             prefix + status.name if valid_status else NA,
             description.data.info if valid_description else NA,
@@ -99,6 +114,11 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             else NA,
             format_bool(status.data.included) if valid_status else NA,
             description.data.endpoint if valid_description else NA,
+            run_number,
+            run_time_at_start,
+            run_time_since_start,
+            trigger_rate,
+            run_type,
         )
 
         children = match_children(status.children, description.children)

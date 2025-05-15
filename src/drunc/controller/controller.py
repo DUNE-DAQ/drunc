@@ -104,6 +104,8 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.runinfo = {}
+        self.run_time_at_start = 0
+        self.run_time_since_start = 0
 
         self.log = get_logger("controller")
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
@@ -352,8 +354,8 @@ class Controller(ControllerServicer):
                     trigger_rate = 0.0
                     run_number = 0
                     disable_data_storage = False
-                    run_time_at_start = 0
-                    run_time_since_start = 0
+                    self.run_time_at_start = 0
+                    self.run_time_since_start = 0
                     self.runinfo = {}
 
                 if self.runinfo:
@@ -363,25 +365,26 @@ class Controller(ControllerServicer):
                         "disable_data_storage", False
                     )
                     trigger_rate = self.runinfo.get("trigger_rate", 0.0)
-                    run_time_at_start = self.runinfo.get("run_time_at_start", 0)
+                    self.run_time_at_start = self.runinfo.get("run_time_at_start", 0)
 
-                if run_time_at_start:
-                    run_time_since_start = int(time.time() - run_time_at_start)
+                if self.run_time_at_start:
+                    self.run_time_since_start = int(time.time() - self.run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controller_publisher(
-                    message=RunInfo(
+                    message = RunInfo(
                         run_type=run_type,
                         trigger_rate=trigger_rate,
                         run_number=run_number,
                         disable_data_storage=disable_data_storage,
-                        run_time_at_start=int(run_time_at_start),
-                        run_time_since_start=run_time_since_start,
+                        run_time_at_start=int(self.run_time_at_start),
+                        run_time_since_start=self.run_time_since_start,
                     )
                 )
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic status: {e}")
             time.sleep(sleep_time)
+                
 
     def construct_error_node_response(
         self, command_name: str, token: Token, cause: FSMResponseFlag
@@ -614,7 +617,7 @@ class Controller(ControllerServicer):
     ) -> Response:
         status = None
         if execute_on_self:
-            status = pack_to_any(get_status_message(self.stateful_node))
+            status = pack_to_any(get_status_message(self))
 
         children_statuses = self.propagate_addressed_command(
             "status",
