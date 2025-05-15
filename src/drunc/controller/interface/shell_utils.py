@@ -253,7 +253,10 @@ def controller_setup(ctx, controller_address):
         ):
             controller_status = ctx.get_driver("controller").status().data.state.lower()
             updater.update(task, completed=time.time() - time_start)
-            time.sleep(0.2)
+            updater.update_table()
+            time.sleep(0.5)
+
+        updater.update_table()
 
     if controller_status == "initialising":
         log.error("Controller did not initialise in time")
@@ -488,7 +491,10 @@ def run_one_fsm_command(
                 )
                 while time.time() - time_start < timeout and not future.done():
                     updater.update(task, completed=time.time() - time_start)
+                    updater.update_table()
                     time.sleep(0.5)
+
+                updater.update_table()
 
             result = future.result(timeout=1)
 
