@@ -71,7 +71,9 @@ class DecodedResponse:
 
     @staticmethod
     def str(obj, prefix=""):
-        text = f"{prefix} {obj.name} -> {obj.flag}\n"
+        text = (
+            f"{prefix} {obj.name} -> response flag={obj.flag} type={type(obj.data)}\n"
+        )
         for v in obj.children:
             if v is None:
                 continue
