@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from functools import partial
-from datetime import datetime
+import datetime
 
 
 import click
@@ -83,12 +83,12 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
     t.add_column("Included")
     t.add_column("Endpoint")
 
-    runinfo_table = Table(title="[blue]Run Info[/blue]")
-    runinfo_table.add_column("Run Number")
-    runinfo_table.add_column("Run Type")
+    runinfo_table = Table(title="Run Info")
+    runinfo_table.add_column("Run number")
+    runinfo_table.add_column("Run type")
     runinfo_table.add_column("Start time")
     runinfo_table.add_column("Duration")
-    runinfo_table.add_column("Trigger Rate")
+    runinfo_table.add_column("Trigger rate")
     runinfo_table.add_column("Data storage disabled")   
 
 
@@ -126,9 +126,9 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
     def add_runinfo_to_table(table, status):
         table.add_row(str(status.data.run_info.run_number),
                     status.data.run_info.run_type,
-                    datetime.fromtimestamp(status.data.run_info.run_time_at_start).strftime("%Y-%m-%d %H:%M:%S"),
-                    f"{status.data.run_info.run_time_since_start}s",
-                    f"{status.data.run_info.trigger_rate}Hz",
+                    datetime.datetime.fromtimestamp(status.data.run_info.run_time_at_start).strftime("%Y-%m-%d %H:%M:%S"),
+                    str(datetime.timedelta(seconds = status.data.run_info.run_time_since_start)),
+                    f"{status.data.run_info.trigger_rate:.4f} Hz",
                     str(status.data.run_info.disable_data_storage),
                     )
 
