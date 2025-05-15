@@ -86,7 +86,7 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
     runinfo_table = Table(title="[blue]Run Info[/blue]")
     runinfo_table.add_column("Run Number")
     runinfo_table.add_column("Run Time at Start")
-    runinfo_table.add_column("Run Time since Start")
+    runinfo_table.add_column("Duration")
     runinfo_table.add_column("Trigger Rate")
     runinfo_table.add_column("Run Type")   
 

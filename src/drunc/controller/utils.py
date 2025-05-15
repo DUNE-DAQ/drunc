@@ -31,13 +31,15 @@ def get_status_message(controller):
     if state_string in ("initial", "configured"):
         return msg
     
-    run_time_since_start = 0
-    if controller.run_time_at_start:
-        run_time_since_start = int(time.time() - controller.run_time_at_start)
-
+    
     print("debug runinfo: ",controller.runinfo)
 
     if controller.runinfo:
+        run_time_since_start = 0
+        run_time_at_start = controller.runinfo.get("run_time_at_start", 0)
+        if run_time_at_start:
+            run_time_since_start = int(time.time() - run_time_at_start)
+
         msg.run_info.CopyFrom(RunInfo(
             run_type=controller.runinfo.get("production_vs_test", ""),
             trigger_rate=controller.runinfo.get("trigger_rate", 0.0),

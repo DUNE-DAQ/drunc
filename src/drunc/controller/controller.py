@@ -104,7 +104,6 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.runinfo = {}
-        self.run_time_at_start = 0
 
         self.log = get_logger("controller")
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
@@ -354,7 +353,7 @@ class Controller(ControllerServicer):
                     run_number = 0
                     disable_data_storage = False
                     run_time_since_start = 0
-                    self.run_time_at_start = 0
+                    run_time_at_start = 0
                     self.runinfo = {}
 
                 if self.runinfo:
@@ -364,10 +363,10 @@ class Controller(ControllerServicer):
                         "disable_data_storage", False
                     )
                     trigger_rate = self.runinfo.get("trigger_rate", 0.0)
-                    self.run_time_at_start = self.runinfo.get("run_time_at_start", 0)
+                    run_time_at_start = self.runinfo.get("run_time_at_start", 0)
 
-                if self.run_time_at_start:
-                    run_time_since_start = int(time.time() - self.run_time_at_start)
+                if run_time_at_start:
+                    run_time_since_start = int(time.time() - run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controller_publisher(
