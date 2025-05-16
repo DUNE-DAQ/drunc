@@ -133,6 +133,7 @@ class Controller(ControllerServicer):
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
             publisher=self.controller_publisher,
+            init_state="initialising",
             name=name,
             session=session,
         )
