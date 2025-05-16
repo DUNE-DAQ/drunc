@@ -14,7 +14,7 @@ class UserProvidedRunNumber(FSMAction):
         _input_data: dict,
         _context,
         run_number: int,
-        run_type: Optional[str] = "PROD",
+        run_type: Optional[str] = "TEST",
         disable_data_storage: bool = False,
         trigger_rate: Optional[float] = None,
         **kwargs,
