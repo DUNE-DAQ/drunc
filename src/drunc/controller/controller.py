@@ -109,6 +109,7 @@ class Controller(ControllerServicer):
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix("oksconflibs:")
 
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
