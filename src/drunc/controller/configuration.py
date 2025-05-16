@@ -4,9 +4,7 @@ import threading
 from kafkaopmon.OpMonPublisher import OpMonPublisher
 
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncCommandException, DruncSetupException
-
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import ControlType
