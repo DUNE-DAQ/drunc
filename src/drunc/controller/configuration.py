@@ -113,6 +113,7 @@ class ControllerConfHandler(ConfHandler):
                 raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
         elif opmon_type == "file":
+            self.log.warning("OpMon type is file, no publisher is initialized")
             pass
 
         else:
