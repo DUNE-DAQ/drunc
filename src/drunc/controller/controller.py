@@ -39,7 +39,10 @@ from drunc.controller.decorators import (
 )
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
-from drunc.controller.utils import get_detector_name, get_status_message
+from drunc.controller.utils import (
+    get_detector_name,
+    get_status_message,
+)
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
@@ -108,7 +111,8 @@ class Controller(ControllerServicer):
         self.runinfo = {}
 
         self.log = get_logger("controller")
-        self.log.info(f"Initialising controller '{name}' with session '{session}'")
+        log_init = get_logger("controller.__init__")
+        log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
 
@@ -133,6 +137,8 @@ class Controller(ControllerServicer):
             session=session,
         )
 
+
+
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
         )
@@ -149,7 +155,7 @@ class Controller(ControllerServicer):
             connection_port = (
                 self.configuration.session.connectivity_service.service.port
             )
-            self.log.info(
+            log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"
             )
 
@@ -158,48 +164,80 @@ class Controller(ControllerServicer):
                 address=f"{connection_server}:{connection_port}",
             )
 
-        self.children_nodes = self.configuration.get_children(
+        self.children_nodes = self.configuration.get_dummy_children()
+
+    def init_controller(self):
+        log_init_controller = get_logger("controller.init_controller")
+        log_init_controller.info("Finishing initialisation of controller")
+        self.configuration.update_children(
+            self.children_nodes,
             init_token=self.actor.get_token(),
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
+        # At this point, we already waited for 60s for the children applications to start and show up on the connectivity service
+        # We now wait for each application to get from "initialising" to "ready"
+        # Unfortunately, if an application crashed on boot and never made it to the connectivity service,
+        # its parent controller will only notice it after 60s, so we need to wait for a _bit more_ than 60s for that controller to come out of initialising state.
+        # Let's assume that parent controller takes 10s to get from initialising to ready, in error state.
+        timeout = 60 + 10
 
-        children_statuses = self.propagate_to_all_children(
-            command_name="status",
-            token=self.actor.get_token(),
-        )
+        time_start = time.time()
 
-        for response in children_statuses:
-            in_error = False
-            try:
-                status = unpack_any(response.data, Status)
-                in_error = status.in_error
-            except UnpackingError:
-                self.log.error(f"Failed to unpack status from {response.name}:")
-                if response.data.Is(Stacktrace.DESCRIPTOR):
-                    stack = unpack_any(response.data, Stacktrace)
-                    for line in stack.text:
-                        self.log.error(f"{response.name}: {line}")
-                elif response.data.Is(PlainText.DESCRIPTOR):
-                    self.log.error(
-                        f"{response.name}: {unpack_any(response.data, PlainText).text}"
+        while (
+            time.time() - time_start < timeout
+            and self.stateful_node.node_is_in_error() == False
+        ):
+            children_statuses = self.propagate_to_all_children(
+                command_name="status",
+                token=self.actor.get_token(),
+            )
+            children_states = {}
+            for response in children_statuses:
+                in_error = False
+                try:
+                    status = unpack_any(response.data, Status)
+                    in_error = status.in_error
+                    children_states[response.name] = status.state
+                except UnpackingError:
+                    log_init_controller.error(
+                        f"Failed to unpack status from {response.name}:"
                     )
-                else:
-                    self.log.error(
-                        f"{response.name}: Unknown data type: {type(response.data)}"
-                    )
+                    if response.data.Is(Stacktrace.DESCRIPTOR):
+                        stack = unpack_any(response.data, Stacktrace)
+                        for line in stack.text:
+                            log_init_controller.error(f"{response.name}: {line}")
+                    elif response.data.Is(PlainText.DESCRIPTOR):
+                        log_init_controller.error(
+                            f"{response.name}: {unpack_any(response.data, PlainText).text}"
+                        )
+                    else:
+                        log_init_controller.error(
+                            f"{response.name}: Unknown data type: {type(response.data)}"
+                        )
 
-            if in_error:
-                # self.state.to_error()  # Set the parent node's state to error
-                self.stateful_node.to_error()
+                if in_error:
+                    self.stateful_node.to_error()
+                    break
+
+            if any([c.lower() != "initial" for c in children_states.values()]):
+                time.sleep(0.5)
+            else:
+                break
+
+        bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
+        if bad_children:
+            log_init_controller.error(
+                f"Children that did not initialise in time: {bad_children}"
+            )
+            self.stateful_node.to_error()
 
         for child in self.children_nodes:
-            if child is None:
-                self.log.info("Child is None")
-            else:
-                self.log.info(child)
-                child.propagate_command("take_control", None, self.actor.get_token())
-        
+            if child.name in bad_children:
+                continue
+            log_init_controller.info(f"Taking control of {child.name}")
+            child.propagate_command("take_control", None, self.actor.get_token())
+
 
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         interval_s = getattr(self.configuration.data, "interval_s", 10.0)
@@ -278,8 +316,11 @@ class Controller(ControllerServicer):
         # ]
 
         # do this at the end, otherwise we need to self.terminate() if an exception is raised
+
+           
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
-        self.log.info("Controller ready")
+        self.stateful_node.set_ready_state(True)
+        log_init_controller.info("Controller ready")
 
     """
     A couple of simple pass-through functions to the broadcasting service
@@ -480,7 +521,7 @@ class Controller(ControllerServicer):
         token: Token,
         override_payload: Any = None,
     ):
-        self.log.info(f"Propagating {command_name} to children")
+        self.log.debug(f"Propagating {command_name} to children")
         response_children = []
         response_lock = threading.Lock()
 
@@ -517,7 +558,7 @@ class Controller(ControllerServicer):
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
                     ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ]:
-                    self.log.info(
+                    self.log.debug(
                         f"Propagated {command_name} to children ({child.name}) successfully"
                     )
                 else:
@@ -718,6 +759,16 @@ class Controller(ControllerServicer):
         execute_on_self: bool,
         token: Token,
     ) -> Response:
+        if not self.stateful_node.get_ready_state():
+            self.log.warning("Controller is not ready, not executing command")
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,  ### TODO: Add a ResponseFlag.NOT_EXECUTED_NOT_READY
+                children=[],
+            )
+
         if execute_on_self:
             if self.stateful_node.node_is_in_error():
                 return self.construct_error_node_response(
@@ -836,16 +887,18 @@ class Controller(ControllerServicer):
                 transition_data=fsm_data,
                 ctx=self,
             )
-
             if (
                 child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY
                 or child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
             ):
                 self.stateful_node.to_error()
 
-            self_response_fsm_flag = (
-                FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-            )  # self has executed successfully, even if children have not
+            self_response_fsm_flag = child_worst_fsm_flag
+            if child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+                self_response_fsm_flag = (
+                    FSMResponseFlag.FSM_FAILED
+                )  ## TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
+
             fsm_result = FSMCommandResponse(
                 flag=self_response_fsm_flag,
                 command_name=payload.command_name,

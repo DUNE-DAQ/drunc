@@ -1,8 +1,11 @@
 import logging
+import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 import click
+import grpc
 from druncschema.controller_pb2 import (
     Argument,
     FSMCommand,
@@ -12,10 +15,19 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import Description, ResponseFlag
+from rich.console import ConsoleRenderable, Group, RichCast
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.utils.grpc_utils import pack_to_any, unpack_any
+from drunc.utils.grpc_utils import ServerUnreachable, pack_to_any, unpack_any
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
@@ -67,7 +79,7 @@ def match_children(statuses: list, descriptions: list) -> defaultdict:
     return children
 
 
-def print_status_table(obj, status: DecodedResponse, description: DecodedResponse):
+def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t = Table(
         title=f"[dark_green]{description.data.session}[/dark_green] status"
         if description.data
@@ -112,8 +124,24 @@ def print_status_table(obj, status: DecodedResponse, description: DecodedRespons
             )
 
     add_status_to_table(t, status, description, prefix="")
-    obj.print(t)
-    obj.print_status_summary()
+    return t
+
+
+class StatusTableUpdater(Progress):
+    def __init__(self, ctx, *args, **kwargs) -> None:
+        self.ctx = ctx
+        self.update_table()
+        super().__init__(*args, **kwargs)
+
+    def update_table(self):
+        self.table = get_status_table(
+            self.ctx.get_driver("controller").status(),
+            self.ctx.get_driver("controller").describe(),
+        )
+
+    def get_renderable(self) -> ConsoleRenderable | RichCast | str:
+        renderable = Group(self.table, *self.get_renderables())
+        return renderable
 
 
 def controller_cleanup_wrapper(ctx):
@@ -121,7 +149,6 @@ def controller_cleanup_wrapper(ctx):
         log = logging.getLogger("controller.shell_utils")
         # remove the shell from the controller broadcast list
         dead = False
-        import grpc
 
         who = ""
 
@@ -159,22 +186,9 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    from druncschema.request_response_pb2 import Description
-
     desc = Description()
 
     timeout = 60
-
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-        TimeRemainingColumn,
-    )
-
-    from drunc.utils.grpc_utils import ServerUnreachable
 
     with Progress(
         SpinnerColumn(),
@@ -185,11 +199,10 @@ def controller_setup(ctx, controller_address):
         console=ctx._console,
     ) as progress:
         waiting = progress.add_task(
-            "[yellow]Trying to talk to the controller...", total=timeout
+            "[yellow]Trying to talk to the root controller...", total=timeout
         )
 
         stored_exception = None
-        import time
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -221,6 +234,26 @@ def controller_setup(ctx, controller_address):
         ctx.start_listening_controller(desc.broadcast)
 
     log.debug("Connected to the controller")
+
+    timeout = (
+        60 + 10
+    )  # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+
+    time_start = time.time()
+    controller_status = ctx.get_driver("controller").status().data.state.lower()
+    with StatusTableUpdater(ctx) as updater:
+        task = updater.add_task("Waiting on tree initialisation...", total=timeout)
+        while (
+            time.time() - time_start < timeout and controller_status == "initialising"
+        ):
+            controller_status = ctx.get_driver("controller").status().data.state.lower()
+            updater.update_table()
+            updater.update(task, completed=time.time() - time_start)
+            time.sleep(0.2)
+
+    if controller_status == "initialising":
+        log.error("Controller did not initialise in time")
+        return
 
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
@@ -429,12 +462,35 @@ def run_one_fsm_command(
             command_name=transition_name,
             arguments=formated_args,
         )
-        result = obj.get_driver("controller").execute_fsm_command(
-            arguments=data,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-        )
+
+        timeout = 60
+        time_start = time.time()
+        result = None
+
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(
+                obj.get_driver("controller").execute_fsm_command,
+                arguments=data,
+                target=target,
+                execute_along_path=execute_along_path,
+                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            )
+
+            with StatusTableUpdater(obj) as updater:
+                task = updater.add_task(
+                    f"Waiting for [yellow]{transition_name}[/yellow] to complete...",
+                    total=timeout,
+                )
+                while time.time() - time_start < timeout and future.running():
+                    updater.update_table()
+                    updater.update(task, completed=time.time() - time_start)
+                    time.sleep(0.2)
+
+            if future.running():
+                log.error(f"{transition_name} timed out")
+            else:
+                result = future.result()
+
     except ArgumentException as ae:
         log.exception(
             str(ae)
@@ -443,26 +499,36 @@ def run_one_fsm_command(
 
     if not result:
         return
+
     t = Table(title=f"{transition_name} execution report")
     t.add_column("Name")
     t.add_column("Command execution")
     t.add_column("FSM transition")
 
-    def bool_to_success(flag_message, FSM):
-        flag = False
-        if FSM and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY:
-            flag = True
-        if not FSM and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            flag = True
-        return "[dark_green]success[/]" if flag else "[red]failed[/]"
+    def bool_to_success(flag_message, message_type):
+        flag = message_type.Name(flag_message).replace("_", " ").title()
+        success = False
+
+        if (
+            message_type == FSMResponseFlag
+            and flag_message == FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+        if (
+            message_type == ResponseFlag
+            and flag_message == ResponseFlag.EXECUTED_SUCCESSFULLY
+        ):
+            success = True
+
+        return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
     def add_to_table(table, response, prefix=""):
-        executed_command = response.data is not None
+        executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
         table.add_row(
             prefix + response.name,
-            bool_to_success(response.flag, FSM=False),
-            bool_to_success(response.data.flag, FSM=True)
+            bool_to_success(response.flag, message_type=ResponseFlag),
+            bool_to_success(response.data.flag, message_type=FSMResponseFlag)
             if executed_command
             else "[red]NA[/]",
         )
@@ -474,7 +540,9 @@ def run_one_fsm_command(
 
     statuses = obj.get_driver("controller").status()
     descriptions = obj.get_driver("controller").describe()
-    print_status_table(obj, statuses, descriptions)
+    t = get_status_table(statuses, descriptions)
+    obj.print(t)
+    obj.print_status_summary()
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):

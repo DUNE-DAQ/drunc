@@ -6,10 +6,16 @@ from kafkaopmon.OpMonPublisher import OpMonPublisher
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncCommandException, DruncSetupException
+
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler
+from drunc.utils.utils import ControlType
 
 import confmodel  # isort: skip
+from drunc.controller.children_interface.rest_api_child import (
+    RESTAPIChildNodeConfHandler,
+)
+from drunc.utils.configuration import ConfTypes
 
 
 class ControllerConfData:  # the bastardised OKS
@@ -116,22 +122,44 @@ class ControllerConfHandler(ConfHandler):
             self.log.error(f"Unsupported OpMon type: {opmon_type}")
             raise DruncCommandException(f"Unsupported OpMon type: {opmon_type}")
 
-    def get_children(
+    def get_dummy_children(self):
+        ret = []
+        session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
+
+        for seg in self.data.segments:
+            if confmodel.component_disabled(self.db._obj, session.id, seg.id):
+                continue
+            ret.append(
+                ChildNode(
+                    name=seg.controller.id,
+                    configuration=RESTAPIChildNodeConfHandler(seg, ConfTypes.PyObject),
+                    node_type=ControlType.Unknown,
+                )
+            )
+        for app in self.data.applications:
+            if confmodel.component_disabled(self.db._obj, session.id, app.id):
+                continue
+            ret.append(
+                ChildNode(
+                    name=app.id,
+                    configuration=RESTAPIChildNodeConfHandler(app, ConfTypes.PyObject),
+                    node_type=ControlType.Unknown,
+                )
+            )
+        return ret
+
+    def update_children(
         self,
+        children,
         init_token,
         without_excluded=False,
         connectivity_service=None,
         session_name=None,
     ):
         enabled_only = not without_excluded
-        timeout = get_segment_lookup_timeout(
-            self.data,  # the current segment
-            base_timeout=60,
-        )
+        timeout = 60  # 60s for each application to start and show up on the connectivity service
 
         self.log.debug(f"get_children: connectivity service lookup timeout={timeout}")
-        # if self.children != []:
-        #    return self.get_children(init_token, without_excluded, connectivity_service)
 
         session = None
         self.children = []
@@ -168,7 +196,15 @@ class ControllerConfHandler(ConfHandler):
                 timeout=timeout,
             )
             if new_node:
-                self.children.append(new_node)
+                got_child = False
+
+                for idx, child in enumerate(children):
+                    if child.name == new_node.name:
+                        children[idx] = new_node
+                        got_child = True
+                        break
+                if not got_child:
+                    self.children.append(new_node)
 
         def process_application(app):
             if enabled_only:
@@ -192,7 +228,15 @@ class ControllerConfHandler(ConfHandler):
                 timeout=60,
             )
             if new_node:
-                self.children.append(new_node)
+                got_child = False
+
+                for idx, child in enumerate(children):
+                    if child.name == new_node.name:
+                        children[idx] = new_node
+                        got_child = True
+                        break
+                if not got_child:
+                    self.children.append(new_node)
 
         # threading the children look up
         threads = []

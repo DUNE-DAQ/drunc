@@ -4,7 +4,7 @@ from time import sleep
 import click
 
 from drunc.controller.interface.context import ControllerContext
-from drunc.controller.interface.shell_utils import controller_setup, print_status_table
+from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
 logger_params = {"logger_name": "controller.interface", "rich_handler": True}
@@ -88,7 +88,9 @@ def status(
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     )  # Get the static system information
-    print_status_table(obj, statuses, descriptions)
+    t = get_status_table(statuses, descriptions)
+    obj.print(t)
+    obj.print_status_summary()
 
 
 @click.command("recompute-status")
@@ -124,7 +126,9 @@ def recompute_status(
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     )
-    print_status_table(obj, statuses, descriptions)
+    t = get_status_table(statuses, descriptions)
+    obj.print(t)
+    obj.print_status_summary()
 
 
 @click.command("connect")
