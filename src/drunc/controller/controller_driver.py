@@ -47,76 +47,122 @@ class ControllerDriver(GRPCDriver):
         return wrapper
 
     @pack_empty_addressed_command
-    def describe(self, addressed_command: AddressedCommand) -> DecodedResponse:
+    def describe(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
         return self.send_command(
-            "describe", data=addressed_command, outformat=Description
+            "describe", data=addressed_command, outformat=Description, timeout=timeout
         )
 
     @pack_empty_addressed_command
     def describe_fsm(
-        self, addressed_command: AddressedCommand, key: str = None
+        self,
+        addressed_command: AddressedCommand,
+        key: str = None,
+        timeout: int | float = 60,
     ) -> DecodedResponse:
         new_command = AddressedCommand()
         new_command.CopyFrom(addressed_command)
         new_command.command_data.Pack(PlainText(text=key))
         return self.send_command(
-            "describe_fsm", data=new_command, outformat=FSMCommandsDescription
+            "describe_fsm",
+            data=new_command,
+            outformat=FSMCommandsDescription,
+            timeout=timeout,
         )
 
     @pack_empty_addressed_command
-    def status(self, addressed_command: AddressedCommand) -> DecodedResponse:
-        return self.send_command("status", data=addressed_command, outformat=Status)
-
-    @pack_empty_addressed_command
-    def recompute_status(self, addressed_command: AddressedCommand) -> DecodedResponse:
+    def status(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
         return self.send_command(
-            "recompute_status", data=addressed_command, outformat=Status
+            "status", data=addressed_command, outformat=Status, timeout=timeout
         )
 
     @pack_empty_addressed_command
-    def take_control(self, addressed_command: AddressedCommand) -> DecodedResponse:
+    def recompute_status(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
         return self.send_command(
-            "take_control", data=addressed_command, outformat=PlainText
+            "recompute_status",
+            data=addressed_command,
+            outformat=Status,
+            timeout=timeout,
         )
 
     @pack_empty_addressed_command
-    def who_is_in_charge(self, addressed_command: AddressedCommand) -> DecodedResponse:
+    def take_control(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
         return self.send_command(
-            "who_is_in_charge", data=addressed_command, outformat=PlainText
+            "take_control", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
     @pack_empty_addressed_command
-    def surrender_control(self, addressed_command: AddressedCommand) -> DecodedResponse:
+    def who_is_in_charge(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
         return self.send_command(
-            "surrender_control", data=addressed_command, outformat=PlainText
+            "who_is_in_charge",
+            data=addressed_command,
+            outformat=PlainText,
+            timeout=timeout,
+        )
+
+    @pack_empty_addressed_command
+    def surrender_control(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        return self.send_command(
+            "surrender_control",
+            data=addressed_command,
+            outformat=PlainText,
+            timeout=timeout,
         )
 
     @pack_empty_addressed_command
     def execute_fsm_command(
-        self, addressed_command: AddressedCommand, arguments
+        self, addressed_command: AddressedCommand, arguments, timeout: int | float = 60
     ) -> DecodedResponse:
         new_command = AddressedCommand()
         new_command.CopyFrom(addressed_command)
         new_command.command_data.Pack(arguments)
         return self.send_command(
-            "execute_fsm_command", data=new_command, outformat=FSMCommandResponse
+            "execute_fsm_command",
+            data=new_command,
+            outformat=FSMCommandResponse,
+            timeout=timeout,
         )
 
     @pack_empty_addressed_command
-    def include(self, addressed_command: AddressedCommand) -> DecodedResponse:
-        return self.send_command("include", data=addressed_command, outformat=PlainText)
+    def include(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        return self.send_command(
+            "include", data=addressed_command, outformat=PlainText, timeout=timeout
+        )
 
     @pack_empty_addressed_command
-    def exclude(self, addressed_command: AddressedCommand) -> DecodedResponse:
-        return self.send_command("exclude", data=addressed_command, outformat=PlainText)
+    def exclude(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        return self.send_command(
+            "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
+        )
 
     @pack_empty_addressed_command
     def expert_command(
-        self, addressed_command: AddressedCommand, json_string
+        self,
+        addressed_command: AddressedCommand,
+        json_string,
+        timeout: int | float = 60,
     ) -> DecodedResponse:
         new_command = AddressedCommand()
         new_command.CopyFrom(addressed_command)
         new_command.command_data.Pack(PlainText(text=json_string))
         return self.send_command(
-            "execute_expert_command", data=new_command, outformat=PlainText
+            "execute_expert_command",
+            data=new_command,
+            outformat=PlainText,
+            timeout=timeout,
         )

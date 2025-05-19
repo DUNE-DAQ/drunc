@@ -157,6 +157,7 @@ class ProcessManagerDriver(GRPCDriver):
         session_name: str,
         log_level: str,
         override_logs: bool = True,
+        timeout: int | float = 60,
         **kwargs,
     ) -> ProcessInstance:
         from daqconf.consolidate import consolidate_db
@@ -198,6 +199,7 @@ To debug it, close drunc and run the following command:
                 "boot",
                 data=br,
                 outformat=ProcessInstance,
+                timeout=timeout,
             )
 
         top_controller_name = session_dal.segment.controller.id
@@ -295,7 +297,13 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             signal.signal(signal.SIGINT, original_sigint_handler)
 
     async def dummy_boot(
-        self, user: str, session_name: str, n_processes: int, sleep: int, n_sleeps: int
+        self,
+        user: str,
+        session_name: str,
+        n_processes: int,
+        sleep: int,
+        n_sleeps: int,
+        timeout: int | float = 60,
     ):  # -> ProcessInstance:
         pwd = os.getcwd()
 
@@ -338,51 +346,69 @@ To find the controller address, you can look up \'{top_controller_name}_control\
                 "boot",
                 data=breq,
                 outformat=ProcessInstance,
+                timeout=timeout,
             )
 
     async def terminate(
         self,
+        timeout: int | float = 60,
     ) -> ProcessInstanceList:
-        return await self.send_command_aio("terminate", outformat=ProcessInstanceList)
+        return await self.send_command_aio(
+            "terminate", outformat=ProcessInstanceList, timeout=timeout
+        )
 
-    async def kill(self, query: ProcessQuery) -> ProcessInstance:
+    async def kill(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstance:
         return await self.send_command_aio(
             "kill",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def logs(self, req: LogRequest) -> LogLine:
+    async def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLine:
         async for stream in self.send_command_for_aio(
             "logs",
             data=req,
             outformat=LogLine,
+            timeout=timeout,
         ):
             yield stream
 
-    async def ps(self, query: ProcessQuery) -> ProcessInstanceList:
+    async def ps(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
         return await self.send_command_aio(
             "ps",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def flush(self, query: ProcessQuery) -> ProcessInstanceList:
+    async def flush(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
         return await self.send_command_aio(
             "flush",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def restart(self, query: ProcessQuery) -> ProcessInstance:
+    async def restart(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstance:
         return await self.send_command_aio(
             "restart",
             data=query,
             outformat=ProcessInstance,
+            timeout=timeout,
         )
 
-    async def describe(self) -> Description:
+    async def describe(self, timeout: int | float = 60) -> Description:
         return await self.send_command_aio(
             "describe",
             outformat=Description,
+            timeout=timeout,
         )
