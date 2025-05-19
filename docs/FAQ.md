@@ -10,11 +10,82 @@ drunc.utils.grpc_utils.ServerUnreachable: ('failed to connect to all addresses; 
 To resolve this issue, the current recommendation is to use a different physical host on which there are no other `drunc` users.
 
 ## I am receiving some strange `ssh` errors...
-Chances are that you cannot actually ssh onto the named servers. It is recommended that you check whether you can `ssh` onto the servers required by your configuration using `drunc-ssh-validator` as
+Chances are that you cannot actually ssh onto the named servers. It is recommended that you check whether you can `ssh` onto the servers required by your configuration using `drunc-ssh-doctor`:
 ```bash
-drunc-ssh-validator <configuration_file_with_directory> <session_name>
+drunc-ssh-doctor check-session name/of/your/file.xml session-name
 ```
-This will tell you which server you cannot `ssh` to.
+
+Alternatively, you can check each host individually:
+```bash
+drunc-ssh-doctor check-host localhost # or np04-srv-019 etc.
+```
+
+This will tell you which server you cannot `ssh` to and how.
+
+## I can't ssh on that host!
+So, you've just run `drunc-ssh-doctor` and it responded back with
+```text
+name-of-your-host [default]: ❌
+name-of-your-host [publickey]: ❌
+name-of-your-host [gssapi-with-mic]: ❌
+```
+
+### SSH keys (preferred solution)
+**Note**: You need to follow these instructions from the host you are running `drunc`, _not_ your laptop (so on `np04-srv-019`, or `daq.fnal`...).
+
+Simplest is to use SSH keys, here is how to do it:
+```bash
+ssh-keygen
+```
+then press `<Enter>` tree times when prompted where to put the key and for a password (*do not* enter a password here, and the default location for the key is also fine).
+
+Then do:
+```bash
+ssh-copy-id localhost # You're using network mounted storage right?
+```
+
+This command should prompt you a password, for the last time. This is the same password you used to log on the server. After that you can do:
+```bash
+ssh name-of-your-host
+```
+and you won't be prompted for a password ever again!
+
+Then in `~/.ssh/config` (which you should create if it doesn't exist) add:
+```config
+Host name-of-the-host
+    User your-user-name
+    PasswordAuthentication no
+```
+
+Run the `drunc-ssh-doctor` once more, to make sure the SSH-Key auth works. You should get:
+```
+name-of-the-host [publickey]: ✅
+```
+
+### Kerberos
+**Note**: You need to follow these instructions from the host you are running `drunc`, _not_ your laptop (so on `np04-srv-019`, or `daq.fnal`...).
+
+Only use this if the approach above with SSH keys didn't work. Drunc does not multiplex SSH connections, so if you start 20 applications, the kerberos server gets hit 20 times with authorisation request, more or less at the same time. This makes this a bit less reliable that standard SSH keys.
+
+To get this to work, create or edit  `~/.ssh/config` and add:
+```config
+Host name-of-the-host
+    GSSAPIAuthentication yes
+    GSSAPIDelegateCredentials yes
+```
+
+Then run
+```bash
+kinit your-username@CERN.CH
+# or, if you're at FNAL
+# kinit your-username@FNAL.GOV
+```
+Enter your password, run the `drunc-ssh-doctor` once more and make sure you get
+```text
+name-of-your-host [gssapi-with-mic]: ✅
+```
+
+Note that you will need to enter `kinit` every once in a while (between one day and one week).
 
 ## What SSH commands are actually run?
 The simplest to know how the processes are started is to add the option `--log-level debug` for the process manager shell or the unified shell.
