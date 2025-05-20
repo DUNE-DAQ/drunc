@@ -109,7 +109,9 @@ class Controller(ControllerServicer):
         self.log.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
-        self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix("oksconflibs:")
+        self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
+            "oksconflibs:"
+        )
 
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
@@ -357,7 +359,7 @@ class Controller(ControllerServicer):
                     run_time_at_start = 0
                     self.runinfo = {}
 
-                if self.runinfo:
+                if self.runinfo and self.runinfo.get("run", None) is not None:
                     run_type = self.runinfo.get("production_vs_test", "")
                     run_number = self.runinfo.get("run", 0)
                     disable_data_storage = self.runinfo.get(
@@ -371,19 +373,19 @@ class Controller(ControllerServicer):
 
                 self.log.debug(f"Publishing periodic run info every {sleep_time}s")
                 self.controller_publisher(
-                    message = RunInfo(
+                    message=RunInfo(
                         run_type=run_type,
                         trigger_rate=trigger_rate,
                         run_number=run_number,
                         disable_data_storage=disable_data_storage,
                         run_time_at_start=int(self.run_time_at_start),
                         run_time_since_start=run_time_since_start,
+                        run_config=self.runinfo["Configuration"],
                     )
                 )
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic status: {e}")
             time.sleep(sleep_time)
-                
 
     def construct_error_node_response(
         self, command_name: str, token: Token, cause: FSMResponseFlag

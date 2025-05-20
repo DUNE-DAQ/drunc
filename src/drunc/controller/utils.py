@@ -31,24 +31,28 @@ def get_status_message(controller):
 
     if state_string in ("initial", "configured"):
         return msg
-    
+
     if controller.runinfo and controller.runinfo.get("run", None) is not None:
         run_time_since_start = 0
         run_time_at_start = controller.runinfo.get("run_time_at_start", 0)
         if run_time_at_start:
             run_time_since_start = int(time.time() - run_time_at_start)
 
-        msg.run_info.CopyFrom(RunInfo(
-            run_type=controller.runinfo.get("production_vs_test", ""),
-            trigger_rate=controller.runinfo.get("trigger_rate", 0.0),
-            run_number=controller.runinfo["run"],
-            disable_data_storage=controller.runinfo.get("disable_data_storage", False),
-            run_time_at_start=int(controller.runinfo.get("run_time_at_start", 0)),
-            run_time_since_start=run_time_since_start,
-        ))
+        msg.run_info.CopyFrom(
+            RunInfo(
+                run_type=controller.runinfo.get("production_vs_test", ""),
+                trigger_rate=controller.runinfo.get("trigger_rate", 0.0),
+                run_number=controller.runinfo["run"],
+                disable_data_storage=controller.runinfo.get(
+                    "disable_data_storage", False
+                ),
+                run_time_at_start=int(controller.runinfo.get("run_time_at_start", 0)),
+                run_time_since_start=run_time_since_start,
+                run_config=controller.runinfo["Configuration"],
+            )
+        )
 
     return msg
-
 
 
 def get_detector_name(configuration) -> str:
