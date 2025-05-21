@@ -1,7 +1,6 @@
 import time
 
 from drunc.fsm.actions.utils import validate_run_type
-
 from drunc.fsm.core import FSMAction
 
 

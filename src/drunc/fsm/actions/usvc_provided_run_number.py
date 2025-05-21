@@ -6,7 +6,6 @@ from drunc.fsm.actions.utils import (
     get_dotdrunc_json,
     validate_run_type,
 )
-
 from drunc.fsm.core import FSMAction
 from drunc.fsm.exceptions import CannotGetRunNumber, DotDruncJsonIncorrectFormat
 from drunc.utils.utils import get_logger
