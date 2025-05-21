@@ -89,7 +89,7 @@ class ControllerConfHandler(ConfHandler):
             )
             self.interval_s = 10.0
 
-        self.log.info(
+        self.log.debug(
             f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.interval_s} s"
         )
 
@@ -113,7 +113,7 @@ class ControllerConfHandler(ConfHandler):
                 raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
         elif opmon_type == "file":
-            self.log.warning("OpMon type is file, no publisher is initialized")
+            self.log.info("OpMon type is file, no publisher is initialized")
             pass
 
         else:
