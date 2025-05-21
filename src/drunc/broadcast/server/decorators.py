@@ -1,9 +1,6 @@
-import time
 import traceback
 
-from druncschema.controller_pb2 import AddressedCommand, FSMCommand
 from druncschema.generic_pb2 import Stacktrace
-from druncschema.opmon.FSM_pb2 import CommandTime
 from druncschema.request_response_pb2 import Response, ResponseFlag
 
 from drunc.exceptions import DruncException
@@ -33,7 +30,6 @@ def broadcasted(cmd):
         obj.broadcast(message=msg, btype=BroadcastType.ACK)
 
         ret = None
-        cmd_start_time = time.time()
         try:
             log.debug("Executing wrapped function")
             ret = cmd(
@@ -62,32 +58,11 @@ def broadcasted(cmd):
                 flag=flag,
                 children=[],
             )
-        cmd_end_time = time.time()
-        cmd_exe_time = cmd_end_time - cmd_start_time
 
         msg = f"User '{request.token.user_name}' successfully executed '{cmd.__name__}'"
 
         obj.broadcast(message=msg, btype=BroadcastType.COMMAND_EXECUTION_SUCCESS)
         log.debug(msg)
-
-        getattr(request,'data',None)
-
-        if hasattr(obj, "opmon_publisher") and obj.opmon_publisher is not None:
-            if cmd.__name__ == 'execute_fsm_command' and request.data is not None:
-                    addressed_command=AddressedCommand()
-                    request.data.Unpack(addressed_command)
-                    fsm_command = FSMCommand()
-                    addressed_command.command_data.Unpack(fsm_command)
-                    custom_origin = {"Command": fsm_command.command_name}
-            else:
-                custom_origin={"Command": cmd.__name__}
-
-            obj.opmon_publisher.publish(
-                session=obj.session,
-                application=obj.name,
-                message=CommandTime(execution_time_ns=int(cmd_exe_time * 1e9)),
-                custom_origin=custom_origin,
-            )
 
         log.debug("Exiting")
         return ret
