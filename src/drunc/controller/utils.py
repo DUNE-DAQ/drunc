@@ -47,7 +47,7 @@ def get_status_message(controller):
                 ),
                 run_time_at_start=int(controller.runinfo.get("run_time_at_start", 0)),
                 run_time_since_start=run_time_since_start,
-                run_config=controller.runinfo["Configuration"],
+                run_config=controller.runinfo.get("Configuration",""),
             )
         )
 

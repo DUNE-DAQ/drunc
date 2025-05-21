@@ -330,7 +330,7 @@ class Controller(ControllerServicer):
                         disable_data_storage=disable_data_storage,
                         run_time_at_start=int(run_time_at_start),
                         run_time_since_start=run_time_since_start,
-                        run_config=self.runinfo["Configuration"],
+                        run_config=self.runinfo.get("Configuration",""),
                     )
                 )
             except Exception as e:
