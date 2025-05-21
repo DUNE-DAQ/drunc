@@ -115,6 +115,7 @@ class Controller(ControllerServicer):
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
 
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
@@ -237,7 +238,6 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.propagate_command("take_control", None, self.actor.get_token())
 
-        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         interval_s = getattr(self.configuration.data, "interval_s", 10.0)
 
         if self.opmon_publisher is not None:
