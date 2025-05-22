@@ -99,13 +99,6 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t.add_column("Included")
     t.add_column("Endpoint")
 
-    runinfo_table = Table(
-        title=f"Run Info, use configuration [dark_green]{status.data.run_info.run_config}[/dark_green]",
-        show_header=False,
-    )
-    runinfo_table.add_column()
-    runinfo_table.add_column()
-
     def add_status_to_table(table, status, description, prefix):
         valid_description = check_message_type(description, "Description")
         valid_status = check_message_type(status, "Status")
@@ -153,10 +146,18 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
         table.add_row(
             "Data storage disabled", str(status.data.run_info.disable_data_storage)
         )
+        table.add_row("Config file", status.data.run_info.run_config_file)
+        table.add_row("Config ID", status.data.run_info.run_config_name)
 
     add_status_to_table(t, status, description, prefix="")
 
     if status.data.HasField("run_info"):
+        runinfo_table = Table(
+            title="Run Info",
+            show_header=False,
+        )
+        runinfo_table.add_column()
+        runinfo_table.add_column()
         add_runinfo_to_table(runinfo_table, status)
         return Group(t, runinfo_table)
 
