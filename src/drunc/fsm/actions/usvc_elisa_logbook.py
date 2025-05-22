@@ -1,3 +1,5 @@
+from typing import Optional
+
 import requests
 
 from drunc.fsm.actions.utils import get_dotdrunc_json
@@ -67,12 +69,14 @@ class ElisaLogbook(FSMAction):
             self.log.info(f"Using the following ELisA logbook '{elisa_hardware}'.")
         self.timeout = 5
 
-    def post_start(self, _input_data: dict, _context, elisa_post: str = "", **kwargs):
+    def post_start(
+        self, _input_data: dict, _context, elisa_post: Optional[str] = None, **kwargs
+    ):
         text = ""
         self.thread_id = None  # Clear this value here, so that if it fails stop can't reply to an old message
 
         self.run_num = _input_data["run"]
-        if elisa_post != "":
+        if elisa_post is not None:
             self.log.info(
                 f"Adding the message:\n--------\n{elisa_post}\n--------\nto the logbook"
             )
@@ -83,7 +87,7 @@ class ElisaLogbook(FSMAction):
         )  # This class won't exist in a test run, so we're adding this temporarily so that we can actually run the function
         text += f"Configuration: {_context.configuration.initial_data}"
 
-        if elisa_post != "" and self.run_type.lower() != "prod":
+        if elisa_post is not None and self.run_type.lower() != "prod":
             self.log.warning(
                 "Your message will NOT be stored, as this is not a PROD run"
             )
@@ -122,10 +126,10 @@ class ElisaLogbook(FSMAction):
         return _input_data
 
     def post_drain_dataflow(
-        self, _input_data, _context, elisa_post: str = "", **kwargs
+        self, _input_data, _context, elisa_post: Optional[str] = None, **kwargs
     ):
         text = ""
-        if elisa_post != "":
+        if elisa_post is not None:
             self.log.info(
                 f"Adding the message:\n--------\n{elisa_post}\n--------\nto the logbook"
             )
