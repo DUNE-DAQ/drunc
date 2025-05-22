@@ -3,8 +3,6 @@ from typing import Optional
 
 import requests
 
-import requests
-
 from drunc.fsm.actions.utils import (
     get_dotdrunc_json,
     validate_run_type,
