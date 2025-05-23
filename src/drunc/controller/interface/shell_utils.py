@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import time
@@ -129,7 +130,38 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
                 prefix=prefix + "  ",
             )
 
+    def add_runinfo_to_table(table, status):
+        table.add_row("Run number", str(status.data.run_info.run_number))
+        table.add_row("Run type", status.data.run_info.run_type)
+        table.add_row(
+            "Start time",
+            datetime.datetime.fromtimestamp(
+                status.data.run_info.run_time_at_start
+            ).strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        table.add_row(
+            "Duration",
+            str(datetime.timedelta(seconds=status.data.run_info.run_time_since_start)),
+        )
+        table.add_row("Trigger rate", f"{status.data.run_info.trigger_rate:.4f} Hz")
+        table.add_row(
+            "Data storage disabled", str(status.data.run_info.disable_data_storage)
+        )
+        table.add_row("Config file", status.data.run_info.run_config_file)
+        table.add_row("Config ID", status.data.run_info.run_config_name)
+
     add_status_to_table(t, status, description, prefix="")
+
+    if status.data.HasField("run_info"):
+        runinfo_table = Table(
+            title="Run Info",
+            show_header=False,
+        )
+        runinfo_table.add_column()
+        runinfo_table.add_column()
+        add_runinfo_to_table(runinfo_table, status)
+        return Group(t, runinfo_table)
+
     return t
 
 

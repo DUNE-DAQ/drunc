@@ -115,6 +115,9 @@ class Controller(ControllerServicer):
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
+            "oksconflibs:"
+        )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
 
         bsch = BroadcastSenderConfHandler(
@@ -306,7 +309,7 @@ class Controller(ControllerServicer):
                     run_time_since_start = 0
                     self.runinfo = {}
 
-                if self.runinfo:
+                if self.runinfo and self.runinfo.get("run", None) is not None:
                     run_type = self.runinfo.get("production_vs_test", "")
                     run_number = self.runinfo.get("run", 0)
                     disable_data_storage = self.runinfo.get(
@@ -327,6 +330,8 @@ class Controller(ControllerServicer):
                         disable_data_storage=disable_data_storage,
                         run_time_at_start=int(run_time_at_start),
                         run_time_since_start=run_time_since_start,
+                        run_config_file=self.configuration.oks_path,
+                        run_config_name=self.configuration.oks_key.session,
                     )
                 )
             except Exception as e:
@@ -565,7 +570,7 @@ class Controller(ControllerServicer):
     ) -> Response:
         status = None
         if execute_on_self:
-            status = pack_to_any(get_status_message(self.stateful_node))
+            status = pack_to_any(get_status_message(self))
 
         children_statuses = self.propagate_addressed_command(
             "status",
