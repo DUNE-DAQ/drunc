@@ -122,19 +122,23 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         # Find all configuration files.
         config_files = []
         for path in search_paths.split(":"):
-            # TODO: we *should not* hardcode this file name.
-            # TODO: setting "*.data.xml" fails on e.g. "example-hsi-configs.data.xml".
-            config_glob = Path(path).rglob("example-configs.data.xml")
+            config_glob = Path(path).rglob("*.data.xml")
             config_files.extend(config_glob)
 
         # Parse all configuration files.
         configs = []
         for file in config_files:
-            cfg = Configuration(f"oksconflibs:{file}")
-            for session in cfg.get_dals("Session"):
+            try:
+                config = Configuration(f"oksconflibs:{file}")
+            except Exception as e:
+                self.log.error(e)
+                continue
+
+            # Parse all session configurations in this file.
+            for session_config in config.get_dals("Session"):
                 config_key = ConfigKey(
                     file=file.name,
-                    session_id=session.id,
+                    session_id=session_config.id,
                 )
                 configs.append(config_key)
 
