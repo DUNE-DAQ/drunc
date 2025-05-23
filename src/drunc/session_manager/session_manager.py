@@ -1,14 +1,22 @@
 """The session manager service."""
 
 import abc
+from os import getenv
+from pathlib import Path
 
+from conffwk import Configuration
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
     Response,
     ResponseFlag,
 )
-from druncschema.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
+from druncschema.session_manager_pb2 import (
+    ActiveSession,
+    AllActiveSessions,
+    AllConfigKeys,
+    ConfigKey,
+)
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from druncschema.token_pb2 import Token
 
@@ -95,7 +103,53 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: next PR.
-    # @unpack_request_data_to(None, pass_token=True)
-    # def list_all_configs(self, token: Token) -> Response:
-    #     pass
+    @unpack_request_data_to(None, pass_token=True)
+    def list_all_configs(self, token: Token) -> Response:
+        self.log.debug(f"{self.name} running list_all_configs")
+
+        # Get search paths for available configurations.
+        search_paths = getenv("DUNEDAQ_DB_PATH")
+        if search_paths is None:
+            self.log.error("DUNEDAQ_DB_PATH not set")
+            return Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(None),
+                flag=ResponseFlag.FAILED,
+                children=[],
+            )
+
+        # Find all configuration files.
+        config_files = []
+        for path in search_paths.split(":"):
+            config_glob = Path(path).rglob("*.data.xml")
+            config_files.extend(config_glob)
+
+        # Parse all configuration files.
+        configs = []
+        for file in config_files:
+            try:
+                config = Configuration(f"oksconflibs:{file}")
+            except Exception as e:
+                self.log.error(e)
+                continue
+
+            # Parse all session configurations in this file.
+            for session_config in config.get_dals("Session"):
+                config_key = ConfigKey(
+                    file=file.name,
+                    session_id=session_config.id,
+                )
+                configs.append(config_key)
+
+        all_configs = AllConfigKeys(
+            config_keys=configs,
+        )
+
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(all_configs),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
+        )
