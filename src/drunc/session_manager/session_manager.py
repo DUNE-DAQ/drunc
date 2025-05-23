@@ -11,7 +11,12 @@ from druncschema.request_response_pb2 import (
     Response,
     ResponseFlag,
 )
-from druncschema.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
+from druncschema.session_manager_pb2 import (
+    ActiveSession,
+    AllActiveSessions,
+    AllConfigKeys,
+    ConfigKey,
+)
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from druncschema.token_pb2 import Token
 
@@ -75,9 +80,36 @@ class SessionManager(abc.ABC, SessionManagerServicer):
     def list_all_sessions(self, token: Token) -> Response:
         self.log.debug(f"{self.name} running list_all_sessions")
 
+        dummy_config = ConfigKey(
+            file="dummy_config_file",
+            session_id="dummy_config_session_id",
+        )
+
+        dummy_session = ActiveSession(
+            name="dummy_session",
+            user="dummy_user",
+            config_key=dummy_config,
+        )
+
+        all_sessions = AllActiveSessions(
+            active_sessions=[dummy_session],
+        )
+
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(all_sessions),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
+        )
+
+    @unpack_request_data_to(None, pass_token=True)
+    def list_all_configs(self, token: Token) -> Response:
+        self.log.debug(f"{self.name} running list_all_configs")
+
         # Get search paths for available configurations.
-        all_search_paths = getenv("DUNEDAQ_DB_PATH")
-        if all_search_paths is None:
+        search_paths = getenv("DUNEDAQ_DB_PATH")
+        if search_paths is None:
             self.log.error("DUNEDAQ_DB_PATH not set")
             return Response(
                 name=self.name,
@@ -89,14 +121,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
 
         # Find all configuration files.
         config_files = []
-        for search_path in all_search_paths.split(":"):
+        for path in search_paths.split(":"):
             # TODO: we *should not* hardcode this file name.
             # TODO: setting "*.data.xml" fails on e.g. "example-hsi-configs.data.xml".
-            config_glob = Path(search_path).rglob("example-configs.data.xml")
+            config_glob = Path(path).rglob("example-configs.data.xml")
             config_files.extend(config_glob)
 
         # Parse all configuration files.
-        sessions = []
+        configs = []
         for file in config_files:
             cfg = Configuration(f"oksconflibs:{file}")
             for session in cfg.get_dals("Session"):
@@ -104,25 +136,16 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                     file=file.name,
                     session_id=session.id,
                 )
-                active_session = ActiveSession(
-                    name="dummy_session",
-                    user="dummy_user",
-                    config_key=config_key,
-                )
-                sessions.append(active_session)
-        all_sessions = AllActiveSessions(
-            active_sessions=sessions,
+                configs.append(config_key)
+
+        all_configs = AllConfigKeys(
+            config_keys=configs,
         )
 
         return Response(
             name=self.name,
             token=None,
-            data=pack_to_any(all_sessions),
+            data=pack_to_any(all_configs),
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=[],
         )
-
-    # TODO: next PR.
-    # @unpack_request_data_to(None, pass_token=True)
-    # def list_all_configs(self, token: Token) -> Response:
-    #     pass
