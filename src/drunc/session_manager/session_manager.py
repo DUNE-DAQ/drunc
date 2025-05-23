@@ -1,7 +1,10 @@
 """The session manager service."""
 
 import abc
+from os import getenv
+from pathlib import Path
 
+from conffwk import Configuration
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
@@ -72,19 +75,43 @@ class SessionManager(abc.ABC, SessionManagerServicer):
     def list_all_sessions(self, token: Token) -> Response:
         self.log.debug(f"{self.name} running list_all_sessions")
 
-        dummy_config = ConfigKey(
-            file="dummy_config_file",
-            session_id="dummy_config_session_id",
-        )
+        # Get search paths for available configurations.
+        all_search_paths = getenv("DUNEDAQ_DB_PATH")
+        if all_search_paths is None:
+            self.log.error("DUNEDAQ_DB_PATH not set")
+            return Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(None),
+                flag=ResponseFlag.FAILED,
+                children=[],
+            )
 
-        dummy_session = ActiveSession(
-            name="dummy_session",
-            user="dummy_user",
-            config_key=dummy_config,
-        )
+        # Find all configuration files.
+        config_files = []
+        for search_path in all_search_paths.split(":"):
+            # TODO: we *should not* hardcode this file name.
+            # TODO: setting "*.data.xml" fails on e.g. "example-hsi-configs.data.xml".
+            config_glob = Path(search_path).rglob("example-configs.data.xml")
+            config_files.extend(config_glob)
 
+        # Parse all configuration files.
+        sessions = []
+        for file in config_files:
+            cfg = Configuration(f"oksconflibs:{file}")
+            for session in cfg.get_dals("Session"):
+                config_key = ConfigKey(
+                    file=file.name,
+                    session_id=session.id,
+                )
+                active_session = ActiveSession(
+                    name="dummy_session",
+                    user="dummy_user",
+                    config_key=config_key,
+                )
+                sessions.append(active_session)
         all_sessions = AllActiveSessions(
-            active_sessions=[dummy_session],
+            active_sessions=sessions,
         )
 
         return Response(
