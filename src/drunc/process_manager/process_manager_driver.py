@@ -159,7 +159,8 @@ class ProcessManagerDriver(GRPCDriver):
         log_level: str,
         override_logs: bool = True,
         timeout: int | float = 60,
-        sleep_between_app_boot: int | float = 0,
+        sleep_between_app_boot: int
+        | float = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
     ) -> ProcessInstance:
         from daqconf.consolidate import consolidate_db
