@@ -186,6 +186,14 @@ To debug it, close drunc and run the following command:
         db = conffwk.Configuration(conf_file)
         session_dal = db.get_dal(class_name="Session", uid=conf_id)
 
+        csc = None
+        if session_dal.connectivity_service:
+            connection_server = session_dal.connectivity_service.host
+            connection_port = session_dal.connectivity_service.service.port
+            csc = ConnectivityServiceClient(
+                session_name, f"{connection_server}:{connection_port}"
+            )
+
         async for br in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
@@ -195,6 +203,14 @@ To debug it, close drunc and run the following command:
             override_logs=override_logs,
             **kwargs,
         ):
+            if (
+                br.process_description.metadata.name
+                not in [app.id for app in session_dal.infrastructure_applications]
+                and csc
+                and not csc.is_ready(timeout=10)
+            ):
+                raise DruncSetupException("Connectivity service is not ready in time")
+
             yield await self.send_command_aio(
                 "boot",
                 data=br,
@@ -209,13 +225,7 @@ To debug it, close drunc and run the following command:
 
             env = {}
             collect_variables(session_dal.environment, env)
-            if session_dal.connectivity_service:
-                connection_server = session_dal.connectivity_service.host
-                connection_port = session_dal.connectivity_service.service.port
-                csc = ConnectivityServiceClient(
-                    session_name, f"{connection_server}:{connection_port}"
-                )
-
+            if csc:
                 try:
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60) + 60
