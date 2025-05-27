@@ -1,3 +1,4 @@
+import asyncio
 import getpass
 import json
 import os
@@ -158,6 +159,7 @@ class ProcessManagerDriver(GRPCDriver):
         log_level: str,
         override_logs: bool = True,
         timeout: int | float = 60,
+        sleep_between_app_boot: int | float = 0,
         **kwargs,
     ) -> ProcessInstance:
         from daqconf.consolidate import consolidate_db
@@ -201,6 +203,8 @@ To debug it, close drunc and run the following command:
                 outformat=ProcessInstance,
                 timeout=timeout,
             )
+            if sleep_between_app_boot > 0:
+                await asyncio.sleep(sleep_between_app_boot)
 
         top_controller_name = session_dal.segment.controller.id
 
