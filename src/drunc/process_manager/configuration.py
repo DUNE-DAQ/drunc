@@ -4,6 +4,7 @@ from importlib.resources import path
 from urllib.parse import urlparse
 
 from kafkaopmon.OpMonPublisher import KafkaOpMonPublisher
+from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
 from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
@@ -69,21 +70,24 @@ class ProcessManagerConfHandler(ConfHandler):
             "OpMon configuration parsed with configuration %s", self.opmon_conf
         )
 
-        if self.opmon_conf.type == "stream":
-            try:
+        try:
+            if self.opmon_conf.type == "stream":
                 new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
                 self.log.info(
-                    "OpMonPublisher initialized with configuration %s", self.opmon_conf
+                    "KafkaOpMonPublisher initialized with configuration %s",
+                    self.opmon_conf,
+                )
+            else:
+                new_data.opmon_publisher = OpMonPublisher(self.opmon_conf)
+                self.log.info(
+                    "%s OpMonPublisher initialized with configuration %s",
+                    self.opmon_conf.type,
+                    self.opmon_conf,
                 )
 
-            except Exception as e:
-                self.log.error("Failed to initialize OpMonPublisher: %s", e)
-                raise DruncCommandException("Failed to initialize OpMonPublisher.")
-        else:
-            self.log.error("Unsupported OpMon type: %s", self.opmon_conf.type)
-            raise DruncCommandException(
-                "Unsupported OpMon type: %s", self.opmon_conf.type
-            )
+        except Exception as e:
+            self.log.error("Failed to initialize OpMonPublisher: %s", e)
+            raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
         return new_data
 
