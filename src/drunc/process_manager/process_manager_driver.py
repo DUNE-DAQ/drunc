@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import tempfile
+import time
 
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -188,7 +189,8 @@ To debug it, close drunc and run the following command:
 
         db = conffwk.Configuration(conf_file)
         session_dal = db.get_dal(class_name="Session", uid=conf_id)
-
+        last_boot_on_host_at = {}
+        previous_host = None
         async for br in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
@@ -198,14 +200,24 @@ To debug it, close drunc and run the following command:
             override_logs=override_logs,
             **kwargs,
         ):
+            this_host = next(iter(br.process_restriction.allowed_hosts))
+
+            time_diff = time.time() - last_boot_on_host_at.get(this_host, 0)
+
+            if sleep_between_app_boot > 0 and time_diff < sleep_between_app_boot:
+                self.log.debug(
+                    f"Sleeping for {sleep_between_app_boot - time_diff} seconds {previous_host} {this_host}"
+                )
+                await asyncio.sleep(sleep_between_app_boot - time_diff)
+
+            previous_host = this_host
+            last_boot_on_host_at[this_host] = time.time()
             yield await self.send_command_aio(
                 "boot",
                 data=br,
                 outformat=ProcessInstance,
                 timeout=timeout,
             )
-            if sleep_between_app_boot > 0:
-                await asyncio.sleep(sleep_between_app_boot)
 
         top_controller_name = session_dal.segment.controller.id
 
