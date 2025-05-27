@@ -3,7 +3,7 @@ from enum import Enum
 from importlib.resources import path
 from urllib.parse import urlparse
 
-from kafkaopmon.OpMonPublisher import KafkaOpMonPublisher
+from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
@@ -66,22 +66,22 @@ class ProcessManagerConfHandler(ConfHandler):
 
         self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
 
-        self.log.info(
-            "OpMon configuration parsed with configuration %s", self.opmon_conf
+        self.log.debug(
+            "Initializing process manager OpMon with configuration %s", self.opmon_conf
         )
 
         try:
-            if self.opmon_conf.type == "stream":
+            if self.opmon_conf.opmon_type == "stream":
                 new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
-                self.log.info(
+                self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
                     self.opmon_conf,
                 )
             else:
                 new_data.opmon_publisher = OpMonPublisher(self.opmon_conf)
-                self.log.info(
+                self.log.debug(
                     "%s OpMonPublisher initialized with configuration %s",
-                    self.opmon_conf.type,
+                    self.opmon_conf.opmon_type,
                     self.opmon_conf,
                 )
 
