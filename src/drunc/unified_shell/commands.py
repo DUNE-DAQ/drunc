@@ -11,7 +11,7 @@ from drunc.utils.utils import get_logger, run_coroutine
 
 @click.command("boot")
 @click.option("--override-logs/--no-override-logs", default=True)
-@click.option("--sleep-between-app-boot", type=float, default=0.2)
+@click.option("--sleep-between-app-boot", type=float, default=0.1)
 @click.pass_obj
 @run_coroutine
 async def boot(
