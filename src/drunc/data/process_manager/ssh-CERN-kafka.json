@@ -21,6 +21,7 @@
         "type": "stream"
     },
     "opmon_conf":{
+        "level": "info",
         "interval_s" : 10.0
     }
 
