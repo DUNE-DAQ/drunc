@@ -1,7 +1,9 @@
 import socket
 import threading
 
-from kafkaopmon.OpMonPublisher import OpMonPublisher
+from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
+from opmonlib.publisher import OpMonPublisher
+from opmonlib.utils import parse_opmon_conf
 
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import (
@@ -65,59 +67,30 @@ class ControllerConfHandler(ConfHandler):
         opmon_uri = self.session.opmon_uri
         opmon_conf = self.data.controller.opmon_conf
 
-        if not opmon_uri:
-            self.log.info("Missing 'opmon_uri' in configuration.")
-            return
-
-        if not opmon_conf:
-            self.log.info("Missing 'opmon_conf' in configuration.")
-            return
-
-        opmon_path = getattr(opmon_uri, "path", "")
-        opmon_type = getattr(opmon_uri, "type", "")
-        self.interval_s = getattr(opmon_conf, "interval_s", 0.0)
-
-        if not opmon_path or not opmon_type:
-            self.log.error("Invalid 'opmon_uri' format: Missing required fields.")
-            raise DruncCommandException(
-                "Invalid 'opmon_uri' format: Missing required fields."
-            )
-        if not self.interval_s:
-            self.log.warning(
-                "Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s"
-            )
-            self.interval_s = 10.0
-
+        self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
         self.log.debug(
-            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.interval_s} s"
+            "Initializing %s OpMon with configuration %s", self.name, self.opmon_conf
         )
 
-        if "/" in opmon_path:
-            opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
-        else:
-            opmon_bootstrap = opmon_path
-            opmon_topic = "opmon_stream"
-
-        if opmon_type == "stream":
-            try:
-                self.opmon_publisher = OpMonPublisher(
-                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
+        try:
+            if self.opmon_conf.opmon_type == "stream":
+                self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
+                self.log.debug(
+                    "KafkaOpMonPublisher initialized with configuration %s",
+                    self.opmon_conf,
                 )
-                self.log.info(
-                    f"OpMonPublisher initialized: {opmon_bootstrap}/{opmon_topic}"
+            else:
+                self.opmon_publisher = OpMonPublisher(self.opmon_conf)
+                self.log.debug(
+                    "%s OpMonPublisher initialized with configuration %s",
+                    self.opmon_conf.opmon_type,
+                    self.opmon_conf,
                 )
 
-            except Exception as e:
-                self.log.error(f"Failed to initialize OpMonPublisher: {e}")
-                raise DruncCommandException("Failed to initialize OpMonPublisher.")
-
-        elif opmon_type == "file":
-            self.log.info("OpMon type is file, no publisher is initialized")
-            pass
-
-        else:
-            self.log.error(f"Unsupported OpMon type: {opmon_type}")
-            raise DruncCommandException(f"Unsupported OpMon type: {opmon_type}")
+        except Exception as e:
+            self.log.error("Failed to initialize OpMonPublisher: %s", e)
+            raise DruncCommandException("Failed to initialize OpMonPublisher.")
+        return
 
     def get_dummy_children(self):
         ret = []
