@@ -68,18 +68,18 @@ class ControllerConfHandler(ConfHandler):
         opmon_conf = self.data.controller.opmon_conf
 
         self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
-        self.log.debug(
-            "Initializing %s OpMon with configuration %s", self.name, self.opmon_conf
-        )
+        self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
 
         try:
             if self.opmon_conf.opmon_type == "stream":
+                self.log.debug("Attemtpting to initialize KafkaOpMonPublisher")
                 self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
                 self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
                     self.opmon_conf,
                 )
             else:
+                self.log.debug("Attemtpting to initialize OpMonPublisher")
                 self.opmon_publisher = OpMonPublisher(self.opmon_conf)
                 self.log.debug(
                     "%s OpMonPublisher initialized with configuration %s",
