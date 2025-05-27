@@ -102,9 +102,11 @@ class ChildNode:  # abc.ABC):
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),
-            info=get_detector_name(self.configuration)
-            if self.configuration is not None
-            else None,
+            info=(
+                get_detector_name(self.configuration)
+                if self.configuration is not None
+                else None
+            ),
             session=os.getenv("DUNEDAQ_SESSION"),
             commands=None,
             broadcast=None,

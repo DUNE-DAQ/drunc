@@ -1,9 +1,5 @@
 from drunc.process_manager.interface.process_manager import process_manager_cli
-from drunc.utils.utils import (
-    create_logger_handler,
-    get_logger,
-    setup_root_logger,
-)
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def main():

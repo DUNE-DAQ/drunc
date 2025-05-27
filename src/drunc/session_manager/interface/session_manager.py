@@ -7,11 +7,7 @@ from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_s
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.utils import (
-    create_logger_handler,
-    get_logger,
-    setup_root_logger,
-)
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def serve(session_manager: SessionManager, address: str) -> None:

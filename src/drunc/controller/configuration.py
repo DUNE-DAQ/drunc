@@ -4,16 +4,15 @@ import threading
 from kafkaopmon.OpMonPublisher import OpMonPublisher
 
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.exceptions import DruncCommandException, DruncSetupException
-from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import ControlType
-
-import confmodel  # isort: skip
 from drunc.controller.children_interface.rest_api_child import (
     RESTAPIChildNodeConfHandler,
 )
-from drunc.utils.configuration import ConfTypes
+from drunc.exceptions import DruncCommandException, DruncSetupException
+from drunc.process_manager.configuration import get_commandline_parameters
+from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.utils import ControlType
+
+import confmodel  # isort: skip
 
 
 class ControllerConfData:  # the bastardised OKS

@@ -439,9 +439,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 pi = ProcessInstance(
                     process_description=pd,
                     process_restriction=pr,
-                    status_code=ProcessInstance.StatusCode.RUNNING
-                    if self.process_store[uuid].is_alive()
-                    else ProcessInstance.StatusCode.DEAD,
+                    status_code=(
+                        ProcessInstance.StatusCode.RUNNING
+                        if self.process_store[uuid].is_alive()
+                        else ProcessInstance.StatusCode.DEAD
+                    ),
                     return_code=return_code,
                     uuid=pu,
                 )

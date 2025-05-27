@@ -16,11 +16,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
-from druncschema.request_response_pb2 import (
-    Description,
-    Response,
-    ResponseFlag,
-)
+from druncschema.request_response_pb2 import Description, Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
@@ -39,18 +35,11 @@ from drunc.controller.decorators import (
 )
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
-from drunc.controller.utils import (
-    get_detector_name,
-    get_status_message,
-)
+from drunc.controller.utils import get_detector_name, get_status_message
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    pack_to_any,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
 
