@@ -21,7 +21,7 @@
         "type": "stream"
     },
     "opmon_conf":{
-        "level": "info",
+        "level": "debug",
         "interval_s" : 10.0
     }
 
