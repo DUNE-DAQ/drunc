@@ -80,7 +80,9 @@ class ControllerConfHandler(ConfHandler):
                 )
             else:
                 self.log.debug("Attemtpting to initialize OpMonPublisher")
-                self.opmon_publisher = OpMonPublisher(self.opmon_conf)
+                self.opmon_publisher = OpMonPublisher(
+                    conf=self.opmon_conf, log_level=self.log.getEffectiveLevel()
+                )
                 self.log.debug(
                     "%s OpMonPublisher initialized with configuration %s",
                     self.opmon_conf.opmon_type,
