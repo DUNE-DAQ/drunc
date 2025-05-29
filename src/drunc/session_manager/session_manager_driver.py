@@ -1,4 +1,4 @@
-"""Provides an interface to the session manager service."""
+"""Driver for the session manager service."""
 
 from druncschema.request_response_pb2 import Description
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
@@ -10,7 +10,7 @@ from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 
 
 class SessionManagerDriver(GRPCDriver):
-    """Driver for the session manager service.
+    """Provides an interface to the session manager service.
 
     This class provides the client-side methods required to interact with a remote
     session manager service, via gRPC connections.
