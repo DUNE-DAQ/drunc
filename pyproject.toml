@@ -9,10 +9,12 @@ dynamic = ["version", "readme"]
 dependencies = [
     "click==8.1.7",
     "click-shell==2.1",
+    "protobuf",
+    "types-protobuf",
     "grpcio==1.68.0",
-    "googleapis-common-protos==1.66.0",
     "grpcio-status==1.68.0",
     "grpcio-tools==1.68.0",
+    "types-grpcio",
     "gunicorn==23.0.0",
     "kafka-python==2.0.2",
     "nest-asyncio==1.6.0",
