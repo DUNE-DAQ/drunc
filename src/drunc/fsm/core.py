@@ -19,7 +19,6 @@ from typing import List, Optional, Union
 
 from druncschema.controller_pb2 import Argument
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from druncschema.opmon.generic_pb2 import RunInfo
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException
@@ -84,17 +83,6 @@ class PreOrPostTransitionSequence:
 
                 if input_data:
                     ctx.runinfo.update(input_data)
-                    if callback.method.__name__ == "start":
-                        ctx.controller_publisher(
-                            message=RunInfo(
-                                run_type=input_data["production_vs_test"],
-                                trigger_rate=input_data["trigger_rate"],
-                                run_number=input_data["run"],
-                                disable_data_storage=input_data["disable_data_storage"],
-                                run_time_at_start=input_data["run_time_at_start"],
-                                run_time_since_start=0,
-                            )
-                        )
 
                 try:
                     json.dumps(input_data)
