@@ -35,7 +35,11 @@ from drunc.controller.decorators import (
 )
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
-from drunc.controller.utils import get_detector_name, get_status_message
+from drunc.controller.utils import (
+    ControllerMonitoringMetrics,
+    get_detector_name,
+    get_status_message,
+)
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
@@ -97,13 +101,14 @@ class Controller(ControllerServicer):
         self.name = name
         self.session = session
         self.broadcast_service = None
-        self.runinfo = {}
+        self.monitoring_metrics = ControllerMonitoringMetrics()
 
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
         )
@@ -283,48 +288,53 @@ class Controller(ControllerServicer):
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
     def threading_publish_state(self, interval_s: float = 10.0):
+        run_time_at_start = 0
         while not self.stop_event.is_set():
             try:
                 self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
 
-                if current_state in ("initial", "configured"):
-                    run_type = ""
-                    trigger_rate = 0.0
-                    run_number = 0
-                    disable_data_storage = False
-                    run_time_at_start = 0
-                    run_time_since_start = 0
-                    self.runinfo = {}
+                if current_state in ("none", "initial", "configured"):
+                    self.monitoring_metrics = ControllerMonitoringMetrics()
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
-                    run_type = self.runinfo.get("production_vs_test", "")
-                    run_number = self.runinfo.get("run", 0)
-                    disable_data_storage = self.runinfo.get(
+                    self.monitoring_metrics.run_type = self.runinfo.get(
+                        "production_vs_test", ""
+                    )
+                    self.monitoring_metrics.run_number = self.runinfo.get("run", 0)
+                    self.monitoring_metrics.disable_data_storage = self.runinfo.get(
                         "disable_data_storage", False
                     )
-                    trigger_rate = self.runinfo.get("trigger_rate", 0.0)
-                    run_time_at_start = self.runinfo.get("run_time_at_start", 0)
+                    self.monitoring_metrics.trigger_rate = self.runinfo.get(
+                        "trigger_rate", 0.0
+                    )
+                    self.monitoring_metrics.run_time_at_start = self.runinfo.get(
+                        "run_time_at_start", 0
+                    )
 
                 if run_time_at_start:
-                    run_time_since_start = int(time.time() - run_time_at_start)
+                    self.monitoring_metrics.run_time_since_start = int(
+                        time.time() - run_time_at_start
+                    )
 
                 self.log.debug(f"Publishing periodic run info every {interval_s}s")
                 self.controller_publisher(
                     message=RunInfo(
-                        run_type=run_type,
-                        trigger_rate=trigger_rate,
-                        run_number=run_number,
-                        disable_data_storage=disable_data_storage,
-                        run_time_at_start=int(run_time_at_start),
-                        run_time_since_start=run_time_since_start,
+                        run_type=self.monitoring_metrics.run_type,
+                        trigger_rate=self.monitoring_metrics.trigger_rate,
+                        run_number=self.monitoring_metrics.run_number,
+                        disable_data_storage=self.monitoring_metrics.disable_data_storage,
+                        run_time_at_start=int(
+                            self.monitoring_metrics.run_time_at_start
+                        ),
+                        run_time_since_start=self.monitoring_metrics.run_time_since_start,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
                     )
                 )
             except Exception as e:
-                self.log.warning(f"Error while publishing periodic status: {e}")
+                self.log.exception(f"Error while publishing periodic status: {e}")
             time.sleep(interval_s)
 
     def construct_error_node_response(
