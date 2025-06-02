@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
-from opmonlib.utils import parse_opmon_conf
+from opmonlib.utils import parse_publisher_conf
 
 from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
@@ -64,7 +64,7 @@ class ProcessManagerConfHandler(ConfHandler):
         opmon_uri = data.get("opmon_uri", None)
         opmon_conf = data.get("opmon_conf", None)
 
-        self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
+        self.opmon_conf = parse_publisher_conf(self.log, opmon_conf, opmon_uri)
 
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = "./info." + data["name"] + ".json"
