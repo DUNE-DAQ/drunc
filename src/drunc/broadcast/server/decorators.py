@@ -1,9 +1,6 @@
-import time
 import traceback
 
-from druncschema.controller_pb2 import AddressedCommand, FSMCommand
 from druncschema.generic_pb2 import Stacktrace
-from druncschema.opmon.FSM_pb2 import CommandTime
 from druncschema.request_response_pb2 import Response, ResponseFlag
 
 from drunc.exceptions import DruncException
@@ -33,7 +30,6 @@ def broadcasted(cmd):
         obj.broadcast(message=msg, btype=BroadcastType.ACK)
 
         ret = None
-        cmd_start_time = time.time()
         try:
             log.debug("Executing wrapped function")
             ret = cmd(obj, request, context)
@@ -60,8 +56,6 @@ def broadcasted(cmd):
                 flag=flag,
                 children=[],
             )
-        cmd_end_time = time.time()
-        cmd_exe_time = cmd_end_time - cmd_start_time
 
         msg = f"User '{request.token.user_name}' successfully executed '{cmd.__name__}'"
 

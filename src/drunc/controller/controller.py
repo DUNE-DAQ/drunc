@@ -32,7 +32,11 @@ from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.rest_api_child import ResponseListener
-from drunc.controller.decorators import in_control, unpack_addressed_command_to
+from drunc.controller.decorators import (
+    in_control,
+    publish_command_time,
+    unpack_addressed_command_to,
+)
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
@@ -99,8 +103,6 @@ class Controller(ControllerServicer):
     children_nodes = []  # type: List[ChildNode]
 
     def __init__(self, configuration, name: str, session: str, token: Token):
-        from kafkaopmon.OpMonPublisher import OpMonPublisher
-
         super().__init__()
 
         self.name = name
@@ -113,6 +115,10 @@ class Controller(ControllerServicer):
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
+            "oksconflibs:"
+        )
+        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
 
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
@@ -128,34 +134,6 @@ class Controller(ControllerServicer):
             data=self.configuration.data.controller.fsm,
         )
 
-        self.opmon_publisher = None
-
-        if self.configuration.session.opmon_uri:
-            opmon_path = self.configuration.session.opmon_uri.path
-            opmon_type = self.configuration.session.opmon_uri.type
-            if hasattr(self.configuration.session.opmon_uri, "sleep_time"):
-                self.opmon_sleep_time = self.configuration.session.opmon_uri.sleep_time
-            else:
-                self.opmon_sleep_time = 10
-                log_init.info(
-                    "Couldn't find sleep time in opmon_uri configuration, use default value of 10s"
-                )
-
-            log_init.info(
-                f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time {self.opmon_sleep_time}s"
-            )
-
-            if "/" in opmon_path:
-                opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
-            else:
-                opmon_bootstrap = opmon_path
-                opmon_topic = "opmon_stream"
-
-            if opmon_type == "stream":
-                self.opmon_publisher = OpMonPublisher(
-                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
-                )
-
         self.stateful_node = StatefulNode(
             fsm_configuration=fsmch,
             publisher=self.controller_publisher,
@@ -163,15 +141,6 @@ class Controller(ControllerServicer):
             name=name,
             session=session,
         )
-
-        if self.opmon_publisher is not None:
-            self.stop_event = threading.Event()
-            self.thread = threading.Thread(
-                target=self.threading_publish_state,
-                args=(self.opmon_sleep_time,),
-                daemon=True,
-            )
-            self.thread.start()
 
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
@@ -272,6 +241,17 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.propagate_command("take_control", None, self.actor.get_token())
 
+        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+
+        if self.opmon_publisher is not None:
+            self.stop_event = threading.Event()
+            self.thread = threading.Thread(
+                target=self.threading_publish_state,
+                args=(interval_s,),
+                daemon=True,
+            )
+            self.thread.start()
+
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
         self.stateful_node.set_ready_state(True)
         log_init_controller.info("Controller ready")
@@ -313,10 +293,10 @@ class Controller(ControllerServicer):
             except Exception as e:
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
-    def threading_publish_state(self, sleep_time: float = 10.0):
+    def threading_publish_state(self, interval_s: float = 10.0):
         while not self.stop_event.is_set():
             try:
-                self.log.debug(f"Publishing periodic FSM status every {sleep_time}s")
+                self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
 
@@ -329,7 +309,7 @@ class Controller(ControllerServicer):
                     run_time_since_start = 0
                     self.runinfo = {}
 
-                if self.runinfo:
+                if self.runinfo and self.runinfo.get("run", None) is not None:
                     run_type = self.runinfo.get("production_vs_test", "")
                     run_number = self.runinfo.get("run", 0)
                     disable_data_storage = self.runinfo.get(
@@ -341,7 +321,8 @@ class Controller(ControllerServicer):
                 if run_time_at_start:
                     run_time_since_start = int(time.time() - run_time_at_start)
 
-                self.log.debug(f"Publishing periodic run info every {sleep_time}s")
+                self.log.debug(f"Publishing periodic run info every {interval_s}s")
+
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=run_type,
@@ -350,11 +331,14 @@ class Controller(ControllerServicer):
                         disable_data_storage=disable_data_storage,
                         run_time_at_start=int(run_time_at_start),
                         run_time_since_start=run_time_since_start,
+                        run_config_file=self.configuration.oks_path,
+                        run_config_name=self.configuration.oks_key.session,
                     )
                 )
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic status: {e}")
-            time.sleep(sleep_time)
+
+            time.sleep(interval_s)
 
     def construct_error_node_response(
         self, command_name: str, token: Token, cause: FSMResponseFlag
@@ -579,6 +563,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def status(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -587,7 +572,7 @@ class Controller(ControllerServicer):
     ) -> Response:
         status = None
         if execute_on_self:
-            status = pack_to_any(get_status_message(self.stateful_node))
+            status = pack_to_any(get_status_message(self))
 
         children_statuses = self.propagate_addressed_command(
             "status",
@@ -609,6 +594,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def describe(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -650,6 +636,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to(PlainText)  # 4th step
+    @publish_command_time
     def describe_fsm(
         self,
         payload: PlainText,
@@ -702,6 +689,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to(FSMCommand)  # 4th step
+    @publish_command_time
     def execute_fsm_command(
         self,
         payload: FSMCommand,
@@ -881,6 +869,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def recompute_status(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -986,6 +975,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to()  # 4th step
+    @publish_command_time
     def include(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1028,6 +1018,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def exclude(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1070,6 +1061,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control
     @unpack_addressed_command_to(PlainText)  # 3rd step
+    @publish_command_time
     def execute_expert_command(
         self,
         payload: PlainText,
@@ -1101,6 +1093,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def take_control(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1144,6 +1137,7 @@ class Controller(ControllerServicer):
     )  # 2nd step
     @in_control  # 3rd step
     @unpack_addressed_command_to()  # 4th step
+    @publish_command_time
     def surrender_control(
         self,
         addressed_commands: dict[str, AddressedCommand],
@@ -1188,6 +1182,7 @@ class Controller(ControllerServicer):
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
     @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
     def who_is_in_charge(
         self,
         addressed_commands: dict[str, AddressedCommand],

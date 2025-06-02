@@ -1,8 +1,10 @@
 import socket
 import threading
 
+from kafkaopmon.OpMonPublisher import OpMonPublisher
+
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.exceptions import DruncSetupException
+from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import ControlType
@@ -59,6 +61,64 @@ class ControllerConfHandler(ConfHandler):
         self.this_host = self.data.controller.runs_on.runs_on.id
         if self.this_host in ["localhost"] or self.this_host.startswith("127."):
             self.this_host = socket.gethostname()
+
+        self.opmon_publisher = None
+        opmon_uri = self.session.opmon_uri
+        opmon_conf = self.data.controller.opmon_conf
+
+        if not opmon_uri:
+            self.log.info("Missing 'opmon_uri' in configuration.")
+            return
+
+        if not opmon_conf:
+            self.log.info("Missing 'opmon_conf' in configuration.")
+            return
+
+        opmon_path = getattr(opmon_uri, "path", "")
+        opmon_type = getattr(opmon_uri, "type", "")
+        self.interval_s = getattr(opmon_conf, "interval_s", 0.0)
+
+        if not opmon_path or not opmon_type:
+            self.log.error("Invalid 'opmon_uri' format: Missing required fields.")
+            raise DruncCommandException(
+                "Invalid 'opmon_uri' format: Missing required fields."
+            )
+        if not self.interval_s:
+            self.log.warning(
+                "Missing 'interval_s' in 'opmon_conf', set to default interval_s = 10s"
+            )
+            self.interval_s = 10.0
+
+        self.log.debug(
+            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {self.interval_s} s"
+        )
+
+        if "/" in opmon_path:
+            opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
+        else:
+            opmon_bootstrap = opmon_path
+            opmon_topic = "opmon_stream"
+
+        if opmon_type == "stream":
+            try:
+                self.opmon_publisher = OpMonPublisher(
+                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
+                )
+                self.log.info(
+                    f"OpMonPublisher initialized: {opmon_bootstrap}/{opmon_topic}"
+                )
+
+            except Exception as e:
+                self.log.error(f"Failed to initialize OpMonPublisher: {e}")
+                raise DruncCommandException("Failed to initialize OpMonPublisher.")
+
+        elif opmon_type == "file":
+            self.log.info("OpMon type is file, no publisher is initialized")
+            pass
+
+        else:
+            self.log.error(f"Unsupported OpMon type: {opmon_type}")
+            raise DruncCommandException(f"Unsupported OpMon type: {opmon_type}")
 
     def get_dummy_children(self):
         ret = []

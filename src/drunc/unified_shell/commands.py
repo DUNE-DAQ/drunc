@@ -11,11 +11,18 @@ from drunc.utils.utils import get_logger, run_coroutine
 
 @click.command("boot")
 @click.option("--override-logs/--no-override-logs", default=True)
+@click.option(
+    "--sleep-between-app-boot",
+    type=float,
+    default=0.1,
+    help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
+)
 @click.pass_obj
 @run_coroutine
 async def boot(
     obj: ProcessManagerContext,
     override_logs: bool,
+    sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
     session_name = obj.session_name
@@ -38,6 +45,7 @@ async def boot(
             session_name=session_name,
             log_level="INFO",  # Unused anyway !!
             override_logs=override_logs,
+            sleep_between_app_boot=sleep_between_app_boot,
         )
         async for result in results:
             if not result:
