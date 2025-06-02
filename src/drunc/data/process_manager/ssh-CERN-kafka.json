@@ -23,6 +23,14 @@
     "opmon_conf":{
         "level": "debug",
         "interval_s" : 10.0
+    },
+    "ers_conf":{
+        "debug": "stdout",
+        "log": "stdout",
+        "info": "throttle,protobufstream(monkafka.cern.ch:30092)",
+        "warning": "throttle,stdout,protobufstream(monkafka.cern.ch:30092)",
+        "error": "throttle,stdout,protobufstream(monkafka.cern.ch:30092)",
+        "fatal": "stdout,protobufstream(monkafka.cern.ch:30092)",
+        "verbosity_level": 1
     }
-
 }

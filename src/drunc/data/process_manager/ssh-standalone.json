@@ -20,5 +20,14 @@
     "opmon_conf":{
         "level": "debug",
         "interval_s" : 10.0
+    },
+    "ers_conf":{
+        "debug": "stdout",
+        "log": "stdout",
+        "info": "throttle,stdout",
+        "warning": "throttle,stderr",
+        "error": "throttle,stderr",
+        "fatal": "stderr",
+        "verbosity_level": 1
     }
 }
