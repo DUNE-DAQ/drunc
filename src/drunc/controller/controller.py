@@ -2,7 +2,7 @@ import multiprocessing
 import threading
 import time
 import traceback
-from typing import Optional, List
+from typing import List, Optional
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -27,8 +27,8 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import (
     in_control,
     publish_command_time,
@@ -173,14 +173,14 @@ class Controller(ControllerServicer):
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
-        # At this point, we already waited for 60s for the children applications to 
+        # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
         # We now wait for each application to get from "initialising" to "ready"
-        # Unfortunately, if an application crashed on boot and never made it to the 
+        # Unfortunately, if an application crashed on boot and never made it to the
         # connectivity service,
-        # its parent controller will only notice it after 60s, so we need to wait for a 
+        # its parent controller will only notice it after 60s, so we need to wait for a
         # _bit more_ than 60s for that controller to come out of initialising state.
-        # Let's assume that parent controller takes 10s to get from initialising to 
+        # Let's assume that parent controller takes 10s to get from initialising to
         # ready, in error state.
         timeout = 60 + 10
 

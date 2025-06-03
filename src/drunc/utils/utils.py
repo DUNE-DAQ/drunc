@@ -32,8 +32,6 @@ from rich.progress import (
 )
 from rich.theme import Theme
 
-from erskafka.ERSPublisher import ERSPublisher
-from opmonlib.publisher import OpMonPublisher
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncException, DruncSetupException
 
@@ -82,28 +80,6 @@ class LoggingFormatter(logging.Formatter):
         record.levelname = level_name.ljust(component_width)[:component_width]
         return super().format(record)
 
-# Custom filter for special_handler
-class ERSFilter(logging.Filter):
-    def filter(self, record):
-        return getattr(record, 'ers', False)
-
-class ERSHandler(logging.Handler):
-    def __init__(self, topic, kafka_config):
-        super().__init__()
-        self.topic = topic
-        self.producer = Producer(kafka_config)
-
-    def emit(self, record):
-        try:
-            log_entry = self.format(record)
-            self.producer.produce(self.topic, key=record.name, value=log_entry)
-            self.producer.poll(0)  # Trigger delivery
-        except Exception as e:
-            self.handleError(record)
-
-    def close(self):
-        self.producer.flush()
-        super().close()
 
 def setup_root_logger(log_level: str) -> logging.Logger:
     log_level = log_level.upper()
@@ -140,7 +116,7 @@ def get_logger(logger_name: str, *args, **kwargs):
     return logging.getLogger(f"drunc.{logger_name}")
 
 
-def create_logger_handler(log_file_path: str = None, rich_handler: bool = False, ers_conf: ERSConf):
+def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
     function_logger = get_logger("utils.get_logger")
     logger_level = logging.getLogger("drunc").level
     if not logger_level:
@@ -179,8 +155,6 @@ def create_logger_handler(log_file_path: str = None, rich_handler: bool = False,
     if stdHandler:
         drunc_logger.addHandler(stdHandler)
         function_logger.debug("Added appropriate stream handler to drunc")
-
-
 
     function_logger.debug("Finished setting up logger")
 
