@@ -255,9 +255,9 @@ def controller_setup(ctx, controller_address):
                 time.sleep(1)
 
             except Exception as e:
-                ctx.critical("Could not get the controller's status")
-                ctx.critical(e)
-                ctx.critical("Exiting.")
+                log.critical("Could not get the controller's status")
+                log.critical(e)
+                log.critical("Exiting.")
                 ctx.terminate()
                 raise e
 
