@@ -15,7 +15,7 @@ class Callback:
 import json
 import traceback
 from inspect import Parameter, signature
-from typing import List
+from typing import List, Optional, Union
 
 from druncschema.controller_pb2 import Argument
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
@@ -81,19 +81,8 @@ class PreOrPostTransitionSequence:
                     _input_data=input_data, _context=ctx, **transition_args
                 )
                 self.log.debug(f"data after callback: {input_data}")
-                if input_data is not None:
-                    ctx.runinfo = input_data
-                    if callback.method.__name__ == "start":
-                        ctx.controller_publisher(
-                            message=RunInfo(
-                                run_type=input_data["production_vs_test"],
-                                trigger_rate=input_data["trigger_rate"],
-                                run_number=input_data["run"],
-                                disable_data_storage=input_data["disable_data_storage"],
-                                run_time_at_start=input_data["run_time_at_start"],
-                                run_time_since_start=0,
-                            )
-                        )
+                if input_data:
+                    ctx.runinfo.update(input_data)
 
                 try:
                     json.dumps(input_data)
@@ -134,44 +123,57 @@ class PreOrPostTransitionSequence:
 
                 t = Argument.Type.INT
 
-                if p.annotation is str:
+                if p.annotation in (str, Optional[str], Union[str, None]):
                     t = Argument.Type.STRING
 
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(string_msg(value=p.default))
 
-                elif p.annotation is float:
+                elif p.annotation in (float, Optional[float], Union[float, None]):
                     t = Argument.Type.FLOAT
 
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(float_msg(value=p.default))
 
-                elif p.annotation is int:
+                elif p.annotation in (int, Optional[int], Union[int, None]):
                     t = Argument.Type.INT
 
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(int_msg(value=p.default))
 
-                elif p.annotation is bool:
+                elif p.annotation in (bool, Optional[bool], Union[bool, None]):
                     t = Argument.Type.BOOL
 
                     if p.default != Parameter.empty:
                         default_value = pack_to_any(bool_msg(value=p.default))
+
                 else:
                     raise fsme.UnhandledArgumentType(p.annotation)
 
+                presence = Argument.Presence.MANDATORY
+                if p.annotation in (
+                    Optional[str],
+                    Optional[float],
+                    Optional[int],
+                    Optional[bool],
+                    Union[str, None],
+                    Union[float, None],
+                    Union[int, None],
+                    Union[bool, None],
+                ):
+                    presence = Argument.Presence.OPTIONAL
+                if default_value:
+                    presence = Argument.Presence.OPTIONAL
+
                 a = Argument(
                     name=p.name,
-                    presence=Argument.Presence.MANDATORY
-                    if p.default == Parameter.empty
-                    else Argument.Presence.OPTIONAL,
+                    presence=presence,
                     type=t,
                     help="",
                 )
 
                 if default_value:
                     a.default_value.CopyFrom(default_value)
-
                 retr += [a]
 
         return retr
