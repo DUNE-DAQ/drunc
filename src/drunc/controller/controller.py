@@ -2,7 +2,7 @@ import multiprocessing
 import threading
 import time
 import traceback
-from typing import Optional
+from typing import Optional, List
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -28,6 +28,7 @@ from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.rest_api_child import ResponseListener
+from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.decorators import (
     in_control,
     publish_command_time,
@@ -93,7 +94,7 @@ class ControllerActor:
 
 
 class Controller(ControllerServicer):
-    children_nodes = []  # type: List[ChildNode]
+    children_nodes: List[ChildNode] = []
 
     def __init__(self, configuration, name: str, session: str, token: Token):
         super().__init__()
@@ -172,11 +173,15 @@ class Controller(ControllerServicer):
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
-        # At this point, we already waited for 60s for the children applications to start and show up on the connectivity service
+        # At this point, we already waited for 60s for the children applications to 
+        # start and show up on the connectivity service
         # We now wait for each application to get from "initialising" to "ready"
-        # Unfortunately, if an application crashed on boot and never made it to the connectivity service,
-        # its parent controller will only notice it after 60s, so we need to wait for a _bit more_ than 60s for that controller to come out of initialising state.
-        # Let's assume that parent controller takes 10s to get from initialising to ready, in error state.
+        # Unfortunately, if an application crashed on boot and never made it to the 
+        # connectivity service,
+        # its parent controller will only notice it after 60s, so we need to wait for a 
+        # _bit more_ than 60s for that controller to come out of initialising state.
+        # Let's assume that parent controller takes 10s to get from initialising to 
+        # ready, in error state.
         timeout = 60 + 10
 
         time_start = time.time()
@@ -271,7 +276,7 @@ class Controller(ControllerServicer):
     def async_interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
-    def controller_publisher(self, message, custom_origin: Optional[dict] = None):
+    def controller_publisher(self, message, custom_origin: dict | None = None):
         if self.opmon_publisher is not None:
             try:
                 if custom_origin is None:
