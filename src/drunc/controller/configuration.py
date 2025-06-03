@@ -3,7 +3,7 @@ import threading
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
-from opmonlib.utils import parse_publisher_conf
+from opmonlib.utils import parse_opmon_conf
 
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import (
@@ -67,7 +67,7 @@ class ControllerConfHandler(ConfHandler):
         opmon_uri = self.session.opmon_uri
         opmon_conf = self.data.controller.opmon_conf
 
-        self.opmon_conf = parse_publisher_conf(self.log, opmon_conf, opmon_uri)
+        self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
         self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
 
         try:
