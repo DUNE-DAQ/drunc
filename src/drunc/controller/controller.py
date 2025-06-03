@@ -762,6 +762,21 @@ class Controller(ControllerServicer):
                 transition_data=payload.data,
                 ctx=self,
             )
+            if payload.command_name == "start":
+                self.controller_publisher(
+                    message=RunInfo(
+                        run_type=self.runinfo.get("production_vs_test", ""),
+                        run_number=self.runinfo.get("run", 0),
+                        disable_data_storage=self.runinfo.get(
+                            "disable_data_storage", False
+                        ),
+                        trigger_rate=self.runinfo.get("trigger_rate", 0.0),
+                        run_time_at_start=int(self.runinfo.get("run_time_at_start", 0)),
+                        run_time_since_start=0,
+                        run_config_file=self.configuration.oks_path,
+                        run_config_name=self.configuration.oks_key.session,
+                    )
+                )
 
             self.stateful_node.propagate_transition_mark(transition)
 
