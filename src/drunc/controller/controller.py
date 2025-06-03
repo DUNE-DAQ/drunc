@@ -322,7 +322,6 @@ class Controller(ControllerServicer):
                     run_time_since_start = int(time.time() - run_time_at_start)
 
                 self.log.debug(f"Publishing periodic run info every {interval_s}s")
-
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=run_type,
@@ -337,7 +336,6 @@ class Controller(ControllerServicer):
                 )
             except Exception as e:
                 self.log.warning(f"Error while publishing periodic status: {e}")
-
             time.sleep(interval_s)
 
     def construct_error_node_response(

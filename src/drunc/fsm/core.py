@@ -19,6 +19,7 @@ from typing import List, Optional, Union
 
 from druncschema.controller_pb2 import Argument
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from druncschema.opmon.generic_pb2 import RunInfo
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException
@@ -80,7 +81,6 @@ class PreOrPostTransitionSequence:
                     _input_data=input_data, _context=ctx, **transition_args
                 )
                 self.log.debug(f"data after callback: {input_data}")
-
                 if input_data:
                     ctx.runinfo.update(input_data)
 
