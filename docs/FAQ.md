@@ -192,6 +192,22 @@ connect grpc://131.225.193.20:45817
 ```
 You can now issue `status`, or `recompute_status` and continue working. Of course, none of the command will be propagated to the application that was excluded (in this case `hsi-fake-to-tc-app`).
 
+## I'm tired of typing --run-type PROD etc.
+You can set the environment variable `DRUNC_RUN_TYPE_DEFAULT=PROD` and you won't need to pass that variable again.
+
+In fact you can do that for _any_ FSM shell command, the name of the variable that you need to set are: `f"DRUNC_{argument_name.upper().replace('-', '_')}_DEFAULT"`. Here are all the variables you can set:
+```bash
+export DRUNC_RUN_TYPE_DEFAULT="PROD"
+export DRUNC_RUN_NUMBER_DEFAULT=666 # 👹 only for non EHN1 settings
+export DRUNC_TRIGGER_RATE_DEFAULT=6.4 # Hz (On start AND on change-rate!)
+export DRUNC_ELISA_POST_DEFAULT="My name is Totoro" # This will send this message on start AND on stop iff RUN_TYPE=PROD
+export DRUNC_DISABLE_DATA_STORAGE_DEFAULT=1 # Write nothing
+```
+
+You can of course still use the usual shell arguments to change the behaviour: after setting `DRUNC_RUN_TYPE_DEFAULT=PROD` I can still the shifter to start a TEST run by doing:
+```bash
+start --run-type TEST
+```
 
 ## So empty...
 If you have a question, please reach out to developers or fill an issue [here](https://github.com/DUNE-DAQ/drunc/issues).
