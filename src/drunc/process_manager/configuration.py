@@ -61,17 +61,20 @@ class ProcessManagerConfHandler(ConfHandler):
                 raise UnknownProcessManagerType(data["type"])
 
         new_data.opmon_publisher = None
-        opmon_uri = data.get("opmon_uri", None)
-        opmon_conf = data.get("opmon_conf", None)
-
-        self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
+        self.opmon_conf = parse_opmon_conf(
+            log=self.log,
+            conf=data.get("opmon_conf", None),
+            uri=data.get("opmon_uri", None),
+        )
 
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = "./info." + data["name"] + ".json"
 
-        self.log.debug(
+        self.log.error(
             "Initializing process manager OpMon with configuration %s", self.opmon_conf
         )
+        self.log.error(f"{data=}")
+        self.log.error(f"{self.__dict__}")
         try:
             if self.opmon_conf.opmon_type == "stream":
                 new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)

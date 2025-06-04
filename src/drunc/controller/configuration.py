@@ -64,12 +64,22 @@ class ControllerConfHandler(ConfHandler):
             self.this_host = socket.gethostname()
 
         self.opmon_publisher = None
-        opmon_uri = self.session.opmon_uri
-        opmon_conf = self.data.controller.opmon_conf
+        self.opmon_conf = parse_opmon_conf(
+            log=self.log,
+            conf=self.data.controller.opmon_conf,
+            uri=self.session.opmon_uri,
+        )
 
-        self.opmon_conf = parse_opmon_conf(self.log, opmon_conf, opmon_uri)
-        self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
+        if self.opmon_conf.path == "./info.json":
+            self.opmon_conf.path = (
+                "./info."
+                + self.oks_key.session
+                + "."
+                + self.data.controller.id
+                + ".json"
+            )
 
+        self.log.error("Initializing OpMon with configuration %s", self.opmon_conf)
         try:
             if self.opmon_conf.opmon_type == "stream":
                 self.log.debug("Attemtpting to initialize KafkaOpMonPublisher")
@@ -84,9 +94,7 @@ class ControllerConfHandler(ConfHandler):
                     conf=self.opmon_conf, log_level=self.log.getEffectiveLevel()
                 )
                 self.log.debug(
-                    "%s OpMonPublisher initialized with configuration %s",
-                    self.opmon_conf.opmon_type,
-                    self.opmon_conf,
+                    "OpMonPublisher initialized with configuration %s", self.opmon_conf
                 )
 
         except Exception as e:
