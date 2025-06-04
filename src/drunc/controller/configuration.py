@@ -79,7 +79,7 @@ class ControllerConfHandler(ConfHandler):
                 + ".json"
             )
 
-        self.log.error("Initializing OpMon with configuration %s", self.opmon_conf)
+        self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
         try:
             if self.opmon_conf.opmon_type == "stream":
                 self.log.debug("Attemtpting to initialize KafkaOpMonPublisher")

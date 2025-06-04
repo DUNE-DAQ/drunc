@@ -70,11 +70,9 @@ class ProcessManagerConfHandler(ConfHandler):
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = "./info." + data["name"] + ".json"
 
-        self.log.error(
+        self.log.debug(
             "Initializing process manager OpMon with configuration %s", self.opmon_conf
         )
-        self.log.error(f"{data=}")
-        self.log.error(f"{self.__dict__}")
         try:
             if self.opmon_conf.opmon_type == "stream":
                 new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
