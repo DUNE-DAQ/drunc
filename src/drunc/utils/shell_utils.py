@@ -106,7 +106,7 @@ class GRPCDriver:
         self.token.CopyFrom(token)
 
     @abc.abstractmethod
-    def create_stub(self, channel):
+    def create_stub(self, channel) -> object:
         pass
 
     def _create_request(self, payload=None) -> Request:

@@ -26,7 +26,19 @@ from drunc.utils.utils import get_logger, pid_info_str
 
 
 class SessionManager(abc.ABC, SessionManagerServicer):
+    """Provides a gRPC service to manage and interact with sessions.
+
+    This class implements the server-side session manager logic, used to create
+    and manage sessions.
+    """
+
     def __init__(self, name: str, configuration: SessionManagerConfHandler):
+        """Cerate a new session manager instance.
+
+        Args:
+            name: The name of the session manager.
+            configuration: The configuration handler for the session manager.
+        """
         super().__init__()
 
         self.log = get_logger("session_manager")
@@ -36,15 +48,24 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
+    # TODO: we cannot type-check yet, due to the decorators.
     @unpack_request_data_to(None, pass_token=True)
     def describe(self, token: Token) -> Response:
+        """Respond with a description of this session manager service.
+
+        Args:
+            token: The token for authentication.
+
+        Returns:
+            A response containing the service description.
+        """
         self.log.debug(f"{self.name} running describe")
 
         command_descriptions = [
             CommandDescription(
                 name="describe",
                 data_type=["None"],
-                help="Describe self (return a list of commands, the type of endpoint, the name and session).",
+                help="List the methods exposed by this endpoint.",
                 return_type="request_response_pb2.Description",
             ),
             CommandDescription(
@@ -76,8 +97,17 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
+    # TODO: we cannot type-check yet, due to the decorators.
     @unpack_request_data_to(None, pass_token=True)
     def list_all_sessions(self, token: Token) -> Response:
+        """Respond with a list of all active sessions.
+
+        Args:
+            token: The token for authentication.
+
+        Returns:
+            A response containing all active sessions.
+        """
         self.log.debug(f"{self.name} running list_all_sessions")
 
         dummy_config = ConfigKey(
@@ -103,8 +133,17 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
+    # TODO: we cannot type-check yet, due to the decorators.
     @unpack_request_data_to(None, pass_token=True)
     def list_all_configs(self, token: Token) -> Response:
+        """Respond with a list of all available configurations.
+
+        Args:
+            token: The token for authentication.
+
+        Returns:
+            A response containing all available configuration keys.
+        """
         self.log.debug(f"{self.name} running list_all_configs")
 
         # Get search paths for available configurations.
@@ -120,7 +159,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             )
 
         # Find all configuration files.
-        config_files = []
+        config_files: list[Path] = []
         for path in search_paths.split(":"):
             config_glob = Path(path).rglob("*.data.xml")
             config_files.extend(config_glob)
