@@ -69,7 +69,7 @@ class ControllerConfHandler(ConfHandler):
             conf=self.data.controller.opmon_conf,
             uri=self.session.opmon_uri,
             session=self.session_name,
-            application=self.data.controller.id
+            application=self.data.controller.id,
         )
 
         if self.opmon_conf.path == "./info.json":
@@ -82,6 +82,7 @@ class ControllerConfHandler(ConfHandler):
             )
 
         self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
+
         try:
             if self.opmon_conf.opmon_type == "stream":
                 self.log.debug("Attemtpting to initialize KafkaOpMonPublisher")
