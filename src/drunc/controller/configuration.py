@@ -54,7 +54,7 @@ class ControllerConfHandler(ConfHandler):
             )
         return this_segment
 
-    def _post_process_oks(self):
+    def _post_process_oks(self, *args, **kwargs):
         self.authoriser = None
         self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
@@ -68,7 +68,7 @@ class ControllerConfHandler(ConfHandler):
             log=self.log,
             conf=self.data.controller.opmon_conf,
             uri=self.session.opmon_uri,
-            session=self.session.id,
+            session=self.session_name,
             application=self.data.controller.id
         )
 
