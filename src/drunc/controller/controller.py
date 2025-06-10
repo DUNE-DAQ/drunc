@@ -283,8 +283,6 @@ class Controller(ControllerServicer):
                     custom_origin = {}
 
                 self.opmon_publisher.publish(
-                    session=self.session,
-                    application=self.name,
                     message=message,
                     custom_origin=custom_origin,
                 )

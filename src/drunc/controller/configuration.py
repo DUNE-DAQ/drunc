@@ -68,6 +68,8 @@ class ControllerConfHandler(ConfHandler):
             log=self.log,
             conf=self.data.controller.opmon_conf,
             uri=self.session.opmon_uri,
+            session=self.session.id,
+            application=self.data.controller.id
         )
 
         if self.opmon_conf.path == "./info.json":

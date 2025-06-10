@@ -65,6 +65,8 @@ class ProcessManagerConfHandler(ConfHandler):
             log=self.log,
             conf=data.get("opmon_conf", None),
             uri=data.get("opmon_uri", None),
+            session=new_data.type.name,
+            application="process_manager"
         )
 
         if self.opmon_conf.path == "./info.json":

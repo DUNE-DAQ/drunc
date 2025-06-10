@@ -190,8 +190,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 }
             )
             self.opmon_publisher.publish(
-                session=self.session,
-                application=self.name,
                 message=ProcessStatus(
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
