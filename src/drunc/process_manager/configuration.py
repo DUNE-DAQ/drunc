@@ -66,11 +66,17 @@ class ProcessManagerConfHandler(ConfHandler):
             conf=data.get("opmon_conf", None),
             uri=data.get("opmon_uri", None),
             session=new_data.type.name,
-            application="process_manager"
+            application="process_manager",
         )
 
         if self.opmon_conf.path == "./info.json":
-            self.opmon_conf.path = "./info." + data["name"] + ".json"
+            self.opmon_conf.path = (
+                "./info."
+                + self.opmon_conf.session
+                + "."
+                + self.opmon_conf.application
+                + ".json"
+            )
 
         self.log.debug(
             "Initializing process manager OpMon with configuration %s", self.opmon_conf

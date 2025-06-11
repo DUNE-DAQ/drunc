@@ -12,7 +12,7 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
 )
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import get_log_path, get_pm_conf_name_from_dir
+from drunc.process_manager.utils import get_log_path
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
     create_logger_handler,
@@ -37,22 +37,7 @@ def run_pm(
     generated_port: bool = None,
 ) -> None:
     appName = "process_manager"
-    pmConfFileName = get_pm_conf_name_from_dir(
-        pm_conf
-    )  # Treating the pm conf data filename as the session
-
-    log_path = get_log_path(
-        user=getpass.getuser(),
-        session_name=pmConfFileName,
-        application_name=appName,
-        override_logs=override_logs,
-        app_log_path=log_path,
-    )
     log = get_logger(logger_name=appName)
-    create_logger_handler(
-        log_file_path=log_path,
-        rich_handler=True,
-    )
 
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
@@ -65,6 +50,18 @@ def run_pm(
     conf_path, conf_type = parse_conf_url(pm_conf)
     pmch = ProcessManagerConfHandler(
         log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
+    )
+
+    log_path = get_log_path(
+        user=getpass.getuser(),
+        session_name=pmch.data.type.name,
+        application_name=appName,
+        override_logs=override_logs,
+        app_log_path=log_path,
+    )
+    create_logger_handler(
+        log_file_path=log_path,
+        rich_handler=True,
     )
 
     for key, value in pmch.data.environment.items():

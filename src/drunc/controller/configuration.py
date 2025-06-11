@@ -75,7 +75,7 @@ class ControllerConfHandler(ConfHandler):
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = (
                 "./info."
-                + self.oks_key.session
+                + self.opmon_conf.session
                 + "."
                 + self.data.controller.id
                 + ".json"
