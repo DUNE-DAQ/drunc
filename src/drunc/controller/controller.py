@@ -2,7 +2,7 @@ import multiprocessing
 import threading
 import time
 import traceback
-from typing import Optional
+from typing import List, Optional
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -16,11 +16,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
-from druncschema.request_response_pb2 import (
-    Description,
-    Response,
-    ResponseFlag,
-)
+from druncschema.request_response_pb2 import Description, Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
@@ -31,6 +27,7 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import (
     in_control,
@@ -40,17 +37,14 @@ from drunc.controller.decorators import (
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
+    ControllerMonitoringMetrics,
     get_detector_name,
     get_status_message,
 )
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    pack_to_any,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
 
@@ -100,7 +94,7 @@ class ControllerActor:
 
 
 class Controller(ControllerServicer):
-    children_nodes = []  # type: List[ChildNode]
+    children_nodes: List[ChildNode] = []
 
     def __init__(self, configuration, name: str, session: str, token: Token):
         super().__init__()
@@ -108,13 +102,14 @@ class Controller(ControllerServicer):
         self.name = name
         self.session = session
         self.broadcast_service = None
-        self.runinfo = {}
+        self.monitoring_metrics = ControllerMonitoringMetrics()
 
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
         )
@@ -178,11 +173,15 @@ class Controller(ControllerServicer):
             connectivity_service=self.connectivity_service,
             session_name=self.session,
         )
-        # At this point, we already waited for 60s for the children applications to start and show up on the connectivity service
+        # At this point, we already waited for 60s for the children applications to
+        # start and show up on the connectivity service
         # We now wait for each application to get from "initialising" to "ready"
-        # Unfortunately, if an application crashed on boot and never made it to the connectivity service,
-        # its parent controller will only notice it after 60s, so we need to wait for a _bit more_ than 60s for that controller to come out of initialising state.
-        # Let's assume that parent controller takes 10s to get from initialising to ready, in error state.
+        # Unfortunately, if an application crashed on boot and never made it to the
+        # connectivity service,
+        # its parent controller will only notice it after 60s, so we need to wait for a
+        # _bit more_ than 60s for that controller to come out of initialising state.
+        # Let's assume that parent controller takes 10s to get from initialising to
+        # ready, in error state.
         timeout = 60 + 10
 
         time_start = time.time()
@@ -277,15 +276,13 @@ class Controller(ControllerServicer):
     def async_interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
 
-    def controller_publisher(self, message, custom_origin: Optional[dict] = None):
+    def controller_publisher(self, message, custom_origin: dict | None = None):
         if self.opmon_publisher is not None:
             try:
                 if custom_origin is None:
                     custom_origin = {}
 
                 self.opmon_publisher.publish(
-                    session=self.session,
-                    application=self.name,
                     message=message,
                     custom_origin=custom_origin,
                 )
@@ -294,48 +291,53 @@ class Controller(ControllerServicer):
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
     def threading_publish_state(self, interval_s: float = 10.0):
+        run_time_at_start = 0
         while not self.stop_event.is_set():
             try:
                 self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
 
-                if current_state in ("initial", "configured"):
-                    run_type = ""
-                    trigger_rate = 0.0
-                    run_number = 0
-                    disable_data_storage = False
-                    run_time_at_start = 0
-                    run_time_since_start = 0
-                    self.runinfo = {}
+                if current_state in ("none", "initial", "configured"):
+                    self.monitoring_metrics = ControllerMonitoringMetrics()
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
-                    run_type = self.runinfo.get("production_vs_test", "")
-                    run_number = self.runinfo.get("run", 0)
-                    disable_data_storage = self.runinfo.get(
+                    self.monitoring_metrics.run_type = self.runinfo.get(
+                        "production_vs_test", ""
+                    )
+                    self.monitoring_metrics.run_number = self.runinfo.get("run", 0)
+                    self.monitoring_metrics.disable_data_storage = self.runinfo.get(
                         "disable_data_storage", False
                     )
-                    trigger_rate = self.runinfo.get("trigger_rate", 0.0)
-                    run_time_at_start = self.runinfo.get("run_time_at_start", 0)
+                    self.monitoring_metrics.trigger_rate = self.runinfo.get(
+                        "trigger_rate", 0.0
+                    )
+                    self.monitoring_metrics.run_time_at_start = self.runinfo.get(
+                        "run_time_at_start", 0
+                    )
 
                 if run_time_at_start:
-                    run_time_since_start = int(time.time() - run_time_at_start)
+                    self.monitoring_metrics.run_time_since_start = int(
+                        time.time() - run_time_at_start
+                    )
 
                 self.log.debug(f"Publishing periodic run info every {interval_s}s")
                 self.controller_publisher(
                     message=RunInfo(
-                        run_type=run_type,
-                        trigger_rate=trigger_rate,
-                        run_number=run_number,
-                        disable_data_storage=disable_data_storage,
-                        run_time_at_start=int(run_time_at_start),
-                        run_time_since_start=run_time_since_start,
+                        run_type=self.monitoring_metrics.run_type,
+                        trigger_rate=self.monitoring_metrics.trigger_rate,
+                        run_number=self.monitoring_metrics.run_number,
+                        disable_data_storage=self.monitoring_metrics.disable_data_storage,
+                        run_time_at_start=int(
+                            self.monitoring_metrics.run_time_at_start
+                        ),
+                        run_time_since_start=self.monitoring_metrics.run_time_since_start,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
                     )
                 )
             except Exception as e:
-                self.log.warning(f"Error while publishing periodic status: {e}")
+                self.log.exception(f"Error while publishing periodic status: {e}")
             time.sleep(interval_s)
 
     def construct_error_node_response(

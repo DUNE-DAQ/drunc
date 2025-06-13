@@ -190,8 +190,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 }
             )
             self.opmon_publisher.publish(
-                session=self.session,
-                application=self.name,
                 message=ProcessStatus(
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
@@ -439,9 +437,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 pi = ProcessInstance(
                     process_description=pd,
                     process_restriction=pr,
-                    status_code=ProcessInstance.StatusCode.RUNNING
-                    if self.process_store[uuid].is_alive()
-                    else ProcessInstance.StatusCode.DEAD,
+                    status_code=(
+                        ProcessInstance.StatusCode.RUNNING
+                        if self.process_store[uuid].is_alive()
+                        else ProcessInstance.StatusCode.DEAD
+                    ),
                     return_code=return_code,
                     uuid=pu,
                 )
@@ -596,12 +596,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         if conf.data.type == ProcessManagerTypes.SSH:
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
 
-            log.info("Starting [green]SSH process_manager[/green]")
+            log.debug("Starting [green]SSH process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
         elif conf.data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
-            log.info("Starting [green]K8s process_manager[/green]")
+            log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")

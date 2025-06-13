@@ -160,8 +160,9 @@ class ProcessManagerDriver(GRPCDriver):
         log_level: str,
         override_logs: bool = True,
         timeout: int | float = 60,
-        sleep_between_app_boot: int
-        | float = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
+        sleep_between_app_boot: (
+            int | float
+        ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
     ) -> ProcessInstance:
         from daqconf.consolidate import consolidate_db
@@ -176,13 +177,15 @@ class ProcessManagerDriver(GRPCDriver):
                 conf_file_no_scheme = conf_file.replace("oksconflibs:", "")
                 consolidate_db(conf_file_no_scheme, f"{fname}")
             except Exception as e:
-                self.log.critical(f"""\nInvalid configuration passed (cannot consolidate your configuration)
+                self.log.critical(
+                    f"""\nInvalid configuration passed (cannot consolidate your configuration)
 {e}
 To debug it, close drunc and run the following command:
 
 [yellow]oks_dump --files-only {conf_file_no_scheme}[/]
 
-""")
+"""
+                )
                 return
 
         import conffwk  # isort: skip
@@ -261,7 +264,8 @@ To debug it, close drunc and run the following command:
                         title=f"Looking for [green]{top_controller_name}[/] on the connectivity service...",
                     )
                 except ApplicationLookupUnsuccessful:
-                    self.log.error(f"""
+                    self.log.error(
+                        f"""
 Could not find \'{top_controller_name}\' on the connectivity service.
 
 Two possibilities:
@@ -280,7 +284,8 @@ And look for messages like:
 [yellow]Registering root-controller to the connectivity service at grpc://xxx.xxx.xxx.xxx:xxxxx[/]
 To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_to_hostname(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
-""")
+"""
+                    )
                     return
 
                 return uri.replace("grpc://", "")
@@ -314,10 +319,12 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             if session_dal.connectivity_service:
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
-                self.log.warning(f"""This shell didn't connect to the {top_controller_name}.
+                self.log.warning(
+                    f"""This shell didn't connect to the {top_controller_name}.
 To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_to_hostname(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
-""")
+"""
+                )
             else:
                 self.log.warning(
                     f"This shell didn't connect to the {top_controller_name}. You can use the connect command to connect to the controller."

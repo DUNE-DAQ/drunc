@@ -76,6 +76,7 @@ class ConfHandler:
         self.controller_id = 0
         self.process_id = 0
         self.process_id_infra = 0
+        self.session_name = kwargs.get("session_name")
 
         if type == ConfTypes.OKSFileName and oks_key is None:
             raise DruncSetupException("Need to provide a key for the OKS file")
