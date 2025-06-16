@@ -47,7 +47,6 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
     unpack_error_response,
-    unpack_request_data_to,
 )
 from drunc.utils.utils import get_logger, pid_info_str
 
@@ -255,13 +254,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(BootRequest)  # 3rd step
-    def boot(self, br: BootRequest) -> Response:
-        self.log.debug(
-            f"{self.name} booting '{br.process_description.metadata.name}' from session '{br.process_description.metadata.session}'"
-        )
+    def boot(self, request, context) -> Response:
         try:
-            resp = self._boot_impl(br)
+            data = unpack_any(request.data, BootRequest)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(
+            "{self.name} booting '{data.process_description.metadata.name}' "
+            "from session '{data.process_description.metadata.session}'"
+        )
+
+        try:
+            resp = self._boot_impl(data)
 
             return Response(
                 name=self.name,
@@ -288,8 +293,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(None)  # 3rd step
-    def terminate(self) -> Response:
+    def terminate(self, request, context) -> Response:
         self.log.debug(f"{self.name} terminating")
         try:
             resp = self._terminate_impl()
@@ -318,11 +322,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def restart(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running restart")
+    def restart(self, request, context) -> Response:
         try:
-            resp = self._restart_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running restart")
+
+        try:
+            resp = self._restart_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -348,11 +357,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def kill(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running kill")
+    def kill(self, request, context) -> Response:
         try:
-            resp = self._kill_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running kill")
+
+        try:
+            resp = self._kill_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -378,11 +392,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def ps(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running ps")
+    def ps(self, request, context) -> Response:
         try:
-            resp = self._ps_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running ps")
+
+        try:
+            resp = self._ps_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -404,12 +423,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def flush(self, query: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running flush")
-        ret = []
+    def flush(self, request, context) -> Response:
+        try:
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        for uuid in self._get_process_uid(query):
+        self.log.debug(f"{self.name} running flush")
+
+        ret = []
+        for uuid in self._get_process_uid(data):
             if uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=uuid)
                 pi = ProcessInstance(
@@ -465,8 +488,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(None)  # 3rd step
-    def describe(self) -> Response:
+    def describe(self, request, context) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(

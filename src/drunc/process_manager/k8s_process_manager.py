@@ -470,12 +470,12 @@ class K8sProcessManager(ProcessManager):
     )  # 2nd step
     @pack_response  # 3rd step
     def flush(self, request, context) -> Response:
-        self.log.info("Flushing dead processes")
-
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.info("Flushing dead processes")
 
         ret = []
         for proc_uuid in self._get_process_uid(data):
