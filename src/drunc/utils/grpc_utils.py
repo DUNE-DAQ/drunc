@@ -23,7 +23,7 @@ class UnpackingError(DruncCommandException):
         )
 
 
-def unpacking_error_response(name: str, text: str, token: Token) -> Response:
+def unpack_error_response(name: str, text: str, token: Token) -> Response:
     """Create a response for unpacking errors.
 
     Args:

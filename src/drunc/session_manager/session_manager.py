@@ -20,7 +20,7 @@ from druncschema.session_manager_pb2 import (
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any, unpack_request_data_to
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -47,10 +47,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None)
-    def describe(self) -> Response:
+    def describe(self, request, context) -> Response:
         """Respond with a description of this session manager service.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing the service description.
@@ -93,10 +95,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None)
-    def list_all_sessions(self) -> Response:
+    def list_all_sessions(self, request, context) -> Response:
         """Respond with a list of all active sessions.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing all active sessions.
@@ -126,10 +130,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None)
-    def list_all_configs(self) -> Response:
+    def list_all_configs(self, request, context) -> Response:
         """Respond with a list of all available configurations.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing all available configuration keys.
