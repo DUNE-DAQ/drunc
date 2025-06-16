@@ -58,6 +58,10 @@ def unpack_any(data, format):
 
 
 def unpack_request_data_to(data_type=None, pass_token=False):
+    raise DeprecationWarning(
+        "This function is deprecated. Unpack your requests yourself!"
+    )
+
     def decor(cmd):
         @functools.wraps(cmd)
         def unpack_request(obj, request, context):
@@ -99,6 +103,10 @@ def unpack_request_data_to(data_type=None, pass_token=False):
 
 
 def async_unpack_request_data_to(data_type=None, pass_token=False):
+    raise DeprecationWarning(
+        "This function is deprecated. Unpack your requests yourself!"
+    )
+
     def decor(cmd):
         @functools.wraps(cmd)
         async def unpack_request(obj, request, context):
