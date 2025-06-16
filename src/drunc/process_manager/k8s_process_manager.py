@@ -470,15 +470,6 @@ class K8sProcessManager(ProcessManager):
     )  # 2nd step
     @pack_response  # 3rd step
     def flush(self, request, context) -> Response:
-        """Flush dead processes based on the provided query.
-
-        Args:
-            request: The incoming request.
-            context: The gRPC context.
-
-        Returns:
-            A Response containing the flushed processes.
-        """
         self.log.info("Flushing dead processes")
 
         try:
