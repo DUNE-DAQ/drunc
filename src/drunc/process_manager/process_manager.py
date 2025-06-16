@@ -2,6 +2,7 @@ import abc
 import re
 import threading
 import time
+from collections.abc import AsyncGenerator
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -21,7 +22,6 @@ from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
-    Request,
     Response,
     ResponseFlag,
 )
@@ -43,8 +43,10 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import (
-    async_unpack_request_data_to,
+    UnpackingError,
     pack_to_any,
+    unpack_any,
+    unpack_error_response,
     unpack_request_data_to,
 )
 from drunc.utils.utils import get_logger, pid_info_str
@@ -92,7 +94,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data=self.configuration.data.authoriser, type=ConfTypes.PyObject
         )
 
-        self.opmon_publisher = getattr(self.configuration.data,"opmon_publisher",None)
+        self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
         opmon_sleep_time = getattr(self.configuration.data, "opmon_sleep_time", 5)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
@@ -486,7 +488,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    async def _logs_impl(self, req: Request, context) -> LogLine:
+    async def _logs_impl(self, request_data: LogRequest) -> AsyncGenerator[LogLine]:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -494,11 +496,26 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @async_authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @async_unpack_request_data_to(LogRequest)  # 3rd step
-    async def logs(self, lr: LogRequest) -> Response:
+    async def logs(self, request, context) -> AsyncGenerator[Response]:
+        """Asynchronously fetch logs for a process.
+
+        Args:
+            request: The incoming request.
+            context: The gRPC context (not used).
+
+        Yields:
+            Response objects containing log lines.
+        """
         self.log.debug("Getting logs")
+
         try:
-            async for r in self._logs_impl(lr):
+            data = unpack_any(request.data, LogRequest)
+        except UnpackingError as e:
+            yield unpack_error_response(self.__class__.__name__, str(e), request.token)
+            return  # Stop further processing if unpacking fails.
+
+        try:
+            async for r in await self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
