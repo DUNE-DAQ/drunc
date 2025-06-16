@@ -3,7 +3,7 @@ import time
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.utils.utils import get_logger, http_post
+from drunc.utils.utils import get_logger, http_get, http_post
 
 
 class ConnectivityServiceClient:
@@ -20,6 +20,25 @@ class ConnectivityServiceClient:
         self.log.debug(
             f"Connectivity service address: {self.address}, session: {self.session}"
         )
+
+    def is_ready(self, timeout: int = 10):
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                r = http_get(
+                    self.address + "/",
+                    headers={"Content-Type": "application/json"},
+                    as_json=True,
+                    timeout=0.5,
+                    ignore_errors=True,
+                    data=None,
+                )
+                r.raise_for_status()
+                return True
+            except (HTTPError, ConnectionError, ReadTimeout):
+                time.sleep(0.5)
+        return False
 
     def retract(self, uid, fail_quickly=False):
         data = {

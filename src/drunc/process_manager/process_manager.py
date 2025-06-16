@@ -94,7 +94,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
         self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
-        opmon_sleep_time = getattr(self.configuration.data, "opmon_sleep_time", 5)
+        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand]
@@ -160,7 +160,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
                 target=self.publish,
-                args=(ProcessQuery(names=[".*"]), opmon_sleep_time),
+                args=(ProcessQuery(names=[".*"]), interval_s),
                 daemon=True,
             )
             self.thread.start()
@@ -170,7 +170,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.stop_event.set()
             self.thread.join()
 
-    def publish(self, q: ProcessQuery, sleep_time: float = 5):
+    def publish(self, q: ProcessQuery, interval_s: float = 10.0):
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -197,7 +197,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
             )
-            time.sleep(sleep_time)
+            time.sleep(interval_s)
 
     """
     A couple of simple pass-through functions to the broadcasting service

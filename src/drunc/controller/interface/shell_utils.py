@@ -1,4 +1,6 @@
+import datetime
 import logging
+import os
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -128,7 +130,38 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
                 prefix=prefix + "  ",
             )
 
+    def add_runinfo_to_table(table, status):
+        table.add_row("Run number", str(status.data.run_info.run_number))
+        table.add_row("Run type", status.data.run_info.run_type)
+        table.add_row(
+            "Start time",
+            datetime.datetime.fromtimestamp(
+                status.data.run_info.run_time_at_start
+            ).strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        table.add_row(
+            "Duration",
+            str(datetime.timedelta(seconds=status.data.run_info.run_time_since_start)),
+        )
+        table.add_row("Trigger rate", f"{status.data.run_info.trigger_rate:.4f} Hz")
+        table.add_row(
+            "Data storage disabled", str(status.data.run_info.disable_data_storage)
+        )
+        table.add_row("Config file", status.data.run_info.run_config_file)
+        table.add_row("Config ID", status.data.run_info.run_config_name)
+
     add_status_to_table(t, status, description, prefix="")
+
+    if status.data.HasField("run_info"):
+        runinfo_table = Table(
+            title="Run Info",
+            show_header=False,
+        )
+        runinfo_table.add_column()
+        runinfo_table.add_column()
+        add_runinfo_to_table(runinfo_table, status)
+        return Group(t, runinfo_table)
+
     return t
 
 
@@ -562,6 +595,7 @@ def run_one_fsm_command(
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
+    log = get_logger("controller.shell_utils")
     cmd = partial(run_one_fsm_command, controller_name, transition.name)
     cmd = click.pass_obj(cmd)
     cmd = click.option(
@@ -609,14 +643,29 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
         argument_name = f"--{argument.name.lower().replace('_', '-')}"
+        default_value = atype(default_value.value) if default_value else None
+
+        def grab_default_value_from_env(argument_name):
+            env_var = f"DRUNC_{argument_name}_DEFAULT".upper().replace("-", "_")
+            env_var_value = os.getenv(env_var, None)
+            if env_var_value:
+                log.info(
+                    f"Using environment variable '{env_var}' as default value for argument '--{argument.name.lower().replace('_', '-')}' of {transition.name.replace('_', '-').lower()} ('{env_var_value}')"
+                )
+                return atype(env_var_value)
+            return None
+
+        env_default_value = grab_default_value_from_env(argument.name)
+        if env_default_value is not None:
+            default_value = env_default_value
+
         cmd = click.option(
             f"{argument_name}",
             type=atype,
-            default=atype(default_value.value)
-            if argument.presence != Argument.Presence.MANDATORY
-            else None,
+            default=default_value,
             show_default=True,
-            required=argument.presence == Argument.Presence.MANDATORY,
+            required=argument.presence == Argument.Presence.MANDATORY
+            and default_value is None,
             help=argument.help,
         )(cmd)
 
