@@ -286,6 +286,7 @@ def unified_shell(
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(
         fsm_configuration=fsmch,
+        top_segment_controller=True
     )
 
     unified_shell_log.debug(
