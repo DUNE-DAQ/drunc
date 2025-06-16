@@ -23,6 +23,26 @@ class UnpackingError(DruncCommandException):
         )
 
 
+def unpacking_error_response(name: str, text: str, token: Token) -> Response:
+    """Create a response for unpacking errors.
+
+    Args:
+        name: The name of the command or service.
+        text: The error message to include in the response.
+        token: The token associated with the request.
+
+    Returns:
+        response: the response object containing the error message.
+    """
+    return Response(
+        name=name,
+        token=token,
+        data=pack_to_any(PlainText(text=text)),
+        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+        children=[],
+    )
+
+
 def pack_to_any(data):
     any = any_pb2.Any()
     any.Pack(data)
