@@ -10,27 +10,34 @@ from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import (
-    log_levels,
-)
+from drunc.utils.utils import log_levels
 
-kDefaultAuth='default'
-kPublicKeyAuth='publickey'
-kKerberosAuth='gssapi-with-mic'
+kDefaultAuth = "default"
+kPublicKeyAuth = "publickey"
+kKerberosAuth = "gssapi-with-mic"
 
-def test_host_connection(host: str, preferred_auth:str=kDefaultAuth) -> bool:
+
+def test_host_connection(host: str, preferred_auth: str = kDefaultAuth) -> bool:
     ssh = Command("/usr/bin/ssh")
-    
-    print(f"[blue]{host}[/blue] \[{preferred_auth}]: ", end='')
+
+    print(f"[blue]{host}[/blue] \[{preferred_auth}]: ", end="")
 
     user_host = f"{getpass.getuser()}@{host}"
-    ssh_args = [
-        user_host,
-        "-tt",
-        "-o StrictHostKeyChecking=no",
-    ]+([f"-o PreferredAuthentications={preferred_auth} "] if preferred_auth!=kDefaultAuth else [])+[
-        f'echo "{user_host} established SSH successfully";',
-    ]
+    ssh_args = (
+        [
+            user_host,
+            "-tt",
+            "-o StrictHostKeyChecking=no",
+        ]
+        + (
+            [f"-o PreferredAuthentications={preferred_auth} "]
+            if preferred_auth != kDefaultAuth
+            else []
+        )
+        + [
+            f'echo "{user_host} established SSH successfully";',
+        ]
+    )
     logging.debug(f"SSH command: /usr/bin/ssh {' '.join(ssh_args)}")
 
     try:
@@ -49,11 +56,13 @@ def test_host_connection(host: str, preferred_auth:str=kDefaultAuth) -> bool:
         # print(f"Failed to SSH onto host [red]{user_host}[/red]")
         # print(e)
         return e
-    
+
     return True
 
-def test_session_ssh_connections(configuration: str, session_name: str, log_level: str, preferred_auth=kDefaultAuth):
 
+def test_session_ssh_connections(
+    configuration: str, session_name: str, log_level: str, preferred_auth=kDefaultAuth
+):
     # log = logging.getLogger()
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
@@ -86,12 +95,13 @@ def test_session_ssh_connections(configuration: str, session_name: str, log_leve
     default="WARNING",
     help="Set the log level",
 )
-def main(log_level :  str):
+def main(log_level: str):
     FORMAT = "%(message)s"
     logging.basicConfig(
         level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
     )
-    logging.getLogger('sh').setLevel(log_level)
+    logging.getLogger("sh").setLevel(log_level)
+
 
 @main.command()
 @click.argument("configuration", type=str, nargs=1)
@@ -101,11 +111,17 @@ def check_session(configuration: str, session: str) -> None:
     auths = [kDefaultAuth, kPublicKeyAuth, kKerberosAuth]
     results = {}
     for auth in auths:
-
-        print('-'*80)
-        print(f"Testing SSH connection to '{session}' host(s) " + (f"enforcing '{auth}' authentication" if auth != kDefaultAuth else "with default authentication"))
+        print("-" * 80)
+        print(
+            f"Testing SSH connection to '{session}' host(s) "
+            + (
+                f"enforcing '{auth}' authentication"
+                if auth != kDefaultAuth
+                else "with default authentication"
+            )
+        )
         print()
-        
+
         results[auth] = test_session_ssh_connections(configuration, session, auth)
     print()
 
@@ -113,19 +129,18 @@ def check_session(configuration: str, session: str) -> None:
 
     print()
 
+
 @main.command()
 @click.argument("host", type=str, nargs=1)
 def check_host(host):
-
     auths = [kDefaultAuth, kPublicKeyAuth, kKerberosAuth]
 
-    print('-'*80)
+    print("-" * 80)
     print(f"Testing SSH connection to '{host}' with {', '.join(auths)} authentications")
     print()
 
     results = {}
     for auth in auths:
-         
         results[auth] = test_host_connection(host, auth)
 
     print()

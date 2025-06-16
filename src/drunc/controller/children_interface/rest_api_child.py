@@ -267,12 +267,14 @@ class AppCommander:
                 data=json.dumps(cmd),
                 headers=headers,
                 timeout=1.0,
-                proxies={
-                    "http": f"socks5h://{self.response_host}:{self.response_port}",
-                    "https": f"socks5h://{self.response_host}:{self.response_port}",
-                }
-                if self.proxy_host
-                else None,
+                proxies=(
+                    {
+                        "http": f"socks5h://{self.response_host}:{self.response_port}",
+                        "https": f"socks5h://{self.response_host}:{self.response_port}",
+                    }
+                    if self.proxy_host
+                    else None
+                ),
             )
         except requests.ConnectionError:
             self.log.error(f"Connection error to {self.app_url}")
@@ -497,9 +499,11 @@ class RESTAPIChildNode(ClientSideChild):
             response_data = pack_to_any(PlainText(text=json.dumps(r)))
 
             fsm_data = FSMCommandResponse(
-                flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-                if success
-                else FSMResponseFlag.FSM_FAILED,
+                flag=(
+                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+                    if success
+                    else FSMResponseFlag.FSM_FAILED
+                ),
                 command_name=data.command_name,
                 data=response_data,
             )

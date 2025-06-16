@@ -270,6 +270,7 @@ def unified_shell(
             obj_uid=controller_name,
             session=ctx.obj.configuration_id,  # some of the function for enable/disable require the full dal of the session
         ),
+        session_name=session_name,
     )
 
     fsm_logger = get_logger("controller.FSM")
