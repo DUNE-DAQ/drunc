@@ -1,5 +1,4 @@
 import functools
-from warnings import deprecated
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -58,7 +57,6 @@ def unpack_any(data, format):
     return req
 
 
-@deprecated("Request unpacking decorators are deprecated")
 def unpack_request_data_to(data_type=None, pass_token=False):
     def decor(cmd):
         @functools.wraps(cmd)
@@ -100,7 +98,6 @@ def unpack_request_data_to(data_type=None, pass_token=False):
     return decor
 
 
-@deprecated("Request unpacking decorators are deprecated")
 def async_unpack_request_data_to(data_type=None, pass_token=False):
     def decor(cmd):
         @functools.wraps(cmd)
