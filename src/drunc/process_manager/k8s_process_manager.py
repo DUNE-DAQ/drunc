@@ -210,25 +210,27 @@ class K8sProcessManager(ProcessManager):
                     self._volume("cvmfs", "/cvmfs/"),
                 ],
                 # HACK
-                affinity=self._k8s_client.V1Affinity(
-                    self._k8s_client.V1NodeAffinity(
-                        required_during_scheduling_ignored_during_execution=self._k8s_client.V1NodeSelector(
-                            node_selector_terms=[
-                                self._k8s_client.V1NodeSelectorTerm(
-                                    match_expressions=[
-                                        {
-                                            "key": "kubernetes.io/hostname",
-                                            "operator": "In",
-                                            "values": [hostname],
-                                        }
-                                    ]
-                                )
-                            ]
+                affinity=(
+                    self._k8s_client.V1Affinity(
+                        self._k8s_client.V1NodeAffinity(
+                            required_during_scheduling_ignored_during_execution=self._k8s_client.V1NodeSelector(
+                                node_selector_terms=[
+                                    self._k8s_client.V1NodeSelectorTerm(
+                                        match_expressions=[
+                                            {
+                                                "key": "kubernetes.io/hostname",
+                                                "operator": "In",
+                                                "values": [hostname],
+                                            }
+                                        ]
+                                    )
+                                ]
+                            )
                         )
                     )
-                )
-                if hostname.startswith("np04")
-                else None,
+                    if hostname.startswith("np04")
+                    else None
+                ),
                 # / HACK
                 security_context=self._pod_security_context_v1_api(
                     run_as_user=os.getuid(),
@@ -298,9 +300,11 @@ class K8sProcessManager(ProcessManager):
         pi = ProcessInstance(
             process_description=pd,
             process_restriction=pr,
-            status_code=ProcessInstance.StatusCode.RUNNING
-            if self.is_alive(podname, session)
-            else ProcessInstance.StatusCode.DEAD,
+            status_code=(
+                ProcessInstance.StatusCode.RUNNING
+                if self.is_alive(podname, session)
+                else ProcessInstance.StatusCode.DEAD
+            ),
             return_code=return_code,
             uuid=pu,
         )

@@ -88,9 +88,11 @@ def match_children(statuses: list, descriptions: list) -> defaultdict:
 
 def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t = Table(
-        title=f"[dark_green]{description.data.session}[/dark_green] status"
-        if description.data
-        else "[dark_green]status[/dark_green]"
+        title=(
+            f"[dark_green]{description.data.session}[/dark_green] status"
+            if description.data
+            else "[dark_green]status[/dark_green]"
+        )
     )
     t.add_column("Name")
     t.add_column("Info")
@@ -113,9 +115,11 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
             description.data.info if valid_description else NA,
             status.data.state if valid_status else NA,
             status.data.sub_state if valid_status else NA,
-            format_bool(status.data.in_error, false_is_good=True)
-            if valid_status
-            else NA,
+            (
+                format_bool(status.data.in_error, false_is_good=True)
+                if valid_status
+                else NA
+            ),
             format_bool(status.data.included) if valid_status else NA,
             description.data.endpoint if valid_description else NA,
         )
@@ -577,9 +581,11 @@ def run_one_fsm_command(
         table.add_row(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
-            bool_to_success(response.data.flag, message_type=FSMResponseFlag)
-            if executed_command
-            else "[red]NA[/]",
+            (
+                bool_to_success(response.data.flag, message_type=FSMResponseFlag)
+                if executed_command
+                else "[red]NA[/]"
+            ),
         )
         for child_response in response.children:
             add_to_table(table, child_response, "  " + prefix)

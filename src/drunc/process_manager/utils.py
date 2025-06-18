@@ -186,10 +186,6 @@ def get_log_path(
     return log_path
 
 
-def get_pm_conf_name_from_dir(pm_conf_path: str) -> str:
-    return pm_conf_path.split("/")[-1].split(".")[0]
-
-
 # # ------------------------------------------------
 # # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
 
