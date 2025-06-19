@@ -293,10 +293,9 @@ class Controller(ControllerServicer):
     def threading_publish_state(self, interval_s: float = 10.0):
         while not self.stop_event.is_set():
             try:
-                self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
-                self.log.debug(f"FSM state: {current_state}")
+                self.log.debug(f"Publishing periodic FSM status: {current_state} every {interval_s}s")
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
                     self.monitoring_metrics.run_type = self.runinfo.get(
