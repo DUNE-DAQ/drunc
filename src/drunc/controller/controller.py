@@ -291,15 +291,11 @@ class Controller(ControllerServicer):
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
     def threading_publish_state(self, interval_s: float = 10.0):
-        run_time_at_start = 0
         while not self.stop_event.is_set():
             try:
-                self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
-
-                if current_state in ("none", "initial", "configured"):
-                    self.monitoring_metrics = ControllerMonitoringMetrics()
+                self.log.debug(f"Publishing periodic FSM status: {current_state} every {interval_s}s")
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
                     self.monitoring_metrics.run_type = self.runinfo.get(
@@ -316,10 +312,11 @@ class Controller(ControllerServicer):
                         "run_time_at_start", 0
                     )
 
-                if run_time_at_start:
-                    self.monitoring_metrics.run_time_since_start = int(
-                        time.time() - run_time_at_start
-                    )
+                if current_state not in ("none", "initial", "configured"):
+                    if self.monitoring_metrics.run_time_at_start:
+                        self.monitoring_metrics.run_time_since_start = int(
+                            time.time() - self.monitoring_metrics.run_time_at_start
+                        )
 
                 self.log.debug(f"Publishing periodic run info every {interval_s}s")
                 self.controller_publisher(
