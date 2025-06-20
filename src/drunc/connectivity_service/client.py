@@ -46,6 +46,7 @@ class ConnectivityServiceClient:
             "connections": [
                 {
                     "connection_id": uid,
+                    "capacity": 10,
                     "data_type": "RunControlMessage",
                 }
             ],
@@ -135,7 +136,7 @@ class ConnectivityServiceClient:
                     return
 
     def resolve(self, uid_regex: str, data_type: str, ntries=50) -> dict:
-        data = {"data_type": data_type, "uid_regex": uid_regex}
+        data = {"data_type": data_type, "capacity": 10, "uid_regex": uid_regex}
         for i in range(ntries):
             try:
                 self.log.debug(
@@ -184,6 +185,7 @@ class ConnectivityServiceClient:
                             {
                                 "connection_type": 0,
                                 "data_type": data_type,
+                                "capacity": 10,
                                 "uid": uid,
                                 "uri": uri,
                             }
