@@ -379,7 +379,7 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
-    async def _logs_impl(self, log_request: LogRequest) -> LogLine:
+    def _logs_impl(self, log_request: LogRequest) -> LogLine:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(log_request.query):

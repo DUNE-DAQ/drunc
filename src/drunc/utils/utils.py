@@ -1,4 +1,3 @@
-import asyncio
 import ctypes
 import logging
 import os
@@ -184,32 +183,6 @@ def now_str(posix_friendly=False):
         return datetime.now().strftime("%m/%d/%Y,%H:%M:%S")
     else:
         return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-
-
-def run_coroutine(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        loop = asyncio.get_event_loop()
-        ret = None
-
-        main_task = asyncio.ensure_future(f(*args, **kwargs))
-        wanna_catch_during_command = [signal.SIGINT]
-
-        for sig in wanna_catch_during_command:
-            loop.add_signal_handler(sig, main_task.cancel)
-
-        try:
-            ret = loop.run_until_complete(main_task)
-        except asyncio.exceptions.CancelledError:
-            print("Command cancelled")
-        finally:
-            for sig in wanna_catch_during_command:
-                loop.remove_signal_handler(sig)
-
-        if ret:
-            return ret
-
-    return wrapper
 
 
 def expand_path(path, turn_to_abs_path=False):

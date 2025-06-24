@@ -2,7 +2,6 @@ import abc
 import re
 import threading
 import time
-from collections.abc import AsyncGenerator
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -30,14 +29,11 @@ from google.rpc import code_pb2
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
-from drunc.authoriser.decorators import (
-    async_authentified_and_authorised,
-    authentified_and_authorised,
-)
+from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import async_broadcasted, broadcasted
+from drunc.broadcast.server.decorators import broadcasted
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
@@ -45,7 +41,6 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import (
-    UnpackingError,
     pack_to_any,
     unpack_any,
     unpack_error_response,
@@ -145,7 +140,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             CommandDescription(
                 name="logs",
                 data_type=["process_manager_pb2.LogRequest"],
-                help="Returns the logs from the process ( must correspond to one process). Note this is an ASYNC function",
+                help="Returns the logs from the process ( must correspond to one process).",
                 return_type="process_manager_pb2.LogLine",
             ),
             CommandDescription(
@@ -231,16 +226,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(f"Interrupting {self.name} broadcast with exception")
         return (
             self.broadcast_service._interrupt_with_exception(*args, **kwargs)
-            if self.broadcast_service
-            else None
-        )
-
-    def async_interrupt_with_exception(self, *args, **kwargs):
-        self.log.debug(
-            f"Interrupting {self.name} broadcast asynchronously with exception"
-        )
-        return (
-            self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
             if self.broadcast_service
             else None
         )
@@ -512,16 +497,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    async def _logs_impl(self, request_data: LogRequest) -> AsyncGenerator[LogLine]:
+    def _logs_impl(self, request_data: LogRequest) -> LogLine:
         raise NotImplementedError
 
     # ORDER MATTERS!
-    @async_broadcasted  # outer most wrapper 1st step
-    @async_authentified_and_authorised(
+    @broadcasted  # outer most wrapper 1st step
+    @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    async def logs(self, request:Request, context:ServicerContext) -> AsyncGenerator[Response]:
-        """Asynchronously fetch logs for a process.
+    def logs(self, request:Request, context:ServicerContext) -> Response:
+        """Fetch logs for a process.
 
         Args:
             request: The incoming request.
@@ -535,11 +520,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             data = unpack_any(request.data, LogRequest)
         except UnpackingError as e:
-            yield unpack_error_response(self.__class__.__name__, str(e), request.token)
-            return  # Stop further processing if unpacking fails.
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
         try:
-            async for r in await self._logs_impl(data):
+            for r in self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
@@ -548,7 +532,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     children=[],
                 )
         except NotImplementedError:
-            yield Response(
+            return Response(
                 name=self.name,
                 token=None,
                 data=None,

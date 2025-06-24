@@ -1,9 +1,9 @@
-import asyncio
+import click
+import concurrent
 import getpass
+import grpc
 import os
 
-import click
-import grpc
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
@@ -70,52 +70,50 @@ def run_pm(
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
 
-    loop = asyncio.get_event_loop()
 
-    async def serve(address: str) -> None:
+    def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
         log.debug("serve called")
         if not address:
             raise DruncSetupException(
                 "The address on which to expect commands/send status wasn't specified"
             )
-        server = grpc.aio.server()
+        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)
         if generated_port is not None:
             generated_port.value = port
 
-        await server.start()
+        server.start()
         # hostname = socket.gethostname()
         host = address.split(":")[0]
         log.info(
             f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
         )  # bold as part of the address was already formatting, couldn't figure out why
 
-        async def server_shutdown():
+        def server_shutdown():
             log.warning("Starting shutdown...")
             # Shuts down the server with 5 seconds of grace period. During the
             # grace period, the server won't accept new connections and allow
             # existing RPCs to continue within the grace period.
-            await server.stop(5)
+            server.stop(5)
             pm._terminate_impl()
 
-        _cleanup_coroutines.append(server_shutdown())
+        _cleanup_coroutines.append(server_shutdown)
         if ready_event is not None:
             ready_event.set()
-        await server.wait_for_termination()
+        server.wait_for_termination()
 
     try:
         log.debug("Serving process_manager")
-        loop.run_until_complete(serve(pm_address))
+        serve(pm_address)
     except Exception as e:
         log.error("Serving the ProcessManager received an Exception")
         log.exception(e)
     finally:
         if _cleanup_coroutines:
-            log.info("Clearing coroutines")
-            loop.run_until_complete(*_cleanup_coroutines)
-        loop.close()
+            for coroutine in _cleanup_coroutines:
+                coroutine()
 
 
 @click.command()

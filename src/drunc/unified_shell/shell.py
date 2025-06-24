@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import multiprocessing as mp
 import os
@@ -186,10 +185,31 @@ def unified_shell(
     desc = None
     try:
         unified_shell_log.debug("Runnning [green]describe[/green]")
-        desc = asyncio.get_event_loop().run_until_complete(
-            ctx.obj.get_driver().describe()
-        )
-        desc = desc.data
+        try:
+            desc = ctx.obj.get_driver().describe()
+            desc = desc.data
+        except Exception as e:
+            unified_shell_log.error(
+                f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
+            )
+            unified_shell_log.error(f"Reason: {e}")
+
+            if type(e) == ServerUnreachable:
+                unified_shell_log.error(
+                    "This can happen if you have the webproxy enabled at CERN"
+                )
+
+            if internal_pm and not ctx.obj.pm_process.is_alive():
+                unified_shell_log.error(
+                    f"[red]The process_manager is dead[/red], exit code {ctx.obj.pm_process.exitcode}"
+                )
+
+            if ctx.obj.pm_process.is_alive():
+                ctx.obj.pm_process.terminate()
+                ctx.obj.pm_process.join()
+
+            sys.exit(1)
+
     except Exception as e:
         unified_shell_log.error(
             f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"

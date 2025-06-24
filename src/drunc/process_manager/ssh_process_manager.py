@@ -132,7 +132,7 @@ class SSHProcessManager(ProcessManager):
             self.log.info("No known process to kill before exiting")
             return ProcessInstanceList()
 
-    async def _logs_impl(self, log_request: LogRequest) -> LogLine:
+    def _logs_impl(self, log_request: LogRequest) -> LogLine:
         self.log.debug(f"Retrieving logs for {log_request.query}")
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         logfile = self.boot_request[uid].process_description.process_logs_path
