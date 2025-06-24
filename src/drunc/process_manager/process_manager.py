@@ -8,7 +8,7 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLine,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -141,7 +141,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 name="logs",
                 data_type=["process_manager_pb2.LogRequest"],
                 help="Returns the logs from the process ( must correspond to one process).",
-                return_type="process_manager_pb2.LogLine",
+                return_type="process_manager_pb2.LogLines",
             ),
             CommandDescription(
                 name="ps",
@@ -497,7 +497,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    def _logs_impl(self, request_data: LogRequest) -> LogLine:
+    def _logs_impl(self, request_data: LogRequest) -> LogLines:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -523,14 +523,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
         try:
-            for r in self._logs_impl(data):
-                yield Response(
-                    name=self.name,
-                    token=None,
-                    data=pack_to_any(r),
-                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    children=[],
-                )
+            return Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(self._logs_impl(data)),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=[],
+            )
         except NotImplementedError:
             return Response(
                 name=self.name,

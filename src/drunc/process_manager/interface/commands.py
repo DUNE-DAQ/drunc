@@ -216,16 +216,13 @@ def logs(
         query=query,
     )
 
-    uuid = None
-    for result in obj.get_driver("process_manager").logs(log_req):
-        if not result:
-            break
+    result = obj.get_driver("process_manager").logs(log_req).data
 
-        if uuid is None:
-            uuid = result.data.uuid.uuid
-            obj.rule(f"[yellow]{uuid}[/yellow] logs")
+    if result.uuid.uuid is not None:
+        obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
 
-        line = result.data.line
+    for line in result.lines:
+
         if line == "":
             obj.print("")
             continue

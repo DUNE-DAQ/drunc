@@ -8,7 +8,7 @@ from time import sleep
 
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLine,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -403,14 +403,13 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             timeout=timeout,
         )
 
-    def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLine:
-        for stream in self.send_command(
+    def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLines:
+        return self.send_command(
             "logs",
             data=req,
-            outformat=LogLine,
+            outformat=LogLines,
             timeout=timeout,
-        ):
-            yield stream
+        )
 
     def ps(
         self, query: ProcessQuery, timeout: int | float = 60
