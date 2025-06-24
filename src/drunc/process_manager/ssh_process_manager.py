@@ -193,6 +193,8 @@ class SSHProcessManager(ProcessManager):
         f.close()
         with open(f.name) as fi:
             lines = fi.readlines()
+            if "Connection to " in lines[-1] and " closed." in lines[-1]:
+                lines = lines[:-1]
             return LogLines(uuid=ProcessUUID(uuid=uid), lines=lines)
 
         os.remove(f.name)
