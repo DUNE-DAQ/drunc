@@ -22,10 +22,12 @@ from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
+    Request,
     Response,
     ResponseFlag,
 )
 from google.rpc import code_pb2
+from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import (
@@ -254,7 +256,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(self, request, context) -> Response:
+    def boot(self, request:Request, context:ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, BootRequest)
         except UnpackingError as e:
@@ -293,7 +295,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def terminate(self, request, context) -> Response:
+    def terminate(self, request:Request, context:ServicerContext) -> Response:
         self.log.debug(f"{self.name} terminating")
         try:
             resp = self._terminate_impl()
@@ -322,7 +324,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def restart(self, request, context) -> Response:
+    def restart(self, request:Request, context:ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -357,7 +359,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def kill(self, request, context) -> Response:
+    def kill(self, request:Request, context:ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -392,7 +394,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(self, request, context) -> Response:
+    def ps(self, request:Request, context:ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -423,7 +425,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(self, request, context) -> Response:
+    def flush(self, request:Request, context:ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -488,7 +490,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def describe(self, request, context) -> Response:
+    def describe(self, request:Request, context:ServicerContext) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(
@@ -518,7 +520,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @async_authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    async def logs(self, request, context) -> AsyncGenerator[Response]:
+    async def logs(self, request:Request, context:ServicerContext) -> AsyncGenerator[Response]:
         """Asynchronously fetch logs for a process.
 
         Args:

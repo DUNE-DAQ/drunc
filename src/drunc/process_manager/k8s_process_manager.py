@@ -5,6 +5,7 @@ import socket
 import uuid
 from time import sleep
 
+import grpc
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -17,7 +18,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.request_response_pb2 import Response
+from druncschema.request_response_pb2 import Request, Response
 from kubernetes import client, config
 
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -469,7 +470,7 @@ class K8sProcessManager(ProcessManager):
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
     @pack_response  # 3rd step
-    def flush(self, request, context) -> Response:
+    def flush(self, request:Request, context:grpc.ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:

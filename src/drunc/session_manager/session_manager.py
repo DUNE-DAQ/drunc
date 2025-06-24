@@ -8,6 +8,7 @@ from conffwk import Configuration
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
+    Request,
     Response,
     ResponseFlag,
 )
@@ -18,6 +19,7 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
+from grpc import ServicerContext
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.utils.grpc_utils import pack_to_any
@@ -47,7 +49,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    def describe(self, request, context) -> Response:
+    def describe(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a description of this session manager service.
 
         Args:
@@ -95,7 +97,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    def list_all_sessions(self, request, context) -> Response:
+    def list_all_sessions(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a list of all active sessions.
 
         Args:
@@ -130,7 +132,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    def list_all_configs(self, request, context) -> Response:
+    def list_all_configs(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a list of all available configurations.
 
         Args:
