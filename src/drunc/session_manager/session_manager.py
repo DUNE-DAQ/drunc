@@ -8,6 +8,7 @@ from conffwk import Configuration
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
+    Request,
     Response,
     ResponseFlag,
 )
@@ -18,10 +19,10 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
-from druncschema.token_pb2 import Token
+from grpc import ServicerContext
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any, unpack_request_data_to
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -48,13 +49,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None, pass_token=True)
-    def describe(self, token: Token) -> Response:
+    def describe(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a description of this session manager service.
 
         Args:
-            token: The token for authentication.
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing the service description.
@@ -97,13 +97,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None, pass_token=True)
-    def list_all_sessions(self, token: Token) -> Response:
+    def list_all_sessions(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a list of all active sessions.
 
         Args:
-            token: The token for authentication.
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing all active sessions.
@@ -133,13 +132,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: we cannot type-check yet, due to the decorators.
-    @unpack_request_data_to(None, pass_token=True)
-    def list_all_configs(self, token: Token) -> Response:
+    def list_all_configs(self, request:Request, context:ServicerContext) -> Response:
         """Respond with a list of all available configurations.
 
         Args:
-            token: The token for authentication.
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
 
         Returns:
             A response containing all available configuration keys.
