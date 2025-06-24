@@ -1,5 +1,6 @@
 import re
 import time
+from dataclasses import dataclass
 
 import grpc
 from google.protobuf import any_pb2
@@ -218,3 +219,15 @@ def address_command(
     if ret == {}:
         log.info(f"Target '{target}' not found in children of '{obj.name}'")
     return ret
+
+
+@dataclass
+class ControllerMonitoringMetrics:
+    """Store the metrics that the OpMon Controller publishes"""
+
+    run_type: str = ""
+    trigger_rate: float = 0.0
+    run_number: int = 0
+    disable_data_storage: bool = False
+    run_time_at_start: int = 0
+    run_time_since_start: int = 0

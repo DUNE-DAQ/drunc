@@ -19,7 +19,6 @@ from typing import List, Optional, Union
 
 from druncschema.controller_pb2 import Argument
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from druncschema.opmon.generic_pb2 import RunInfo
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException

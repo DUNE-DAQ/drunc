@@ -5,6 +5,7 @@ import socket
 import uuid
 from time import sleep
 
+import grpc
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -17,7 +18,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.request_response_pb2 import Response
+from druncschema.request_response_pb2 import Request, Response
 from kubernetes import client, config
 
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -25,7 +26,12 @@ from drunc.broadcast.server.decorators import broadcasted
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.utils.grpc_utils import pack_response, unpack_request_data_to
+from drunc.utils.grpc_utils import (
+    UnpackingError,
+    pack_response,
+    unpack_any,
+    unpack_error_response,
+)
 from drunc.utils.utils import get_logger
 
 
@@ -210,25 +216,27 @@ class K8sProcessManager(ProcessManager):
                     self._volume("cvmfs", "/cvmfs/"),
                 ],
                 # HACK
-                affinity=self._k8s_client.V1Affinity(
-                    self._k8s_client.V1NodeAffinity(
-                        required_during_scheduling_ignored_during_execution=self._k8s_client.V1NodeSelector(
-                            node_selector_terms=[
-                                self._k8s_client.V1NodeSelectorTerm(
-                                    match_expressions=[
-                                        {
-                                            "key": "kubernetes.io/hostname",
-                                            "operator": "In",
-                                            "values": [hostname],
-                                        }
-                                    ]
-                                )
-                            ]
+                affinity=(
+                    self._k8s_client.V1Affinity(
+                        self._k8s_client.V1NodeAffinity(
+                            required_during_scheduling_ignored_during_execution=self._k8s_client.V1NodeSelector(
+                                node_selector_terms=[
+                                    self._k8s_client.V1NodeSelectorTerm(
+                                        match_expressions=[
+                                            {
+                                                "key": "kubernetes.io/hostname",
+                                                "operator": "In",
+                                                "values": [hostname],
+                                            }
+                                        ]
+                                    )
+                                ]
+                            )
                         )
                     )
-                )
-                if hostname.startswith("np04")
-                else None,
+                    if hostname.startswith("np04")
+                    else None
+                ),
                 # / HACK
                 security_context=self._pod_security_context_v1_api(
                     run_as_user=os.getuid(),
@@ -298,9 +306,11 @@ class K8sProcessManager(ProcessManager):
         pi = ProcessInstance(
             process_description=pd,
             process_restriction=pr,
-            status_code=ProcessInstance.StatusCode.RUNNING
-            if self.is_alive(podname, session)
-            else ProcessInstance.StatusCode.DEAD,
+            status_code=(
+                ProcessInstance.StatusCode.RUNNING
+                if self.is_alive(podname, session)
+                else ProcessInstance.StatusCode.DEAD
+            ),
             return_code=return_code,
             uuid=pu,
         )
@@ -463,12 +473,17 @@ class K8sProcessManager(ProcessManager):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    @pack_response  # 4th step
-    def flush(self, query: ProcessQuery) -> Response:
-        ret = []
+    @pack_response  # 3rd step
+    def flush(self, request:Request, context:grpc.ServicerContext) -> Response:
+        try:
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
         self.log.info("Flushing dead processes")
-        for proc_uuid in self._get_process_uid(query):
+
+        ret = []
+        for proc_uuid in self._get_process_uid(data):
             podname = self.boot_request[proc_uuid].process_description.metadata.name
             session = self.boot_request[proc_uuid].process_description.metadata.session
 
@@ -483,9 +498,7 @@ class K8sProcessManager(ProcessManager):
 
             self._kill_if_empty_session(session)
 
-        pil = ProcessInstanceList(values=ret)
-
-        return pil
+        return ProcessInstanceList(values=ret)
 
     def _kill_impl(
         self, query: ProcessQuery, in_boot_request: bool = False

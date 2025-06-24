@@ -103,9 +103,9 @@ class ClientSideChild(ChildNode):
     def get_status(self, token):
         status = Status(
             state=self.state.get_operational_state(),
-            sub_state="idle"
-            if not self.state.get_executing_command()
-            else "executing_cmd",
+            sub_state=(
+                "idle" if not self.state.get_executing_command() else "executing_cmd"
+            ),
             in_error=self.state.in_error() or not self.commander.ping(),  # meh
             included=self.state.included(),
         )

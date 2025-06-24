@@ -2,6 +2,7 @@ import abc
 import re
 import threading
 import time
+from collections.abc import AsyncGenerator
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -26,6 +27,7 @@ from druncschema.request_response_pb2 import (
     ResponseFlag,
 )
 from google.rpc import code_pb2
+from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import (
@@ -43,9 +45,10 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import (
-    async_unpack_request_data_to,
+    UnpackingError,
     pack_to_any,
-    unpack_request_data_to,
+    unpack_any,
+    unpack_error_response,
 )
 from drunc.utils.utils import get_logger, pid_info_str
 
@@ -190,8 +193,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 }
             )
             self.opmon_publisher.publish(
-                session=self.session,
-                application=self.name,
                 message=ProcessStatus(
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
@@ -253,13 +254,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(BootRequest)  # 3rd step
-    def boot(self, br: BootRequest) -> Response:
-        self.log.debug(
-            f"{self.name} booting '{br.process_description.metadata.name}' from session '{br.process_description.metadata.session}'"
-        )
+    def boot(self, request:Request, context:ServicerContext) -> Response:
         try:
-            resp = self._boot_impl(br)
+            data = unpack_any(request.data, BootRequest)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(
+            "{self.name} booting '{data.process_description.metadata.name}' "
+            "from session '{data.process_description.metadata.session}'"
+        )
+
+        try:
+            resp = self._boot_impl(data)
 
             return Response(
                 name=self.name,
@@ -286,8 +293,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(None)  # 3rd step
-    def terminate(self) -> Response:
+    def terminate(self, request:Request, context:ServicerContext) -> Response:
         self.log.debug(f"{self.name} terminating")
         try:
             resp = self._terminate_impl()
@@ -316,11 +322,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def restart(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running restart")
+    def restart(self, request:Request, context:ServicerContext) -> Response:
         try:
-            resp = self._restart_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running restart")
+
+        try:
+            resp = self._restart_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -346,11 +357,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def kill(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running kill")
+    def kill(self, request:Request, context:ServicerContext) -> Response:
         try:
-            resp = self._kill_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running kill")
+
+        try:
+            resp = self._kill_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -376,11 +392,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def ps(self, q: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running ps")
+    def ps(self, request:Request, context:ServicerContext) -> Response:
         try:
-            resp = self._ps_impl(q)
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        self.log.debug(f"{self.name} running ps")
+
+        try:
+            resp = self._ps_impl(data)
             return Response(
                 name=self.name,
                 token=None,
@@ -402,12 +423,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(ProcessQuery)  # 3rd step
-    def flush(self, query: ProcessQuery) -> Response:
-        self.log.debug(f"{self.name} running flush")
-        ret = []
+    def flush(self, request:Request, context:ServicerContext) -> Response:
+        try:
+            data = unpack_any(request.data, ProcessQuery)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        for uuid in self._get_process_uid(query):
+        self.log.debug(f"{self.name} running flush")
+
+        ret = []
+        for uuid in self._get_process_uid(data):
             if uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=uuid)
                 pi = ProcessInstance(
@@ -439,9 +464,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 pi = ProcessInstance(
                     process_description=pd,
                     process_restriction=pr,
-                    status_code=ProcessInstance.StatusCode.RUNNING
-                    if self.process_store[uuid].is_alive()
-                    else ProcessInstance.StatusCode.DEAD,
+                    status_code=(
+                        ProcessInstance.StatusCode.RUNNING
+                        if self.process_store[uuid].is_alive()
+                        else ProcessInstance.StatusCode.DEAD
+                    ),
                     return_code=return_code,
                     uuid=pu,
                 )
@@ -463,8 +490,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @unpack_request_data_to(None)  # 3rd step
-    def describe(self) -> Response:
+    def describe(self, request:Request, context:ServicerContext) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(
@@ -486,7 +512,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    async def _logs_impl(self, req: Request, context) -> LogLine:
+    async def _logs_impl(self, request_data: LogRequest) -> AsyncGenerator[LogLine]:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -494,11 +520,26 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @async_authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    @async_unpack_request_data_to(LogRequest)  # 3rd step
-    async def logs(self, lr: LogRequest) -> Response:
+    async def logs(self, request:Request, context:ServicerContext) -> AsyncGenerator[Response]:
+        """Asynchronously fetch logs for a process.
+
+        Args:
+            request: The incoming request.
+            context: The gRPC context (not used).
+
+        Yields:
+            Response objects containing log lines.
+        """
         self.log.debug("Getting logs")
+
         try:
-            async for r in self._logs_impl(lr):
+            data = unpack_any(request.data, LogRequest)
+        except UnpackingError as e:
+            yield unpack_error_response(self.__class__.__name__, str(e), request.token)
+            return  # Stop further processing if unpacking fails.
+
+        try:
+            async for r in await self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
@@ -596,12 +637,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         if conf.data.type == ProcessManagerTypes.SSH:
             from drunc.process_manager.ssh_process_manager import SSHProcessManager
 
-            log.info("Starting [green]SSH process_manager[/green]")
+            log.debug("Starting [green]SSH process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
         elif conf.data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
-            log.info("Starting [green]K8s process_manager[/green]")
+            log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
