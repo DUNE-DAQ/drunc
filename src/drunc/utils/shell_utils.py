@@ -15,8 +15,13 @@ from drunc.exceptions import (
     DruncSetupException,
     DruncShellException,
 )
-from drunc.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
-from drunc.utils.utils import get_logger, print_traceback, setup_root_logger
+from drunc.utils.grpc_utils import (
+    UnpackingError,
+    rethrow_if_timeout,
+    rethrow_if_unreachable_server,
+    unpack_any,
+)
+from drunc.utils.utils import get_logger
 
 
 class InterruptedCommand(DruncShellException):
@@ -67,7 +72,9 @@ class DecodedResponse:
 
     @staticmethod
     def str(obj, prefix=""):
-        text = f"{prefix} {obj.name} -> {obj.flag}\n"
+        text = (
+            f"{prefix} {obj.name} -> response flag={obj.flag} type={type(obj.data)}\n"
+        )
         for v in obj.children:
             if v is None:
                 continue
@@ -99,7 +106,7 @@ class GRPCDriver:
         self.token.CopyFrom(token)
 
     @abc.abstractmethod
-    def create_stub(self, channel):
+    def create_stub(self, channel) -> object:
         pass
 
     def _create_request(self, payload=None) -> Request:
@@ -116,19 +123,8 @@ class GRPCDriver:
 
     def __handle_grpc_error(self, error, command):
         rethrow_if_unreachable_server(error)
-        # else:
-        #     from drunc.utils.grpc_utils import interrupt_if_server_unreachable
-        #     text = interrupt_if_unreachable_server(error)
-        #     if text:
-        #         self.log.error(text)
-
-        # if hasattr(error, 'details'): #ARGG asyncio gRPC so different from synchronous one!!
-        #     self.log.error(error.details())
-
-        #     # of course, right now asyncio servers are not able to reply with a stacktrace (yet)
-        #     # we just throw the client-side error and call it a day for now
-        #     if rethrow:
-        #         raise error
+        rethrow_if_timeout(error)
+        raise error
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
@@ -136,9 +132,14 @@ class GRPCDriver:
             token=response.token,
             flag=response.flag,
         )
+
         if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            if response.data not in [None, ""]:
-                dr.data = unpack_any(response.data, outformat)
+            if response.HasField("data") and response.data not in [None, ""]:
+                try:
+                    dr.data = unpack_any(response.data, outformat)
+                except UnpackingError as e:
+                    self.log.error(f"Error unpacking data: {e}")
+                    dr.data = response.data
 
             for c_response in response.children:
                 try:
@@ -151,8 +152,32 @@ class GRPCDriver:
 
         else:
 
-            def text(verb="not executed"):
-                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}')"
+            def text(verb="not executed", reason=""):
+                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
+
+            if not response.HasField("data"):
+                return None
+
+            error_txt = ""
+            stack_txt = None
+
+            if response.data.Is(Stacktrace.DESCRIPTOR):
+                stack = unpack_any(response.data, Stacktrace)
+                dr.data = stack
+                # stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
+                stack_txt = "Stacktrace on remote server!\n"
+                last_one = ""
+
+                for l in stack.text:
+                    stack_txt += l + "\n"
+                    if l != "":
+                        last_one = l
+                error_txt = last_one
+
+            elif response.data.Is(PlainText.DESCRIPTOR):
+                txt = unpack_any(response.data, PlainText)
+                error_txt = txt.text  # noqa: F841  (might need to revisit this)
+                dr.data = error_txt
 
             if response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
@@ -163,34 +188,8 @@ class GRPCDriver:
             ]:
                 self.log.warn(text())
             else:
-                self.log.error(text("failed"))
+                self.log.error(text("failed", error_txt))
 
-            if not response.HasField("data"):
-                return None
-
-            error_txt = ""
-            stack_txt = None
-
-            if response.data.Is(Stacktrace.DESCRIPTOR):
-                stack = unpack_any(response.data, Stacktrace)
-                # stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
-                stack_txt = "Stacktrace on remote server!\n"
-                last_one = ""
-                for l in stack.text:
-                    stack_txt += l + "\n"
-                    if l != "":
-                        last_one = l
-                error_txt = last_one
-
-            elif response.data.Is(PlainText.DESCRIPTOR):
-                txt = unpack_any(response.data, PlainText)
-                error_txt = txt.text
-            self.log.error(error_txt)
-
-            if stack_txt:
-                self.log.debug(stack_txt)
-
-            dr.data = response.data
             for c_response in response.children:
                 try:
                     dr.children.append(
@@ -201,7 +200,12 @@ class GRPCDriver:
             return dr
 
     def send_command(
-        self, command: str, data=None, outformat=None, decode_children=False
+        self,
+        command: str,
+        data=None,
+        outformat=None,
+        decode_children=False,
+        timeout: int | float = 60,
     ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
@@ -211,12 +215,14 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            response = cmd(request)
+            response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command)
         return self.handle_response(response, command, outformat)
 
-    async def send_command_aio(self, command: str, data=None, outformat=None):
+    async def send_command_aio(
+        self, command: str, data=None, outformat=None, timeout: int | float = 60
+    ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
 
@@ -225,13 +231,15 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            response = await cmd(request)
+            response = await cmd(request, timeout=timeout)
 
         except grpc.aio.AioRpcError as e:
             self.__handle_grpc_error(e, command)
         return self.handle_response(response, command, outformat)
 
-    async def send_command_for_aio(self, command: str, data=None, outformat=None):
+    async def send_command_for_aio(
+        self, command: str, data=None, outformat=None, timeout: int | float = 60
+    ):
         if not self.stub:
             raise DruncShellException("No stub initialised")
 
@@ -240,7 +248,7 @@ class GRPCDriver:
         request = self._create_request(data)
 
         try:
-            async for s in cmd(request):
+            async for s in cmd(request, timeout=timeout):
                 yield self.handle_response(s, command, outformat)
 
         except grpc.aio.AioRpcError as e:
@@ -254,11 +262,11 @@ class ShellContext:
         self._drivers: Mapping[str, GRPCDriver] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
-        setup_root_logger("NOTSET")
+        log = get_logger("utils.ShellContext")
         try:
             self.reset(*args, **kwargs)
         except Exception as e:
-            print_traceback(e)
+            log.exception(e)
             exit(1)
 
     @abc.abstractmethod
@@ -282,7 +290,7 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None) -> GRPCDriver:
+    def get_driver(self, name: str = None, quiet_fail: bool = False) -> GRPCDriver:
         try:
             if name:
                 return self._drivers[name]
@@ -290,6 +298,8 @@ class ShellContext:
                 raise DruncShellException("More than one driver in this context")
             return list(self._drivers.values())[0]
         except KeyError:
+            if quiet_fail:
+                return None
             log = get_logger("utils.ShellContext")
             log.exception(
                 "Controller-specific commands cannot be sent until the session is booted"

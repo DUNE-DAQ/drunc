@@ -108,9 +108,11 @@ class BroadcastSender:
         from drunc.exceptions import DruncException
 
         self.broadcast(
-            btype=BroadcastType.DRUNC_EXCEPTION_RAISED
-            if isinstance(exception, DruncException)
-            else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            btype=(
+                BroadcastType.DRUNC_EXCEPTION_RAISED
+                if isinstance(exception, DruncException)
+                else BroadcastType.UNHANDLED_EXCEPTION_RAISED
+            ),
             message=txt,
         )
 
@@ -133,9 +135,11 @@ class BroadcastSender:
         from drunc.exceptions import DruncException
 
         self.broadcast(
-            btype=BroadcastType.DRUNC_EXCEPTION_RAISED
-            if isinstance(exception, DruncException)
-            else BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+            btype=(
+                BroadcastType.DRUNC_EXCEPTION_RAISED
+                if isinstance(exception, DruncException)
+                else BroadcastType.UNHANDLED_EXCEPTION_RAISED
+            ),
             message=txt,
         )
 

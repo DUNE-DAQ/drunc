@@ -16,6 +16,7 @@ from drunc.controller.interface.commands import (
     connect,
     disconnect,
     exclude,
+    expert_command,
     include,
     recompute_status,
     status,
@@ -32,7 +33,6 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import get_process_manager_configuration
 from drunc.process_manager.interface.commands import (
-    dummy_boot,
     flush,
     kill,
     logs,
@@ -42,6 +42,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import boot
+from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -250,7 +251,6 @@ def unified_shell(
     ctx.command.add_command(logs, "logs")
     ctx.command.add_command(restart, "restart")
     ctx.command.add_command(ps, "ps")
-    ctx.command.add_command(dummy_boot, "dummy_boot")
 
     # Not particularly proud of this...
     # We instantiate a stateful node which has the same configuration as the one from this session
@@ -270,6 +270,7 @@ def unified_shell(
             obj_uid=controller_name,
             session=ctx.obj.configuration_id,  # some of the function for enable/disable require the full dal of the session
         ),
+        session_name=session_name,
     )
 
     fsm_logger = get_logger("controller.FSM")
@@ -303,6 +304,11 @@ def unified_shell(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
 
+    for sequence in session_dal.segment.controller.fsm.command_sequences:
+        ctx.command.add_command(
+            *generate_fsm_sequence_command(ctx, sequence, controller_name)
+        )
+
     ctx.command.add_command(status, "status")
     ctx.command.add_command(recompute_status, "recompute-status")
     ctx.command.add_command(connect, "connect")
@@ -314,6 +320,7 @@ def unified_shell(
     ctx.command.add_command(include, "include")
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
+    ctx.command.add_command(expert_command, "expert-command")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"

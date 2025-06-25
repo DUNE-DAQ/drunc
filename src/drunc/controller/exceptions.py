@@ -27,3 +27,7 @@ class MalformedCommand(ControllerException):
 
 class MalformedCommandArgument(ControllerException):
     pass
+
+
+class ExpertCommandException(ControllerException):
+    pass

@@ -3,7 +3,7 @@ import time
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.utils.utils import get_logger, http_post
+from drunc.utils.utils import get_logger, http_get, http_post
 
 
 class ConnectivityServiceClient:
@@ -21,6 +21,25 @@ class ConnectivityServiceClient:
             f"Connectivity service address: {self.address}, session: {self.session}"
         )
 
+    def is_ready(self, timeout: int = 10):
+        start = time.time()
+
+        while time.time() - start < timeout:
+            try:
+                r = http_get(
+                    self.address + "/",
+                    headers={"Content-Type": "application/json"},
+                    as_json=True,
+                    timeout=0.5,
+                    ignore_errors=True,
+                    data=None,
+                )
+                r.raise_for_status()
+                return True
+            except (HTTPError, ConnectionError, ReadTimeout):
+                time.sleep(0.5)
+        return False
+
     def retract(self, uid, fail_quickly=False):
         data = {
             "partition": self.session,
@@ -36,7 +55,6 @@ class ConnectivityServiceClient:
                 self.log.debug(
                     f"Retracting '{uid}' on the connectivity service, attempt {i + 1}"
                 )
-
                 r = http_post(
                     self.address + "/retract",
                     data=data,
@@ -45,7 +63,6 @@ class ConnectivityServiceClient:
                     timeout=0.5,
                     ignore_errors=True,
                 )
-
                 if r.status_code == 404:
                     self.log.warning(
                         f"Connection '{uid}' not found on the connectivity service"
@@ -97,7 +114,6 @@ class ConnectivityServiceClient:
                     break
 
                 r.raise_for_status()
-                print(r.text)
                 break
 
             except (HTTPError, ConnectionError) as e:
@@ -118,9 +134,9 @@ class ConnectivityServiceClient:
                 if fail_quickly:
                     return
 
-    def resolve(self, uid_regex: str, data_type: str) -> dict:
+    def resolve(self, uid_regex: str, data_type: str, ntries=50) -> dict:
         data = {"data_type": data_type, "uid_regex": uid_regex}
-        for i in range(50):
+        for i in range(ntries):
             try:
                 self.log.debug(
                     f"Looking up '{uid_regex}' on the connectivity service, attempt {i + 1}"

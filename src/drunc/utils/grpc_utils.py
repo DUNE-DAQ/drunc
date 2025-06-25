@@ -18,8 +18,29 @@ class UnpackingError(DruncCommandException):
         self.format = format
 
         super().__init__(
-            f"Cannot unpack {data} to {format.DESCRIPTOR}", code_pb2.INVALID_ARGUMENT
+            f"Cannot unpack '{data}' to '{format.DESCRIPTOR.name}'",
+            code_pb2.INVALID_ARGUMENT,
         )
+
+
+def unpack_error_response(name: str, text: str, token: Token) -> Response:
+    """Create a response for unpacking errors.
+
+    Args:
+        name: The name of the command or service.
+        text: The error message to include in the response.
+        token: The token associated with the request.
+
+    Returns:
+        response: the response object containing the error message.
+    """
+    return Response(
+        name=name,
+        token=token,
+        data=pack_to_any(PlainText(text=text)),
+        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+        children=[],
+    )
 
 
 def pack_to_any(data):
@@ -37,11 +58,13 @@ def unpack_any(data, format):
 
 
 def unpack_request_data_to(data_type=None, pass_token=False):
+    raise DeprecationWarning(
+        "This function is deprecated. Unpack your requests yourself!"
+    )
+
     def decor(cmd):
-        @functools.wraps(
-            cmd
-        )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        def unpack_request(obj, request):
+        @functools.wraps(cmd)
+        def unpack_request(obj, request, context):
             log = get_logger("utils.unpack_request_data_to_decorator")
             log.debug("Entering")
 
@@ -60,7 +83,7 @@ def unpack_request_data_to(data_type=None, pass_token=False):
                     return Response(
                         name=obj.__class__.__name__,
                         token=request.token,
-                        data=PlainText(text=str(e)),
+                        data=pack_to_any(PlainText(text=str(e))),
                         flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
                         children=[],
                     )
@@ -80,11 +103,13 @@ def unpack_request_data_to(data_type=None, pass_token=False):
 
 
 def async_unpack_request_data_to(data_type=None, pass_token=False):
+    raise DeprecationWarning(
+        "This function is deprecated. Unpack your requests yourself!"
+    )
+
     def decor(cmd):
-        @functools.wraps(
-            cmd
-        )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        async def unpack_request(obj, request):
+        @functools.wraps(cmd)
+        async def unpack_request(obj, request, context):
             log = get_logger("utils.async_unpack_request_data_to_decorator")
             log.debug("Executing wrapped function")
             kwargs = {}
@@ -99,7 +124,7 @@ def async_unpack_request_data_to(data_type=None, pass_token=False):
                     yield Response(
                         name=obj.__class__.__name__,
                         token=request.token,
-                        data=PlainText(text=str(e)),
+                        data=pack_to_any(PlainText(text=str(e))),
                         flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
                         children=[],
                     )
@@ -123,9 +148,7 @@ def pack_response(cmd, with_children_responses=False):
         "This function is deprecated, pack your responses yourself"
     )
 
-    @functools.wraps(
-        cmd
-    )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
+    @functools.wraps(cmd)
     def pack_response(obj, *arg, **kwargs):
         log = get_logger("utils.pack_response_decorator")
         log.debug("Executing wrapped function")
@@ -159,9 +182,7 @@ def async_pack_response(cmd, with_children_responses=False):
         "This function is deprecated, pack your responses yourself"
     )
 
-    @functools.wraps(
-        cmd
-    )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
+    @functools.wraps(cmd)
     async def pack_response(obj, *arg, **kwargs):
         log = get_logger("utils.async_pack_response_decorator")
         log.debug("Executing wrapped function")
@@ -179,6 +200,12 @@ class ServerUnreachable(DruncException):
     def __init__(self, message):
         self.message = message
         super(ServerUnreachable, self).__init__(message)
+
+
+class ServerTimeout(DruncException):
+    def __init__(self, message):
+        self.message = message
+        super(ServerTimeout, self).__init__(message)
 
 
 def server_is_reachable(grpc_error):
@@ -199,6 +226,12 @@ def rethrow_if_unreachable_server(grpc_error):
             raise ServerUnreachable(grpc_error._state.details) from grpc_error
         elif hasattr(grpc_error, "_details"):
             raise ServerUnreachable(grpc_error._details) from grpc_error
+
+
+def rethrow_if_timeout(grpc_error):
+    if hasattr(grpc_error, "_state"):
+        if grpc_error._state.code == grpc.StatusCode.DEADLINE_EXCEEDED:
+            raise ServerTimeout(grpc_error._state.details) from grpc_error
 
 
 def interrupt_if_unreachable_server(grpc_error):

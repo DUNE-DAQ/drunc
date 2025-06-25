@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="6" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T105549" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241022T175827"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240826T084126" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="Correct cern stream"/>
+ <comment creation-time="20240909T081245" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240909T082108" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240918T124331" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="change local session opmon URI"/>
+</comments>
+
+<obj class="Service" id="controller_control">
+ <attr name="protocol" type="string" val="grpc"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+
+<obj class="RCApplication" id="controller-0">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="controller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
+</obj>
+
+<obj class="DetectorConfig" id="dummy-detector">
+ <attr name="tpg_channel_map" type="string" val="PD2HDChannelMap"/>
+ <attr name="clock_speed_hz" type="u32" val="62500000"/>
+ <attr name="op_env" type="string" val="test"/>
+ <attr name="offline_data_stream" type="string" val="cosmics"/>
+</obj>
+
+<obj class="Segment" id="segment-0">
+ <rel name="controller" class="RCApplication" id="controller-0"/>
+</obj>
+
+<obj class="Session" id="one-controller-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+ </rel>
+ <rel name="segment" class="Segment" id="segment-0"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+
+</oks-data>

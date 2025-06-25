@@ -1,3 +1,5 @@
+"""Session Manager CLI interface for Drunc."""
+
 from concurrent import futures
 from logging import getLogger
 
@@ -7,10 +9,16 @@ from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_s
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.utils import get_logger, setup_root_logger  # log_levels,
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def serve(session_manager: SessionManager, address: str) -> None:
+    """Start the gRPC server for the session manager.
+
+    Args:
+        session_manager: The session manager instance to serve.
+        address: The address to bind the server to.
+    """
     logger = getLogger("drunc.session_manager")
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
     add_SessionManagerServicer_to_server(session_manager, server)
@@ -35,9 +43,17 @@ def serve(session_manager: SessionManager, address: str) -> None:
 # )
 # def session_manager_cli(log_level: str, log_path: str):
 def session_manager_cli():
+    """CLI interface for the Drunc session manager.
+
+    This command starts the session manager service, which allows clients to manage
+    and interact with drunc sessions.
+    """
+    app_name = "session_manager"
     log_level = "DEBUG"
+
     setup_root_logger(log_level)
-    logger = get_logger(logger_name="drunc.session_manager", rich_handler=True)
+    logger = get_logger(app_name)
+    create_logger_handler(rich_handler=True)
 
     # Load the configuration for the session manager.
     config = SessionManagerConfHandler()
@@ -48,7 +64,7 @@ def session_manager_cli():
     logger.info("Creating session manager.")
 
     try:
-        serve(session_manager, "127.0.0.1:50000")
+        serve(session_manager, "0.0.0.0:50000")
     except Exception as e:
         logger.error("Error whilst serving the session manager.")
         logger.exception(e)

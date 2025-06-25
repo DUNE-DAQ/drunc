@@ -1,0 +1,15 @@
+{
+    "data": {
+        "modules": [
+            {
+                "data": {
+                    "duration": 100
+                },
+                "match": ""
+            }
+        ]
+    },
+    "entry_state": "RUNNING",
+    "exit_state": "RUNNING",
+    "id": "record"
+}

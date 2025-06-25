@@ -1,20 +1,24 @@
 # Running `drunc`
-This can currently be done either with `drunc-unified-shell`, which is recommended for first time/casual users, or with a `process-manager-shell` and `controller-shell`, which is recommended for expert developers.
+This can currently be done either with `drunc-unified-shell`, which is recommended way to use the run control right now.
+
+You can also run 3 terminals, one for the `drunc-process-manager`, another for the `drunc-process-manager-shell` and one more for the `drunc-controller-shell`, this is recommended for run control experts.
 
 All of the `drunc` shells support tab completion.
 
 ## With `drunc-unified-shell`
-### Spawning the shell and `process_manager`
-In your terminal window run `drunc-unified-shell` as
-```bash
-drunc-unified-shell <process_manager_configuration> <DAQ_configuration_file> <session_name>
-```
-For which `<process_manager_configuration>` can be
- - The name of a configuration file defined in `drunc/src/drunc/data/process_manager/` (see them [here](https://github.com/DUNE-DAQ/drunc/tree/develop/src/drunc/data/process_manager)). There is a description of them in [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-manager#Configurations)
- - The path to name of a custom configuration file, relative or absolute
- - `<DAQ_configuration_file>` - the name of the DAQ system configuration file, typically defined in [`daqsystemtest/config/example-configs.data.xml`](https://github.com/DUNE-DAQ/daqsystemtest/blob/develop/config/daqsystemtest/example-configs.data.xml)
- - `<session_name>` - the name of the session defined in `<DAQ_configuration_file>`
+### Reference
+Can be found [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Unified-shell-reference).
 
+### Spawning the shell and `process_manager`
+In your terminal window, run `drunc-unified-shell`:
+```bash
+drunc-unified-shell process_manager_configuration config-file.data.xml configuration_session_id session_name
+```
+For which:
+* `process_manager_configuration` is the name of a configuration file defined in `drunc/src/drunc/data/process_manager/` (see them [here](https://github.com/DUNE-DAQ/drunc/tree/develop/src/drunc/data/process_manager)). There is a description of them in [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-manager#Configurations). Alternatively, this can be the path to name of a custom configuration file, relative or absolute.
+* `config-file.data.xml` is the name of the DAQ system configuration file, typically defined in [`daqsystemtest/config/example-configs.data.xml`](https://github.com/DUNE-DAQ/daqsystemtest/blob/develop/config/daqsystemtest/example-configs.data.xml).
+* `configuration_session_id` is the name of the session defined in `config-file.data.xml`.
+* `session_name` is a name you choose.
 
 ### Interacting with `process_manager`
 At this point the `process_manager` has been spawned, and you can interface it directly through the current shell. You can now start the DAQ processes as
@@ -23,13 +27,8 @@ drunc-unified-shell > boot
 ```
 You will get a lot of output, it will finish with something like:
 ```bash
-[11:54:36] INFO     "unified": localhost:3333 is 'root-controller.test-session' (name.session), starting listening...                                                                shell_utils.py:284
-Connected to the controller
-root-controller.test-session's children 👪: ['ru-controller', 'df-controller', 'trg-controller', 'hsi-controller']
-[...]
-           INFO     "unified": You are in control.
+[2025/04/08 17:50:38] INFO       commands.py:79                 unified_shell.boot:                           Booted successfully
 ```
-Notice the last message indicates that you have taken control of the root controller and all its children (so connections work).
 
 You can then check the running processes with `ps` as
 ```bash
@@ -47,71 +46,83 @@ drunc-unified-shell > ps
 └──────────────┴───────────────────────────┴──────────┴───────────┴──────────────────────────────────────┴───────┴───────────┘
 ```
 
-We have started a couple of processes - the standard DAQ applications organized into segments each with a controller, and a `root-controller` that will control all the segments. The logs and work directory is the `${PWD}` where you executed the `drunc-unified-shell`. From here you can use the `process_manger` commands
- - `ps` - list all the processes
- - `kill` - kill specific processes
- - `flush` - remove dead processes
- - `restart` - restart processes
- - `logs` - show the logs of specific processes
- - `terminate` - kill all the processes
-
-There are many more functionalities to the shell, head over to the [process manager documentation](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-manager) to see how to interact with it.
+We have started a couple of processes - the standard DAQ applications organized into segments each with a controller, and a `root-controller` that will control all the segments. From here you can use the `process_manger` commands
+* `ps`: list all the processes
+* `kill`: kill specific processes
+* `flush`: remove dead processes
+* `restart`: restart processes (DO NOT USE)
+* `logs`: show the logs of specific processes
+* `terminate`: kill all the processes
 
 ### Interacting with `root-controller`
 Next, let's send commands to the `root-controller`. These commands will be propagated by it to other applications using `gRPC`. To see which segments a controller controls, you can use `ls`:
-```bash
-drunc-unified-shell > ls
-['ru-controller', 'df-controller', 'trg-controller', 'hsi-controller']
-```
+
 The set of commands that you can send to the `root-controller` are
- - `describe` - shows available _endpoint_ commands (not this currently describes what the controller endpoint can do internally not through the shell)
- - `ls` - lists all running segments
- - `status` - lists the FSM state, substate, error status, and included parameters of the segments
- - `connect` - remaps the root controller
- - `take_control` - updates the user in charge (actor)
- - `surrender_control` - releases the current actor
- - `who_am_i` - prints your username
- - `who_is_in_charge` - prints who is in charge of the root controller
- - `include` - includes self in the current session
- - `exclude` - excludes self from the current session
+* `status`: lists the FSM state, substate, error status, and included parameters of the segments.
+* `recompute-status`: calculates the status of the controllers from their children, and reset their status.
+* `connect`: connects to another controller,
+* `disconnect`: disconnects from a controller,
+* `take-control`: updates the user in charge of the controller (DO NOT USE)
+* `surrender-control`: releases the current user (DO NOT USE)
+* `whoami`: prints your username (DO NOT USE)
+* `who-is-in-charge`: prints who is in charge of the root controller (DO NOT USE)
+* `include`: includes a children in the current session
+* `exclude`: excludes a children from the current session
+* `expert-command`: send abritrary json to an application
 
 [FSM](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/FSM) transitions can be executed directly from the shell with the commands:
- - `conf` - configure the applications by ingesting the parameters from the configuration file to the applications
- - `start` - start a run, allocating a run number. Initializes queues and connections
- - `enable-triggers` - start generating TPs, TDs are not propagated to the DFO
- - `disable-triggers` - stop collecting generated TPs to file
- - `drain-dataflow` - stop propagating TDs to the TRBs.
- - `stop-trigger-sources` - stop generating TPs
- - `stop` - stop app communication
- - `scrap` - remove all the configuration parameters from the applications
+* `conf`: configure the applications by ingesting the parameters from the configuration file to the applications
+* `start`: start a run, allocating a run number. Initializes queues and connections
+* `enable-triggers`: start generating TPs, TDs are not propagated to the DFO
+* `disable-triggers`: stop collecting generated TPs to file
+* `drain-dataflow`: stop propagating TDs to the TRBs.
+* `stop-trigger-sources`: stop generating TPs
+* `stop`: stop app communication
+* `scrap`: remove all the configuration parameters from the applications
 
-## Operating a DAQ with `drunc`
-Let's take the DAQ for a spin:
+### Typical operation of the DAQ
+Let's take the DAQ for a spin.
+
+First we start the unified shell:
 ```bash
-drunc-unified-shell > conf
-drunc-unified-shell > start --run-number 12345 # start the run 12345
-drunc-unified-shell > enable-triggers
-[...we wait for a bit of time, to get a file...]
-drunc-unified-shell > disable-triggers
-drunc-unified-shell > drain-dataflow
-drunc-unified-shell > stop-trigger-sources
-drunc-unified-shell > stop
-drunc-unified-shell > scrap
+drunc-unified-shell ssh-standalone config/daqsystemtest/example-configs.data.xml local-1x1-config ${USER}-test
 ```
 
-Several things to note:
- - There is a profusion of logging that happens. This is coming from the asynchronous logging from the controller. If someone tries to connect at the same time or to execute a command you will see it appearing on your shell too (you can try it yourself in a different shell). Unfortunately CLIs do not lend itself very well with this, and one needs a better UI for the logs to be rendered better and to not distract.
- - The `describe` command describes the _endpoint_ **NOT** the shell. This means that there are some commands that are not directly available in the shell (for example `get_children_status`). However if you do `status` is the shell, you will get the children statuses because the shell calls `get_children_status` under the hood.
-
-You can now head to the [controller documentation](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Controller) for more information.
-
-# Shutting down
+We then boot the system:
 ```bash
-drunc-unified-shell > kill --session test-session
-drunc-unified-shell > quit
+boot
+```
+
+After that, we check the status:
+```bash
+status
+```
+
+If all looks good, you can:
+```bash
+conf
+start --run-number 12345 # start the run 12345 in this case, but this command can differ depending on the configuration you are using
+enable-triggers
+# We wait for a "bit" of time, depending on what you are doing... Maybe until the end of your shift... or that an expert tells us to stop the run...
+disable-triggers
+drain-dataflow
+stop-trigger-sources
+stop
+scrap
+```
+
+### Shutting down
+```bash
+kill --session test-session
+quit
 ```
 or
 ```bash
-drunc-unified-shell > terminate
-drunc-unified-shell > quit
+terminate
+quit
 ```
+
+### With the trio `drunc-process-manager`, `drunc-process-manager-shell`, `drunc-controller-shell`
+The process manager documentation is [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Process-manager).
+
+The controller shell documentation is [here](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Controller).

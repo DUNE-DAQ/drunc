@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, Optional
+from typing import Any, Callable, Optional
+
+from druncschema.opmon.FSM_pb2 import FSMStatus
 
 from drunc.exceptions import DruncCommandException
 from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
 from drunc.fsm.utils import decode_fsm_arguments
 from drunc.utils.utils import get_logger
-
-if TYPE_CHECKING:
-    from kafkaopmon.OpMonPublisher import OpMonPublisher
 
 
 class Observed:
@@ -90,38 +89,45 @@ class StatefulNode(abc.ABC):
     def __init__(
         self,
         fsm_configuration,
-        publisher: Optional[OpMonPublisher] = None,
+        publisher: Optional[Callable[[Any], None]] = None,
+        init_state: str = "",
         session: str = "",
         name: str = "",
     ):
         self.publisher = publisher
         self.session = session
         self.name = name
-
+        self._ready_state = False
         self.__fsm = FSM(fsm_configuration)
         self.log = get_logger("controller.StatefulNode")
         self.__operational_state = OperationalState(
-            stateful_node=self, initial_value=self.__fsm.initial_state
+            stateful_node=self,
+            initial_value=init_state,
         )
         self.__operational_sub_state = OperationalState(
-            stateful_node=self, initial_value=self.__fsm.initial_state
+            stateful_node=self, initial_value=init_state
         )
         self.__included = InclusionState(stateful_node=self, initial_value=True)
         self.__in_error = ErrorState(stateful_node=self, initial_value=False)
 
-    def publish_state(self):
-        from druncschema.opmon.FSM_pb2 import FSMStatus
+    def set_ready_state(self, ready: bool = True):
+        self._ready_state = ready
+        if self._ready_state:
+            self.__operational_state.value = self.__fsm.initial_state
+            self.__operational_sub_state.value = self.__fsm.initial_state
 
+    def get_ready_state(self):
+        return self._ready_state
+
+    def publish_state(self):
         if self.publisher is not None:
-            self.publisher.publish(
-                session=self.session,
-                application=self.name,
-                message=FSMStatus(
+            self.publisher(
+                FSMStatus(
                     state=self.__operational_state.value,
                     sub_state=self.__operational_sub_state.value,
                     in_error=self.__in_error.value,
                     included=self.__included.value,
-                ),
+                )
             )
 
     def get_node_operational_state(self):

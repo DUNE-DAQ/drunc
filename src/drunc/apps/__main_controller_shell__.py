@@ -1,11 +1,6 @@
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell import controller_shell
-from drunc.utils.utils import (
-    create_logger_handler,
-    get_logger,
-    print_traceback,
-    setup_root_logger,
-)
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def main() -> None:
@@ -19,7 +14,7 @@ def main() -> None:
         log = get_logger("controller_shell")
         create_logger_handler(rich_handler=True)
         log.error("[red bold]:fire::fire: Exception thrown :fire::fire:")
-        print_traceback(e)
+        log.exception(e)
         exit(1)
 
 

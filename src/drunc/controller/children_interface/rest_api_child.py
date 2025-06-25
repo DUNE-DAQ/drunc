@@ -4,11 +4,12 @@ import queue
 import socket
 import threading
 import time
+from json import JSONDecodeError
 from typing import NoReturn
 
 import requests
 import socks
-from druncschema.controller_pb2 import FSMCommandResponse, FSMResponseFlag
+from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -16,7 +17,7 @@ from flask import Flask, request
 from flask_restful import Api
 
 from drunc.controller.children_interface.client_side_child import ClientSideChild
-from drunc.controller.exceptions import ChildError
+from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
@@ -239,10 +240,10 @@ class AppCommander:
             return False
 
     def send_command(
-        self, cmd_id: str, cmd_data: dict, entry_state="ANY", exit_state="ANY"
+        self, cmd_id: str, module_data: dict, entry_state="ANY", exit_state="ANY"
     ):
         # here we go again...
-        module_data = {"modules": [{"data": cmd_data, "match": ""}]}
+        # module_data = {"modules": [{"data": cmd_data, "match": ""}]}
 
         cmd = {
             "id": cmd_id,
@@ -266,12 +267,14 @@ class AppCommander:
                 data=json.dumps(cmd),
                 headers=headers,
                 timeout=1.0,
-                proxies={
-                    "http": f"socks5h://{self.response_host}:{self.response_port}",
-                    "https": f"socks5h://{self.response_host}:{self.response_port}",
-                }
-                if self.proxy_host
-                else None,
+                proxies=(
+                    {
+                        "http": f"socks5h://{self.response_host}:{self.response_port}",
+                        "https": f"socks5h://{self.response_host}:{self.response_port}",
+                    }
+                    if self.proxy_host
+                    else None
+                ),
             )
         except requests.ConnectionError:
             self.log.error(f"Connection error to {self.app_url}")
@@ -383,97 +386,106 @@ class RESTAPIChildNode(ClientSideChild):
     def __str__(self):
         return f"'{self.name}@{self.app_host}:{self.app_port}' (type {self.node_type})"
 
-    # def terminate(self):
-    #     pass
-
     def get_endpoint(self):
         return f"rest://{self.app_host}:{self.app_port}"
 
-    # def get_status(self, token):
+    def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
+        data_dict = json.loads(data.text)
+        example = json.dumps(
+            {
+                "data": {"modules": [{"data": {"duration": 100}, "match": ""}]},
+                "entry_state": "RUNNING",
+                "exit_state": "RUNNING",
+                "id": "record",
+            },
+            indent=4,
+        )
 
-    #     status = Status(
-    #         state = self.state.get_operational_state(),
-    #         sub_state = 'idle' if not self.state.get_executing_command() else 'executing_cmd',
-    #         in_error = self.state.in_error() or not self.commander.ping(), # meh
-    #         included = self.state.included(),
-    #     )
-    #     return Response(
-    #         name = self.name,
-    #         token = None,
-    #         data = pack_to_any(status),
-    #         flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-    #         children = [],
-    #     )
+        if (
+            "id" not in data_dict
+            or "data" not in data_dict
+            or "entry_state" not in data_dict
+            or "exit_state" not in data_dict
+        ):
+            raise ExpertCommandException(
+                f"Invalid format for expert command: format should be: {example}, you provided {data.text}"
+            )
 
-    # def propagate_command(self, command:str, data, token:Token) -> Response:
-    #     if command == 'exclude':
-    #         self.state.exclude()
-    #         return Response(
-    #             name = self.name,
-    #             token = token,
-    #             data = pack_to_any(
-    #                 PlainText(
-    #                     text=f"\'{self.name}\' excluded"
-    #                 )
-    #             ),
-    #             flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-    #             children = []
-    #         )
-    #     elif command == 'include':
-    #         self.state.include()
-    #         return Response(
-    #             name = self.name,
-    #             token = token,
-    #             data = pack_to_any(
-    #                 PlainText(
-    #                     text=f"\'{self.name}\' included"
-    #                 )
-    #             ),
-    #             flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-    #             children = []
-    #         )
+        command_name = data_dict["id"]
+        cmd_data = data_dict["data"]
+        entry_state = data_dict["entry_state"].upper()
+        exit_state = data_dict["exit_state"].upper()
 
-    #     if self.state.excluded():
-    #         return Response(
-    #             name = self.name,
-    #             token = token,
-    #             data = pack_to_any(
-    #                 FSMCommandResponse(
-    #                     flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-    #                     command_name = data.command_name,
-    #                     data = None
-    #                 )
-    #             ),
-    #             flag = ResponseFlag.EXECUTED_SUCCESSFULLY,
-    #             children = []
-    #         )
+        if entry_state != exit_state:
+            raise ExpertCommandException(
+                f"'entry_state' and 'exit_state' must be the same, provided entry_state='{data_dict['entry_state']}' and exit_state='{data_dict['exit_state']}'"
+            )
 
-    #     # here lies the mother of all the problems
-    #     if command == 'execute_fsm_command':
-    #         return self.propagate_fsm_command(command, data, token)
-    #     elif command == 'describe':
-    #         return self.describe(token)
-    #     else:
-    #         self.log.info(f'Ignoring command \'{command}\' sent to \'{self.name}\'')
-    #         return Response(
-    #             name = self.name,
-    #             token = token,
-    #             data = None,
-    #             flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-    #             children = []
-    #         )
+        current_state = self.state.get_operational_state().upper()
 
-    def propagate_fsm_command(self, command: str, data, token: Token) -> Response:
+        if entry_state not in [current_state, "ANY", "ALL", "", ".*"]:
+            raise ExpertCommandException(
+                f"Invalid 'entry_state', according to the command the system should be '{data_dict['entry_state']}', application is in state '{current_state}'"
+            )
+
+        self.log.info(f"Sending '{command_name}' to '{self.name}'")
+
+        try:
+            self.commander.send_command(
+                cmd_id=command_name,
+                module_data=cmd_data,
+                entry_state=entry_state,
+                exit_state=exit_state,
+            )
+            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
+            r = self.commander.check_response(150)
+
+            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
+
+            success = r["success"]
+
+            response_data = PlainText(text=json.dumps(r))
+
+            response = Response(
+                name=self.name,
+                token=token,
+                data=pack_to_any(response_data),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children={},
+            )
+
+            if not success:
+                self.log.error(r["result"])
+                self.state.to_error()
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
+                return response
+
+        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
+            self.log.error(
+                f"Got error from '{command_name}' to '{self.name}': {str(e)}"
+            )
+            self.state.to_error()
+
+            self.log.exception(e)
+            raise e
+
+        return response
+
+    def propagate_fsm_command(self, data: FSMCommand, token: Token) -> Response:
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(data.command_name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
         self.log.info(f"Sending '{data.command_name}' to '{self.name}'")
-
+        try:
+            the_module_data = json.loads(data.data if data.data else "{}")
+        except JSONDecodeError as e:
+            self.log.error(f"Error parsing data: {e}")
+            raise e
         try:
             self.commander.send_command(
                 cmd_id=data.command_name,
-                cmd_data=json.loads(data.data),
+                module_data={"modules": [{"data": the_module_data, "match": ""}]},
                 entry_state=entry_state.upper(),
                 exit_state=exit_state.upper(),
             )
@@ -487,9 +499,11 @@ class RESTAPIChildNode(ClientSideChild):
             response_data = pack_to_any(PlainText(text=json.dumps(r)))
 
             fsm_data = FSMCommandResponse(
-                flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-                if success
-                else FSMResponseFlag.FSM_FAILED,
+                flag=(
+                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+                    if success
+                    else FSMResponseFlag.FSM_FAILED
+                ),
                 command_name=data.command_name,
                 data=response_data,
             )

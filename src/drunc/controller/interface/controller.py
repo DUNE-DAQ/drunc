@@ -94,6 +94,7 @@ def controller_cli(
             obj_uid=name,
             session=configurationid,  # some of the function for enable/disable require the full dal of the session
         ),
+        session_name=sessionname
     )
 
     commandfacility = resolve_localhost_and_127_ip_to_network_ip(commandfacility)
@@ -106,7 +107,7 @@ def controller_cli(
     )
 
     def serve(listen_addr: str) -> None:
-        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=1))
+        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)
 
@@ -139,6 +140,7 @@ def controller_cli(
         server, port = serve(commandfacility)
         server_name = commandfacility.split(":")[0]
         ctrlr.advertise_control_address(f"grpc://{server_name}:{port}")
+        ctrlr.init_controller()
         server.wait_for_termination(timeout=None)
 
     except Exception as e:

@@ -1,43 +1,71 @@
 """The session manager service."""
 
 import abc
-import logging
+from os import getenv
+from pathlib import Path
 
+from conffwk import Configuration
 from druncschema.request_response_pb2 import (
     CommandDescription,
     Description,
+    Request,
     Response,
     ResponseFlag,
 )
-from druncschema.session_manager_pb2 import ActiveSession, AllActiveSessions, ConfigKey
+from druncschema.session_manager_pb2 import (
+    ActiveSession,
+    AllActiveSessions,
+    AllConfigKeys,
+    ConfigKey,
+)
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
-from druncschema.token_pb2 import Token
+from grpc import ServicerContext
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any, unpack_request_data_to
-from drunc.utils.utils import pid_info_str
+from drunc.utils.grpc_utils import pack_to_any
+from drunc.utils.utils import get_logger, pid_info_str
 
 
 class SessionManager(abc.ABC, SessionManagerServicer):
+    """Provides a gRPC service to manage and interact with sessions.
+
+    This class implements the server-side session manager logic, used to create
+    and manage sessions.
+    """
+
     def __init__(self, name: str, configuration: SessionManagerConfHandler):
+        """Cerate a new session manager instance.
+
+        Args:
+            name: The name of the session manager.
+            configuration: The configuration handler for the session manager.
+        """
         super().__init__()
 
-        self.log = logging.getLogger("drunc.session_manager")
+        self.log = get_logger("session_manager")
         self.log.debug(pid_info_str())
         self.log.debug("Initialized SessionManager")
 
         self.name = name
         self.configuration = configuration
 
-    @unpack_request_data_to(None, pass_token=True)
-    def describe(self, token: Token) -> Response:
+    def describe(self, request:Request, context:ServicerContext) -> Response:
+        """Respond with a description of this session manager service.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
+
+        Returns:
+            A response containing the service description.
+        """
         self.log.debug(f"{self.name} running describe")
 
         command_descriptions = [
             CommandDescription(
                 name="describe",
                 data_type=["None"],
-                help="Describe self (return a list of commands, the type of endpoint, the name and session).",
+                help="List the methods exposed by this endpoint.",
                 return_type="request_response_pb2.Description",
             ),
             CommandDescription(
@@ -69,8 +97,16 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    @unpack_request_data_to(None, pass_token=True)
-    def list_all_sessions(self, token: Token) -> Response:
+    def list_all_sessions(self, request:Request, context:ServicerContext) -> Response:
+        """Respond with a list of all active sessions.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
+
+        Returns:
+            A response containing all active sessions.
+        """
         self.log.debug(f"{self.name} running list_all_sessions")
 
         dummy_config = ConfigKey(
@@ -96,7 +132,61 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    # TODO: next PR.
-    # @unpack_request_data_to(None, pass_token=True)
-    # def list_all_configs(self, token: Token) -> Response:
-    #     pass
+    def list_all_configs(self, request:Request, context:ServicerContext) -> Response:
+        """Respond with a list of all available configurations.
+
+        Args:
+            request: The incoming request (not used).
+            context: The gRPC context (not used).
+
+        Returns:
+            A response containing all available configuration keys.
+        """
+        self.log.debug(f"{self.name} running list_all_configs")
+
+        # Get search paths for available configurations.
+        search_paths = getenv("DUNEDAQ_DB_PATH")
+        if search_paths is None:
+            self.log.error("DUNEDAQ_DB_PATH not set")
+            return Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(None),
+                flag=ResponseFlag.FAILED,
+                children=[],
+            )
+
+        # Find all configuration files.
+        config_files: list[Path] = []
+        for path in search_paths.split(":"):
+            config_glob = Path(path).rglob("*.data.xml")
+            config_files.extend(config_glob)
+
+        # Parse all configuration files.
+        configs = []
+        for file in config_files:
+            try:
+                config = Configuration(f"oksconflibs:{file}")
+            except Exception as e:
+                self.log.error(e)
+                continue
+
+            # Parse all session configurations in this file.
+            for session_config in config.get_dals("Session"):
+                config_key = ConfigKey(
+                    file=file.name,
+                    session_id=session_config.id,
+                )
+                configs.append(config_key)
+
+        all_configs = AllConfigKeys(
+            config_keys=configs,
+        )
+
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(all_configs),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
+        )

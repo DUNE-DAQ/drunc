@@ -4,6 +4,20 @@ import os
 import click
 import click_shell
 
+from drunc.controller.interface.commands import (
+    connect,
+    disconnect,
+    exclude,
+    expert_command,
+    include,
+    recompute_status,
+    status,
+    surrender_control,
+    take_control,
+    wait,
+    who_am_i,
+    who_is_in_charge,
+)
 from drunc.controller.interface.shell_utils import (
     controller_cleanup_wrapper,
     controller_setup,
@@ -67,18 +81,8 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     #     ctx.call_on_close(controller_shell_log.warning(f"[green]{getpass.getuser()}[/green] disconnected from the [green]{ctx.obj.get_driver('controller').describe().data.name}[/green] through a [green]controller-shell[/green]"))
     # ctx.call_on_close(cleanup)
 
-    from drunc.controller.interface.commands import (
-        connect,
-        disconnect,
-        exclude,
-        include,
-        recompute_status,
-        status,
-        surrender_control,
-        take_control,
-        wait,
-        who_am_i,
-        who_is_in_charge,
+    transitions = (
+        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").data
     )
 
     transitions = (
@@ -98,3 +102,4 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     ctx.command.add_command(include, "include")
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
+    ctx.command.add_command(expert_command, "expert-command")

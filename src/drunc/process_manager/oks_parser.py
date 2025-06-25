@@ -1,14 +1,11 @@
 import os
 from typing import Dict, List
 
-import conffwk
 import confmodel
 
 from drunc.exceptions import DruncException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import get_logger
-
-dal = conffwk.dal.module("x", "schema/confmodel/dunedaq.schema.xml")
 
 
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:
@@ -69,6 +66,7 @@ def collect_apps(
     rc_env = defenv.copy()
     collect_variables(controller.application_environment, rc_env)
     rc_env["DUNEDAQ_APPLICATION_NAME"] = controller.id
+    rc_env["GRPC_ENABLE_FORK_SUPPORT"] = "false"
     host = controller.runs_on.runs_on.id
 
     tree_id_str = ".".join(map(str, tree_prefix))

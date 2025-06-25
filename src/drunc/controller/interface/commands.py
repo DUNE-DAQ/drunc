@@ -1,10 +1,10 @@
+import json
 from time import sleep
 
 import click
-from druncschema.generic_pb2 import PlainTextVector
 
 from drunc.controller.interface.context import ControllerContext
-from drunc.controller.interface.shell_utils import controller_setup, print_status_table
+from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
 logger_params = {"logger_name": "controller.interface", "rich_handler": True}
@@ -12,12 +12,22 @@ logger_params = {"logger_name": "controller.interface", "rich_handler": True}
 
 @click.command("list-transitions")
 @click.option(
-    "--all", is_flag=True, help="List all transitions (available and unavailable)"
+    "--all",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="List all transitions (available and unavailable)",
 )
+@click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
-def list_transitions(obj: ControllerContext, all: bool) -> None:
+def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
     log = get_logger(**logger_params)
-    desc = obj.get_driver("controller").describe_fsm("all-transitions" if all else None)
+    desc = obj.get_driver("controller").describe_fsm(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=False,
+        key="all-transitions" if all else None,
+    )
     if not desc:
         log.error("Could not get the list of commands available")
         return
@@ -46,23 +56,79 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
 
 
 @click.command("status")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
 @click.pass_obj
-def status(obj: ControllerContext) -> None:
-    statuses = obj.get_driver(
-        "controller"
-    ).status()  # Get the dynamic system information
-    descriptions = obj.get_driver(
-        "controller"
-    ).describe()  # Get the static system information
-    print_status_table(obj, statuses, descriptions)
+def status(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    statuses = obj.get_driver("controller").status(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )  # Get the dynamic system information
+    descriptions = obj.get_driver("controller").describe(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )  # Get the static system information
+    t = get_status_table(statuses, descriptions)
+    obj.print(t)
+    obj.print_status_summary()
 
 
 @click.command("recompute-status")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
 @click.pass_obj
-def recompute_status(obj: ControllerContext) -> None:
-    statuses = obj.get_driver("controller").recompute_status()
-    descriptions = obj.get_driver("controller").describe()
-    print_status_table(obj, statuses, descriptions)
+def recompute_status(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    statuses = obj.get_driver("controller").recompute_status(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    descriptions = obj.get_driver("controller").describe(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    t = get_status_table(statuses, descriptions)
+    obj.print(t)
+    obj.print_status_summary()
 
 
 @click.command("connect")
@@ -126,15 +192,63 @@ You can also find the controller address on the connectivity service.
 
 
 @click.command("take-control")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
 @click.pass_obj
-def take_control(obj: ControllerContext) -> None:
-    obj.get_driver("controller").take_control().data
+def take_control(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    obj.get_driver("controller").take_control(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    ).data
 
 
 @click.command("surrender-control")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
 @click.pass_obj
-def surrender_control(obj: ControllerContext) -> None:
-    obj.get_driver("controller").surrender_control().data
+def surrender_control(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    obj.get_driver("controller").surrender_control(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    ).data
 
 
 @click.command("who-am-i")
@@ -145,20 +259,58 @@ def who_am_i(obj: ControllerContext) -> None:
 
 
 @click.command("who-is-in-charge")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
 @click.pass_obj
-def who_is_in_charge(obj: ControllerContext) -> None:
-    who = obj.get_driver("controller").who_is_in_charge().data
+def who_is_in_charge(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    who = (
+        obj.get_driver("controller")
+        .who_is_in_charge(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        .data
+    )
     if who:
         log = get_logger(**logger_params)
-        log.info(who.text)
+        log.info(who.text)  ## TODO create a table of who is in charge
 
 
 @click.command("include")
-@click.argument("children", type=str, nargs=-1)
+@click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
-def include(obj: ControllerContext, children: list[str]) -> None:
-    data = PlainTextVector(text=children)
-    result = obj.get_driver("controller").include(arguments=data).data
+def include(
+    obj: ControllerContext,
+    target: str,
+) -> None:
+    result = (
+        obj.get_driver("controller")
+        .include(
+            target=target,
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=True,
+        )
+        .data
+    )
     if not result:
         return
     log = get_logger(**logger_params)
@@ -166,12 +318,91 @@ def include(obj: ControllerContext, children: list[str]) -> None:
 
 
 @click.command("exclude")
-@click.argument("children", type=str, nargs=-1)
+@click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
-def exclude(obj: ControllerContext, children: list[str]) -> None:
-    data = PlainTextVector(text=children)
-    result = obj.get_driver("controller").exclude(arguments=data).data
+def exclude(
+    obj: ControllerContext,
+    target: str,
+) -> None:
+    result = (
+        obj.get_driver("controller")
+        .exclude(
+            target=target,
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=True,
+        )
+        .data
+    )
     if not result:
         return
     log = get_logger(**logger_params)
     log.info(result.text)
+
+
+@click.command("expert-command")
+@click.option(
+    "-s",
+    "--string",
+    is_flag=True,
+    show_default=True,
+    help="Read the command directly from the command line, else you need to write a file and provide its path",
+)
+@click.argument("command", type=str)
+@click.option("--target", type=str, help="The target to address", default="")
+@click.pass_obj
+def expert_command(
+    obj: ControllerContext,
+    command: str,
+    string: bool,
+    target: str,
+) -> None:
+    data = dict()
+    log = get_logger(**logger_params)
+    try:
+        if string:
+            data = json.loads(command)
+        else:
+            with open(command, "r") as f:
+                data = json.load(f)
+
+    except FileNotFoundError:
+        log.error(f"File not found: {command}")
+        return
+
+    except json.JSONDecodeError as e:
+        log.error(f"JSON decode error: {e}")
+        return
+
+    result = obj.get_driver("controller").expert_command(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
+        json_string=json.dumps(data),
+    )
+
+    def print_result(result, prefix=""):
+        if not hasattr(result, "data"):
+            log.info(
+                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (no data)[/red]"
+            )
+        elif result.data.DESCRIPTOR.name == "PlainText":
+            log.info(
+                f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data.text}[/green]"
+            )
+        elif result.data.DESCRIPTOR.name == "Stacktrace":
+            for i in reversed(range(len(result.data.text))):
+                error = result.data.text[i]
+                if error != "":
+                    break
+            log.info(
+                f"{prefix}[yellow]{result.name}[/yellow] [red]ERROR: {error}[/red]"
+            )
+        else:
+            log.info(
+                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (data format not understood: {result.data.DESCRIPTOR.name})[/red]"
+            )
+
+        for child in result.children:
+            print_result(child, prefix + "    ")
+
+    print_result(result)

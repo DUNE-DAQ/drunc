@@ -12,7 +12,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, log_levels, run_coroutine
+from drunc.utils.utils import get_logger, run_coroutine
 
 
 @click.command("boot")
@@ -22,13 +22,6 @@ from drunc.utils.utils import get_logger, log_levels, run_coroutine
     type=str,
     default=getpass.getuser(),
     help="Select the process of a particular user (default $USER)",
-)
-@click.option(
-    "-l",
-    "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
-    default="INFO",
-    help="Set the log level",
 )
 @click.option(
     "-o/-no",
@@ -48,7 +41,6 @@ async def boot(
     session_name: str,
     configuration_file: str,
     configuration_id: str,
-    log_level: str,
     override_logs: bool,
 ) -> None:
     log = get_logger("process_manager.shell")
@@ -69,7 +61,7 @@ async def boot(
             conf_id=configuration_id,
             user=user,
             session_name=session_name,
-            log_level=log_level,
+            log_level="INFO",  ## Unused anyway!!
             override_logs=override_logs,
         )
         async for result in results:
@@ -199,7 +191,7 @@ async def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @run_coroutine
 async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
-    log.debug(f"process_manager running flish with query {query}")
+    log.debug(f"Flushing with query {query}")
     result = await obj.get_driver("process_manager").flush(query=query)
     if not result:
         return
@@ -210,7 +202,13 @@ async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 
 @click.command("logs")
 @add_query_options(at_least_one=True)
-@click.option("--how-far", type=int, default=100, help="How many lines one wants")
+@click.option(
+    "--how-far",
+    type=int,
+    show_default=True,
+    default=100,
+    help="How many lines one wants",
+)
 @click.option("--grep", type=str, default=None)
 @click.pass_obj
 @run_coroutine

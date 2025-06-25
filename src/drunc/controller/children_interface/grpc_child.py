@@ -65,9 +65,8 @@ class gRPCChildNode(ChildNode):
                         f"Could not connect to the controller ({self.uri}), trial {itry + 1} of {ntries}"
                     )
                     time.sleep(5)
+                    continue
 
-            except ServerUnreachable as e:
-                raise DruncSetupException from e
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
                 break

@@ -4,7 +4,6 @@ import signal
 import tempfile
 import threading
 import uuid
-from ctypes import cdll
 from time import sleep
 
 import sh
@@ -21,35 +20,9 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
-
-# # ------------------------------------------------
-# # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
-
-# Constant taken from http://linux.die.net/include/linux/prctl.h
-PR_SET_PDEATHSIG = 1
-
-
-class PrCtlError(DruncException):
-    pass
-
-
-def on_parent_exit(signum):
-    """Return a function to be run in a child process which will trigger
-    SIGNAME to be sent when the parent process dies
-    """
-
-    def set_parent_exit_signal():
-        # http://linux.die.net/man/2/prctl
-        result = cdll["libc.so.6"].prctl(PR_SET_PDEATHSIG, signum)
-        if result != 0:
-            raise PrCtlError("prctl failed with error code %s" % result)
-
-    return set_parent_exit_signal
-
-
-# ------------------------------------------------
+from drunc.process_manager.utils import on_parent_exit
 
 
 class AppProcessWatcherThread(threading.Thread):
@@ -78,6 +51,19 @@ class SSHProcessManager(ProcessManager):
         self.session = getpass.getuser()  # unfortunate
 
         super().__init__(configuration=configuration, session=self.session, **kwargs)
+
+        self.disable_localhost_host_key_check = False
+        self.disable_host_key_check = False
+
+        if self.configuration.data.settings:
+            self.disable_localhost_host_key_check = (
+                self.configuration.data.settings.get(
+                    "disable_localhost_host_key_check", False
+                )
+            )
+            self.disable_host_key_check = self.configuration.data.settings.get(
+                "disable_host_key_check", False
+            )
 
         # self.children_logs_depth = 1000
         # self.children_logs = {}
@@ -153,6 +139,11 @@ class SSHProcessManager(ProcessManager):
         user = self.boot_request[uid].process_description.metadata.user
         host = self.boot_request[uid].process_description.metadata.hostname
         user_host = f"{user}@{host}"
+        disable_host_key_check = self.disable_host_key_check or (
+            self.disable_localhost_host_key_check
+            and host in ("localhost", "127.0.0.1", "::1")
+        )
+
         # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
         # "Not the straight forward way"...
         f = tempfile.NamedTemporaryFile(delete=False)
@@ -167,7 +158,18 @@ class SSHProcessManager(ProcessManager):
                 logfile,
             ]
             self.log.debug(f"cmd: {cmd}")
-            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"] + cmd
+            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
+            arguments += (
+                [
+                    "-o LogLevel=error",
+                    "-o GlobalKnownHostsFile=/dev/null",
+                    "-o UserKnownHostsFile=/dev/null",
+                ]
+                if disable_host_key_check
+                else []
+            )
+            arguments += cmd
+
             self.ssh(
                 *arguments,
                 _out=f.name,
@@ -246,6 +248,10 @@ class SSHProcessManager(ProcessManager):
 
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
+                disable_host_key_check = self.disable_host_key_check or (
+                    self.disable_localhost_host_key_check
+                    and host in ("localhost", "127.0.0.1", "::1")
+                )
 
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
                 cmd = (
@@ -270,13 +276,19 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
-                arguments = [
-                    user_host,
-                    "-tt",
-                    "-o StrictHostKeyChecking=no",
+                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
+                arguments += (
+                    [
+                        "-o LogLevel=error",
+                        "-o GlobalKnownHostsFile=/dev/null",
+                        "-o UserKnownHostsFile=/dev/null",
+                    ]
+                    if disable_host_key_check
+                    else []
+                )
+                arguments += [
                     f"{{ {cmd} ; }} &> {log_file}",
                 ]
-                self.log.debug(f"{arguments}")
                 # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
                 # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
                 self.process_store[uuid] = self.ssh(
@@ -339,9 +351,11 @@ class SSHProcessManager(ProcessManager):
         pi = ProcessInstance(
             process_description=pd,
             process_restriction=pr,
-            status_code=ProcessInstance.StatusCode.RUNNING
-            if alive
-            else ProcessInstance.StatusCode.DEAD,
+            status_code=(
+                ProcessInstance.StatusCode.RUNNING
+                if alive
+                else ProcessInstance.StatusCode.DEAD
+            ),
             return_code=return_code,
             uuid=pu,
         )
@@ -349,7 +363,6 @@ class SSHProcessManager(ProcessManager):
         return pi
 
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        self.log.debug(f"{self.name} running ps")
         ret = []
 
         for proc_uuid in self._get_process_uid(query):
@@ -379,9 +392,11 @@ class SSHProcessManager(ProcessManager):
             pi = ProcessInstance(
                 process_description=pd,
                 process_restriction=pr,
-                status_code=ProcessInstance.StatusCode.RUNNING
-                if self.process_store[proc_uuid].is_alive()
-                else ProcessInstance.StatusCode.DEAD,
+                status_code=(
+                    ProcessInstance.StatusCode.RUNNING
+                    if self.process_store[proc_uuid].is_alive()
+                    else ProcessInstance.StatusCode.DEAD
+                ),
                 return_code=return_code,
                 uuid=pu,
             )

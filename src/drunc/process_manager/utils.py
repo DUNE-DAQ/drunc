@@ -8,7 +8,7 @@ import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
 from rich.table import Table
 
-from drunc.exceptions import DruncCommandException, DruncSetupException
+from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
 from drunc.utils.utils import now_str
 
 
@@ -186,5 +186,31 @@ def get_log_path(
     return log_path
 
 
-def get_pm_conf_name_from_dir(pm_conf_path: str) -> str:
-    return pm_conf_path.split("/")[-1].split(".")[0]
+# # ------------------------------------------------
+# # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
+
+# Constant taken from http://linux.die.net/include/linux/prctl.h
+PR_SET_PDEATHSIG = 1
+
+
+class PrCtlError(DruncException):
+    pass
+
+
+def on_parent_exit(signum):
+    """Return a function to be run in a child process which will trigger
+    SIGNAME to be sent when the parent process dies
+    """
+
+    def set_parent_exit_signal():
+        from ctypes import cdll
+
+        # http://linux.die.net/man/2/prctl
+        result = cdll["libc.so.6"].prctl(PR_SET_PDEATHSIG, signum)
+        if result != 0:
+            raise PrCtlError("prctl failed with error code %s" % result)
+
+    return set_parent_exit_signal
+
+
+# ------------------------------------------------

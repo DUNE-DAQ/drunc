@@ -1,8 +1,10 @@
+import asyncio
 import getpass
 import json
 import os
 import signal
 import tempfile
+import time
 
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -157,6 +159,10 @@ class ProcessManagerDriver(GRPCDriver):
         session_name: str,
         log_level: str,
         override_logs: bool = True,
+        timeout: int | float = 60,
+        sleep_between_app_boot: (
+            int | float
+        ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
     ) -> ProcessInstance:
         from daqconf.consolidate import consolidate_db
@@ -171,19 +177,32 @@ class ProcessManagerDriver(GRPCDriver):
                 conf_file_no_scheme = conf_file.replace("oksconflibs:", "")
                 consolidate_db(conf_file_no_scheme, f"{fname}")
             except Exception as e:
-                self.log.critical(f"""\nInvalid configuration passed (cannot consolidate your configuration)
+                self.log.critical(
+                    f"""\nInvalid configuration passed (cannot consolidate your configuration)
 {e}
 To debug it, close drunc and run the following command:
 
 [yellow]oks_dump --files-only {conf_file_no_scheme}[/]
 
-""")
+"""
+                )
                 return
 
         import conffwk  # isort: skip
 
         db = conffwk.Configuration(conf_file)
         session_dal = db.get_dal(class_name="Session", uid=conf_id)
+
+        csc = None
+        if session_dal.connectivity_service:
+            connection_server = session_dal.connectivity_service.host
+            connection_port = session_dal.connectivity_service.service.port
+            csc = ConnectivityServiceClient(
+                session_name, f"{connection_server}:{connection_port}"
+            )
+
+        last_boot_on_host_at = {}
+        previous_host = None
 
         async for br in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
@@ -194,10 +213,31 @@ To debug it, close drunc and run the following command:
             override_logs=override_logs,
             **kwargs,
         ):
+            if (
+                br.process_description.metadata.name
+                not in [app.id for app in session_dal.infrastructure_applications]
+                and csc
+                and not csc.is_ready(timeout=10)
+            ):
+                raise DruncSetupException("Connectivity service is not ready in time")
+
+            this_host = next(iter(br.process_restriction.allowed_hosts))
+
+            time_diff = time.time() - last_boot_on_host_at.get(this_host, 0)
+
+            if sleep_between_app_boot > 0 and time_diff < sleep_between_app_boot:
+                self.log.debug(
+                    f"Sleeping for {sleep_between_app_boot - time_diff} seconds {previous_host} {this_host}"
+                )
+                await asyncio.sleep(sleep_between_app_boot - time_diff)
+
+            previous_host = this_host
+            last_boot_on_host_at[this_host] = time.time()
             yield await self.send_command_aio(
                 "boot",
                 data=br,
                 outformat=ProcessInstance,
+                timeout=timeout,
             )
 
         top_controller_name = session_dal.segment.controller.id
@@ -207,13 +247,7 @@ To debug it, close drunc and run the following command:
 
             env = {}
             collect_variables(session_dal.environment, env)
-            if session_dal.connectivity_service:
-                connection_server = session_dal.connectivity_service.host
-                connection_port = session_dal.connectivity_service.service.port
-                csc = ConnectivityServiceClient(
-                    session_name, f"{connection_server}:{connection_port}"
-                )
-
+            if csc:
                 try:
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60) + 60
@@ -230,7 +264,8 @@ To debug it, close drunc and run the following command:
                         title=f"Looking for [green]{top_controller_name}[/] on the connectivity service...",
                     )
                 except ApplicationLookupUnsuccessful:
-                    self.log.error(f"""
+                    self.log.error(
+                        f"""
 Could not find \'{top_controller_name}\' on the connectivity service.
 
 Two possibilities:
@@ -249,7 +284,8 @@ And look for messages like:
 [yellow]Registering root-controller to the connectivity service at grpc://xxx.xxx.xxx.xxx:xxxxx[/]
 To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_to_hostname(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
-""")
+"""
+                    )
                     return
 
                 return uri.replace("grpc://", "")
@@ -283,10 +319,12 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             if session_dal.connectivity_service:
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
-                self.log.warning(f"""This shell didn't connect to the {top_controller_name}.
+                self.log.warning(
+                    f"""This shell didn't connect to the {top_controller_name}.
 To find the controller address, you can look up \'{top_controller_name}_control\' on http://{resolve_localhost_to_hostname(connection_server)}:{connection_port} (you may need a SOCKS proxy from outside CERN), or use the address from the logs as above. Then just connect this shell to the controller with:
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
-""")
+"""
+                )
             else:
                 self.log.warning(
                     f"This shell didn't connect to the {top_controller_name}. You can use the connect command to connect to the controller."
@@ -295,7 +333,13 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             signal.signal(signal.SIGINT, original_sigint_handler)
 
     async def dummy_boot(
-        self, user: str, session_name: str, n_processes: int, sleep: int, n_sleeps: int
+        self,
+        user: str,
+        session_name: str,
+        n_processes: int,
+        sleep: int,
+        n_sleeps: int,
+        timeout: int | float = 60,
     ):  # -> ProcessInstance:
         pwd = os.getcwd()
 
@@ -338,51 +382,69 @@ To find the controller address, you can look up \'{top_controller_name}_control\
                 "boot",
                 data=breq,
                 outformat=ProcessInstance,
+                timeout=timeout,
             )
 
     async def terminate(
         self,
+        timeout: int | float = 60,
     ) -> ProcessInstanceList:
-        return await self.send_command_aio("terminate", outformat=ProcessInstanceList)
+        return await self.send_command_aio(
+            "terminate", outformat=ProcessInstanceList, timeout=timeout
+        )
 
-    async def kill(self, query: ProcessQuery) -> ProcessInstance:
+    async def kill(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstance:
         return await self.send_command_aio(
             "kill",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def logs(self, req: LogRequest) -> LogLine:
+    async def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLine:
         async for stream in self.send_command_for_aio(
             "logs",
             data=req,
             outformat=LogLine,
+            timeout=timeout,
         ):
             yield stream
 
-    async def ps(self, query: ProcessQuery) -> ProcessInstanceList:
+    async def ps(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
         return await self.send_command_aio(
             "ps",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def flush(self, query: ProcessQuery) -> ProcessInstanceList:
+    async def flush(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
         return await self.send_command_aio(
             "flush",
             data=query,
             outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
-    async def restart(self, query: ProcessQuery) -> ProcessInstance:
+    async def restart(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstance:
         return await self.send_command_aio(
             "restart",
             data=query,
             outformat=ProcessInstance,
+            timeout=timeout,
         )
 
-    async def describe(self) -> Description:
+    async def describe(self, timeout: int | float = 60) -> Description:
         return await self.send_command_aio(
             "describe",
             outformat=Description,
+            timeout=timeout,
         )

@@ -1,11 +1,18 @@
 import socket
 import threading
 
+from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
+from opmonlib.publisher import OpMonPublisher
+from opmonlib.utils import parse_opmon_conf
+
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import get_segment_lookup_timeout
-from drunc.exceptions import DruncSetupException
+from drunc.controller.children_interface.rest_api_child import (
+    RESTAPIChildNodeConfHandler,
+)
+from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.configuration import ConfHandler
+from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.utils import ControlType
 
 import confmodel  # isort: skip
 
@@ -47,7 +54,7 @@ class ControllerConfHandler(ConfHandler):
             )
         return this_segment
 
-    def _post_process_oks(self):
+    def _post_process_oks(self, *args, **kwargs):
         self.authoriser = None
         self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
@@ -56,22 +63,86 @@ class ControllerConfHandler(ConfHandler):
         if self.this_host in ["localhost"] or self.this_host.startswith("127."):
             self.this_host = socket.gethostname()
 
-    def get_children(
+        self.opmon_publisher = None
+        self.opmon_conf = parse_opmon_conf(
+            log=self.log,
+            conf=self.data.controller.opmon_conf,
+            uri=self.session.opmon_uri,
+            session=self.session_name,
+            application=self.data.controller.id,
+        )
+
+        if self.opmon_conf.path == "./info.json":
+            self.opmon_conf.path = (
+                "./info."
+                + self.opmon_conf.session
+                + "."
+                + self.data.controller.id
+                + ".json"
+            )
+
+        self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
+
+        try:
+            if self.opmon_conf.opmon_type == "stream":
+                self.log.debug("Attemtpting to initialize KafkaOpMonPublisher")
+                self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
+                self.log.debug(
+                    "KafkaOpMonPublisher initialized with configuration %s",
+                    self.opmon_conf,
+                )
+            else:
+                self.log.debug("Attemtpting to initialize OpMonPublisher")
+                self.opmon_publisher = OpMonPublisher(
+                    conf=self.opmon_conf, log_level=self.log.getEffectiveLevel()
+                )
+                self.log.debug(
+                    "OpMonPublisher initialized with configuration %s", self.opmon_conf
+                )
+
+        except Exception as e:
+            self.log.error("Failed to initialize OpMonPublisher: %s", e)
+            raise DruncCommandException("Failed to initialize OpMonPublisher.")
+        return
+
+    def get_dummy_children(self):
+        ret = []
+        session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
+
+        for seg in self.data.segments:
+            if confmodel.component_disabled(self.db._obj, session.id, seg.id):
+                continue
+            ret.append(
+                ChildNode(
+                    name=seg.controller.id,
+                    configuration=RESTAPIChildNodeConfHandler(seg, ConfTypes.PyObject),
+                    node_type=ControlType.Unknown,
+                )
+            )
+        for app in self.data.applications:
+            if confmodel.component_disabled(self.db._obj, session.id, app.id):
+                continue
+            ret.append(
+                ChildNode(
+                    name=app.id,
+                    configuration=RESTAPIChildNodeConfHandler(app, ConfTypes.PyObject),
+                    node_type=ControlType.Unknown,
+                )
+            )
+        return ret
+
+    def update_children(
         self,
+        children,
         init_token,
         without_excluded=False,
         connectivity_service=None,
         session_name=None,
     ):
         enabled_only = not without_excluded
-        timeout = get_segment_lookup_timeout(
-            self.data,  # the current segment
-            base_timeout=60,
-        )
+        timeout = 60  # 60s for each application to start and show up on the connectivity service
 
         self.log.debug(f"get_children: connectivity service lookup timeout={timeout}")
-        # if self.children != []:
-        #    return self.get_children(init_token, without_excluded, connectivity_service)
 
         session = None
         self.children = []
@@ -108,7 +179,15 @@ class ControllerConfHandler(ConfHandler):
                 timeout=timeout,
             )
             if new_node:
-                self.children.append(new_node)
+                got_child = False
+
+                for idx, child in enumerate(children):
+                    if child.name == new_node.name:
+                        children[idx] = new_node
+                        got_child = True
+                        break
+                if not got_child:
+                    self.children.append(new_node)
 
         def process_application(app):
             if enabled_only:
@@ -122,7 +201,7 @@ class ControllerConfHandler(ConfHandler):
                 session_name=session_name,
                 obj=app,
             )
-            self.log.info(f"commandline_parameters: {commandline_parameters}")
+
             new_node = ChildNode.get_child(
                 cli=commandline_parameters,
                 name=app.id,
@@ -132,7 +211,15 @@ class ControllerConfHandler(ConfHandler):
                 timeout=60,
             )
             if new_node:
-                self.children.append(new_node)
+                got_child = False
+
+                for idx, child in enumerate(children):
+                    if child.name == new_node.name:
+                        children[idx] = new_node
+                        got_child = True
+                        break
+                if not got_child:
+                    self.children.append(new_node)
 
         # threading the children look up
         threads = []

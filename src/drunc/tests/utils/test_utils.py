@@ -319,26 +319,6 @@ def test_https_or_https_present():
         https_or_http_present("httpss://google.com")
 
 
-@pytest.mark.xfail
-def test_http_post():
-    raise NotImplementedError()
-
-
-@pytest.mark.xfail
-def test_http_get():
-    raise NotImplementedError()
-
-
-@pytest.mark.xfail
-def test_http_patch():
-    raise NotImplementedError()
-
-
-@pytest.mark.xfail
-def test_http_delete():
-    raise NotImplementedError()
-
-
 def test_get_control_type_and_uri_from_cli():
     this_address = socket.gethostbyname(socket.gethostname()) + ":1234"
 

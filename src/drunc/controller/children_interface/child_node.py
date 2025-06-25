@@ -1,5 +1,7 @@
-import abc
 import os
+
+from druncschema.controller_pb2 import Status
+from druncschema.request_response_pb2 import Response
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
@@ -15,7 +17,6 @@ from drunc.utils.utils import (
 
 from druncschema.request_response_pb2 import (  # isort: skip
     Description,
-    Response,
     ResponseFlag,
 )
 from druncschema.token_pb2 import Token  # isort: skip
@@ -26,34 +27,58 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode(abc.ABC):
+class ChildNode:  # abc.ABC):
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
-        super().__init__(**kwargs)
+        # super().__init__(**kwargs)
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
         self.configuration = configuration
+        self.included = True
 
-    @abc.abstractmethod
     def __str__(self):
         pass
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
-    @abc.abstractmethod
+    # @abc.abstractmethod
     def terminate(self):
         pass
 
-    @abc.abstractmethod
+    # @abc.abstractmethod
     def propagate_command(self, command, data, token):
-        pass
+        if command == "status":
+            return self.get_status(token)
+        elif command == "describe":
+            return self.describe(token)
+        else:
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                children=[],
+            )
 
     # @abc.abstractmethod
-    # def get_status(self, token):
-    #     pass
+    def get_status(self, token):
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(
+                Status(
+                    state="unknown",
+                    sub_state="unknown",
+                    in_error=False,
+                    included=True,
+                )
+            ),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
+        )
 
-    @abc.abstractmethod
+    # @abc.abstractmethod
     def get_endpoint(self):
         pass
 
@@ -77,9 +102,11 @@ class ChildNode(abc.ABC):
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),
-            info=get_detector_name(self.configuration)
-            if self.configuration is not None
-            else None,
+            info=(
+                get_detector_name(self.configuration)
+                if self.configuration is not None
+                else None
+            ),
             session=os.getenv("DUNEDAQ_SESSION"),
             commands=None,
             broadcast=None,

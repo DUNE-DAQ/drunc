@@ -3,7 +3,9 @@ from enum import Enum
 from importlib.resources import path
 from urllib.parse import urlparse
 
-from kafkaopmon.OpMonPublisher import OpMonPublisher
+from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
+from opmonlib.publisher import OpMonPublisher
+from opmonlib.utils import parse_opmon_conf
 
 from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
@@ -26,6 +28,7 @@ class ProcessManagerConfData:
         self.type = ProcessManagerTypes.Unknown
         self.command_address = ""
         self.environment = {}
+        self.settings = {}
         self.opmon_uri = None
         self.opmon_publisher = None
 
@@ -46,6 +49,7 @@ class ProcessManagerConfHandler(ConfHandler):
             new_data.broadcaster = None
         new_data.authoriser = None
         new_data.environment = data.get("environment", {})
+        new_data.settings = data.get("settings", {})
 
         match data["type"].lower():
             case "ssh":
@@ -60,47 +64,46 @@ class ProcessManagerConfHandler(ConfHandler):
                 raise UnknownProcessManagerType(data["type"])
 
         new_data.opmon_publisher = None
-        opmon_uri = data.get("opmon_uri", None)
-
-        if not opmon_uri:
-            self.log.info("Missing 'opmon_uri' in configuration.")
-            return new_data
-
-        opmon_path = opmon_uri.get("path", "")
-        opmon_type = opmon_uri.get("type", "")
-        new_data.opmon_sleep_time = opmon_uri.get("sleep_time", 5.0)
-
-        if not opmon_path or not opmon_type:
-            self.log.error("Invalid 'opmon_uri' format: Missing required fields.")
-            raise DruncCommandException(
-                "Invalid 'opmon_uri' format: Missing required fields."
-            )
-
-        self.log.info(
-            f"OpMon path {opmon_path} and type {opmon_type} is enabled, sleep time: {new_data.opmon_sleep_time} s"
+        self.opmon_conf = parse_opmon_conf(
+            log=self.log,
+            conf=data.get("opmon_conf", None),
+            uri=data.get("opmon_uri", None),
+            session=new_data.type.name,
+            application="process_manager",
         )
 
-        if "/" in opmon_path:
-            opmon_bootstrap, opmon_topic = opmon_path.split("/", 1)
-        else:
-            opmon_bootstrap = opmon_path
-            opmon_topic = "opmon_stream"
+        if self.opmon_conf.path == "./info.json":
+            self.opmon_conf.path = (
+                "./info."
+                + self.opmon_conf.session
+                + "."
+                + self.opmon_conf.application
+                + ".json"
+            )
 
-        if opmon_type == "stream":
-            try:
+        self.log.debug(
+            "Initializing process manager OpMon with configuration %s", self.opmon_conf
+        )
+        try:
+            if self.opmon_conf.opmon_type == "stream":
+                new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
+                self.log.debug(
+                    "KafkaOpMonPublisher initialized with configuration %s",
+                    self.opmon_conf,
+                )
+            else:
                 new_data.opmon_publisher = OpMonPublisher(
-                    default_topic=opmon_topic, bootstrap=opmon_bootstrap
+                    conf=self.opmon_conf, rich_handler=True
                 )
-                self.log.info(
-                    f"OpMonPublisher initialized: {opmon_bootstrap}/{opmon_topic}"
+                self.log.debug(
+                    "%s OpMonPublisher initialized with configuration %s",
+                    self.opmon_conf.opmon_type,
+                    self.opmon_conf,
                 )
 
-            except Exception as e:
-                self.log.error(f"Failed to initialize OpMonPublisher: {e}")
-                raise DruncCommandException("Failed to initialize OpMonPublisher.")
-        else:
-            self.log.error(f"Unsupported OpMon type: {opmon_type}")
-            raise DruncCommandException(f"Unsupported OpMon type: {opmon_type}")
+        except Exception as e:
+            self.log.error("Failed to initialize OpMonPublisher: %s", e)
+            raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
         return new_data
 

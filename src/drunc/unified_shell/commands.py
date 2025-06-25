@@ -6,36 +6,27 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, log_levels, run_coroutine
+from drunc.utils.utils import get_logger, run_coroutine
 
 
 @click.command("boot")
-@click.option(
-    "-u",
-    "--user",
-    type=str,
-    default=getpass.getuser(),
-    help="Create the processes for a particular user (default $USER)",
-)
-@click.option(
-    "-l",
-    "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
-    default="INFO",
-    help="Set the log level",
-)
 @click.option("--override-logs/--no-override-logs", default=True)
+@click.option(
+    "--sleep-between-app-boot",
+    type=float,
+    default=0.1,
+    help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
+)
 @click.pass_obj
 @run_coroutine
 async def boot(
     obj: ProcessManagerContext,
-    user: str,
-    log_level: str,
     override_logs: bool,
+    sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
     session_name = obj.session_name
-
+    user = getpass.getuser()
     processes = await obj.get_driver("process_manager").ps(
         ProcessQuery(user=user, session=session_name)
     )
@@ -52,8 +43,9 @@ async def boot(
             conf_id=obj.configuration_id,
             user=user,
             session_name=session_name,
-            log_level=log_level,
+            log_level="INFO",  # Unused anyway !!
             override_logs=override_logs,
+            sleep_between_app_boot=sleep_between_app_boot,
         )
         async for result in results:
             if not result:
@@ -76,4 +68,7 @@ async def boot(
         log.error("Could not understand where the controller is!")
         return
 
-    log.info("Booted successfully")
+    if not obj.get_driver("controller").status().data.in_error:
+        log.info("Booted successfully")
+    else:
+        log.error("Booted, but the top controller is in error")
