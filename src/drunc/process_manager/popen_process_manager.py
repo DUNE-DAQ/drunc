@@ -88,21 +88,21 @@ class PopenProcessManager(ProcessManager):
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
-            if process.is_alive():
+            if process.poll() is None:
                 sequence = [
                     # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
                     signal.SIGQUIT,
                     signal.SIGKILL,  # Kept as nuclear option
                 ]
                 for sig in sequence:
-                    if not process.is_alive():
+                    if process.poll() is not None:
                         self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
                         break
                     self.log.debug(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
                     )
-                    process.signal_group(sig)  # TODO grab this from the inputs
-                    if not process.is_alive():
+                    process.send_signal(sig)  # TODO grab this from the inputs
+                    if process.poll() is not None:
                         break
                     sleep(self.configuration.data.kill_timeout)
             pd = ProcessDescription()
@@ -111,12 +111,7 @@ class PopenProcessManager(ProcessManager):
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
             pu = ProcessUUID(uuid=proc_uuid)
 
-            return_code = None
-            if not self.process_store[proc_uuid].is_alive():
-                try:
-                    return_code = self.process_store[proc_uuid].exit_code
-                except Exception:
-                    pass
+            return_code = self.process_store[proc_uuid].poll()
 
             ret += [
                 ProcessInstance(
@@ -316,13 +311,8 @@ class PopenProcessManager(ProcessManager):
             )
             return pi
 
-        try:
-            if not self.process_store[uuid].is_alive():
-                return_code = self.process_store[uuid].exit_code
-            else:
-                alive = True
-        except Exception:
-            pass
+        return_code = self.process_store[uuid].poll()
+        alive = return_code is not None
 
         pi = ProcessInstance(
             process_description=pd,
@@ -358,7 +348,7 @@ class PopenProcessManager(ProcessManager):
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
             pu = ProcessUUID(uuid=proc_uuid)
             return_code = None
-            if not self.process_store[proc_uuid].is_alive():
+            if self.process_store[proc_uuid].poll() is None:
                 try:
                     return_code = self.process_store[proc_uuid].exit_code
                 except Exception:
@@ -368,7 +358,7 @@ class PopenProcessManager(ProcessManager):
                 process_description=pd,
                 process_restriction=pr,
                 status_code=ProcessInstance.StatusCode.RUNNING
-                if self.process_store[proc_uuid].is_alive()
+                if self.process_store[proc_uuid].poll() is None
                 else ProcessInstance.StatusCode.DEAD,
                 return_code=return_code,
                 uuid=pu,
@@ -396,7 +386,7 @@ class PopenProcessManager(ProcessManager):
 
         if uuid in self.process_store:
             process = self.process_store[uuid]
-            if process.is_alive():
+            if process.poll() is None:
                 process.terminate()
 
         del self.process_store[uuid]
