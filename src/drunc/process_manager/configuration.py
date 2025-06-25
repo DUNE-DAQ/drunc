@@ -57,6 +57,7 @@ class ProcessManagerConfHandler(ConfHandler):
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "popen":
                 new_data.type = ProcessManagerTypes.Popen
+                new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
                 new_data.type = ProcessManagerTypes.K8s
                 new_data.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
