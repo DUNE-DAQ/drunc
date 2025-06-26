@@ -84,7 +84,7 @@ class PopenProcessManager(ProcessManager):
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
             if process.poll() is None:
                 sequence = [
-                    # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
+                    signal.SIGINT,
                     signal.SIGQUIT,
                     signal.SIGKILL,  # Kept as nuclear option
                 ]
