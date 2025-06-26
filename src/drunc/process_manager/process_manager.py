@@ -41,6 +41,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import (
+    UnpackingError,
     pack_to_any,
     unpack_any,
     unpack_error_response,

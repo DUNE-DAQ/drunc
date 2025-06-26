@@ -9,6 +9,7 @@ import grpc
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -378,13 +379,13 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
-    def _logs_impl(self, log_request: LogRequest) -> LogLine:
+    def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(log_request.query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
-            return [LogLine(line=log) for log in self._core_v1_api.read_namespaced_pod_log(
+            return [LogLines(line=log) for log in self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far
             ).split("\n")]
 
