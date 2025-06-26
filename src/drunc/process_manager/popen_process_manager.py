@@ -4,7 +4,7 @@ import signal
 import tempfile
 import threading
 import uuid
-from ctypes import cdll
+from ctypes import CDLL
 from subprocess import Popen
 from time import sleep
 
@@ -42,9 +42,11 @@ def on_parent_exit(signum):
 
     def set_parent_exit_signal():
         # http://linux.die.net/man/2/prctl
-        result = cdll["libc.so.6"].prctl(PR_SET_PDEATHSIG, signum)
+        print("on_parent_exec")
+        result = CDLL("libc.so.6").prctl(PR_SET_PDEATHSIG, signum)
         if result != 0:
             raise PrCtlError("prctl failed with error code %s" % result)
+        os.setsid()
 
     return set_parent_exit_signal
 
