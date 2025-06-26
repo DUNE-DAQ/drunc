@@ -42,7 +42,6 @@ def on_parent_exit(signum):
 
     def set_parent_exit_signal():
         # http://linux.die.net/man/2/prctl
-        print("on_parent_exec")
         result = CDLL("libc.so.6").prctl(PR_SET_PDEATHSIG, signum)
         if result != 0:
             raise PrCtlError("prctl failed with error code %s" % result)
