@@ -1,9 +1,9 @@
-import click
 import concurrent
 import getpass
-import grpc
 import os
 
+import click
+import grpc
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException

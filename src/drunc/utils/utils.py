@@ -11,7 +11,6 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
-from functools import wraps
 from urllib.parse import urlparse
 
 import kafka

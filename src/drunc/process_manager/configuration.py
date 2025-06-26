@@ -1,7 +1,7 @@
 import os
 from enum import Enum
-from urllib.parse import urlparse
 from importlib import resources
+from urllib.parse import urlparse
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher

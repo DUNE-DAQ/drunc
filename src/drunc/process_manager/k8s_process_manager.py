@@ -9,7 +9,6 @@ import grpc
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
