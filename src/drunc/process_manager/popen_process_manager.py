@@ -90,7 +90,7 @@ class PopenProcessManager(ProcessManager):
                 ]
                 for sig in sequence:
                     if process.poll() is not None:
-                        self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
+                        self.log.info(f"Process '{app_name}' already dead with PID {proc_uuid}")
                         break
                     self.log.debug(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
@@ -186,11 +186,7 @@ class PopenProcessManager(ProcessManager):
 
     def notify_join(self, name, session, user, exec):
         self.log.debug(f"{self.name} joining processes from the event loop")
-        exit_code = None
-        if exec:
-            print(exec.__dict__)
-            print(exec)
-            exit_code = exec.returncode
+        exit_code = exec.poll()
         end_str = f"Process '{name}' (session: '{session}', user: '{user}') process exited with exit code {exit_code}"
         self.log.info(end_str)
         if exec:
@@ -206,7 +202,7 @@ class PopenProcessManager(ProcessManager):
         t.start()
         self.watchers.append(t)
 
-    def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
+    def __boot(self, boot_request: BootRequest) -> ProcessInstance:
         self.log.debug(
             f"{self.name} booting '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}'"
         )
@@ -218,13 +214,7 @@ class PopenProcessManager(ProcessManager):
             raise DruncCommandException("No allowed host provided! bailing")
 
         error = ""
-
-        if uuid in self.boot_request:
-            raise DruncCommandException(f"Process {uuid} already exists!")
-        self.boot_request[uuid] = BootRequest()
-        self.boot_request[uuid].CopyFrom(boot_request)
-        hostname = ""
-
+        pid = None
         for host in boot_request.process_restriction.allowed_hosts:
             if host != "localhost":
                 raise DruncCommandException(
@@ -260,42 +250,47 @@ class PopenProcessManager(ProcessManager):
                 full_cmd = f"{{ {cmd} ; }} &> {log_file}"
 
                 self.log.debug(f"{full_cmd}")
-                self.process_store[uuid] = Popen(
+                process = Popen(
                     full_cmd,
                     shell=True,
                     executable="/bin/bash",
                     preexec_fn=on_parent_exit(signal.SIGTERM) if not macos else None,
                 )
+                self.process_store[str(process.pid)] = process
+                pid = str(process.pid)
 
                 self._watch(
                     name=meta.name,
                     user=meta.user,
                     session=meta.session,
-                    process=self.process_store[uuid],
+                    process=self.process_store[pid],
                 )
                 break
 
             except Exception as e:
                 error += str(e)
                 print(f"Couldn't start on host {host}, reason:\n{e!s}")
-                print("\nTrying on a different host")
                 continue
+
+        self.boot_request[pid] = BootRequest()
+        self.boot_request[pid].CopyFrom(boot_request)
+        hostname = ""
         ## Saving the host to the metadata
-        self.boot_request[uuid].process_description.metadata.hostname = hostname
+        self.boot_request[pid].process_description.metadata.hostname = hostname
 
         self.log.info(
-            f"Booted '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}' with UUID {uuid}"
+            f"Booted '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}' with PID {pid}"
         )
         pd = ProcessDescription()
-        pd.CopyFrom(self.boot_request[uuid].process_description)
+        pd.CopyFrom(self.boot_request[pid].process_description)
         pr = ProcessRestriction()
-        pr.CopyFrom(self.boot_request[uuid].process_restriction)
-        pu = ProcessUUID(uuid=uuid)
+        pr.CopyFrom(self.boot_request[pid].process_restriction)
+        pu = ProcessUUID(uuid=pid)
 
         return_code = None
         alive = False
 
-        if uuid not in self.process_store:
+        if pid not in self.process_store:
             pi = ProcessInstance(
                 process_description=pd,
                 process_restriction=pr,
@@ -305,7 +300,7 @@ class PopenProcessManager(ProcessManager):
             )
             return pi
 
-        return_code = self.process_store[uuid].poll()
+        return_code = self.process_store[pid].poll()
         alive = return_code is not None
 
         pi = ProcessInstance(
@@ -365,8 +360,7 @@ class PopenProcessManager(ProcessManager):
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
         self.log.debug(f"{self.name} running _boot_impl")
-        this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+        return self.__boot(boot_request)
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
