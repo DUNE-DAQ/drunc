@@ -103,12 +103,15 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
-
+        
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        top_segment_controller = self.configuration.db.get_dal(class_name='Session', uid=self.configuration.oks_key.session).segment.controller.id == self.name
+        self.custom_origin = {"top_segment_controller": top_segment_controller}
+
         self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
@@ -135,6 +138,7 @@ class Controller(ControllerServicer):
             init_state="initialising",
             name=name,
             session=session,
+            top_segment_controller=top_segment_controller,
         )
 
         dach = DummyAuthoriserConfHandler(
@@ -284,7 +288,7 @@ class Controller(ControllerServicer):
 
                 self.opmon_publisher.publish(
                     message=message,
-                    custom_origin=custom_origin,
+                    custom_origin=custom_origin | self.custom_origin,
                 )
                 self.log.debug(f"Published {type(message)} to OpMon")
             except Exception as e:
@@ -331,7 +335,8 @@ class Controller(ControllerServicer):
                         run_time_since_start=self.monitoring_metrics.run_time_since_start,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
-                    )
+                    ),
+                    # custom_origin = self.controller.custom_origin
                 )
             except Exception as e:
                 self.log.exception(f"Error while publishing periodic status: {e}")
@@ -774,7 +779,8 @@ class Controller(ControllerServicer):
                         run_time_since_start=0,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
-                    )
+                    ),
+                    custom_origin=self.custom_origin
                 )
 
             self.stateful_node.propagate_transition_mark(transition)
