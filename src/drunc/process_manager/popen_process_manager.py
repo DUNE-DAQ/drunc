@@ -3,7 +3,6 @@ import os
 import signal
 import tempfile
 import threading
-import uuid
 from ctypes import CDLL
 from subprocess import Popen
 from time import sleep
