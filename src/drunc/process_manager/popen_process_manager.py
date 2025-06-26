@@ -64,25 +64,17 @@ class AppProcessWatcherThread(threading.Thread):
         self.process = process
 
     def run(self):
-        exc = None
-        try:
-            self.process.wait()
-        except Exception as e:
-            exc = e
-
+        self.process.wait()
         self.pm.notify_join(
-            name=self.name, session=self.session, user=self.user, exec=exc
+            name=self.name, session=self.session, user=self.user, exec=self.process
         )
 
 
 class PopenProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
         self.session = getpass.getuser()  # unfortunate
-
         super().__init__(configuration=configuration, session=self.session, **kwargs)
 
-        # self.children_logs_depth = 1000
-        # self.children_logs = {}
         self.watchers = []
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
