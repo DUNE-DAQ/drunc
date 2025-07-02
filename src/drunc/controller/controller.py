@@ -703,7 +703,7 @@ class Controller(ControllerServicer):
                 name=self.name,
                 token=token,
                 data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NODE_IN_ERROR,  ### TODO: Add a ResponseFlag.NOT_EXECUTED_NOT_READY
+                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                 children=[],
             )
 
