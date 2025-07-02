@@ -539,7 +539,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return  # Stop further processing if unpacking fails.
 
         try:
-            async for r in await self._logs_impl(data):
+            async for r in self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
