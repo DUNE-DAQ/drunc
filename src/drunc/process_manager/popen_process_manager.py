@@ -272,7 +272,7 @@ class PopenProcessManager(ProcessManager):
 
         self.boot_request[pid] = BootRequest()
         self.boot_request[pid].CopyFrom(boot_request)
-        hostname = ""
+        hostname = "localhost" # popen can only run processes on localhost
         ## Saving the host to the metadata
         self.boot_request[pid].process_description.metadata.hostname = hostname
 
