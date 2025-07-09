@@ -35,7 +35,8 @@ class PrCtlError(DruncException):
 
 
 def on_parent_exit(signum):
-    """Return a function to be run in a child process which will trigger
+    """
+    Return a function to be run in a child process which will trigger
     SIGNAME to be sent when the parent process dies
     """
 
@@ -44,7 +45,7 @@ def on_parent_exit(signum):
         result = CDLL("libc.so.6").prctl(PR_SET_PDEATHSIG, signum)
         if result != 0:
             raise PrCtlError("prctl failed with error code %s" % result)
-        os.setsid()
+        # os.setsid()
 
     return set_parent_exit_signal
 
@@ -88,7 +89,9 @@ class PopenProcessManager(ProcessManager):
                 ]
                 for sig in sequence:
                     if process.poll() is not None:
-                        self.log.info(f"Process '{app_name}' already dead with PID {proc_uuid}")
+                        self.log.info(
+                            f"Process '{app_name}' already dead with PID {proc_uuid}"
+                        )
                         break
                     self.log.debug(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
@@ -204,8 +207,6 @@ class PopenProcessManager(ProcessManager):
         self.log.debug(
             f"{self.name} booting '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}'"
         )
-        platform = os.uname().sysname.lower()
-        macos = "darwin" in platform
 
         meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
@@ -225,7 +226,9 @@ class PopenProcessManager(ProcessManager):
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
 
-                cmd = 'echo "PopenPM: Starting process $$ on host $HOSTNAME as user $USER";'
+                cmd = (
+                    "echo PopenPM: Starting process $$ on host $HOSTNAME as user $USER;"
+                )
 
                 # Add exported environment variables
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_var.items()])
@@ -246,13 +249,12 @@ class PopenProcessManager(ProcessManager):
                     cmd = cmd[:-1]
 
                 # full_cmd = f"{{ {cmd} ; }} &> {log_file}"
-                arguments = [f'{cmd_env} drunc-ssh-process-wrapper --log {log_file} {cmd}']
-                self.log.debug(f"{full_cmd}")
+                arguments = f'drunc-process-wrapper --log {log_file} "{cmd_env}; {cmd}"'
+                # self.log.debug(f"{full_cmd}")
                 process = Popen(
                     arguments,
                     shell=True,
-                    executable="/bin/bash",
-                    preexec_fn=on_parent_exit(signal.SIGTERM) if not macos else None,
+                    preexec_fn=on_parent_exit(signal.SIGTERM),
                 )
                 self.process_store[str(process.pid)] = process
                 pid = str(process.pid)
@@ -272,7 +274,7 @@ class PopenProcessManager(ProcessManager):
 
         self.boot_request[pid] = BootRequest()
         self.boot_request[pid].CopyFrom(boot_request)
-        hostname = "localhost" # popen can only run processes on localhost
+        hostname = "localhost"  # popen can only run processes on localhost
         ## Saving the host to the metadata
         self.boot_request[pid].process_description.metadata.hostname = hostname
 
