@@ -34,7 +34,7 @@ class PrCtlError(DruncException):
     pass
 
 
-def on_parent_exit(signum):
+def on_parent_exit(signum, setsid=True):
     """
     Return a function to be run in a child process which will trigger
     SIGNAME to be sent when the parent process dies
@@ -45,7 +45,9 @@ def on_parent_exit(signum):
         result = CDLL("libc.so.6").prctl(PR_SET_PDEATHSIG, signum)
         if result != 0:
             raise PrCtlError("prctl failed with error code %s" % result)
-        # os.setsid()
+
+        if setsid:
+            os.setsid()
 
     return set_parent_exit_signal
 
@@ -93,7 +95,7 @@ class PopenProcessManager(ProcessManager):
                             f"Process '{app_name}' already dead with PID {proc_uuid}"
                         )
                         break
-                    self.log.debug(
+                    self.log.info(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
                     )
                     process.send_signal(sig)  # TODO grab this from the inputs

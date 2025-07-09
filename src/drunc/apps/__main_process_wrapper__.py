@@ -33,10 +33,10 @@ def main(cmd: str, log_path: str):
             stdout=logfile,
             stderr=logfile,
             preexec_fn=on_parent_exit(
-                signal.SIGHUP
-            ),  # Propagate SIGHUP to child processes, SIGKILL doesn't seem to kill gunicorn...
+                signal.SIGHUP,  # Propagate SIGHUP to child processes, SIGKILL doesn't seem to kill gunicorn...
+                setsid=False,  # Don't create a new session, so that the process group can be killed
+            ),
         )
-        # print(f"Started process with pid {proc.pid}")
 
         return_code = None
         while True:
