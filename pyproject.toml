@@ -43,7 +43,7 @@ drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
 application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
 drunc-ssh-validator = "drunc.apps.__main_ssh_validator__:main"
 drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
-
+drunc-process-wrapper = "drunc.apps.__main_process_wrapper__:main"
 [tool.setuptools.dynamic]
 version = {attr = "drunc.__version__"}
 readme = {file = ["docs/README.md"]}

@@ -245,11 +245,11 @@ class PopenProcessManager(ProcessManager):
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
-                full_cmd = f"{{ {cmd} ; }} &> {log_file}"
-
+                # full_cmd = f"{{ {cmd} ; }} &> {log_file}"
+                arguments = [f'{cmd_env} drunc-ssh-process-wrapper --log {log_file} {cmd}']
                 self.log.debug(f"{full_cmd}")
                 process = Popen(
-                    full_cmd,
+                    arguments,
                     shell=True,
                     executable="/bin/bash",
                     preexec_fn=on_parent_exit(signal.SIGTERM) if not macos else None,

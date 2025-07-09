@@ -276,21 +276,9 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
-                arguments += (
-                    [
-                        "-o LogLevel=error",
-                        "-o GlobalKnownHostsFile=/dev/null",
-                        "-o UserKnownHostsFile=/dev/null",
-                    ]
-                    if disable_host_key_check
-                    else []
-                )
-                arguments += [
-                    f"{{ {cmd} ; }} &> {log_file}",
-                ]
-                # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
-                # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
+                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{cmd_env} drunc-ssh-process-wrapper --log {log_file} {cmd}']
+                self.log.debug(f"{arguments}")
+
                 self.process_store[uuid] = self.ssh(
                     *arguments,
                     # _out=partial(self._process_children_logs, uuid),
