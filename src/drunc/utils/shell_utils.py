@@ -333,6 +333,7 @@ class ShellContext:
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().data
+        describe_fsm = self.get_driver("controller").describe_fsm().data
         if status.in_error:
             log.error(
                 f"[red] FSM is in error ({status})[/red], not currently accepting new commands."
@@ -340,10 +341,15 @@ class ShellContext:
         else:
             available_actions = [
                 command.name.replace("_", "-")
-                for command in self.get_driver("controller")
-                .describe_fsm()
-                .data.commands
+                for command in describe_fsm.commands
             ]
+            available_sequences = [
+                seq.id.replace("_", "-") 
+                for seq in describe_fsm.sequences
+            ]
+
             log.info(
                 f"Current FSM status is [green]{status.state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
             )
+            log.info(f"Available sequence commands: {available_sequences}")
+

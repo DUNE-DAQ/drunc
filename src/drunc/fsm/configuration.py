@@ -3,6 +3,8 @@ from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger
+from druncschema.controller_pb2 import FSMSequence
+
 
 
 class FSMConfHandler(ConfHandler):
@@ -42,6 +44,7 @@ class FSMConfHandler(ConfHandler):
         self.transitions = []
         self.states = self.data.states
         self.initial_state = self.data.initial_state
+        self.sequences = []
 
         for action in self.data.actions:
             self.log.debug(f"Setting up action '{action.id}'")
@@ -71,7 +74,7 @@ class FSMConfHandler(ConfHandler):
             self.post_transitions[tr] = post_transitions
 
             self.transitions += [tr]
-
+        
     # def _parse_dict(self, data):
     #     pass
 
@@ -92,3 +95,14 @@ class FSMConfHandler(ConfHandler):
 
     def get_post_transitions_sequences(self):
         return self.post_transitions
+    
+    def get_sequences(self):
+        if not hasattr(self.data, "command_sequences"):
+            return self.sequences
+        
+        for sequence in self.data.command_sequences:
+            seq_id = sequence.id
+            cmd_ids = [cmd.id for cmd in sequence.sequence]
+            self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))
+
+        return self.sequences

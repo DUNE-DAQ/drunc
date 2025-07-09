@@ -11,6 +11,9 @@ class Callback:
         self.method = method
         self.mandatory = mandatory
 
+class FSMSequence:
+    def __init__(self):
+        pass
 
 import json
 import traceback

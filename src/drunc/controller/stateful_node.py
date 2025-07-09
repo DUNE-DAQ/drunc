@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional
 
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
+
 from drunc.exceptions import DruncCommandException
 from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition
@@ -101,6 +102,7 @@ class StatefulNode(abc.ABC):
         self.name = name
         self._ready_state = False
         self.__fsm = FSM(fsm_configuration)
+        self.__fsm_configuration = fsm_configuration
         self.log = get_logger("controller.StatefulNode")
         self.__operational_state = OperationalState(
             stateful_node=self,
@@ -155,6 +157,9 @@ class StatefulNode(abc.ABC):
 
     def get_fsm_transition(self, transition_name):
         return self.__fsm.get_transition(transition_name)
+
+    def get_fsm_sequences(self):
+        return self.__fsm_configuration.get_sequences()
 
     def include_node(self):
         if self.__included.value:

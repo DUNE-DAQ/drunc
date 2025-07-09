@@ -12,6 +12,7 @@ from druncschema.controller_pb2 import (
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
+    FSMSequence,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
@@ -666,6 +667,10 @@ class Controller(ControllerServicer):
             desc.type = "controller"
             desc.name = self.name
             desc.session = self.session
+
+            for seq in  self.stateful_node.get_fsm_sequences():
+                desc.sequences.append(seq)
+            
 
         children_description = self.propagate_addressed_command(
             "describe_fsm",
