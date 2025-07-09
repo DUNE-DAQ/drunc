@@ -44,7 +44,6 @@ class FSMConfHandler(ConfHandler):
         self.transitions = []
         self.states = self.data.states
         self.initial_state = self.data.initial_state
-        self.sequences = []
 
         for action in self.data.actions:
             self.log.debug(f"Setting up action '{action.id}'")
@@ -97,6 +96,8 @@ class FSMConfHandler(ConfHandler):
         return self.post_transitions
     
     def get_sequences(self):
+        self.sequences = []
+
         if not hasattr(self.data, "command_sequences"):
             return self.sequences
         
