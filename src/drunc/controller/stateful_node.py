@@ -5,7 +5,6 @@ from typing import Any, Callable, Optional
 
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
-
 from drunc.exceptions import DruncCommandException
 from drunc.fsm.core import FSM
 from drunc.fsm.exceptions import InvalidTransition

@@ -334,22 +334,28 @@ class ShellContext:
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().data
         describe_fsm = self.get_driver("controller").describe_fsm().data
+        current_state = status.state
         if status.in_error:
             log.error(
                 f"[red] FSM is in error ({status})[/red], not currently accepting new commands."
             )
         else:
             available_actions = [
-                command.name.replace("_", "-")
-                for command in describe_fsm.commands
+                command.name.replace("_", "-") for command in describe_fsm.commands
             ]
             available_sequences = [
-                seq.id.replace("_", "-") 
-                for seq in describe_fsm.sequences
+                seq.id.replace("_", "-") for seq in describe_fsm.sequences
             ]
 
-            log.info(
-                f"Current FSM status is [green]{status.state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
-            )
-            log.info(f"Available sequence commands: {available_sequences}")
+            filtered_sequences = []
+            for seq in available_sequences:
+                if seq == "start-run" and current_state == "running":
+                    continue
+                if seq == "stop-run" and current_state in ("initial", "configured"):
+                    continue
+                filtered_sequences.append(seq)
 
+            log.info(
+                f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
+            )
+            log.info(f"Available sequence commands: {filtered_sequences}")

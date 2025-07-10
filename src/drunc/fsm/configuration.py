@@ -1,10 +1,10 @@
+from druncschema.controller_pb2 import FSMSequence
+
 from drunc.fsm.action_factory import FSMActionFactory
 from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger
-from druncschema.controller_pb2 import FSMSequence
-
 
 
 class FSMConfHandler(ConfHandler):

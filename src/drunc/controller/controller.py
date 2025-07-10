@@ -12,7 +12,6 @@ from druncschema.controller_pb2 import (
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
-    FSMSequence,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.generic_pb2 import PlainText, Stacktrace
