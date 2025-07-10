@@ -512,7 +512,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    async def _logs_impl(self, request_data: LogRequest) -> AsyncGenerator[LogLine]:
+    async def _logs_impl(self, request_data: LogRequest) -> LogLine:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -520,7 +520,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @async_authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    async def logs(self, request:Request, context:ServicerContext) -> AsyncGenerator[Response]:
+    async def logs(self, request:Request, context:ServicerContext) -> Response:
         """Asynchronously fetch logs for a process.
 
         Args:
@@ -539,7 +539,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return  # Stop further processing if unpacking fails.
 
         try:
-            async for r in await self._logs_impl(data):
+            async for r in self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
