@@ -2,7 +2,6 @@ import abc
 import re
 import threading
 import time
-from collections.abc import AsyncGenerator
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -254,7 +253,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(self, request:Request, context:ServicerContext) -> Response:
+    def boot(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, BootRequest)
         except UnpackingError as e:
@@ -293,7 +292,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def terminate(self, request:Request, context:ServicerContext) -> Response:
+    def terminate(self, request: Request, context: ServicerContext) -> Response:
         self.log.debug(f"{self.name} terminating")
         try:
             resp = self._terminate_impl()
@@ -322,7 +321,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def restart(self, request:Request, context:ServicerContext) -> Response:
+    def restart(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -357,7 +356,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def kill(self, request:Request, context:ServicerContext) -> Response:
+    def kill(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -392,7 +391,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(self, request:Request, context:ServicerContext) -> Response:
+    def ps(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -423,7 +422,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(self, request:Request, context:ServicerContext) -> Response:
+    def flush(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -490,7 +489,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def describe(self, request:Request, context:ServicerContext) -> Response:
+    def describe(self, request: Request, context: ServicerContext) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(
@@ -512,7 +511,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    async def _logs_impl(self, request_data: LogRequest) -> AsyncGenerator[LogLine]:
+    async def _logs_impl(self, request_data: LogRequest) -> LogLine:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -520,7 +519,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @async_authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    async def logs(self, request:Request, context:ServicerContext) -> AsyncGenerator[Response]:
+    async def logs(self, request: Request, context: ServicerContext) -> Response:
         """Asynchronously fetch logs for a process.
 
         Args:
@@ -539,7 +538,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return  # Stop further processing if unpacking fails.
 
         try:
-            async for r in await self._logs_impl(data):
+            async for r in self._logs_impl(data):
                 yield Response(
                     name=self.name,
                     token=None,
