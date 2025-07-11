@@ -23,8 +23,8 @@ def terminate_all(sig, frame):
 )
 @click.argument("cmd")
 def main(cmd: str, log_path: str):
-    signal.signal(signal.SIGHUP, terminate_all)
-    signal.signal(signal.SIGINT, terminate_all)
+    # signal.signal(signal.SIGHUP, terminate_all)
+    # signal.signal(signal.SIGINT, terminate_all)
 
     with open(log_path, "w") as logfile:
         proc = subprocess.Popen(
@@ -33,7 +33,7 @@ def main(cmd: str, log_path: str):
             stdout=logfile,
             stderr=logfile,
             preexec_fn=on_parent_exit(
-                signal.SIGHUP,  # Propagate SIGHUP to child processes, SIGKILL doesn't seem to kill gunicorn...
+                signal.SIGINT,  # Propagate SIGHUP to child processes, SIGKILL doesn't seem to kill gunicorn...
                 setsid=False,  # Don't create a new session, so that the process group can be killed
             ),
         )
