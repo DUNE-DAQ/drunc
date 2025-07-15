@@ -230,14 +230,19 @@ class AppCommander:
             s = socks.socksocket(socket.AF_INET, socket.SOCK_STREAM)
             s.set_proxy(socks.SOCKS5, self.proxy_host, self.proxy_port)
             s.settimeout(1)
-        try:
-            s.connect((self.app_host, self.app_port))
-            s.shutdown(2)
-            self.log.debug(f"'{self.app}' pings")
-            return True
-        except Exception as e:
-            self.log.error(f"'{self.app}' does not ping, reason: '{e!s}'")
-            return False
+        n_tries = 2
+
+        for i_try in range(n_tries):
+            try:
+                s.connect((self.app_host, self.app_port)),
+                s.shutdown(2)
+                self.log.debug(f"'{self.app}' pings")
+                return True
+
+            except Exception as e:
+                self.log.error(f"'{self.app}' does not ping, reason: '{e!s}'")
+                if i_try == n_tries-1:
+                    return False
 
     def send_command(
         self, cmd_id: str, module_data: dict, entry_state="ANY", exit_state="ANY"
@@ -261,24 +266,31 @@ class AppCommander:
             headers["X-Answer-Host"] = self.response_host
 
         self.log.debug(headers)
-        try:
-            ack = requests.post(
-                self.app_url,
-                data=json.dumps(cmd),
-                headers=headers,
-                timeout=1.0,
-                proxies=(
-                    {
-                        "http": f"socks5h://{self.response_host}:{self.response_port}",
-                        "https": f"socks5h://{self.response_host}:{self.response_port}",
-                    }
-                    if self.proxy_host
-                    else None
-                ),
-            )
-        except requests.ConnectionError:
-            self.log.error(f"Connection error to {self.app_url}")
-            raise CouldnotSendCommand(f"Connection error to {self.app_url}")
+
+        n_tries = 2
+        for i_try in range(n_tries):
+            try:
+                ack = requests.post(
+                    self.app_url,
+                    data=json.dumps(cmd),
+                    headers=headers,
+                    timeout=1.0,
+                    proxies=(
+                        {
+                            "http": f"socks5h://{self.response_host}:{self.response_port}",
+                            "https": f"socks5h://{self.response_host}:{self.response_port}",
+                        }
+                        if self.proxy_host
+                        else None
+                    ),
+                )
+                break
+            except requests.ConnectionError as e:
+                self.log.error(f"Connection error to {self.app_url}: {e}")
+                if i_try == n_tries - 1:
+                    raise CouldnotSendCommand(f"Connection error to {self.app_url}") from e
+                else:
+                    self.log.error("Trying again...")
 
         self.log.debug(f"Ack to {self.app}: {ack.status_code}")
         self.sent_cmd = cmd_id
@@ -526,7 +538,7 @@ class RESTAPIChildNode(ClientSideChild):
                 f"Got error from '{data.command_name}' to '{self.name}': {e!s}"
             )
             self.state.to_error()
-            self.log.exception(e)
+            # self.log.exception(e)
             raise e
 
         self.state.end_command_execution_mark()
