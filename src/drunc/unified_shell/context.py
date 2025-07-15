@@ -32,7 +32,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             ret["process_manager"] = ProcessManagerDriver(
                 self.address_pm,
                 self._token,
-                aio_channel=True,
+                aio_channel=False,
             )
         if self.address_controller != "":
             from drunc.controller.controller_driver import ControllerDriver

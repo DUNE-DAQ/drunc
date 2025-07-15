@@ -103,12 +103,15 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
-
+        
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
+        top_segment_controller = self.configuration.db.get_dal(class_name='Session', uid=self.configuration.oks_key.session).segment.controller.id == self.name
+        self.custom_origin = {"top_segment_controller": top_segment_controller}
+
         self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
@@ -135,6 +138,7 @@ class Controller(ControllerServicer):
             init_state="initialising",
             name=name,
             session=session,
+            top_segment_controller=top_segment_controller,
         )
 
         dach = DummyAuthoriserConfHandler(
@@ -273,9 +277,6 @@ class Controller(ControllerServicer):
     def interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
-    def async_interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
-
     def controller_publisher(self, message, custom_origin: dict | None = None):
         if self.opmon_publisher is not None:
             try:
@@ -284,22 +285,18 @@ class Controller(ControllerServicer):
 
                 self.opmon_publisher.publish(
                     message=message,
-                    custom_origin=custom_origin,
+                    custom_origin=custom_origin | self.custom_origin,
                 )
                 self.log.debug(f"Published {type(message)} to OpMon")
             except Exception as e:
                 self.log.error(f"Failed to publish to OpMon: {e}")
 
     def threading_publish_state(self, interval_s: float = 10.0):
-        run_time_at_start = 0
         while not self.stop_event.is_set():
             try:
-                self.log.debug(f"Publishing periodic FSM status every {interval_s}s")
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
-
-                if current_state in ("none", "initial", "configured"):
-                    self.monitoring_metrics = ControllerMonitoringMetrics()
+                self.log.debug(f"Publishing periodic FSM status: {current_state} every {interval_s}s")
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
                     self.monitoring_metrics.run_type = self.runinfo.get(
@@ -316,10 +313,11 @@ class Controller(ControllerServicer):
                         "run_time_at_start", 0
                     )
 
-                if run_time_at_start:
-                    self.monitoring_metrics.run_time_since_start = int(
-                        time.time() - run_time_at_start
-                    )
+                if current_state not in ("none", "initial", "configured"):
+                    if self.monitoring_metrics.run_time_at_start:
+                        self.monitoring_metrics.run_time_since_start = int(
+                            time.time() - self.monitoring_metrics.run_time_at_start
+                        )
 
                 self.log.debug(f"Publishing periodic run info every {interval_s}s")
                 self.controller_publisher(
@@ -334,7 +332,8 @@ class Controller(ControllerServicer):
                         run_time_since_start=self.monitoring_metrics.run_time_since_start,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
-                    )
+                    ),
+                    # custom_origin = self.controller.custom_origin
                 )
             except Exception as e:
                 self.log.exception(f"Error while publishing periodic status: {e}")
@@ -777,7 +776,8 @@ class Controller(ControllerServicer):
                         run_time_since_start=0,
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
-                    )
+                    ),
+                    custom_origin=self.custom_origin
                 )
 
             self.stateful_node.propagate_transition_mark(transition)
