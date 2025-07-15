@@ -240,7 +240,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(self, request:Request, context:ServicerContext) -> Response:
+    def boot(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, BootRequest)
         except UnpackingError as e:
@@ -279,7 +279,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def terminate(self, request:Request, context:ServicerContext) -> Response:
+    def terminate(self, request: Request, context: ServicerContext) -> Response:
         self.log.debug(f"{self.name} terminating")
         try:
             resp = self._terminate_impl()
@@ -308,7 +308,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def restart(self, request:Request, context:ServicerContext) -> Response:
+    def restart(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -343,7 +343,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def kill(self, request:Request, context:ServicerContext) -> Response:
+    def kill(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -378,7 +378,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(self, request:Request, context:ServicerContext) -> Response:
+    def ps(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -409,7 +409,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(self, request:Request, context:ServicerContext) -> Response:
+    def flush(self, request: Request, context: ServicerContext) -> Response:
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
@@ -476,7 +476,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def describe(self, request:Request, context:ServicerContext) -> Response:
+    def describe(self, request: Request, context: ServicerContext) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
         d = Description(
