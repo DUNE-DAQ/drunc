@@ -6,7 +6,7 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, run_coroutine
+from drunc.utils.utils import get_logger
 
 
 @click.command("boot")
@@ -18,8 +18,7 @@ from drunc.utils.utils import get_logger, run_coroutine
     help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
 )
 @click.pass_obj
-@run_coroutine
-async def boot(
+def boot(
     obj: ProcessManagerContext,
     override_logs: bool,
     sleep_between_app_boot: int | float = 0,
@@ -27,7 +26,7 @@ async def boot(
     log = get_logger("unified_shell.boot")
     session_name = obj.session_name
     user = getpass.getuser()
-    processes = await obj.get_driver("process_manager").ps(
+    processes = obj.get_driver("process_manager").ps(
         ProcessQuery(user=user, session=session_name)
     )
 
@@ -47,7 +46,7 @@ async def boot(
             override_logs=override_logs,
             sleep_between_app_boot=sleep_between_app_boot,
         )
-        async for result in results:
+        for result in results:
             if not result:
                 break
             log.debug(
