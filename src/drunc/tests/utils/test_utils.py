@@ -1,11 +1,8 @@
-import asyncio
 import logging
 import multiprocessing
 import os
-import signal
 import socket
 import tempfile
-import threading
 import time
 
 import click
@@ -29,7 +26,6 @@ from drunc.utils.utils import (
     regex_match,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
-    run_coroutine,
     setup_root_logger,
     validate_command_facility,
 )
@@ -122,40 +118,6 @@ def test_get_new_port():
     # Check the range of the port
     assert port > 0
     assert port < 65535
-
-
-def test_run_coroutine():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    @run_coroutine
-    async def test_this_coroutine(val):
-        return val
-
-    result = test_this_coroutine("abc")
-
-    assert result == "abc"
-
-
-@pytest.mark.skip()  # reason="Not implemented correctly"
-def test_interrupt_run_coroutine(capsys):
-    @run_coroutine
-    async def test_this_coroutine(val):
-        await asyncio.sleep(10)
-        print(val)
-        return val
-
-    thread = threading.Thread(target=test_this_coroutine, kwargs={"val": "abcdef"})
-    thread.start()
-    time.sleep(4)
-    signal.pthread_kill(thread.get_ident(), signal.SIGINT)
-    # pid = process.pid
-    # os.kill(pid, signal.SIGINT)
-
-    captured = capsys.readouterr()
-    print(f"{capsys.readouterr()=}")
-    assert "Command cancelled" in captured.out
-    thread.join()
 
 
 def test_now_str():

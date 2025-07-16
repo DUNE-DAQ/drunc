@@ -282,9 +282,6 @@ class Controller(ControllerServicer):
     def interrupt_with_exception(self, *args, **kwargs):
         return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
-    def async_interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._async_interrupt_with_exception(*args, **kwargs)
-
     def controller_publisher(self, message, custom_origin: dict | None = None):
         if self.opmon_publisher is not None:
             try:

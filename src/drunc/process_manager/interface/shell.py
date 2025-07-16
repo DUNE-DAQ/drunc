@@ -1,4 +1,3 @@
-import asyncio
 import getpass
 import os
 
@@ -49,9 +48,8 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.obj.reset(address=process_manager_address)
 
     try:
-        desc = asyncio.get_event_loop().run_until_complete(
-            ctx.obj.get_driver("process_manager").describe()
-        )
+
+        desc = ctx.obj.get_driver("process_manager").describe()
     except ServerUnreachable as e:
         process_manager_shell_log = get_logger(
             logger_name="process_manager.shell", rich_handler=True

@@ -7,7 +7,7 @@ from time import sleep
 
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLine,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -368,19 +368,16 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
-    async def _terminate_impl(self) -> ProcessInstanceList:
-        return self._terminate
 
-    async def _logs_impl(self, log_request: LogRequest) -> LogLine:
+    def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(log_request.query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
-            for log in self._core_v1_api.read_namespaced_pod_log(
+            return [LogLines(line=log) for log in self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far
-            ).split("\n"):
-                yield LogLine(line=log)
+            ).split("\n")]
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
         this_uuid = str(uuid.uuid4())

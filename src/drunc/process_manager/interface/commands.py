@@ -12,7 +12,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand
-from drunc.utils.utils import get_logger, run_coroutine
+from drunc.utils.utils import get_logger
 
 
 @click.command("boot")
@@ -34,8 +34,7 @@ from drunc.utils.utils import get_logger, run_coroutine
 @click.argument("session-name", type=str)
 @click.argument("configuration-id", type=str)
 @click.pass_obj
-@run_coroutine
-async def boot(
+def boot(
     obj: ProcessManagerContext,
     user: str,
     session_name: str,
@@ -44,7 +43,7 @@ async def boot(
     override_logs: bool,
 ) -> None:
     log = get_logger("process_manager.shell")
-    processes = await obj.get_driver("process_manager").ps(ProcessQuery(user=user))
+    processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
 
     if len(processes.data.values) > 0:
         click.confirm(
@@ -64,7 +63,7 @@ async def boot(
             log_level="INFO",  ## Unused anyway!!
             override_logs=override_logs,
         )
-        async for result in results:
+        for result in results:
             if not result:
                 break
             log.debug(
@@ -121,8 +120,7 @@ async def boot(
 )
 @click.argument("session-name", type=str)
 @click.pass_obj
-@run_coroutine
-async def dummy_boot(
+def dummy_boot(
     obj: ProcessManagerContext,
     user: str,
     n_processes: int,
@@ -142,7 +140,7 @@ async def dummy_boot(
             sleep=sleep,
             n_sleeps=n_sleeps,
         )
-        async for result in results:
+        for result in results:
             if not result:
                 break
             log.debug(
@@ -154,11 +152,10 @@ async def dummy_boot(
 
 @click.command("terminate")
 @click.pass_obj
-@run_coroutine
-async def terminate(obj: ProcessManagerContext) -> None:
+def terminate(obj: ProcessManagerContext) -> None:
     log = get_logger("process_manager.shell")
     log.debug("Terminating")
-    result = await obj.get_driver("process_manager").terminate()
+    result = obj.get_driver("process_manager").terminate()
     if not result:
         return
     obj.print(
@@ -171,11 +168,10 @@ async def terminate(obj: ProcessManagerContext) -> None:
 @click.command("kill")
 @add_query_options(at_least_one=True)
 @click.pass_obj
-@run_coroutine
-async def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
-    result = await obj.get_driver("process_manager").kill(query=query)
+    result = obj.get_driver("process_manager").kill(query=query)
     if not result:
         return
     obj.print(
@@ -188,11 +184,10 @@ async def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @click.command("flush")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @click.pass_obj
-@run_coroutine
-async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
-    result = await obj.get_driver("process_manager").flush(query=query)
+    result = obj.get_driver("process_manager").flush(query=query)
     if not result:
         return
     obj.print(
@@ -211,8 +206,7 @@ async def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 )
 @click.option("--grep", type=str, default=None)
 @click.pass_obj
-@run_coroutine
-async def logs(
+def logs(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
     log = get_logger("process_manager.shell")
@@ -222,16 +216,13 @@ async def logs(
         query=query,
     )
 
-    uuid = None
-    async for result in obj.get_driver("process_manager").logs(log_req):
-        if not result:
-            break
+    result = obj.get_driver("process_manager").logs(log_req).data
 
-        if uuid is None:
-            uuid = result.data.uuid.uuid
-            obj.rule(f"[yellow]{uuid}[/yellow] logs")
+    if result.uuid.uuid is not None:
+        obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
 
-        line = result.data.line
+    for line in result.lines:
+
         if line == "":
             obj.print("")
             continue
@@ -254,11 +245,10 @@ async def logs(
 @click.command("restart")
 @add_query_options(at_least_one=True)
 @click.pass_obj
-@run_coroutine
-async def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
-    await obj.get_driver("process_manager").restart(query=query)
+    obj.get_driver("process_manager").restart(query=query)
 
 
 @click.command("ps")
@@ -272,13 +262,12 @@ async def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     help="Whether to have a long output",
 )
 @click.pass_obj
-@run_coroutine
-async def ps(
+def ps(
     obj: ProcessManagerContext, query: ProcessQuery, long_format: bool
 ) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
-    results = await obj.get_driver("process_manager").ps(query=query)
+    results = obj.get_driver("process_manager").ps(query=query)
     if not results:
         return
     obj.print(

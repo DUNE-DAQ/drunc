@@ -220,39 +220,6 @@ class GRPCDriver:
             self.__handle_grpc_error(e, command)
         return self.handle_response(response, command, outformat)
 
-    async def send_command_aio(
-        self, command: str, data=None, outformat=None, timeout: int | float = 60
-    ):
-        if not self.stub:
-            raise DruncShellException("No stub initialised")
-
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = self._create_request(data)
-
-        try:
-            response = await cmd(request, timeout=timeout)
-
-        except grpc.aio.AioRpcError as e:
-            self.__handle_grpc_error(e, command)
-        return self.handle_response(response, command, outformat)
-
-    async def send_command_for_aio(
-        self, command: str, data=None, outformat=None, timeout: int | float = 60
-    ):
-        if not self.stub:
-            raise DruncShellException("No stub initialised")
-
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = self._create_request(data)
-
-        try:
-            async for s in cmd(request, timeout=timeout):
-                yield self.handle_response(s, command, outformat)
-
-        except grpc.aio.AioRpcError as e:
-            self.__handle_grpc_error(e, command)
 
 
 class ShellContext:

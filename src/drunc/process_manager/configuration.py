@@ -1,6 +1,6 @@
 import os
 from enum import Enum
-from importlib.resources import path
+from importlib import resources
 from urllib.parse import urlparse
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
@@ -147,14 +147,14 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
             process_manager_conf_filename = "file://" + process_manager_conf_filename
     else:
         ## Check if the file is in the list of packaged configurations
-        packaged_configurations = os.listdir(path("drunc.data.process_manager", ""))
+        resource_path = resources.files("drunc.data.process_manager")
+        packaged_configurations = [p.name for p in resource_path.iterdir()]
         if process_manager_conf_filename in packaged_configurations:
             process_manager_conf_filename = (
                 "file://"
-                + str(path("drunc.data.process_manager", ""))
-                + "/"
-                + process_manager_conf_filename
+                + str(resource_path / process_manager_conf_filename)
             )
+
         else:
             log = get_logger("process_manager.ConfHandler")
             log.error(

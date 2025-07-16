@@ -9,6 +9,7 @@ def test_issue363(load_test_config):
     setup_root_logger("INFO")
     conf_path, conf_type = parse_conf_url("oksconflibs:nestedConfig.data.xml")
     controller_id = "nested-segment-controller"
+
     controller_configuration = ControllerConfHandler(
         type=conf_type,
         data=conf_path,
@@ -18,6 +19,7 @@ def test_issue363(load_test_config):
             obj_uid=controller_id,
             session="test-config",  # some of the function for enable/disable require the full dal of the session
         ),
+        session_name="test",
     )
     ids = [segment.id for segment in controller_configuration.data.segments]
     assert ids == ["bottom-segment-1", "bottom-segment-2"]
