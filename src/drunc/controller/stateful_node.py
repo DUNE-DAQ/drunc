@@ -93,7 +93,7 @@ class StatefulNode(abc.ABC):
         init_state: str = "",
         session: str = "",
         name: str = "",
-        top_segment_controller: bool = False
+        top_segment_controller: bool = False,
     ):
         self.publisher = publisher
         self.custom_origin = {"top_segment_controller": top_segment_controller}
@@ -101,7 +101,6 @@ class StatefulNode(abc.ABC):
         self.name = name
         self._ready_state = False
         self.__fsm = FSM(fsm_configuration)
-        self.__fsm_configuration = fsm_configuration
         self.log = get_logger("controller.StatefulNode")
         self.__operational_state = OperationalState(
             stateful_node=self,
@@ -131,7 +130,7 @@ class StatefulNode(abc.ABC):
                     in_error=self.__in_error.value,
                     included=self.__included.value,
                 ),
-                custom_origin=self.custom_origin
+                custom_origin=self.custom_origin,
             )
 
     def get_node_operational_state(self):
@@ -158,7 +157,7 @@ class StatefulNode(abc.ABC):
         return self.__fsm.get_transition(transition_name)
 
     def get_fsm_sequences(self):
-        return self.__fsm_configuration.get_sequences()
+        return self.__fsm.get_executable_sequences(self.get_node_operational_state())
 
     def include_node(self):
         if self.__included.value:

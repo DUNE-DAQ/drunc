@@ -5,8 +5,6 @@ import socket
 import uuid
 from time import sleep
 
-import grpc
-from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLine,
@@ -18,20 +16,11 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.request_response_pb2 import Request, Response
 from kubernetes import client, config
 
-from drunc.authoriser.decorators import authentified_and_authorised
-from drunc.broadcast.server.decorators import broadcasted
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    pack_response,
-    unpack_any,
-    unpack_error_response,
-)
 from drunc.utils.utils import get_logger
 
 
@@ -379,6 +368,9 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
+    async def _terminate_impl(self) -> ProcessInstanceList:
+        return self._terminate
+
     async def _logs_impl(self, log_request: LogRequest) -> LogLine:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
@@ -468,37 +460,37 @@ class K8sProcessManager(ProcessManager):
         # )
         return ret
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
-    )  # 2nd step
-    @pack_response  # 3rd step
-    def flush(self, request:Request, context:grpc.ServicerContext) -> Response:
-        try:
-            data = unpack_any(request.data, ProcessQuery)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+    # # ORDER MATTERS!
+    # @broadcasted  # outer most wrapper 1st step
+    # @authentified_and_authorised(
+    #     action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
+    # )  # 2nd step
+    # @pack_response  # 3rd step
+    # def flush(self, request:Request, context:grpc.ServicerContext) -> Response:
+    #     try:
+    #         data = unpack_any(request.data, ProcessQuery)
+    #     except UnpackingError as e:
+    #         return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        self.log.info("Flushing dead processes")
+    #     self.log.info("Flushing dead processes")
 
-        ret = []
-        for proc_uuid in self._get_process_uid(data):
-            podname = self.boot_request[proc_uuid].process_description.metadata.name
-            session = self.boot_request[proc_uuid].process_description.metadata.session
+    #     ret = []
+    #     for proc_uuid in self._get_process_uid(data):
+    #         podname = self.boot_request[proc_uuid].process_description.metadata.name
+    #         session = self.boot_request[proc_uuid].process_description.metadata.session
 
-            if not self.is_alive(podname, session):
-                return_code = self._return_code(podname, session)
-                ret.append(self._get_pi(proc_uuid, podname, session, return_code))
-                self.log.info(f'Flushing "{session}.{podname}":{proc_uuid}')
-                del self.boot_request[proc_uuid]
-                self.log.info(f'"{session}.{podname}":{proc_uuid} flushed')
-                del proc_uuid
-                self._kill_pod(podname, session)
+    #         if not self.is_alive(podname, session):
+    #             return_code = self._return_code(podname, session)
+    #             ret.append(self._get_pi(proc_uuid, podname, session, return_code))
+    #             self.log.info(f'Flushing "{session}.{podname}":{proc_uuid}')
+    #             del self.boot_request[proc_uuid]
+    #             self.log.info(f'"{session}.{podname}":{proc_uuid} flushed')
+    #             del proc_uuid
+    #             self._kill_pod(podname, session)
 
-            self._kill_if_empty_session(session)
+    #         self._kill_if_empty_session(session)
 
-        return ProcessInstanceList(values=ret)
+    #     return ProcessInstanceList(values=ret)
 
     def _kill_impl(
         self, query: ProcessQuery, in_boot_request: bool = False

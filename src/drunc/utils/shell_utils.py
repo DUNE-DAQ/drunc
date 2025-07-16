@@ -347,15 +347,6 @@ class ShellContext:
                 seq.id.replace("_", "-") for seq in describe_fsm.sequences
             ]
 
-            filtered_sequences = []
-            for seq in available_sequences:
-                if seq == "start-run" and current_state == "running":
-                    continue
-                if seq == "stop-run" and current_state in ("initial", "configured"):
-                    continue
-                filtered_sequences.append(seq)
-
             log.info(
-                f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
+                f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
-            log.info(f"Available sequence commands: {filtered_sequences}")
