@@ -1,5 +1,6 @@
 """Driver for the session manager service."""
 
+from druncschema.description_pb2 import NewDescription
 from druncschema.request_response_pb2 import Description
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
@@ -38,6 +39,14 @@ class SessionManagerDriver(GRPCDriver):
             An object containing session manager service method stubs.
         """
         return SessionManagerStub(channel)
+
+    def new_describe(self) -> DecodedResponse | None:
+        """Describe the session manager service.
+
+        Returns:
+            A decoded response object containing the description of the service.
+        """
+        return self.send_command("new_describe", outformat=NewDescription)
 
     def describe(self) -> DecodedResponse | None:
         """Describe the session manager service.

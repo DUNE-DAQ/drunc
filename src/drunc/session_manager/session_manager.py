@@ -49,7 +49,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    def describe(self, request:Request, context:ServicerContext) -> Response:
+    def describe(self, request: Request, context: ServicerContext) -> Response:
         """Respond with a description of this session manager service.
 
         Args:
@@ -97,7 +97,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    def list_all_sessions(self, request:Request, context:ServicerContext) -> Response:
+    def list_all_sessions(self, request: Request, context: ServicerContext) -> Response:
         """Respond with a list of all active sessions.
 
         Args:
@@ -132,7 +132,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
         )
 
-    def list_all_configs(self, request:Request, context:ServicerContext) -> Response:
+    def list_all_configs(self, request: Request, context: ServicerContext) -> Response:
         """Respond with a list of all available configurations.
 
         Args:
