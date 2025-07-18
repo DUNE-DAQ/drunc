@@ -91,7 +91,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             token=None,
         )
 
-    def list_all_sessions(self, request: Request, context: ServicerContext) -> Response:
+    def list_all_sessions(
+        self, request: Request, context: ServicerContext
+    ) -> AllActiveSessions:
         """Respond with a list of all active sessions.
 
         Args:
@@ -114,16 +116,11 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             config_key=dummy_config,
         )
 
-        all_sessions = AllActiveSessions(
-            active_sessions=[dummy_session],
-        )
-
-        return Response(
+        return AllActiveSessions(
             name=self.name,
             token=None,
-            data=pack_to_any(all_sessions),
+            active_sessions=[dummy_session],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )
 
     def list_all_configs(self, request: Request, context: ServicerContext) -> Response:
