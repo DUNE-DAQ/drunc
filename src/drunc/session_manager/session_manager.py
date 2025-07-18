@@ -65,7 +65,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 name="describe",
                 data_type=["None"],
                 help="List the methods exposed by this endpoint.",
-                return_type="request_response_pb2.Description",
+                return_type="description_pb2.NewDescription",
             ),
             CommandDescription(
                 name="list_all_sessions",
