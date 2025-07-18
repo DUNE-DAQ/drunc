@@ -5,7 +5,7 @@ from os import getenv
 from pathlib import Path
 
 from conffwk import Configuration
-from druncschema.description_pb2 import CommandDescription, NewDescription
+from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import (
     Request,
     Response,
@@ -48,7 +48,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    def describe(self, request: Request, context: ServicerContext) -> NewDescription:
+    def describe(self, request: Request, context: ServicerContext) -> Description:
         """Respond with a description of this session manager service.
 
         Args:
@@ -65,7 +65,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 name="describe",
                 data_type=["None"],
                 help="List the methods exposed by this endpoint.",
-                return_type="description_pb2.NewDescription",
+                return_type="description_pb2.Description",
             ),
             CommandDescription(
                 name="list_all_sessions",
@@ -81,7 +81,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             ),
         ]
 
-        return NewDescription(
+        return Description(
             type="session_manager",
             name=self.name,
             session=self.name,

@@ -220,9 +220,9 @@ class GRPCDriver:
             self.__handle_grpc_error(e, command)
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
-        from druncschema.description_pb2 import NewDescription
+        from druncschema.description_pb2 import Description
 
-        if isinstance(response, (NewDescription,)):
+        if isinstance(response, (Description,)):
             return response
 
         return self.handle_response(response, command, outformat)
