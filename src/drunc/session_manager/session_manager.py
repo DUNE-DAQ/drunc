@@ -8,7 +8,6 @@ from conffwk import Configuration
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import (
     Request,
-    Response,
     ResponseFlag,
 )
 from druncschema.session_manager_pb2 import (
@@ -21,7 +20,6 @@ from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from grpc import ServicerContext
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -123,7 +121,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def list_all_configs(self, request: Request, context: ServicerContext) -> Response:
+    def list_all_configs(
+        self, request: Request, context: ServicerContext
+    ) -> AllConfigKeys:
         """Respond with a list of all available configurations.
 
         Args:
@@ -139,12 +139,11 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         search_paths = getenv("DUNEDAQ_DB_PATH")
         if search_paths is None:
             self.log.error("DUNEDAQ_DB_PATH not set")
-            return Response(
+            return AllConfigKeys(
                 name=self.name,
                 token=None,
-                data=pack_to_any(None),
+                config_keys=[],
                 flag=ResponseFlag.FAILED,
-                children=[],
             )
 
         # Find all configuration files.
@@ -170,14 +169,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 )
                 configs.append(config_key)
 
-        all_configs = AllConfigKeys(
-            config_keys=configs,
-        )
-
-        return Response(
+        return AllConfigKeys(
             name=self.name,
             token=None,
-            data=pack_to_any(all_configs),
+            config_keys=configs,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )

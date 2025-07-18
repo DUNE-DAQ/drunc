@@ -221,9 +221,9 @@ class GRPCDriver:
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description
-        from druncschema.session_manager_pb2 import AllActiveSessions
+        from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 
-        if isinstance(response, (Description, AllActiveSessions)):
+        if isinstance(response, (Description, AllActiveSessions, AllConfigKeys)):
             return response
 
         return self.handle_response(response, command, outformat)
