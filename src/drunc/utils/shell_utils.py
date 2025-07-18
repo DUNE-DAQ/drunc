@@ -127,12 +127,6 @@ class GRPCDriver:
         raise error
 
     def handle_response(self, response, command, outformat):
-        # TODO: TEMP HACK -- DON'T FORGET TO FIX THIS!!!
-        from druncschema.description_pb2 import NewDescription
-
-        if isinstance(response, (NewDescription,)):
-            return response
-
         dr = DecodedResponse(
             name=response.name,
             token=response.token,
@@ -224,6 +218,13 @@ class GRPCDriver:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command)
+
+        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
+        from druncschema.description_pb2 import NewDescription
+
+        if isinstance(response, (NewDescription,)):
+            return response
+
         return self.handle_response(response, command, outformat)
 
 

@@ -5,10 +5,8 @@ from os import getenv
 from pathlib import Path
 
 from conffwk import Configuration
-from druncschema.description_pb2 import NewCommandDescription, NewDescription
+from druncschema.description_pb2 import CommandDescription, NewDescription
 from druncschema.request_response_pb2 import (
-    CommandDescription,
-    Description,
     Request,
     Response,
     ResponseFlag,
@@ -50,9 +48,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    def new_describe(
-        self, request: Request, context: ServicerContext
-    ) -> NewDescription:
+    def describe(self, request: Request, context: ServicerContext) -> NewDescription:
         """Respond with a description of this session manager service.
 
         Args:
@@ -65,19 +61,19 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.log.debug(f"{self.name} running describe")
 
         commands = [
-            NewCommandDescription(
+            CommandDescription(
                 name="describe",
                 data_type=["None"],
                 help="List the methods exposed by this endpoint.",
                 return_type="request_response_pb2.Description",
             ),
-            NewCommandDescription(
+            CommandDescription(
                 name="list_all_sessions",
                 data_type=["None"],
                 help="List all active sessions.",
                 return_type="session_manager_pb2.AllActiveSessions",
             ),
-            NewCommandDescription(
+            CommandDescription(
                 name="list_all_configs",
                 data_type=["None"],
                 help="List all available configurations.",
@@ -93,54 +89,6 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
-        )
-
-    def describe(self, request: Request, context: ServicerContext) -> Response:
-        """Respond with a description of this session manager service.
-
-        Args:
-            request: The incoming request (not used).
-            context: The gRPC context (not used).
-
-        Returns:
-            A response containing the service description.
-        """
-        self.log.debug(f"{self.name} running describe")
-
-        command_descriptions = [
-            CommandDescription(
-                name="describe",
-                data_type=["None"],
-                help="List the methods exposed by this endpoint.",
-                return_type="request_response_pb2.Description",
-            ),
-            CommandDescription(
-                name="list_all_sessions",
-                data_type=["None"],
-                help="List all active sessions.",
-                return_type="session_manager_pb2.AllActiveSessions",
-            ),
-            CommandDescription(
-                name="list_all_configs",
-                data_type=["None"],
-                help="List all available configurations.",
-                return_type="session_manager_pb2.AllConfigKeys",
-            ),
-        ]
-
-        description = Description(
-            type="session_manager",
-            name=self.name,
-            session=self.name,
-            commands=command_descriptions,
-        )
-
-        return Response(
-            name=self.name,
-            token=None,
-            data=pack_to_any(description),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )
 
     def list_all_sessions(self, request: Request, context: ServicerContext) -> Response:
