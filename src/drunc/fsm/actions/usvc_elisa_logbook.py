@@ -86,6 +86,7 @@ class ElisaLogbook(FSMAction):
             "production_vs_test", "TEST"
         )  # This class won't exist in a test run, so we're adding this temporarily so that we can actually run the function
         text += f"Configuration: {_context.configuration.initial_data}"
+        text += f"\nRetrieve configuration: http://np04-srv-017.cern.ch:30015/runregistry/getRunBlob/{_input_data['run']}"
 
         if elisa_post is not None and self.run_type.lower() != "prod":
             self.log.warning(
