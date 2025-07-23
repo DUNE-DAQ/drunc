@@ -6,6 +6,7 @@ import tempfile
 import time
 from time import sleep
 
+from druncschema.description_pb2 import OldDescription
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -18,7 +19,6 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.request_response_pb2 import Description
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -393,9 +393,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             "terminate", outformat=ProcessInstanceList, timeout=timeout
         )
 
-    def kill(
-        self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstance:
+    def kill(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstance:
         return self.send_command(
             "kill",
             data=query,
@@ -411,9 +409,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             timeout=timeout,
         )
 
-    def ps(
-        self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstanceList:
+    def ps(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstanceList:
         return self.send_command(
             "ps",
             data=query,
@@ -441,9 +437,9 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             timeout=timeout,
         )
 
-    def describe(self, timeout: int | float = 60) -> Description:
+    def describe(self, timeout: int | float = 60) -> OldDescription:
         return self.send_command(
             "describe",
-            outformat=Description,
+            outformat=OldDescription,
             timeout=timeout,
         )

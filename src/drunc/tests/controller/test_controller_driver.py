@@ -1,5 +1,5 @@
 import pytest
-from druncschema.request_response_pb2 import Description
+from druncschema.description_pb2 import OldDescription
 from google.protobuf.json_format import MessageToDict
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -181,7 +181,7 @@ def test_controller_driver_describe(many_controllers_running):
     address_commmand_permutations_deep_segments_config(
         controller_driver=controller_driver,
         command="describe",
-        expected_response=Description(
+        expected_response=OldDescription(
             name="<name>",
             type="controller",
             endpoint="<endpoint>",

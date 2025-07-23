@@ -5,11 +5,9 @@ from os import getenv
 from pathlib import Path
 
 from conffwk import Configuration
+from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import (
-    CommandDescription,
-    Description,
     Request,
-    Response,
     ResponseFlag,
 )
 from druncschema.session_manager_pb2 import (
@@ -22,7 +20,6 @@ from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from grpc import ServicerContext
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -49,7 +46,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.name = name
         self.configuration = configuration
 
-    def describe(self, request:Request, context:ServicerContext) -> Response:
+    def describe(self, request: Request, context: ServicerContext) -> Description:
         """Respond with a description of this session manager service.
 
         Args:
@@ -61,12 +58,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running describe")
 
-        command_descriptions = [
+        commands = [
             CommandDescription(
                 name="describe",
                 data_type=["None"],
                 help="List the methods exposed by this endpoint.",
-                return_type="request_response_pb2.Description",
+                return_type="description_pb2.Description",
             ),
             CommandDescription(
                 name="list_all_sessions",
@@ -82,22 +79,19 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             ),
         ]
 
-        description = Description(
+        return Description(
             type="session_manager",
             name=self.name,
             session=self.name,
-            commands=command_descriptions,
-        )
-
-        return Response(
-            name=self.name,
-            token=None,
-            data=pack_to_any(description),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            commands=commands,
             children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
         )
 
-    def list_all_sessions(self, request:Request, context:ServicerContext) -> Response:
+    def list_all_sessions(
+        self, request: Request, context: ServicerContext
+    ) -> AllActiveSessions:
         """Respond with a list of all active sessions.
 
         Args:
@@ -120,19 +114,16 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             config_key=dummy_config,
         )
 
-        all_sessions = AllActiveSessions(
-            active_sessions=[dummy_session],
-        )
-
-        return Response(
+        return AllActiveSessions(
             name=self.name,
             token=None,
-            data=pack_to_any(all_sessions),
+            active_sessions=[dummy_session],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )
 
-    def list_all_configs(self, request:Request, context:ServicerContext) -> Response:
+    def list_all_configs(
+        self, request: Request, context: ServicerContext
+    ) -> AllConfigKeys:
         """Respond with a list of all available configurations.
 
         Args:
@@ -148,12 +139,11 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         search_paths = getenv("DUNEDAQ_DB_PATH")
         if search_paths is None:
             self.log.error("DUNEDAQ_DB_PATH not set")
-            return Response(
+            return AllConfigKeys(
                 name=self.name,
                 token=None,
-                data=pack_to_any(None),
+                config_keys=[],
                 flag=ResponseFlag.FAILED,
-                children=[],
             )
 
         # Find all configuration files.
@@ -179,14 +169,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 )
                 configs.append(config_key)
 
-        all_configs = AllConfigKeys(
-            config_keys=configs,
-        )
-
-        return Response(
+        return AllConfigKeys(
             name=self.name,
             token=None,
-            data=pack_to_any(all_configs),
+            config_keys=configs,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )

@@ -14,9 +14,10 @@ from druncschema.controller_pb2 import (
     Status,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
+from druncschema.description_pb2 import OldDescription
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
-from druncschema.request_response_pb2 import Description, Response, ResponseFlag
+from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
@@ -611,7 +612,7 @@ class Controller(ControllerServicer):
 
         if execute_on_self:
             bd = self.describe_broadcast()
-            d = Description(
+            d = OldDescription(
                 type="controller",
                 name=self.name,
                 endpoint=self.uri if self.uri is not None else "unknown",

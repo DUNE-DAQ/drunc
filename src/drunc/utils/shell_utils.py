@@ -218,8 +218,15 @@ class GRPCDriver:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command)
-        return self.handle_response(response, command, outformat)
 
+        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
+        from druncschema.description_pb2 import Description
+        from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
+
+        if isinstance(response, (Description, AllActiveSessions, AllConfigKeys)):
+            return response
+
+        return self.handle_response(response, command, outformat)
 
 
 class ShellContext:
