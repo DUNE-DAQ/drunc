@@ -71,7 +71,7 @@ class SSHProcessManager(ProcessManager):
 
         self.ssh = sh.Command("/usr/bin/ssh")
 
-    def kill_processes(self, uuids: list) -> ProcessInstanceList:
+    def kill_processes(self, uuids: list) -> list[ProcessInstance]:
         ret = []
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
@@ -117,11 +117,11 @@ class SSHProcessManager(ProcessManager):
             ]
             del self.process_store[proc_uuid]
 
-        pil = ProcessInstanceList(values=ret)
-        return pil
+        return ret
 
-    def _terminate_impl(self) -> ProcessInstanceList:
+    def _terminate_impl(self) -> list[ProcessInstance]:
         self.log.info("Terminating")
+
         if self.process_store:
             self.log.info("Killing all the known processes before exiting")
             uuids = self._get_process_uid(
@@ -130,7 +130,7 @@ class SSHProcessManager(ProcessManager):
             return self.kill_processes(uuids)
         else:
             self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+            return []
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         self.log.debug(f"Retrieving logs for {log_request.query}")
@@ -178,7 +178,8 @@ class SSHProcessManager(ProcessManager):
         except Exception as e:
             if uid not in self.process_store:
                 return LogLines(
-                    uuid=ProcessUUID(uuid=uid), lines=[f"Could not retrieve logs: {e!s}"]
+                    uuid=ProcessUUID(uuid=uid),
+                    lines=[f"Could not retrieve logs: {e!s}"],
                 )
             else:
                 return LogLines(
@@ -186,7 +187,7 @@ class SSHProcessManager(ProcessManager):
                     lines=[
                         f"Could not retrieve logs: {e!s}",
                         f"stdout: {self.process_store[uid].stdout}",
-                        f"stderr: {self.process_store[uid].stderr}"
+                        f"stderr: {self.process_store[uid].stderr}",
                     ],
                 )
 
@@ -435,11 +436,12 @@ class SSHProcessManager(ProcessManager):
 
         return ret
 
-    def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+    def _kill_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
+
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
             return self.kill_processes(uuids)
         else:
             self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+            return []

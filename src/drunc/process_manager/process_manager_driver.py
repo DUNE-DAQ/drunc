@@ -393,7 +393,9 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             "terminate", outformat=ProcessInstanceList, timeout=timeout
         )
 
-    def kill(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstance:
+    def kill(
+        self, query: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
         return self.send_command(
             "kill",
             data=query,
@@ -429,11 +431,11 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 
     def restart(
         self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstance:
+    ) -> ProcessInstanceList:
         return self.send_command(
             "restart",
             data=query,
-            outformat=ProcessInstance,
+            outformat=ProcessInstanceList,
             timeout=timeout,
         )
 
