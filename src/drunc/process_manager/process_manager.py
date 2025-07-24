@@ -280,9 +280,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def terminate(
         self, request: Request, context: ServicerContext
     ) -> ProcessInstanceList:
-        self.log.debug(f"{self.name} terminating")
+        self.log.debug(f"{self.name} running terminate")
 
-        # tototo
         try:
             response = self._terminate_impl()
         except NotImplementedError:
@@ -301,7 +300,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    def _restart_impl(self, q: ProcessQuery) -> ProcessInstanceList:
+    def _restart_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -309,31 +308,32 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def restart(self, request: Request, context: ServicerContext) -> Response:
+    def restart(
+        self, request: Request, context: ServicerContext
+    ) -> ProcessInstanceList:
+        self.log.debug(f"{self.name} running restart")
+
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        self.log.debug(f"{self.name} running restart")
-
         try:
             response = self._restart_impl(data)
-            return Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(response),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
-            )
         except NotImplementedError:
-            return Response(
+            return ProcessInstanceList(
                 name=self.name,
                 token=None,
-                data=pack_to_any(response),
+                values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                children=[],
             )
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=response,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     @abc.abstractmethod
     def _kill_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
@@ -352,7 +352,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         except UnpackingError as e:
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        # tototo
         try:
             response = self._kill_impl(data)
         except NotImplementedError:

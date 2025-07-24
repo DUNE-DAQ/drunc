@@ -368,16 +368,18 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
-
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(log_request.query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
-            return [LogLines(line=log) for log in self._core_v1_api.read_namespaced_pod_log(
-                podname, session, tail_lines=log_request.how_far
-            ).split("\n")]
+            return [
+                LogLines(line=log)
+                for log in self._core_v1_api.read_namespaced_pod_log(
+                    podname, session, tail_lines=log_request.how_far
+                ).split("\n")
+            ]
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
         this_uuid = str(uuid.uuid4())
@@ -426,8 +428,8 @@ class K8sProcessManager(ProcessManager):
 
         return pil
 
-    def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        # ret = []
+    def _restart_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+        ret = []
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(query):
@@ -445,16 +447,12 @@ class K8sProcessManager(ProcessManager):
             del self.boot_request[uuid]
             del uuid
 
-            ret = self.__boot(same_uuid_br, same_uuid)
+            ret = [self.__boot(same_uuid_br, same_uuid)]
+            # ret.append(self._get_pi(uuid, podname, session))
 
             del same_uuid_br
             del same_uuid
 
-            # ret.append(self._get_pi(uuid, podname, session))
-
-        # pil = ProcessInstanceList(
-        #     values=ret
-        # )
         return ret
 
     # # ORDER MATTERS!
