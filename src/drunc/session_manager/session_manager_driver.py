@@ -6,7 +6,7 @@ from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 from grpc import Channel
 
-from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
+from drunc.utils.shell_utils import GRPCDriver
 
 
 class SessionManagerDriver(GRPCDriver):
@@ -39,7 +39,7 @@ class SessionManagerDriver(GRPCDriver):
         """
         return SessionManagerStub(channel)
 
-    def describe(self) -> DecodedResponse | None:
+    def describe(self) -> Description:
         """Describe the session manager service.
 
         Returns:
@@ -47,7 +47,7 @@ class SessionManagerDriver(GRPCDriver):
         """
         return self.send_command("describe", outformat=Description)
 
-    def list_all_sessions(self) -> DecodedResponse | None:
+    def list_all_sessions(self) -> AllActiveSessions:
         """List all active sessions managed by the session manager.
 
         Returns:
@@ -55,7 +55,7 @@ class SessionManagerDriver(GRPCDriver):
         """
         return self.send_command("list_all_sessions", outformat=AllActiveSessions)
 
-    def list_all_configs(self) -> DecodedResponse | None:
+    def list_all_configs(self) -> AllConfigKeys:
         """List all available configurations in the session manager.
 
         Returns:
