@@ -6,7 +6,7 @@ import tempfile
 import time
 from time import sleep
 
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -437,9 +437,9 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             timeout=timeout,
         )
 
-    def describe(self, timeout: int | float = 60) -> OldDescription:
+    def describe(self, timeout: int | float = 60) -> Description:
         return self.send_command(
             "describe",
-            outformat=OldDescription,
+            outformat=Description,
             timeout=timeout,
         )

@@ -223,7 +223,13 @@ class GRPCDriver:
         from druncschema.description_pb2 import Description
         from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 
-        if isinstance(response, (Description, AllActiveSessions, AllConfigKeys)):
+        new_message_types = (
+            Description,
+            AllActiveSessions,
+            AllConfigKeys,
+        )
+
+        if isinstance(response, new_message_types):
             return response
 
         return self.handle_response(response, command, outformat)

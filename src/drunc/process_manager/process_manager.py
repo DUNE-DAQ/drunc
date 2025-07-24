@@ -5,7 +5,7 @@ import time
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.description_pb2 import CommandDescription, OldDescription
+from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -105,7 +105,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 name="describe",
                 data_type=["None"],
                 help="Describe self (return a list of commands, the type of endpoint, the name and session).",
-                return_type="description_pb2.OldDescription",
+                return_type="description_pb2.Description",
             ),
             CommandDescription(
                 name="kill",
@@ -475,26 +475,24 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def describe(self, request: Request, context: ServicerContext) -> Response:
+    def describe(self, request: Request, context: ServicerContext) -> Description:
         self.log.debug(f"{self.name} running describe")
-        bd = self.describe_broadcast()
-        d = OldDescription(
+
+        description = Description(
             type="process_manager",
             name=self.name,
             info=self.configuration.log_path,
             session="no_session" if not self.session else self.session,
             commands=self.commands,
-        )
-        if bd:
-            d.broadcast.CopyFrom(pack_to_any(bd))
-
-        return Response(
-            name=self.name,
-            token=None,
-            data=pack_to_any(d),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            token=None,
         )
+
+        if broadcast_description := self.describe_broadcast():
+            description.broadcast.CopyFrom(pack_to_any(broadcast_description))
+
+        return description
 
     @abc.abstractmethod
     def _logs_impl(self, request_data: LogRequest) -> LogLines:
