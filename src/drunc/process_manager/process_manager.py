@@ -173,19 +173,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             n_running = sum(
                 1
-                for process in results.values
+                for process in results
                 if process.status_code == ProcessInstance.StatusCode.RUNNING
             )
             n_dead = sum(
                 1
-                for process in results.values
+                for process in results
                 if process.status_code == ProcessInstance.StatusCode.DEAD
             )
             n_session = len(
-                {
-                    process.process_description.metadata.session
-                    for process in results.values
-                }
+                {process.process_description.metadata.session for process in results}
             )
             self.opmon_publisher.publish(
                 message=ProcessStatus(
@@ -231,7 +228,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    def _boot_impl(self, br: BootRequest) -> ProcessInstance:
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -370,7 +367,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    def _ps_impl(self, q: ProcessQuery) -> ProcessInstanceList:
+    def _ps_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -378,44 +375,43 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(self, request: Request, context: ServicerContext) -> Response:
+    def ps(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+        self.log.debug(f"{self.name} running ps")
+
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
-        self.log.debug(f"{self.name} running ps")
-
         try:
-            resp = self._ps_impl(data)
-            return Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(resp),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
-            )
+            response = self._ps_impl(data)
         except NotImplementedError:
-            return Response(
+            return ProcessInstanceList(
                 name=self.name,
                 token=None,
-                data=pack_to_any(resp),
+                values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                children=[],
             )
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=response,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(self, request: Request, context: ServicerContext) -> Response:
+    def flush(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+        self.log.debug(f"{self.name} running flush")
+
         try:
             data = unpack_any(request.data, ProcessQuery)
         except UnpackingError as e:
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        self.log.debug(f"{self.name} running flush")
 
         ret = []
         for uuid in self._get_process_uid(data):
@@ -461,14 +457,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 del self.process_store[uuid]
                 ret += [pi]
 
-        pil = ProcessInstanceList(values=ret)
-
-        return Response(
+        return ProcessInstanceList(
             name=self.name,
             token=None,
-            data=pack_to_any(pil),
+            values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
         )
 
     # ORDER MATTERS!

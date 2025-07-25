@@ -390,7 +390,9 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         timeout: int | float = 60,
     ) -> ProcessInstanceList:
         return self.send_command(
-            "terminate", outformat=ProcessInstanceList, timeout=timeout
+            "terminate",
+            outformat=ProcessInstanceList,
+            timeout=timeout,
         )
 
     def kill(

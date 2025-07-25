@@ -14,7 +14,6 @@ from druncschema.process_manager_pb2 import (
     LogRequest,
     ProcessDescription,
     ProcessInstance,
-    ProcessInstanceList,
     ProcessQuery,
     ProcessRestriction,
     ProcessUUID,
@@ -361,7 +360,7 @@ class SSHProcessManager(ProcessManager):
 
         return pi
 
-    def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+    def _ps_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
         ret = []
 
         for proc_uuid in self._get_process_uid(query):
@@ -401,9 +400,7 @@ class SSHProcessManager(ProcessManager):
             )
             ret += [pi]
 
-        pil = ProcessInstanceList(values=ret)
-
-        return pil
+        return ret
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
         self.log.debug(f"{self.name} running _boot_impl")

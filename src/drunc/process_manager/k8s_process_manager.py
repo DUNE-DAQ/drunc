@@ -414,7 +414,7 @@ class K8sProcessManager(ProcessManager):
 
     def _ps_impl(
         self, query: ProcessQuery, in_boot_request: bool = False
-    ) -> ProcessInstanceList:
+    ) -> list[ProcessInstance]:
         ret = []
         for proc_uuid in self._get_process_uid(query):
             podname = self.boot_request[proc_uuid].process_description.metadata.name
@@ -424,9 +424,7 @@ class K8sProcessManager(ProcessManager):
 
             ret.append(self._get_pi(proc_uuid, podname, session, return_code))
 
-        pil = ProcessInstanceList(values=ret)
-
-        return pil
+        return ret
 
     def _restart_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
         ret = []
