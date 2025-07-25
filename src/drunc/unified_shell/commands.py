@@ -30,9 +30,9 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
-    if len(processes.data.values) > 0:
+    if len(processes.values) > 0:
         click.confirm(
-            f"You already have {len(processes.data.values)} processes running in session {session_name}, are you sure you want to boot a session?",
+            f"You already have {len(processes.values)} processes running in session {session_name}, are you sure you want to boot a session?",
             abort=True,
         )
 
