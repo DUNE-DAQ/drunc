@@ -67,7 +67,7 @@ def boot(
             if not result:
                 break
             log.debug(
-                f"'{result.data.process_description.metadata.name}' ({result.data.uuid.uuid}) process started"
+                f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) process started"
             )
     except InterruptedCommand:
         return
@@ -144,7 +144,7 @@ def dummy_boot(
             if not result:
                 break
             log.debug(
-                f"'{result.data.process_description.metadata.name}' ({result.data.uuid.uuid}) process started"
+                f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) process started"
             )
     except InterruptedCommand:
         return

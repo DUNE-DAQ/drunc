@@ -50,7 +50,7 @@ def boot(
             if not result:
                 break
             log.debug(
-                f"'{result.data.process_description.metadata.name}' ({result.data.uuid.uuid}) started"
+                f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) started"
             )
     except InterruptedCommand:
         log.warning("Booting interrupted")
