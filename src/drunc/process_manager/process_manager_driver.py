@@ -4,6 +4,7 @@ import os
 import signal
 import tempfile
 import time
+from collections.abc import Iterator
 from time import sleep
 
 from druncschema.description_pb2 import Description
@@ -12,7 +13,6 @@ from druncschema.process_manager_pb2 import (
     LogLines,
     LogRequest,
     ProcessDescription,
-    ProcessInstance,
     ProcessInstanceList,
     ProcessMetadata,
     ProcessQuery,
@@ -54,7 +54,7 @@ class ProcessManagerDriver(GRPCDriver):
         db,
         session_name: str,
         override_logs: bool,
-    ) -> BootRequest:
+    ) -> Iterator[BootRequest]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
 
         env = {
@@ -164,7 +164,7 @@ class ProcessManagerDriver(GRPCDriver):
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> ProcessInstance:
+    ) -> Iterator[ProcessInstanceList]:
         from daqconf.consolidate import consolidate_db
 
         self.log.info(f"Booting session [green]{session_name}[/green]")
@@ -236,7 +236,7 @@ To debug it, close drunc and run the following command:
             yield self.send_command(
                 "boot",
                 data=br,
-                outformat=ProcessInstance,
+                outformat=ProcessInstanceList,
                 timeout=timeout,
             )
 
@@ -340,7 +340,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         sleep: int,
         n_sleeps: int,
         timeout: int | float = 60,
-    ):  # -> ProcessInstance:
+    ) -> Iterator[ProcessInstanceList]:
         pwd = os.getcwd()
 
         # Construct the list of commands to send to the dummy_boot process
@@ -381,7 +381,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             yield self.send_command(
                 "boot",
                 data=breq,
-                outformat=ProcessInstance,
+                outformat=ProcessInstanceList,
                 timeout=timeout,
             )
 
