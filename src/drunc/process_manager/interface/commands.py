@@ -45,9 +45,9 @@ def boot(
     log = get_logger("process_manager.shell")
     processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
 
-    if len(processes.data.values) > 0:
+    if len(processes.values) > 0:
         click.confirm(
-            f"You already have {len(processes.data.values)} processes running, are you sure you want to boot a session?",
+            f"You already have {len(processes.values)} processes running, are you sure you want to boot a session?",
             abort=True,
         )
 
@@ -159,7 +159,7 @@ def terminate(obj: ProcessManagerContext) -> None:
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result.data, "Terminated process", False)
+        tabulate_process_instance_list(result, "Terminated process", False)
     )  # rich tables require console printing
 
     obj.delete_driver("controller")
@@ -175,7 +175,7 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result.data, "Killed process", False)
+        tabulate_process_instance_list(result, "Killed process", False)
     )  # rich tables require console printing
 
     obj.delete_driver("controller")
@@ -191,7 +191,7 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result.data, "Flushed process", False)
+        tabulate_process_instance_list(result, "Flushed process", False)
     )  # rich tables require console printing
 
 
@@ -222,7 +222,6 @@ def logs(
         obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
 
     for line in result.lines:
-
         if line == "":
             obj.print("")
             continue
@@ -262,9 +261,7 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     help="Whether to have a long output",
 )
 @click.pass_obj
-def ps(
-    obj: ProcessManagerContext, query: ProcessQuery, long_format: bool
-) -> None:
+def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query=query)
@@ -272,6 +269,6 @@ def ps(
         return
     obj.print(
         tabulate_process_instance_list(
-            results.data, title="Processes running", long=long_format
+            results, title="Processes running", long=long_format
         )
     )

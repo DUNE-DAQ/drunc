@@ -118,8 +118,7 @@ def unified_shell(
     ctx.obj.session_name = session_name
 
     db = conffwk.Configuration(ctx.obj.configuration_file)
-    session_dal = db.get_dal(class_name="Session",
-                             uid=ctx.obj.configuration_id)
+    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
     connectivity_service_address = f"{session_dal.connectivity_service.host}:{session_dal.connectivity_service.service.port}"
@@ -133,8 +132,7 @@ def unified_shell(
             f"Spawning [green]process_manager[/green] with configuration {process_manager}"
         )
         # Check if process_manager is a packaged config
-        process_manager_conf_file = get_process_manager_configuration(
-            process_manager)
+        process_manager_conf_file = get_process_manager_configuration(process_manager)
 
         ready_event = mp.Event()
         port = mp.Value("i", 0)
@@ -189,7 +187,6 @@ def unified_shell(
         unified_shell_log.debug("Runnning [green]describe[/green]")
         try:
             desc = ctx.obj.get_driver().describe()
-            desc = desc.data
         except Exception as e:
             unified_shell_log.error(
                 f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
@@ -279,12 +276,10 @@ def unified_shell(
     # Let's do this
     unified_shell_log.debug("Retrieving the session database")
     db = conffwk.Configuration(ctx.obj.configuration_file)
-    session_dal = db.get_dal(class_name="Session",
-                             uid=ctx.obj.configuration_id)
+    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
 
     controller_name = session_dal.segment.controller.id
-    unified_shell_log.debug(
-        "Initializing the [green]ControllerConfHandler[/green]")
+    unified_shell_log.debug("Initializing the [green]ControllerConfHandler[/green]")
     controller_configuration = ControllerConfHandler(
         type=ConfTypes.OKSFileName,
         data=ctx.obj.configuration_file,
@@ -309,16 +304,12 @@ def unified_shell(
     )
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
-    stateful_node = StatefulNode(
-        fsm_configuration=fsmch,
-        top_segment_controller=False
-    )
+    stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
 
     unified_shell_log.debug(
         "Retrieving the transitions from the [green]StatefulNode[/green]"
     )
-    transitions = convert_fsm_transition(
-        stateful_node.get_all_fsm_transitions())
+    transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
     fsm_logger.setLevel(log_level)
     fsm_conf_logger.setLevel(log_level)
     # End of shameful code
