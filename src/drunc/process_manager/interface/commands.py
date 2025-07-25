@@ -216,7 +216,7 @@ def logs(
         query=query,
     )
 
-    result = obj.get_driver("process_manager").logs(log_req).data
+    result = obj.get_driver("process_manager").logs(log_req)
 
     if result.uuid.uuid is not None:
         obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
