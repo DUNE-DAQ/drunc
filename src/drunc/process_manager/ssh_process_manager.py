@@ -412,7 +412,7 @@ class SSHProcessManager(ProcessManager):
         return ret
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
-        self.log.debug(f"{self.name} running _boot_impl")
+        self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
         return self.__boot(boot_request, this_uuid)
 

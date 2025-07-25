@@ -21,7 +21,6 @@ from druncschema.process_manager_pb2 import (
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
     Request,
-    Response,
     ResponseFlag,
 )
 from google.rpc import code_pb2
@@ -236,34 +235,33 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(self, request: Request, context: ServicerContext) -> Response:
-        try:
-            data = unpack_any(request.data, BootRequest)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
+    def boot(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
         self.log.debug(
             "{self.name} booting '{data.process_description.metadata.name}' "
             "from session '{data.process_description.metadata.session}'"
         )
 
         try:
+            data = unpack_any(request.data, BootRequest)
+        except UnpackingError as e:
+            return unpack_error_response(self.__class__.__name__, str(e), request.token)
+
+        try:
             response = self._boot_impl(data)
-            return Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(response),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
-            )
         except NotImplementedError:
-            return Response(
+            return ProcessInstanceList(
                 name=self.name,
                 token=None,
-                data=pack_to_any(response),
+                values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                children=[],
             )
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[response],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     @abc.abstractmethod
     def _terminate_impl(self) -> list[ProcessInstance]:

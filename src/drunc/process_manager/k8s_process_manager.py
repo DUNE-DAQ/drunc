@@ -381,7 +381,8 @@ class K8sProcessManager(ProcessManager):
                 ).split("\n")
             ]
 
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
+        self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
         return self.__boot(boot_request, this_uuid)
 
