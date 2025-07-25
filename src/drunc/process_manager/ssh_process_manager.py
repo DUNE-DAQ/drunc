@@ -18,6 +18,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
@@ -175,27 +176,35 @@ class SSHProcessManager(ProcessManager):
                 _err_to_out=True,
             )
         except Exception as e:
-            if uid not in self.process_store:
-                return LogLines(
-                    uuid=ProcessUUID(uuid=uid),
-                    lines=[f"Could not retrieve logs: {e!s}"],
-                )
-            else:
-                return LogLines(
-                    uuid=ProcessUUID(uuid=uid),
-                    lines=[
-                        f"Could not retrieve logs: {e!s}",
+            lines = [f"Could not retrieve logs: {e!s}"]
+            if uid in self.process_store:
+                lines.extend(
+                    [
                         f"stdout: {self.process_store[uid].stdout}",
                         f"stderr: {self.process_store[uid].stderr}",
-                    ],
+                    ]
                 )
+
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=ProcessUUID(uuid=uid),
+                lines=lines,
+                flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+            )
 
         f.close()
         with open(f.name) as fi:
             lines = fi.readlines()
             if "Connection to " in lines[-1] and " closed." in lines[-1]:
                 lines = lines[:-1]
-            return LogLines(uuid=ProcessUUID(uuid=uid), lines=lines)
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=ProcessUUID(uuid=uid),
+                lines=lines,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
 
         os.remove(f.name)
 

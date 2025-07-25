@@ -489,7 +489,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return description
 
     @abc.abstractmethod
-    def _logs_impl(self, request_data: LogRequest) -> LogLines:
+    def _logs_impl(self, log_request: LogRequest) -> LogLines:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -497,15 +497,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def logs(self, request: Request, context: ServicerContext) -> Response:
+    def logs(self, request: Request, context: ServicerContext) -> LogLines:
         """Fetch logs for a process.
 
         Args:
             request: The incoming request.
             context: The gRPC context (not used).
 
-        Yields:
-            Response objects containing log lines.
+        Returns:
+            A response containing log lines.
         """
         self.log.debug("Getting logs")
 
@@ -515,23 +515,21 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return unpack_error_response(self.__class__.__name__, str(e), request.token)
 
         try:
-            return Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(self._logs_impl(data)),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
-            )
+            response = self._logs_impl(data)
         except NotImplementedError:
-            return Response(
+            return LogLines(
                 name=self.name,
                 token=None,
-                data=None,
+                uuid=None,
+                lines=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                children=[],
             )
 
-    def _ensure_one_process(self, uuids: [str], in_boot_request: bool = False) -> str:
+        return response
+
+    def _ensure_one_process(
+        self, uuids: list[str], in_boot_request: bool = False
+    ) -> str:
         if uuids == []:
             raise BadQuery("The process corresponding to the query doesn't exist")
         elif len(uuids) > 1:
