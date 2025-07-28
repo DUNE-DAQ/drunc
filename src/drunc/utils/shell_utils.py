@@ -94,15 +94,10 @@ class GRPCDriver:
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
 
-        self._address = address
-        self._channel = grpc.insecure_channel(self._address)
-        self._stub = self.create_stub(self._channel)
+        self.address = address
+        self.channel = grpc.insecure_channel(self.address)
         self.token = Token()
         self.token.CopyFrom(token)
-
-    @abc.abstractmethod
-    def create_stub(self, channel) -> object:
-        pass
 
     def _create_request(self, payload=None) -> Request:
         token2 = Token()
@@ -202,10 +197,10 @@ class GRPCDriver:
         decode_children=False,
         timeout: int | float = 60,
     ):
-        if not self._stub:
+        if not self.stub:
             raise DruncShellException("No stub initialised")
 
-        cmd = getattr(self._stub, command)  # this throws if the command doesn't exist
+        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
 
         request = self._create_request(data)
 
@@ -217,12 +212,9 @@ class GRPCDriver:
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description
         from druncschema.process_manager_pb2 import ProcessInstanceList
-        from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 
         new_message_types = (
             Description,
-            AllActiveSessions,
-            AllConfigKeys,
             ProcessInstanceList,
         )
 

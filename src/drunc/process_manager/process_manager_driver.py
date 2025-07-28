@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from time import sleep
 
+import grpc
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -19,12 +20,18 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
+from druncschema.request_response_pb2 import Request
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
+from drunc.utils.grpc_utils import (
+    copy_token,
+    rethrow_if_timeout,
+    rethrow_if_unreachable_server,
+)
 from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
@@ -38,13 +45,10 @@ class ProcessManagerDriver(GRPCDriver):
     controller_address = ""
 
     def __init__(self, address: str, token, **kwargs):
-        super(ProcessManagerDriver, self).__init__(
-            name="process_manager.driver", address=address, token=token, **kwargs
+        super().__init__(
+            name="process_manager_driver", address=address, token=token, **kwargs
         )
-        self.log.debug("set up process_manager.driver")
-
-    def create_stub(self, channel):
-        return ProcessManagerStub(channel)
+        self.stub = ProcessManagerStub(self.channel)
 
     def _convert_oks_to_boot_request(
         self,
@@ -442,8 +446,14 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         )
 
     def describe(self, timeout: int | float = 60) -> Description:
-        return self.send_command(
-            "describe",
-            outformat=Description,
-            timeout=timeout,
-        )
+        token = copy_token(self.token)
+        request = Request(token=token)
+
+        try:
+            response = self.stub.describe(request, timeout=timeout)
+        except grpc.RpcError as e:
+            rethrow_if_unreachable_server(e)
+            rethrow_if_timeout(e)
+            raise e
+
+        return response

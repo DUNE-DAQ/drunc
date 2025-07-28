@@ -28,8 +28,6 @@ class SessionManagerDriver(GRPCDriver):
         super().__init__(
             name="session_manager_driver", address=address, token=token, **kwargs
         )
-        self.address = address
-        self.channel = grpc.insecure_channel(self.address)
         self.stub = SessionManagerStub(self.channel)
 
     def describe(self, timeout: int | float = 60) -> Description:

@@ -1,4 +1,3 @@
-
 import grpc
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -98,3 +97,17 @@ def interrupt_if_unreachable_server(grpc_error):
             return grpc_error._state.details
         elif hasattr(grpc_error, "_details"):
             return grpc_error._details
+
+
+def copy_token(token: Token) -> Token:
+    """Create a copy of the original token.
+
+    Args:
+        token: The original token to copy.
+
+    Returns:
+        A copy of the original token.
+    """
+    token_copy = Token()
+    token_copy.CopyFrom(token)
+    return token_copy
