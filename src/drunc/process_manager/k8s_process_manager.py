@@ -433,6 +433,14 @@ class K8sProcessManager(ProcessManager):
                 break
         else:
             raise DruncException(f'Not able to boot "{session}.{podnames}":{uuid}')
+        
+        try:
+            pod_info = self._core_v1_api.read_namespaced_pod(podnames, session)
+            node_name = pod_info.spec.node_name
+            self.boot_request[uuid].process_description.metadata.hostname = node_name
+        except Exception as e:
+            self.log.warning(f"Could not retrieve node name for pod {session}.{podnames}: {e}")
+
         return self._get_pi(uuid, podnames, session)
 
     def _ps_impl(
