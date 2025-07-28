@@ -2,11 +2,12 @@
 
 import grpc
 from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import Request
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
-from google.protobuf.empty_pb2 import Empty
 
+from drunc.utils.grpc_utils import copy_token
 from drunc.utils.shell_utils import GRPCDriver
 
 
@@ -39,9 +40,11 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing the description of the service.
         """
+        token = copy_token(self.token)
+        request = Request(token=token)
 
         try:
-            response = self.stub.describe(Empty(), timeout=timeout)
+            response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "describe")
 
@@ -56,9 +59,11 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing a list of all active sessions.
         """
+        token = copy_token(self.token)
+        request = Request(token=token)
 
         try:
-            response = self.stub.list_all_sessions(Empty(), timeout=timeout)
+            response = self.stub.list_all_sessions(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "list_all_sessions")
 
@@ -73,9 +78,11 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing all available configuration keys.
         """
+        token = copy_token(self.token)
+        request = Request(token=token)
 
         try:
-            response = self.stub.list_all_configs(Empty(), timeout=timeout)
+            response = self.stub.list_all_configs(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "list_all_configs")
 
