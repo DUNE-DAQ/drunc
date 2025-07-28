@@ -40,13 +40,12 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing the description of the service.
         """
-        token = copy_token(self.token)
-        request = Request(token=token)
+        request = Request(token=copy_token(self.token))
 
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, "describe")
+            self.handle_grpc_error(e)
 
         return response
 
@@ -59,13 +58,12 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing a list of all active sessions.
         """
-        token = copy_token(self.token)
-        request = Request(token=token)
+        request = Request(token=copy_token(self.token))
 
         try:
             response = self.stub.list_all_sessions(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, "list_all_sessions")
+            self.handle_grpc_error(e)
 
         return response
 
@@ -78,12 +76,11 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing all available configuration keys.
         """
-        token = copy_token(self.token)
-        request = Request(token=token)
+        request = Request(token=copy_token(self.token))
 
         try:
             response = self.stub.list_all_configs(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, "list_all_configs")
+            self.handle_grpc_error(e)
 
         return response

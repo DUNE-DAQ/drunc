@@ -111,7 +111,7 @@ class GRPCDriver:
         else:
             return Request(token=token2)
 
-    def __handle_grpc_error(self, error, command):
+    def handle_grpc_error(self, error):
         rethrow_if_unreachable_server(error)
         rethrow_if_timeout(error)
         raise error
@@ -207,7 +207,7 @@ class GRPCDriver:
         try:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, command)
+            self.handle_grpc_error(e)
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description

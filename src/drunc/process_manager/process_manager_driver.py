@@ -27,11 +27,7 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc.utils.grpc_utils import (
-    copy_token,
-    rethrow_if_timeout,
-    rethrow_if_unreachable_server,
-)
+from drunc.utils.grpc_utils import copy_token
 from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
@@ -400,60 +396,65 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         )
 
     def kill(
-        self, query: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         return self.send_command(
             "kill",
-            data=query,
+            data=request,
             outformat=ProcessInstanceList,
             timeout=timeout,
         )
 
-    def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLines:
+    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines:
         return self.send_command(
             "logs",
-            data=req,
+            data=request,
             outformat=LogLines,
             timeout=timeout,
         )
 
-    def ps(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstanceList:
-        return self.send_command(
-            "ps",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+    def ps(
+        self, request: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.ps(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def flush(
-        self, query: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "flush",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.flush(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def restart(
-        self, query: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "restart",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.restart(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def describe(self, timeout: int | float = 60) -> Description:
-        token = copy_token(self.token)
-        request = Request(token=token)
+        request = Request(token=copy_token(self.token))
 
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
-            rethrow_if_unreachable_server(e)
-            rethrow_if_timeout(e)
-            raise e
+            self.handle_grpc_error(e)
 
         return response

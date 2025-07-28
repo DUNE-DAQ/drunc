@@ -304,17 +304,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
     def restart(
-        self, request: Request, context: ServicerContext
+        self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running restart")
 
         try:
-            data = unpack_any(request.data, ProcessQuery)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        try:
-            response = self._restart_impl(data)
+            response = self._restart_impl(request)
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
@@ -373,16 +368,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+    def ps(
+        self, request: ProcessQuery, context: ServicerContext
+    ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running ps")
 
         try:
-            data = unpack_any(request.data, ProcessQuery)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        try:
-            response = self._ps_impl(data)
+            response = self._ps_impl(request)
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
