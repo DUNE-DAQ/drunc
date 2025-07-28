@@ -94,14 +94,9 @@ class GRPCDriver:
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
 
-        self.address = address
-
-        if aio_channel:
-            self.channel = grpc.aio.insecure_channel(self.address)
-        else:
-            self.channel = grpc.insecure_channel(self.address)
-
-        self.stub = self.create_stub(self.channel)
+        self._address = address
+        self._channel = grpc.insecure_channel(self._address)
+        self._stub = self.create_stub(self._channel)
         self.token = Token()
         self.token.CopyFrom(token)
 
@@ -186,7 +181,7 @@ class GRPCDriver:
             elif response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
             ]:
-                self.log.warn(text())
+                self.log.warning(text())
             else:
                 self.log.error(text("failed", error_txt))
 
@@ -207,10 +202,10 @@ class GRPCDriver:
         decode_children=False,
         timeout: int | float = 60,
     ):
-        if not self.stub:
+        if not self._stub:
             raise DruncShellException("No stub initialised")
 
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
+        cmd = getattr(self._stub, command)  # this throws if the command doesn't exist
 
         request = self._create_request(data)
 

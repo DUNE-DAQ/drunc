@@ -1,10 +1,11 @@
 """Driver for the session manager service."""
 
+import grpc
 from druncschema.description_pb2 import Description
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
-from grpc import Channel
+from google.protobuf.empty_pb2 import Empty
 
 from drunc.utils.shell_utils import GRPCDriver
 
@@ -27,17 +28,9 @@ class SessionManagerDriver(GRPCDriver):
         super().__init__(
             name="session_manager_driver", address=address, token=token, **kwargs
         )
-
-    def create_stub(self, channel: Channel) -> SessionManagerStub:
-        """Create gRPC stubs for the session manager service.
-
-        Args:
-            channel: The gRPC channel to use for communication.
-
-        Returns:
-            An object containing session manager service method stubs.
-        """
-        return SessionManagerStub(channel)
+        self.address = address
+        self.channel = grpc.insecure_channel(self.address)
+        self.stub = SessionManagerStub(self.channel)
 
     def describe(self) -> Description:
         """Describe the session manager service.
@@ -45,7 +38,13 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing the description of the service.
         """
-        return self.send_command("describe", outformat=Description)
+
+        try:
+            response = self.stub.describe(Empty())
+        except grpc.RpcError as e:
+            self.__handle_grpc_error(e, "describe")
+
+        return response
 
     def list_all_sessions(self) -> AllActiveSessions:
         """List all active sessions managed by the session manager.
@@ -53,7 +52,13 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing a list of all active sessions.
         """
-        return self.send_command("list_all_sessions", outformat=AllActiveSessions)
+
+        try:
+            response = self.stub.list_all_sessions(Empty())
+        except grpc.RpcError as e:
+            self.__handle_grpc_error(e, "list_all_sessions")
+
+        return response
 
     def list_all_configs(self) -> AllConfigKeys:
         """List all available configurations in the session manager.
@@ -61,4 +66,10 @@ class SessionManagerDriver(GRPCDriver):
         Returns:
             A response containing all available configuration keys.
         """
-        return self.send_command("list_all_configs", outformat=AllConfigKeys)
+
+        try:
+            response = self.stub.list_all_configs(Empty())
+        except grpc.RpcError as e:
+            self.__handle_grpc_error(e, "list_all_configs")
+
+        return response
