@@ -334,16 +334,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def kill(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+    def kill(
+        self, request: ProcessQuery, context: ServicerContext
+    ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running kill")
 
         try:
-            data = unpack_any(request.data, ProcessQuery)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        try:
-            response = self._kill_impl(data)
+            response = self._kill_impl(request)
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
@@ -395,16 +392,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+    def flush(
+        self, request: ProcessQuery, context: ServicerContext
+    ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running flush")
 
-        try:
-            data = unpack_any(request.data, ProcessQuery)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
         ret = []
-        for uuid in self._get_process_uid(data):
+        for uuid in self._get_process_uid(request):
             if uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=uuid)
                 pi = ProcessInstance(
@@ -487,7 +481,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def logs(self, request: Request, context: ServicerContext) -> LogLines:
+    def logs(self, request: LogRequest, context: ServicerContext) -> LogLines:
         """Fetch logs for a process.
 
         Args:
@@ -500,12 +494,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug("Getting logs")
 
         try:
-            data = unpack_any(request.data, LogRequest)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        try:
-            response = self._logs_impl(data)
+            response = self._logs_impl(request)
         except NotImplementedError:
             return LogLines(
                 name=self.name,
@@ -542,7 +531,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         query: ProcessQuery,
         in_boot_request: bool = False,
         order_by: str = "random",
-    ) -> [str]:
+    ) -> list[str]:
         order_by = order_by.lower()
         if order_by not in ["random", "leaf_first", "root_first"]:
             raise DruncCommandException(f"Order by '{order_by}' is not supported")

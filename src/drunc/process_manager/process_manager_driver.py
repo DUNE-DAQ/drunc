@@ -389,29 +389,36 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         self,
         timeout: int | float = 60,
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "terminate",
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        request = Request(token=copy_token(self.token))
+
+        try:
+            response = self.stub.terminate(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def kill(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "kill",
-            data=request,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.kill(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines:
-        return self.send_command(
-            "logs",
-            data=request,
-            outformat=LogLines,
-            timeout=timeout,
-        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.logs(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_grpc_error(e)
+
+        return response
 
     def ps(
         self, request: ProcessQuery, timeout: int | float = 60
