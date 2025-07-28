@@ -133,6 +133,7 @@ class ProcessManagerDriver(GRPCDriver):
 
             self.log.debug(f"{name}'s env:\n{env}")
             breq = BootRequest(
+                token=copy_token(self.token),
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
                         user=user,
@@ -204,7 +205,7 @@ To debug it, close drunc and run the following command:
         last_boot_on_host_at = {}
         previous_host = None
 
-        for br in self._convert_oks_to_boot_request(
+        for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
             session_dal=session_dal,
@@ -214,14 +215,14 @@ To debug it, close drunc and run the following command:
             **kwargs,
         ):
             if (
-                br.process_description.metadata.name
+                request.process_description.metadata.name
                 not in [app.id for app in session_dal.infrastructure_applications]
                 and csc
                 and not csc.is_ready(timeout=10)
             ):
                 raise DruncSetupException("Connectivity service is not ready in time")
 
-            this_host = next(iter(br.process_restriction.allowed_hosts))
+            this_host = next(iter(request.process_restriction.allowed_hosts))
 
             time_diff = time.time() - last_boot_on_host_at.get(this_host, 0)
 
@@ -233,12 +234,13 @@ To debug it, close drunc and run the following command:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
-            yield self.send_command(
-                "boot",
-                data=br,
-                outformat=ProcessInstanceList,
-                timeout=timeout,
-            )
+
+            try:
+                response = self.stub.boot(request, timeout=timeout)
+            except grpc.RpcError as e:
+                self.handle_grpc_error(e)
+
+            yield response
 
         top_controller_name = session_dal.segment.controller.id
 
@@ -359,7 +361,8 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         )
 
         for process in range(n_processes):
-            breq = BootRequest(
+            request = BootRequest(
+                token=copy_token(self.token),
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
                         user=user,
@@ -376,14 +379,14 @@ To find the controller address, you can look up \'{top_controller_name}_control\
                 ),
                 process_restriction=ProcessRestriction(allowed_hosts=["localhost"]),
             )
-            self.log.debug(f"{breq=}\n\n")
+            self.log.debug(f"{request=}\n\n")
 
-            yield self.send_command(
-                "boot",
-                data=breq,
-                outformat=ProcessInstanceList,
-                timeout=timeout,
-            )
+            try:
+                response = self.stub.boot(request, timeout=timeout)
+            except grpc.RpcError as e:
+                self.handle_grpc_error(e)
+
+            yield response
 
     def terminate(
         self,

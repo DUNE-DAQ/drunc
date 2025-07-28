@@ -39,10 +39,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.grpc_utils import (
-    UnpackingError,
     pack_to_any,
-    unpack_any,
-    unpack_error_response,
 )
 from drunc.utils.utils import get_logger, pid_info_str
 
@@ -235,19 +232,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(self, request: Request, context: ServicerContext) -> ProcessInstanceList:
+    def boot(
+        self, request: BootRequest, context: ServicerContext
+    ) -> ProcessInstanceList:
         self.log.debug(
             "{self.name} booting '{data.process_description.metadata.name}' "
             "from session '{data.process_description.metadata.session}'"
         )
 
         try:
-            data = unpack_any(request.data, BootRequest)
-        except UnpackingError as e:
-            return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-        try:
-            response = self._boot_impl(data)
+            response = self._boot_impl(request)
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
