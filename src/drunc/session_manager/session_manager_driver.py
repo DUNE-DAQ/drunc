@@ -32,43 +32,52 @@ class SessionManagerDriver(GRPCDriver):
         self.channel = grpc.insecure_channel(self.address)
         self.stub = SessionManagerStub(self.channel)
 
-    def describe(self) -> Description:
+    def describe(self, timeout: int | float = 60) -> Description:
         """Describe the session manager service.
+
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
 
         Returns:
             A response containing the description of the service.
         """
 
         try:
-            response = self.stub.describe(Empty())
+            response = self.stub.describe(Empty(), timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "describe")
 
         return response
 
-    def list_all_sessions(self) -> AllActiveSessions:
+    def list_all_sessions(self, timeout: int | float = 60) -> AllActiveSessions:
         """List all active sessions managed by the session manager.
+
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
 
         Returns:
             A response containing a list of all active sessions.
         """
 
         try:
-            response = self.stub.list_all_sessions(Empty())
+            response = self.stub.list_all_sessions(Empty(), timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "list_all_sessions")
 
         return response
 
-    def list_all_configs(self) -> AllConfigKeys:
+    def list_all_configs(self, timeout: int | float = 60) -> AllConfigKeys:
         """List all available configurations in the session manager.
+
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
 
         Returns:
             A response containing all available configuration keys.
         """
 
         try:
-            response = self.stub.list_all_configs(Empty())
+            response = self.stub.list_all_configs(Empty(), timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, "list_all_configs")
 
