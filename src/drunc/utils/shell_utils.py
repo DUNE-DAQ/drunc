@@ -15,12 +15,7 @@ from drunc.exceptions import (
     DruncSetupException,
     DruncShellException,
 )
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    rethrow_if_timeout,
-    rethrow_if_unreachable_server,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.utils import get_logger
 
 
@@ -111,11 +106,6 @@ class GRPCDriver:
         else:
             return Request(token=token2)
 
-    def handle_grpc_error(self, error):
-        rethrow_if_unreachable_server(error)
-        rethrow_if_timeout(error)
-        raise error
-
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
             name=response.name,
@@ -193,7 +183,7 @@ class GRPCDriver:
         try:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description

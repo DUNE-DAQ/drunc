@@ -1,3 +1,5 @@
+from typing import NoReturn
+
 import grpc
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -89,6 +91,17 @@ def rethrow_if_timeout(grpc_error):
     if hasattr(grpc_error, "_state"):
         if grpc_error._state.code == grpc.StatusCode.DEADLINE_EXCEEDED:
             raise ServerTimeout(grpc_error._state.details) from grpc_error
+
+
+def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
+    """Handle gRPC errors by rethrowing them with appropriate context.
+
+    Args:
+        error: The gRPC error to handle.
+    """
+    rethrow_if_unreachable_server(error)
+    rethrow_if_timeout(error)
+    raise error
 
 
 def interrupt_if_unreachable_server(grpc_error):

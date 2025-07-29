@@ -7,7 +7,7 @@ from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 
-from drunc.utils.grpc_utils import copy_token
+from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import GRPCDriver
 
 
@@ -45,7 +45,7 @@ class SessionManagerDriver(GRPCDriver):
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -63,7 +63,7 @@ class SessionManagerDriver(GRPCDriver):
         try:
             response = self.stub.list_all_sessions(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -81,6 +81,6 @@ class SessionManagerDriver(GRPCDriver):
         try:
             response = self.stub.list_all_configs(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response

@@ -27,7 +27,7 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc.utils.grpc_utils import copy_token
+from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
@@ -238,7 +238,7 @@ To debug it, close drunc and run the following command:
             try:
                 response = self.stub.boot(request, timeout=timeout)
             except grpc.RpcError as e:
-                self.handle_grpc_error(e)
+                handle_grpc_error(e)
 
             yield response
 
@@ -384,7 +384,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             try:
                 response = self.stub.boot(request, timeout=timeout)
             except grpc.RpcError as e:
-                self.handle_grpc_error(e)
+                handle_grpc_error(e)
 
             yield response
 
@@ -397,7 +397,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.terminate(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -409,7 +409,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.kill(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -419,7 +419,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.logs(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -431,7 +431,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.ps(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -443,7 +443,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.flush(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -455,7 +455,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.restart(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
 
@@ -465,6 +465,6 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_grpc_error(e)
+            handle_grpc_error(e)
 
         return response
