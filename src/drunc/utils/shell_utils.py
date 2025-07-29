@@ -131,15 +131,6 @@ class GRPCDriver:
                     self.log.error(f"Error unpacking data: {e}")
                     dr.data = response.data
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
-
         else:
 
             def text(verb="not executed", reason=""):
@@ -154,7 +145,6 @@ class GRPCDriver:
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
                 dr.data = stack
-                # stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
                 stack_txt = "Stacktrace on remote server!\n"
                 last_one = ""
 
@@ -180,14 +170,13 @@ class GRPCDriver:
             else:
                 self.log.error(text("failed", error_txt))
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
+        for c_response in response.children:
+            try:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            except DruncServerSideError as e:
+                self.log.error(f"Exception thrown from child: {e}")
+
+        return dr
 
     def send_command(
         self,
@@ -197,9 +186,6 @@ class GRPCDriver:
         decode_children=False,
         timeout: int | float = 60,
     ):
-        if not self.stub:
-            raise DruncShellException("No stub initialised")
-
         cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
 
         request = self._create_request(data)
