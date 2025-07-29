@@ -173,7 +173,6 @@ class GRPCDriver:
         command: str,
         data=None,
         outformat=None,
-        decode_children=False,
         timeout: int | float = 60,
     ):
         cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
@@ -187,14 +186,8 @@ class GRPCDriver:
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description
-        from druncschema.process_manager_pb2 import ProcessInstanceList
 
-        new_message_types = (
-            Description,
-            ProcessInstanceList,
-        )
-
-        if isinstance(response, new_message_types):
+        if isinstance(response, Description):
             return response
 
         return self.handle_response(response, command, outformat)
