@@ -159,8 +159,11 @@ class K8sProcessManager(ProcessManager):
         hostname = socket.gethostname()
         # / HACK
 
-        # pod_image = self.configuration.data.image
-        pod_image = "ghcr.io/dune-daq/alma9:latest"
+        pod_image = self.configuration.data.image
+        #pod_image = boot_request.process_description.metadata.pod_image or "ghcr.io/dune-daq/alma9:latest"
+
+        # if not pod_image:
+        #     raise DruncException("No image specified in BootRequest")
 
         pod = self._pod_v1_api(
             api_version="v1",
@@ -183,8 +186,9 @@ class K8sProcessManager(ProcessManager):
                         # args = ["-c", "sleep 3600"],
                         env=self._env_vars(boot_request.process_description.env),
                         volume_mounts=[
-                            self._volume_mount("pwd", os.getcwd()),
+                            #self._volume_mount("pwd", os.getcwd()),
                             self._volume_mount("cvmfs", "/cvmfs/"),
+                            self._volume_mount("nfs", "/nfs/"),
                         ],
                         working_dir=boot_request.process_description.process_execution_directory,
                         restart_policy="Never",
@@ -201,8 +205,9 @@ class K8sProcessManager(ProcessManager):
                     )
                 ],
                 volumes=[
-                    self._volume("pwd", os.getcwd()),
+                    #self._volume("pwd", os.getcwd()),
                     self._volume("cvmfs", "/cvmfs/"),
+                    self._volume("nfs", "/nfs/"),
                 ],
                 # HACK
                 affinity=(
