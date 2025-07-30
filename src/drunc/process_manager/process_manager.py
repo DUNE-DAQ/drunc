@@ -224,7 +224,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     @abc.abstractmethod
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -250,15 +250,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
 
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=[response],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     @abc.abstractmethod
-    def _terminate_impl(self) -> list[ProcessInstance]:
+    def _terminate_impl(self) -> ProcessInstanceList:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -281,15 +276,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
 
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=response,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     @abc.abstractmethod
-    def _restart_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -312,15 +302,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
 
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=response,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     @abc.abstractmethod
-    def _kill_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -343,15 +328,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
 
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=response,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     @abc.abstractmethod
-    def _ps_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
     # ORDER MATTERS!
@@ -374,12 +354,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
 
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=response,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step

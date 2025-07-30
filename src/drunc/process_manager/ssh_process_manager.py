@@ -14,6 +14,7 @@ from druncschema.process_manager_pb2 import (
     LogRequest,
     ProcessDescription,
     ProcessInstance,
+    ProcessInstanceList,
     ProcessQuery,
     ProcessRestriction,
     ProcessUUID,
@@ -119,7 +120,7 @@ class SSHProcessManager(ProcessManager):
 
         return ret
 
-    def _terminate_impl(self) -> list[ProcessInstance]:
+    def _terminate_impl(self) -> ProcessInstanceList:
         self.log.info("Terminating")
 
         if self.process_store:
@@ -127,10 +128,17 @@ class SSHProcessManager(ProcessManager):
             uuids = self._get_process_uid(
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
-            return self.kill_processes(uuids)
+            processes = self.kill_processes(uuids)
         else:
             self.log.info("No known process to kill before exiting")
-            return []
+            processes = []
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=processes,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         self.log.debug(f"Retrieving logs for {log_request.query}")
@@ -369,7 +377,7 @@ class SSHProcessManager(ProcessManager):
 
         return pi
 
-    def _ps_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         ret = []
 
         for proc_uuid in self._get_process_uid(query):
@@ -409,19 +417,29 @@ class SSHProcessManager(ProcessManager):
             )
             ret += [pi]
 
-        return ret
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+        process = self.__boot(boot_request, this_uuid)
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[process],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-    def _restart_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
-        same_uuid_br = []
         same_uuid_br = BootRequest()
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
@@ -440,14 +458,26 @@ class SSHProcessManager(ProcessManager):
         del same_uuid_br
         del same_uuid
 
-        return ret
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-    def _kill_impl(self, query: ProcessQuery) -> list[ProcessInstance]:
+    def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
 
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
-            return self.kill_processes(uuids)
+            processes = self.kill_processes(uuids)
         else:
             self.log.info("No known process to kill before exiting")
-            return []
+            processes = []
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=processes,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
