@@ -72,7 +72,7 @@ class SSHProcessManager(ProcessManager):
 
         self.ssh = sh.Command("/usr/bin/ssh")
 
-    def kill_processes(self, uuids: list) -> list[ProcessInstance]:
+    def kill_processes(self, uuids: list) -> ProcessInstanceList:
         ret = []
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
@@ -118,7 +118,12 @@ class SSHProcessManager(ProcessManager):
             ]
             del self.process_store[proc_uuid]
 
-        return ret
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _terminate_impl(self) -> ProcessInstanceList:
         self.log.info("Terminating")
@@ -128,15 +133,13 @@ class SSHProcessManager(ProcessManager):
             uuids = self._get_process_uid(
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
-            processes = self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            processes = []
+            return self.kill_processes(uuids)
 
+        self.log.info("No known process to kill before exiting")
         return ProcessInstanceList(
             name=self.name,
             token=None,
-            values=processes,
+            values=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -470,14 +473,12 @@ class SSHProcessManager(ProcessManager):
 
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
-            processes = self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            processes = []
+            return self.kill_processes(uuids)
 
+        self.log.info("No known process to kill before exiting")
         return ProcessInstanceList(
             name=self.name,
             token=None,
-            values=processes,
+            values=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
