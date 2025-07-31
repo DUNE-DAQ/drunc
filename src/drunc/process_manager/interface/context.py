@@ -34,7 +34,7 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             "process_manager": ProcessManagerDriver(
                 self.address,
                 self._token,
-                aio_channel=True,
+                aio_channel=False,
             )
         }
 
