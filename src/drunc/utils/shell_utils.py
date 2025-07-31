@@ -86,7 +86,7 @@ class DecodedResponse:
 
 
 class GRPCDriver:
-    def __init__(self, name: str, address: str, token: Token, aio_channel=False):
+    def __init__(self, name: str, address: str, token: Token):
         self.log = get_logger("utils.GRPCDriver")
 
         if not address:
@@ -96,10 +96,8 @@ class GRPCDriver:
 
         self.address = address
 
-        if aio_channel:
-            self.channel = grpc.aio.insecure_channel(self.address)
-        else:
-            self.channel = grpc.insecure_channel(self.address)
+        
+        self.channel = grpc.insecure_channel(self.address)
 
         self.stub = self.create_stub(self.channel)
         self.token = Token()
