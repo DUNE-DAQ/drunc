@@ -169,16 +169,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             n_running = sum(
                 1
-                for process in results
+                for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.RUNNING
             )
             n_dead = sum(
                 1
-                for process in results
+                for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.DEAD
             )
             n_session = len(
-                {process.process_description.metadata.session for process in results}
+                {process.process_description.metadata.session for process in results.values}
             )
             self.opmon_publisher.publish(
                 message=ProcessStatus(
