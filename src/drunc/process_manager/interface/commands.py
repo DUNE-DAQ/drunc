@@ -171,7 +171,7 @@ def terminate(obj: ProcessManagerContext) -> None:
 def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
-    result = obj.get_driver("process_manager").kill(query=query)
+    result = obj.get_driver("process_manager").kill(query)
     if not result:
         return
     obj.print(
@@ -187,7 +187,7 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
-    result = obj.get_driver("process_manager").flush(query=query)
+    result = obj.get_driver("process_manager").flush(query)
     if not result:
         return
     obj.print(
@@ -247,7 +247,7 @@ def logs(
 def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
-    obj.get_driver("process_manager").restart(query=query)
+    obj.get_driver("process_manager").restart(query)
 
 
 @click.command("ps")
@@ -264,7 +264,7 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
-    results = obj.get_driver("process_manager").ps(query=query)
+    results = obj.get_driver("process_manager").ps(query)
     if not results:
         return
     obj.print(
