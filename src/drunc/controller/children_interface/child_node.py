@@ -1,6 +1,7 @@
 import os
 
 from druncschema.controller_pb2 import Status
+from druncschema.description_pb2 import OldDescription
 from druncschema.request_response_pb2 import Response
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -16,7 +17,6 @@ from drunc.utils.utils import (
 )
 
 from druncschema.request_response_pb2 import (  # isort: skip
-    Description,
     ResponseFlag,
 )
 from druncschema.token_pb2 import Token  # isort: skip
@@ -98,7 +98,7 @@ class ChildNode:  # abc.ABC):
                 descriptionType = self.configuration.data.controller.application_name
                 descriptionName = self.configuration.data.controller.id
 
-        d = Description(
+        d = OldDescription(
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),

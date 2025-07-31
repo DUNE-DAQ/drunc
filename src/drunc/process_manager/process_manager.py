@@ -5,6 +5,7 @@ import time
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.description_pb2 import CommandDescription, OldDescription
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -19,8 +20,6 @@ from druncschema.process_manager_pb2 import (
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
-    CommandDescription,
-    Description,
     Request,
     Response,
     ResponseFlag,
@@ -106,7 +105,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 name="describe",
                 data_type=["None"],
                 help="Describe self (return a list of commands, the type of endpoint, the name and session).",
-                return_type="request_response_pb2.Description",
+                return_type="description_pb2.OldDescription",
             ),
             CommandDescription(
                 name="kill",
@@ -479,7 +478,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def describe(self, request: Request, context: ServicerContext) -> Response:
         self.log.debug(f"{self.name} running describe")
         bd = self.describe_broadcast()
-        d = Description(
+        d = OldDescription(
             type="process_manager",
             name=self.name,
             info=self.configuration.log_path,
@@ -506,7 +505,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def logs(self, request:Request, context:ServicerContext) -> Response:
+    def logs(self, request: Request, context: ServicerContext) -> Response:
         """Fetch logs for a process.
 
         Args:

@@ -118,7 +118,7 @@ def collect_apps(
     app_index = 0
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
-        if "Component" in app.oksTypes():
+        if "Resource" in app.oksTypes():
             enabled = not confmodel.component_disabled(db._obj, session_obj.id, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:

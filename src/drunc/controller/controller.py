@@ -14,9 +14,10 @@ from druncschema.controller_pb2 import (
     Status,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
+from druncschema.description_pb2 import OldDescription
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
-from druncschema.request_response_pb2 import Description, Response, ResponseFlag
+from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
 
@@ -103,13 +104,18 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
-        
+
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
-        top_segment_controller = self.configuration.db.get_dal(class_name='Session', uid=self.configuration.oks_key.session).segment.controller.id == self.name
+        top_segment_controller = (
+            self.configuration.db.get_dal(
+                class_name="Session", uid=self.configuration.oks_key.session
+            ).segment.controller.id
+            == self.name
+        )
         self.custom_origin = {"top_segment_controller": top_segment_controller}
 
         self.runinfo = {}
@@ -296,7 +302,9 @@ class Controller(ControllerServicer):
             try:
                 self.stateful_node.publish_state()
                 current_state = self.stateful_node.get_node_operational_state()
-                self.log.debug(f"Publishing periodic FSM status: {current_state} every {interval_s}s")
+                self.log.debug(
+                    f"Publishing periodic FSM status: {current_state} every {interval_s}s"
+                )
 
                 if self.runinfo and self.runinfo.get("run", None) is not None:
                     self.monitoring_metrics.run_type = self.runinfo.get(
@@ -604,7 +612,7 @@ class Controller(ControllerServicer):
 
         if execute_on_self:
             bd = self.describe_broadcast()
-            d = Description(
+            d = OldDescription(
                 type="controller",
                 name=self.name,
                 endpoint=self.uri if self.uri is not None else "unknown",
@@ -663,6 +671,9 @@ class Controller(ControllerServicer):
             desc.type = "controller"
             desc.name = self.name
             desc.session = self.session
+
+            for seq in self.stateful_node.get_fsm_sequences():
+                desc.sequences.append(seq)
 
         children_description = self.propagate_addressed_command(
             "describe_fsm",
@@ -777,7 +788,7 @@ class Controller(ControllerServicer):
                         run_config_file=self.configuration.oks_path,
                         run_config_name=self.configuration.oks_key.session,
                     ),
-                    custom_origin=self.custom_origin
+                    custom_origin=self.custom_origin,
                 )
 
             self.stateful_node.propagate_transition_mark(transition)

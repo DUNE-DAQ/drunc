@@ -218,8 +218,15 @@ class GRPCDriver:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             self.__handle_grpc_error(e, command)
-        return self.handle_response(response, command, outformat)
 
+        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
+        from druncschema.description_pb2 import Description
+        from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
+
+        if isinstance(response, (Description, AllActiveSessions, AllConfigKeys)):
+            return response
+
+        return self.handle_response(response, command, outformat)
 
 
 class ShellContext:
@@ -300,17 +307,20 @@ class ShellContext:
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().data
+        describe_fsm = self.get_driver("controller").describe_fsm().data
+        current_state = status.state
         if status.in_error:
             log.error(
                 f"[red] FSM is in error ({status})[/red], not currently accepting new commands."
             )
         else:
             available_actions = [
-                command.name.replace("_", "-")
-                for command in self.get_driver("controller")
-                .describe_fsm()
-                .data.commands
+                command.name.replace("_", "-") for command in describe_fsm.commands
             ]
+            available_sequences = [
+                seq.id.replace("_", "-") for seq in describe_fsm.sequences
+            ]
+
             log.info(
-                f"Current FSM status is [green]{status.state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
+                f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )

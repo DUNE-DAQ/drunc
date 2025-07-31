@@ -1,6 +1,6 @@
 """Driver for the session manager service."""
 
-from druncschema.request_response_pb2 import Description
+from druncschema.description_pb2 import Description
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
@@ -43,7 +43,7 @@ class SessionManagerDriver(GRPCDriver):
         """Describe the session manager service.
 
         Returns:
-            A decoded response object containing the description of the service.
+            A response containing the description of the service.
         """
         return self.send_command("describe", outformat=Description)
 
@@ -51,7 +51,7 @@ class SessionManagerDriver(GRPCDriver):
         """List all active sessions managed by the session manager.
 
         Returns:
-            A decoded response object containing a list of all active sessions.
+            A response containing a list of all active sessions.
         """
         return self.send_command("list_all_sessions", outformat=AllActiveSessions)
 
@@ -59,6 +59,6 @@ class SessionManagerDriver(GRPCDriver):
         """List all available configurations in the session manager.
 
         Returns:
-            A decoded response object containing all available configuration keys.
+            A response containing all available configuration keys.
         """
         return self.send_command("list_all_configs", outformat=AllConfigKeys)
