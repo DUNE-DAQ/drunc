@@ -159,8 +159,11 @@ class K8sProcessManager(ProcessManager):
         hostname = socket.gethostname()
         # / HACK
 
-        # pod_image = self.configuration.data.image
-        pod_image = "ghcr.io/dune-daq/alma9:latest"
+        pod_image = self.configuration.data.image
+        #pod_image = boot_request.process_description.metadata.pod_image or "ghcr.io/dune-daq/alma9:latest"
+
+        # if not pod_image:
+        #     raise DruncException("No image specified in BootRequest")
 
         pod = self._pod_v1_api(
             api_version="v1",
@@ -183,8 +186,9 @@ class K8sProcessManager(ProcessManager):
                         # args = ["-c", "sleep 3600"],
                         env=self._env_vars(boot_request.process_description.env),
                         volume_mounts=[
-                            self._volume_mount("pwd", os.getcwd()),
+                            #self._volume_mount("pwd", os.getcwd()),
                             self._volume_mount("cvmfs", "/cvmfs/"),
+                            self._volume_mount("nfs", "/nfs/"),
                         ],
                         working_dir=boot_request.process_description.process_execution_directory,
                         restart_policy="Never",
@@ -201,8 +205,9 @@ class K8sProcessManager(ProcessManager):
                     )
                 ],
                 volumes=[
-                    self._volume("pwd", os.getcwd()),
+                    #self._volume("pwd", os.getcwd()),
                     self._volume("cvmfs", "/cvmfs/"),
+                    self._volume("nfs", "/nfs/"),
                 ],
                 # HACK
                 affinity=(
@@ -235,6 +240,20 @@ class K8sProcessManager(ProcessManager):
             ),
         )
         try:
+            pods = self._core_v1_api.list_namespaced_pod(session)
+            if any(p.metadata.name == podname for p in pods.items):
+                self.log.warning(f'Pod "{session}.{podname}" already exists. Deleting it...')
+                self._core_v1_api.delete_namespaced_pod(
+                    podname, session, grace_period_seconds=0
+                )
+                for _ in range(10):
+                    sleep(1)
+                    pods = self._core_v1_api.list_namespaced_pod(session)
+                    if all(p.metadata.name != podname for p in pods.items):
+                        break
+                else:
+                    raise DruncException(f'Timed out waiting for pod "{session}.{podname}" to be deleted')
+
             self._core_v1_api.create_namespaced_pod(session, pod)
             self.log.info(f'Creating "{session}.{podname}"')
             self._add_creator_label(podname, "pod")
@@ -354,11 +373,20 @@ class K8sProcessManager(ProcessManager):
             return_code = None
         else:
             if not self.is_alive(podname, session):
-                return_code = (
+                container_statuses = (
                     self._core_v1_api.read_namespaced_pod_status(podname, session)
-                    .status.container_statuses[0]
-                    .state.terminated.exit_code
+                    .status.container_statuses
                 )
+
+                if container_statuses:
+                    state = container_statuses[0].state
+                    self.log.debug(f"{podname} state: {state}")
+                    if state and state.terminated:
+                        return_code = state.terminated.exit_code
+                    else:
+                        return_code = None
+                else:
+                    return_code = None
             else:
                 return_code = None
         return return_code
@@ -368,6 +396,8 @@ class K8sProcessManager(ProcessManager):
     def _terminate(self):
         self.log.info("Terminating")
 
+    def _terminate_impl(self):
+        return self._terminate()
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query, in_boot_request=True)
@@ -375,9 +405,9 @@ class K8sProcessManager(ProcessManager):
         for uuid in self._get_process_uid(log_request.query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
-            return [LogLines(line=log) for log in self._core_v1_api.read_namespaced_pod_log(
+            return LogLines(lines=[log for log in self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far
-            ).split("\n")]
+            ).split("\n")])
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
         this_uuid = str(uuid.uuid4())
@@ -408,6 +438,14 @@ class K8sProcessManager(ProcessManager):
                 break
         else:
             raise DruncException(f'Not able to boot "{session}.{podnames}":{uuid}')
+        
+        try:
+            pod_info = self._core_v1_api.read_namespaced_pod(podnames, session)
+            node_name = pod_info.spec.node_name
+            self.boot_request[uuid].process_description.metadata.hostname = node_name
+        except Exception as e:
+            self.log.warning(f"Could not retrieve node name for pod {session}.{podnames}: {e}")
+
         return self._get_pi(uuid, podnames, session)
 
     def _ps_impl(
