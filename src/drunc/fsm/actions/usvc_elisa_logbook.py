@@ -43,13 +43,13 @@ class ElisaLogbook(FSMAction):
             if len(configuration.parameters) > 0:
                 elisa_hardware_tmp = configuration.parameters[0].value
                 if elisa_hardware_tmp not in dotdrunc["elisa_configuration"]:
-                    self._log.error(
+                    self.log.error(
                         f"The ELisA logbook you specified in your configuration '{elisa_hardware_tmp}' was not found in '~/.drunc.json'. I will use the first one in your ~/.drunc.json. You will log on the ELisA logbook '{elisa_hardware}'. Contact Pierre Lasorak for help."
                     )
                 else:
                     elisa_hardware = elisa_hardware_tmp
             else:
-                self._log.error(
+                self.log.error(
                     f"ELisA logbook not specified in the configuration, using the first one in from your '~/.drunc.json'. You will log on the ELisA logbook '{elisa_hardware}'. Contact Pierre Lasorak for help."
                 )
 
