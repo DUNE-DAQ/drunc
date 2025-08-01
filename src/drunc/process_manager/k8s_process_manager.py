@@ -154,6 +154,28 @@ class K8sProcessManager(ProcessManager):
         exec_and_args = "; ".join(exec_and_args)
         return exec_and_args
 
+    def _create_headless_service(self, podname, session):
+        service_manifest = self._k8s_client.V1Service(
+            api_version="v1",
+            kind="Service",
+            metadata=self._meta_v1_api(
+                name=podname,
+                namespace=session,
+                labels={f"creator.{self.drunc_label}": self.__class__.__name__},
+            ),
+            spec=self._k8s_client.V1ServiceSpec(
+                cluster_ip="None",  # Headless service
+                selector={"app": podname},
+                ports=[self._k8s_client.V1ServicePort(port=80, target_port=80)],
+            ),
+        )
+
+        try:
+            self._core_v1_api.create_namespaced_service(namespace=session, body=service_manifest)
+            self.log.info(f'Created headless service "{session}.{podname}"')
+        except self._api_error_v1_api as e:
+            self.log.error(f"Failed to create headless service for {podname}: {e}")
+
     def _create_pod(self, podname, session, boot_request: BootRequest):
         # HACK
         hostname = socket.gethostname()
@@ -168,7 +190,7 @@ class K8sProcessManager(ProcessManager):
         pod = self._pod_v1_api(
             api_version="v1",
             kind="Pod",
-            metadata=self._meta_v1_api(name=podname, namespace=session),
+            metadata=self._meta_v1_api(name=podname, namespace=session, labels={"app": podname}),
             spec=self._pod_spec_v1_api(
                 restart_policy="Never",
                 containers=[
@@ -257,6 +279,9 @@ class K8sProcessManager(ProcessManager):
             self._core_v1_api.create_namespaced_pod(session, pod)
             self.log.info(f'Creating "{session}.{podname}"')
             self._add_creator_label(podname, "pod")
+
+            self._create_headless_service(podname, session)
+
         except Exception as e:
             self.log.error(
                 f'Couldn\'t create pod with name: "{session}.{podname}": {e}'
