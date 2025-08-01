@@ -15,15 +15,15 @@ class ElisaLogbook(FSMAction):
         self.log = get_logger("controller.elisa-logbook")
 
         dotdrunc = get_dotdrunc_json()
-        elisa_hardware: str | None = os.getenv("DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None)
+        self.elisa_hardware: str | None = os.getenv("DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None)
         default_elisa_logbook: bool = False
 
-        if elisa_hardware == "unified_shell":
+        if self.elisa_hardware == "unified_shell":
             self.log.debug(
                 "You are using the unified_shell, which does not support ELisA logbook posting."
             )
             return
-        if elisa_hardware is None:
+        if self.elisa_hardware is None:
             self.log.warning(
                 "Environment variable DUNEDAQ_ELISA_LOGBOOK_APPARATUS is not set, "
                 "defaulting to [yellow]pdsp[/yellow])."
@@ -31,6 +31,7 @@ class ElisaLogbook(FSMAction):
             default_elisa_logbook = True
             self.elisa_hardware = "pdsp"
 
+        
         if dotdrunc["elisa_configuration"].get(self.elisa_hardware):
             ec = dotdrunc["elisa_configuration"][self.elisa_hardware]
             self.API_SOCKET = ec.get("socket")
