@@ -32,17 +32,17 @@ class ElisaLogbook(FSMAction):
             self.elisa_hardware = "pdsp"
 
         if dotdrunc["elisa_configuration"].get(self.elisa_hardware):
-            try:
-                ec = dotdrunc["elisa_configuration"][self.elisa_hardware]
-                self.API_SOCKET = ec["socket"]
-                self.API_USER = ec["user"]
-                self.API_PASS = ec["password"]
-            except KeyError as exc:
+            ec = dotdrunc["elisa_configuration"][self.elisa_hardware]
+            self.API_SOCKET = ec.get("socket")
+            self.API_USER = ec.get("user")
+            self.API_PASS = ec.get("password")
+
+            if not self.API_SOCKET or not self.API_USER or not self.API_PASS:
                 err_msg: str = (
                     "Malformed ~/.drunc.json, missing a key in 'elisa_configuration' "
                     "in your ~/.drunc.json, or the entire 'elisa_configuration' section"
                 )
-                raise DotDruncJsonIncorrectFormat(err_msg) from exc
+                raise DotDruncJsonIncorrectFormat(err_msg) from KeyError
         else:
             err_msg: str = ""
             if default_elisa_logbook:
