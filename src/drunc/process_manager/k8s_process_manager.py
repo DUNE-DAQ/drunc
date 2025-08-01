@@ -154,7 +154,7 @@ class K8sProcessManager(ProcessManager):
         exec_and_args = "; ".join(exec_and_args)
         return exec_and_args
 
-    def _create_headless_service(self, podname, session):
+    def _create_headless_service(self, podname, session, pod_uid):
         service_manifest = self._k8s_client.V1Service(
             api_version="v1",
             kind="Service",
@@ -162,6 +162,16 @@ class K8sProcessManager(ProcessManager):
                 name=podname,
                 namespace=session,
                 labels={f"creator.{self.drunc_label}": self.__class__.__name__},
+                owner_references=[
+                    self._k8s_client.V1OwnerReference(
+                        api_version="v1",
+                        kind="Pod",
+                        name=podname,
+                        uid=pod_uid,
+                        controller=True,
+                        block_owner_deletion=True,
+                    )
+                ],
             ),
             spec=self._k8s_client.V1ServiceSpec(
                 cluster_ip="None",  # Headless service
@@ -276,11 +286,13 @@ class K8sProcessManager(ProcessManager):
                 else:
                     raise DruncException(f'Timed out waiting for pod "{session}.{podname}" to be deleted')
 
-            self._core_v1_api.create_namespaced_pod(session, pod)
+            created_pod = self._core_v1_api.create_namespaced_pod(session, pod)
             self.log.info(f'Creating "{session}.{podname}"')
             self._add_creator_label(podname, "pod")
 
-            self._create_headless_service(podname, session)
+            # Pass pod UID to the service creation so ownerReferences are set
+            pod_uid = created_pod.metadata.uid
+            self._create_headless_service(podname, session, pod_uid)
 
         except Exception as e:
             self.log.error(
