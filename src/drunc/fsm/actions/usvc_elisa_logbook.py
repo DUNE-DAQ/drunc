@@ -17,7 +17,7 @@ class ElisaLogbook(FSMAction):
         dotdrunc = get_dotdrunc_json()
         self.elisa_hardware: str | None = os.getenv("DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None)
         default_elisa_logbook: bool = False
-
+        self.no_publish_hardware = ["unified_shell", None]
         if self.elisa_hardware == "unified_shell":
             self.log.debug(
                 "You are using the unified_shell, which does not support ELisA logbook posting."
@@ -71,7 +71,7 @@ class ElisaLogbook(FSMAction):
     def post_start(
         self, _input_data: dict, _context, elisa_post: Optional[str] = None, **kwargs
     ):
-        if self.elisa_hardware == "unified_shell":
+        if self.elisa_hardware in self.no_publish_hardware:
             return
         text = ""
         self.thread_id = None  # Clear this value here, so that if it fails stop can't reply to an old message
@@ -130,7 +130,7 @@ class ElisaLogbook(FSMAction):
     def post_drain_dataflow(
         self, _input_data, _context, elisa_post: Optional[str] = None, **kwargs
     ):
-        if self.elisa_hardware == "unified_shell":
+        if self.elisa_hardware in self.no_publish_hardware:
             return
         text = ""
         if elisa_post is not None:
