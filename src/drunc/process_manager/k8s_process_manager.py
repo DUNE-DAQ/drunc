@@ -431,7 +431,47 @@ class K8sProcessManager(ProcessManager):
     # --------------------------------------Commands--------------------------------------
 
     def _terminate(self):
-        self.log.info("Terminating")
+        if self.boot_request:
+            first_req = next(iter(self.boot_request.values()))
+            session_name = first_req.process_description.metadata.session
+            self.log.info(f'Terminating (K8s mode); Session: "{session_name}"')
+        else:
+            self.log.warning("Terminating (K8s mode); no processes found in boot_request")
+
+        ret = []
+        query = ProcessQuery(names=[".*"])
+
+        for proc_uuid in self._get_process_uid(query):
+            if proc_uuid not in self.boot_request:
+                self.log.warning(f"UUID {proc_uuid} not in boot_request; skipping.")
+                continue
+
+            pd = self.boot_request[proc_uuid].process_description
+            podname = pd.metadata.name
+            session = pd.metadata.session
+
+            self.log.info(f'Killing pod "{session}.{podname}":{proc_uuid}')
+
+            try:
+                self._kill_pod(podname, session)
+
+                return_code = self._return_code(podname, session)
+                ret.append(self._get_pi(proc_uuid, podname, session, return_code))
+
+                # Now safe to delete the boot_request entry
+                del self.boot_request[proc_uuid]
+
+                try:
+                    self._kill_if_empty_session(session)
+                except Exception as e:
+                    self.log.warning(f"Failed to kill empty session {session}: {e}")
+
+            except Exception as e:
+                self.log.warning(f"Failed to kill pod {podname} in session {session}: {e}")
+                continue
+
+        pil = ProcessInstanceList(values=ret)
+        return pil
 
     def _terminate_impl(self):
         return self._terminate()
