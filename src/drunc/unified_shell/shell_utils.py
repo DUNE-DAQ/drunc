@@ -1,4 +1,3 @@
-import asyncio
 from functools import partial
 
 import click
@@ -19,9 +18,7 @@ def run_fsm_sequence(sequence_commands, cmd_to_options_and_args, ctx, obj, **kwa
         cd = obj.get_driver("controller", quiet_fail=True)
         if command == "boot":
             pmd = obj.get_driver("process_manager", quiet_fail=True)
-            loop = asyncio.get_event_loop()
-            main_task = asyncio.ensure_future(pmd.ps(ProcessQuery(names=[".*"])))
-            process_list = loop.run_until_complete(main_task)
+            process_list = pmd.ps(ProcessQuery(names=[".*"]))
             if not process_list.data.values:  # We haven't started anything yet
                 accepted_command.append("boot")
         if cd:

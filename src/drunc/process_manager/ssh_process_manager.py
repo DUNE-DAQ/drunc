@@ -10,7 +10,7 @@ import sh
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLine,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -132,7 +132,7 @@ class SSHProcessManager(ProcessManager):
             self.log.info("No known process to kill before exiting")
             return ProcessInstanceList()
 
-    async def _logs_impl(self, log_request: LogRequest) -> LogLine:
+    def _logs_impl(self, log_request: LogRequest) -> LogLines:
         self.log.debug(f"Retrieving logs for {log_request.query}")
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
         logfile = self.boot_request[uid].process_description.process_logs_path
@@ -176,28 +176,26 @@ class SSHProcessManager(ProcessManager):
                 _err_to_out=True,
             )
         except Exception as e:
-            ll = LogLine(
-                uuid=ProcessUUID(uuid=uid), line=f"Could not retrieve logs: {e!s}"
-            )
-            yield ll
-            if uid in self.process_store:
-                llstdout = LogLine(
-                    uuid=ProcessUUID(uuid=uid),
-                    line=f"stdout: {self.process_store[uid].stdout}",
+            if uid not in self.process_store:
+                return LogLines(
+                    uuid=ProcessUUID(uuid=uid), lines=[f"Could not retrieve logs: {e!s}"]
                 )
-                llstderr = LogLine(
+            else:
+                return LogLines(
                     uuid=ProcessUUID(uuid=uid),
-                    line=f"stderr: {self.process_store[uid].stderr}",
+                    lines=[
+                        f"Could not retrieve logs: {e!s}",
+                        f"stdout: {self.process_store[uid].stdout}",
+                        f"stderr: {self.process_store[uid].stderr}"
+                    ],
                 )
-                yield llstdout
-                yield llstderr
 
         f.close()
         with open(f.name) as fi:
             lines = fi.readlines()
-            for line in lines:
-                ll = LogLine(uuid=ProcessUUID(uuid=uid), line=line)
-                yield ll
+            if "Connection to " in lines[-1] and " closed." in lines[-1]:
+                lines = lines[:-1]
+            return LogLines(uuid=ProcessUUID(uuid=uid), lines=lines)
 
         os.remove(f.name)
 

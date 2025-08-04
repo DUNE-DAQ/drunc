@@ -1,14 +1,15 @@
-import asyncio
 import getpass
 import json
 import os
 import signal
 import tempfile
 import time
+from time import sleep
 
+from druncschema.description_pb2 import OldDescription
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    LogLine,
+    LogLines,
     LogRequest,
     ProcessDescription,
     ProcessInstance,
@@ -18,7 +19,6 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.request_response_pb2 import Description
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -46,7 +46,7 @@ class ProcessManagerDriver(GRPCDriver):
     def create_stub(self, channel):
         return ProcessManagerStub(channel)
 
-    async def _convert_oks_to_boot_request(
+    def _convert_oks_to_boot_request(
         self,
         oks_conf: str,
         user: str,
@@ -151,7 +151,7 @@ class ProcessManagerDriver(GRPCDriver):
             self.log.debug(f"{breq=}\n\n")
             yield breq
 
-    async def boot(
+    def boot(
         self,
         conf_file: str,
         conf_id: str,
@@ -204,7 +204,7 @@ To debug it, close drunc and run the following command:
         last_boot_on_host_at = {}
         previous_host = None
 
-        async for br in self._convert_oks_to_boot_request(
+        for br in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
             session_dal=session_dal,
@@ -229,11 +229,11 @@ To debug it, close drunc and run the following command:
                 self.log.debug(
                     f"Sleeping for {sleep_between_app_boot - time_diff} seconds {previous_host} {this_host}"
                 )
-                await asyncio.sleep(sleep_between_app_boot - time_diff)
+                sleep(sleep_between_app_boot - time_diff)
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
-            yield await self.send_command_aio(
+            yield self.send_command(
                 "boot",
                 data=br,
                 outformat=ProcessInstance,
@@ -332,7 +332,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         finally:
             signal.signal(signal.SIGINT, original_sigint_handler)
 
-    async def dummy_boot(
+    def dummy_boot(
         self,
         user: str,
         session_name: str,
@@ -378,73 +378,68 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             )
             self.log.debug(f"{breq=}\n\n")
 
-            yield await self.send_command_aio(
+            yield self.send_command(
                 "boot",
                 data=breq,
                 outformat=ProcessInstance,
                 timeout=timeout,
             )
 
-    async def terminate(
+    def terminate(
         self,
         timeout: int | float = 60,
     ) -> ProcessInstanceList:
-        return await self.send_command_aio(
+        return self.send_command(
             "terminate", outformat=ProcessInstanceList, timeout=timeout
         )
 
-    async def kill(
-        self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstance:
-        return await self.send_command_aio(
+    def kill(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstance:
+        return self.send_command(
             "kill",
             data=query,
             outformat=ProcessInstanceList,
             timeout=timeout,
         )
 
-    async def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLine:
-        async for stream in self.send_command_for_aio(
+    def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLines:
+        return self.send_command(
             "logs",
             data=req,
-            outformat=LogLine,
+            outformat=LogLines,
             timeout=timeout,
-        ):
-            yield stream
+        )
 
-    async def ps(
-        self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstanceList:
-        return await self.send_command_aio(
+    def ps(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstanceList:
+        return self.send_command(
             "ps",
             data=query,
             outformat=ProcessInstanceList,
             timeout=timeout,
         )
 
-    async def flush(
+    def flush(
         self, query: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
-        return await self.send_command_aio(
+        return self.send_command(
             "flush",
             data=query,
             outformat=ProcessInstanceList,
             timeout=timeout,
         )
 
-    async def restart(
+    def restart(
         self, query: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstance:
-        return await self.send_command_aio(
+        return self.send_command(
             "restart",
             data=query,
             outformat=ProcessInstance,
             timeout=timeout,
         )
 
-    async def describe(self, timeout: int | float = 60) -> Description:
-        return await self.send_command_aio(
+    def describe(self, timeout: int | float = 60) -> OldDescription:
+        return self.send_command(
             "describe",
-            outformat=Description,
+            outformat=OldDescription,
             timeout=timeout,
         )

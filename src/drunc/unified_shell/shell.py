@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import multiprocessing as mp
 import os
@@ -186,10 +185,31 @@ def unified_shell(
     desc = None
     try:
         unified_shell_log.debug("Runnning [green]describe[/green]")
-        desc = asyncio.get_event_loop().run_until_complete(
-            ctx.obj.get_driver().describe()
-        )
-        desc = desc.data
+        try:
+            desc = ctx.obj.get_driver().describe()
+            desc = desc.data
+        except Exception as e:
+            unified_shell_log.error(
+                f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
+            )
+            unified_shell_log.error(f"Reason: {e}")
+
+            if type(e) == ServerUnreachable:
+                unified_shell_log.error(
+                    "This can happen if you have the webproxy enabled at CERN"
+                )
+
+            if internal_pm and not ctx.obj.pm_process.is_alive():
+                unified_shell_log.error(
+                    f"[red]The process_manager is dead[/red], exit code {ctx.obj.pm_process.exitcode}"
+                )
+
+            if ctx.obj.pm_process.is_alive():
+                ctx.obj.pm_process.terminate()
+                ctx.obj.pm_process.join()
+
+            sys.exit(1)
+
     except Exception as e:
         unified_shell_log.error(
             f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
@@ -261,6 +281,7 @@ def unified_shell(
 
     controller_name = session_dal.segment.controller.id
     unified_shell_log.debug("Initializing the [green]ControllerConfHandler[/green]")
+
     controller_configuration = ControllerConfHandler(
         type=ConfTypes.OKSFileName,
         data=ctx.obj.configuration_file,
@@ -268,11 +289,12 @@ def unified_shell(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
             obj_uid=controller_name,
-            session=ctx.obj.configuration_id,  # some of the function for enable/disable require the full dal of the session
+            # some of the function for enable/disable require the full dal of the session
+            session=ctx.obj.configuration_id,
         ),
         session_name=session_name,
     )
-
+    os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
     fsm_logger = get_logger("controller.FSM")
     fsm_logger.setLevel("ERROR")
     fsm_conf_logger = get_logger("controller.FSMConfHandler")
@@ -284,9 +306,7 @@ def unified_shell(
     )
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
-    stateful_node = StatefulNode(
-        fsm_configuration=fsmch,
-    )
+    stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
 
     unified_shell_log.debug(
         "Retrieving the transitions from the [green]StatefulNode[/green]"
@@ -325,3 +345,11 @@ def unified_shell(
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
+    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
+
+
+def on_exit(ctx, unified_shell_log):
+    """Handle exit from the shell."""
+    unified_shell_log.info("[green]Exiting unified_shell[/green]")
+    # TODO - cleanup needs to happen
+    unified_shell_log.info("[green]unified_shell[/green] exited successfully.")

@@ -93,8 +93,10 @@ class StatefulNode(abc.ABC):
         init_state: str = "",
         session: str = "",
         name: str = "",
+        top_segment_controller: bool = False,
     ):
         self.publisher = publisher
+        self.custom_origin = {"top_segment_controller": top_segment_controller}
         self.session = session
         self.name = name
         self._ready_state = False
@@ -122,12 +124,13 @@ class StatefulNode(abc.ABC):
     def publish_state(self):
         if self.publisher is not None:
             self.publisher(
-                FSMStatus(
+                message=FSMStatus(
                     state=self.__operational_state.value,
                     sub_state=self.__operational_sub_state.value,
                     in_error=self.__in_error.value,
                     included=self.__included.value,
-                )
+                ),
+                custom_origin=self.custom_origin,
             )
 
     def get_node_operational_state(self):
@@ -152,6 +155,9 @@ class StatefulNode(abc.ABC):
 
     def get_fsm_transition(self, transition_name):
         return self.__fsm.get_transition(transition_name)
+
+    def get_fsm_sequences(self):
+        return self.__fsm.get_executable_sequences(self.get_node_operational_state())
 
     def include_node(self):
         if self.__included.value:

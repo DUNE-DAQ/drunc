@@ -1,15 +1,12 @@
-import functools
 
 import grpc
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2
-from google.protobuf.any_pb2 import Any
 from google.rpc import code_pb2
 
 from drunc.exceptions import DruncCommandException, DruncException
-from drunc.utils.utils import get_logger
 
 
 class UnpackingError(DruncCommandException):
@@ -21,6 +18,26 @@ class UnpackingError(DruncCommandException):
             f"Cannot unpack '{data}' to '{format.DESCRIPTOR.name}'",
             code_pb2.INVALID_ARGUMENT,
         )
+
+
+def unpack_error_response(name: str, text: str, token: Token) -> Response:
+    """Create a response for unpacking errors.
+
+    Args:
+        name: The name of the command or service.
+        text: The error message to include in the response.
+        token: The token associated with the request.
+
+    Returns:
+        response: the response object containing the error message.
+    """
+    return Response(
+        name=name,
+        token=token,
+        data=pack_to_any(PlainText(text=text)),
+        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+        children=[],
+    )
 
 
 def pack_to_any(data):
@@ -35,137 +52,6 @@ def unpack_any(data, format):
     req = format()
     data.Unpack(req)
     return req
-
-
-def unpack_request_data_to(data_type=None, pass_token=False):
-    def decor(cmd):
-        @functools.wraps(cmd)
-        def unpack_request(obj, request, context):
-            log = get_logger("utils.unpack_request_data_to_decorator")
-            log.debug("Entering")
-
-            ret = None
-            log.debug("Executing wrapped function")
-
-            kwargs = {}
-            if pass_token:
-                kwargs = {"token": request.token}
-
-            data = None
-            if data_type is not None:
-                try:
-                    data = unpack_any(request.data, data_type)
-                except UnpackingError as e:
-                    return Response(
-                        name=obj.__class__.__name__,
-                        token=request.token,
-                        data=pack_to_any(PlainText(text=str(e))),
-                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children=[],
-                    )
-
-            if data is not None:
-                ret = cmd(obj, data, **kwargs)
-            else:
-                ret = cmd(obj, **kwargs)
-
-            log.debug("Exiting")
-
-            return ret
-
-        return unpack_request
-
-    return decor
-
-
-def async_unpack_request_data_to(data_type=None, pass_token=False):
-    def decor(cmd):
-        @functools.wraps(cmd)
-        async def unpack_request(obj, request, context):
-            log = get_logger("utils.async_unpack_request_data_to_decorator")
-            log.debug("Executing wrapped function")
-            kwargs = {}
-            if pass_token:
-                kwargs = {"token": request.token}
-
-            data = None
-            if data_type is not None:
-                try:
-                    data = unpack_any(request.data, data_type)
-                except UnpackingError as e:
-                    yield Response(
-                        name=obj.__class__.__name__,
-                        token=request.token,
-                        data=pack_to_any(PlainText(text=str(e))),
-                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children=[],
-                    )
-
-            if data is not None:
-                async for a in cmd(obj, data, **kwargs):
-                    yield a
-            else:
-                async for a in cmd(obj, **kwargs):
-                    yield a
-
-            log.debug("Exiting")
-
-        return unpack_request
-
-    return decor
-
-
-def pack_response(cmd, with_children_responses=False):
-    raise DeprecationWarning(
-        "This function is deprecated, pack your responses yourself"
-    )
-
-    @functools.wraps(cmd)
-    def pack_response(obj, *arg, **kwargs):
-        log = get_logger("utils.pack_response_decorator")
-        log.debug("Executing wrapped function")
-        out = cmd(obj, *arg, **kwargs)
-        self_response = out
-        response_children = {}
-
-        if with_children_responses:
-            self_response = out[0]
-            response_children = out[1]
-
-        new_token = Token()  # empty token
-        data = Any()
-        data.Pack(self_response)
-        ret = Response(
-            name=obj.__class__.__name__,
-            token=new_token,
-            data=data,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=response_children,
-        )
-
-        log.debug("Exiting")
-        return ret
-
-    return pack_response
-
-
-def async_pack_response(cmd, with_children_responses=False):
-    raise DeprecationWarning(
-        "This function is deprecated, pack your responses yourself"
-    )
-
-    @functools.wraps(cmd)
-    async def pack_response(obj, *arg, **kwargs):
-        log = get_logger("utils.async_pack_response_decorator")
-        log.debug("Executing wrapped function")
-        async for ret in cmd(obj, *arg, **kwargs):
-            new_token = Token()  # empty token
-            data = Any()
-            data.Pack(ret)
-            yield Response(token=new_token, data=data)
-        log.debug("Exiting")
-
-    return pack_response
 
 
 class ServerUnreachable(DruncException):

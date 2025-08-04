@@ -12,6 +12,11 @@ class Callback:
         self.mandatory = mandatory
 
 
+class FSMSequence:
+    def __init__(self):
+        pass
+
+
 import json
 import traceback
 from inspect import Parameter, signature
@@ -187,6 +192,7 @@ class FSM:
         self.states = self.configuration.get_states()
 
         self.transitions = self.configuration.get_transitions()
+        self.sequences = self.configuration.get_sequences()
         self._enusure_unique_transition(self.transitions)
         self.pre_transition_sequences = (
             self.configuration.get_pre_transitions_sequences()
@@ -217,6 +223,10 @@ class FSM:
         """Grab all the transitions"""
         return self.transitions
 
+    def get_all_sequences(self) -> List[FSMSequence]:
+        """Grab all the transitions"""
+        return self.sequences
+
     def get_destination_state(self, source_state, transition) -> str:
         """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
@@ -239,6 +249,23 @@ class FSM:
                 self.log.debug(f"{debug_txt} No\n")
 
         return valid_transitions
+
+    def get_executable_sequences(self, source_state) -> List[FSMSequence]:
+        valid_sequences = []
+
+        for seq in self.sequences:
+            for cmd_ids in seq.command_ids:
+                try:
+                    transition = self.get_transition(cmd_ids)
+                    if self.can_execute_transition(source_state, transition):
+                        valid_sequences.append(seq)
+                except fsme.NoTransitionOfName:
+                    self.log.debug(
+                        f"Skipping sequence {seq.id}, unknown command {cmd_ids}"
+                    )
+                    continue
+
+        return valid_sequences
 
     def get_transition(self, transition_name) -> bool:
         self.log.debug(f"Searching for transition {transition_name}")

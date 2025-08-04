@@ -126,30 +126,3 @@ class BroadcastSender:
             code=error_code,
             details=txt,
         )
-
-    async def _async_interrupt_with_exception(self, exception, context, stack=""):
-        from druncschema.broadcast_pb2 import BroadcastType
-
-        txt = f"'{exception.__class__.__name__}' exception thrown: {exception}"
-
-        from drunc.exceptions import DruncException
-
-        self.broadcast(
-            btype=(
-                BroadcastType.DRUNC_EXCEPTION_RAISED
-                if isinstance(exception, DruncException)
-                else BroadcastType.UNHANDLED_EXCEPTION_RAISED
-            ),
-            message=txt,
-        )
-
-        if stack:
-            txt += "\n\n" + stack
-
-        from google.rpc import code_pb2
-
-        error_code = getattr(exception, "grpc_error_code", code_pb2.INTERNAL)
-        await context.abort(
-            code=error_code,
-            details=txt,
-        )
