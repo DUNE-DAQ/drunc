@@ -2,9 +2,11 @@ import getpass
 import os
 import re
 import socket
+import threading
 import uuid
 from time import sleep
 
+from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -16,7 +18,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from kubernetes import client, config
+from kubernetes import client, config, watch
 
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
@@ -24,138 +26,147 @@ from drunc.process_manager.process_manager import ProcessManager
 from drunc.utils.utils import get_logger
 
 
+class K8sPodWatcherThread(threading.Thread):
+    def __init__(self, pm):
+        threading.Thread.__init__(self)
+        self.pm = pm
+        self.daemon = True
+
+    def run(self):
+        self.pm.log.info("K8sPodWatcherThread started")
+        while True:
+            try:
+                w = watch.Watch()
+                stream = w.stream(
+                    self.pm._core_v1_api.list_pod_for_all_namespaces,
+                    label_selector=self.pm._get_creator_label_selector(),
+                )
+                for event in stream:
+                    pod = event["object"]
+                    event_type = event["type"]
+                    metadata = pod.metadata
+                    status = pod.status
+                    phase = status.phase
+                    uuid = metadata.labels.get(f"uuid.{self.pm.drunc_label}")
+
+                    if not uuid:
+                        continue
+
+                    if event_type in ["MODIFIED", "DELETED"] and phase in ["Succeeded", "Failed"]:
+                        exit_code = -1
+                        reason = "Unknown"
+                        if status.container_statuses and status.container_statuses[0].state.terminated:
+                            terminated_state = status.container_statuses[0].state.terminated
+                            exit_code = terminated_state.exit_code
+                            reason = terminated_state.reason
+                        self.pm.notify_termination(uuid, exit_code, reason)
+
+            except Exception as e:
+                self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
+                sleep(5)
+
+
 class K8sProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
-        self.session = getpass.getuser()  # unfortunate
+        self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
         self.log = get_logger("process_manager.k8s-process-manager")
         config.load_kube_config()
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
-
-        self._ns_v1_api = client.V1Namespace
         self._meta_v1_api = client.V1ObjectMeta
-        self._container_v1_api = client.V1Container
-        self._api_error_v1_api = client.rest.ApiException
-        self._pod_v1_api = client.V1Pod
         self._pod_spec_v1_api = client.V1PodSpec
-        self._pod_security_context_v1_api = client.V1PodSecurityContext
-        self._security_context_v1_api = client.V1SecurityContext
-        self._capabilities_v1_api = client.V1Capabilities
+        self._api_error_v1_api = client.rest.ApiException
 
         self.drunc_label = "drunc.daq"
+        self.watchers = []
+        self._start_watcher()
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
         )
-
         namespace_names = [ns.metadata.name for ns in namespaces.items]
         namespace_list_str = "\n - ".join(namespace_names)
 
         if namespace_list_str:
-            namespace_list_str = "\n - " + namespace_list_str
-            self.log.info(f"Active namespaces created by drunc:{namespace_list_str}")
-
+            self.log.info(f"Active namespaces created by drunc:\n - {namespace_list_str}")
         else:
             self.log.info("No active namespace created by drunc")
 
+    def _start_watcher(self):
+        self.log.debug("Starting K8s pod watcher thread")
+        t = K8sPodWatcherThread(pm=self)
+        t.start()
+        self.watchers.append(t)
+
+    def notify_termination(self, uuid, exit_code, reason):
+        if uuid not in self.boot_request:
+            self.log.debug(f"Received termination for already-removed UUID {uuid}")
+            return
+
+        meta = self.boot_request[uuid].process_description.metadata
+        end_str = f"Pod '{meta.name}' (session: '{meta.session}', user: '{meta.user}', uuid: {uuid}) terminated with exit code {exit_code}. Reason: {reason}"
+        self.log.info(end_str)
+        self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+
     def is_alive(self, podname, session):
-        pods = self._core_v1_api.list_namespaced_pod(session)
-        pod_names = [pod.metadata.name for pod in pods.items]
-        if podname in pod_names:
-            for _ in range(10):
-                s = self._core_v1_api.read_namespaced_pod_status(podname, session)
-                for cond in s.status.conditions:
-                    if cond.type == "Ready" and cond.status == "True":
-                        return True
-        else:
-            return False
+        try:
+            pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
+            return pod_status.status.phase == "Running"
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                return False
+            else:
+                self.log.error(f"Error checking status for pod {session}.{podname}: {e}")
+                return False
 
-    def _add_label(self, obj_name, obj_type, key, label):
+    def _add_label(self, obj_name, obj_type, key, label, session=None):
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
+        
+        if obj_type == "pod":
+            if not session:
+                raise DruncException("Session (namespace) must be provided to label a pod.")
+            try:
+                self._core_v1_api.patch_namespaced_pod(name=obj_name, namespace=session, body=body)
+            except self._api_error_v1_api as e:
+                self.log.error(f"Failed to apply label to pod {session}/{obj_name}: {e}")
 
-        if obj_type == "namespace":
-            self._core_v1_api.patch_namespace(obj_name, body)
-            self.log.info(
-                f'Added label "{key}.{self.drunc_label}:{label}" to "{obj_name}" session'
-            )
-        elif obj_type == "pod":
-            session = self._get_pod_namespace(obj_name)
-            self._core_v1_api.patch_namespaced_pod(obj_name, session, body)
-            self.log.info(
-                f'Added label "{key}.{self.drunc_label}:{label}" to "{session}.{obj_name}"'
-            )
+        elif obj_type == "namespace":
+            try:
+                self._core_v1_api.patch_namespace(name=obj_name, body=body)
+            except self._api_error_v1_api as e:
+                self.log.error(f"Failed to apply label to namespace {obj_name}: {e}")
         else:
             raise DruncException(f"Cannot add label to object type: {obj_type}")
 
-    def _get_pod_namespace(self, podname):
-        pods = self._core_v1_api.list_pod_for_all_namespaces()
-        for pod in pods.items:
-            if pod.metadata.name == podname:
-                return pod.metadata.namespace
-
     def _add_creator_label(self, obj_name, obj_type):
-        return self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
+        self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _get_creator_label_selector(self):
-        label = f"creator.{self.drunc_label}={self.__class__.__name__}"
-        return label
+        return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _create_namespace(self, session):
-        ns_list = self._core_v1_api.list_namespace(
-            label_selector=self._get_creator_label_selector(),
-        )
-        ns_names = [ns.metadata.name for ns in ns_list.items]
-
-        if session not in ns_names:
-            self.log.info(f'Creating "{session}" session')
-            namespace_manifest = {
-                "apiVersion": "v1",
-                "kind": "Namespace",
-                "metadata": {
-                    "name": session,
-                    "labels": {
-                        "pod-security.kubernetes.io/enforce": "privileged",
-                        "pod-security.kubernetes.io/enforce-version": "latest",
-                        "pod-security.kubernetes.io/warn": "privileged",
-                        "pod-security.kubernetes.io/warn-version": "latest",
-                        "pod-security.kubernetes.io/audit": "privileged",
-                        "pod-security.kubernetes.io/audit-version": "latest",
-                    },
-                },
-            }
-            self._core_v1_api.create_namespace(namespace_manifest)
-            self._add_creator_label(session, "namespace")
-        else:
-            return DruncK8sNamespaceAlreadyExists(f'"{session}" session already exists')
-
-    def _volume(self, name, host_path):
-        return self._k8s_client.V1Volume(
-            name=name, host_path=self._k8s_client.V1HostPathVolumeSource(path=host_path)
-        )
-
-    def _volume_mount(self, name, mount_path):
-        return self._k8s_client.V1VolumeMount(name=name, mount_path=mount_path)
-
-    def _env_vars(self, env_var):
-        env_vars_list = [
-            self._k8s_client.models.V1EnvVar(name=k, value=v)
-            for k, v in env_var.items()
-        ]
-        return env_vars_list
-
-    def _execs_and_args(self, executable_and_arguments=[]):
-        exec_and_args = []
-        for e_and_a in executable_and_arguments:
-            args = [a for a in e_and_a.args]
-            exec_and_args += [" ".join([e_and_a.exec] + args)]
-            # exec_and_args = ["source rte", "daq_application --something argument"]
-        exec_and_args = "; ".join(exec_and_args)
-        return exec_and_args
+        try:
+            self._core_v1_api.read_namespace(name=session)
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                self.log.info(f'Creating "{session}" session')
+                namespace_manifest = client.V1Namespace(
+                    api_version="v1",
+                    kind="Namespace",
+                    metadata=self._meta_v1_api(
+                        name=session,
+                        labels={"pod-security.kubernetes.io/enforce": "privileged"}
+                    )
+                )
+                self._core_v1_api.create_namespace(body=namespace_manifest)
+                self._add_creator_label(session, "namespace")
+            else:
+                raise e
 
     def _create_headless_service(self, podname, session, pod_uid):
-        service_manifest = self._k8s_client.V1Service(
+        service_manifest = client.V1Service(
             api_version="v1",
             kind="Service",
             metadata=self._meta_v1_api(
@@ -163,7 +174,7 @@ class K8sProcessManager(ProcessManager):
                 namespace=session,
                 labels={f"creator.{self.drunc_label}": self.__class__.__name__},
                 owner_references=[
-                    self._k8s_client.V1OwnerReference(
+                    client.V1OwnerReference(
                         api_version="v1",
                         kind="Pod",
                         name=podname,
@@ -173,418 +184,233 @@ class K8sProcessManager(ProcessManager):
                     )
                 ],
             ),
-            spec=self._k8s_client.V1ServiceSpec(
-                cluster_ip="None",  # Headless service
+            spec=client.V1ServiceSpec(
+                cluster_ip="None",
                 selector={"app": podname},
-                ports=[self._k8s_client.V1ServicePort(port=80, target_port=80)],
+                ports=[client.V1ServicePort(port=80, target_port=80)],
             ),
         )
-
         try:
             self._core_v1_api.create_namespaced_service(namespace=session, body=service_manifest)
             self.log.info(f'Created headless service "{session}.{podname}"')
         except self._api_error_v1_api as e:
-            self.log.error(f"Failed to create headless service for {podname}: {e}")
+            if e.status != 409: # Ignore if it already exists
+                self.log.error(f"Failed to create headless service for {podname}: {e}")
 
     def _create_pod(self, podname, session, boot_request: BootRequest):
-        # HACK
-        hostname = socket.gethostname()
-        # / HACK
+        pod_image = "ghcr.io/dune-daq/alma9:latest"
+        
+        original_exec_and_args = "; ".join([
+            " ".join([e_and_a.exec] + list(e_and_a.args))
+            for e_and_a in boot_request.process_description.executable_and_arguments
+        ])
 
-        pod_image = self.configuration.data.image
-        #pod_image = boot_request.process_description.metadata.pod_image or "ghcr.io/dune-daq/alma9:latest"
+        wait_command = ""
+        if boot_request.process_description.executable_and_arguments:
+            first_e_and_a = boot_request.process_description.executable_and_arguments[0]
+            file_to_wait_for = ""
+            if first_e_and_a.exec == "source" and first_e_and_a.args:
+                file_to_wait_for = first_e_and_a.args[0]
+            else:
+                file_to_wait_for = first_e_and_a.exec
+            if file_to_wait_for:
+                wait_command = f"while [ ! -f {file_to_wait_for} ]; do echo 'Waiting for {file_to_wait_for} to be available...'; sleep 0.5; done;"
+        
+        final_exec_and_args = f"{wait_command} {original_exec_and_args}"
+        env_vars = [client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()]
 
-        # if not pod_image:
-        #     raise DruncException("No image specified in BootRequest")
-
-        pod = self._pod_v1_api(
+        pod_manifest = client.V1Pod(
             api_version="v1",
             kind="Pod",
-            metadata=self._meta_v1_api(name=podname, namespace=session, labels={"app": podname}),
+            metadata=self._meta_v1_api(
+                name=podname, 
+                namespace=session,
+                labels={"app": podname, f"creator.{self.drunc_label}": self.__class__.__name__}
+            ),
             spec=self._pod_spec_v1_api(
                 restart_policy="Never",
                 containers=[
-                    self._container_v1_api(
-                        name=podname,
-                        image=pod_image,
-                        command=["sh"],
-                        # args = ["-c", "exit 3"],
-                        args=[
-                            "-c",
-                            self._execs_and_args(
-                                boot_request.process_description.executable_and_arguments
-                            ),
-                        ],
-                        # args = ["-c", "sleep 3600"],
-                        env=self._env_vars(boot_request.process_description.env),
+                    client.V1Container(
+                        name=podname, image=pod_image, command=["sh", "-c"],
+                        args=[final_exec_and_args], env=env_vars,
                         volume_mounts=[
-                            #self._volume_mount("pwd", os.getcwd()),
-                            self._volume_mount("cvmfs", "/cvmfs/"),
-                            self._volume_mount("nfs", "/nfs/"),
+                            client.V1VolumeMount(name="nfs", mount_path="/nfs"),
+                            client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
                         ],
                         working_dir=boot_request.process_description.process_execution_directory,
-                        restart_policy="Never",
-                        security_context=self._security_context_v1_api(
-                            run_as_user=os.getuid(),
-                            run_as_group=os.getgid(),
-                            run_as_non_root=True,
-                            allow_privilege_escalation=False,
-                            capabilities=self._capabilities_v1_api(drop=["ALL"]),
-                            seccomp_profile=self._k8s_client.V1SeccompProfile(
-                                type="RuntimeDefault"
-                            ),
-                        ),
+                        security_context=client.V1SecurityContext(run_as_user=os.getuid(), run_as_group=os.getgid()),
                     )
                 ],
                 volumes=[
-                    #self._volume("pwd", os.getcwd()),
-                    self._volume("cvmfs", "/cvmfs/"),
-                    self._volume("nfs", "/nfs/"),
+                    client.V1Volume(name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")),
+                    client.V1Volume(name="cvmfs", host_path=client.V1HostPathVolumeSource(path="/cvmfs")),
                 ],
-                # HACK
-                affinity=(
-                    self._k8s_client.V1Affinity(
-                        self._k8s_client.V1NodeAffinity(
-                            required_during_scheduling_ignored_during_execution=self._k8s_client.V1NodeSelector(
-                                node_selector_terms=[
-                                    self._k8s_client.V1NodeSelectorTerm(
-                                        match_expressions=[
-                                            {
-                                                "key": "kubernetes.io/hostname",
-                                                "operator": "In",
-                                                "values": [hostname],
-                                            }
-                                        ]
-                                    )
-                                ]
-                            )
-                        )
-                    )
-                    if hostname.startswith("np04")
-                    else None
-                ),
-                # / HACK
-                security_context=self._pod_security_context_v1_api(
-                    run_as_user=os.getuid(),
-                    run_as_group=os.getgid(),
-                    run_as_non_root=True,
-                ),
             ),
         )
         try:
-            pods = self._core_v1_api.list_namespaced_pod(session)
-            if any(p.metadata.name == podname for p in pods.items):
-                self.log.warning(f'Pod "{session}.{podname}" already exists. Deleting it...')
-                self._core_v1_api.delete_namespaced_pod(
-                    podname, session, grace_period_seconds=0
-                )
-                for _ in range(10):
-                    sleep(1)
-                    pods = self._core_v1_api.list_namespaced_pod(session)
-                    if all(p.metadata.name != podname for p in pods.items):
-                        break
-                else:
-                    raise DruncException(f'Timed out waiting for pod "{session}.{podname}" to be deleted')
-
-            created_pod = self._core_v1_api.create_namespaced_pod(session, pod)
-            self.log.info(f'Creating "{session}.{podname}"')
-            self._add_creator_label(podname, "pod")
-
-            # Pass pod UID to the service creation so ownerReferences are set
+            created_pod = self._core_v1_api.create_namespaced_pod(session, pod_manifest)
+            self.log.info(f'Creating pod "{session}.{podname}"')
             pod_uid = created_pod.metadata.uid
             self._create_headless_service(podname, session, pod_uid)
-
-        except Exception as e:
-            self.log.error(
-                f'Couldn\'t create pod with name: "{session}.{podname}": {e}'
-            )
+        except self._api_error_v1_api as e:
+            self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
             raise e
 
-    def _get_process_uid(self, query: ProcessQuery, in_boot_request: bool = False):
-        uuid_selector = []
-        name_selector = query.names
-        user_selector = query.user
-        session_selector = query.session
-        # relevant reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
+    def _get_process_uid(self, query: ProcessQuery):
+        if not any([query.uuids, query.names, query.session, query.user]):
+            return list(self.boot_request.keys())
 
-        processes = []
-
-        all_the_uuids = self.boot_request.keys()
-
-        for uid in query.uuids:
-            uuid_selector += [uid.uuid]
-
-        all_pods = []
-        for proc_uuid in all_the_uuids:
-            podname = self.boot_request[proc_uuid].process_description.metadata.name
-            all_pods.append(podname)
-
-        for proc_uuid in self.boot_request.keys():
-            accepted = False
-            meta = self.boot_request[proc_uuid].process_description.metadata
-
-            if proc_uuid in uuid_selector:
-                accepted = True
-
-            for name_reg in name_selector:
-                if re.search(name_reg, meta.name):
-                    accepted = True
-
-            if session_selector == meta.session:
-                accepted = True
-
-            if user_selector == meta.user:
-                accepted = True
-
-            if accepted:
-                processes.append(proc_uuid)
-
-        return processes
-
-    def _get_pi(self, uuid, podname, session, return_code=None):
-        pd = ProcessDescription()
-        pd.CopyFrom(self.boot_request[uuid].process_description)
-        pr = ProcessRestriction()
-        pr.CopyFrom(self.boot_request[uuid].process_restriction)
-        pu = ProcessUUID(uuid=uuid)
-
-        pi = ProcessInstance(
-            process_description=pd,
-            process_restriction=pr,
-            status_code=(
-                ProcessInstance.StatusCode.RUNNING
-                if self.is_alive(podname, session)
-                else ProcessInstance.StatusCode.DEAD
-            ),
-            return_code=return_code,
-            uuid=pu,
-        )
-        return pi
-
-    def _kill_pod(self, podname, session):
-        pods = self._core_v1_api.list_namespaced_pod(session)
-        pod_names = [pod.metadata.name for pod in pods.items]
-        if podname in pod_names:
-            self._core_v1_api.delete_namespaced_pod(
-                podname, session, grace_period_seconds=0
-            )
-            while podname in pod_names:
-                sleep(1)
-                pods = self._core_v1_api.list_namespaced_pod(session)
-                pod_names = [pod.metadata.name for pod in pods.items]
-        else:
-            pass
-
-    def _kill_if_empty_session(self, session):
-        pods = self._core_v1_api.list_namespaced_pod(
-            session,
-            label_selector=self._get_creator_label_selector(),
-        )
-        deletion_timestamps = [pod.metadata.deletion_timestamp for pod in pods.items]
-        if not pods.items or all(
-            timestamp is not None for timestamp in deletion_timestamps
-        ):
-            self.log.info(f'Killing empty "{session}" session')
-            self._core_v1_api.delete_namespace(session)
-
-            ns_list = self._core_v1_api.list_namespace(
-                label_selector=self._get_creator_label_selector(),
-            )
-            namespaces = [ns.metadata.name for ns in ns_list.items]
-            while session in namespaces:
-                sleep(1)
-                ns_list = self._core_v1_api.list_namespace(
-                    label_selector=self._get_creator_label_selector(),
-                )
-                namespaces = [ns.metadata.name for ns in ns_list.items]
-            else:
-                self.log.info(f'"{session}" session has been killed')
-                pass
-        else:
-            pass
-
-    def _return_code(self, podname, session):
-        pods = self._core_v1_api.list_namespaced_pod(session)
-        pod_names = [pod.metadata.name for pod in pods.items]
-        if podname not in pod_names:
-            return_code = None
-        else:
-            if not self.is_alive(podname, session):
-                container_statuses = (
-                    self._core_v1_api.read_namespaced_pod_status(podname, session)
-                    .status.container_statuses
-                )
-
-                if container_statuses:
-                    state = container_statuses[0].state
-                    self.log.debug(f"{podname} state: {state}")
-                    if state and state.terminated:
-                        return_code = state.terminated.exit_code
-                    else:
-                        return_code = None
-                else:
-                    return_code = None
-            else:
-                return_code = None
-        return return_code
-
-    # --------------------------------------Commands--------------------------------------
-
-    def _terminate(self):
-        self.log.info("Terminating")
-
-    def _terminate_impl(self):
-        return self._terminate()
+        matched_uuids = set()
+        for proc_uuid, boot_req in self.boot_request.items():
+            meta = boot_req.process_description.metadata
+            if any(uid.uuid == proc_uuid for uid in query.uuids):
+                matched_uuids.add(proc_uuid)
+            if query.session and query.session == meta.session:
+                matched_uuids.add(proc_uuid)
+            if query.user and query.user == meta.user:
+                matched_uuids.add(proc_uuid)
+            if any(re.search(name_reg, meta.name) for name_reg in query.names):
+                matched_uuids.add(proc_uuid)
+        return list(matched_uuids)
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
-        uuids = self._get_process_uid(log_request.query, in_boot_request=True)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
-        for uuid in self._get_process_uid(log_request.query):
-            podname = self.boot_request[uuid].process_description.metadata.name
-            session = self.boot_request[uuid].process_description.metadata.session
-            return LogLines(lines=[log for log in self._core_v1_api.read_namespaced_pod_log(
-                podname, session, tail_lines=log_request.how_far
-            ).split("\n")])
+        uuids = self._get_process_uid(log_request.query)
+        uuid = self._ensure_one_process(uuids)
+        podname = self.boot_request[uuid].process_description.metadata.name
+        session = self.boot_request[uuid].process_description.metadata.session
+        try:
+            logs = self._core_v1_api.read_namespaced_pod_log(
+                podname, session, tail_lines=log_request.how_far or 100
+            )
+            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=logs.split('\n'))
+        except self._api_error_v1_api as e:
+            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=[f"Could not retrieve logs: {e.reason}"])
 
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
-        this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
+        return self.__boot(boot_request, str(uuid.uuid4()))
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         session = boot_request.process_description.metadata.session
-        podnames = boot_request.process_description.metadata.name
+        podname = boot_request.process_description.metadata.name
         if uuid in self.boot_request:
-            raise DruncCommandException(
-                f'"{session}.{podnames}":{uuid} already exists!'
-            )
+            raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
+        
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_namespace(session)
-        self._create_pod(podnames, session, boot_request)
-        self._add_label(podnames, "pod", "uuid", uuid)
-        self.log.info(f'"{session}.{podnames}":{uuid} booted')
+        self._create_pod(podname, session, boot_request)
+        self._add_label(podname, "pod", "uuid", uuid, session=session)
+        self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
-        pods = self._core_v1_api.list_namespaced_pod(session)
-        pod_names = [pod.metadata.name for pod in pods.items]
+        pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
+        pd.CopyFrom(self.boot_request[uuid].process_description)
+        pr.CopyFrom(self.boot_request[uuid].process_restriction)
 
-        for _ in range(10):
-            if podnames not in pod_names:
-                sleep(1)
-            else:
-                break
-        else:
-            raise DruncException(f'Not able to boot "{session}.{podnames}":{uuid}')
+        return ProcessInstance(
+            process_description=pd, process_restriction=pr,
+            status_code=ProcessInstance.StatusCode.RUNNING, uuid=pu,
+        )
+
+    def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        queried_uuids = self._get_process_uid(query)
+        if not queried_uuids: return ProcessInstanceList()
+
+        all_pods = self._core_v1_api.list_pod_for_all_namespaces(
+            label_selector=self._get_creator_label_selector()
+        )
+        uuid_to_pod = {p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in all_pods.items}
         
-        try:
-            pod_info = self._core_v1_api.read_namespaced_pod(podnames, session)
-            node_name = pod_info.spec.node_name
-            self.boot_request[uuid].process_description.metadata.hostname = node_name
-        except Exception as e:
-            self.log.warning(f"Could not retrieve node name for pod {session}.{podnames}: {e}")
-
-        return self._get_pi(uuid, podnames, session)
-
-    def _ps_impl(
-        self, query: ProcessQuery, in_boot_request: bool = False
-    ) -> ProcessInstanceList:
         ret = []
-        for proc_uuid in self._get_process_uid(query):
-            podname = self.boot_request[proc_uuid].process_description.metadata.name
-            session = self.boot_request[proc_uuid].process_description.metadata.session
+        for uuid in queried_uuids:
+            if uuid not in self.boot_request: continue
+            
+            pod = uuid_to_pod.get(uuid)
+            status_code = ProcessInstance.StatusCode.DEAD
+            return_code = None
+            if pod:
+                if pod.status.phase == 'Running':
+                    status_code = ProcessInstance.StatusCode.RUNNING
+                elif pod.status.phase in ['Succeeded', 'Failed']:
+                    if pod.status.container_statuses and pod.status.container_statuses[0].state.terminated:
+                        return_code = pod.status.container_statuses[0].state.terminated.exit_code
 
-            return_code = self._return_code(podname, session)
+            pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
+            pd.CopyFrom(self.boot_request[uuid].process_description)
+            pr.CopyFrom(self.boot_request[uuid].process_restriction)
 
-            ret.append(self._get_pi(proc_uuid, podname, session, return_code))
-
-        pil = ProcessInstanceList(values=ret)
-
-        return pil
+            ret.append(ProcessInstance(
+                process_description=pd, process_restriction=pr,
+                status_code=status_code, return_code=return_code, uuid=pu,
+            ))
+        return ProcessInstanceList(values=ret)
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        # ret = []
-        uuids = self._get_process_uid(query, in_boot_request=True)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
-        for uuid in self._get_process_uid(query):
-            podname = self.boot_request[uuid].process_description.metadata.name
-            session = self.boot_request[uuid].process_description.metadata.session
-            self.log.info(f'Restarting "{session}.{podname}":{uuid}')
+        uuids = self._get_process_uid(query)
+        uuid = self._ensure_one_process(uuids)
+        
+        br_copy = BootRequest()
+        br_copy.CopyFrom(self.boot_request[uuid])
+        
+        self._kill_impl(ProcessQuery(uuids=[ProcessUUID(uuid=uuid)]))
+        ret = self.__boot(br_copy, uuid)
+        return ProcessInstanceList(values=[ret])
 
-            self._kill_pod(podname, session)
+    def _kill_pod(self, podname, session):
+        try:
+            self._core_v1_api.delete_namespaced_pod(podname, session, grace_period_seconds=0)
+        except self._api_error_v1_api as e:
+            if e.status != 404: raise e
 
-            same_uuid_br = []
-            same_uuid_br = BootRequest()
-            same_uuid_br.CopyFrom(self.boot_request[uuid])
-            same_uuid = uuid
+    def _kill_if_empty_session(self, session):
+        try:
+            pods = self._core_v1_api.list_namespaced_pod(
+                session, label_selector=self._get_creator_label_selector()
+            )
+            if not pods.items:
+                self.log.info(f'Session "{session}" is empty, deleting namespace.')
+                self._core_v1_api.delete_namespace(session)
+        except self._api_error_v1_api as e:
+            if e.status != 404:
+                self.log.warning(f"Failed to check/delete empty session {session}: {e}")
 
-            del self.boot_request[uuid]
-            del uuid
+    def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        ret, sessions_affected = [], set()
+        uuids_to_kill = self._get_process_uid(query)
+        
+        for proc_uuid in uuids_to_kill:
+            if proc_uuid not in self.boot_request: continue
 
-            ret = self.__boot(same_uuid_br, same_uuid)
-
-            del same_uuid_br
-            del same_uuid
-
-            # ret.append(self._get_pi(uuid, podname, session))
-
-        # pil = ProcessInstanceList(
-        #     values=ret
-        # )
-        return ret
-
-    # # ORDER MATTERS!
-    # @broadcasted  # outer most wrapper 1st step
-    # @authentified_and_authorised(
-    #     action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
-    # )  # 2nd step
-    # @pack_response  # 3rd step
-    # def flush(self, request:Request, context:grpc.ServicerContext) -> Response:
-    #     try:
-    #         data = unpack_any(request.data, ProcessQuery)
-    #     except UnpackingError as e:
-    #         return unpack_error_response(self.__class__.__name__, str(e), request.token)
-
-    #     self.log.info("Flushing dead processes")
-
-    #     ret = []
-    #     for proc_uuid in self._get_process_uid(data):
-    #         podname = self.boot_request[proc_uuid].process_description.metadata.name
-    #         session = self.boot_request[proc_uuid].process_description.metadata.session
-
-    #         if not self.is_alive(podname, session):
-    #             return_code = self._return_code(podname, session)
-    #             ret.append(self._get_pi(proc_uuid, podname, session, return_code))
-    #             self.log.info(f'Flushing "{session}.{podname}":{proc_uuid}')
-    #             del self.boot_request[proc_uuid]
-    #             self.log.info(f'"{session}.{podname}":{proc_uuid} flushed')
-    #             del proc_uuid
-    #             self._kill_pod(podname, session)
-
-    #         self._kill_if_empty_session(session)
-
-    #     return ProcessInstanceList(values=ret)
-
-    def _kill_impl(
-        self, query: ProcessQuery, in_boot_request: bool = False
-    ) -> ProcessInstanceList:
-        ret = []
-        for proc_uuid in self._get_process_uid(query):
-            podname = self.boot_request[proc_uuid].process_description.metadata.name
-            session = self.boot_request[proc_uuid].process_description.metadata.session
-
-            self.log.info(f'Killing "{session}.{podname}":{proc_uuid}')
-
-            self._kill_pod(podname, session)
-
-            self.log.info(f'"{session}.{podname}":{proc_uuid} killed')
-
-            return_code = self._return_code(podname, session)
-            ret.append(self._get_pi(proc_uuid, podname, session, return_code))
-
+            pd = self.boot_request[proc_uuid].process_description
+            podname, session = pd.metadata.name, pd.metadata.session
+            sessions_affected.add(session)
+            self.log.info(f'Killing pod "{session}/{podname}" (UUID {proc_uuid})')
+            
+            try:
+                self._kill_pod(podname, session)
+            except Exception as e:
+                self.log.error(f"Failed to issue kill for pod {podname}: {e}")
+                continue
+            
+            pd_copy, pr_copy, pu_copy = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=proc_uuid)
+            pd_copy.CopyFrom(self.boot_request[proc_uuid].process_description)
+            pr_copy.CopyFrom(self.boot_request[proc_uuid].process_restriction)
+            
+            ret.append(ProcessInstance(
+                process_description=pd_copy, process_restriction=pr_copy,
+                status_code=ProcessInstance.StatusCode.DEAD, uuid=pu_copy,
+            ))
             del self.boot_request[proc_uuid]
-            del proc_uuid
 
+        for session in sessions_affected:
             self._kill_if_empty_session(session)
 
-        pil = ProcessInstanceList(values=ret)
-        return pil
+        return ProcessInstanceList(values=ret)
+
+    def _terminate_impl(self) -> ProcessInstanceList:
+        self.log.info("Terminating all known K8s processes.")
+        if not self.boot_request:
+            self.log.info("No processes to terminate.")
+            return ProcessInstanceList()
+        return self._kill_impl(ProcessQuery(names=[".*"]))
+    
