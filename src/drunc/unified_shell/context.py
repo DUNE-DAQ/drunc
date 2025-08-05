@@ -52,11 +52,14 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             del self._drivers["controller"]
             return
 
-        self._drivers["controller"] = ControllerDriver(
+        driver = ControllerDriver(
             self.address_controller,
             self._token,
             aio_channel=False,
         )
+
+        # This will raise an exception if the driver already exists
+        self.set_driver("controller", driver)
 
     def create_token(self, **kwargs) -> Token:
         from drunc.utils.shell_utils import create_dummy_token_from_uname
