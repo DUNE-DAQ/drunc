@@ -32,7 +32,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             ret["process_manager"] = ProcessManagerDriver(
                 self.address_pm,
                 self._token,
-                aio_channel=False,
             )
         if self.address_controller != "":
             from drunc.controller.controller_driver import ControllerDriver
@@ -40,7 +39,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             ret["controller"] = ControllerDriver(
                 self.address,
                 self._token,
-                aio_channel=False,
             )
         return ret
 
@@ -55,7 +53,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         driver = ControllerDriver(
             self.address_controller,
             self._token,
-            aio_channel=False,
         )
 
         # This will raise an exception if the driver already exists
