@@ -51,6 +51,7 @@ class ElisaLogbook(FSMAction):
                 )
                 raise DotDruncJsonIncorrectFormat(err_msg) from KeyError
         else:
+
             err_msg: str = ""
             if default_elisa_logbook:
                 err_msg = (

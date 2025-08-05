@@ -15,12 +15,7 @@ from drunc.exceptions import (
     DruncSetupException,
     DruncShellException,
 )
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    rethrow_if_timeout,
-    rethrow_if_unreachable_server,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.utils import get_logger
 
 
@@ -95,17 +90,9 @@ class GRPCDriver:
             )
 
         self.address = address
-
-        
         self.channel = grpc.insecure_channel(self.address)
-
-        self.stub = self.create_stub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
-
-    @abc.abstractmethod
-    def create_stub(self, channel) -> object:
-        pass
 
     def _create_request(self, payload=None) -> Request:
         token2 = Token()
@@ -118,11 +105,6 @@ class GRPCDriver:
             return Request(token=token2, data=data)
         else:
             return Request(token=token2)
-
-    def __handle_grpc_error(self, error, command):
-        rethrow_if_unreachable_server(error)
-        rethrow_if_timeout(error)
-        raise error
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
@@ -139,15 +121,6 @@ class GRPCDriver:
                     self.log.error(f"Error unpacking data: {e}")
                     dr.data = response.data
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
-
         else:
 
             def text(verb="not executed", reason=""):
@@ -162,7 +135,6 @@ class GRPCDriver:
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
                 dr.data = stack
-                # stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
                 stack_txt = "Stacktrace on remote server!\n"
                 last_one = ""
 
@@ -184,30 +156,25 @@ class GRPCDriver:
             elif response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
             ]:
-                self.log.warn(text())
+                self.log.warning(text())
             else:
                 self.log.error(text("failed", error_txt))
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
+        for c_response in response.children:
+            try:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            except DruncServerSideError as e:
+                self.log.error(f"Exception thrown from child: {e}")
+
+        return dr
 
     def send_command(
         self,
         command: str,
         data=None,
         outformat=None,
-        decode_children=False,
         timeout: int | float = 60,
     ):
-        if not self.stub:
-            raise DruncShellException("No stub initialised")
-
         cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
 
         request = self._create_request(data)
@@ -215,13 +182,12 @@ class GRPCDriver:
         try:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, command)
+            handle_grpc_error(e)
 
         # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
         from druncschema.description_pb2 import Description
-        from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 
-        if isinstance(response, (Description, AllActiveSessions, AllConfigKeys)):
+        if isinstance(response, Description):
             return response
 
         return self.handle_response(response, command, outformat)

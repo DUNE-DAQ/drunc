@@ -48,7 +48,6 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.obj.reset(address=process_manager_address)
 
     try:
-
         desc = ctx.obj.get_driver("process_manager").describe()
     except ServerUnreachable as e:
         process_manager_shell_log = get_logger(
@@ -63,7 +62,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     process_manager_log = get_logger(
         logger_name="process_manager",
-        log_file_path=desc.data.info,
+        log_file_path=desc.info,
         override_log_file=False,
         rich_handler=True,
     )
@@ -72,10 +71,10 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         f"[green]{getpass.getuser()}[/green] connected to the process manager through a [green]drunc-process-manager-shell[/green] via address [green]{process_manager_address}[/green]"
     )
     process_manager_shell_log.info(
-        f"Connected to {process_manager_address}, running '{desc.data.name}.{desc.data.session}' (name.session), starting listening..."
+        f"Connected to {process_manager_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
-    if desc.data.HasField("broadcast"):
-        ctx.obj.start_listening(desc.data.broadcast)
+    if desc.HasField("broadcast"):
+        ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
         ctx.obj.terminate()
