@@ -292,7 +292,7 @@ def unified_shell(
         ),
         session_name=session_name,
     )
-
+    os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
     fsm_logger = get_logger("controller.FSM")
     fsm_logger.setLevel("ERROR")
     fsm_conf_logger = get_logger("controller.FSMConfHandler")
@@ -343,3 +343,11 @@ def unified_shell(
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
+    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
+
+
+def on_exit(ctx, unified_shell_log):
+    """Handle exit from the shell."""
+    unified_shell_log.info("[green]Exiting unified_shell[/green]")
+    # TODO - cleanup needs to happen
+    unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
