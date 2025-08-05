@@ -91,7 +91,6 @@ class GRPCDriver:
 
         self.address = address
         self.channel = grpc.insecure_channel(self.address)
-        self.stub = self.create_stub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
 
