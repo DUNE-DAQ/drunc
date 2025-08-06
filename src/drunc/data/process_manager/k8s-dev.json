@@ -1,0 +1,27 @@
+{
+    "type": "k8s",
+    "name": "K8sProcessManager",
+    "command_address": "0.0.0.0:10054",
+    "image": "ghcr.io/dune-daq/nightly-release-alma9:development_v5",
+
+    "authoriser": {
+        "type": "dummy"
+    },
+
+    "broadcaster": {
+        "type": "kafka",
+        "kafka_address": "monkafka.cern.ch:30092",
+        "publish_timeout": 2
+    },
+    "environment": {
+        "GRPC_ENABLE_FORK_SUPPORT": "false"
+    },
+    "opmon_uri": {
+        "path": "monkafka.cern.ch:30092/opmon_stream",
+        "type": "stream"
+    },
+    "opmon_conf":{
+        "level": "info",
+        "interval_s" : 10.0
+    }
+}
