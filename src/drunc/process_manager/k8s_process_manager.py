@@ -198,25 +198,35 @@ class K8sProcessManager(ProcessManager):
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
     def _create_pod(self, podname, session, boot_request: BootRequest):
-        pod_image = "ghcr.io/dune-daq/alma9:latest"
+        pod_image = self.configuration.data.image
         
-        original_exec_and_args = "; ".join([
+        exec_and_args_list = boot_request.process_description.executable_and_arguments
+        main_command_str = "; ".join([
             " ".join([e_and_a.exec] + list(e_and_a.args))
-            for e_and_a in boot_request.process_description.executable_and_arguments
+            for e_and_a in exec_and_args_list
         ])
-
-        wait_command = ""
-        if boot_request.process_description.executable_and_arguments:
-            first_e_and_a = boot_request.process_description.executable_and_arguments[0]
-            file_to_wait_for = ""
-            if first_e_and_a.exec == "source" and first_e_and_a.args:
-                file_to_wait_for = first_e_and_a.args[0]
-            else:
-                file_to_wait_for = first_e_and_a.exec
-            if file_to_wait_for:
-                wait_command = f"while [ ! -f {file_to_wait_for} ]; do echo 'Waiting for {file_to_wait_for} to be available...'; sleep 0.5; done;"
         
-        final_exec_and_args = f"{wait_command} {original_exec_and_args}"
+        init_containers = []
+        # Check if the boot request follows the pattern: 1. source script, 2. run command
+        if len(exec_and_args_list) > 1 and exec_and_args_list[0].exec == "source":
+            env_script_path = exec_and_args_list[0].args[0]
+            main_app_name = exec_and_args_list[1].exec
+
+            # This command will loop until the environment script can be sourced AND the main application command is found in the PATH.
+            init_command_str = f"until source {env_script_path} && command -v {main_app_name} >/dev/null 2>&1; do echo 'Waiting for environment of {main_app_name} to be ready...'; sleep 1; done"
+            
+            init_container = client.V1Container(
+                name="init-environment",
+                image=pod_image,
+                command=["sh", "-c"],
+                args=[init_command_str],
+                volume_mounts=[
+                    client.V1VolumeMount(name="nfs", mount_path="/nfs"),
+                    client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
+                ]
+            )
+            init_containers.append(init_container)
+
         env_vars = [client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()]
 
         pod_manifest = client.V1Pod(
@@ -228,11 +238,13 @@ class K8sProcessManager(ProcessManager):
                 labels={"app": podname, f"creator.{self.drunc_label}": self.__class__.__name__}
             ),
             spec=self._pod_spec_v1_api(
+                init_containers=init_containers, # Add the init container to the spec
                 restart_policy="Never",
                 containers=[
                     client.V1Container(
                         name=podname, image=pod_image, command=["sh", "-c"],
-                        args=[final_exec_and_args], env=env_vars,
+                        args=[main_command_str], # The main container now runs the original command without a wait loop
+                        env=env_vars,
                         volume_mounts=[
                             client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                             client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
