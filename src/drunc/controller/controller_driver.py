@@ -15,12 +15,10 @@ from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 
 class ControllerDriver(GRPCDriver):
     def __init__(self, address: str, token, **kwargs):
-        super(ControllerDriver, self).__init__(
+        super().__init__(
             name="controller_driver", address=address, token=token, **kwargs
         )
-
-    def create_stub(self, channel):
-        return ControllerStub(channel)
+        self.stub = ControllerStub(self.channel)
 
     def pack_empty_addressed_command(cmd):
         @wraps(cmd)

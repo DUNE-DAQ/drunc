@@ -4,27 +4,30 @@ import os
 import signal
 import tempfile
 import time
+from collections.abc import Iterator
 from time import sleep
 
-from druncschema.description_pb2 import OldDescription
+import grpc
+from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
     ProcessDescription,
-    ProcessInstance,
     ProcessInstanceList,
     ProcessMetadata,
     ProcessQuery,
     ProcessRestriction,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
+from druncschema.request_response_pb2 import Request
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
+from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
@@ -38,13 +41,10 @@ class ProcessManagerDriver(GRPCDriver):
     controller_address = ""
 
     def __init__(self, address: str, token, **kwargs):
-        super(ProcessManagerDriver, self).__init__(
-            name="process_manager.driver", address=address, token=token, **kwargs
+        super().__init__(
+            name="process_manager_driver", address=address, token=token, **kwargs
         )
-        self.log.debug("set up process_manager.driver")
-
-    def create_stub(self, channel):
-        return ProcessManagerStub(channel)
+        self.stub = ProcessManagerStub(self.channel)
 
     def _convert_oks_to_boot_request(
         self,
@@ -54,7 +54,7 @@ class ProcessManagerDriver(GRPCDriver):
         db,
         session_name: str,
         override_logs: bool,
-    ) -> BootRequest:
+    ) -> Iterator[BootRequest]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
 
         env = {
@@ -133,6 +133,7 @@ class ProcessManagerDriver(GRPCDriver):
 
             self.log.debug(f"{name}'s env:\n{env}")
             breq = BootRequest(
+                token=copy_token(self.token),
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
                         user=user,
@@ -164,7 +165,7 @@ class ProcessManagerDriver(GRPCDriver):
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> ProcessInstance:
+    ) -> Iterator[ProcessInstanceList]:
         from daqconf.consolidate import consolidate_db
 
         self.log.info(f"Booting session [green]{session_name}[/green]")
@@ -204,7 +205,7 @@ To debug it, close drunc and run the following command:
         last_boot_on_host_at = {}
         previous_host = None
 
-        for br in self._convert_oks_to_boot_request(
+        for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
             session_dal=session_dal,
@@ -214,14 +215,14 @@ To debug it, close drunc and run the following command:
             **kwargs,
         ):
             if (
-                br.process_description.metadata.name
+                request.process_description.metadata.name
                 not in [app.id for app in session_dal.infrastructure_applications]
                 and csc
                 and not csc.is_ready(timeout=10)
             ):
                 raise DruncSetupException("Connectivity service is not ready in time")
 
-            this_host = next(iter(br.process_restriction.allowed_hosts))
+            this_host = next(iter(request.process_restriction.allowed_hosts))
 
             time_diff = time.time() - last_boot_on_host_at.get(this_host, 0)
 
@@ -233,12 +234,13 @@ To debug it, close drunc and run the following command:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
-            yield self.send_command(
-                "boot",
-                data=br,
-                outformat=ProcessInstance,
-                timeout=timeout,
-            )
+
+            try:
+                response = self.stub.boot(request, timeout=timeout)
+            except grpc.RpcError as e:
+                handle_grpc_error(e)
+
+            yield response
 
         top_controller_name = session_dal.segment.controller.id
 
@@ -340,7 +342,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         sleep: int,
         n_sleeps: int,
         timeout: int | float = 60,
-    ):  # -> ProcessInstance:
+    ) -> Iterator[ProcessInstanceList]:
         pwd = os.getcwd()
 
         # Construct the list of commands to send to the dummy_boot process
@@ -359,7 +361,8 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         )
 
         for process in range(n_processes):
-            breq = BootRequest(
+            request = BootRequest(
+                token=copy_token(self.token),
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
                         user=user,
@@ -376,70 +379,92 @@ To find the controller address, you can look up \'{top_controller_name}_control\
                 ),
                 process_restriction=ProcessRestriction(allowed_hosts=["localhost"]),
             )
-            self.log.debug(f"{breq=}\n\n")
+            self.log.debug(f"{request=}\n\n")
 
-            yield self.send_command(
-                "boot",
-                data=breq,
-                outformat=ProcessInstance,
-                timeout=timeout,
-            )
+            try:
+                response = self.stub.boot(request, timeout=timeout)
+            except grpc.RpcError as e:
+                handle_grpc_error(e)
+
+            yield response
 
     def terminate(
         self,
         timeout: int | float = 60,
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "terminate", outformat=ProcessInstanceList, timeout=timeout
-        )
+        request = Request(token=copy_token(self.token))
 
-    def kill(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstance:
-        return self.send_command(
-            "kill",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        try:
+            response = self.stub.terminate(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
 
-    def logs(self, req: LogRequest, timeout: int | float = 60) -> LogLines:
-        return self.send_command(
-            "logs",
-            data=req,
-            outformat=LogLines,
-            timeout=timeout,
-        )
+        return response
 
-    def ps(self, query: ProcessQuery, timeout: int | float = 60) -> ProcessInstanceList:
-        return self.send_command(
-            "ps",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+    def kill(
+        self, request: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.kill(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines:
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.logs(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def ps(
+        self, request: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.ps(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def flush(
-        self, query: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
-        return self.send_command(
-            "flush",
-            data=query,
-            outformat=ProcessInstanceList,
-            timeout=timeout,
-        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.flush(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def restart(
-        self, query: ProcessQuery, timeout: int | float = 60
-    ) -> ProcessInstance:
-        return self.send_command(
-            "restart",
-            data=query,
-            outformat=ProcessInstance,
-            timeout=timeout,
-        )
+        self, request: ProcessQuery, timeout: int | float = 60
+    ) -> ProcessInstanceList:
+        request.token.CopyFrom(self.token)
 
-    def describe(self, timeout: int | float = 60) -> OldDescription:
-        return self.send_command(
-            "describe",
-            outformat=OldDescription,
-            timeout=timeout,
-        )
+        try:
+            response = self.stub.restart(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def describe(self, timeout: int | float = 60) -> Description:
+        request = Request(token=copy_token(self.token))
+
+        try:
+            response = self.stub.describe(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response

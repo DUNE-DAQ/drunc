@@ -187,7 +187,6 @@ def unified_shell(
         unified_shell_log.debug("Runnning [green]describe[/green]")
         try:
             desc = ctx.obj.get_driver().describe()
-            desc = desc.data
         except Exception as e:
             unified_shell_log.error(
                 f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
@@ -281,7 +280,6 @@ def unified_shell(
 
     controller_name = session_dal.segment.controller.id
     unified_shell_log.debug("Initializing the [green]ControllerConfHandler[/green]")
-
     controller_configuration = ControllerConfHandler(
         type=ConfTypes.OKSFileName,
         data=ctx.obj.configuration_file,

@@ -19,6 +19,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
@@ -117,20 +118,30 @@ class SSHProcessManager(ProcessManager):
             ]
             del self.process_store[proc_uuid]
 
-        pil = ProcessInstanceList(values=ret)
-        return pil
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _terminate_impl(self) -> ProcessInstanceList:
         self.log.info("Terminating")
+
         if self.process_store:
             self.log.info("Killing all the known processes before exiting")
             uuids = self._get_process_uid(
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
             return self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+
+        self.log.info("No known process to kill before exiting")
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         self.log.debug(f"Retrieving logs for {log_request.query}")
@@ -176,26 +187,35 @@ class SSHProcessManager(ProcessManager):
                 _err_to_out=True,
             )
         except Exception as e:
-            if uid not in self.process_store:
-                return LogLines(
-                    uuid=ProcessUUID(uuid=uid), lines=[f"Could not retrieve logs: {e!s}"]
-                )
-            else:
-                return LogLines(
-                    uuid=ProcessUUID(uuid=uid),
-                    lines=[
-                        f"Could not retrieve logs: {e!s}",
+            lines = [f"Could not retrieve logs: {e!s}"]
+            if uid in self.process_store:
+                lines.extend(
+                    [
                         f"stdout: {self.process_store[uid].stdout}",
-                        f"stderr: {self.process_store[uid].stderr}"
-                    ],
+                        f"stderr: {self.process_store[uid].stderr}",
+                    ]
                 )
+
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=ProcessUUID(uuid=uid),
+                lines=lines,
+                flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+            )
 
         f.close()
         with open(f.name) as fi:
             lines = fi.readlines()
             if "Connection to " in lines[-1] and " closed." in lines[-1]:
                 lines = lines[:-1]
-            return LogLines(uuid=ProcessUUID(uuid=uid), lines=lines)
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=ProcessUUID(uuid=uid),
+                lines=lines,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
 
         os.remove(f.name)
 
@@ -400,21 +420,29 @@ class SSHProcessManager(ProcessManager):
             )
             ret += [pi]
 
-        pil = ProcessInstanceList(values=ret)
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-        return pil
-
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
-        self.log.debug(f"{self.name} running _boot_impl")
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
+        self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+        process = self.__boot(boot_request, this_uuid)
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[process],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
-        same_uuid_br = []
         same_uuid_br = BootRequest()
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
@@ -428,18 +456,29 @@ class SSHProcessManager(ProcessManager):
         del self.boot_request[uuid]
         del uuid
 
-        ret = self.__boot(same_uuid_br, same_uuid)
+        ret = [self.__boot(same_uuid_br, same_uuid)]
 
         del same_uuid_br
         del same_uuid
 
-        return ret
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
+
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
             return self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+
+        self.log.info("No known process to kill before exiting")
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
