@@ -331,6 +331,7 @@ class K8sProcessManager(ProcessManager):
         all_pods = self._core_v1_api.list_pod_for_all_namespaces(
             label_selector=self._get_creator_label_selector()
         )
+
         uuid_to_pod = {p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in all_pods.items}
         
         ret = []
@@ -424,5 +425,9 @@ class K8sProcessManager(ProcessManager):
         if not self.boot_request:
             self.log.info("No processes to terminate.")
             return ProcessInstanceList()
-        return self._kill_impl(ProcessQuery(names=[".*"]))
+        
+        # This correctly creates a query to kill all processes known to this manager,
+        # identical to the SSHProcessManager's behavior.
+        all_processes_query = ProcessQuery(names=[".*"])
+        return self._kill_impl(all_processes_query)
     
