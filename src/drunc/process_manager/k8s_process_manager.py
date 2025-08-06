@@ -1,3 +1,4 @@
+# Standard Library Imports
 import getpass
 import os
 import re
@@ -6,6 +7,15 @@ import threading
 import uuid
 from time import sleep
 
+# Third-Party Imports
+from kubernetes import client, config, watch
+
+# Local Application Imports
+from drunc.exceptions import DruncCommandException, DruncException
+from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
+from drunc.process_manager.process_manager import ProcessManager
+from drunc.utils.grpc_utils import pack_to_any
+from drunc.utils.utils import get_logger
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -18,12 +28,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from kubernetes import client, config, watch
-
-from drunc.exceptions import DruncCommandException, DruncException
-from drunc.k8s_exceptions import DruncK8sNamespaceAlreadyExists
-from drunc.process_manager.process_manager import ProcessManager
-from drunc.utils.utils import get_logger
+from druncschema.request_response_pb2 import Response, ResponseFlag
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -109,6 +114,9 @@ class K8sProcessManager(ProcessManager):
         end_str = f"Pod '{meta.name}' (session: '{meta.session}', user: '{meta.user}', uuid: {uuid}) terminated with exit code {exit_code}. Reason: {reason}"
         self.log.info(end_str)
         self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+
+        # Automatically flush the record of the dead process
+        del self.boot_request[uuid]
 
     def is_alive(self, podname, session):
         try:
@@ -213,7 +221,7 @@ class K8sProcessManager(ProcessManager):
         ])
         
         init_containers = []
-        # Check if the boot request follows the pattern: 1. source script, 2. run command
+
         if len(exec_and_args_list) > 1 and exec_and_args_list[0].exec == "source":
             env_script_path = exec_and_args_list[0].args[0]
             main_app_name = exec_and_args_list[1].exec
@@ -244,12 +252,12 @@ class K8sProcessManager(ProcessManager):
                 labels={"app": podname, f"creator.{self.drunc_label}": self.__class__.__name__}
             ),
             spec=self._pod_spec_v1_api(
-                init_containers=init_containers, # Add the init container to the spec
+                init_containers=init_containers,
                 restart_policy="Never",
                 containers=[
                     client.V1Container(
                         name=podname, image=pod_image, command=["sh", "-c"],
-                        args=[main_command_str], # The main container now runs the original command without a wait loop
+                        args=[main_command_str],
                         env=env_vars,
                         volume_mounts=[
                             client.V1VolumeMount(name="nfs", mount_path="/nfs"),
@@ -293,7 +301,9 @@ class K8sProcessManager(ProcessManager):
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query)
-        uuid = self._ensure_one_process(uuids)
+        # Add in_boot_request=True to check the correct dictionary
+        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        
         podname = self.boot_request[uuid].process_description.metadata.name
         session = self.boot_request[uuid].process_description.metadata.session
         try:
@@ -364,16 +374,26 @@ class K8sProcessManager(ProcessManager):
             ))
         return ProcessInstanceList(values=ret)
 
-    def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+    def _restart_impl(self, query: ProcessQuery) -> ProcessInstance: # Corrected the return type hint
         uuids = self._get_process_uid(query)
-        uuid = self._ensure_one_process(uuids)
-        
+        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+
+        if uuid not in self.boot_request:
+            raise DruncCommandException(f"Cannot restart process with UUID {uuid}: Not found.")
+
         br_copy = BootRequest()
         br_copy.CopyFrom(self.boot_request[uuid])
-        
-        self._kill_impl(ProcessQuery(uuids=[ProcessUUID(uuid=uuid)]))
+
+        pd = self.boot_request[uuid].process_description
+        podname, session = pd.metadata.name, pd.metadata.session
+        self.log.info(f"Restarting pod '{session}/{podname}'. First, killing the old one.")
+        self._kill_pod(podname, session)
+        self._kill_if_empty_session(session)
+
+        del self.boot_request[uuid]
+
         ret = self.__boot(br_copy, uuid)
-        return ProcessInstanceList(values=[ret])
+        return ret
 
     def _kill_pod(self, podname, session):
         try:
@@ -419,7 +439,6 @@ class K8sProcessManager(ProcessManager):
                 process_description=pd_copy, process_restriction=pr_copy,
                 status_code=ProcessInstance.StatusCode.DEAD, uuid=pu_copy,
             ))
-            del self.boot_request[proc_uuid]
 
         for session in sessions_affected:
             self._kill_if_empty_session(session)
@@ -436,4 +455,19 @@ class K8sProcessManager(ProcessManager):
         # identical to the SSHProcessManager's behavior.
         all_processes_query = ProcessQuery(names=[".*"])
         return self._kill_impl(all_processes_query)
+    
+    def flush(self, request: 'Request', context: 'ServicerContext') -> Response:
+        self.log.info(
+            "The 'flush' command is not needed for the K8sProcessManager. "
+            "Cleanup of dead processes is handled automatically in real-time."
+        )
+        # We must return a valid, empty ProcessInstanceList inside a Response object.
+        pil = ProcessInstanceList(values=[])
+        return Response(
+            name=self.name,
+            token=None,
+            data=pack_to_any(pil),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=[],
+        )
     
