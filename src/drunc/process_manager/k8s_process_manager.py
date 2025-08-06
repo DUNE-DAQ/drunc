@@ -129,12 +129,18 @@ class K8sProcessManager(ProcessManager):
                 raise DruncException("Session (namespace) must be provided to label a pod.")
             try:
                 self._core_v1_api.patch_namespaced_pod(name=obj_name, namespace=session, body=body)
+                self.log.info(
+                    f'Added label "{key}.{self.drunc_label}:{label}" to pod "{session}.{obj_name}"'
+                )
             except self._api_error_v1_api as e:
                 self.log.error(f"Failed to apply label to pod {session}/{obj_name}: {e}")
 
         elif obj_type == "namespace":
             try:
                 self._core_v1_api.patch_namespace(name=obj_name, body=body)
+                self.log.info(
+                    f'Added label "{key}.{self.drunc_label}:{label}" to namespace "{obj_name}"'
+                )
             except self._api_error_v1_api as e:
                 self.log.error(f"Failed to apply label to namespace {obj_name}: {e}")
         else:
