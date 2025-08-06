@@ -48,23 +48,24 @@ class K8sPodWatcherThread(threading.Thread):
                 )
                 for event in stream:
                     pod = event["object"]
-                    event_type = event["type"]
                     metadata = pod.metadata
                     status = pod.status
                     phase = status.phase
+                    
                     uuid = metadata.labels.get(f"uuid.{self.pm.drunc_label}")
+                    session = metadata.namespace
 
                     if not uuid:
                         continue
 
-                    if event_type in ["MODIFIED", "DELETED"] and phase in ["Succeeded", "Failed"]:
+                    if event["type"] in ["MODIFIED", "DELETED"] and phase in ["Succeeded", "Failed"]:
                         exit_code = -1
                         reason = "Unknown"
                         if status.container_statuses and status.container_statuses[0].state.terminated:
                             terminated_state = status.container_statuses[0].state.terminated
                             exit_code = terminated_state.exit_code
                             reason = terminated_state.reason
-                        self.pm.notify_termination(uuid, exit_code, reason)
+                        self.pm.notify_termination(uuid, exit_code, reason, session)
 
             except Exception as e:
                 self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
@@ -87,6 +88,7 @@ class K8sProcessManager(ProcessManager):
         self.drunc_label = "drunc.daq"
         self.watchers = []
         self._start_watcher()
+        self.sessions_pending_deletion = set()
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -105,18 +107,16 @@ class K8sProcessManager(ProcessManager):
         t.start()
         self.watchers.append(t)
 
-    def notify_termination(self, uuid, exit_code, reason):
-        if uuid not in self.boot_request:
-            self.log.debug(f"Received termination for already-removed UUID {uuid}")
-            return
+    def notify_termination(self, uuid, exit_code, reason, session):
+        if uuid in self.boot_request:
+            meta = self.boot_request[uuid].process_description.metadata
+            end_str = f"Pod '{meta.name}' (session: '{session}', user: '{meta.user}', uuid: {uuid}) terminated with exit code {exit_code}. Reason: {reason}"
+            self.log.info(end_str)
+            self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+        else:
+            self.log.debug(f"Received termination for already-removed UUID {uuid}, checking session '{session}' for cleanup.")
 
-        meta = self.boot_request[uuid].process_description.metadata
-        end_str = f"Pod '{meta.name}' (session: '{meta.session}', user: '{meta.user}', uuid: {uuid}) terminated with exit code {exit_code}. Reason: {reason}"
-        self.log.info(end_str)
-        self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
-
-        # Automatically flush the record of the dead process
-        del self.boot_request[uuid]
+        self._kill_if_empty_session(session)
 
     def is_alive(self, podname, session):
         try:
@@ -161,6 +161,10 @@ class K8sProcessManager(ProcessManager):
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _create_namespace(self, session):
+
+        if session in self.sessions_pending_deletion:
+            self.sessions_pending_deletion.remove(session)
+
         try:
             self._core_v1_api.read_namespace(name=session)
         except self._api_error_v1_api as e:
@@ -397,24 +401,32 @@ class K8sProcessManager(ProcessManager):
 
     def _kill_pod(self, podname, session):
         try:
-            self._core_v1_api.delete_namespaced_pod(podname, session, grace_period_seconds=0)
+            self._core_v1_api.delete_namespaced_pod(podname, session)
         except self._api_error_v1_api as e:
             if e.status != 404: raise e
 
     def _kill_if_empty_session(self, session):
+        # If we have already started deleting this session, do nothing.
+        if session in self.sessions_pending_deletion:
+            return
+
         try:
             pods = self._core_v1_api.list_namespaced_pod(
                 session, label_selector=self._get_creator_label_selector()
             )
             if not pods.items:
+                # Mark this session for deletion BEFORE we send the request.
+                self.sessions_pending_deletion.add(session)
                 self.log.info(f'Session "{session}" is empty, deleting namespace.')
                 self._core_v1_api.delete_namespace(session)
         except self._api_error_v1_api as e:
-            if e.status != 404:
+            if e.status == 404:
+                self.sessions_pending_deletion.add(session)
+            else:
                 self.log.warning(f"Failed to check/delete empty session {session}: {e}")
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        ret, sessions_affected = [], set()
+        ret = []
         uuids_to_kill = self._get_process_uid(query)
         
         for proc_uuid in uuids_to_kill:
@@ -422,7 +434,6 @@ class K8sProcessManager(ProcessManager):
 
             pd = self.boot_request[proc_uuid].process_description
             podname, session = pd.metadata.name, pd.metadata.session
-            sessions_affected.add(session)
             self.log.info(f'Killing pod "{session}/{podname}" (UUID {proc_uuid})')
             
             try:
@@ -439,10 +450,9 @@ class K8sProcessManager(ProcessManager):
                 process_description=pd_copy, process_restriction=pr_copy,
                 status_code=ProcessInstance.StatusCode.DEAD, uuid=pu_copy,
             ))
+            del self.boot_request[proc_uuid]
 
-        for session in sessions_affected:
-            self._kill_if_empty_session(session)
-
+        # The check for empty sessions is no longer done here
         return ProcessInstanceList(values=ret)
 
     def _terminate_impl(self) -> ProcessInstanceList:
