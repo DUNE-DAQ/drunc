@@ -19,7 +19,7 @@ def run_fsm_sequence(sequence_commands, cmd_to_options_and_args, ctx, obj, **kwa
         if command == "boot":
             pmd = obj.get_driver("process_manager", quiet_fail=True)
             process_list = pmd.ps(ProcessQuery(names=[".*"]))
-            if not process_list.data.values:  # We haven't started anything yet
+            if not process_list.values:  # We haven't started anything yet
                 accepted_command.append("boot")
         if cd:
             accepted_command_raw = cd.describe_fsm()

@@ -76,7 +76,7 @@ class FSMActionFactory:
             case "file-logbook":
                 iface = FileLogbook(configuration)
             case "elisa-logbook":
-                iface = ElisaLogbook(configuration)
+                iface = ElisaLogbook()
             case "file-run-registry":
                 iface = FileRunRegistry(configuration)
             case "db-run-registry":

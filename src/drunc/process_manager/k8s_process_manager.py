@@ -16,6 +16,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 from kubernetes import client, config
 
 from drunc.exceptions import DruncCommandException, DruncException
@@ -442,13 +443,21 @@ class K8sProcessManager(ProcessManager):
         for uuid in self._get_process_uid(log_request.query):
             podname = self.boot_request[uuid].process_description.metadata.name
             session = self.boot_request[uuid].process_description.metadata.session
+            
             return LogLines(lines=[log for log in self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far
             ).split("\n")])
 
-    def _boot_impl(self, boot_request: BootRequest) -> ProcessUUID:
+    def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
+        self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
-        return self.__boot(boot_request, this_uuid)
+        process = self.__boot(boot_request, this_uuid)
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=[process],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         session = boot_request.process_description.metadata.session
@@ -497,12 +506,15 @@ class K8sProcessManager(ProcessManager):
 
             ret.append(self._get_pi(proc_uuid, podname, session, return_code))
 
-        pil = ProcessInstanceList(values=ret)
-
-        return pil
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        # ret = []
+        ret = []
         uuids = self._get_process_uid(query, in_boot_request=True)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         for uuid in self._get_process_uid(query):
@@ -512,7 +524,6 @@ class K8sProcessManager(ProcessManager):
 
             self._kill_pod(podname, session)
 
-            same_uuid_br = []
             same_uuid_br = BootRequest()
             same_uuid_br.CopyFrom(self.boot_request[uuid])
             same_uuid = uuid
@@ -520,17 +531,18 @@ class K8sProcessManager(ProcessManager):
             del self.boot_request[uuid]
             del uuid
 
-            ret = self.__boot(same_uuid_br, same_uuid)
+            ret = [self.__boot(same_uuid_br, same_uuid)]
+            # ret.append(self._get_pi(uuid, podname, session))
 
             del same_uuid_br
             del same_uuid
 
-            # ret.append(self._get_pi(uuid, podname, session))
-
-        # pil = ProcessInstanceList(
-        #     values=ret
-        # )
-        return ret
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     # # ORDER MATTERS!
     # @broadcasted  # outer most wrapper 1st step
