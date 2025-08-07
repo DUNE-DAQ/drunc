@@ -441,25 +441,30 @@ class SSHProcessManager(ProcessManager):
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
         uuids = self._get_process_uid(query, in_boot_request=True)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        #uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
-        same_uuid_br = BootRequest()
-        same_uuid_br.CopyFrom(self.boot_request[uuid])
-        same_uuid = uuid
+        if not uuids:
+            raise ProcessManager.BadQuery("No processes found matching the query.")
+    
+        ret = []
+        for uuid in uuids:
+            same_uuid_br = BootRequest()
+            same_uuid_br.CopyFrom(self.boot_request[uuid])
+            same_uuid = uuid
 
-        if uuid in self.process_store:
-            process = self.process_store[uuid]
-            if process.is_alive():
-                process.terminate()
+            if uuid in self.process_store:
+                process = self.process_store[uuid]
+                if process.is_alive():
+                    process.terminate()
 
-        del self.process_store[uuid]
-        del self.boot_request[uuid]
-        del uuid
+            del self.process_store[uuid]
+            del self.boot_request[uuid]
+            del uuid
 
-        ret = [self.__boot(same_uuid_br, same_uuid)]
+            ret = [self.__boot(same_uuid_br, same_uuid)]
 
-        del same_uuid_br
-        del same_uuid
+            del same_uuid_br
+            del same_uuid
 
         return ProcessInstanceList(
             name=self.name,
