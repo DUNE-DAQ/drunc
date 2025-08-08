@@ -17,8 +17,8 @@
         "GRPC_ENABLE_FORK_SUPPORT": "false"
     },
     "opmon_uri": {
-       "path": "./info.json",
-        "type": "file"
+        "path": "monkafka.cern.ch:30092/opmon_stream",
+        "type": "stream"
     },
     "opmon_conf":{
         "level": "info",
