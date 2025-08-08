@@ -82,7 +82,6 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         return Description(
             type="session_manager",
             name=self.name,
-            session=self.name,
             commands=commands,
             children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
