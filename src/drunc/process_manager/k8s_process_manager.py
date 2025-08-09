@@ -8,6 +8,7 @@ import tempfile
 import threading
 import uuid
 from time import sleep
+from collections import deque
 
 # Third-Party Imports
 from grpc import ServicerContext
@@ -82,8 +83,8 @@ class K8sProcessManager(ProcessManager):
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
         self.log = get_logger("process_manager.k8s-process-manager")
-        
-        config.load_kube_config() 
+
+        config.load_kube_config()
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
@@ -96,6 +97,14 @@ class K8sProcessManager(ProcessManager):
         self._start_watcher()
         self.sessions_pending_deletion = set()
         self.port_forwards = {}
+
+        try:
+            timeout_val = self.configuration.data.kill_timeout
+            self.kill_timeout = timeout_val if timeout_val is not None else 10
+        except AttributeError:
+            self.kill_timeout = 10
+        self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
+
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -136,7 +145,7 @@ class K8sProcessManager(ProcessManager):
 
     def _add_label(self, obj_name, obj_type, key, label, session=None):
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
-        
+
         if obj_type == "pod":
             if not session: raise DruncException("Session (namespace) must be provided to label a pod.")
             try:
@@ -226,7 +235,7 @@ class K8sProcessManager(ProcessManager):
                     name=podname, image=pod_image, command=["sh", "-c"],
                     args=[main_command_str],
                     env=[client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()],
-                    ports=[client.V1ContainerPort(container_port=50051)], # <<< THIS IS THE NEW LINE
+                    ports=[client.V1ContainerPort(container_port=50051)],
                     volume_mounts=[
                         client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                         client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
@@ -249,17 +258,43 @@ class K8sProcessManager(ProcessManager):
             self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
             raise e
 
-    def _get_process_uid(self, query: ProcessQuery):
-        if not any([query.uuids, query.names, query.session, query.user]):
-            return list(self.boot_request.keys())
-        matched_uuids = set()
+    def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
+        # First, find all processes that match the query
+        initial_match = set()
         for proc_uuid, boot_req in self.boot_request.items():
             meta = boot_req.process_description.metadata
-            if any(uid.uuid == proc_uuid for uid in query.uuids): matched_uuids.add(proc_uuid)
-            if query.session and query.session == meta.session: matched_uuids.add(proc_uuid)
-            if query.user and query.user == meta.user: matched_uuids.add(proc_uuid)
-            if any(re.search(name_reg, meta.name) for name_reg in query.names): matched_uuids.add(proc_uuid)
-        return list(matched_uuids)
+            query_is_empty = not any([query.uuids, query.names, query.session, query.user])
+
+            if query_is_empty or \
+               any(uid.uuid == proc_uuid for uid in query.uuids) or \
+               (query.session and query.session == meta.session) or \
+               (query.user and query.user == meta.user) or \
+               any(re.search(name_reg, meta.name) for name_reg in query.names):
+                initial_match.add(proc_uuid)
+
+        # If no ordering is required, return the matched list
+        if order_by != "leaf_first":
+            return list(initial_match)
+
+        self.log.debug("Sorting processes in leaf-first order using tree_id.")
+
+        # Create a list of tuples (uuid, tree_id) for the matched processes.
+        procs_to_sort = []
+        for uuid in initial_match:
+            if uuid in self.boot_request:
+                tree_id = self.boot_request[uuid].process_description.metadata.tree_id
+                procs_to_sort.append((uuid, tree_id))
+
+        # Sort the list. The key is a tuple: (-len(tree_id), tree_id).
+        # -len sorts by length in descending order (longest ID string is a leaf).
+        # tree_id is the secondary key for stable sorting of nodes at the same depth.
+        procs_to_sort.sort(key=lambda p: (-len(p[1]), p[1]))
+
+        # Extract just the UUIDs from the now-sorted list.
+        sorted_uuids = [uuid for uuid, tree_id in procs_to_sort]
+
+        return sorted_uuids
+
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query)
@@ -285,7 +320,7 @@ class K8sProcessManager(ProcessManager):
         podname = boot_request.process_description.metadata.name
         if uuid in self.boot_request:
             raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
-        
+
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
@@ -330,7 +365,7 @@ class K8sProcessManager(ProcessManager):
                 status_code=status_code, return_code=return_code, uuid=pu,
             ))
         return ProcessInstanceList(values=ret)
-        
+
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         uuids = self._get_process_uid(query)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
@@ -348,12 +383,16 @@ class K8sProcessManager(ProcessManager):
 
         # Now, boot the new instance with the same config and UUID
         restarted_process = self.__boot(br_copy, uuid)
-        
-        return ProcessInstanceList(values=[restarted_process])   
 
-    def _kill_pod(self, podname, session):
+        return ProcessInstanceList(values=[restarted_process])
+
+    def _kill_pod(self, podname, session, grace_period=None):
         try:
-            self._core_v1_api.delete_namespaced_pod(podname, session)
+            self._core_v1_api.delete_namespaced_pod(
+                podname,
+                session,
+                grace_period_seconds=grace_period
+            )
         except self._api_error_v1_api as e:
             if e.status != 404:
                 raise e
@@ -374,14 +413,15 @@ class K8sProcessManager(ProcessManager):
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         ret = []
-        uuids_to_kill = self._get_process_uid(query)
+        uuids_to_kill = self._get_process_uid(query, order_by="leaf_first")
+
         for proc_uuid in uuids_to_kill:
             if proc_uuid not in self.boot_request: continue
             pd = self.boot_request[proc_uuid].process_description
             podname, session = pd.metadata.name, pd.metadata.session
             self.log.info(f'Killing pod "{session}/{podname}" (UUID {proc_uuid})')
             try:
-                self._kill_pod(podname, session)
+                self._kill_pod(podname, session, grace_period=self.kill_timeout)
             except Exception as e:
                 self.log.error(f"Failed to issue kill for pod {podname}: {e}")
                 continue
