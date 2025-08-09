@@ -3,16 +3,17 @@ import getpass
 import os
 import re
 import socket
-import subprocess
 import tempfile
 import threading
 import uuid
-from time import sleep
+from time import sleep, time
 from collections import deque
+from urllib.parse import urlparse
 
 # Third-Party Imports
 from grpc import ServicerContext
 from kubernetes import client, config, watch
+from kubernetes.stream import portforward
 
 # Local Application Imports
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -96,7 +97,10 @@ class K8sProcessManager(ProcessManager):
         self.watchers = []
         self._start_watcher()
         self.sessions_pending_deletion = set()
-        self.port_forwards = {}
+
+        self.connection_server_name = "local-connection-server"
+        self.connection_server_port = 5000
+        self.local_connection_server_is_booted = False # Flag to track if the local server is in use
 
         try:
             timeout_val = self.configuration.data.kill_timeout
@@ -206,6 +210,32 @@ class K8sProcessManager(ProcessManager):
         except self._api_error_v1_api as e:
             if e.status != 409: self.log.error(f"Failed to create headless service for {podname}: {e}")
 
+    def _create_clusterip_service(self, podname, session, pod_uid):
+        service_manifest = client.V1Service(
+            api_version="v1", kind="Service",
+            metadata=self._meta_v1_api(
+                name=podname, namespace=session,
+                labels={f"creator.{self.drunc_label}": self.__class__.__name__},
+                owner_references=[client.V1OwnerReference(
+                    api_version="v1", kind="Pod", name=podname, uid=pod_uid,
+                    controller=True, block_owner_deletion=True
+                )]
+            ),
+            spec=client.V1ServiceSpec(
+                selector={"app": podname},
+                ports=[client.V1ServicePort(
+                    protocol="TCP",
+                    port=self.connection_server_port,
+                    target_port=self.connection_server_port
+                )]
+            ),
+        )
+        try:
+            self._core_v1_api.create_namespaced_service(namespace=session, body=service_manifest)
+            self.log.info(f'Created ClusterIP service "{session}.{podname}" on port {self.connection_server_port}')
+        except self._api_error_v1_api as e:
+            if e.status != 409: self.log.error(f"Failed to create ClusterIP service for {podname}: {e}")
+
     def _create_pod(self, podname, session, boot_request: BootRequest):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
@@ -222,6 +252,35 @@ class K8sProcessManager(ProcessManager):
                     client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
                 ]
             ))
+
+        main_container = client.V1Container(
+            name=podname, image=pod_image, command=["sh", "-c"],
+            args=[main_command_str],
+            env=[client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()],
+            ports=[],
+            volume_mounts=[
+                client.V1VolumeMount(name="nfs", mount_path="/nfs"),
+                client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
+            ],
+            working_dir=boot_request.process_description.process_execution_directory,
+            security_context=client.V1SecurityContext(run_as_user=os.getuid(), run_as_group=os.getgid()),
+        )
+
+        all_containers = [main_container]
+
+        ### MODIFICATION ###: Only add the sidecar if the local connection server has been booted
+        if podname != self.connection_server_name and self.local_connection_server_is_booted:
+            self.log.info(f"Adding proxy sidecar to pod '{podname}'")
+            sidecar_container = client.V1Container(
+                name="proxy-sidecar",
+                image="alpine/socat",
+                args=[
+                    "TCP-LISTEN:5000,fork,reuseaddr",
+                    f"TCP:{self.connection_server_name}.{session}:{self.connection_server_port}"
+                ]
+            )
+            all_containers.append(sidecar_container)
+
         pod_manifest = client.V1Pod(
             api_version="v1", kind="Pod",
             metadata=self._meta_v1_api(
@@ -231,18 +290,7 @@ class K8sProcessManager(ProcessManager):
             spec=self._pod_spec_v1_api(
                 init_containers=init_containers,
                 restart_policy="Never",
-                containers=[client.V1Container(
-                    name=podname, image=pod_image, command=["sh", "-c"],
-                    args=[main_command_str],
-                    env=[client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()],
-                    ports=[client.V1ContainerPort(container_port=50051)],
-                    volume_mounts=[
-                        client.V1VolumeMount(name="nfs", mount_path="/nfs"),
-                        client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
-                    ],
-                    working_dir=boot_request.process_description.process_execution_directory,
-                    security_context=client.V1SecurityContext(run_as_user=os.getuid(), run_as_group=os.getgid()),
-                )],
+                containers=all_containers,
                 volumes=[
                     client.V1Volume(name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")),
                     client.V1Volume(name="cvmfs", host_path=client.V1HostPathVolumeSource(path="/cvmfs")),
@@ -253,13 +301,17 @@ class K8sProcessManager(ProcessManager):
             created_pod = self._core_v1_api.create_namespaced_pod(session, pod_manifest)
             self.log.info(f'Creating pod "{session}.{podname}"')
             pod_uid = created_pod.metadata.uid
-            self._create_headless_service(podname, session, pod_uid)
+
+            if podname == self.connection_server_name:
+                self._create_clusterip_service(podname, session, pod_uid)
+            else:
+                self._create_headless_service(podname, session, pod_uid)
+
         except self._api_error_v1_api as e:
             self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
             raise e
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
-        # First, find all processes that match the query
         initial_match = set()
         for proc_uuid, boot_req in self.boot_request.items():
             meta = boot_req.process_description.metadata
@@ -272,29 +324,22 @@ class K8sProcessManager(ProcessManager):
                any(re.search(name_reg, meta.name) for name_reg in query.names):
                 initial_match.add(proc_uuid)
 
-        # If no ordering is required, return the matched list
         if order_by != "leaf_first":
             return list(initial_match)
 
         self.log.debug("Sorting processes in leaf-first order using tree_id.")
 
-        # Create a list of tuples (uuid, tree_id) for the matched processes.
         procs_to_sort = []
         for uuid in initial_match:
             if uuid in self.boot_request:
                 tree_id = self.boot_request[uuid].process_description.metadata.tree_id
                 procs_to_sort.append((uuid, tree_id))
 
-        # Sort the list. The key is a tuple: (-len(tree_id), tree_id).
-        # -len sorts by length in descending order (longest ID string is a leaf).
-        # tree_id is the secondary key for stable sorting of nodes at the same depth.
         procs_to_sort.sort(key=lambda p: (-len(p[1]), p[1]))
 
-        # Extract just the UUIDs from the now-sorted list.
         sorted_uuids = [uuid for uuid, tree_id in procs_to_sort]
 
         return sorted_uuids
-
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         uuids = self._get_process_uid(log_request.query)
@@ -318,6 +363,7 @@ class K8sProcessManager(ProcessManager):
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
+
         if uuid in self.boot_request:
             raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
 
@@ -328,6 +374,34 @@ class K8sProcessManager(ProcessManager):
         self._create_pod(podname, session, boot_request)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
+
+        ### MODIFICATION ###: Only block and prompt for the connection server
+        if podname == self.connection_server_name:
+            self.log.info(f"Waiting for '{podname}' to become ready...")
+            start_time = time()
+            timeout = 60
+            while time() - start_time < timeout:
+                try:
+                    pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
+                    if pod_status.status.phase == 'Running' and pod_status.status.pod_ip:
+                        self.log.info(f"'{podname}' is ready with IP {pod_status.status.pod_ip}.")
+                        self.local_connection_server_is_booted = True # Set the flag for sidecars
+                        break
+                except self._api_error_v1_api as e:
+                    if e.status == 404:
+                        pass
+                    else:
+                        raise e
+                sleep(1)
+            else:
+                raise DruncException(f"'{podname}' did not become ready in {timeout} seconds.")
+
+            self.log.info("--- MANUAL STEP REQUIRED ---")
+            self.log.info("The orchestrator needs a port-forward tunnel to connect to the server.")
+            self.log.info("Please run this command in a NEW terminal (after setting KUBECONFIG):")
+            self.log.info(f"kubectl port-forward -n {session} pod/{podname} {self.connection_server_port}:{self.connection_server_port}")
+            input("Press Enter here after the port-forward is running in the other terminal...")
+            self.log.info("Resuming...")
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -373,15 +447,12 @@ class K8sProcessManager(ProcessManager):
         if uuid not in self.boot_request:
             raise DruncCommandException(f"Cannot restart process with UUID {uuid}: Not found.")
 
-        # Store the original boot request before we kill the process
         br_copy = BootRequest()
         br_copy.CopyFrom(self.boot_request[uuid])
 
-        # Use the full kill implementation to ensure a complete cleanup
         kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=uuid)])
         self._kill_impl(kill_query)
 
-        # Now, boot the new instance with the same config and UUID
         restarted_process = self.__boot(br_copy, uuid)
 
         return ProcessInstanceList(values=[restarted_process])
@@ -419,6 +490,7 @@ class K8sProcessManager(ProcessManager):
             if proc_uuid not in self.boot_request: continue
             pd = self.boot_request[proc_uuid].process_description
             podname, session = pd.metadata.name, pd.metadata.session
+            
             self.log.info(f'Killing pod "{session}/{podname}" (UUID {proc_uuid})')
             try:
                 self._kill_pod(podname, session, grace_period=self.kill_timeout)
@@ -446,7 +518,6 @@ class K8sProcessManager(ProcessManager):
         return self._kill_impl(all_processes_query)
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        # This implementation is a safe no-op for now.
         self.log.info(
             "The 'flush' command is not needed for the K8sProcessManager. "
             "Cleanup of dead processes is handled automatically in real-time."
