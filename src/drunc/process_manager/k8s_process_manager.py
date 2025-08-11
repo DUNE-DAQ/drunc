@@ -3,28 +3,12 @@ import getpass
 import os
 import re
 import signal
-import socket
 import subprocess
-import tempfile
 import threading
 import uuid
 from time import sleep, time
-from collections import deque
 
-# Third-Party Imports
-from grpc import ServicerContext
-from kubernetes import client, config, watch
-
-# Local Application Imports
-from drunc.authoriser.decorators import authentified_and_authorised
-from drunc.broadcast.server.decorators import broadcasted
-from drunc.exceptions import DruncCommandException, DruncException
-from drunc.process_manager.process_manager import ProcessManager, BadQuery
-from drunc.utils.grpc_utils import pack_to_any, unpack_any, unpack_error_response
-from drunc.utils.utils import get_logger
-from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.description_pb2 import CommandDescription, OldDescription
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -36,7 +20,14 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
-from druncschema.request_response_pb2 import Request, Response, ResponseFlag
+
+# Third-Party Imports
+from kubernetes import client, config, watch
+
+# Local Application Imports
+from drunc.exceptions import DruncCommandException, DruncException
+from drunc.process_manager.process_manager import ProcessManager
+from drunc.utils.utils import get_logger
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -359,10 +350,10 @@ class K8sProcessManager(ProcessManager):
         self.log.debug("Sorting processes in leaf-first order using tree_id.")
 
         procs_to_sort = []
-        for uuid in initial_match:
-            if uuid in self.boot_request:
-                tree_id = self.boot_request[uuid].process_description.metadata.tree_id
-                procs_to_sort.append((uuid, tree_id))
+        for a_uuid in initial_match:
+            if a_uuid in self.boot_request:
+                tree_id = self.boot_request[a_uuid].process_description.metadata.tree_id
+                procs_to_sort.append((a_uuid, tree_id))
 
         procs_to_sort.sort(key=lambda p: (-len(p[1]), p[1]))
 
@@ -444,7 +435,7 @@ class K8sProcessManager(ProcessManager):
             command_parts.append(f"kubectl port-forward -n {session} pod/{podname} {self.connection_server_port}:{self.connection_server_port}")
             command = "; ".join(command_parts)
 
-            self.log.info(f"Starting port-forward for orchestrator. Executing shell command...")
+            self.log.info("Starting port-forward for orchestrator. Executing shell command...")
             try:
                 # preexec_fn=os.setsid creates a new process group, allowing us to kill the shell and all its children.
                 proc = subprocess.Popen(
