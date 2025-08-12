@@ -42,8 +42,10 @@ def unpack_addressed_command_to(data_type=None):
         def wrap(obj, request, context):
             try:
                 if request.HasField("data"):
+                    # Unpack the AddressedCommand if data is provided
                     command = unpack_any(request.data, AddressedCommand)
                 else:
+                    # Create blank AddressedCommand if no data is provided
                     command = AddressedCommand(
                         command_name=command_name,
                         command_data=None,

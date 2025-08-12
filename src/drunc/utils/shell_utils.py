@@ -184,12 +184,6 @@ class GRPCDriver:
         except grpc.RpcError as e:
             handle_grpc_error(e)
 
-        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
-        from druncschema.description_pb2 import Description
-
-        if isinstance(response, Description):
-            return response
-
         return self.handle_response(response, command, outformat)
 
 

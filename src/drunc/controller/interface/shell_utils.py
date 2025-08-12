@@ -15,7 +15,7 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     Status,
 )
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from rich.console import ConsoleRenderable, Group, RichCast
@@ -49,8 +49,8 @@ def generate_none_status() -> Status:
     )
 
 
-def generate_none_description() -> OldDescription:
-    return OldDescription(
+def generate_none_description() -> Description:
+    return Description(
         type="none",
         name="none",
         endpoint="none",
@@ -104,7 +104,7 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t.add_column("Endpoint")
 
     def add_status_to_table(table, status, description, prefix):
-        valid_description = check_message_type(description, "OldDescription")
+        valid_description = check_message_type(description, "Description")
         valid_status = check_message_type(status, "Status")
 
         if not valid_description or not valid_status:
@@ -229,7 +229,7 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    desc = OldDescription()
+    desc = Description()
 
     timeout = 60
 

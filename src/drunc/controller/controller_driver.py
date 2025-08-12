@@ -1,5 +1,6 @@
 from functools import wraps
 
+import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
     FSMCommandResponse,
@@ -7,9 +8,11 @@ from druncschema.controller_pb2 import (
     Status,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText
+from druncschema.request_response_pb2 import Request
 
+from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 
 
@@ -44,16 +47,32 @@ class ControllerDriver(GRPCDriver):
 
         return wrapper
 
-    @pack_empty_addressed_command
     def describe(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "describe",
-            data=addressed_command,
-            outformat=OldDescription,
-            timeout=timeout,
-        )
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> Description:
+        request = Request(token=copy_token(self.token))
+
+        addressed_command = AddressedCommand(
+            command_name="describe",
+            command_data=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        ),
+
+        request.data.Pack(addressed_command)
+
+
+        try:
+            response = self.stub.describe(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     @pack_empty_addressed_command
     def describe_fsm(

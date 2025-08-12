@@ -2,7 +2,7 @@ import time
 
 import grpc
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
@@ -46,7 +46,7 @@ class gRPCChildNode(ChildNode):
         self.channel = grpc.insecure_channel(self.uri)
         self.controller = ControllerStub(self.channel)
 
-        desc = OldDescription()
+        desc = Description()
         ntries = 20
 
         for itry in range(ntries):
