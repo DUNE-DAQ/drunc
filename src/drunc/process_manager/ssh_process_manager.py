@@ -439,9 +439,7 @@ class SSHProcessManager(ProcessManager):
         )
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
         uuids = self._get_process_uid(query, in_boot_request=True)
-        #uuid = self._ensure_one_process(uuids, in_boot_request=True)
         if not uuids:
             raise ProcessManager.BadQuery("No processes found matching the query.")
     
@@ -457,6 +455,7 @@ class SSHProcessManager(ProcessManager):
             try:
                 if u in self.process_store:
                     try:
+                        self.log.info(f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}")
                         self.kill_processes([u])  
                     except Exception as e:
                         self.log.warning(f"Failed to kill process {u} cleanly: {e!s}")
