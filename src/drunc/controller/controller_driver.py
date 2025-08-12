@@ -56,16 +56,17 @@ class ControllerDriver(GRPCDriver):
     ) -> Description:
         request = Request(token=copy_token(self.token))
 
-        addressed_command = AddressedCommand(
-            command_name="describe",
-            command_data=None,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-        ),
+        addressed_command = (
+            AddressedCommand(
+                command_name="describe",
+                command_data=None,
+                target=target,
+                execute_along_path=execute_along_path,
+                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            ),
+        )
 
         request.data.Pack(addressed_command)
-
 
         try:
             response = self.stub.describe(request, timeout=timeout)
