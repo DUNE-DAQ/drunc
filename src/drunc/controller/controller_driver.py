@@ -10,7 +10,6 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Request
 
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
@@ -54,19 +53,14 @@ class ControllerDriver(GRPCDriver):
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> Description:
-        request = Request(token=copy_token(self.token))
-
-        addressed_command = (
-            AddressedCommand(
-                command_name="describe",
-                command_data=None,
-                target=target,
-                execute_along_path=execute_along_path,
-                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-            ),
+        request = AddressedCommand(
+            token=copy_token(self.token),
+            command_name="describe",
+            command_data=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
-
-        request.data.Pack(addressed_command)
 
         try:
             response = self.stub.describe(request, timeout=timeout)
