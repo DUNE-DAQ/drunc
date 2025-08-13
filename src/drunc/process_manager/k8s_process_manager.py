@@ -514,20 +514,98 @@ class K8sProcessManager(ProcessManager):
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """Handles the 'restart' command."""
         uuids = self._get_process_uid(query)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
-        if uuid not in self.boot_request:
-            raise DruncCommandException(f"Cannot restart process with UUID {uuid}: Not found.")
+        if not uuids:
+            raise DruncCommandException("No processes found matching the query.")
+       
+        br_by_uuid = {}
+        targets_for_log = []
+        for u in uuids:
+            if u not in self.boot_request:
+                self.log.warning(f"UUID {u} is not in boot_request anymore; skipping.")
+                continue
 
-        br_copy = BootRequest()
-        br_copy.CopyFrom(self.boot_request[uuid])
+            br = BootRequest()
+            br.CopyFrom(self.boot_request[u])
+            br_by_uuid[u] = br
+            md = br.process_description.metadata
+            targets_for_log.append(f"{md.name} (uuid={u}, session={md.session}, user={md.user})")
 
-        kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=uuid)])
-        self._kill_impl(kill_query)
+        if not br_by_uuid:
+            raise DruncCommandException("No valid processes to restart (missing boot requests).")
 
-        restarted_process = self.__boot(br_copy, uuid)
+        self.log.info(
+            f"{self.name} restarting {len(br_by_uuid)} process(es): "
+            + ", ".join(targets_for_log)
+        )
 
-        return ProcessInstanceList(values=[restarted_process])
+        def _wait_pod_gone(podname: str, namespace: str, timeout_s: int) -> bool:
+            deadline = time() + timeout_s
+            last_phase = None
+            while time() < deadline:
+                try:
+                    pod = self._core_v1_api.read_namespaced_pod_status(podname, namespace)
+                    last_phase = getattr(pod.status, "phase", None)
+                    sleep(0.5)
+                except self._api_error_v1_api as e:
+                    if e.status == 404:
+                        return True
+                    sleep(0.5)
+            self.log.warning(f"Timeout waiting for deletion of {namespace}/{podname}. Last phase={last_phase}")
+            return False
+    
+        try:
+            kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=u) for u in uuids])
+            self._kill_impl(kill_query)
+        except Exception as e:
+            self.log.warning(f"Encountered issues during kill phase of restart: {e!s}. Will attempt re-boot anyway.")
+
+
+        ret = []
+        wait_timeout = int(self.kill_timeout) + 10
+
+        for u in uuids:
+            br = br_by_uuid.get(u)
+            if br is None:
+                self.log.error(f"Restart skipped for {u}: no BootRequest snapshot.")
+                continue
+
+            md = br.process_description.metadata
+            podname, ns = md.name, md.session
+
+            try:
+                _ = _wait_pod_gone(podname, ns, wait_timeout)
+
+                if u in self.boot_request:
+                    try:
+                        del self.boot_request[u]
+                    except Exception:
+                        pass
+
+                pi = self.__boot(br, u)
+                ret.append(pi)
+
+            except Exception as e:
+                self.log.error(f"Restart failed for {ns}/{podname} (uuid={u}): {e!s}")
+
+                pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=u)
+                try:
+                    pd.CopyFrom(br.process_description)
+                    pr.CopyFrom(br.process_restriction)
+                except Exception:
+                    pass
+
+                ret.append(
+                    ProcessInstance(
+                        process_description=pd,
+                        process_restriction=pr,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        return_code=None,
+                        uuid=pu,
+                    )
+                )
+
+        return ProcessInstanceList(values=ret)
 
     def _kill_pod(self, podname, session, grace_period=None):
         """Deletes a specific pod from a namespace."""
@@ -610,3 +688,5 @@ class K8sProcessManager(ProcessManager):
         )
         return ProcessInstanceList(values=[])
 
+
+    
