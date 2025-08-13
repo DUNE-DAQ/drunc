@@ -69,22 +69,32 @@ class ControllerDriver(GRPCDriver):
 
         return response
 
-    @pack_empty_addressed_command
     def describe_fsm(
         self,
-        addressed_command: AddressedCommand,
-        key: str = None,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str | None = None,
         timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=key))
-        return self.send_command(
-            "describe_fsm",
-            data=new_command,
-            outformat=FSMCommandsDescription,
-            timeout=timeout,
+    ) -> FSMCommandsDescription:
+        request = AddressedCommand(
+            token=copy_token(self.token),
+            command_name="describe_fsm",
+            command_data=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+
+        if key is not None:
+            request.command_data.Pack(PlainText(text=key))
+
+        try:
+            response = self.stub.describe_fsm(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     @pack_empty_addressed_command
     def status(
