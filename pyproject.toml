@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest",]
+dev = ["ruff", "pre-commit", "pytest","pytest-grpc"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
