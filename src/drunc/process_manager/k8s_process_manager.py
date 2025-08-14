@@ -391,6 +391,11 @@ class K8sProcessManager(ProcessManager):
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
+        session_re = re.compile(r'^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$')
+        if not session_re.match(session):
+            raise DruncCommandException(f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
+                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars.")
+
         if uuid in self.boot_request:
             raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
 
