@@ -71,7 +71,7 @@ class AppProcessWatcherThread(threading.Thread):
         )
 
 
-class PopenProcessManager(ProcessManager):
+class SubProcessProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
         self.session = getpass.getuser()  # unfortunate
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -219,7 +219,7 @@ class PopenProcessManager(ProcessManager):
         for host in boot_request.process_restriction.allowed_hosts:
             if host != "localhost":
                 raise DruncCommandException(
-                    "Popen process manager does not support remote hosts"
+                    "SubProcess process manager does not support remote hosts"
                 )
 
             try:
@@ -228,9 +228,7 @@ class PopenProcessManager(ProcessManager):
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
 
-                cmd = (
-                    "echo PopenPM: Starting process $$ on host $HOSTNAME as user $USER;"
-                )
+                cmd = "echo SubProcessPM: Starting process $$ on host $HOSTNAME as user $USER;"
 
                 # Add exported environment variables
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_var.items()])

@@ -506,7 +506,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def logs(self, request:Request, context:ServicerContext) -> Response:
+    def logs(self, request: Request, context: ServicerContext) -> Response:
         """Fetch logs for a process.
 
         Args:
@@ -628,11 +628,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.Popen:
-            from drunc.process_manager.popen_process_manager import PopenProcessManager
+        elif conf.data.type == ProcessManagerTypes.SubProcess:
+            from drunc.process_manager.subprocess_process_manager import (
+                SubProcessProcessManager,
+            )
 
-            log.info("Starting [green]Popen process_manager[/green]")
-            return PopenProcessManager(conf, **kwargs)
+            log.info("Starting [green]SubProcess process_manager[/green]")
+            return SubProcessProcessManager(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
             raise RuntimeError(

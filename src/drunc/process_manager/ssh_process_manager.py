@@ -178,7 +178,8 @@ class SSHProcessManager(ProcessManager):
         except Exception as e:
             if uid not in self.process_store:
                 return LogLines(
-                    uuid=ProcessUUID(uuid=uid), lines=[f"Could not retrieve logs: {e!s}"]
+                    uuid=ProcessUUID(uuid=uid),
+                    lines=[f"Could not retrieve logs: {e!s}"],
                 )
             else:
                 return LogLines(
@@ -186,7 +187,7 @@ class SSHProcessManager(ProcessManager):
                     lines=[
                         f"Could not retrieve logs: {e!s}",
                         f"stdout: {self.process_store[uid].stdout}",
-                        f"stderr: {self.process_store[uid].stderr}"
+                        f"stderr: {self.process_store[uid].stderr}",
                     ],
                 )
 
@@ -246,10 +247,10 @@ class SSHProcessManager(ProcessManager):
 
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
-                disable_host_key_check = self.disable_host_key_check or (
-                    self.disable_localhost_host_key_check
-                    and host in ("localhost", "127.0.0.1", "::1")
-                )
+                # disable_host_key_check = self.disable_host_key_check or (
+                #     self.disable_localhost_host_key_check
+                #     and host in ("localhost", "127.0.0.1", "::1")
+                # )
 
                 # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
                 cmd = (
@@ -274,7 +275,12 @@ class SSHProcessManager(ProcessManager):
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{cmd_env} drunc-ssh-process-wrapper --log {log_file} {cmd}']
+                arguments = [
+                    user_host,
+                    "-tt",
+                    "-o StrictHostKeyChecking=no",
+                    f"{cmd_env} drunc-ssh-process-wrapper --log {log_file} {cmd}",
+                ]
                 self.log.debug(f"{arguments}")
 
                 self.process_store[uuid] = self.ssh(

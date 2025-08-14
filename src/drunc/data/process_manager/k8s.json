@@ -3,11 +3,9 @@
     "name": "K8sProcessManager",
     "command_address": "0.0.0.0:10054",
     "image": "ghcr.io/dune-daq/alma9:latest",
-
     "authoriser": {
         "type": "dummy"
     },
-
     "broadcaster": {
         "type": "kafka",
         "kafka_address": "monkafka.cern.ch:30092",

@@ -1,6 +1,6 @@
 {
-    "type": "popen",
-    "name": "PopenProcessManager",
+    "type": "subprocess",
+    "name": "SubProcessProcessManager",
     "authoriser": {
         "type": "dummy"
     },

@@ -5,14 +5,11 @@
     "authoriser": {
         "type": "dummy"
     },
-
-
     "broadcaster": {
         "type": "kafka",
         "kafka_address": "localhost:31014",
         "publish_timeout": 2
     },
-
     "environment": {
         "GRPC_ENABLE_FORK_SUPPORT": "false"
     }

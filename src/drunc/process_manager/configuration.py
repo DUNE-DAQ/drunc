@@ -18,7 +18,7 @@ class ProcessManagerTypes(Enum):
     Unknown = 0
     SSH = 1
     K8s = 2
-    Popen = 3
+    SubProcess = 3
 
 
 class ProcessManagerConfData:
@@ -56,7 +56,7 @@ class ProcessManagerConfHandler(ConfHandler):
                 new_data.type = ProcessManagerTypes.SSH
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "popen":
-                new_data.type = ProcessManagerTypes.Popen
+                new_data.type = ProcessManagerTypes.SubProcess
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
                 new_data.type = ProcessManagerTypes.K8s
@@ -154,9 +154,8 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
         resource_path = resources.files("drunc.data.process_manager")
         packaged_configurations = [p.name for p in resource_path.iterdir()]
         if process_manager_conf_filename in packaged_configurations:
-            process_manager_conf_filename = (
-                "file://"
-                + str(resource_path / process_manager_conf_filename)
+            process_manager_conf_filename = "file://" + str(
+                resource_path / process_manager_conf_filename
             )
 
         else:
