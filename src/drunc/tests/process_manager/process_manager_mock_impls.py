@@ -31,7 +31,7 @@ class ConcreteProcessManager(ProcessManager):
     def __init__(
         self,
         configuration: ProcessManagerConfHandler = Mock(),
-        name: str = "concrete_process_manager",
+        name: str = "process_manager_no_impl",
         session: Optional[str] = None,
         **kwargs,
     ):
