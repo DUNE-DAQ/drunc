@@ -1,19 +1,18 @@
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from conffwk import Configuration
-from drunc.session_manager.session_manager import SessionManager
-from druncschema.session_manager_pb2_grpc import SessionManagerServicer
+import pytest
+from druncschema.description_pb2 import CommandDescription, Description
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.session_manager_pb2 import (
     ActiveSession,
     AllActiveSessions,
     AllConfigKeys,
     ConfigKey,
 )
-from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
-from druncschema.description_pb2 import CommandDescription, Description
+
+from drunc.session_manager.session_manager import SessionManager
 
 
 @pytest.fixture
@@ -65,7 +64,7 @@ def commands():
 
 def test_describe(session_manager, mock_request, mock_context, commands, mock_logger):
     response = session_manager.describe(mock_request, mock_context)
-    mock_logger.debug.assert_any_call(f"Initialized SessionManager")
+    mock_logger.debug.assert_any_call("Initialized SessionManager")
 
     assert isinstance(response, Description)
     assert response.name == "dummy_name"
@@ -135,7 +134,8 @@ def test_list_all_configs_files_not_parsed(session_manager, mock_request, mock_c
         with patch("drunc.session_manager.session_manager.Configuration", side_effect=Exception("Config failed")):
             response = session_manager.list_all_configs(mock_request, mock_context)
 
-            assert mock_logger.error.call_count == 3 
+            assert mock_logger.error.call_count == 3 # should error 3 times - once per each file
+
             assert isinstance(response, AllConfigKeys)  
             assert response.name == "dummy_name"
             assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY 
