@@ -38,6 +38,9 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log_path = log_path
         self.log = get_logger("process_manager.conf_handler")
 
+    def get_log_path(self):
+        return self.log_path
+
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
         if data.get("broadcaster"):
@@ -150,9 +153,8 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
         resource_path = resources.files("drunc.data.process_manager")
         packaged_configurations = [p.name for p in resource_path.iterdir()]
         if process_manager_conf_filename in packaged_configurations:
-            process_manager_conf_filename = (
-                "file://"
-                + str(resource_path / process_manager_conf_filename)
+            process_manager_conf_filename = "file://" + str(
+                resource_path / process_manager_conf_filename
             )
 
         else:

@@ -148,6 +148,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
             self.thread.start()
 
+    def get_log_path(self):
+        return self.configuration.get_log_path()
+
     def _create_broadcast_service(self, name, session):
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.get_data_broadcaster(), type=ConfTypes.PyObject
@@ -436,7 +439,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         description = Description(
             type="process_manager",
             name=self.name,
-            info=self.configuration.log_path,
+            info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
             commands=self.commands,
             children=[],
