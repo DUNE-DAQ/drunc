@@ -473,3 +473,161 @@ def test_boot_with_no_impl(grpc_test_server_no_impl):
     )
 
     _test_boot(test_server, expected_response)
+
+
+def _test_terminate(grpc_test_server, expected_response: ProcessInstanceList):
+    """
+    Test that invoking the terminate method gives the expected response.
+
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: ProcessInstanceList containing the expected response data
+    """
+    token = expected_response.token
+
+    # Create the data payload for the terminate request
+    data_any = google.protobuf.any_pb2.Any()
+    data_any.value = b"terminate_session_data"
+
+    # Construct the terminate request
+    request = Request(token=token, data=data_any)
+
+    # Invoke the terminate method via gRPC testing framework
+    terminate_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["terminate"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    response: ProcessInstanceList
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = terminate_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    # Verify all response fields match expected values
+    assert expected_response.name == response.name
+    assert expected_response.token == response.token
+    assert expected_response.flag == response.flag
+
+    # Verify process details match expected response
+    assert len(expected_response.values) == len(response.values)
+    for expected_process, actual_process in zip(
+        expected_response.values, response.values
+    ):
+        assert expected_process.uuid == actual_process.uuid
+        assert expected_process.status_code == actual_process.status_code
+        assert expected_process.return_code == actual_process.return_code
+        assert (
+            expected_process.process_description == actual_process.process_description
+        )
+        assert (
+            expected_process.process_restriction == actual_process.process_restriction
+        )
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_with_mock_terminate_impl(grpc_servicer):
+    """
+    Create a gRPC testing server with pre-configured terminate_impl mocking.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        tuple: (test_server, expected_response) for use in terminate tests
+    """
+    # Create mock process UUID for terminated process
+    mock_process_uuid = ProcessUUID(uuid="terminated-process-uuid-123")
+
+    # Create mock process metadata
+    mock_process_metadata = ProcessMetadata(
+        uuid=mock_process_uuid,
+        user="session_user",
+        session="terminated_session",
+        name="terminated_process",
+        hostname="target_host",
+        tree_id="1.0",
+    )
+
+    # Configure mock process description
+    mock_process_description = ProcessDescription(
+        metadata=mock_process_metadata,
+        executable_and_arguments=[
+            ProcessDescription.ExecAndArgs(exec="terminated_service", args="--daemon")
+        ],
+        process_execution_directory="/opt/service",
+        process_logs_path="/var/log/service",
+    )
+
+    # Set up mock process restrictions
+    mock_process_restriction = ProcessRestriction(
+        allowed_hosts=["target_host"], allowed_host_types=["service_host"]
+    )
+
+    # Create mock process instance representing terminated process
+    mock_process_instance = ProcessInstance(
+        uuid=mock_process_uuid,
+        process_description=mock_process_description,
+        process_restriction=mock_process_restriction,
+        status_code=ProcessInstance.StatusCode.DEAD,
+        return_code=0,
+    )
+
+    # Create mock authentication token
+    mock_token = Token()
+
+    # Configure the terminate_impl response that will be returned by the mock
+    mock_terminate_impl_response = ProcessInstanceList(
+        name="terminate_with_impl",
+        token=mock_token,
+        values=[mock_process_instance],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    # Mock the abstract _terminate_impl method to return our test response
+    grpc_servicer._terminate_impl = MagicMock(return_value=mock_terminate_impl_response)
+
+    # Register the servicer with the gRPC testing framework
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    # Return the exact response that the mock will produce
+    return (test_server, mock_terminate_impl_response)
+
+
+def test_terminate_with_impl(grpc_test_server_with_mock_terminate_impl):
+    """
+    Test the terminate RPC method with a concrete implementation.
+
+    Args:
+        grpc_test_server_with_mock_terminate_impl: Fixture providing configured test server
+    """
+    test_server, expected_response = grpc_test_server_with_mock_terminate_impl
+    _test_terminate(test_server, expected_response)
+
+
+def test_terminate_with_no_impl(grpc_test_server_no_impl):
+    """
+    Test the terminate RPC method without any concrete implementation.
+
+    Args:
+        grpc_test_server_no_impl: Fixture providing test server without implementation
+    """
+    test_server, _ = grpc_test_server_no_impl
+
+    # Define the expected response when no implementation is available
+    expected_response = ProcessInstanceList(
+        name="process_manager_no_impl",
+        token=None,
+        values=[],
+        flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+    )
+
+    _test_terminate(test_server, expected_response)
