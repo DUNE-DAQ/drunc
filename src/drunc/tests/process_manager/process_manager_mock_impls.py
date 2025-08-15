@@ -92,4 +92,10 @@ class ConcreteProcessManager(ProcessManager):
         """
         Returns default not implemented response to indicate communication is working
         """
-        return self._not_implemented_response()
+        return LogLines(
+            name="process_manager_no_impl",
+            token=None,
+            uuid=None,
+            lines=[],
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )

@@ -8,6 +8,8 @@ from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     DESCRIPTOR,
     BootRequest,
+    LogLines,
+    LogRequest,
     ProcessDescription,
     ProcessInstance,
     ProcessMetadata,
@@ -598,7 +600,6 @@ def grpc_test_server_with_mock_terminate_impl(grpc_servicer):
         servicers, grpc_testing.strict_real_time()
     )
 
-    # Return the exact response that the mock will produce
     return (test_server, mock_terminate_impl_response)
 
 
@@ -631,3 +632,573 @@ def test_terminate_with_no_impl(grpc_test_server_no_impl):
     )
 
     _test_terminate(test_server, expected_response)
+
+
+def _test_restart(grpc_test_server, expected_response: ProcessInstanceList):
+    """
+    Test that invoking the restart method gives the expected response.
+
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: ProcessInstanceList containing the expected response data
+    """
+    token = expected_response.token
+
+    # Extract process identifiers from expected response
+    uuids = [process.uuid for process in expected_response.values]
+    names = (
+        [
+            process.process_description.metadata.name
+            for process in expected_response.values
+        ]
+        if expected_response.values
+        else []
+    )
+    user = (
+        expected_response.values[0].process_description.metadata.user
+        if expected_response.values
+        else "test_user"
+    )
+    session = (
+        expected_response.values[0].process_description.metadata.session
+        if expected_response.values
+        else "test_session"
+    )
+
+    # Construct the process query for restart request
+    request = ProcessQuery(
+        token=token, uuids=uuids, names=names, user=user, session=session
+    )
+
+    # Invoke the restart method via gRPC testing framework
+    restart_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["restart"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    response: ProcessInstanceList
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = restart_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    # Verify all response fields match expected values
+    assert expected_response.name == response.name
+    assert expected_response.token == response.token
+    assert expected_response.flag == response.flag
+
+    # Verify process details match expected response
+    assert len(expected_response.values) == len(response.values)
+    for expected_process, actual_process in zip(
+        expected_response.values, response.values
+    ):
+        assert expected_process.uuid == actual_process.uuid
+        assert expected_process.status_code == actual_process.status_code
+        assert expected_process.return_code == actual_process.return_code
+        assert (
+            expected_process.process_description == actual_process.process_description
+        )
+        assert (
+            expected_process.process_restriction == actual_process.process_restriction
+        )
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_with_mock_restart_impl(grpc_servicer):
+    """
+    Create a gRPC testing server with pre-configured restart_impl mocking.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        tuple: (test_server, expected_response) for use in restart tests
+    """
+    # Create mock process UUID for restarted process
+    mock_process_uuid = ProcessUUID(uuid="restarted-process-uuid-789")
+
+    # Create mock process metadata
+    mock_process_metadata = ProcessMetadata(
+        uuid=mock_process_uuid,
+        user="restart_user",
+        session="restart_session",
+        name="restarted_process",
+        hostname="restart_host",
+        tree_id="1.0",
+    )
+
+    # Configure mock process description
+    mock_process_description = ProcessDescription(
+        metadata=mock_process_metadata,
+        executable_and_arguments=[
+            ProcessDescription.ExecAndArgs(exec="restarted_service", args="--restart")
+        ],
+        process_execution_directory="/opt/restart",
+        process_logs_path="/var/log/restart",
+    )
+
+    # Set up mock process restrictions
+    mock_process_restriction = ProcessRestriction(
+        allowed_hosts=["restart_host"], allowed_host_types=["restart_type"]
+    )
+
+    # Create mock process instance representing restarted process
+    mock_process_instance = ProcessInstance(
+        uuid=mock_process_uuid,
+        process_description=mock_process_description,
+        process_restriction=mock_process_restriction,
+        status_code=ProcessInstance.StatusCode.RUNNING,
+        return_code=0,
+    )
+
+    # Create mock authentication token
+    mock_token = Token()
+
+    # Configure the restart_impl response that will be returned by the mock
+    mock_restart_impl_response = ProcessInstanceList(
+        name="restart_with_impl",
+        token=mock_token,
+        values=[mock_process_instance],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    # Mock the abstract _restart_impl method to return our test response
+    grpc_servicer._restart_impl = MagicMock(return_value=mock_restart_impl_response)
+
+    # Register the servicer with the gRPC testing framework
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    return (test_server, mock_restart_impl_response)
+
+
+def test_restart_with_impl(grpc_test_server_with_mock_restart_impl):
+    """
+    Test the restart RPC method with a concrete implementation.
+
+    Args:
+        grpc_test_server_with_mock_restart_impl: Fixture providing configured test server
+    """
+    test_server, expected_response = grpc_test_server_with_mock_restart_impl
+    _test_restart(test_server, expected_response)
+
+
+def test_restart_with_no_impl(grpc_test_server_no_impl):
+    """
+    Test the restart RPC method without any concrete implementation.
+
+    Args:
+        grpc_test_server_no_impl: Fixture providing test server without implementation
+    """
+    test_server, _ = grpc_test_server_no_impl
+
+    # Define the expected response when no implementation is available
+    expected_response = ProcessInstanceList(
+        name="process_manager_no_impl",
+        token=None,
+        values=[],
+        flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+    )
+
+    _test_restart(test_server, expected_response)
+
+
+def _test_ps(grpc_test_server, expected_response: ProcessInstanceList):
+    """
+    Test that invoking the ps method gives the expected response.
+
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: ProcessInstanceList containing the expected response data
+    """
+    token = expected_response.token
+
+    # Extract process identifiers from expected response
+    uuids = [process.uuid for process in expected_response.values]
+    names = (
+        [
+            process.process_description.metadata.name
+            for process in expected_response.values
+        ]
+        if expected_response.values
+        else []
+    )
+    user = (
+        expected_response.values[0].process_description.metadata.user
+        if expected_response.values
+        else "test_user"
+    )
+    session = (
+        expected_response.values[0].process_description.metadata.session
+        if expected_response.values
+        else "test_session"
+    )
+
+    # Construct the process query for ps request
+    request = ProcessQuery(
+        token=token, uuids=uuids, names=names, user=user, session=session
+    )
+
+    # Invoke the ps method via gRPC testing framework
+    ps_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["ps"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    response: ProcessInstanceList
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = ps_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    # Verify all response fields match expected values
+    assert expected_response.name == response.name
+    assert expected_response.token == response.token
+    assert expected_response.flag == response.flag
+
+    # Verify process details match expected response
+    assert len(expected_response.values) == len(response.values)
+    for expected_process, actual_process in zip(
+        expected_response.values, response.values
+    ):
+        assert expected_process.uuid == actual_process.uuid
+        assert expected_process.status_code == actual_process.status_code
+        assert expected_process.return_code == actual_process.return_code
+        assert (
+            expected_process.process_description == actual_process.process_description
+        )
+        assert (
+            expected_process.process_restriction == actual_process.process_restriction
+        )
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_with_mock_ps_impl(grpc_servicer):
+    """
+    Create a gRPC testing server with pre-configured ps_impl mocking.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        tuple: (test_server, expected_response) for use in ps tests
+    """
+    # Create mock process UUID for process status query
+    mock_process_uuid = ProcessUUID(uuid="ps-process-uuid-999")
+
+    # Create mock process metadata
+    mock_process_metadata = ProcessMetadata(
+        uuid=mock_process_uuid,
+        user="ps_user",
+        session="ps_session",
+        name="ps_process",
+        hostname="ps_host",
+        tree_id="1.0",
+    )
+
+    # Configure mock process description
+    mock_process_description = ProcessDescription(
+        metadata=mock_process_metadata,
+        executable_and_arguments=[
+            ProcessDescription.ExecAndArgs(exec="ps_service", args="--status")
+        ],
+        process_execution_directory="/opt/ps",
+        process_logs_path="/var/log/ps",
+    )
+
+    # Set up mock process restrictions
+    mock_process_restriction = ProcessRestriction(
+        allowed_hosts=["ps_host"], allowed_host_types=["ps_type"]
+    )
+
+    # Create mock process instance representing process status
+    mock_process_instance = ProcessInstance(
+        uuid=mock_process_uuid,
+        process_description=mock_process_description,
+        process_restriction=mock_process_restriction,
+        status_code=ProcessInstance.StatusCode.RUNNING,
+        return_code=0,
+    )
+
+    # Create mock authentication token
+    mock_token = Token()
+
+    # Configure the ps_impl response that will be returned by the mock
+    mock_ps_impl_response = ProcessInstanceList(
+        name="ps_with_impl",
+        token=mock_token,
+        values=[mock_process_instance],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    # Mock the abstract _ps_impl method to return our test response
+    grpc_servicer._ps_impl = MagicMock(return_value=mock_ps_impl_response)
+
+    # Register the servicer with the gRPC testing framework
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    return (test_server, mock_ps_impl_response)
+
+
+def test_ps_with_impl(grpc_test_server_with_mock_ps_impl):
+    """
+    Test the ps RPC method with a concrete implementation.
+
+    Args:
+        grpc_test_server_with_mock_ps_impl: Fixture providing configured test server
+    """
+    test_server, expected_response = grpc_test_server_with_mock_ps_impl
+    _test_ps(test_server, expected_response)
+
+
+def test_ps_with_no_impl(grpc_test_server_no_impl):
+    """
+    Test the ps RPC method without any concrete implementation.
+
+    Args:
+        grpc_test_server_no_impl: Fixture providing test server without implementation
+    """
+    test_server, _ = grpc_test_server_no_impl
+
+    # Define the expected response when no implementation is available
+    expected_response = ProcessInstanceList(
+        name="process_manager_no_impl",
+        token=None,
+        values=[],
+        flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+    )
+
+    _test_ps(test_server, expected_response)
+
+
+def _test_logs(grpc_test_server, expected_response: LogLines):
+    """
+    Test that invoking the logs method gives the expected response.
+
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: LogLines containing the expected response data
+    """
+    token = expected_response.token
+
+    # Extract process UUID from expected response
+    uuid = (
+        expected_response.uuid
+        if expected_response.uuid
+        else ProcessUUID(uuid="test_uuid")
+    )
+
+    # Construct the process query for logs request
+    query = ProcessQuery(
+        token=token, uuids=[uuid], names=[], user="test_user", session="test_session"
+    )
+
+    # Construct the log request
+    request = LogRequest(token=token, query=query, how_far=100)
+
+    # Invoke the logs method via gRPC testing framework
+    logs_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["logs"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    response: LogLines
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = logs_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    print("Expected response:", expected_response)
+    print("Actual response:", response)
+
+    # Verify all response fields match expected values
+    assert expected_response.name == response.name
+    assert expected_response.token == response.token
+    assert expected_response.uuid == response.uuid
+    assert expected_response.lines == response.lines
+    assert expected_response.flag == response.flag
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_with_mock_logs_impl(grpc_servicer):
+    """
+    Create a gRPC testing server with pre-configured logs_impl mocking.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        tuple: (test_server, expected_response) for use in logs tests
+    """
+
+    mock_process_uuid = ProcessUUID(uuid="logs-process-uuid-888")
+    mock_token = Token()
+    mock_log_lines = [
+        "2024-01-01 10:00:00 INFO Starting service",
+        "2024-01-01 10:00:01 INFO Service initialized",
+        "2024-01-01 10:00:02 DEBUG Processing request",
+    ]
+
+    # Configure the logs_impl response that will be returned by the mock
+    mock_logs_impl_response = LogLines(
+        name="logs_with_impl",
+        token=mock_token,
+        uuid=mock_process_uuid,
+        lines=mock_log_lines,
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+    grpc_servicer._logs_impl = MagicMock(return_value=mock_logs_impl_response)
+
+    # Register the servicer with the gRPC testing framework
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    return (test_server, mock_logs_impl_response)
+
+
+def test_logs_with_impl(grpc_test_server_with_mock_logs_impl):
+    """
+    Test the logs RPC method with a concrete implementation.
+
+    Args:
+        grpc_test_server_with_mock_logs_impl: Fixture providing configured test server
+    """
+    test_server, expected_response = grpc_test_server_with_mock_logs_impl
+    _test_logs(test_server, expected_response)
+
+
+def test_logs_with_no_impl(grpc_test_server_no_impl):
+    """
+    Test the logs RPC method without any concrete implementation.
+
+    Args:
+        grpc_test_server_no_impl: Fixture providing test server without implementation
+    """
+    test_server, _ = grpc_test_server_no_impl
+
+    # Define the expected response when no implementation is available
+    expected_response = LogLines(
+        name="process_manager_no_impl",
+        token=None,
+        uuid=None,
+        lines=[],
+        flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+    )
+
+    _test_logs(test_server, expected_response)
+
+
+def _test_flush(grpc_test_server, expected_response: ProcessInstanceList):
+    """
+    Test that invoking the flush method gives the expected response.
+
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: ProcessInstanceList containing the expected response data
+    """
+    token = expected_response.token
+
+    # Extract process identifiers from expected response
+    uuids = [process.uuid for process in expected_response.values]
+    names = (
+        [
+            process.process_description.metadata.name
+            for process in expected_response.values
+        ]
+        if expected_response.values
+        else []
+    )
+    user = (
+        expected_response.values[0].process_description.metadata.user
+        if expected_response.values
+        else "test_user"
+    )
+    session = (
+        expected_response.values[0].process_description.metadata.session
+        if expected_response.values
+        else "test_session"
+    )
+
+    # Construct the process query for flush request
+    request = ProcessQuery(
+        token=token, uuids=uuids, names=names, user=user, session=session
+    )
+
+    # Invoke the flush method via gRPC testing framework
+    flush_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["flush"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    response: ProcessInstanceList
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = flush_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    # Verify all response fields match expected values
+    assert expected_response.name == response.name
+    assert expected_response.token == response.token
+    assert expected_response.flag == response.flag
+
+    # Verify process details match expected response
+    assert len(expected_response.values) == len(response.values)
+    for expected_process, actual_process in zip(
+        expected_response.values, response.values
+    ):
+        assert expected_process.uuid == actual_process.uuid
+        assert expected_process.status_code == actual_process.status_code
+        assert expected_process.return_code == actual_process.return_code
+        assert (
+            expected_process.process_description == actual_process.process_description
+        )
+        assert (
+            expected_process.process_restriction == actual_process.process_restriction
+        )
+
+
+def test_flush_with_impl(grpc_test_server_no_impl):
+    """
+    Test the flush RPC method, which is concrete in process manager.
+
+    Args:
+        grpc_test_server_no_impl: Fixture providing test server
+    """
+    test_server, _ = grpc_test_server_no_impl
+
+    # Define the expected response for flush operation
+    expected_response = ProcessInstanceList(
+        name="process_manager_no_impl",
+        token=None,
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    _test_flush(test_server, expected_response)
