@@ -94,7 +94,7 @@ class ConfHandler:
         return self.get_data().broadcaster
 
     def get_data_authoriser(self):
-        return self.get_data().authorisers
+        return self.get_data().authoriser
 
     def copy_oks_key(self):
         return self.oks_key
