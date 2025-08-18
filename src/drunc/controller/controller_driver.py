@@ -3,12 +3,12 @@ from functools import wraps
 import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
     FSMCommandResponse,
-    FSMCommandsDescription,
     Status,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText
 
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
@@ -52,7 +52,7 @@ class ControllerDriver(GRPCDriver):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> Description:
+    ) -> DescribeResponse:
         request = AddressedCommand(
             token=copy_token(self.token),
             command_name="describe",
@@ -76,7 +76,7 @@ class ControllerDriver(GRPCDriver):
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str | None = None,
         timeout: int | float = 60,
-    ) -> FSMCommandsDescription:
+    ) -> DescribeFSMResponse:
         request = AddressedCommand(
             token=copy_token(self.token),
             command_name="describe_fsm",

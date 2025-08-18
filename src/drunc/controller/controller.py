@@ -8,6 +8,8 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
@@ -31,6 +33,7 @@ from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.decorators import (
+    TODO_unpack_addressed_command_to,
     in_control,
     publish_command_time,
     unpack_addressed_command_to,
@@ -600,94 +603,96 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+    @TODO_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def describe(
         self,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        d = None
+    ) -> DescribeResponse:
+        response = DescribeResponse(
+            token=None,
+            name=self.name,
+        )
 
         if execute_on_self:
-            bd = self.describe_broadcast()
-            d = Description(
+            description = Description(
                 type="controller",
                 name=self.name,
-                endpoint=self.uri if self.uri is not None else "unknown",
                 info=get_detector_name(self.configuration),
                 session=self.session,
-                # commands=self.commands,
+                endpoint=self.uri if self.uri is not None else "unknown",
             )
-            if bd:
-                d.broadcast.CopyFrom(pack_to_any(bd))
+            if broadcast_description := self.describe_broadcast():
+                description.broadcast.Pack(broadcast_description)
+            response.description.CopyFrom(description)
 
-        children_description = self.propagate_addressed_command(
+        children = self.propagate_addressed_command(
             "describe",
             addressed_commands=addressed_commands,
-            token=token,
+            token=None,
         )
+        response.children.extend(children)
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(d) if d else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_description,
-        )
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @unpack_addressed_command_to(PlainText)  # 4th step
+    @TODO_unpack_addressed_command_to(PlainText)  # 4th step
     @publish_command_time
     def describe_fsm(
         self,
         payload: PlainText,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        desc = None
+    ) -> DescribeFSMResponse:
+        response = DescribeFSMResponse(
+            token=None,
+            name=self.name,
+        )
+
         if execute_on_self:
             if payload.text == "all-transitions":
-                desc = convert_fsm_transition(
+                description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
             elif payload.text == "":
-                desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+                description = convert_fsm_transition(
+                    self.stateful_node.get_fsm_transitions()
+                )
             else:
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
+                    # TODO: where is `input` coming from?
                     if input.text == transition.source:
                         interesting_transitions += [transition]
                     if input.text == transition.name:
                         interesting_transitions += [transition]
-                desc = convert_fsm_transition(interesting_transitions)
-            desc.type = "controller"
-            desc.name = self.name
-            desc.session = self.session
+                description = convert_fsm_transition(interesting_transitions)
 
+            description.type = "controller"
+            description.name = self.name
+            description.session = self.session
             for seq in self.stateful_node.get_fsm_sequences():
-                desc.sequences.append(seq)
+                description.sequences.append(seq)
+            response.description.CopyFrom(description)
 
-        children_description = self.propagate_addressed_command(
+        children = self.propagate_addressed_command(
             "describe_fsm",
             addressed_commands=addressed_commands,
-            token=token,
+            token=None,
         )
+        response.children.extend(children)
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(desc) if desc else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_description,
-        )
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     ########################################
     ############# FSM commands #############
