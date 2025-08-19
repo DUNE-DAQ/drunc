@@ -2,6 +2,7 @@ import multiprocessing
 import threading
 import time
 import traceback
+from functools import wraps
 from typing import List, Optional
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -33,24 +34,153 @@ from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
-from drunc.controller.decorators import (
-    TODO_unpack_addressed_command_to,
-    in_control,
-    publish_command_time,
-    unpack_addressed_command_to,
-)
+from drunc.controller.decorators import in_control, publish_command_time
 from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
     ControllerMonitoringMetrics,
+    address_command,
     get_detector_name,
     get_status_message,
 )
-from drunc.exceptions import DruncException
+from drunc.exceptions import DruncCommandException, DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
+
+
+def TODO_unpack_addressed_command_to(data_type=None):
+    def decor(cmd):
+        command_name = cmd.__name__
+        logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
+
+        @wraps(cmd)
+        def wrap(obj, request, context):
+            if request.target == "/" or request.target is None or request.target == "":
+                target = obj.name
+            else:
+                target = request.target
+
+            try:
+                addressed_commands = address_command(
+                    obj=obj,
+                    command_name=command_name,
+                    command_data=request.command_data,
+                    target=request.target,
+                    execute_along_path=request.execute_along_path,
+                    execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+                )
+                logger.debug(f"Addressed commands: {addressed_commands}")
+            except DruncCommandException as e:
+                logger.exception(e)
+                return Response(
+                    name=obj.name,
+                    token=None,
+                    data=pack_to_any(PlainText(text=str(e))),
+                    flag=ResponseFlag.FAILED,
+                    children=[],
+                )
+
+            payload = None
+            if data_type is not None:
+                try:
+                    payload = unpack_any(request.command_data, data_type)
+                except UnpackingError as e:
+                    logger.exception(e)
+                    return Response(
+                        name=obj.name,
+                        token=None,
+                        data=pack_to_any(PlainText(text=str(e))),
+                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children=[],
+                    )
+
+            kwargs = {
+                "addressed_commands": addressed_commands,
+                "execute_on_self": request.execute_along_path or obj.name == target,
+            }
+            if payload is not None:
+                kwargs["payload"] = payload
+
+            return cmd(obj, **kwargs)
+
+        return wrap
+
+    return decor
+
+
+def unpack_addressed_command_to(data_type=None):
+    def decor(cmd):
+        command_name = cmd.__name__
+        logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
+
+        @wraps(cmd)
+        def wrap(obj, request, context):
+            try:
+                command = unpack_any(request.data, AddressedCommand)
+            except UnpackingError as e:
+                logger.exception(e)
+                return Response(
+                    name=obj.name,
+                    token=request.token,
+                    data=pack_to_any(PlainText(text=str(e))),
+                    flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                    children=[],
+                )
+
+            if command.target == "/" or command.target is None or command.target == "":
+                target = obj.name
+            else:
+                target = command.target
+
+            try:
+                addressed_commands = address_command(
+                    obj=obj,
+                    command_name=command_name,
+                    command_data=command.command_data,
+                    target=command.target,
+                    execute_along_path=command.execute_along_path,
+                    execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
+                )
+                logger.debug(f"Addressed commands: {addressed_commands}")
+            except DruncCommandException as e:
+                logger.exception(e)
+                return Response(
+                    name=obj.name,
+                    token=request.token,
+                    data=pack_to_any(PlainText(text=str(e))),
+                    flag=ResponseFlag.FAILED,
+                    children=[],
+                )
+
+            payload = None
+            if data_type is not None:
+                try:
+                    payload = unpack_any(command.command_data, data_type)
+                except UnpackingError as e:
+                    logger.exception(e)
+                    return Response(
+                        name=obj.name,
+                        token=request.token,
+                        data=pack_to_any(PlainText(text=str(e))),
+                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children=[],
+                    )
+
+            kwargs = {
+                "addressed_commands": addressed_commands,
+                "execute_on_self": command.execute_along_path or obj.name == target,
+                "token": request.token,
+            }
+            if payload is not None:
+                kwargs["payload"] = payload
+
+            return cmd(obj, **kwargs)
+
+        return wrap
+
+    return decor
 
 
 class ControllerActor:
