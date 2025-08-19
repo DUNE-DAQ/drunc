@@ -4,7 +4,7 @@ import threading
 import time
 import traceback
 from functools import wraps
-from typing import List, Optional
+from typing import List
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -35,8 +35,8 @@ from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
+from drunc.controller.controller_actor import ControllerActor
 from drunc.controller.decorators import in_control, publish_command_time
-from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
     ControllerMonitoringMetrics,
@@ -252,51 +252,6 @@ def unpack_addressed_command_to(data_type=None):
         return wrap
 
     return decor
-
-
-class ControllerActor:
-    def __init__(self, token: Optional[Token] = None):
-        self.log = get_logger("controller.actor")
-        self._token = Token(token="", user_name="")
-        if token is not None:
-            self._token.CopyFrom(token)
-        self._lock = threading.Lock()
-
-    def get_token(self) -> Token:
-        return self._token
-
-    def get_user_name(self) -> str:
-        return self._token.user_name
-
-    def _update_actor(self, token: Optional[Token] = Token()) -> None:
-        self._lock.acquire()
-        self._token.CopyFrom(token)
-        self._lock.release()
-
-    def compare_token(self, token1, token2):
-        self._lock.acquire()
-        result = (
-            token1.user_name == token2.user_name and token1.token == token2.token
-        )  #!! come on protobuf, you can compare messages
-        self._lock.release()
-        return result
-
-    def token_is_current_actor(self, token):
-        return self.compare_token(token, self._token)
-
-    def surrender_control(self, token) -> None:
-        if self.compare_token(self._token, token):
-            self._update_actor(Token())
-            return
-        raise CannotSurrenderControl(
-            f"Token {token} cannot release control of {self._token}"
-        )
-
-    def take_control(self, token) -> None:
-        # if not self.compare_token(self._token, token):
-        #     raise OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
-        self._update_actor(token)
-        return 0
 
 
 class Controller(ControllerServicer):
