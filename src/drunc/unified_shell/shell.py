@@ -181,6 +181,7 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]{process_manager_address}[/green]"
     )
     ctx.obj.reset(address_pm=process_manager_address)
+    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
 
     desc = None
     try:
@@ -260,6 +261,7 @@ def unified_shell(
         "Adding [green]unified_shell[/green] commands to the context"
     )
     ctx.command.add_command(boot, "boot")
+    ctx.obj.dynamic_commands.add("boot")
 
     unified_shell_log.debug(
         "Adding [green]process_manager[/green] commands to the context"
@@ -270,6 +272,12 @@ def unified_shell(
     ctx.command.add_command(logs, "logs")
     ctx.command.add_command(restart, "restart")
     ctx.command.add_command(ps, "ps")
+    ctx.obj.dynamic_commands.add("kill")
+    ctx.obj.dynamic_commands.add("terminate")
+    ctx.obj.dynamic_commands.add("flush")
+    ctx.obj.dynamic_commands.add("logs")
+    ctx.obj.dynamic_commands.add("restart")
+    ctx.obj.dynamic_commands.add("ps")
 
     # Not particularly proud of this...
     # We instantiate a stateful node which has the same configuration as the one from this session
@@ -339,12 +347,25 @@ def unified_shell(
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
     ctx.command.add_command(expert_command, "expert-command")
+    ctx.obj.dynamic_commands.add("status")
+    ctx.obj.dynamic_commands.add("recompute_status")
+    ctx.obj.dynamic_commands.add("connect")
+    ctx.obj.dynamic_commands.add("disconnect")
+    ctx.obj.dynamic_commands.add("take_control")
+    ctx.obj.dynamic_commands.add("surrender_control")
+    ctx.obj.dynamic_commands.add("who_am_i")
+    ctx.obj.dynamic_commands.add("who_is_in_charge")
+    ctx.obj.dynamic_commands.add("include")
+    ctx.obj.dynamic_commands.add("exclude")
+    ctx.obj.dynamic_commands.add("wait")
+    ctx.obj.dynamic_commands.add("expert_command")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
-    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
 
+    if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
+        ctx.obj.batch_mode = True
 
 def on_exit(ctx, unified_shell_log):
     """Handle exit from the shell."""

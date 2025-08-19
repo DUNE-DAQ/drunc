@@ -71,3 +71,5 @@ def boot(
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
+        # if ctx.obj.batch_mode:
+            
