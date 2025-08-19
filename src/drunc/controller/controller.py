@@ -1,4 +1,5 @@
 import multiprocessing
+import re
 import threading
 import time
 import traceback
@@ -39,7 +40,6 @@ from drunc.controller.exceptions import CannotSurrenderControl
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
     ControllerMonitoringMetrics,
-    address_command,
     get_detector_name,
     get_status_message,
 )
@@ -48,6 +48,75 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
+
+
+def address_command(
+    obj,
+    command_name,
+    command_data,
+    target,
+    execute_along_path,
+    execute_on_all_subsequent_children_in_path,
+):
+    log = get_logger("controller.address_command")
+
+    ret = {}
+    children_names = [c.name for c in obj.children_nodes]
+
+    start_with_slash = target.startswith("/")
+    target_ = target[:]
+    if start_with_slash:
+        target_ = target[1:]
+
+    if target_ == "":
+        if execute_on_all_subsequent_children_in_path:
+            for child in children_names:
+                ret[child] = AddressedCommand(
+                    command_name=command_name,
+                    command_data=command_data,
+                    target=child,
+                    execute_along_path=execute_along_path,
+                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+                )
+        return ret
+
+    target_path = target_.split("/")
+    if start_with_slash and target_path[0] != obj.name:
+        raise DruncCommandException(f"Target '{target_}' is not matching '{obj.name}'")
+
+    if target_path[0] == obj.name:
+        target_path.pop(0)
+
+    if target_path == []:
+        if execute_on_all_subsequent_children_in_path:
+            for child in children_names:
+                ret[child] = AddressedCommand(
+                    command_name=command_name,
+                    command_data=command_data,
+                    target=child,
+                    execute_along_path=execute_along_path,
+                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+                )
+        return ret
+
+    target_name = target_path[0]
+
+    for child in children_names:
+        if re.match(target_name, child):
+            new_target_path = child
+            if len(target_path) > 1:
+                new_target_path = "/".join([new_target_path] + target_path[1:])
+            ret[child] = AddressedCommand(
+                command_name=command_name,
+                command_data=command_data,
+                target=new_target_path,
+                execute_along_path=execute_along_path,
+                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            )
+
+    if ret == {}:
+        log.info(f"Target '{target}' not found in children of '{obj.name}'")
+    return ret
 
 
 def TODO_unpack_addressed_command_to(data_type=None):
