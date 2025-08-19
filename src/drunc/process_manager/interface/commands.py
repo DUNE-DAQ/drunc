@@ -175,7 +175,6 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     obj.print(
         tabulate_process_instance_list(result, "Killed process", False)
     )  # rich tables require console printing
-    obj.delete_driver("controller")
 
 @click.command("flush")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
