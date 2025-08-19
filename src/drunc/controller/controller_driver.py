@@ -7,6 +7,7 @@ from druncschema.controller_pb2 import (
     DescribeResponse,
     FSMCommandResponse,
     Status,
+    StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText
@@ -45,6 +46,29 @@ class ControllerDriver(GRPCDriver):
             )
 
         return wrapper
+
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            token=copy_token(self.token),
+            command_name="status",
+            command_data=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.status(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def describe(
         self,
@@ -95,14 +119,6 @@ class ControllerDriver(GRPCDriver):
             handle_grpc_error(e)
 
         return response
-
-    @pack_empty_addressed_command
-    def status(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "status", data=addressed_command, outformat=Status, timeout=timeout
-        )
 
     @pack_empty_addressed_command
     def recompute_status(

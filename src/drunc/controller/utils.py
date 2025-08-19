@@ -107,17 +107,18 @@ def send_command(controller, token, command: str, data=None, rethrow=False):
         if hasattr(status, "details"):
             for detail in status.details:
                 if detail.Is(Stacktrace.DESCRIPTOR):
-                    # text = '[bold red]Stacktrace on remote server![/bold red]\n' # Temporary - bold red doesn't work
                     text = "Stacktrace on remote server!\n"
                     stack = unpack_any(detail, Stacktrace)
                     for l in stack.text:
                         text += l + "\n"
+                    log.error(text)
                 elif detail.Is(PlainText.DESCRIPTOR):
-                    txt = unpack_any(detail, PlainText)
-                log.error(txt)
+                    text = unpack_any(detail, PlainText)
+                    log.error(text)
 
         if rethrow:
             raise e
+
         return None
 
     return response

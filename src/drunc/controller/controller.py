@@ -14,6 +14,7 @@ from druncschema.controller_pb2 import (
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
+    StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
@@ -561,6 +562,7 @@ class Controller(ControllerServicer):
 
         for thread in threads:
             thread.join()
+
         return response_children
 
     ########################################################
@@ -572,31 +574,32 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+    @TODO_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def status(
         self,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        status = None
-        if execute_on_self:
-            status = pack_to_any(get_status_message(self))
+    ) -> StatusResponse:
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+        )
 
-        children_statuses = self.propagate_addressed_command(
+        if execute_on_self:
+            status = get_status_message(self)
+            response.status.CopyFrom(status)
+
+        children = self.propagate_addressed_command(
             "status",
             addressed_commands=addressed_commands,
-            token=token,
+            token=None,
         )
+        response.children.extend(children)
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=status,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_statuses,
-        )
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
