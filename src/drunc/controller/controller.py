@@ -57,19 +57,21 @@ def TODO_unpack_addressed_command_to(data_type=None):
 
         @wraps(cmd)
         def wrap(obj, request, context):
-            if request.target == "/" or request.target is None or request.target == "":
+            command = request
+
+            if command.target == "/" or command.target is None or command.target == "":
                 target = obj.name
             else:
-                target = request.target
+                target = command.target
 
             try:
                 addressed_commands = address_command(
                     obj=obj,
                     command_name=command_name,
-                    command_data=request.command_data,
-                    target=request.target,
-                    execute_along_path=request.execute_along_path,
-                    execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+                    command_data=command.command_data,
+                    target=command.target,
+                    execute_along_path=command.execute_along_path,
+                    execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
                 )
                 logger.debug(f"Addressed commands: {addressed_commands}")
             except DruncCommandException as e:
@@ -85,7 +87,7 @@ def TODO_unpack_addressed_command_to(data_type=None):
             payload = None
             if data_type is not None:
                 try:
-                    payload = unpack_any(request.command_data, data_type)
+                    payload = unpack_any(command.command_data, data_type)
                 except UnpackingError as e:
                     logger.exception(e)
                     return Response(
@@ -98,7 +100,7 @@ def TODO_unpack_addressed_command_to(data_type=None):
 
             kwargs = {
                 "addressed_commands": addressed_commands,
-                "execute_on_self": request.execute_along_path or obj.name == target,
+                "execute_on_self": command.execute_along_path or obj.name == target,
             }
             if payload is not None:
                 kwargs["payload"] = payload
@@ -123,7 +125,7 @@ def unpack_addressed_command_to(data_type=None):
                 logger.exception(e)
                 return Response(
                     name=obj.name,
-                    token=request.token,
+                    token=None,
                     data=pack_to_any(PlainText(text=str(e))),
                     flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
                     children=[],
@@ -148,7 +150,7 @@ def unpack_addressed_command_to(data_type=None):
                 logger.exception(e)
                 return Response(
                     name=obj.name,
-                    token=request.token,
+                    token=None,
                     data=pack_to_any(PlainText(text=str(e))),
                     flag=ResponseFlag.FAILED,
                     children=[],
@@ -162,7 +164,7 @@ def unpack_addressed_command_to(data_type=None):
                     logger.exception(e)
                     return Response(
                         name=obj.name,
-                        token=request.token,
+                        token=None,
                         data=pack_to_any(PlainText(text=str(e))),
                         flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
                         children=[],
