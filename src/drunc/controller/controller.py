@@ -828,10 +828,9 @@ class Controller(ControllerServicer):
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    # TODO: where is `input` coming from?
-                    if input.text == transition.source:
+                    if payload.text == transition.source:
                         interesting_transitions += [transition]
-                    if input.text == transition.name:
+                    if payload.text == transition.name:
                         interesting_transitions += [transition]
                 description = convert_fsm_transition(interesting_transitions)
 
