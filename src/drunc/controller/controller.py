@@ -116,10 +116,11 @@ def address_command(
 
     if ret == {}:
         log.info(f"Target '{target}' not found in children of '{obj.name}'")
+
     return ret
 
 
-def TODO_unpack_addressed_command_to(data_type=None):
+def TODO_unpack_addressed_command_to():
     def decor(cmd):
         command_name = cmd.__name__
         logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
@@ -153,28 +154,12 @@ def TODO_unpack_addressed_command_to(data_type=None):
                     children=[],
                 )
 
-            payload = None
-            if data_type is not None:
-                try:
-                    payload = unpack_any(command.command_data, data_type)
-                except UnpackingError as e:
-                    logger.exception(e)
-                    return Response(
-                        name=obj.name,
-                        token=None,
-                        data=pack_to_any(PlainText(text=str(e))),
-                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children=[],
-                    )
-
             kwargs = {
                 "addressed_commands": addressed_commands,
                 "execute_on_self": command.execute_along_path or obj.name == target,
             }
-            if payload is not None:
-                kwargs["payload"] = payload
 
-            return cmd(obj, **kwargs)
+            return cmd(request, obj, **kwargs)
 
         return wrap
 
@@ -734,6 +719,7 @@ class Controller(ControllerServicer):
     @publish_command_time
     def status(
         self,
+        request: AddressedCommand,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> StatusResponse:
@@ -766,6 +752,7 @@ class Controller(ControllerServicer):
     @publish_command_time
     def describe(
         self,
+        request: AddressedCommand,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> DescribeResponse:
@@ -806,7 +793,7 @@ class Controller(ControllerServicer):
     @publish_command_time
     def describe_fsm(
         self,
-        payload: PlainText,
+        request: AddressedCommand,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> DescribeFSMResponse:
@@ -814,6 +801,18 @@ class Controller(ControllerServicer):
             token=None,
             name=self.name,
         )
+
+        try:
+            payload = unpack_any(request.command_data, PlainText)
+        except UnpackingError as e:
+            self.log.exception(e)
+            return Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(PlainText(text=str(e))),
+                flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                children=[],
+            )
 
         if execute_on_self:
             if payload.text == "all-transitions":
