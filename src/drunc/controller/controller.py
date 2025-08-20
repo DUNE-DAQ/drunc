@@ -25,6 +25,7 @@ from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
+from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -154,12 +155,11 @@ def TODO_unpack_addressed_command_to():
                     children=[],
                 )
 
-            kwargs = {
-                "addressed_commands": addressed_commands,
-                "execute_on_self": command.execute_along_path or obj.name == target,
-            }
+            execute_on_self = command.execute_along_path or obj.name == target
 
-            return cmd(request, obj, **kwargs)
+            response = cmd(obj, request, context, addressed_commands, execute_on_self)
+
+            return response
 
         return wrap
 
@@ -720,6 +720,7 @@ class Controller(ControllerServicer):
     def status(
         self,
         request: AddressedCommand,
+        context: ServicerContext,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> StatusResponse:
@@ -753,6 +754,7 @@ class Controller(ControllerServicer):
     def describe(
         self,
         request: AddressedCommand,
+        context: ServicerContext,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> DescribeResponse:
@@ -794,6 +796,7 @@ class Controller(ControllerServicer):
     def describe_fsm(
         self,
         request: AddressedCommand,
+        context: ServicerContext,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
     ) -> DescribeFSMResponse:
