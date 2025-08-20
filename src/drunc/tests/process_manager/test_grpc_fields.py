@@ -3,29 +3,13 @@ These tests check that the current generated gRPC schema matches
 the expected fields
 """
 
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    CommandNotificationMessage,
-    ExceptionNotification,
-    GenericNotificationMessage,
-    LogLines,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstance,
-    ProcessInstanceList,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
-)
-from druncschema.request_response_pb2 import ResponseFlag
-from druncschema.token_pb2 import Token
-
 
 def test_process_restriction_field_init():
     """
     Test ProcessRestriction fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessRestriction
+
     hosts = ["host1", "host2"]
     host_types = ["worker", "manager"]
     restriction = ProcessRestriction(allowed_hosts=hosts, allowed_host_types=host_types)
@@ -38,6 +22,8 @@ def test_command_notification_message_field_init():
     """
     Test CommandNotificationMessage fields properly populated
     """
+    from druncschema.process_manager_pb2 import CommandNotificationMessage
+
     user = "test_user"
     command = "test_command"
     notification = CommandNotificationMessage(user=user, command=command)
@@ -50,6 +36,8 @@ def test_generic_notification_message_field_init():
     """
     Test GenericNotificationMessage fields properly populated
     """
+    from druncschema.process_manager_pb2 import GenericNotificationMessage
+
     message = "test message"
     notification = GenericNotificationMessage(message=message)
 
@@ -60,6 +48,8 @@ def test_exception_notification_stack_line_field_init():
     """
     Test ExceptionNotification.StackLine fields properly populated
     """
+    from druncschema.process_manager_pb2 import ExceptionNotification
+
     line_text = "error line"
     line_number = "42"
     file = "test.py"
@@ -77,6 +67,8 @@ def test_exception_notification_field_init():
     """
     Test ExceptionNotification fields properly populated
     """
+    from druncschema.process_manager_pb2 import ExceptionNotification
+
     error_text = "test error"
     stack_trace = [
         ExceptionNotification.StackLine(
@@ -97,6 +89,9 @@ def test_log_request_field_init():
     """
     Test LogRequest fields properly populated
     """
+    from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
+    from druncschema.token_pb2 import Token
+
     token = Token()
     query = ProcessQuery()
     how_far = 100
@@ -112,6 +107,10 @@ def test_log_lines_field_init():
     """
     Test LogLines fields properly populated
     """
+    from druncschema.process_manager_pb2 import LogLines, ProcessUUID
+    from druncschema.request_response_pb2 import ResponseFlag
+    from druncschema.token_pb2 import Token
+
     name = "test_process"
     token = Token()
     uuid = ProcessUUID(uuid="test-uuid")
@@ -131,6 +130,8 @@ def test_process_uuid_field_init():
     """
     Test ProcessUUID fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessUUID
+
     uuid = "test-uuid-123"
     process_uuid = ProcessUUID(uuid=uuid)
 
@@ -141,6 +142,8 @@ def test_process_metadata_field_init():
     """
     Test ProcessMetadata fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessMetadata, ProcessUUID
+
     uuid = ProcessUUID(uuid="test-uuid")
     user = "test_user"
     session = "test_session"
@@ -169,6 +172,9 @@ def test_process_query_field_init():
     """
     Test ProcessQuery fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessQuery, ProcessUUID
+    from druncschema.token_pb2 import Token
+
     token = Token()
     uuids = [ProcessUUID(uuid="uuid1"), ProcessUUID(uuid="uuid2")]
     names = ["name1", "name2"]
@@ -190,6 +196,8 @@ def test_process_description_string_list_field_init():
     """
     Test ProcessDescription.StringList fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessDescription
+
     values = ["value1", "value2"]
     string_list = ProcessDescription.StringList(values=values)
 
@@ -200,6 +208,8 @@ def test_process_description_exec_and_args_field_init():
     """
     Test ProcessDescription.ExecAndArgs fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessDescription
+
     exec = "/usr/bin/python"
     args = ["arg1", "arg2"]
 
@@ -213,6 +223,12 @@ def test_process_description_field_init():
     """
     Test ProcessDescription fields properly populated
     """
+    from druncschema.process_manager_pb2 import (
+        ProcessDescription,
+        ProcessMetadata,
+        ProcessUUID,
+    )
+
     metadata = ProcessMetadata(
         uuid=ProcessUUID(uuid="test-uuid"),
         user="test_user",
@@ -245,6 +261,13 @@ def test_process_instance_field_init():
     """
     Test ProcessInstance fields properly populated
     """
+    from druncschema.process_manager_pb2 import (
+        ProcessDescription,
+        ProcessInstance,
+        ProcessRestriction,
+        ProcessUUID,
+    )
+
     process_description = ProcessDescription()
     process_restriction = ProcessRestriction()
     status_code = ProcessInstance.StatusCode.RUNNING
@@ -270,6 +293,10 @@ def test_process_instance_list_field_init():
     """
     Test ProcessInstanceList fields properly populated
     """
+    from druncschema.process_manager_pb2 import ProcessInstance, ProcessInstanceList
+    from druncschema.request_response_pb2 import ResponseFlag
+    from druncschema.token_pb2 import Token
+
     name = "test_list"
     token = Token()
     values = [ProcessInstance(), ProcessInstance()]
@@ -289,6 +316,13 @@ def test_boot_request_field_init():
     """
     Test BootRequest fields properly populated
     """
+    from druncschema.process_manager_pb2 import (
+        BootRequest,
+        ProcessDescription,
+        ProcessRestriction,
+    )
+    from druncschema.token_pb2 import Token
+
     token = Token()
     process_description = ProcessDescription()
     process_restriction = ProcessRestriction()
