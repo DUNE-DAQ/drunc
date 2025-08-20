@@ -255,20 +255,19 @@ class Controller(ControllerServicer):
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
-        top_segment_controller = (
+        self.top_segment_controller = (
             self.configuration.db.get_dal(
                 class_name="Session", uid=self.configuration.oks_key.session
             ).segment.controller.id
             == self.name
         )
-        self.custom_origin = {"top_segment_controller": top_segment_controller}
+        self.custom_origin = {"top_segment_controller": self.top_segment_controller}
 
         self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
-
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
         )
@@ -289,7 +288,7 @@ class Controller(ControllerServicer):
             init_state="initialising",
             name=name,
             session=session,
-            top_segment_controller=top_segment_controller,
+            top_segment_controller=self.top_segment_controller,
         )
 
         dach = DummyAuthoriserConfHandler(
