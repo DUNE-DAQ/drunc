@@ -43,7 +43,7 @@ def test_address_command():
     from druncschema.generic_pb2 import PlainText
     from google.protobuf import any_pb2
 
-    from drunc.controller.utils import address_command
+    from drunc.controller.controller import address_command
 
     class MockNode:
         def __init__(self, name):

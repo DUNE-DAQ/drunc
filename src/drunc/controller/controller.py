@@ -791,7 +791,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @TODO_unpack_addressed_command_to(PlainText)  # 4th step
+    @TODO_unpack_addressed_command_to()  # 4th step
     @publish_command_time
     def describe_fsm(
         self,
