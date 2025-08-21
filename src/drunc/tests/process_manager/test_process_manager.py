@@ -1,3 +1,10 @@
+"""
+This suite tests the grpc endpoints of the abstract process manager class.
+Checking that the serialisation/deserialisation of requests and responses
+works as expected.
+
+"""
+
 from unittest.mock import MagicMock, patch
 
 import google.protobuf.any_pb2
