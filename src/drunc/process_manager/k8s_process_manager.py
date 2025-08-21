@@ -98,6 +98,7 @@ class K8sProcessManager(ProcessManager):
         self._api_error_v1_api = client.rest.ApiException
 
         self.drunc_label = "drunc.daq"
+        self.managed_sessions = set()
         self.watchers = []
         self._start_watcher()
         self.sessions_pending_deletion = set()
@@ -197,13 +198,16 @@ class K8sProcessManager(ProcessManager):
     def _create_namespace(self, session):
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
+        
+        if session in self.managed_sessions:
+            return
+
         try:
-            namespace = self._core_v1_api.read_namespace(name=session)
-            if f"creator.{self.drunc_label}" not in namespace.metadata.labels:
-                raise DruncException(
-                    f"Namespace '{session}' already exists but was not created by this process manager. "
-                    "Please use a different session name to avoid conflicts."
-                )
+            self._core_v1_api.read_namespace(name=session)
+            raise DruncException(
+                f"Namespace '{session}' already exists. Please use a different session name."
+            )
+
         except self._api_error_v1_api as e:
             if e.status == 404:
                 self.log.info(f'Creating "{session}" namespace.')
@@ -213,6 +217,7 @@ class K8sProcessManager(ProcessManager):
                 )
                 self._core_v1_api.create_namespace(body=namespace_manifest)
                 self._add_creator_label(session, "namespace")
+                self.managed_sessions.add(session)
             else:
                 raise e
 
@@ -644,13 +649,15 @@ done
                 final_ret.append(pi)
                 del self.boot_request[proc_uuid]
         
-        # Cleanup empty namespaces
+        # If our internal process list is empty, we can clean up the namespace we used.
         if not self.boot_request:
+            self.log.info("All tracked processes terminated. Cleaning up managed namespace...")
             try:
-                namespaces = self._core_v1_api.list_namespace(label_selector=self._get_creator_label_selector())
-                for ns in namespaces.items:
-                    self.log.info(f'Session "{ns.metadata.name}" is empty, deleting namespace.')
-                    self._core_v1_api.delete_namespace(ns.metadata.name)
+                for session in list(self.managed_sessions):
+                    self.log.info(f'Session "{session}" is empty, deleting namespace.')
+                    self._core_v1_api.delete_namespace(session)
+                    self.managed_sessions.remove(session)
+
             except self._api_error_v1_api as e:
                 self.log.warning(f"Failed during namespace cleanup: {e}")
 
