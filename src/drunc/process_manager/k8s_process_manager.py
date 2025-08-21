@@ -127,7 +127,7 @@ class K8sProcessManager(ProcessManager):
         self.sidecar_image = settings.get("sidecar_image", "alpine/socat")
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
         self.port_forward_timeout = settings.get("port_forward_timeout", 15)
-        self.kill_timeout = settings.get("kill_timeout", 10)
+        self.kill_timeout = settings.get("kill_timeout", 60)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         self.forced_node = settings.get("force_node", "np04-srv-016") # TODO: change this later
 
@@ -288,51 +288,41 @@ class K8sProcessManager(ProcessManager):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        main_command_str = ""
-        lifecycle_hook = None
+        # This logic correctly prepends 'exec' to the C++ application command.
+        command_parts = []
+        for i, e_and_a in enumerate(exec_and_args_list):
+            is_last_command = (i == len(exec_and_args_list) - 1)
+            prefix = ""
+            # Only add 'exec' to the C++ apps (non-controllers)
+            if "controller" not in podname and podname != self.connection_server_name and is_last_command and e_and_a.exec != "source":
+                prefix = "exec "
+            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+        main_command_str = " && ".join(command_parts)
 
-        if "controller" in podname:
-            self.log.debug(f"'{podname}' identified as a Python controller, using robust trap for signal handling.")
-            # Build the original command string for the controller
-            command_parts = []
-            for e_and_a in exec_and_args_list:
-                command_parts.append(" ".join([e_and_a.exec] + list(e_and_a.args)))
-            original_command = " && ".join(command_parts)
-            
-            # This robust trap script becomes PID 1, catches signals,
-            # forwards them to the child, and waits for it to exit completely.
-            main_command_str = f"""
-#!/bin/sh
-trap 'kill -TERM "$CHILD_PID"' TERM INT
-{original_command} &
-CHILD_PID=$!
-wait "$CHILD_PID"
-EXIT_STATUS=$?
-trap - TERM INT
-wait "$CHILD_PID"
-exit $EXIT_STATUS
+
+        # Determine the correct shutdown command for the preStop hook
+        shutdown_command = ""
+        if "controller" in podname or podname == self.connection_server_name:
+            self.log.debug(f"'{podname}' identified as a Python app, using manual PID discovery with SIGINT.")
+            # This script loops only through numbered process folders in /proc.
+            shutdown_command = """
+for p in /proc/[0-9]*; do
+    if [ -f "$p/cmdline" ] && grep -a "drunc-controller" "$p/cmdline" > /dev/null; then
+        kill -SIGINT $(basename "$p");
+    fi
+done
 """
-            # No preStop hook is needed because the trap handles the default SIGTERM
-            lifecycle_hook = None
-
         else: # C++ Applications
-            self.log.debug(f"'{podname}' identified as a C++ app, prepending exec and using SIGQUIT preStop hook.")
-            command_parts = []
-            for i, e_and_a in enumerate(exec_and_args_list):
-                is_last_command = (i == len(exec_and_args_list) - 1)
-                prefix = ""
-                if is_last_command and e_and_a.exec != "source":
-                    prefix = "exec "
-                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
-            main_command_str = " && ".join(command_parts)
-            
-            lifecycle_hook = client.V1Lifecycle(
-                pre_stop=client.V1LifecycleHandler(
-                    _exec=client.V1ExecAction(
-                        command=["/bin/sh", "-c", "kill -QUIT 1"]
-                    )
+            self.log.debug(f"'{podname}' identified as a C++ app, using SIGQUIT.")
+            shutdown_command = "kill -QUIT 1"
+
+        lifecycle_hook = client.V1Lifecycle(
+            pre_stop=client.V1LifecycleHandler(
+                _exec=client.V1ExecAction(
+                    command=["/bin/sh", "-c", shutdown_command]
                 )
             )
+        )
 
         main_container = client.V1Container(
             name=podname, image=pod_image, command=["/bin/sh", "-c"],
