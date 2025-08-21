@@ -127,8 +127,8 @@ class K8sProcessManager(ProcessManager):
         self.sidecar_image = settings.get("sidecar_image", "alpine/socat")
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
         self.port_forward_timeout = settings.get("port_forward_timeout", 15)
-        self.kill_timeout = settings.get("kill_timeout", 55)
-        self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 120)
+        self.kill_timeout = settings.get("kill_timeout", 10)
+        self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         self.forced_node = settings.get("force_node", "np04-srv-016") # TODO: change this later
 
         self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
@@ -284,6 +284,7 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409: self.log.error(f"Failed to create ClusterIP service for {podname}: {e}")
 
     def _create_pod(self, podname, session, boot_request: BootRequest):
+        """Constructs and creates a Kubernetes Pod manifest."""
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
@@ -292,11 +293,14 @@ class K8sProcessManager(ProcessManager):
 
         if "controller" in podname:
             self.log.debug(f"'{podname}' identified as a Python controller, using robust trap for signal handling.")
+            # Build the original command string for the controller
             command_parts = []
             for e_and_a in exec_and_args_list:
                 command_parts.append(" ".join([e_and_a.exec] + list(e_and_a.args)))
             original_command = " && ".join(command_parts)
             
+            # This robust trap script becomes PID 1, catches signals,
+            # forwards them to the child, and waits for it to exit completely.
             main_command_str = f"""
 #!/bin/sh
 trap 'kill -TERM "$CHILD_PID"' TERM INT
@@ -308,6 +312,7 @@ trap - TERM INT
 wait "$CHILD_PID"
 exit $EXIT_STATUS
 """
+            # No preStop hook is needed because the trap handles the default SIGTERM
             lifecycle_hook = None
 
         else: # C++ Applications
@@ -329,10 +334,6 @@ exit $EXIT_STATUS
                 )
             )
 
-        run_as_uid = os.getuid()
-        run_as_gid = os.getgid()
-        security_context = client.V1SecurityContext(run_as_user=run_as_uid, run_as_group=run_as_gid)
-
         main_container = client.V1Container(
             name=podname, image=pod_image, command=["/bin/sh", "-c"],
             args=[main_command_str],
@@ -344,7 +345,7 @@ exit $EXIT_STATUS
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
             ],
             working_dir=boot_request.process_description.process_execution_directory,
-            security_context=security_context,
+            security_context=client.V1SecurityContext(run_as_user=os.getuid(), run_as_group=os.getgid()),
         )
 
         all_containers = [main_container]
@@ -352,7 +353,8 @@ exit $EXIT_STATUS
         if podname != self.connection_server_name and self.local_connection_server_is_booted:
             self.log.info(f"Adding proxy sidecar to pod '{podname}'")
             sidecar_container = client.V1Container(
-                name="proxy-sidecar", image=self.sidecar_image,
+                name="proxy-sidecar",
+                image=self.sidecar_image,
                 args=[
                     f"TCP-LISTEN:{self.connection_server_port},fork,reuseaddr",
                     f"TCP:{self.connection_server_name}.{session}:{self.connection_server_port}"
@@ -363,13 +365,18 @@ exit $EXIT_STATUS
         node_selector = {}
         if self.forced_node:
             node_selector = {"kubernetes.io/hostname": self.forced_node}
+            self.log.info(f"Pod '{podname}' will be forced to run on node '{self.forced_node}' (from config)")
         elif boot_request.process_restriction.allowed_hosts:
             target_host = boot_request.process_restriction.allowed_hosts[0]
             node_selector = {"kubernetes.io/hostname": target_host}
+            self.log.info(f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)")
 
         pod_manifest = client.V1Pod(
             api_version="v1", kind="Pod",
-            metadata=self._meta_v1_api(name=podname, namespace=session, labels={"app": podname, f"creator.{self.drunc_label}": self.__class__.__name__}),
+            metadata=self._meta_v1_api(
+                name=podname, namespace=session,
+                labels={"app": podname, f"creator.{self.drunc_label}": self.__class__.__name__}
+            ),
             spec=self._pod_spec_v1_api(
                 node_selector=node_selector,
                 termination_grace_period_seconds=self.kill_timeout,
@@ -385,10 +392,12 @@ exit $EXIT_STATUS
             created_pod = self._core_v1_api.create_namespaced_pod(session, pod_manifest)
             self.log.info(f'Creating pod "{session}.{podname}"')
             pod_uid = created_pod.metadata.uid
+
             if podname == self.connection_server_name:
                 self._create_clusterip_service(podname, session, pod_uid)
             else:
                 self._create_headless_service(podname, session, pod_uid)
+
         except self._api_error_v1_api as e:
             self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
             raise e
@@ -643,10 +652,6 @@ exit $EXIT_STATUS
                 pd = self.boot_request[proc_uuid].process_description
                 pr = self.boot_request[proc_uuid].process_restriction
                 pu = ProcessUUID(uuid=proc_uuid)
-
-                # --- ADD THIS PRINT STATEMENT FOR DEBUGGING ---
-                print(f"DEBUG: Storing data for {pd.metadata.name}, host={pd.metadata.hostname}")
-                # --- END DEBUG ---
 
                 initial_ret_map[proc_uuid] = ProcessInstance(
                     process_description=pd,
