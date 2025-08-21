@@ -130,11 +130,6 @@ def TODO_unpack_addressed_command_to():
         def wrap(obj, request, context):
             command = request
 
-            if command.target == "/" or command.target is None or command.target == "":
-                target = obj.name
-            else:
-                target = command.target
-
             try:
                 addressed_commands = address_command(
                     obj=obj,
@@ -155,7 +150,9 @@ def TODO_unpack_addressed_command_to():
                     children=[],
                 )
 
-            execute_on_self = command.execute_along_path or obj.name == target
+            execute_on_self = (
+                obj.is_target(command.target) or command.execute_along_path
+            )
 
             response = cmd(obj, request, context, addressed_commands, execute_on_self)
 
@@ -184,11 +181,6 @@ def unpack_addressed_command_to(data_type=None):
                     flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
                     children=[],
                 )
-
-            if command.target == "/" or command.target is None or command.target == "":
-                target = obj.name
-            else:
-                target = command.target
 
             try:
                 addressed_commands = address_command(
@@ -224,9 +216,13 @@ def unpack_addressed_command_to(data_type=None):
                         children=[],
                     )
 
+            execute_on_self = (
+                obj.is_target(command.target) or command.execute_along_path
+            )
+
             kwargs = {
                 "addressed_commands": addressed_commands,
-                "execute_on_self": command.execute_along_path or obj.name == target,
+                "execute_on_self": execute_on_self,
                 "token": request.token,
             }
             if payload is not None:
@@ -574,6 +570,18 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
+
+    def is_target(self, target: str) -> bool:
+        """
+        Check if we are the target of a command.
+
+        Args:
+            target: The target string to check.
+
+        Returns:
+            True if we are the target of the command, False otherwise.
+        """
+        return target == self.name or target == "" or target == "/"
 
     def propagate_to_all_children(
         self,
