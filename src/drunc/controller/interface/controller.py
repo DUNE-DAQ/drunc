@@ -122,6 +122,8 @@ def controller_cli(
     def kill_me(sig, frame):
         l = get_logger("controller.kill_me")
         l.info("Sending SIGKILL")
+        if ctrlr.top_segment_controller:
+            ctrlr.connectivity_service.retract_partition(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())
         os.killpg(pgrp, signal.SIGKILL)
 
