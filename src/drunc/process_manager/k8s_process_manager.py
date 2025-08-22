@@ -446,10 +446,11 @@ done
         if uuid in self.boot_request:
             raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
 
+        self._create_namespace(session)
+
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        self._create_namespace(session)
         self._create_pod(podname, session, boot_request)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
