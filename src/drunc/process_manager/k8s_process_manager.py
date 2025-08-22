@@ -1,3 +1,4 @@
+# Standard Library Imports
 import getpass
 import os
 import re
@@ -19,6 +20,8 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
+
+# Third-Party Imports
 from kubernetes import client, config, watch
 
 from drunc.exceptions import DruncCommandException, DruncException
@@ -83,7 +86,11 @@ class K8sProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
         """
         Manages processes as Kubernetes Pods.
-        ...
+        This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
+        applications running in Pods. It includes special handling for a local connectivity
+        service, which involves:
+        1.  Automating a `kubectl port-forward` in a background shell process for the orchestrator.
+        2.  Injecting a proxy sidecar container into other pods for transparent service discovery.
         """
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -137,12 +144,14 @@ class K8sProcessManager(ProcessManager):
             self.log.info("No active namespace created by drunc")
  
     def _start_watcher(self):
+        """Starts the background thread that watches for Pod status changes."""
         self.log.debug("Starting K8s pod watcher thread")
         t = K8sPodWatcherThread(pm=self)
         t.start()
         self.watchers.append(t)
 
     def notify_termination(self, proc_uuid, exit_code, reason, session):
+        """Callback for when a pod terminates."""
         self.log.debug(f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}")
 
         if proc_uuid in self.boot_request:
@@ -161,6 +170,7 @@ class K8sProcessManager(ProcessManager):
                 self.termination_complete_event.set()
 
     def is_alive(self, podname, session):
+        """Checks if a pod is currently in the 'Running' phase."""
         try:
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
             return pod_status.status.phase == "Running"
@@ -170,6 +180,7 @@ class K8sProcessManager(ProcessManager):
             return False
 
     def _add_label(self, obj_name, obj_type, key, label, session=None):
+        """Adds a label to a Kubernetes object (Pod or Namespace)."""
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
         if obj_type == "pod":
@@ -189,12 +200,15 @@ class K8sProcessManager(ProcessManager):
             raise DruncException(f"Cannot add label to object type: {obj_type}")
 
     def _add_creator_label(self, obj_name, obj_type):
+        """Adds a 'creator' label to a Kubernetes object."""
         self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _get_creator_label_selector(self):
+        """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _create_namespace(self, session):
+        """Creates a Kubernetes namespace if it doesn't already exist."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
         
@@ -221,6 +235,7 @@ class K8sProcessManager(ProcessManager):
                 raise e
 
     def _create_headless_service(self, podname, session, pod_uid):
+        """Creates a headless service for a pod."""
         service_manifest = client.V1Service(
             api_version="v1", kind="Service",
             metadata=self._meta_v1_api(
@@ -243,6 +258,7 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409: self.log.error(f"Failed to create headless service for {podname}: {e}")
 
     def _create_clusterip_service(self, podname, session, pod_uid):
+        """Creates a standard ClusterIP service for the connection server."""
         service_manifest = client.V1Service(
             api_version="v1", kind="Service",
             metadata=self._meta_v1_api(
@@ -323,6 +339,7 @@ done
 
         all_containers = [main_container]
 
+         # If the local connection server is active, inject a proxy sidecar into all other pods.
         if podname != self.connection_server_name and self.local_connection_server_is_booted:
             self.log.info(f"Adding proxy sidecar to pod '{podname}'")
             sidecar_container = client.V1Container(
@@ -385,6 +402,12 @@ done
             raise e
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
+        """
+        Finds process UUIDs matching a query.
+        
+        If order_by is "leaf_first", it sorts the UUIDs so that child processes
+        (which have a longer tree_id) come before their parents.
+        """
         initial_match = set()
         for proc_uuid, boot_req in self.boot_request.items():
             meta = boot_req.process_description.metadata
@@ -413,6 +436,7 @@ done
         return sorted_uuids
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
+        """Handles the 'logs' command."""
         uuids = self._get_process_uid(log_request.query)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         podname = self.boot_request[uuid].process_description.metadata.name
@@ -426,12 +450,18 @@ done
             return LogLines(uuid=ProcessUUID(uuid=uuid), lines=[f"Could not retrieve logs: {e.reason}"])
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
+        """Handles the 'boot' command from the gRPC interface."""
         self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
         process = self.__boot(boot_request, this_uuid)
         return ProcessInstanceList(values=[process])
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
+        """
+        Internal boot method. Handles pod creation and special logic for the connection server.
+        - For the connection server: Boot is BLOCKING, and a port-forward is automated.
+        - For all other pods: Boot is NON-BLOCKING.
+        """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
@@ -451,6 +481,7 @@ done
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
+        # Special handling only for the connection server
         if podname == self.connection_server_name:
             self.log.info(f"Waiting for '{podname}' to become ready...")
             start_time = time()
@@ -483,6 +514,7 @@ done
 
             self.log.info("Starting port-forward for orchestrator. Executing shell command...")
             try:
+                # preexec_fn=os.setsid creates a new process group, allowing us to kill the shell and all its children.
                 proc = subprocess.Popen(
                     command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, preexec_fn=os.setsid
@@ -527,6 +559,7 @@ done
         )
 
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """Handles the 'ps' command."""
         queried_uuids = self._get_process_uid(query)
         if not queried_uuids: return ProcessInstanceList(values=[])
         all_pods = self._core_v1_api.list_pod_for_all_namespaces(
@@ -555,6 +588,7 @@ done
         return ProcessInstanceList(values=ret)
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """Handles the 'restart' command."""
         uuids = self._get_process_uid(query)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
@@ -571,12 +605,14 @@ done
         return ProcessInstanceList(values=[restarted_process])
 
     def _kill_pod(self, podname, session, grace_period_seconds=None):
+        """Deletes a specific pod from a namespace."""
         try:
             self._core_v1_api.delete_namespaced_pod(name=podname, namespace=session, grace_period_seconds=grace_period_seconds)
         except self._api_error_v1_api as e:
             if e.status != 404: raise e
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """Handles the 'kill' command."""
         uuids_to_kill = self._get_process_uid(query, order_by="leaf_first")
         if not uuids_to_kill: return ProcessInstanceList(values=[])
 
@@ -657,6 +693,7 @@ done
         return ProcessInstanceList(values=final_ret)
 
     def _terminate_impl(self) -> ProcessInstanceList:
+        """Handles the 'terminate' command, killing all known processes."""
         self.log.info("Terminating all known K8s processes.")
         if not self.boot_request:
             self.log.info("No processes to terminate.")
@@ -665,6 +702,7 @@ done
         return self._kill_impl(all_processes_query)
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """Handles the 'flush' command (no-op for Kubernetes)."""
         self.log.info(
             "The 'flush' command is not needed for the K8sProcessManager. "
             "Cleanup of dead processes is handled automatically in real-time."
