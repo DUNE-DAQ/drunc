@@ -1,8 +1,8 @@
 import time
 from dataclasses import dataclass
+from typing import cast
 
 import grpc
-from google.protobuf import any_pb2
 from grpc_status import rpc_status
 
 from drunc.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
@@ -71,6 +71,40 @@ def get_detector_name(configuration) -> str:
     return detector_name
 
 
+def handle_grpc_error(error: grpc.RpcError) -> None:
+    """Handle gRPC errors from sending commands to the controller.
+
+    Args:
+        error: The gRPC error to handle.
+    """
+    rethrow_if_unreachable_server(error)
+
+    # RpcError is also a subclass of Call, and can be used in from_call.
+    # The type stubs in types-grpcio do not reflect this, so we must cast.
+    # See https://github.com/grpc/grpc/issues/10885.
+    status = rpc_status.from_call(cast(grpc.Call, error))
+
+    log = get_logger("controller.handle_grpc_error")
+    log.error("Error sending command to controller")
+
+    if hasattr(status, "message"):
+        log.error(status.message)
+
+    if hasattr(status, "details"):
+        for detail in status.details:
+            if detail.Is(Stacktrace.DESCRIPTOR):
+                text = "Stacktrace on remote server!\n"
+                stack = unpack_any(detail, Stacktrace)
+                for l in stack.text:
+                    text += l + "\n"
+                log.error(text)
+            elif detail.Is(PlainText.DESCRIPTOR):
+                text = unpack_any(detail, PlainText)
+                log.error(text)
+
+    raise error
+
+
 def send_command(controller, token, command: str, data=None, rethrow=False):
     log = get_logger("controller.send_command")
 
@@ -84,39 +118,15 @@ def send_command(controller, token, command: str, data=None, rethrow=False):
     cmd = getattr(controller, command)  # this throws if the command doesn't exist
 
     request = Request(token=token)
+    if data is not None:
+        request.data.Pack(data)
+
+    log.debug(f"Sending: {command} to the controller, with {request=}")
 
     try:
-        if data:
-            data_detail = any_pb2.Any()
-            data_detail.Pack(data)
-            request.data.CopyFrom(data_detail)
-        log.debug(f"Sending: {command} to the controller, with {request=}")
         response = cmd(request)
-
     except grpc.RpcError as e:
-        rethrow_if_unreachable_server(e)
-        status = rpc_status.from_call(e)
-        log.error(f'Error sending command "{command}" to controller')
-
-        if hasattr(status, "message"):
-            log.error(status.message)
-
-        if hasattr(status, "details"):
-            for detail in status.details:
-                if detail.Is(Stacktrace.DESCRIPTOR):
-                    text = "Stacktrace on remote server!\n"
-                    stack = unpack_any(detail, Stacktrace)
-                    for l in stack.text:
-                        text += l + "\n"
-                    log.error(text)
-                elif detail.Is(PlainText.DESCRIPTOR):
-                    text = unpack_any(detail, PlainText)
-                    log.error(text)
-
-        if rethrow:
-            raise e
-
-        return None
+        handle_grpc_error(e)
 
     return response
 
