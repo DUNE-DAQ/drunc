@@ -71,7 +71,7 @@ def get_detector_name(configuration) -> str:
     return detector_name
 
 
-def handle_grpc_error(error: grpc.RpcError) -> None:
+def handle_controller_grpc_error(error: grpc.RpcError) -> None:
     """Handle gRPC errors from sending commands to the controller.
 
     Args:
@@ -84,7 +84,7 @@ def handle_grpc_error(error: grpc.RpcError) -> None:
     # See https://github.com/grpc/grpc/issues/10885.
     status = rpc_status.from_call(cast(grpc.Call, error))
 
-    log = get_logger("controller.handle_grpc_error")
+    log = get_logger("controller.handle_controller_grpc_error")
     log.error("Error sending command to controller")
 
     if hasattr(status, "message"):
@@ -126,7 +126,7 @@ def send_command(controller, token, command: str, data=None, rethrow=False):
     try:
         response = cmd(request)
     except grpc.RpcError as e:
-        handle_grpc_error(e)
+        handle_controller_grpc_error(e)
 
     return response
 
