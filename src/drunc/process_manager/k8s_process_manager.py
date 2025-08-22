@@ -121,7 +121,6 @@ class K8sProcessManager(ProcessManager):
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         
-        # **FIX:** Restored the default node from your original file.
         self.forced_node = settings.get("force_node", "np04-srv-016") # TODO: change this later
 
         self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
@@ -285,12 +284,10 @@ class K8sProcessManager(ProcessManager):
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
-
         # Determine the correct shutdown command for the preStop hook
         shutdown_command = ""
         if "controller" in podname or podname == self.connection_server_name:
             self.log.debug(f"'{podname}' identified as a Python app, using manual PID discovery with SIGINT.")
-            # This script loops only through numbered process folders in /proc.
             shutdown_command = """
 for p in /proc/[0-9]*; do
     if [ -f "$p/cmdline" ] && grep -a "drunc-controller" "$p/cmdline" > /dev/null; then
@@ -335,7 +332,6 @@ done
                     f"TCP-LISTEN:{self.connection_server_port},fork,reuseaddr",
                     f"TCP:{self.connection_server_name}.{session}:{self.connection_server_port}"
                 ],
-                # --- THIS IS THE ONLY CHANGE ---
                 # This hook delays the sidecar's termination, allowing the main C++ app
                 # to shut down gracefully while its network connection is still alive.
                 lifecycle=client.V1Lifecycle(
@@ -586,7 +582,6 @@ done
 
         self.log.info(f"Starting termination of {len(uuids_to_kill)} pods...")
         
-        # Determine if this is a local session shutdown
         is_local_session = any(
             self.boot_request[uuid].process_description.metadata.name == self.connection_server_name
             for uuid in uuids_to_kill if uuid in self.boot_request
@@ -599,7 +594,6 @@ done
             pd = self.boot_request[uuid_str].process_description
             is_controller = "controller" in pd.metadata.name or pd.metadata.name == self.connection_server_name
             
-            # FINAL LOGIC: Force-kill controllers AND all C++ apps during a local session
             if is_controller or is_local_session:
                 forced_apps.append(uuid_str)
             else:
@@ -623,10 +617,8 @@ done
                  self.log.warning(f"Timeout in stage '{stage_name}'. Remaining: {self.uuids_pending_deletion}")
             self.uuids_pending_deletion.clear()
         
-        # First, gracefully kill standalone C++ apps
         kill_and_wait(graceful_apps, "Standalone C++ Applications")
         
-        # Then, nuke all controllers and any C++ apps that were part of a local session
         kill_and_wait(forced_apps, "Controllers & Local Session Apps", grace_period=0)
 
         # Terminate port-forward if its pod was killed
