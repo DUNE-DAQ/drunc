@@ -8,6 +8,7 @@ import threading
 import uuid
 from time import sleep, time
 
+# Local Application Imports
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -339,7 +340,7 @@ done
 
         all_containers = [main_container]
 
-         # If the local connection server is active, inject a proxy sidecar into all other pods.
+        # If the local connection server is active, inject a proxy sidecar into all other pods.
         if podname != self.connection_server_name and self.local_connection_server_is_booted:
             self.log.info(f"Adding proxy sidecar to pod '{podname}'")
             sidecar_container = client.V1Container(
