@@ -89,11 +89,7 @@ class GRPCDriver:
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
         options = [
-            ("grpc.keepalive_time_ms", 60000),  # pings the server every 60 seconds
-            (
-                "grpc.keepalive_permit_without_calls",
-                True,
-            ),  # allows pings when the client is idle
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
         self.address = address
         self.channel = grpc.insecure_channel(self.address, options=options)
