@@ -234,14 +234,14 @@ class AppCommander:
 
         for i_try in range(n_tries):
             try:
-                s.connect((self.app_host, self.app_port)),
+                (s.connect((self.app_host, self.app_port)),)
                 s.shutdown(2)
                 self.log.debug(f"'{self.app}' pings")
                 return True
 
             except Exception as e:
                 self.log.error(f"'{self.app}' does not ping, reason: '{e!s}'")
-                if i_try == n_tries-1:
+                if i_try == n_tries - 1:
                     return False
 
     def send_command(
@@ -288,7 +288,9 @@ class AppCommander:
             except requests.ConnectionError as e:
                 self.log.error(f"Connection error to {self.app_url}: {e}")
                 if i_try == n_tries - 1:
-                    raise CouldnotSendCommand(f"Connection error to {self.app_url}") from e
+                    raise CouldnotSendCommand(
+                        f"Connection error to {self.app_url}"
+                    ) from e
                 else:
                     self.log.error("Trying again...")
 

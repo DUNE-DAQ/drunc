@@ -70,7 +70,6 @@ def run_pm(
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
 
-
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
         log.debug("serve called")

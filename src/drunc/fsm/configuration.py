@@ -75,13 +75,11 @@ class FSMConfHandler(ConfHandler):
 
             self.transitions += [tr]
 
-
         for sequence in self.data.command_sequences:
             seq_id = sequence.id
             cmd_ids = [cmd.id for cmd in sequence.sequence]
             self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))
 
-        
     # def _parse_dict(self, data):
     #     pass
 
@@ -102,6 +100,6 @@ class FSMConfHandler(ConfHandler):
 
     def get_post_transitions_sequences(self):
         return self.post_transitions
-    
+
     def get_sequences(self):
         return self.sequences
