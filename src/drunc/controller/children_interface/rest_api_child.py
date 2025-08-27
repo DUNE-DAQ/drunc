@@ -234,7 +234,7 @@ class AppCommander:
 
         for i_try in range(n_tries):
             try:
-                (s.connect((self.app_host, self.app_port)),)
+                s.connect((self.app_host, self.app_port))
                 s.shutdown(2)
                 self.log.debug(f"'{self.app}' pings")
                 return True
