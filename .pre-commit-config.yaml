@@ -5,3 +5,8 @@ repos:
       - id: ruff
         name: Check linting with Ruff
         entry: ruff check .
+        args: [--no-fix]
+      - id: ruff-format
+        name: Fix formatting with Ruff
+        entry: ruff format
+        types_or: [python]
