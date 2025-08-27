@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 
 import grpc
 import pytest
-
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import (
     ResponseFlag,
