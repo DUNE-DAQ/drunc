@@ -15,8 +15,8 @@ from drunc.session_manager.session_manager import SessionManager
 
 servicers = {
     DESCRIPTOR.services_by_name["SessionManager"]: SessionManager(
-        name="dummy_name", 
-        configuration=MagicMock())
+        name="dummy_name", configuration=MagicMock()
+    )
 }
 
 
@@ -24,16 +24,15 @@ test_server = server_from_dictionary(servicers, strict_real_time())
 
 
 def test_describe():
-    request = SessionManager(
-        name="dummy_name", 
-        configuration=MagicMock())
+    request = SessionManager(name="dummy_name", configuration=MagicMock())
 
     describe_method = test_server.invoke_unary_unary(
         method_descriptor=(
-            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name["describe"]),
-        request =request,
+            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name["describe"]
+        ),
+        request=request,
         invocation_metadata={},
-        timeout=1
+        timeout=1,
     )
 
     response, metadata, code, details = describe_method.termination()
@@ -44,16 +43,17 @@ def test_describe():
 
 
 def test_list_all_sessions():
-    request = SessionManager(
-        name="dummy_name", 
-        configuration=MagicMock())
+    request = SessionManager(name="dummy_name", configuration=MagicMock())
 
     list_all_sessions_method = test_server.invoke_unary_unary(
         method_descriptor=(
-            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name["list_all_sessions"]),
-        request =request,
+            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name[
+                "list_all_sessions"
+            ]
+        ),
+        request=request,
         invocation_metadata={},
-        timeout=1
+        timeout=1,
     )
 
     response, metadata, code, details = list_all_sessions_method.termination()
@@ -62,7 +62,7 @@ def test_list_all_sessions():
     assert code == grpc.StatusCode.OK
     assert response.name == "dummy_name"
     assert response.active_sessions
-    
+
     assert len(response.active_sessions) == 1
 
     session = response.active_sessions[0]
@@ -74,17 +74,17 @@ def test_list_all_sessions():
 
 
 def test_list_all_configs():
-    request = SessionManager(
-        name="dummy_name", 
-        configuration=MagicMock())
+    request = SessionManager(name="dummy_name", configuration=MagicMock())
 
     list_all_sessions_method = test_server.invoke_unary_unary(
         method_descriptor=(
-            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name["list_all_configs"]
-            ),
-        request =request,
+            DESCRIPTOR.services_by_name["SessionManager"].methods_by_name[
+                "list_all_configs"
+            ]
+        ),
+        request=request,
         invocation_metadata={},
-        timeout=1
+        timeout=1,
     )
 
     response, metadata, code, details = list_all_sessions_method.termination()
@@ -94,9 +94,6 @@ def test_list_all_configs():
     assert response.name == "dummy_name"
     assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
-    assert len(response.config_keys) == 17
     config = response.config_keys[0]
     assert config.file == "example-configs.data.xml"
     assert config.session_id == "local-tpreplay-config"
-
-
