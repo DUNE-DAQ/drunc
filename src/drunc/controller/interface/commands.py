@@ -406,3 +406,32 @@ def expert_command(
             print_result(child, prefix + "    ")
 
     print_result(result)
+
+@click.command("to_error")
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=True,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=True,
+)
+@click.pass_obj
+def to_error(
+    obj: ControllerContext,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool
+) -> None:
+    obj.get_driver("controller").to_error(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )

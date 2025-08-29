@@ -21,6 +21,7 @@ from drunc.controller.interface.commands import (
     status,
     surrender_control,
     take_control,
+    to_error,
     wait,
     who_am_i,
     who_is_in_charge,
@@ -347,6 +348,7 @@ def unified_shell(
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
     ctx.command.add_command(expert_command, "expert-command")
+    ctx.command.add_command(to_error, "to-error")
     ctx.obj.dynamic_commands.add("status")
     ctx.obj.dynamic_commands.add("recompute_status")
     ctx.obj.dynamic_commands.add("connect")
@@ -359,6 +361,7 @@ def unified_shell(
     ctx.obj.dynamic_commands.add("exclude")
     ctx.obj.dynamic_commands.add("wait")
     ctx.obj.dynamic_commands.add("expert_command")
+    ctx.obj.dynamic_commands.add("to_error")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
