@@ -1,17 +1,17 @@
 import time
 
 import grpc
+from druncschema.controller_pb2 import AddressedCommand
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import send_command
+from drunc.controller.utils import handle_controller_grpc_error, send_command
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfHandler, ConfTypes
-from drunc.utils.grpc_utils import ServerUnreachable
+from drunc.utils.grpc_utils import ServerUnreachable, copy_token
 from drunc.utils.utils import ControlType, get_logger
 
 
@@ -46,32 +46,40 @@ class gRPCChildNode(ChildNode):
         self.channel = grpc.insecure_channel(self.uri)
         self.controller = ControllerStub(self.channel)
 
-        desc = Description()
-        ntries = 20
+        request = AddressedCommand(
+            token=copy_token(init_token),
+            command_name="describe",
+            command_data=None,
+            target="",
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=False,
+        )
 
-        for itry in range(ntries):
+        n_tries = 20
+        while True:
+            n_tries -= 1
+
             try:
-                response = send_command(
-                    controller=self.controller,
-                    token=init_token,
-                    command="describe",
-                    rethrow=True,
-                )
-                response.data.Unpack(desc)
-            except ServerUnreachable as e:
-                if itry + 1 == ntries:
-                    raise e
-                else:
+                response = self.controller.describe(request)
+
+            except grpc.RpcError as error:
+                try:
+                    handle_controller_grpc_error(error)
+                except ServerUnreachable as server_unreachable_error:
+                    if n_tries == 0:
+                        raise server_unreachable_error
                     self.log.info(
-                        f"Could not connect to the controller ({self.uri}), trial {itry + 1} of {ntries}"
+                        (
+                            f"Could not connect to the controller ({self.uri}). "
+                            f"Trying {n_tries} more times..."
+                        )
                     )
                     time.sleep(5)
-                    continue
 
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
+                self.start_listening(response.broadcast)
                 break
-        self.start_listening(desc.broadcast)
 
     def __str__(self):
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
