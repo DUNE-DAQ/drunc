@@ -31,7 +31,6 @@ class ChildNode:  # abc.ABC):
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
-        # super().__init__(**kwargs)
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name

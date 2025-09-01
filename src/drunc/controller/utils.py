@@ -10,7 +10,6 @@ from drunc.utils.utils import get_logger
 
 from druncschema.controller_pb2 import Status, RunInfo  # isort: skip
 from druncschema.generic_pb2 import PlainText, Stacktrace  # isort: skip
-from druncschema.request_response_pb2 import Request  # isort: skip
 
 
 def get_status_message(controller):
@@ -103,32 +102,6 @@ def handle_controller_grpc_error(error: grpc.RpcError) -> None:
                 log.error(text)
 
     raise error
-
-
-def send_command(controller, token, command: str, data=None, rethrow=False):
-    log = get_logger("controller.send_command")
-
-    # Grab the command from the controller stub in the context
-    # Add the token to the data (which can be of any protobuf type)
-    # Send the command to the controller
-
-    if not controller:
-        raise RuntimeError("No controller initialised")
-
-    cmd = getattr(controller, command)  # this throws if the command doesn't exist
-
-    request = Request(token=token)
-    if data is not None:
-        request.data.Pack(data)
-
-    log.debug(f"Sending: {command} to the controller, with {request=}")
-
-    try:
-        response = cmd(request)
-    except grpc.RpcError as e:
-        handle_controller_grpc_error(e)
-
-    return response
 
 
 def get_segment_lookup_timeout(segment_conf, base_timeout=60):
