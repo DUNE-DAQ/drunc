@@ -119,8 +119,8 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = cmd(request)
-        except grpc.RpcError as e:
-            self.handle_controller_grpc_error(e)
+        except grpc.RpcError as error:
+            self.handle_controller_grpc_error(error)
 
         return response
 

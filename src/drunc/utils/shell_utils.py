@@ -4,18 +4,13 @@ from collections.abc import Mapping
 
 import click
 import grpc
-from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
 from rich.console import Console
 
 from drunc.exceptions import (
-    DruncServerSideError,
     DruncSetupException,
     DruncShellException,
 )
-from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.utils import get_logger
 
 
@@ -93,98 +88,6 @@ class GRPCDriver:
         self.channel = grpc.insecure_channel(self.address)
         self.token = Token()
         self.token.CopyFrom(token)
-
-    def _create_request(self, payload=None) -> Request:
-        token2 = Token()
-        token2.CopyFrom(self.token)
-        data = Any()
-        if payload is not None:
-            data.Pack(payload)
-
-        if payload:
-            return Request(token=token2, data=data)
-        else:
-            return Request(token=token2)
-
-    def handle_response(self, response, command, outformat):
-        dr = DecodedResponse(
-            name=response.name,
-            token=response.token,
-            flag=response.flag,
-        )
-
-        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            if response.HasField("data") and response.data not in [None, ""]:
-                try:
-                    dr.data = unpack_any(response.data, outformat)
-                except UnpackingError as e:
-                    self.log.error(f"Error unpacking data: {e}")
-                    dr.data = response.data
-
-        else:
-
-            def text(verb="not executed", reason=""):
-                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
-
-            if not response.HasField("data"):
-                return None
-
-            error_txt = ""
-            stack_txt = None
-
-            if response.data.Is(Stacktrace.DESCRIPTOR):
-                stack = unpack_any(response.data, Stacktrace)
-                dr.data = stack
-                stack_txt = "Stacktrace on remote server!\n"
-                last_one = ""
-
-                for l in stack.text:
-                    stack_txt += l + "\n"
-                    if l != "":
-                        last_one = l
-                error_txt = last_one
-
-            elif response.data.Is(PlainText.DESCRIPTOR):
-                txt = unpack_any(response.data, PlainText)
-                error_txt = txt.text  # noqa: F841  (might need to revisit this)
-                dr.data = error_txt
-
-            if response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-            ]:
-                self.log.debug(text())
-            elif response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
-            ]:
-                self.log.warning(text())
-            else:
-                self.log.error(text("failed", error_txt))
-
-        for c_response in response.children:
-            try:
-                dr.children.append(self.handle_response(c_response, command, outformat))
-            except DruncServerSideError as e:
-                self.log.error(f"Exception thrown from child: {e}")
-
-        return dr
-
-    def send_command(
-        self,
-        command: str,
-        data=None,
-        outformat=None,
-        timeout: int | float = 60,
-    ):
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = self._create_request(data)
-
-        try:
-            response = cmd(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
-        return self.handle_response(response, command, outformat)
 
 
 class ShellContext:
