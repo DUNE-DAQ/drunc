@@ -1,17 +1,24 @@
 import time
+from typing import cast
 
 import grpc
 from druncschema.controller_pb2 import AddressedCommand
 from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, Response
+from grpc_status import rpc_status
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import handle_controller_grpc_error
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfHandler, ConfTypes
-from drunc.utils.grpc_utils import ServerUnreachable, copy_token
+from drunc.utils.grpc_utils import (
+    ServerUnreachable,
+    copy_token,
+    rethrow_if_unreachable_server,
+    unpack_any,
+)
 from drunc.utils.utils import ControlType, get_logger
 
 
@@ -64,7 +71,7 @@ class gRPCChildNode(ChildNode):
 
             except grpc.RpcError as error:
                 try:
-                    handle_controller_grpc_error(error)
+                    self.handle_controller_grpc_error(error)
                 except ServerUnreachable as server_unreachable_error:
                     if n_tries == 0:
                         raise server_unreachable_error
@@ -113,7 +120,7 @@ class gRPCChildNode(ChildNode):
         try:
             response = cmd(request)
         except grpc.RpcError as e:
-            handle_controller_grpc_error(e)
+            self.handle_controller_grpc_error(e)
 
         return response
 
@@ -134,3 +141,37 @@ class gRPCChildNode(ChildNode):
             command=command,
             data=data,
         )
+
+    @staticmethod
+    def handle_controller_grpc_error(error: grpc.RpcError) -> None:
+        """Handle gRPC errors from sending commands to the controller.
+
+        Args:
+            error: The gRPC error to handle.
+        """
+        rethrow_if_unreachable_server(error)
+
+        # RpcError is also a subclass of Call, and can be used in from_call.
+        # The type stubs in types-grpcio do not reflect this, so we must cast.
+        # See https://github.com/grpc/grpc/issues/10885.
+        status = rpc_status.from_call(cast(grpc.Call, error))
+
+        log = get_logger("controller.handle_controller_grpc_error")
+        log.error("Error sending command to controller")
+
+        if hasattr(status, "message"):
+            log.error(status.message)
+
+        if hasattr(status, "details"):
+            for detail in status.details:
+                if detail.Is(Stacktrace.DESCRIPTOR):
+                    text = "Stacktrace on remote server!\n"
+                    stack = unpack_any(detail, Stacktrace)
+                    for l in stack.text:
+                        text += l + "\n"
+                    log.error(text)
+                elif detail.Is(PlainText.DESCRIPTOR):
+                    text = unpack_any(detail, PlainText)
+                    log.error(text)
+
+        raise error

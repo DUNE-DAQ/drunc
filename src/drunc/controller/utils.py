@@ -1,15 +1,9 @@
 import time
 from dataclasses import dataclass
-from typing import cast
 
-import grpc
-from grpc_status import rpc_status
+from druncschema.controller_pb2 import RunInfo, Status
 
-from drunc.utils.grpc_utils import rethrow_if_unreachable_server, unpack_any
 from drunc.utils.utils import get_logger
-
-from druncschema.controller_pb2 import Status, RunInfo  # isort: skip
-from druncschema.generic_pb2 import PlainText, Stacktrace  # isort: skip
 
 
 def get_status_message(controller):
@@ -68,40 +62,6 @@ def get_detector_name(configuration) -> str:
             f'Application {configuration.data.id} has no "contains" relation, hence no detector'
         )
     return detector_name
-
-
-def handle_controller_grpc_error(error: grpc.RpcError) -> None:
-    """Handle gRPC errors from sending commands to the controller.
-
-    Args:
-        error: The gRPC error to handle.
-    """
-    rethrow_if_unreachable_server(error)
-
-    # RpcError is also a subclass of Call, and can be used in from_call.
-    # The type stubs in types-grpcio do not reflect this, so we must cast.
-    # See https://github.com/grpc/grpc/issues/10885.
-    status = rpc_status.from_call(cast(grpc.Call, error))
-
-    log = get_logger("controller.handle_controller_grpc_error")
-    log.error("Error sending command to controller")
-
-    if hasattr(status, "message"):
-        log.error(status.message)
-
-    if hasattr(status, "details"):
-        for detail in status.details:
-            if detail.Is(Stacktrace.DESCRIPTOR):
-                text = "Stacktrace on remote server!\n"
-                stack = unpack_any(detail, Stacktrace)
-                for l in stack.text:
-                    text += l + "\n"
-                log.error(text)
-            elif detail.Is(PlainText.DESCRIPTOR):
-                text = unpack_any(detail, PlainText)
-                log.error(text)
-
-    raise error
 
 
 def get_segment_lookup_timeout(segment_conf, base_timeout=60):
