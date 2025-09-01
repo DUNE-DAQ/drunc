@@ -12,6 +12,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
 from drunc.utils.grpc_utils import (
@@ -21,14 +22,16 @@ from drunc.utils.grpc_utils import (
     unpack_any,
 )
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
+from drunc.utils.utils import get_logger
 
 
 class ControllerDriver(GRPCDriver):
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="controller_driver", address=address, token=token, **kwargs
-        )
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ControllerDriver")
+        self.address = address
+        self.channel = grpc.insecure_channel(self.address)
         self.stub = ControllerStub(self.channel)
+        self.token = copy_token(token)
 
     def pack_empty_addressed_command(cmd):
         @wraps(cmd)

@@ -21,6 +21,7 @@ from druncschema.process_manager_pb2 import (
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -31,6 +32,7 @@ from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
+    get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
@@ -40,11 +42,12 @@ from drunc.utils.utils import (
 class ProcessManagerDriver(GRPCDriver):
     controller_address = ""
 
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="process_manager_driver", address=address, token=token, **kwargs
-        )
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ProcessManagerDriver")
+        self.address = address
+        self.channel = grpc.insecure_channel(self.address)
         self.stub = ProcessManagerStub(self.channel)
+        self.token = copy_token(token)
 
     def _convert_oks_to_boot_request(
         self,

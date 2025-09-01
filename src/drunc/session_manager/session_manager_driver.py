@@ -9,6 +9,7 @@ from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
 from drunc.utils.shell_utils import GRPCDriver
+from drunc.utils.utils import get_logger
 
 
 class SessionManagerDriver(GRPCDriver):
@@ -18,7 +19,7 @@ class SessionManagerDriver(GRPCDriver):
     session manager service, via gRPC connections.
     """
 
-    def __init__(self, address: str, token: Token, **kwargs):
+    def __init__(self, address: str, token: Token):
         """Create a new session manager driver instance.
 
         Args:
@@ -26,10 +27,11 @@ class SessionManagerDriver(GRPCDriver):
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        super().__init__(
-            name="session_manager_driver", address=address, token=token, **kwargs
-        )
+        self.log = get_logger("controller.SessionManagerDriver")
+        self.address = address
+        self.channel = grpc.insecure_channel(self.address)
         self.stub = SessionManagerStub(self.channel)
+        self.token = copy_token(token)
 
     def describe(self, timeout: int | float = 60) -> Description:
         """Describe the session manager service.

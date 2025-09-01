@@ -3,14 +3,10 @@ import getpass
 from collections.abc import Mapping
 
 import click
-import grpc
 from druncschema.token_pb2 import Token
 from rich.console import Console
 
-from drunc.exceptions import (
-    DruncSetupException,
-    DruncShellException,
-)
+from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
 
@@ -76,18 +72,7 @@ class DecodedResponse:
 
 
 class GRPCDriver:
-    def __init__(self, name: str, address: str, token: Token):
-        self.log = get_logger("utils.GRPCDriver")
-
-        if not address:
-            raise DruncSetupException(
-                f"You need to provide a valid IP address for the driver. Provided '{address}'"
-            )
-
-        self.address = address
-        self.channel = grpc.insecure_channel(self.address)
-        self.token = Token()
-        self.token.CopyFrom(token)
+    pass
 
 
 class ShellContext:
