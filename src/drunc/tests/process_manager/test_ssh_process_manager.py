@@ -72,7 +72,7 @@ def ssh_process_manager(mock_logger) -> SSHProcessManager:
 
 
 # =============================================================================
-# Tests for _kill_impl method (high-level interface)
+# Tests for _kill_impl method
 # =============================================================================
 
 
@@ -200,7 +200,7 @@ def test_kill_impl_single_process(ssh_process_manager: SSHProcessManager):
 
 
 # =============================================================================
-# Tests for kill_processes method (low-level implementation)
+# Tests for kill_processes method
 # =============================================================================
 
 
