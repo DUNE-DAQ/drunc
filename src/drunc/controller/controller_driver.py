@@ -12,8 +12,6 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, ResponseFlag
-from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
 
 from drunc.exceptions import DruncServerSideError
 from drunc.utils.grpc_utils import (
@@ -217,18 +215,6 @@ class ControllerDriver(GRPCDriver):
             timeout=timeout,
         )
 
-    def _create_request(self, payload=None) -> Request:
-        token2 = Token()
-        token2.CopyFrom(self.token)
-        data = Any()
-        if payload is not None:
-            data.Pack(payload)
-
-        if payload:
-            return Request(token=token2, data=data)
-        else:
-            return Request(token=token2)
-
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
             name=response.name,
@@ -298,11 +284,12 @@ class ControllerDriver(GRPCDriver):
         outformat=None,
         timeout: int | float = 60,
     ):
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = self._create_request(data)
+        request = Request(token=copy_token(self.token))
+        if data is not None:
+            request.data.Pack(data)
 
         try:
+            cmd = getattr(self.stub, command)
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
             handle_grpc_error(e)
