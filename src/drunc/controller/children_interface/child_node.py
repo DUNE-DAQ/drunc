@@ -78,8 +78,8 @@ class ChildNode:  # abc.ABC):
         )
 
     # @abc.abstractmethod
-    def get_endpoint(self):
-        pass
+    def get_endpoint(self) -> str | None:
+        return None
 
     def describe(self, token: Token) -> Response:
         descriptionType = None
