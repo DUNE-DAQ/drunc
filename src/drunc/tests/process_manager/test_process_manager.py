@@ -185,11 +185,110 @@ def test_kill_endpoint(grpc_test_server_with_mock_kill_impl):
     # Verify the RPC completed successfully
     assert code == grpc.StatusCode.OK
 
+    # if we fail here the request/response type has changed
+    # test should be updated
+    assert response.flag != ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    assert response.flag != ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+    assert expected_response.flag == response.flag
+
     # Verify all response fields match expected values
     assert expected_response.name == response.name
     assert expected_response.token == response.token
     assert expected_response.values == response.values
-    assert expected_response.flag == response.flag
+
+
+def test_kill_endpoint_wrong_request_type(grpc_test_server_with_mock_kill_impl):
+    """
+    Test that invoking the kill method with the wrong request type gives the expected response
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+        expected_response: the response expected (unused)
+    """
+    grpc_test_server, _ = grpc_test_server_with_mock_kill_impl
+
+    request = MagicMock()
+
+    # invoke the method
+    kill_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["kill"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    # blocks until response is ready
+    response, metadata, code, details = kill_method.termination()
+
+    # Verify the RPC completed successfully
+    assert code == grpc.StatusCode.OK
+    assert response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_with_wrong_response(grpc_servicer):
+    """
+    Create a gRPC testing server with an invalid kill_impl response.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        grpc_testing.Server: Configured testing server instance
+    """
+
+    mock_kill_impl_response = MagicMock()
+
+    grpc_servicer._kill_impl = MagicMock(return_value=mock_kill_impl_response)
+
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    return test_server
+
+
+def test_kill_endpoint_wrong_response_type(grpc_test_server_with_wrong_response):
+    """
+    Test that invoking the kill method gives the expected response
+    Args:
+        grpc_test_server: gRPC testing server for invoking RPC methods
+    """
+    grpc_test_server = grpc_test_server_with_wrong_response
+
+    # Create authentication token for the request
+    token = Token()
+
+    # Create process identifiers for targeting specific processes
+    uuids = [ProcessUUID(uuid="uuid1"), ProcessUUID(uuid="uuid2")]
+    names = ["name1", "name2"]
+    user = "test_user"
+    session = "test_session"
+
+    # Construct the process query with all required identification fields
+    request = ProcessQuery(
+        token=token, uuids=uuids, names=names, user=user, session=session
+    )
+
+    # invoke the method
+    kill_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["kill"]
+        ),
+        invocation_metadata={},
+        request=request,
+        timeout=1,
+    )
+
+    # blocks until response is ready
+    response, metadata, code, details = kill_method.termination()
+
+    # Verify the RPC completed successfully
+    assert code == grpc.StatusCode.OK
+    assert response.flag == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
 
 
 def test_describe_endpoint(grpc_test_server_no_impl):
