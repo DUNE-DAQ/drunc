@@ -37,7 +37,7 @@ from drunc.tests.process_manager.process_manager_mock_impls import (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def mock_logger():
     """
     Create a mock logger that intercepts get_logger calls during testing.
@@ -197,14 +197,39 @@ def test_kill_endpoint(grpc_test_server_with_mock_kill_impl):
     assert expected_response.values == response.values
 
 
-def test_kill_endpoint_wrong_request_type(grpc_test_server_with_mock_kill_impl):
+@pytest.fixture(scope="function")
+def grpc_test_server_with_wrong_request(grpc_servicer):
+    """
+    Create a gRPC testing server with an invalid kill_impl response.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        grpc_testing.Server: Configured testing server instance
+    """
+
+    mock_kill_impl_response = MagicMock()
+
+    grpc_servicer._kill_impl = MagicMock(return_value=mock_kill_impl_response)
+
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+
+    test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    return test_server, grpc_servicer
+
+
+def test_kill_endpoint_wrong_request_type(grpc_test_server_with_wrong_request):
     """
     Test that invoking the kill method with the wrong request type gives the expected response
     Args:
         grpc_test_server: gRPC testing server for invoking RPC methods
         expected_response: the response expected (unused)
     """
-    grpc_test_server, _ = grpc_test_server_with_mock_kill_impl
+    grpc_test_server, grpc_servicer = grpc_test_server_with_wrong_request
 
     request = MagicMock()
 
@@ -224,6 +249,7 @@ def test_kill_endpoint_wrong_request_type(grpc_test_server_with_mock_kill_impl):
     # Verify the RPC completed successfully
     assert code == grpc.StatusCode.OK
     assert response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    grpc_servicer._mock_logger.logger_instance.error.assert_called_once()
 
 
 @pytest.fixture(scope="function")
@@ -248,7 +274,7 @@ def grpc_test_server_with_wrong_response(grpc_servicer):
         servicers, grpc_testing.strict_real_time()
     )
 
-    return test_server
+    return test_server, grpc_servicer
 
 
 def test_kill_endpoint_wrong_response_type(grpc_test_server_with_wrong_response):
@@ -257,7 +283,7 @@ def test_kill_endpoint_wrong_response_type(grpc_test_server_with_wrong_response)
     Args:
         grpc_test_server: gRPC testing server for invoking RPC methods
     """
-    grpc_test_server = grpc_test_server_with_wrong_response
+    grpc_test_server, grpc_servicer = grpc_test_server_with_wrong_response
 
     # Create authentication token for the request
     token = Token()
@@ -289,6 +315,7 @@ def test_kill_endpoint_wrong_response_type(grpc_test_server_with_wrong_response)
     # Verify the RPC completed successfully
     assert code == grpc.StatusCode.OK
     assert response.flag == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+    grpc_servicer._mock_logger.logger_instance.error.assert_called_once()
 
 
 def test_describe_endpoint(grpc_test_server_no_impl):
