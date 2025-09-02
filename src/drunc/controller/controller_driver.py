@@ -21,11 +21,11 @@ from drunc.utils.grpc_utils import (
     handle_grpc_error,
     unpack_any,
 )
-from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
+from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
 
-class ControllerDriver(GRPCDriver):
+class ControllerDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ControllerDriver")
         self.address = address
@@ -298,7 +298,5 @@ class ControllerDriver(GRPCDriver):
             handle_grpc_error(e)
 
         return self.handle_response(response, command, outformat)
-
-    # TODO: remove remaining GRPCDriver.__init__ and the class itself.
 
     # TODO: do the equivalent of handle_response for controller, PM and SM.

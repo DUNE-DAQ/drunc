@@ -29,7 +29,6 @@ from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
-from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
@@ -39,7 +38,7 @@ from drunc.utils.utils import (
 )
 
 
-class ProcessManagerDriver(GRPCDriver):
+class ProcessManagerDriver:
     controller_address = ""
 
     def __init__(self, address: str, token: Token):

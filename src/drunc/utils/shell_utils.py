@@ -6,8 +6,13 @@ import click
 from druncschema.token_pb2 import Token
 from rich.console import Console
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from drunc.session_manager.session_manager_driver import SessionManagerDriver
 from drunc.utils.utils import get_logger
+
+GRPCDriver = SessionManagerDriver | ProcessManagerDriver | ControllerDriver
 
 
 class InterruptedCommand(DruncShellException):
@@ -69,10 +74,6 @@ class DecodedResponse:
 
     def __str__(self):
         return DecodedResponse.str(self)
-
-
-class GRPCDriver:
-    pass
 
 
 class ShellContext:

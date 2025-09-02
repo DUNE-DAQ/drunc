@@ -8,11 +8,10 @@ from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
-from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import get_logger
 
 
-class SessionManagerDriver(GRPCDriver):
+class SessionManagerDriver:
     """Provides an interface to the session manager service.
 
     This class provides the client-side methods required to interact with a remote
