@@ -81,7 +81,7 @@ class ChildNode:  # abc.ABC):
     def get_endpoint(self) -> str | None:
         return None
 
-    def describe(self, token: Token) -> Response:
+    def describe(self, token: Token) -> Description:
         descriptionType = None
         descriptionName = None
 
@@ -97,7 +97,7 @@ class ChildNode:  # abc.ABC):
                 descriptionType = self.configuration.data.controller.application_name
                 descriptionName = self.configuration.data.controller.id
 
-        d = Description(
+        description = Description(
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),
@@ -109,16 +109,10 @@ class ChildNode:  # abc.ABC):
             session=os.getenv("DUNEDAQ_SESSION"),
             commands=None,
             broadcast=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        resp = Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(d),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=None,
-        )
-        return resp
+        return description
 
     @staticmethod
     def get_child(

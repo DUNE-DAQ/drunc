@@ -774,9 +774,10 @@ class Controller(ControllerServicer):
             description = Description(
                 type="controller",
                 name=self.name,
+                endpoint=self.uri if self.uri is not None else "unknown",
                 info=get_detector_name(self.configuration),
                 session=self.session,
-                endpoint=self.uri if self.uri is not None else "unknown",
+                commands=None,
             )
             if broadcast_description := self.describe_broadcast():
                 description.broadcast.Pack(broadcast_description)
