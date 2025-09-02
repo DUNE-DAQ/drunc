@@ -10,28 +10,12 @@ boundary without caring about the actual endpoint logic
 from concurrent import futures
 from unittest.mock import MagicMock, patch
 
-import google.protobuf.any_pb2
 import grpc
 import pytest
-from druncschema.description_pb2 import Description
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogLines,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstance,
-    ProcessInstanceList,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
-)
 from druncschema.process_manager_pb2_grpc import (
     ProcessManagerStub,
     add_ProcessManagerServicer_to_server,
 )
-from druncschema.request_response_pb2 import Request, ResponseFlag
-from druncschema.token_pb2 import Token
 
 from drunc.tests.process_manager.process_manager_mock_impls import (
     ConcreteProcessManager,
@@ -98,193 +82,90 @@ def serialisation_test_suite():
 
 def test_boot_serialisation(serialisation_test_suite):
     """Test boot endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="boot_endpoint",
-        token=Token(),
-        values=[
-            ProcessInstance(
-                uuid=ProcessUUID(uuid="test-boot-uuid"),
-                status_code=ProcessInstance.StatusCode.RUNNING,
-                return_code=0,
-            )
-        ],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import BOOT_REQUEST
+    from drunc.tests.process_manager.dummy_responses import BOOT_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("boot", mock_response)
+    serialisation_test_suite.setup_server_and_client("boot", BOOT_RESPONSE)
 
-    request = BootRequest(
-        token=Token(),
-        process_description=ProcessDescription(
-            metadata=ProcessMetadata(name="test_process")
-        ),
-        process_restriction=ProcessRestriction(),
-    )
-
-    response = serialisation_test_suite.stub.boot(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.boot(BOOT_REQUEST)
+    assert response == BOOT_RESPONSE
 
 
 def test_kill_serialisation(serialisation_test_suite):
     """Test kill endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="kill_endpoint",
-        token=Token(),
-        values=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
+    from drunc.tests.process_manager.dummy_responses import KILL_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("kill", mock_response)
+    serialisation_test_suite.setup_server_and_client("kill", KILL_RESPONSE)
 
-    request = ProcessQuery(
-        token=Token(),
-        uuids=[ProcessUUID(uuid="test-uuid")],
-        names=["test_process"],
-        user="test_user",
-        session="test_session",
-    )
-
-    response = serialisation_test_suite.stub.kill(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.kill(PROCESS_QUERY_REQUEST)
+    assert response == KILL_RESPONSE
 
 
 def test_restart_serialisation(serialisation_test_suite):
     """Test restart endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="restart_endpoint",
-        token=Token(),
-        values=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
+    from drunc.tests.process_manager.dummy_responses import RESTART_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("restart", mock_response)
+    serialisation_test_suite.setup_server_and_client("restart", RESTART_RESPONSE)
 
-    request = ProcessQuery(
-        token=Token(),
-        uuids=[ProcessUUID(uuid="test-uuid")],
-        names=["test_process"],
-        user="test_user",
-        session="test_session",
-    )
-
-    response = serialisation_test_suite.stub.restart(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.restart(PROCESS_QUERY_REQUEST)
+    assert response == RESTART_RESPONSE
 
 
 def test_ps_serialisation(serialisation_test_suite):
     """Test ps endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="ps_endpoint",
-        token=Token(),
-        values=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
+    from drunc.tests.process_manager.dummy_responses import PS_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("ps", mock_response)
+    serialisation_test_suite.setup_server_and_client("ps", PS_RESPONSE)
 
-    request = ProcessQuery(
-        token=Token(),
-        uuids=[ProcessUUID(uuid="test-uuid")],
-        names=["test_process"],
-        user="test_user",
-        session="test_session",
-    )
-
-    response = serialisation_test_suite.stub.ps(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.ps(PROCESS_QUERY_REQUEST)
+    assert response == PS_RESPONSE
 
 
 def test_terminate_serialisation(serialisation_test_suite):
     """Test terminate endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="terminate_endpoint",
-        token=Token(),
-        values=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import GENERIC_REQUEST
+    from drunc.tests.process_manager.dummy_responses import TERMINATE_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("terminate", mock_response)
+    serialisation_test_suite.setup_server_and_client("terminate", TERMINATE_RESPONSE)
 
-    data_any = google.protobuf.any_pb2.Any()
-    data_any.value = b"test_data"
-    request = Request(token=Token(), data=data_any)
-
-    response = serialisation_test_suite.stub.terminate(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.terminate(GENERIC_REQUEST)
+    assert response == TERMINATE_RESPONSE
 
 
 def test_logs_serialisation(serialisation_test_suite):
     """Test logs endpoint serialisation/deserialisation."""
-    mock_response = LogLines(
-        name="logs_endpoint",
-        token=Token(),
-        uuid=ProcessUUID(uuid="test-uuid"),
-        lines=["test log line 1", "test log line 2"],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import LOG_REQUEST
+    from drunc.tests.process_manager.dummy_responses import LOGS_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("logs", mock_response)
+    serialisation_test_suite.setup_server_and_client("logs", LOGS_RESPONSE)
 
-    request = LogRequest(
-        token=Token(),
-        query=ProcessQuery(
-            token=Token(),
-            uuids=[ProcessUUID(uuid="test-uuid")],
-            names=["test_process"],
-            user="test_user",
-            session="test_session",
-        ),
-        how_far=100,
-    )
-
-    response = serialisation_test_suite.stub.logs(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.logs(LOG_REQUEST)
+    assert response == LOGS_RESPONSE
 
 
 def test_describe_serialisation(serialisation_test_suite):
     """Test describe endpoint serialisation/deserialisation."""
-    mock_response = Description(
-        type="process_manager",
-        name="test_process_manager",
-        info="/var/log/test",
-        session="test_session",
-        commands=[],
-        children=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        token=Token(),
-    )
+    from drunc.tests.process_manager.dummy_requests import GENERIC_REQUEST
+    from drunc.tests.process_manager.dummy_responses import DESCRIBE_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("describe", mock_response)
+    serialisation_test_suite.setup_server_and_client("describe", DESCRIBE_RESPONSE)
 
-    data_any = google.protobuf.any_pb2.Any()
-    data_any.value = b"test_data"
-    request = Request(token=Token(), data=data_any)
-
-    response = serialisation_test_suite.stub.describe(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.describe(GENERIC_REQUEST)
+    assert response == DESCRIBE_RESPONSE
 
 
 def test_flush_serialisation(serialisation_test_suite):
     """Test flush endpoint serialisation/deserialisation."""
-    mock_response = ProcessInstanceList(
-        name="flush_endpoint",
-        token=Token(),
-        values=[],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
+    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
+    from drunc.tests.process_manager.dummy_responses import FLUSH_RESPONSE
 
-    serialisation_test_suite.setup_server_and_client("flush", mock_response)
+    serialisation_test_suite.setup_server_and_client("flush", FLUSH_RESPONSE)
 
-    request = ProcessQuery(
-        token=Token(),
-        uuids=[ProcessUUID(uuid="test-uuid")],
-        names=["test_process"],
-        user="test_user",
-        session="test_session",
-    )
-
-    response = serialisation_test_suite.stub.flush(request)
-    assert response == mock_response
+    response = serialisation_test_suite.stub.flush(PROCESS_QUERY_REQUEST)
+    assert response == FLUSH_RESPONSE
 
 
 def test_wrong_request_type_raises_serialisation_error(serialisation_test_suite):
@@ -296,20 +177,10 @@ def test_wrong_request_type_raises_serialisation_error(serialisation_test_suite)
     """
     from grpc._channel import _InactiveRpcError
 
+    from drunc.tests.process_manager.dummy_responses import BOOT_RESPONSE
+
     # Using boot method as representative test - not necessary to test all endpoints this way
-    mock_response = ProcessInstanceList(
-        name="boot_endpoint",
-        token=Token(),
-        values=[
-            ProcessInstance(
-                uuid=ProcessUUID(uuid="test-boot-uuid"),
-                status_code=ProcessInstance.StatusCode.RUNNING,
-                return_code=0,
-            )
-        ],
-        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-    )
-    serialisation_test_suite.setup_server_and_client("boot", mock_response)
+    serialisation_test_suite.setup_server_and_client("boot", BOOT_RESPONSE)
 
     # Expect gRPC error when sending invalid request type
     with pytest.raises(_InactiveRpcError):
@@ -325,17 +196,12 @@ def test_wrong_response_type_raises_deserialisation_error(serialisation_test_sui
     """
     from grpc._channel import _InactiveRpcError
 
+    from drunc.tests.process_manager.dummy_requests import BOOT_REQUEST
+
     # Using boot method as representative test - not necessary to test all endpoints this way
     # MagicMock will return an invalid response type, triggering deserialisation error
     serialisation_test_suite.setup_server_and_client("boot", MagicMock())
 
     # Expect gRPC error when server returns invalid response type
     with pytest.raises(_InactiveRpcError):
-        request = BootRequest(
-            token=Token(),
-            process_description=ProcessDescription(
-                metadata=ProcessMetadata(name="test_process")
-            ),
-            process_restriction=ProcessRestriction(),
-        )
-        serialisation_test_suite.stub.boot(request)
+        serialisation_test_suite.stub.boot(BOOT_REQUEST)

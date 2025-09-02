@@ -329,33 +329,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running kill")
 
-        # update this if the request type changes
-        if not isinstance(request, ProcessQuery):
-            self.log.error(
-                f"Programmer Error: kill method can't handle {type(request)} requests."
-            )
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-            )
-
         try:
             response = self._kill_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-            )
-
-        # update this if the response type changes
-        if not isinstance(response, ProcessInstanceList):
-            self.log.error(
-                f"Programmer Error: kill method shouldn't respond with {type(response)} type."
-            )
             return ProcessInstanceList(
                 name=self.name,
                 token=None,
