@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 from druncschema.token_pb2 import Token
 
-from drunc.utils.shell_utils import GRPCDriver, ShellContext
+from drunc.utils.shell_utils import ShellContext
 
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
@@ -22,7 +22,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.address_pm = address_pm
         super(UnifiedShellContext, self)._reset(name="unified_shell")
 
-    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, object]:
         ret = {}
         if self.address_pm != "":
             from drunc.process_manager.process_manager_driver import (

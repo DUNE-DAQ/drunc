@@ -6,13 +6,8 @@ import click
 from druncschema.token_pb2 import Token
 from rich.console import Console
 
-from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.session_manager.session_manager_driver import SessionManagerDriver
 from drunc.utils.utils import get_logger
-
-GRPCDriver = SessionManagerDriver | ProcessManagerDriver | ControllerDriver
 
 
 class InterruptedCommand(DruncShellException):
@@ -80,7 +75,7 @@ class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
         self._token = self.create_token(**token_args)
-        self._drivers: Mapping[str, GRPCDriver] = self.create_drivers(**driver_args)
+        self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
@@ -95,7 +90,7 @@ class ShellContext:
         pass
 
     @abc.abstractmethod
-    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, object]:
         pass
 
     @abc.abstractmethod
@@ -106,12 +101,12 @@ class ShellContext:
     def terminate(self) -> None:
         pass
 
-    def set_driver(self, name: str, driver: GRPCDriver) -> None:
+    def set_driver(self, name: str, driver: object) -> None:
         if name in self._drivers:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None, quiet_fail: bool = False) -> GRPCDriver:
+    def get_driver(self, name: str = None, quiet_fail: bool = False) -> object:
         try:
             if name:
                 return self._drivers[name]
