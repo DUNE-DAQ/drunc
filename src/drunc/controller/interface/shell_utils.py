@@ -252,7 +252,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time() - start_time)
 
             try:
-                desc = ctx.get_driver("controller").describe().data
+                desc = ctx.get_driver("controller").describe().description
                 stored_exception = None
                 break
             except ServerUnreachable as e:
