@@ -1,6 +1,6 @@
 import os
 
-from druncschema.controller_pb2 import Status
+from druncschema.controller_pb2 import DescribeResponse, Status
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response
 
@@ -81,7 +81,7 @@ class ChildNode:  # abc.ABC):
     def get_endpoint(self) -> str | None:
         return None
 
-    def describe(self, token: Token) -> Description:
+    def describe(self, token: Token) -> DescribeResponse:
         descriptionType = None
         descriptionName = None
 
@@ -112,7 +112,15 @@ class ChildNode:  # abc.ABC):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        return description
+        response = DescribeResponse(
+            token=None,
+            name=self.name,
+            description=description,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
 
     @staticmethod
     def get_child(
