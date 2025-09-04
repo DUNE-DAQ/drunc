@@ -178,7 +178,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 if process.status_code == ProcessInstance.StatusCode.DEAD
             )
             n_session = len(
-                {process.process_description.metadata.session for process in results.values}
+                {
+                    process.process_description.metadata.session
+                    for process in results.values
+                }
             )
             self.opmon_publisher.publish(
                 message=ProcessStatus(
