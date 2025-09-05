@@ -3,7 +3,7 @@ Integration test suite for Process Manager gRPC serialisation/deserialisation.
 
 This suite tests that protobuf message serialisation and deserialisation works correctly
 for all process manager endpoints using a real server/client setup. The focus is purely
-on ensuring message types can be correctly serialized/deserialized across the network
+on ensuring message types can be correctly serialised/deserialised across the network
 boundary without caring about the actual endpoint logic
 """
 
@@ -34,7 +34,7 @@ class ProcessManagerserialisationTestSuite:
         self.servicer = None
 
     def setup_server_and_client(self, method_name, mock_response):
-        """Initialize a real gRPC server and client for serialisation testing.
+        """Initialise a real gRPC server and client for serialisation testing.
 
         Args:
             method_name: Name of the method to mock (e.g., 'boot', 'kill')
