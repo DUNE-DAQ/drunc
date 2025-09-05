@@ -1,8 +1,6 @@
 """
-Comprehensive test suite for SSHProcessManager kill functionality.
+Test suite for SSHProcessManager kill functionality.
 
-This module tests both the high-level _kill_impl method and the low-level
-kill_processes method with various process states and configurations.
 """
 
 from unittest.mock import MagicMock, Mock, patch
