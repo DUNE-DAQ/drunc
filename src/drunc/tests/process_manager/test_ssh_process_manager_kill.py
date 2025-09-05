@@ -76,10 +76,7 @@ def ssh_process_manager(mock_logger) -> SSHProcessManager:
 
 def test_kill_impl_no_processes(ssh_process_manager: SSHProcessManager):
     """
-    Verify _kill_impl handles empty process store gracefully.
-
-    Tests the scenario where no processes exist to kill, ensuring
-    the method returns appropriate success response without errors.
+    test kill_impl behaviour with no processes present
 
     Args:
         ssh_process_manager: The SSHProcessManager instance configured for testing
@@ -105,10 +102,11 @@ def test_kill_impl_no_processes(ssh_process_manager: SSHProcessManager):
 
 def test_kill_impl_multiple_processes(ssh_process_manager: SSHProcessManager):
     """
-    Verify _kill_impl correctly delegates to kill_processes for multiple processes.
+    Check kill_impl behaviour with multiple processes present.
 
-    Mocks kill_processes to verify it receives the correct UUID list when
-    multiple processes match the query criteria.
+    Mocks:
+    - _get_process_uid
+    - kill_processes
 
     Args:
         ssh_process_manager: The SSHProcessManager instance configured for testing
@@ -122,6 +120,7 @@ def test_kill_impl_multiple_processes(ssh_process_manager: SSHProcessManager):
     test_uuids = ["uuid-1", "uuid-2", "uuid-3"]
     ssh_process_manager._get_process_uid = MagicMock(return_value=test_uuids)
 
+    # TODO change to constant response when other branch merged
     # Mock kill_processes
     expected_response = ProcessInstanceList(
         name=ssh_process_manager.name,
@@ -130,7 +129,7 @@ def test_kill_impl_multiple_processes(ssh_process_manager: SSHProcessManager):
     )
     ssh_process_manager.kill_processes = MagicMock(return_value=expected_response)
 
-    # Create query corresponding to test uuids
+    # set up a process query with a matching state in process manager
     query = ProcessQuery(names=["app1", "app2", "app3"])
     ssh_process_manager.process_store = {
         uuid: app for uuid, app in zip(test_uuids, query.names)
@@ -147,16 +146,17 @@ def test_kill_impl_multiple_processes(ssh_process_manager: SSHProcessManager):
     # Verify kill_processes was called with the UUIDs returned by _get_process_uid
     ssh_process_manager.kill_processes.assert_called_once_with(test_uuids)
 
-    # Verify the response is passed through correctly
+    # Verify the impl response is same as kill_processes response
     assert result == expected_response
 
 
 def test_kill_impl_single_process(ssh_process_manager: SSHProcessManager):
     """
-    Verify _kill_impl correctly delegates to kill_processes for single process.
+    Check kill_impl behaviour with a single process present.
 
-    Tests the most common scenario where exactly one process matches the
-    query and verifies proper delegation to the kill_processes method.
+    Mocks:
+    - _get_process_uid
+    - kill_processes
 
     Args:
         ssh_process_manager: The SSHProcessManager instance configured for testing
@@ -170,6 +170,7 @@ def test_kill_impl_single_process(ssh_process_manager: SSHProcessManager):
     test_uuid = ["single-process-uuid"]
     ssh_process_manager._get_process_uid = MagicMock(return_value=test_uuid)
 
+    # TODO change to constant response when other branch merged
     # Mock kill_processes
     expected_response = ProcessInstanceList(
         name=ssh_process_manager.name,
