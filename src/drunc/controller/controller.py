@@ -45,6 +45,11 @@ from drunc.controller.utils import (
 from drunc.exceptions import DruncException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
+from drunc.fsm.actions.utils import get_dotdrunc_json
+from drunc.fsm.exceptions import (
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
@@ -774,6 +779,13 @@ class Controller(ControllerServicer):
                 ctx=self,
             )
             if payload.command_name == "start":
+
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
+                    
+
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=self.runinfo.get("production_vs_test", ""),
@@ -789,6 +801,12 @@ class Controller(ControllerServicer):
                     ),
                     custom_origin=self.custom_origin,
                 )
+
+            if payload.command_name == "drain_dataflow":
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(f"ELisaLogbook entry will not be posted after drain-dataflow. {e}")
 
             self.stateful_node.propagate_transition_mark(transition)
 
