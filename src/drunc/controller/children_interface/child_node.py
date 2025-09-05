@@ -48,7 +48,7 @@ class ChildNode:  # abc.ABC):
     # @abc.abstractmethod
     def propagate_command(self, command, data, token):
         if command == "status":
-            return self.get_status(token)
+            return self.status(token)
         elif command == "describe":
             return self.describe(token)
         else:
@@ -61,7 +61,7 @@ class ChildNode:  # abc.ABC):
             )
 
     # @abc.abstractmethod
-    def get_status(self, token):
+    def status(self, token):
         return Response(
             name=self.name,
             token=token,

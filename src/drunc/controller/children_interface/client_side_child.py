@@ -100,7 +100,7 @@ class ClientSideChild(ChildNode):
     def get_endpoint(self):
         pass
 
-    def get_status(self, token):
+    def status(self, token):
         status = Status(
             state=self.state.get_operational_state(),
             sub_state=(
@@ -142,7 +142,7 @@ class ClientSideChild(ChildNode):
             return self.describe(token)
 
         elif command in ["status", "recompute_status"]:
-            return self.get_status(token)
+            return self.status(token)
 
         if self.state.excluded() and command == "execute_fsm_command":
             return Response(
