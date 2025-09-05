@@ -26,10 +26,10 @@ def get_dotdrunc_json(path: str = "~/.drunc.json"):
         f = open(expand_path(path))
         dotdrunc = json.load(f)
     except FileNotFoundError:
-        raise DotDruncJsonNotFound(f"dotdrunc file not found: '{path}'")
+        raise DotDruncJsonNotFound(f"~/.drunc.json file not found: '{path}'")
     except json.JSONDecodeError as exc:
         raise DotDruncJsonIncorrectFormat(
-            f"dotdrunc file is not a valid JSON: '{path}'"
+            f"~/.drunc.json file is not a valid JSON: '{path}'"
         ) from exc
 
     expected_keys = [
@@ -40,7 +40,7 @@ def get_dotdrunc_json(path: str = "~/.drunc.json"):
 
     if not all(key in dotdrunc for key in expected_keys):
         raise DotDruncJsonIncorrectFormat(
-            f"dotdrunc file is missing some expected keys: {expected_keys}"
+            f"~/.drunc.json file is outdated or is missing some expected keys: {expected_keys}"
         )
 
     return dotdrunc
