@@ -1,6 +1,6 @@
 import os
 
-from druncschema.controller_pb2 import DescribeResponse, Status
+from druncschema.controller_pb2 import DescribeResponse, Status, StatusResponse
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response
 
@@ -8,7 +8,6 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
@@ -61,25 +60,23 @@ class ChildNode:  # abc.ABC):
             )
 
     # @abc.abstractmethod
-    def status(self, token):
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(
-                Status(
-                    state="unknown",
-                    sub_state="unknown",
-                    in_error=False,
-                    included=True,
-                )
-            ),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
+    def status(self, token: Token) -> StatusResponse:
+        status = Status(
+            state="unknown",
+            sub_state="unknown",
+            in_error=False,
+            included=True,
         )
 
-    # @abc.abstractmethod
-    def get_endpoint(self) -> str | None:
-        return None
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+            status=status,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
 
     def describe(self, token: Token) -> DescribeResponse:
         descriptionType = None
@@ -121,6 +118,10 @@ class ChildNode:  # abc.ABC):
         )
 
         return response
+
+    # @abc.abstractmethod
+    def get_endpoint(self) -> str | None:
+        return None
 
     @staticmethod
     def get_child(

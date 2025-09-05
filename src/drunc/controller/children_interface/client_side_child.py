@@ -5,6 +5,7 @@ from druncschema.controller_pb2 import (
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
+    StatusResponse,
 )
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -100,7 +101,7 @@ class ClientSideChild(ChildNode):
     def get_endpoint(self):
         pass
 
-    def status(self, token):
+    def status(self, token: Token) -> StatusResponse:
         status = Status(
             state=self.state.get_operational_state(),
             sub_state=(
@@ -109,13 +110,16 @@ class ClientSideChild(ChildNode):
             in_error=self.state.in_error() or not self.commander.ping(),  # meh
             included=self.state.included(),
         )
-        return Response(
-            name=self.name,
+
+        response = StatusResponse(
             token=None,
-            data=pack_to_any(status),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            name=self.name,
+            status=status,
             children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        return response
 
     def propagate_command(self, command: str, data, token: Token) -> Response:
         if command == "exclude":
