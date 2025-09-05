@@ -298,5 +298,3 @@ class ControllerDriver:
             handle_grpc_error(e)
 
         return self.handle_response(response, command, outformat)
-
-    # TODO: do the equivalent of handle_response for controller, PM and SM.

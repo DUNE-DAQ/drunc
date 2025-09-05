@@ -2,18 +2,21 @@ import datetime
 import logging
 import os
 import time
-from collections import defaultdict
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from functools import partial
 
 import click
 import grpc
 from druncschema.controller_pb2 import (
     Argument,
+    DescribeResponse,
     FSMCommand,
     FSMCommandDescription,
     FSMResponseFlag,
     Status,
+    StatusResponse,
 )
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
@@ -36,62 +39,38 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
 
-def generate_none_status() -> Status:
-    return Status(
-        state="none",
-        sub_state="none",
-        in_error=False,
-        included=False,
-    )
+@dataclass(slots=True)
+class StatusDescriptionPair:
+    status: StatusResponse | None = None
+    description: DescribeResponse | None = None
 
 
-def generate_none_description() -> Description:
-    return Description(
-        type="none",
-        name="none",
-        endpoint="none",
-        commands=[],
-        broadcast=None,
-    )
-
-
-def check_message_type(message, expected_type: str) -> None:
-    if message is None:
-        return False
-
-    if message.data is None:
-        return False
-
-    if message.data.DESCRIPTOR.name != expected_type:
-        return False
-    return True
-
-
-def match_children(statuses: list, descriptions: list) -> defaultdict:
-    children = defaultdict(dict)
+def match_children(
+    statuses: Sequence[StatusResponse], descriptions: Sequence[DescribeResponse]
+) -> dict[str, StatusDescriptionPair]:
+    children: dict[str, StatusDescriptionPair] = {}
     for status in statuses:
-        children[status.name].update({"status": status})
-
+        pair = children.setdefault(status.name, StatusDescriptionPair())
+        pair.status = status
     for description in descriptions:
-        children[description.name].update({"description": description})
-
-    for child in children.values():
-        if "status" not in child:
-            child["status"] = None
-        if "description" not in child:
-            child["description"] = None
+        pair = children.setdefault(description.name, StatusDescriptionPair())
+        pair.description = description
     return children
 
 
-def get_status_table(status: DecodedResponse, description: DecodedResponse):
+def get_status_table(
+    status_response: StatusResponse, describe_response: DescribeResponse
+):
+    status = status_response.status
+    description = describe_response.description
+
     t = Table(
         title=(
-            f"[dark_green]{description.data.session}[/dark_green] status"
-            if description.data
+            f"[dark_green]{description.session}[/dark_green] status"
+            if description is not None
             else "[dark_green]status[/dark_green]"
         )
     )
@@ -103,61 +82,62 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t.add_column("Included")
     t.add_column("Endpoint")
 
-    def add_status_to_table(table, status, description, prefix):
-        valid_description = check_message_type(description, "Description")
-        valid_status = check_message_type(status, "Status")
-
-        if not valid_description or not valid_status:
+    def add_status_to_table(
+        table: Table,
+        status_response: StatusResponse,
+        describe_response: DescribeResponse,
+        prefix: str,
+    ):
+        status = status_response.status
+        description = describe_response.description
+        if status is None or description is None:
             return
 
-        NA = "[red]NA[/]"
         table.add_row(
-            prefix + status.name if valid_status else NA,
-            description.data.info if valid_description else NA,
-            status.data.state if valid_status else NA,
-            status.data.sub_state if valid_status else NA,
-            (
-                format_bool(status.data.in_error, false_is_good=True)
-                if valid_status
-                else NA
-            ),
-            format_bool(status.data.included) if valid_status else NA,
-            description.data.endpoint if valid_description else NA,
+            prefix + status_response.name,
+            description.info,
+            status.state,
+            status.sub_state,
+            format_bool(status.in_error, false_is_good=True),
+            format_bool(status.included),
+            description.endpoint,
         )
 
-        children = match_children(status.children, description.children)
+        children = match_children(status_response.children, describe_response.children)
         children_list = sorted(list(children.keys()))
-        for child in children_list:
-            add_status_to_table(
-                t,
-                children[child]["status"],
-                children[child]["description"],
-                prefix=prefix + "  ",
-            )
 
-    def add_runinfo_to_table(table, status):
-        table.add_row("Run number", str(status.data.run_info.run_number))
-        table.add_row("Run type", status.data.run_info.run_type)
+        for child in children_list:
+            child_status = children[child].status
+            child_describe = children[child].description
+            if child_status is None or child_describe is None:
+                raise DruncShellException(
+                    f"No matching status and description for child '{child}'"
+                )
+            add_status_to_table(t, child_status, child_describe, prefix + "  ")
+
+    add_status_to_table(t, status_response, describe_response, "")
+
+    def add_runinfo_to_table(table: Table, status: Status):
+        table.add_row("Run number", str(status.run_info.run_number))
+        table.add_row("Run type", status.run_info.run_type)
         table.add_row(
             "Start time",
-            datetime.datetime.fromtimestamp(
-                status.data.run_info.run_time_at_start
-            ).strftime("%Y-%m-%d %H:%M:%S"),
+            datetime.datetime.fromtimestamp(status.run_info.run_time_at_start).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
         )
         table.add_row(
             "Duration",
-            str(datetime.timedelta(seconds=status.data.run_info.run_time_since_start)),
+            str(datetime.timedelta(seconds=status.run_info.run_time_since_start)),
         )
-        table.add_row("Trigger rate", f"{status.data.run_info.trigger_rate:.4f} Hz")
+        table.add_row("Trigger rate", f"{status.run_info.trigger_rate:.4f} Hz")
         table.add_row(
-            "Data storage disabled", str(status.data.run_info.disable_data_storage)
+            "Data storage disabled", str(status.run_info.disable_data_storage)
         )
-        table.add_row("Config file", status.data.run_info.run_config_file)
-        table.add_row("Config ID", status.data.run_info.run_config_name)
+        table.add_row("Config file", status.run_info.run_config_file)
+        table.add_row("Config ID", status.run_info.run_config_name)
 
-    add_status_to_table(t, status, description, prefix="")
-
-    if status.data.HasField("run_info"):
+    if status.HasField("run_info"):
         runinfo_table = Table(
             title="Run Info",
             show_header=False,
@@ -177,10 +157,9 @@ class StatusTableUpdater(Progress):
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
-        self.table = get_status_table(
-            self.ctx.get_driver("controller").status(),
-            self.ctx.get_driver("controller").describe(),
-        )
+        statuses = self.ctx.get_driver("controller").status()
+        descriptions = self.ctx.get_driver("controller").describe()
+        self.table = get_status_table(statuses, descriptions)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -192,12 +171,10 @@ def controller_cleanup_wrapper(ctx):
         log = logging.getLogger("controller.shell_utils")
         # remove the shell from the controller broadcast list
         dead = False
-
         who = ""
 
         try:
             who = ctx.get_driver("controller").who_is_in_charge().data
-
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
