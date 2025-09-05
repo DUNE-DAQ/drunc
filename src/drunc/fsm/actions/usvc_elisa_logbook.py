@@ -46,25 +46,26 @@ class ElisaLogbook(FSMAction):
             self.API_PASS = ec.get("password")
 
             if not self.API_SOCKET or not self.API_USER or not self.API_PASS:
-                err_msg: str = (
+                warn_msg: str = (
                     "Malformed ~/.drunc.json, missing a key in 'elisa_configuration' "
                     "in your ~/.drunc.json, or the entire 'elisa_configuration' section"
                 )
-                raise DotDruncJsonIncorrectFormat(err_msg) from KeyError
+                self.log.warning(warn_msg)
         else:
-            err_msg: str = ""
+
+            warn_msg: str = ""
             if default_elisa_logbook:
-                err_msg = (
+                warn_msg = (
                     "You need to update your ~/.drunc.json: The default ELisA logbook "
                     "[yellow]pdsp[/yellow] does not have a configuration."
                 )
             else:
-                err_msg = (
+                warn_msg = (
                     "You need to update your ~/.drunc.json: you have specified an "
                     f"ELisA logbook ({self.elisa_hardware}) in your configuration, but your "
                     "current ~/.drunc.json doesn't support this one."
                 )
-            raise DotDruncJsonIncorrectFormat(err_msg) from None
+            self.log.warning(warn_msg)
 
         self.log.info(f"Using the following ELisA logbook '{self.elisa_hardware}'.")
         self.timeout = 5
