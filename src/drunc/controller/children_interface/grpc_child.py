@@ -85,7 +85,7 @@ class gRPCChildNode(ChildNode):
 
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
-                self.start_listening(response.broadcast)
+                self.start_listening(response.description.broadcast)
                 break
 
     def __str__(self):
