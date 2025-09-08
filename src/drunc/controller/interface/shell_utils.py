@@ -4,7 +4,6 @@ import os
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
 
 import click
 import grpc
@@ -30,6 +29,11 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.fsm.actions.utils import get_dotdrunc_json
+from drunc.fsm.exceptions import (
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.utils.grpc_utils import (
     ServerTimeout,
     ServerUnreachable,
@@ -39,11 +43,6 @@ from drunc.utils.grpc_utils import (
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
-from drunc.fsm.actions.utils import get_dotdrunc_json
-from drunc.fsm.exceptions import (
-    DotDruncJsonIncorrectFormat,
-    DotDruncJsonNotFound,
-)
 
 def generate_none_status() -> Status:
     return Status(
