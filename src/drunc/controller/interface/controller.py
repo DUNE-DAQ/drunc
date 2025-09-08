@@ -94,7 +94,7 @@ def controller_cli(
             obj_uid=name,
             session=configurationid,  # some of the function for enable/disable require the full dal of the session
         ),
-        session_name=sessionname
+        session_name=sessionname,
     )
 
     commandfacility = resolve_localhost_and_127_ip_to_network_ip(commandfacility)

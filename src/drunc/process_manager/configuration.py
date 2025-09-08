@@ -150,9 +150,8 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
         resource_path = resources.files("drunc.data.process_manager")
         packaged_configurations = [p.name for p in resource_path.iterdir()]
         if process_manager_conf_filename in packaged_configurations:
-            process_manager_conf_filename = (
-                "file://"
-                + str(resource_path / process_manager_conf_filename)
+            process_manager_conf_filename = "file://" + str(
+                resource_path / process_manager_conf_filename
             )
 
         else:
