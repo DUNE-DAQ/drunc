@@ -43,13 +43,13 @@ from drunc.controller.utils import (
     get_status_message,
 )
 from drunc.exceptions import DruncException
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.utils import convert_fsm_transition
 from drunc.fsm.actions.utils import get_dotdrunc_json
+from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
     DotDruncJsonNotFound,
 )
+from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 

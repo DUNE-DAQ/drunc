@@ -5,7 +5,7 @@ import requests
 
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.core import FSMAction
-from drunc.fsm.exceptions import CannotSendElisaMessage, DotDruncJsonIncorrectFormat
+from drunc.fsm.exceptions import CannotSendElisaMessage
 from drunc.utils.utils import get_logger
 
 
