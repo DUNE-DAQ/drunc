@@ -1,3 +1,4 @@
+from typing import NoReturn
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -92,9 +93,34 @@ def rethrow_if_timeout(grpc_error):
             raise ServerTimeout(grpc_error._state.details) from grpc_error
 
 
+def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
+    """Handle gRPC errors by rethrowing them with appropriate context.
+
+    Args:
+        error: The gRPC error to handle.
+    """
+    rethrow_if_unreachable_server(error)
+    rethrow_if_timeout(error)
+    raise error
+
+
 def interrupt_if_unreachable_server(grpc_error):
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
             return grpc_error._state.details
         elif hasattr(grpc_error, "_details"):
             return grpc_error._details
+
+
+def copy_token(token: Token) -> Token:
+    """Create a copy of the original token.
+
+    Args:
+        token: The original token to copy.
+
+    Returns:
+        A copy of the original token.
+    """
+    token_copy = Token()
+    token_copy.CopyFrom(token)
+    return token_copy

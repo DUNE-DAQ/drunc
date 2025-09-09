@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import requests
@@ -9,69 +10,70 @@ from drunc.utils.utils import get_logger
 
 
 class ElisaLogbook(FSMAction):
-    def __init__(self, configuration):
+    def __init__(self):
         super().__init__(name="elisa-logbook")
         self.log = get_logger("controller.elisa-logbook")
 
         dotdrunc = get_dotdrunc_json()
+        self.elisa_hardware: str | None = os.getenv(
+            "DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None
+        )
+        default_elisa_logbook: bool = False
+        self.no_publish_hardware = ["unified_shell", None]
+        if self.elisa_hardware == "unified_shell":
+            self.log.debug(
+                "You are using the unified_shell, which does not support ELisA logbook posting."
+            )
+            return
+        if self.elisa_hardware is None:
+            # This has been removed for fddaqv5.4.0 as CERN ELisA is very unstable
+            # self.log.warning(
+            #     "Environment variable DUNEDAQ_ELISA_LOGBOOK_APPARATUS is not set, "
+            #     "defaulting to [yellow]pdsp[/yellow])."
+            # )
+            # default_elisa_logbook = True
+            # self.elisa_hardware = "pdsp"
+            self.log.warning(
+                "Environment variable DUNEDAQ_ELISA_LOGBOOK_APPARATUS is not set, "
+                "nothing will be posted to ELisA logbook."
+            )
+            return
 
-        if (
-            dotdrunc["elisa_configuration"].get("socket")
-            or dotdrunc["elisa_configuration"].get("user")
-            or dotdrunc["elisa_configuration"].get("password")
-        ):
-            try:
-                ec = dotdrunc["elisa_configuration"]
-                self.API_SOCKET = ec["socket"]
-                self.API_USER = ec["user"]
-                self.API_PASS = ec["password"]
-            except KeyError as exc:
-                raise DotDruncJsonIncorrectFormat(
-                    "Malformed ~/.drunc.json, missing a key in the 'elisa_configuration' section, or the entire 'elisa_configuration' section"
-                ) from exc
+        if dotdrunc["elisa_configuration"].get(self.elisa_hardware):
+            ec = dotdrunc["elisa_configuration"][self.elisa_hardware]
+            self.API_SOCKET = ec.get("socket")
+            self.API_USER = ec.get("user")
+            self.API_PASS = ec.get("password")
 
-            if len(configuration.parameters) > 0:
-                self.log.error(
-                    f"You need to update your ~/.drunc.json: you have specified an ELisA logbook ({configuration.parameters[0].value}) in your configuration, but your current ~/.drunc.json doesn't support this (if you run with this, you will get ELisA logging on whichever you have specified in your ~/.drunc.json). Contact Pierre Lasorak for help."
+            if not self.API_SOCKET or not self.API_USER or not self.API_PASS:
+                err_msg: str = (
+                    "Malformed ~/.drunc.json, missing a key in 'elisa_configuration' "
+                    "in your ~/.drunc.json, or the entire 'elisa_configuration' section"
                 )
-            else:
-                self.log.warning(
-                    f"Using the following ELisA endpoint: {self.API_SOCKET} (note, you can update your ~/.drunc.json and configuration to support logging on different ELisA logbooks). Contact Pierre Lasorak for help."
-                )
+                raise DotDruncJsonIncorrectFormat(err_msg) from KeyError
         else:
-            elisa_hardware = list(dotdrunc["elisa_configuration"].keys())[0]
-            if len(configuration.parameters) > 0:
-                elisa_hardware_tmp = configuration.parameters[0].value
-                if elisa_hardware_tmp not in dotdrunc["elisa_configuration"]:
-                    self._log.error(
-                        f"The ELisA logbook you specified in your configuration '{elisa_hardware_tmp}' was not found in '~/.drunc.json'. I will use the first one in your ~/.drunc.json. You will log on the ELisA logbook '{elisa_hardware}'. Contact Pierre Lasorak for help."
-                    )
-                else:
-                    elisa_hardware = elisa_hardware_tmp
-            else:
-                self._log.error(
-                    f"ELisA logbook not specified in the configuration, using the first one in from your '~/.drunc.json'. You will log on the ELisA logbook '{elisa_hardware}'. Contact Pierre Lasorak for help."
+            err_msg: str = ""
+            if default_elisa_logbook:
+                err_msg = (
+                    "You need to update your ~/.drunc.json: The default ELisA logbook "
+                    "[yellow]pdsp[/yellow] does not have a configuration."
                 )
+            else:
+                err_msg = (
+                    "You need to update your ~/.drunc.json: you have specified an "
+                    f"ELisA logbook ({self.elisa_hardware}) in your configuration, but your "
+                    "current ~/.drunc.json doesn't support this one."
+                )
+            raise DotDruncJsonIncorrectFormat(err_msg) from None
 
-            try:
-                self.API_SOCKET = dotdrunc["elisa_configuration"][elisa_hardware][
-                    "socket"
-                ]
-                self.API_USER = dotdrunc["elisa_configuration"][elisa_hardware]["user"]
-                self.API_PASS = dotdrunc["elisa_configuration"][elisa_hardware][
-                    "password"
-                ]
-            except KeyError as exc:
-                raise DotDruncJsonIncorrectFormat(
-                    f"Malformed ~/.drunc.json, missing a key in the 'elisa_configuration.{elisa_hardware}' section, or the entire 'elisa_configuration.{elisa_hardware}' section"
-                ) from exc
-
-            self.log.info(f"Using the following ELisA logbook '{elisa_hardware}'.")
+        self.log.info(f"Using the following ELisA logbook '{self.elisa_hardware}'.")
         self.timeout = 5
 
     def post_start(
         self, _input_data: dict, _context, elisa_post: Optional[str] = None, **kwargs
     ):
+        if self.elisa_hardware in self.no_publish_hardware:
+            return
         text = ""
         self.thread_id = None  # Clear this value here, so that if it fails stop can't reply to an old message
 
@@ -88,10 +90,10 @@ class ElisaLogbook(FSMAction):
         text += f"Configuration: {_context.configuration.initial_data}"
         text += f"\nRetrieve configuration: http://np04-srv-017.cern.ch:30015/runregistry/getRunBlob/{_input_data['run']}"
 
-        if elisa_post is not None and self.run_type.lower() != "prod":
-            self.log.warning(
-                "Your message will NOT be stored, as this is not a PROD run"
-            )
+        # if elisa_post is not None and self.run_type.lower() != "prod":
+        #     self.log.warning(
+        #         "Your message will NOT be stored, as this is not a PROD run"
+        #     )
 
         text += "\n<p>log automatically generated by DRunC.</p>"
         self.det_id = _context.configuration.db.get_dal(
@@ -129,6 +131,8 @@ class ElisaLogbook(FSMAction):
     def post_drain_dataflow(
         self, _input_data, _context, elisa_post: Optional[str] = None, **kwargs
     ):
+        if self.elisa_hardware in self.no_publish_hardware:
+            return
         text = ""
         if elisa_post is not None:
             self.log.info(
