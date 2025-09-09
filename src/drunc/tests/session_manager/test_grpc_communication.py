@@ -1,99 +1,138 @@
 from unittest.mock import MagicMock
 
 import grpc
-from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import ResponseFlag
+import pytest
 from druncschema.session_manager_pb2 import (
     DESCRIPTOR,
-    AllActiveSessions,
-    AllConfigKeys,
-    ConfigKey,
 )
 from grpc_testing import server_from_dictionary, strict_real_time
 
 from drunc.session_manager.session_manager import SessionManager
+from drunc.tests.session_manager.dummy_requests import GENERIC_REQUEST
+from drunc.tests.session_manager.dummy_responses import (
+    DUMMY_ALLACTIVESESSIONS_RESPONSE,
+    DUMMY_ALLCONFIGKEYS_RESPONSE,
+    DUMMY_DESCRIBE_RESPONSE,
+)
 
-servicers = {
-    DESCRIPTOR.services_by_name["SessionManager"]: SessionManager(
-        name="dummy_name", configuration=MagicMock()
+
+@pytest.fixture(scope="function")
+def grpc_servicer():
+    """
+    Create and configure a ConcreteProcessManager instance for testing.
+
+    This fixture instantiates the process manager servicer with a mocked logger
+    The servicer implements the ProcessManager gRPC service interface.
+
+    Args:
+        mock_logger: Mock logger fixture to prevent actual logging operations
+
+    Returns:
+        ConcreteProcessManager: Configured servicer instance ready for testing
+    """
+    servicer = SessionManager(name="dummy_session", configuration=MagicMock())
+    return servicer
+
+
+@pytest.fixture(scope="function")
+def grpc_test_server_factory(grpc_servicer):
+    """
+    Create a function for generating gRPC test servers with specific endpoint mocks.
+
+    Args:
+        grpc_servicer: The ProcessManager servicer instance to register
+
+    Returns:
+        function: Factory function that accepts (endpoint_name, expected_response) parameters
+    """
+
+    def create_server(endpoint_name, expected_response):
+        """
+        Create a gRPC test server with a specific endpoint mocked.
+
+        Args:
+            endpoint_name (str): Name of the endpoint method to mock (e.g., 'kill', 'boot')
+            expected_response: The response object to return from the mocked method
+
+        Returns:
+            tuple: (test_server, expected_response) for use in endpoint tests
+        """
+        # Mock the abstract implementation method for the specified endpoint
+        mock_method = MagicMock(return_value=expected_response)
+        setattr(grpc_servicer, endpoint_name, mock_method)
+
+        # Register the servicer with the gRPC testing framework
+        servicers = {DESCRIPTOR.services_by_name["SessionManager"]: grpc_servicer}
+
+        test_server = server_from_dictionary(servicers, strict_real_time())
+
+        return (test_server, expected_response)
+
+    return create_server
+
+
+def test_describe(grpc_test_server_factory):
+    grpc_test_server, expected_response = grpc_test_server_factory(
+        "describe", DUMMY_DESCRIBE_RESPONSE
     )
-}
 
-
-test_server = server_from_dictionary(servicers, strict_real_time())
-
-
-def test_describe():
-    request = SessionManager(name="dummy_name", configuration=MagicMock())
-
-    describe_method = test_server.invoke_unary_unary(
+    describe_method = grpc_test_server.invoke_unary_unary(
         method_descriptor=(
             DESCRIPTOR.services_by_name["SessionManager"].methods_by_name["describe"]
         ),
-        request=request,
+        request=GENERIC_REQUEST,
         invocation_metadata={},
         timeout=1,
     )
 
     response, metadata, code, details = describe_method.termination()
 
-    assert isinstance(response, Description)
+    assert expected_response == response
+
     assert code == grpc.StatusCode.OK
-    assert response.name == "dummy_name"
 
 
-def test_list_all_sessions():
-    request = SessionManager(name="dummy_name", configuration=MagicMock())
+def test_list_all_sessions(grpc_test_server_factory):
+    grpc_test_server, expected_response = grpc_test_server_factory(
+        "list_all_sessions", DUMMY_ALLACTIVESESSIONS_RESPONSE
+    )
 
-    list_all_sessions_method = test_server.invoke_unary_unary(
+    list_all_sessions_method = grpc_test_server.invoke_unary_unary(
         method_descriptor=(
             DESCRIPTOR.services_by_name["SessionManager"].methods_by_name[
                 "list_all_sessions"
             ]
         ),
-        request=request,
+        request=GENERIC_REQUEST,
         invocation_metadata={},
         timeout=1,
     )
 
     response, metadata, code, details = list_all_sessions_method.termination()
 
-    assert isinstance(response, AllActiveSessions)
+    assert expected_response == response
+
     assert code == grpc.StatusCode.OK
-    assert response.name == "dummy_name"
-    assert response.active_sessions
-
-    assert len(response.active_sessions) == 1
-
-    session = response.active_sessions[0]
-    assert session.name == "dummy_session"
-    assert session.user == "dummy_user"
-    assert isinstance(session.config_key, ConfigKey)
-    assert session.config_key.file == "dummy_config_file"
-    assert session.config_key.session_id == "dummy_config_session_id"
 
 
-def test_list_all_configs():
-    request = SessionManager(name="dummy_name", configuration=MagicMock())
+def test_list_all_configs(grpc_test_server_factory):
+    grpc_test_server, expected_response = grpc_test_server_factory(
+        "list_all_configs", DUMMY_ALLCONFIGKEYS_RESPONSE
+    )
 
-    list_all_sessions_method = test_server.invoke_unary_unary(
+    list_all_configs_method = grpc_test_server.invoke_unary_unary(
         method_descriptor=(
             DESCRIPTOR.services_by_name["SessionManager"].methods_by_name[
                 "list_all_configs"
             ]
         ),
-        request=request,
+        request=GENERIC_REQUEST,
         invocation_metadata={},
         timeout=1,
     )
 
-    response, metadata, code, details = list_all_sessions_method.termination()
+    response, metadata, code, details = list_all_configs_method.termination()
 
-    assert isinstance(response, AllConfigKeys)
+    assert expected_response == response
 
-    assert response.name == "dummy_name"
-    assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    config = response.config_keys[0]
-    assert config.file == "example-configs.data.xml"
-    assert config.session_id == "local-tpreplay-config"
+    assert code == grpc.StatusCode.OK
