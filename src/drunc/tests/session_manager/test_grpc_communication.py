@@ -1,11 +1,11 @@
 from unittest.mock import MagicMock
 
 import grpc
+import grpc_testing
 import pytest
 from druncschema.session_manager_pb2 import (
     DESCRIPTOR,
 )
-from grpc_testing import server_from_dictionary, strict_real_time
 
 from drunc.session_manager.session_manager import SessionManager
 from drunc.tests.session_manager.dummy_requests import GENERIC_REQUEST
@@ -49,7 +49,9 @@ def grpc_test_server_factory(grpc_servicer):
         setattr(grpc_servicer, endpoint_name, mock_method)
         # Register the servicer with the gRPC testing framework
         servicers = {DESCRIPTOR.services_by_name["SessionManager"]: grpc_servicer}
-        test_server = server_from_dictionary(servicers, strict_real_time())
+        test_server = grpc_testing.server_from_dictionary(
+            servicers, grpc_testing.strict_real_time()
+        )
         return (test_server, expected_response)
 
     return create_server

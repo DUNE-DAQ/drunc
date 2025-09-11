@@ -1,7 +1,8 @@
 """
-This tests the full communication flow by starting a real gRPC server and 
+This tests the full communication flow by starting a real gRPC server and
 connecting to it using an actual client stub.
 """
+
 from concurrent import futures
 from unittest.mock import patch
 
