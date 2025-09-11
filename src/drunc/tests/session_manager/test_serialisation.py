@@ -77,17 +77,16 @@ def serialisation_test_suite():
 
 
 @pytest.mark.parametrize(
-    "method_name, request_type, expected_response",
+    "method_name, expected_response",
     [
-        ("describe", GENERIC_REQUEST, DUMMY_DESCRIBE_RESPONSE),
-        ("list_all_sessions", GENERIC_REQUEST, DUMMY_ALLACTIVESESSIONS_RESPONSE),
-        ("list_all_configs", GENERIC_REQUEST, DUMMY_ALLCONFIGKEYS_RESPONSE),
+        ("describe", DUMMY_DESCRIBE_RESPONSE),
+        ("list_all_sessions", DUMMY_ALLACTIVESESSIONS_RESPONSE),
+        ("list_all_configs", DUMMY_ALLCONFIGKEYS_RESPONSE),
     ],
 )
 def test_serialisation(
     serialisation_test_suite,
     method_name,
-    request_type,
     expected_response,
     mock_config_environment,
 ):
@@ -104,7 +103,7 @@ def test_serialisation(
     else:
         serialisation_test_suite.setup_server_and_client(method_name, expected_response)
 
-    response = getattr(serialisation_test_suite.stub, method_name)(request_type)
+    response = getattr(serialisation_test_suite.stub, method_name)(GENERIC_REQUEST)
 
     assert response == expected_response
 
