@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-gRPC Tree Structure Classes with Communication Methods (Dynamic Children Support)
+Multi-Process gRPC Tree Structure Classes
 
-Classes for hierarchical gRPC setup:
-Manager ↔ RootController ↔ ChildController (configurable number of instances)
+Architecture:
+- Test Process: Manager client only
+- Separate processes: Manager server, RootController server+client, ChildController servers+clients
+- Manager client coordinates communication and process management
 
-All channels are established during initialisation for efficient communication.
-The number of child controllers can be specified dynamically in each test case.
+All inter-component communication happens via gRPC across process boundaries.
 """
 
+import multiprocessing
+import os
+import signal
 import time
 from concurrent import futures
+from typing import Dict, List, Tuple
 
 import grpc
 
@@ -31,6 +36,7 @@ from drunc.tests.issues.test_issue568.test_pb2_grpc import (
 # Configuration constants
 MANAGER_MAX_WORKERS = 10
 CONTROLLER_MAX_WORKERS = 1
+SERVER_GRACE_PERIOD = 2
 
 # Base port assignments for dynamic allocation
 BASE_MANAGER_PORT = 50070
@@ -38,401 +44,407 @@ BASE_ROOT_PORT = 50071
 BASE_CHILD_PORT = 50072
 
 
-class Manager:
+def run_manager_server(
+    server_port: int,
+    server_options: List[Tuple[str, any]] = None,
+    ready_event: multiprocessing.Event = None,
+    stop_event: multiprocessing.Event = None,
+) -> None:
     """
-    Manager class with gRPC server and client capabilities.
-    Communicates bidirectionally with RootController.
+    Standalone function to run Manager server in a separate process.
+
+    Args:
+        server_port: Port number for the Manager's gRPC server
+        server_options: List of gRPC server configuration tuples
+        ready_event: Event to signal when server is ready (optional)
+        stop_event: Event to signal server shutdown (optional)
     """
 
-    def __init__(
-        self, server_port, root_port, server_options=None, client_options=None
-    ):
-        """
-        Initialise Manager with server and client configurations.
+    def signal_handler(signum, frame):
+        """Handle shutdown signals gracefully"""
+        if stop_event:
+            stop_event.set()
 
-        Args:
-            server_port (int): Port for Manager's gRPC server
-            root_port (int): Port of RootController to connect to
-            server_options (list): List of gRPC server configuration tuples
-            client_options (list): List of gRPC client configuration tuples
-        """
-        self.server_port = server_port
-        self.root_port = root_port
-        self.server_options = server_options or []
-        self.client_options = client_options or []
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
 
-        self.server = None
-        self.channel = None
-        self.stub = None
+    class ManagerServiceImpl(ManagerServiceServicer):
+        def MakeRequest(self, request, context):
+            return DummyResponse(reply=f"Manager server response: {request.message}")
 
-    def start_server(self):
-        """Start the Manager's gRPC server with configured options"""
+    # Create and configure server
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=MANAGER_MAX_WORKERS),
+        options=server_options or [],
+    )
 
-        class ManagerServiceImpl(ManagerServiceServicer):
-            def MakeRequest(self, request, context):
-                return DummyResponse(reply=f"Manager response: {request.message}")
+    add_ManagerServiceServicer_to_server(ManagerServiceImpl(), server)
+    port = server.add_insecure_port(f"[::]:{server_port}")
 
-        self.server = grpc.server(
-            futures.ThreadPoolExecutor(max_workers=MANAGER_MAX_WORKERS),
-            options=self.server_options,
-        )
+    try:
+        server.start()
+        print(f"Manager server started on port {port}")
 
-        add_ManagerServiceServicer_to_server(ManagerServiceImpl(), self.server)
-        self.server.add_insecure_port(f"localhost:{self.server_port}")
-        self.server.start()
-        time.sleep(0.1)  # Allow server to fully start
+        # Signal that server is ready
+        if ready_event:
+            ready_event.set()
 
-    def start_client(self):
-        """Start the Manager's gRPC client connection to RootController"""
-        self.channel = grpc.insecure_channel(
-            f"localhost:{self.root_port}", options=self.client_options
-        )
-        self.stub = RootControllerServiceStub(self.channel)
-        time.sleep(0.1)  # Allow connection to establish
+        # Wait for stop signal or run indefinitely
+        if stop_event:
+            while not stop_event.is_set():
+                time.sleep(0.1)
+        else:
+            server.wait_for_termination()
 
-    def talk_to_root_controller(self, root_controller):
-        """
-        Send a request to the RootController.
+    except Exception as e:
+        print(f"Manager server error: {e}")
+    finally:
+        print("Shutting down Manager server...")
+        server.stop(grace=SERVER_GRACE_PERIOD)
 
-        Args:
-            root_controller (RootController): RootController instance for identification
 
-        Returns:
-            DummyResponse: Response from the RootController
+def run_root_controller_server(
+    server_port: int,
+    manager_port: int,
+    server_options: List[Tuple[str, any]] = None,
+    client_options: List[Tuple[str, any]] = None,
+    ready_event: multiprocessing.Event = None,
+    stop_event: multiprocessing.Event = None,
+) -> None:
+    """
+    Standalone function to run RootController server with Manager client in a separate process.
 
-        Raises:
-            grpc.RpcError: If the gRPC call fails
-            RuntimeError: If client connection not established
-        """
-        if not self.stub:
-            raise RuntimeError(
-                "Client connection not established. Call start_client() first."
+    Args:
+        server_port: Port number for the RootController's gRPC server
+        manager_port: Port number of the Manager server to connect to
+        server_options: List of gRPC server configuration tuples
+        client_options: List of gRPC client configuration tuples
+        ready_event: Event to signal when server is ready (optional)
+        stop_event: Event to signal server shutdown (optional)
+    """
+
+    def signal_handler(signum, frame):
+        """Handle shutdown signals gracefully"""
+        if stop_event:
+            stop_event.set()
+
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    class RootControllerServiceImpl(RootControllerServiceServicer):
+        def MakeRequest(self, request, context):
+            return DummyResponse(
+                reply=f"RootController server response: {request.message}"
             )
 
-        # Create request with identifying information
-        request = DummyRequest(
-            message=f"Hello from Manager to RootController:{root_controller.server_port}",
-            timestamp=int(time.time() * 1000),  # Current time in milliseconds
+    # Create and configure server
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=CONTROLLER_MAX_WORKERS),
+        options=server_options or [],
+    )
+
+    add_RootControllerServiceServicer_to_server(RootControllerServiceImpl(), server)
+    port = server.add_insecure_port(f"[::]:{server_port}")
+
+    # Set up client connection to Manager
+    manager_channel = None
+    manager_stub = None
+
+    try:
+        server.start()
+
+        # Establish connection to Manager
+        manager_channel = grpc.insecure_channel(
+            f"localhost:{manager_port}", options=client_options or []
+        )
+        manager_stub = ManagerServiceStub(manager_channel)
+
+        print(
+            f"RootController server started on port {port}, connected to Manager on {manager_port}"
         )
 
-        # Send the request and return the response
-        response = self.stub.MakeRequest(request)
-        return response
+        # Signal that server is ready
+        if ready_event:
+            ready_event.set()
 
-    def stop(self):
-        """Stop both server and client connections gracefully"""
-        if self.server:
-            self.server.stop(grace=1)
-        if self.channel:
-            self.channel.close()
+        # Wait for stop signal or run indefinitely
+        if stop_event:
+            while not stop_event.is_set():
+                time.sleep(0.1)
+        else:
+            server.wait_for_termination()
+
+    except Exception as e:
+        print(f"RootController server error: {e}")
+    finally:
+        print("Shutting down RootController server...")
+        if manager_channel:
+            manager_channel.close()
+        server.stop(grace=SERVER_GRACE_PERIOD)
 
 
-class RootController:
+def run_child_controller_server(
+    server_port: int,
+    root_port: int,
+    child_name: str,
+    server_options: List[Tuple[str, any]] = None,
+    client_options: List[Tuple[str, any]] = None,
+    ready_event: multiprocessing.Event = None,
+    stop_event: multiprocessing.Event = None,
+) -> None:
     """
-    RootController class with gRPC server and client capabilities.
-    Communicates with Manager and multiple ChildControllers.
+    Standalone function to run ChildController server with RootController client in a separate process.
+
+    Args:
+        server_port: Port number for the ChildController's gRPC server
+        root_port: Port number of the RootController server to connect to
+        child_name: Unique identifier for this child controller
+        server_options: List of gRPC server configuration tuples
+        client_options: List of gRPC client configuration tuples
+        ready_event: Event to signal when server is ready (optional)
+        stop_event: Event to signal server shutdown (optional)
+    """
+
+    def signal_handler(signum, frame):
+        """Handle shutdown signals gracefully"""
+        if stop_event:
+            stop_event.set()
+
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    class ChildControllerServiceImpl(ChildControllerServiceServicer):
+        def __init__(self, name: str):
+            self.name = name
+
+        def MakeRequest(self, request, context):
+            return DummyResponse(
+                reply=f"{self.name} server response: {request.message}"
+            )
+
+    # Create and configure server
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=CONTROLLER_MAX_WORKERS),
+        options=server_options or [],
+    )
+
+    add_ChildControllerServiceServicer_to_server(
+        ChildControllerServiceImpl(child_name), server
+    )
+    port = server.add_insecure_port(f"[::]:{server_port}")
+
+    # Set up client connection to RootController
+    root_channel = None
+    root_stub = None
+
+    try:
+        server.start()
+
+        # Establish connection to RootController
+        root_channel = grpc.insecure_channel(
+            f"localhost:{root_port}", options=client_options or []
+        )
+        root_stub = RootControllerServiceStub(root_channel)
+
+        print(
+            f"{child_name} server started on port {port}, connected to RootController on {root_port}"
+        )
+
+        # Signal that server is ready
+        if ready_event:
+            ready_event.set()
+
+        # Wait for stop signal or run indefinitely
+        if stop_event:
+            while not stop_event.is_set():
+                time.sleep(0.1)
+        else:
+            server.wait_for_termination()
+
+    except Exception as e:
+        print(f"{child_name} server error: {e}")
+    finally:
+        print(f"Shutting down {child_name} server...")
+        if root_channel:
+            root_channel.close()
+        server.stop(grace=SERVER_GRACE_PERIOD)
+
+
+class ProcessManagerClient:
+    """
+    Client-only Manager class that coordinates communication with all components
+    running in separate processes. This runs in the test process.
     """
 
     def __init__(
-        self, server_port, manager_port, server_options=None, client_options=None
+        self,
+        manager_port: int,
+        root_port: int,
+        child_ports: List[int],
+        client_options: List[Tuple[str, any]] = None,
     ):
         """
-        Initialise RootController with server and client configurations.
+        Initialise ProcessManagerClient with connection details.
 
         Args:
-            server_port (int): Port for RootController's gRPC server
-            manager_port (int): Port of Manager to connect to
-            server_options (list): List of gRPC server configuration tuples
-            client_options (list): List of gRPC client configuration tuples
+            manager_port: Port of the Manager server
+            root_port: Port of the RootController server
+            child_ports: List of ChildController server ports
+            client_options: List of gRPC client configuration tuples
         """
-        self.server_port = server_port
         self.manager_port = manager_port
-        self.server_options = server_options or []
+        self.root_port = root_port
+        self.child_ports = child_ports
         self.client_options = client_options or []
 
-        self.server = None
+        # Client connections
         self.manager_channel = None
         self.manager_stub = None
+        self.root_channel = None
+        self.root_stub = None
+        self.child_channels = {}
+        self.child_stubs = {}
 
-        # Dictionary to store child controller connections by their names
-        self.child_connections = {}
-
-    def start_server(self):
-        """Start the RootController's gRPC server with configured options"""
-
-        class RootControllerServiceImpl(RootControllerServiceServicer):
-            def MakeRequest(self, request, context):
-                return DummyResponse(
-                    reply=f"RootController response: {request.message}"
-                )
-
-        self.server = grpc.server(
-            futures.ThreadPoolExecutor(max_workers=CONTROLLER_MAX_WORKERS),
-            options=self.server_options,
-        )
-
-        add_RootControllerServiceServicer_to_server(
-            RootControllerServiceImpl(), self.server
-        )
-        self.server.add_insecure_port(f"localhost:{self.server_port}")
-        self.server.start()
-        time.sleep(0.1)
-
-    def start_client(self):
-        """Start the RootController's gRPC client connection to Manager"""
+    def connect_to_all_servers(self) -> None:
+        """Establish gRPC client connections to all servers."""
+        # Connect to Manager
         self.manager_channel = grpc.insecure_channel(
             f"localhost:{self.manager_port}", options=self.client_options
         )
         self.manager_stub = ManagerServiceStub(self.manager_channel)
-        time.sleep(0.1)
 
-    def add_child_connection(self, child_controller):
-        """
-        Establish a connection to a ChildController.
-
-        Args:
-            child_controller (ChildController): ChildController instance to connect to
-        """
-        child_channel = grpc.insecure_channel(
-            f"localhost:{child_controller.server_port}", options=self.client_options
-        )
-        child_stub = ChildControllerServiceStub(child_channel)
-
-        self.child_connections[child_controller.name] = {
-            "channel": child_channel,
-            "stub": child_stub,
-            "controller": child_controller,
-        }
-        time.sleep(0.1)  # Allow connection to establish
-
-    def talk_to_manager(self, manager):
-        """
-        Send a request to the Manager.
-
-        Args:
-            manager (Manager): Manager instance for identification
-
-        Returns:
-            DummyResponse: Response from the Manager
-
-        Raises:
-            grpc.RpcError: If the gRPC call fails
-            RuntimeError: If Manager client connection not established
-        """
-        if not self.manager_stub:
-            raise RuntimeError(
-                "Manager client connection not established. Call start_client() first."
-            )
-
-        # Create request with identifying information
-        request = DummyRequest(
-            message=f"Hello from RootController:{self.server_port} to Manager",
-            timestamp=int(time.time() * 1000),  # Current time in milliseconds
-        )
-
-        # Send the request and return the response
-        response = self.manager_stub.MakeRequest(request)
-        return response
-
-    def talk_to_child(self, child_controller):
-        """
-        Send a request to a ChildController using pre-established connection.
-
-        Args:
-            child_controller (ChildController): ChildController instance to communicate with
-
-        Returns:
-            DummyResponse: Response from the ChildController
-
-        Raises:
-            grpc.RpcError: If the gRPC call fails
-            RuntimeError: If no connection exists to the specified child
-        """
-        child_name = child_controller.name
-
-        # Check if we have a connection to this child controller
-        if child_name not in self.child_connections:
-            raise RuntimeError(
-                f"No connection established to child controller '{child_name}'. "
-                f"Call add_child_connection() first."
-            )
-
-        # Use pre-established connection
-        child_stub = self.child_connections[child_name]["stub"]
-
-        # Create request with identifying information
-        request = DummyRequest(
-            message=f"Hello from RootController:{self.server_port} to {child_controller.name}",
-            timestamp=int(time.time() * 1000),  # Current time in milliseconds
-        )
-
-        # Send the request and return the response
-        response = child_stub.MakeRequest(request)
-        return response
-
-    def talk_to_all_children(self):
-        """
-        Send requests to all connected child controllers.
-
-        Returns:
-            dict: Dictionary mapping child names to their responses
-
-        Raises:
-            grpc.RpcError: If any gRPC call fails
-        """
-        responses = {}
-        for child_name, connection_info in self.child_connections.items():
-            child_controller = connection_info["controller"]
-            response = self.talk_to_child(child_controller)
-            responses[child_name] = response
-        return responses
-
-    def get_child_count(self):
-        """
-        Get the number of connected child controllers.
-
-        Returns:
-            int: Number of child controllers currently connected
-        """
-        return len(self.child_connections)
-
-    def stop(self):
-        """Stop server and all client connections gracefully"""
-        if self.server:
-            self.server.stop(grace=1)
-        if self.manager_channel:
-            self.manager_channel.close()
-
-        # Close all child controller connections
-        for connection_info in self.child_connections.values():
-            connection_info["channel"].close()
-
-        # Clear the connections dictionary
-        self.child_connections.clear()
-
-
-class ChildController:
-    """
-    ChildController class with gRPC server and client capabilities.
-    Communicates bidirectionally with RootController.
-    """
-
-    def __init__(
-        self, server_port, root_port, name, server_options=None, client_options=None
-    ):
-        """
-        Initialise ChildController with server and client configurations.
-
-        Args:
-            server_port (int): Port for ChildController's gRPC server
-            root_port (int): Port of RootController to connect to
-            name (str): Unique identifier for this child controller
-            server_options (list): List of gRPC server configuration tuples
-            client_options (list): List of gRPC client configuration tuples
-        """
-        self.server_port = server_port
-        self.root_port = root_port
-        self.name = name
-        self.server_options = server_options or []
-        self.client_options = client_options or []
-
-        self.server = None
-        self.channel = None
-        self.stub = None
-
-    def start_server(self):
-        """Start the ChildController's gRPC server with configured options"""
-
-        class ChildControllerServiceImpl(ChildControllerServiceServicer):
-            def __init__(self, name):
-                self.name = name
-
-            def MakeRequest(self, request, context):
-                return DummyResponse(reply=f"{self.name} response: {request.message}")
-
-        self.server = grpc.server(
-            futures.ThreadPoolExecutor(max_workers=CONTROLLER_MAX_WORKERS),
-            options=self.server_options,
-        )
-
-        add_ChildControllerServiceServicer_to_server(
-            ChildControllerServiceImpl(self.name), self.server
-        )
-        self.server.add_insecure_port(f"localhost:{self.server_port}")
-        self.server.start()
-        time.sleep(0.1)
-
-    def start_client(self):
-        """Start the ChildController's gRPC client connection to RootController"""
-        self.channel = grpc.insecure_channel(
+        # Connect to RootController
+        self.root_channel = grpc.insecure_channel(
             f"localhost:{self.root_port}", options=self.client_options
         )
-        self.stub = RootControllerServiceStub(self.channel)
-        time.sleep(0.1)
+        self.root_stub = RootControllerServiceStub(self.root_channel)
 
-    def talk_to_root_controller(self, root_controller):
-        """
-        Send a request to the RootController.
+        # Connect to all ChildControllers
+        for i, port in enumerate(self.child_ports):
+            child_name = f"ChildController{i + 1}"
+            channel = grpc.insecure_channel(
+                f"localhost:{port}", options=self.client_options
+            )
+            stub = ChildControllerServiceStub(channel)
 
-        Args:
-            root_controller (RootController): RootController instance for identification
+            self.child_channels[child_name] = channel
+            self.child_stubs[child_name] = stub
 
-        Returns:
-            DummyResponse: Response from the RootController
+        # Allow connections to establish
+        time.sleep(0.5)
 
-        Raises:
-            grpc.RpcError: If the gRPC call fails
-            RuntimeError: If client connection not established
-        """
-        if not self.stub:
+    def talk_to_manager(self) -> DummyResponse:
+        """Send a request to the Manager server."""
+        if not self.manager_stub:
             raise RuntimeError(
-                "Client connection not established. Call start_client() first."
+                "Manager connection not established. Call connect_to_all_servers() first."
             )
 
-        # Create request with identifying information
         request = DummyRequest(
-            message=f"Hello from {self.name} to RootController:{root_controller.server_port}",
-            timestamp=int(time.time() * 1000),  # Current time in milliseconds
+            message="Hello from ProcessManagerClient to Manager",
+            timestamp=int(time.time() * 1000),
         )
+        return self.manager_stub.MakeRequest(request)
 
-        # Send the request and return the response
-        response = self.stub.MakeRequest(request)
-        return response
+    def talk_to_root_controller(self) -> DummyResponse:
+        """Send a request to the RootController server."""
+        if not self.root_stub:
+            raise RuntimeError(
+                "RootController connection not established. Call connect_to_all_servers() first."
+            )
 
-    def stop(self):
-        """Stop both server and client connections gracefully"""
-        if self.server:
-            self.server.stop(grace=1)
-        if self.channel:
-            self.channel.close()
+        request = DummyRequest(
+            message="Hello from ProcessManagerClient to RootController",
+            timestamp=int(time.time() * 1000),
+        )
+        return self.root_stub.MakeRequest(request)
+
+    def talk_to_child_controller(self, child_name: str) -> DummyResponse:
+        """Send a request to a specific ChildController server."""
+        if child_name not in self.child_stubs:
+            raise RuntimeError(
+                f"No connection to ChildController '{child_name}'. Call connect_to_all_servers() first."
+            )
+
+        request = DummyRequest(
+            message=f"Hello from ProcessManagerClient to {child_name}",
+            timestamp=int(time.time() * 1000),
+        )
+        return self.child_stubs[child_name].MakeRequest(request)
+
+    def talk_to_all_child_controllers(self) -> Dict[str, DummyResponse]:
+        """Send requests to all ChildController servers."""
+        responses = {}
+        for child_name in self.child_stubs.keys():
+            responses[child_name] = self.talk_to_child_controller(child_name)
+        return responses
+
+    def perform_full_communication_test(self) -> None:
+        """Perform comprehensive communication test with all components."""
+        print(f"Testing communication with {len(self.child_ports)} children...")
+
+        # Test Manager communication
+        print("   ProcessManagerClient → Manager")
+        response = self.talk_to_manager()
+        print(f"     Response: {response.reply}")
+
+        # Test RootController communication
+        print("   ProcessManagerClient → RootController")
+        response = self.talk_to_root_controller()
+        print(f"     Response: {response.reply}")
+
+        # Test all ChildController communications
+        child_responses = self.talk_to_all_child_controllers()
+        for child_name, response in child_responses.items():
+            print(f"   ProcessManagerClient → {child_name}")
+            print(f"     Response: {response.reply}")
+
+        print("   All communications successful")
+
+    def close_all_connections(self) -> None:
+        """Close all gRPC client connections."""
+        if self.manager_channel:
+            self.manager_channel.close()
+        if self.root_channel:
+            self.root_channel.close()
+
+        for channel in self.child_channels.values():
+            channel.close()
+
+        # Clear connection references
+        self.child_channels.clear()
+        self.child_stubs.clear()
 
 
-def create_grpc_tree(
-    number_of_children,
-    manager_server_config,
-    manager_client_config,
-    root_server_config,
-    root_client_config,
-    child_server_config,
-    child_client_config,
-):
+def create_grpc_tree_processes(
+    number_of_children: int,
+    manager_server_config: List[Tuple[str, any]],
+    manager_client_config: List[Tuple[str, any]],
+    root_server_config: List[Tuple[str, any]],
+    root_client_config: List[Tuple[str, any]],
+    child_server_config: List[Tuple[str, any]],
+    child_client_config: List[Tuple[str, any]],
+) -> Tuple[ProcessManagerClient, List[multiprocessing.Process]]:
     """
-    Create a hierarchical gRPC tree structure with configurable number of children.
+    Create a multi-process gRPC tree structure.
 
-    Creates one Manager, one RootController, and a specified number of ChildControllers
-    with the provided gRPC options for servers and clients.
+    Spawns separate processes for Manager server, RootController server, and ChildController servers.
+    Returns a ProcessManagerClient that can communicate with all components.
 
     Args:
-        number_of_children (int): Number of child controllers to create
-        manager_server_config (list): List of gRPC options for Manager's server
-        manager_client_config (list): List of gRPC options for Manager's client
-        root_server_config (list): List of gRPC options for RootController's server
-        root_client_config (list): List of gRPC options for RootController's client
-        child_server_config (list): List of gRPC options for ChildController servers
-        child_client_config (list): List of gRPC options for ChildController clients
+        number_of_children: Number of child controllers to create
+        manager_server_config: List of gRPC options for Manager's server
+        manager_client_config: List of gRPC options for Manager's client
+        root_server_config: List of gRPC options for RootController's server
+        root_client_config: List of gRPC options for RootController's client
+        child_server_config: List of gRPC options for ChildController servers
+        child_client_config: List of gRPC options for ChildController clients
 
     Returns:
-        tuple: (manager, root_controller, list_of_child_controllers)
+        Tuple of (ProcessManagerClient, list of Process objects)
 
     Raises:
         ValueError: If number_of_children is less than 0
@@ -440,209 +452,213 @@ def create_grpc_tree(
     if number_of_children < 0:
         raise ValueError("Number of children must be non-negative")
 
-    # Dynamic port allocation to avoid conflicts
+    # Calculate port assignments
     manager_port = BASE_MANAGER_PORT
     root_port = BASE_ROOT_PORT
+    child_ports = [BASE_CHILD_PORT + i for i in range(number_of_children)]
 
-    # Create Manager instance
-    manager = Manager(
-        server_port=manager_port,
+    processes = []
+    ready_events = []
+    stop_events = []
+
+    # Create Manager server process
+    manager_ready = multiprocessing.Event()
+    manager_stop = multiprocessing.Event()
+    manager_process = multiprocessing.Process(
+        target=run_manager_server,
+        args=(manager_port, manager_server_config, manager_ready, manager_stop),
+        name="ManagerServer",
+    )
+
+    processes.append(manager_process)
+    ready_events.append(manager_ready)
+    stop_events.append(manager_stop)
+
+    # Create RootController server process
+    root_ready = multiprocessing.Event()
+    root_stop = multiprocessing.Event()
+    root_process = multiprocessing.Process(
+        target=run_root_controller_server,
+        args=(
+            root_port,
+            manager_port,
+            root_server_config,
+            root_client_config,
+            root_ready,
+            root_stop,
+        ),
+        name="RootControllerServer",
+    )
+
+    processes.append(root_process)
+    ready_events.append(root_ready)
+    stop_events.append(root_stop)
+
+    # Create ChildController server processes
+    for i in range(number_of_children):
+        child_port = child_ports[i]
+        child_name = f"ChildController{i + 1}"
+        child_ready = multiprocessing.Event()
+        child_stop = multiprocessing.Event()
+
+        child_process = multiprocessing.Process(
+            target=run_child_controller_server,
+            args=(
+                child_port,
+                root_port,
+                child_name,
+                child_server_config,
+                child_client_config,
+                child_ready,
+                child_stop,
+            ),
+            name=f"ChildServer{i + 1}",
+        )
+
+        processes.append(child_process)
+        ready_events.append(child_ready)
+        stop_events.append(child_stop)
+
+    # Start all processes
+    print(f"Starting {len(processes)} server processes...")
+    for process in processes:
+        process.start()
+
+    # Wait for all servers to be ready
+    print("Waiting for all servers to be ready...")
+    for ready_event in ready_events:
+        ready_event.wait(timeout=10)
+
+    # Allow extra time for servers to be fully ready
+    time.sleep(1)
+
+    # Create ProcessManagerClient
+    process_manager = ProcessManagerClient(
+        manager_port=manager_port,
         root_port=root_port,
-        server_options=manager_server_config,
+        child_ports=child_ports,
         client_options=manager_client_config,
     )
 
-    # Create RootController instance
-    root_controller = RootController(
-        server_port=root_port,
-        manager_port=manager_port,
-        server_options=root_server_config,
-        client_options=root_client_config,
-    )
+    # Store stop events in the process manager for cleanup
+    process_manager._stop_events = stop_events
 
-    # Create the specified number of ChildController instances
-    child_controllers = []
-    for i in range(number_of_children):
-        child_port = BASE_CHILD_PORT + i
-        child_name = f"ChildController{i + 1}"
-
-        child = ChildController(
-            server_port=child_port,
-            root_port=root_port,
-            name=child_name,
-            server_options=child_server_config,
-            client_options=child_client_config,
-        )
-
-        child_controllers.append(child)
-
-        # Establish connection from root controller to this child
-        root_controller.add_child_connection(child)
-
-    return manager, root_controller, child_controllers
+    return process_manager, processes
 
 
-def start_all_components(manager, root_controller, child_controllers):
+def stop_all_processes(
+    processes: List[multiprocessing.Process],
+    stop_events: List[multiprocessing.Event] = None,
+    timeout: int = 10,
+) -> None:
     """
-    Start all servers and establish all client connections for the gRPC tree.
+    Stop all processes gracefully with proper cleanup.
 
     Args:
-        manager (Manager): Manager instance to start
-        root_controller (RootController): RootController instance to start
-        child_controllers (list): List of ChildController instances to start
+        processes: List of Process objects to terminate
+        stop_events: Optional list of Events to signal graceful shutdown
+        timeout: Maximum time to wait for processes to terminate
     """
-    # Start all servers first to ensure they're ready for connections
-    print(f"Starting {len(child_controllers) + 2} servers...")
-    manager.start_server()
-    root_controller.start_server()
+    print("Shutting down all processes...")
 
-    for child in child_controllers:
-        child.start_server()
+    # Signal graceful shutdown if events are available
+    if stop_events:
+        for stop_event in stop_events:
+            stop_event.set()
 
-    # Allow servers to be fully ready before client connections
-    time.sleep(0.5)
+    # Wait for processes to terminate gracefully
+    start_time = time.time()
+    for process in processes:
+        remaining_time = max(0, timeout - (time.time() - start_time))
+        process.join(timeout=remaining_time)
 
-    # Start all client connections
-    print("Establishing client connections...")
-    manager.start_client()
-    root_controller.start_client()
+        # Force termination if process didn't exit gracefully
+        if process.is_alive():
+            print(f"Force terminating process {process.name}")
+            process.terminate()
+            process.join(timeout=2)
 
-    for child in child_controllers:
-        child.start_client()
+            # Last resort: kill the process
+            if process.is_alive():
+                print(f"Force killing process {process.name}")
+                process.kill()
+                process.join()
 
-    # Allow connections to establish
-    time.sleep(0.5)
+
+def enable_verbose_logging():
+    """Enable verbose gRPC logging for debugging."""
+    os.environ["GRPC_VERBOSITY"] = "DEBUG"
+    os.environ["GRPC_TRACE"] = "http"
 
 
-def stop_all_components(manager, root_controller, child_controllers):
+def test_multiprocess_http2_ping_timeout():
     """
-    Stop all servers and client connections gracefully.
+    Test HTTP/2 ping timeout errors using multi-process architecture.
 
-    Args:
-        manager (Manager): Manager instance to stop
-        root_controller (RootController): RootController instance to stop
-        child_controllers (list): List of ChildController instances to stop
+    Creates a scenario where components run in separate processes and communicate
+    via gRPC with aggressive keepalive settings to trigger ping timeout behaviour.
     """
-    print("Shutting down components...")
+    # enable_verbose_logging()
 
-    # Stop child controllers first
-    for child in child_controllers:
-        child.stop()
-
-    # Then stop root controller and manager
-    root_controller.stop()
-    manager.stop()
-
-
-def perform_communication_test(manager, root_controller, child_controllers):
-    """
-    Perform a full communication test between all components.
-
-    Args:
-        manager (Manager): Manager instance
-        root_controller (RootController): RootController instance
-        child_controllers (list): List of ChildController instances
-    """
-    print(f"Testing communication with {len(child_controllers)} children...")
-
-    # Manager to RootController
-    print("   Manager → RootController")
-    manager.talk_to_root_controller(root_controller)
-
-    # RootController to Manager
-    print("   RootController → Manager")
-    root_controller.talk_to_manager(manager)
-
-    # RootController to each ChildController
-    for i, child in enumerate(child_controllers, 1):
-        print(f"   RootController → ChildController{i}")
-        root_controller.talk_to_child(child)
-
-    # Each ChildController to RootController
-    for i, child in enumerate(child_controllers, 1):
-        print(f"   ChildController{i} → RootController")
-        child.talk_to_root_controller(root_controller)
-
-    print("   All communications successful")
-
-
-def test_http2_ping_timeout():
-    """
-    Test to produce HTTP/2 ping timeout errors using completely default gRPC configurations.
-
-    Creates a scenario where the HTTP/2 transport becomes unresponsive to ping frames
-    while keeping the underlying connection alive.
-    """
     print("=" * 60)
-    print("HTTP/2 Ping Timeout Test - Default Configs Only")
+    print("Multi-Process HTTP/2 Ping Timeout Test")
     print("=" * 60)
 
-    # Use completely default configs - no modifications
-    default_config = []
-
-    print("Creating gRPC tree with default configurations...")
-    manager, root_controller, child_controllers = create_grpc_tree(
-        number_of_children=10,
-        manager_server_config=default_config,
-        manager_client_config=default_config,
-        root_server_config=default_config,
-        root_client_config=default_config,
-        child_server_config=default_config,
-        child_client_config=default_config,
-    )
+    # Aggressive keepalive settings to trigger ping timeout scenarios
+    aggressive_config = [
+        # ("grpc.keepalive_time_ms", 10),
+        #     ("grpc.keepalive_timeout_ms", 1),
+        #     (
+        #         "grpc.keepalive_permit_without_calls",
+        #         1,
+        #     ),  # Allow keepalive without active calls
+        #     ("grpc.http2.max_pings_without_data", 0),  # No limit on pings without data
+        #  ("grpc.http2.min_time_between_pings_ms", 100),  # Minimum 100ms between pings
+    ]
 
     try:
-        # Start all components
-        start_all_components(manager, root_controller, child_controllers)
+        print("Creating multi-process gRPC tree...")
+        process_manager, processes = create_grpc_tree_processes(
+            number_of_children=5,
+            manager_server_config=aggressive_config,
+            manager_client_config=aggressive_config,
+            root_server_config=aggressive_config,
+            root_client_config=aggressive_config,
+            child_server_config=aggressive_config,
+            child_client_config=aggressive_config,
+        )
 
-        # Verify initial communication
-        perform_communication_test(manager, root_controller, child_controllers)
-        print("Initial communication successful")
+        print("Connecting ProcessManagerClient to all servers...")
+        process_manager.connect_to_all_servers()
 
-        # Let connections establish properly
-        print("Allowing connections to establish (5 seconds)...")
-        time.sleep(5)
+        print("Going idle to monitor for ping timeout behaviour...")
+        time.sleep(150)
+        print("Finished idle period.")
 
-        # Create resource exhaustion by overloading the server's thread pool
-        # This should make it unresponsive to HTTP/2 ping frames while keeping connection alive
-        print("Creating server resource exhaustion...")
+        # Perform initial communication test
+        process_manager.perform_full_communication_test()
 
-        # Block the server's thread pool with long-running operations
-        import threading
+        print("Going idle to monitor for ping timeout behaviour...")
+        time.sleep(150)
+        print("Finished idle period.")
 
-        def block_server_threads():
-            """Block server threads to make it unresponsive to HTTP/2 pings"""
-            time.sleep(120)  # Block for 2 minutes
+        print("Testing communication after monitoring period...")
+        process_manager.perform_full_communication_test()
 
-        # Start multiple blocking threads to exhaust the server's thread pool
-        blocking_threads = []
-        for i in range(CONTROLLER_MAX_WORKERS + 2):  # Exceed the thread pool size
-            thread = threading.Thread(target=block_server_threads)
-            thread.daemon = True
-            thread.start()
-            blocking_threads.append(thread)
+        print("Test completed - check logs for ping_timeout messages")
 
-        print("Server threads blocked - monitoring for ping timeout (60 seconds)...")
-
-        for i in range(180):
-            time.sleep(1)
-
-            # Periodically attempt communication to trigger HTTP/2 activity
-            if i % 10 == 0 and i > 0:
-                try:
-                    manager.talk_to_root_controller(root_controller)
-                except Exception as e:
-                    print(f"Communication attempt failed: {type(e).__name__}")
-
-            if (i + 1) % 15 == 0:
-                print(f"  {i + 1} seconds elapsed...")
-
-        print("Monitoring complete - check for ping_timeout in logs")
-
-        perform_communication_test(manager, root_controller, child_controllers)
+    except Exception as e:
+        print(f"Test encountered error: {e}")
+        raise
     finally:
-        stop_all_components(manager, root_controller, child_controllers)
+        # Clean up
+        if "process_manager" in locals():
+            process_manager.close_all_connections()
+
+        if "processes" in locals():
+            stop_events = getattr(process_manager, "_stop_events", None)
+            stop_all_processes(processes, stop_events)
 
 
 if __name__ == "__main__":
-    test_http2_ping_timeout()
+    test_multiprocess_http2_ping_timeout()
