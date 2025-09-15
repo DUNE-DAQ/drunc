@@ -1232,3 +1232,52 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=response_children,
         )
+
+    ##########################################
+    ####### Integration test commands ########
+    ##########################################
+
+
+    # ORDER MATTERS!
+    @broadcasted  # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control
+    @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
+    def to_error(
+        self,
+        addressed_commands: dict[str, AddressedCommand],
+        execute_on_self: bool,
+        token: Token
+    ) -> PlainText:
+        """
+        Transitions the stateful node to an error state. Used for testing purposes.
+        """
+        try:
+            if execute_on_self:
+                self.stateful_node.to_error()
+
+            response_children = self.propagate_addressed_command(
+                "to_error",
+                addressed_commands=addressed_commands,
+                token=token,
+            )
+
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=response_children,
+            )
+        except Exception as e:
+            self.log.exception(e)
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children=None,
+            )
