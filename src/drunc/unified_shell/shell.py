@@ -31,7 +31,10 @@ from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.process_manager.configuration import get_process_manager_configuration
+from drunc.process_manager.configuration import (
+    get_process_manager_configuration,
+    validate_pm_config,
+)
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
@@ -134,6 +137,10 @@ def unified_shell(
         )
         # Check if process_manager is a packaged config
         process_manager_conf_file = get_process_manager_configuration(process_manager)
+
+        if not validate_pm_config(process_manager_conf_file):
+            unified_shell_log.error("Process manager configuration validation failed. Exiting.")
+            sys.exit(1)
 
         ready_event = mp.Event()
         port = mp.Value("i", 0)
