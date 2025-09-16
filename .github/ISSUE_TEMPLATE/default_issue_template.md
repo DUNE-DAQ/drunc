@@ -1,3 +1,8 @@
+---
+name: SWIT template
+about: Report an issue with the format requested by SWIT
+---
+
 > Sample uses of this template can be found in DUNE-DAQ/daq-deliverables#181 and DUNE-DAQ/daq-deliverables#187.
 
 **_Small Issues and PRs_**
