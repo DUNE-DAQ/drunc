@@ -45,7 +45,7 @@
         },
         "command_address": {"type": "string"}
       },
-      "required": ["type"],
+      "required": ["type", "name"],
       "additionalProperties": true
     },
     {

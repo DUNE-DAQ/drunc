@@ -164,22 +164,21 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-DEFAULT_SCHEMA = {
-    "type": "object",
-    "properties": {"type": {"type": "string", "enum": ["ssh", "k8s"]}},
-    "required": ["type"],
-}
-
 def _load_pm_schema_from_package():
-    """Load JSON Schema from packaged file if available; fall back to DEFAULT_SCHEMA."""
+    """Load JSON Schema from packaged file; raise if missing or unreadable."""
     try:
-        schema_resource = resources.files("drunc.data.schema.process_manager") / "process_manager.schema.json"
-        if hasattr(schema_resource, "open"):
-            with schema_resource.open("r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return DEFAULT_SCHEMA
+        # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
+        schema_resource = (
+            resources.files("drunc.data.process_manager.schema") / "process_manager.schema.json"
+        )
+        if not hasattr(schema_resource, "open"):
+            raise FileNotFoundError("process_manager.schema.json resource not found")
+        with schema_resource.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger = get_logger("process_manager.config_validation")
+        logger.error(f"Failed to load packaged schema: {e}")
+        raise DruncCommandException("Packaged process manager schema could not be loaded.")
 
 def _load_config_from_source(source: str) -> dict:
     """
