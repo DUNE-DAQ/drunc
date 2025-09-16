@@ -1,11 +1,11 @@
+import json
 import os
 from enum import Enum
 from importlib import resources
-import json
-from urllib.parse import urlparse, unquote
-from jsonschema import validate as js_validate, ValidationError
+from urllib.parse import unquote, urlparse
 
-
+from jsonschema import ValidationError
+from jsonschema import validate as js_validate
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
@@ -47,9 +47,6 @@ class ProcessManagerConfHandler(ConfHandler):
             new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(
                 data.get("broadcaster")
             )
-        else:
-            new_data.broadcaster = None
-        new_data.authoriser = None
         new_data.environment = data.get("environment", {})
         new_data.settings = data.get("settings", {})
 
@@ -63,7 +60,7 @@ class ProcessManagerConfHandler(ConfHandler):
             case _:
                 raise UnknownProcessManagerType(data["type"])
 
-        new_data.opmon_publisher = None
+        # opmon_publisher left as default None
         self.opmon_conf = parse_opmon_conf(
             log=self.log,
             conf=data.get("opmon_conf", None),
@@ -167,107 +164,22 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-
-"""
-JSON Schema definitions for Process Manager configuration validation.
-
-We keep a minimal base and use conditional validation for type-specific fields.
-The schema mirrors how the code consumes configuration today to avoid over-
-validating unused/optional fields.
-"""
-
-# Base schema common to all configuration types
-base_schema = {
+DEFAULT_SCHEMA = {
     "type": "object",
-    "properties": {
-        "type": {"type": "string", "enum": ["ssh", "k8s"]},
-        "name": {"type": "string"},
-        # Optional authoriser object (currently unused in code, may be added later)
-        "authoriser": {
-            "type": "object",
-            "properties": {"type": {"type": "string"}},
-            "required": ["type"],
-            "additionalProperties": True,
-        },
-        "environment": {"type": "object"},
-        # opmon configuration may come via either opmon_conf or opmon_uri; both optional
-        "opmon_uri": {
-            "type": "object",
-            "properties": {
-                "path": {"type": "string"},
-                "type": {"type": "string", "enum": ["file", "stream"]},
-            },
-            "required": ["path", "type"],
-            "additionalProperties": True,
-        },
-        "opmon_conf": {
-            "type": "object",
-            "properties": {
-                # Keep permissive; downstream parser handles details
-                "level": {"type": "string"},
-                "interval_s": {"type": ["number", "integer"]},
-            },
-            "additionalProperties": True,
-        },
-        "broadcaster": {
-            "type": "object",
-            "properties": {
-                "type": {"type": "string"},
-                "kafka_address": {"type": "string"},
-                "publish_timeout": {"type": ["integer", "number"]},
-            },
-            "required": ["type", "kafka_address", "publish_timeout"],
-            "additionalProperties": True,
-        },
-        # Common optional fields some types may reference
-        "command_address": {"type": "string"},
-    },
+    "properties": {"type": {"type": "string", "enum": ["ssh", "k8s"]}},
     "required": ["type"],
-    "additionalProperties": True,
 }
 
-# Type-specific fragments
-ssh_schema = {
-    "type": "object",
-    "properties": {
-        "settings": {
-            "type": "object",
-            "properties": {
-                "disable_localhost_host_key_check": {"type": "boolean"},
-                "disable_host_key_check": {"type": "boolean"},
-            },
-            "additionalProperties": True,
-        },
-        "command_address": {"type": "string"},
-        "kill_timeout": {"type": ["number", "integer"]},
-    },
-    "additionalProperties": True,
-}
-
-k8s_schema = {
-    "type": "object",
-    "properties": {
-        "command_address": {"type": "string"},
-        "image": {"type": "string"},
-    },
-    # Keep optional to allow defaults in code
-    "additionalProperties": True,
-}
-
-# Combined schema using conditional branches
-combined_schema = {
-    "allOf": [
-        base_schema,
-        {
-            "if": {"properties": {"type": {"const": "ssh"}}},
-            "then": ssh_schema,
-        },
-        {
-            "if": {"properties": {"type": {"const": "k8s"}}},
-            "then": k8s_schema,
-        },
-    ]
-}
+def _load_pm_schema_from_package():
+    """Load JSON Schema from packaged file if available; fall back to DEFAULT_SCHEMA."""
+    try:
+        schema_resource = resources.files("drunc.data.schema.process_manager") / "process_manager.schema.json"
+        if hasattr(schema_resource, "open"):
+            with schema_resource.open("r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return DEFAULT_SCHEMA
 
 def _load_config_from_source(source: str) -> dict:
     """
@@ -292,8 +204,11 @@ def _load_config_from_source(source: str) -> dict:
                     return json.load(f)
             raise FileNotFoundError(f"Unsupported URL scheme: {u.scheme}")
 
-        # Filesystem path
-        with open(source, "r", encoding="utf-8") as f:
+        # Name or filesystem path: resolve and then load
+        resolved_url = get_process_manager_configuration(source)
+        u = urlparse(resolved_url)
+        path = unquote(u.path)
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
     # Already a dict
@@ -305,15 +220,17 @@ def _load_config_from_source(source: str) -> dict:
 def validate_config(config_or_source) -> bool:
     try:
         cfg = _load_config_from_source(config_or_source)
-
-        # Single-pass validation against combined schema
-        js_validate(instance=cfg, schema=combined_schema)
+        schema = _load_pm_schema_from_package()
+        # Single-pass validation against schema (package or fallback)
+        js_validate(instance=cfg, schema=schema)
         return True
 
     except ValidationError as e:
-        log.error(e.message)
-        log.error(list(e.path))
+        logger = get_logger("process_manager.config_validation")
+        logger.error(e.message)
+        logger.error(list(e.path))
         return False
     except (OSError, json.JSONDecodeError, FileNotFoundError, TypeError) as e:
-        print(f"  - Failed to read/parse config: {e}")
+        logger = get_logger("process_manager.config_validation")
+        logger.error(f"Failed to read/parse config: {e}")
         return False

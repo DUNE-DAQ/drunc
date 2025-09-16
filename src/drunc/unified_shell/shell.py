@@ -30,7 +30,10 @@ from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.process_manager.configuration import get_process_manager_configuration, validate_config
+from drunc.process_manager.configuration import (
+    get_process_manager_configuration,
+    validate_config,
+)
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
