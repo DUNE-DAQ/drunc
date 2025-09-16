@@ -1,7 +1,10 @@
 import os
 from enum import Enum
 from importlib import resources
-from urllib.parse import urlparse
+import json
+from urllib.parse import urlparse, unquote
+from jsonschema import validate as js_validate, ValidationError
+
 
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
@@ -162,3 +165,155 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
             )
             exit()
     return process_manager_conf_filename
+
+
+
+"""
+JSON Schema definitions for Process Manager configuration validation.
+
+We keep a minimal base and use conditional validation for type-specific fields.
+The schema mirrors how the code consumes configuration today to avoid over-
+validating unused/optional fields.
+"""
+
+# Base schema common to all configuration types
+base_schema = {
+    "type": "object",
+    "properties": {
+        "type": {"type": "string", "enum": ["ssh", "k8s"]},
+        "name": {"type": "string"},
+        # Optional authoriser object (currently unused in code, may be added later)
+        "authoriser": {
+            "type": "object",
+            "properties": {"type": {"type": "string"}},
+            "required": ["type"],
+            "additionalProperties": True,
+        },
+        "environment": {"type": "object"},
+        # opmon configuration may come via either opmon_conf or opmon_uri; both optional
+        "opmon_uri": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "type": {"type": "string", "enum": ["file", "stream"]},
+            },
+            "required": ["path", "type"],
+            "additionalProperties": True,
+        },
+        "opmon_conf": {
+            "type": "object",
+            "properties": {
+                # Keep permissive; downstream parser handles details
+                "level": {"type": "string"},
+                "interval_s": {"type": ["number", "integer"]},
+            },
+            "additionalProperties": True,
+        },
+        "broadcaster": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "kafka_address": {"type": "string"},
+                "publish_timeout": {"type": ["integer", "number"]},
+            },
+            "required": ["type", "kafka_address", "publish_timeout"],
+            "additionalProperties": True,
+        },
+        # Common optional fields some types may reference
+        "command_address": {"type": "string"},
+    },
+    "required": ["type"],
+    "additionalProperties": True,
+}
+
+# Type-specific fragments
+ssh_schema = {
+    "type": "object",
+    "properties": {
+        "settings": {
+            "type": "object",
+            "properties": {
+                "disable_localhost_host_key_check": {"type": "boolean"},
+                "disable_host_key_check": {"type": "boolean"},
+            },
+            "additionalProperties": True,
+        },
+        "command_address": {"type": "string"},
+        "kill_timeout": {"type": ["number", "integer"]},
+    },
+    "additionalProperties": True,
+}
+
+k8s_schema = {
+    "type": "object",
+    "properties": {
+        "command_address": {"type": "string"},
+        "image": {"type": "string"},
+    },
+    # Keep optional to allow defaults in code
+    "additionalProperties": True,
+}
+
+# Combined schema using conditional branches
+combined_schema = {
+    "allOf": [
+        base_schema,
+        {
+            "if": {"properties": {"type": {"const": "ssh"}}},
+            "then": ssh_schema,
+        },
+        {
+            "if": {"properties": {"type": {"const": "k8s"}}},
+            "then": k8s_schema,
+        },
+    ]
+}
+
+def _load_config_from_source(source: str) -> dict:
+    """
+    Accepts:
+      - file URLs (file:///...),
+      - plain filesystem paths,
+      - raw JSON text (starts with '{' or '[').
+    Returns dict.
+    """
+    if isinstance(source, str):
+        s = source.lstrip()
+        # Raw JSON text
+        if s.startswith("{") or s.startswith("["):
+            return json.loads(source)
+
+        # URL?
+        if "://" in source:
+            u = urlparse(source)
+            if u.scheme == "file":
+                path = unquote(u.path)
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            raise FileNotFoundError(f"Unsupported URL scheme: {u.scheme}")
+
+        # Filesystem path
+        with open(source, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    # Already a dict
+    if isinstance(source, dict):
+        return source
+
+    raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
+
+def validate_config(config_or_source) -> bool:
+    try:
+        cfg = _load_config_from_source(config_or_source)
+
+        # Single-pass validation against combined schema
+        js_validate(instance=cfg, schema=combined_schema)
+        return True
+
+    except ValidationError as e:
+        log.error(e.message)
+        log.error(list(e.path))
+        return False
+    except (OSError, json.JSONDecodeError, FileNotFoundError, TypeError) as e:
+        print(f"  - Failed to read/parse config: {e}")
+        return False
