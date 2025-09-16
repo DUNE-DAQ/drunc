@@ -2,6 +2,7 @@ import json
 import os
 from enum import Enum
 from importlib import resources
+from typing import Any, Dict, Union
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -164,7 +165,7 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-def _load_pm_schema_from_package():
+def _load_pm_schema_from_package() -> Dict[str, Any]:
     """Load JSON Schema from packaged file; raise if missing or unreadable."""
     try:
         # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
@@ -180,7 +181,7 @@ def _load_pm_schema_from_package():
         logger.error(f"Failed to load packaged schema: {e}")
         raise DruncCommandException("Packaged process manager schema could not be loaded.")
 
-def _load_config_from_source(source: str) -> dict:
+def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     """
     Accepts:
       - file URLs (file:///...),
@@ -211,17 +212,18 @@ def _load_config_from_source(source: str) -> dict:
             return json.load(f)
 
     # Already a dict
-    if isinstance(source, dict):
+    elif isinstance(source, dict):
         return source
 
     raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
 
-def validate_config(config_or_source) -> bool:
+def validate_pm_config(config_or_source: Union[str, Dict[str, Any]]) -> bool:
     try:
-        cfg = _load_config_from_source(config_or_source)
+        pm_conf = _load_config_from_source(config_or_source)
         schema = _load_pm_schema_from_package()
-        # Single-pass validation against schema (package or fallback)
-        js_validate(instance=cfg, schema=schema)
+
+        js_validate(instance=pm_conf, schema=schema)
+        
         return True
 
     except ValidationError as e:

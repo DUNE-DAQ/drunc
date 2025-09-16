@@ -11,7 +11,7 @@ from drunc.exceptions import DruncSetupException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     get_process_manager_configuration,
-    validate_config,
+    validate_pm_config,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
@@ -48,11 +48,11 @@ def run_pm(
 
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
 
-    log.info(f"Validating process_manager configuration: {pm_conf}")
-    if not validate_config(pm_conf):   
+    log.debug(f"Validating process_manager configuration: {pm_conf}")
+    if not validate_pm_config(pm_conf):   
         log.error("Process manager configuration validation failed. Exiting.")
         sys.exit(1)
-    log.info("Process manager configuration is valid.")
+    log.debug("Process manager configuration is valid.")
 
     conf_path, conf_type = parse_conf_url(pm_conf)
     
