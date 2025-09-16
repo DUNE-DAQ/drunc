@@ -1,4 +1,7 @@
 ```mermaid
+---
+id: d0abd951-f88e-487f-a1a3-1c11060408d8
+---
 sequenceDiagram
     participant U2 as User 2
     participant U1 as User 1
@@ -15,5 +18,6 @@ sequenceDiagram
     C ->> U1: Notification: Control surrendered
     C ->> U1: WhoIsInCharge
     C ->> U2: WhoIsInCharge
-
+    U2 ->> C: Take control
+    Note over C: Assign User 2 <br> as actor
 ```
