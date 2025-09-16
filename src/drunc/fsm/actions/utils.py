@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Optional
 
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
@@ -23,7 +22,7 @@ def validate_run_type(run_type: str) -> str:
     return run_type
 
 
-def get_dotdrunc_json(path: Optional[str] = None) :
+def get_dotdrunc_json(path: str | None = None):
     # Resolution order: DOTDRUNC env var -> provided path -> default path
     file_path = os.getenv("DOTDRUNC") or path or "~/.drunc.json"
     try:
