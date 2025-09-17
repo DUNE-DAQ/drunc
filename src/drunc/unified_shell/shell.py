@@ -21,6 +21,7 @@ from drunc.controller.interface.commands import (
     status,
     surrender_control,
     take_control,
+    to_error,
     wait,
     who_am_i,
     who_is_in_charge,
@@ -30,7 +31,10 @@ from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.process_manager.configuration import get_process_manager_configuration
+from drunc.process_manager.configuration import (
+    get_process_manager_configuration,
+    validate_pm_config,
+)
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
@@ -118,8 +122,7 @@ def unified_shell(
     ctx.obj.session_name = session_name
 
     db = conffwk.Configuration(ctx.obj.configuration_file)
-    session_dal = db.get_dal(class_name="Session",
-                             uid=ctx.obj.configuration_id)
+    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
     connectivity_service_address = f"{session_dal.connectivity_service.host}:{session_dal.connectivity_service.service.port}"
@@ -133,8 +136,11 @@ def unified_shell(
             f"Spawning [green]process_manager[/green] with configuration {process_manager}"
         )
         # Check if process_manager is a packaged config
-        process_manager_conf_file = get_process_manager_configuration(
-            process_manager)
+        process_manager_conf_file = get_process_manager_configuration(process_manager)
+
+        if not validate_pm_config(process_manager_conf_file):
+            unified_shell_log.error("Process manager configuration validation failed. Exiting.")
+            sys.exit(1)
 
         ready_event = mp.Event()
         port = mp.Value("i", 0)
@@ -183,13 +189,13 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]{process_manager_address}[/green]"
     )
     ctx.obj.reset(address_pm=process_manager_address)
+    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
 
     desc = None
     try:
         unified_shell_log.debug("Runnning [green]describe[/green]")
         try:
             desc = ctx.obj.get_driver().describe()
-            desc = desc.data
         except Exception as e:
             unified_shell_log.error(
                 f"[red]Could not connect to the process manager at the address[/red] [green]{process_manager_address}[/]"
@@ -263,6 +269,7 @@ def unified_shell(
         "Adding [green]unified_shell[/green] commands to the context"
     )
     ctx.command.add_command(boot, "boot")
+    ctx.obj.dynamic_commands.add("boot")
 
     unified_shell_log.debug(
         "Adding [green]process_manager[/green] commands to the context"
@@ -273,18 +280,22 @@ def unified_shell(
     ctx.command.add_command(logs, "logs")
     ctx.command.add_command(restart, "restart")
     ctx.command.add_command(ps, "ps")
+    ctx.obj.dynamic_commands.add("kill")
+    ctx.obj.dynamic_commands.add("terminate")
+    ctx.obj.dynamic_commands.add("flush")
+    ctx.obj.dynamic_commands.add("logs")
+    ctx.obj.dynamic_commands.add("restart")
+    ctx.obj.dynamic_commands.add("ps")
 
     # Not particularly proud of this...
     # We instantiate a stateful node which has the same configuration as the one from this session
     # Let's do this
     unified_shell_log.debug("Retrieving the session database")
     db = conffwk.Configuration(ctx.obj.configuration_file)
-    session_dal = db.get_dal(class_name="Session",
-                             uid=ctx.obj.configuration_id)
+    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
 
     controller_name = session_dal.segment.controller.id
-    unified_shell_log.debug(
-        "Initializing the [green]ControllerConfHandler[/green]")
+    unified_shell_log.debug("Initializing the [green]ControllerConfHandler[/green]")
     controller_configuration = ControllerConfHandler(
         type=ConfTypes.OKSFileName,
         data=ctx.obj.configuration_file,
@@ -297,7 +308,7 @@ def unified_shell(
         ),
         session_name=session_name,
     )
-
+    os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
     fsm_logger = get_logger("controller.FSM")
     fsm_logger.setLevel("ERROR")
     fsm_conf_logger = get_logger("controller.FSMConfHandler")
@@ -309,16 +320,12 @@ def unified_shell(
     )
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
-    stateful_node = StatefulNode(
-        fsm_configuration=fsmch,
-        top_segment_controller=False
-    )
+    stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
 
     unified_shell_log.debug(
         "Retrieving the transitions from the [green]StatefulNode[/green]"
     )
-    transitions = convert_fsm_transition(
-        stateful_node.get_all_fsm_transitions())
+    transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
     fsm_logger.setLevel(log_level)
     fsm_conf_logger.setLevel(log_level)
     # End of shameful code
@@ -348,7 +355,30 @@ def unified_shell(
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
     ctx.command.add_command(expert_command, "expert-command")
+    ctx.command.add_command(to_error, "to-error")
+    ctx.obj.dynamic_commands.add("status")
+    ctx.obj.dynamic_commands.add("recompute_status")
+    ctx.obj.dynamic_commands.add("connect")
+    ctx.obj.dynamic_commands.add("disconnect")
+    ctx.obj.dynamic_commands.add("take_control")
+    ctx.obj.dynamic_commands.add("surrender_control")
+    ctx.obj.dynamic_commands.add("who_am_i")
+    ctx.obj.dynamic_commands.add("who_is_in_charge")
+    ctx.obj.dynamic_commands.add("include")
+    ctx.obj.dynamic_commands.add("exclude")
+    ctx.obj.dynamic_commands.add("wait")
+    ctx.obj.dynamic_commands.add("expert_command")
+    ctx.obj.dynamic_commands.add("to_error")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
+
+    if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
+        ctx.obj.batch_mode = True
+
+def on_exit(ctx, unified_shell_log):
+    """Handle exit from the shell."""
+    unified_shell_log.info("[green]Exiting unified_shell[/green]")
+    # TODO - cleanup needs to happen
+    unified_shell_log.info("[green]unified_shell[/green] exited successfully.")

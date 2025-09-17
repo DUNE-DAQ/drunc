@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -15,8 +16,9 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     Status,
 )
+from druncschema.description_pb2 import OldDescription
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from druncschema.request_response_pb2 import Description, ResponseFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from rich.console import ConsoleRenderable, Group, RichCast
 from rich.progress import (
     BarColumn,
@@ -48,8 +50,8 @@ def generate_none_status() -> Status:
     )
 
 
-def generate_none_description() -> Description:
-    return Description(
+def generate_none_description() -> OldDescription:
+    return OldDescription(
         type="none",
         name="none",
         endpoint="none",
@@ -103,7 +105,7 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t.add_column("Endpoint")
 
     def add_status_to_table(table, status, description, prefix):
-        valid_description = check_message_type(description, "Description")
+        valid_description = check_message_type(description, "OldDescription")
         valid_status = check_message_type(status, "Status")
 
         if not valid_description or not valid_status:
@@ -228,7 +230,7 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    desc = Description()
+    desc = OldDescription()
 
     timeout = 60
 
@@ -460,6 +462,13 @@ def run_one_fsm_command(
     log.info(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
+
+    if obj.batch_mode and obj.get_driver("controller").status().data.in_error:
+        obj.get_driver("controller").status()
+        log.error(
+            "Running in batch mode, and because error state is detected, exiting."
+        )
+        sys.exit(1)
 
     execute_along_path = False
     execute_on_all_subsequent_children_in_path = True

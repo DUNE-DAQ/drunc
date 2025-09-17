@@ -70,7 +70,11 @@ def tabulate_process_instance_list(pil, title, long=False):
         t.add_column("executable")
 
     sorted_pil = sorted(
-        pil.values, key=attrgetter("process_description.metadata.tree_id")
+        pil.values,
+        key=attrgetter(
+            "process_description.metadata.session",
+            "process_description.metadata.tree_id",
+        ),
     )
     tree_str = make_tree(sorted_pil)
     try:

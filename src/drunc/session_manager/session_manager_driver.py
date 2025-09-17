@@ -1,12 +1,14 @@
 """Driver for the session manager service."""
 
-from druncschema.request_response_pb2 import Description
+import grpc
+from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import Request
 from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
-from grpc import Channel
 
-from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
+from drunc.utils.grpc_utils import copy_token, handle_grpc_error
+from drunc.utils.shell_utils import GRPCDriver
 
 
 class SessionManagerDriver(GRPCDriver):
@@ -27,38 +29,58 @@ class SessionManagerDriver(GRPCDriver):
         super().__init__(
             name="session_manager_driver", address=address, token=token, **kwargs
         )
+        self.stub = SessionManagerStub(self.channel)
 
-    def create_stub(self, channel: Channel) -> SessionManagerStub:
-        """Create gRPC stubs for the session manager service.
-
-        Args:
-            channel: The gRPC channel to use for communication.
-
-        Returns:
-            An object containing session manager service method stubs.
-        """
-        return SessionManagerStub(channel)
-
-    def describe(self) -> DecodedResponse | None:
+    def describe(self, timeout: int | float = 60) -> Description:
         """Describe the session manager service.
 
-        Returns:
-            A decoded response object containing the description of the service.
-        """
-        return self.send_command("describe", outformat=Description)
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
 
-    def list_all_sessions(self) -> DecodedResponse | None:
+        Returns:
+            A response containing the description of the service.
+        """
+        request = Request(token=copy_token(self.token))
+
+        try:
+            response = self.stub.describe(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def list_all_sessions(self, timeout: int | float = 60) -> AllActiveSessions:
         """List all active sessions managed by the session manager.
 
-        Returns:
-            A decoded response object containing a list of all active sessions.
-        """
-        return self.send_command("list_all_sessions", outformat=AllActiveSessions)
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
 
-    def list_all_configs(self) -> DecodedResponse | None:
+        Returns:
+            A response containing a list of all active sessions.
+        """
+        request = Request(token=copy_token(self.token))
+
+        try:
+            response = self.stub.list_all_sessions(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def list_all_configs(self, timeout: int | float = 60) -> AllConfigKeys:
         """List all available configurations in the session manager.
 
+        Args:
+            timeout: The timeout for the gRPC call in seconds.
+
         Returns:
-            A decoded response object containing all available configuration keys.
+            A response containing all available configuration keys.
         """
-        return self.send_command("list_all_configs", outformat=AllConfigKeys)
+        request = Request(token=copy_token(self.token))
+
+        try:
+            response = self.stub.list_all_configs(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response

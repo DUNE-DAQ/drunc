@@ -15,12 +15,7 @@ from drunc.exceptions import (
     DruncSetupException,
     DruncShellException,
 )
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    rethrow_if_timeout,
-    rethrow_if_unreachable_server,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.utils import get_logger
 
 
@@ -86,28 +81,20 @@ class DecodedResponse:
 
 
 class GRPCDriver:
-    def __init__(self, name: str, address: str, token: Token, aio_channel=False):
+    def __init__(self, name: str, address: str, token: Token):
         self.log = get_logger("utils.GRPCDriver")
 
         if not address:
             raise DruncSetupException(
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
-
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
         self.address = address
-
-        if aio_channel:
-            self.channel = grpc.aio.insecure_channel(self.address)
-        else:
-            self.channel = grpc.insecure_channel(self.address)
-
-        self.stub = self.create_stub(self.channel)
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.token = Token()
         self.token.CopyFrom(token)
-
-    @abc.abstractmethod
-    def create_stub(self, channel) -> object:
-        pass
 
     def _create_request(self, payload=None) -> Request:
         token2 = Token()
@@ -120,11 +107,6 @@ class GRPCDriver:
             return Request(token=token2, data=data)
         else:
             return Request(token=token2)
-
-    def __handle_grpc_error(self, error, command):
-        rethrow_if_unreachable_server(error)
-        rethrow_if_timeout(error)
-        raise error
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
@@ -141,15 +123,6 @@ class GRPCDriver:
                     self.log.error(f"Error unpacking data: {e}")
                     dr.data = response.data
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
-
         else:
 
             def text(verb="not executed", reason=""):
@@ -164,7 +137,6 @@ class GRPCDriver:
             if response.data.Is(Stacktrace.DESCRIPTOR):
                 stack = unpack_any(response.data, Stacktrace)
                 dr.data = stack
-                # stack_txt = 'Stacktrace [bold red]on remote server![/bold red]\n' # Temporary - bold doesn't work
                 stack_txt = "Stacktrace on remote server!\n"
                 last_one = ""
 
@@ -186,30 +158,25 @@ class GRPCDriver:
             elif response.flag in [
                 ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
             ]:
-                self.log.warn(text())
+                self.log.warning(text())
             else:
                 self.log.error(text("failed", error_txt))
 
-            for c_response in response.children:
-                try:
-                    dr.children.append(
-                        self.handle_response(c_response, command, outformat)
-                    )
-                except DruncServerSideError as e:
-                    self.log.error(f"Exception thrown from child: {e}")
-            return dr
+        for c_response in response.children:
+            try:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            except DruncServerSideError as e:
+                self.log.error(f"Exception thrown from child: {e}")
+
+        return dr
 
     def send_command(
         self,
         command: str,
         data=None,
         outformat=None,
-        decode_children=False,
         timeout: int | float = 60,
     ):
-        if not self.stub:
-            raise DruncShellException("No stub initialised")
-
         cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
 
         request = self._create_request(data)
@@ -217,9 +184,15 @@ class GRPCDriver:
         try:
             response = cmd(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.__handle_grpc_error(e, command)
-        return self.handle_response(response, command, outformat)
+            handle_grpc_error(e)
 
+        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
+        from druncschema.description_pb2 import Description
+
+        if isinstance(response, Description):
+            return response
+
+        return self.handle_response(response, command, outformat)
 
 
 class ShellContext:
@@ -230,6 +203,8 @@ class ShellContext:
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
+        self.dynamic_commands = set()
+        self.batch_mode = False
         try:
             self.reset(*args, **kwargs)
         except Exception as e:
@@ -300,17 +275,20 @@ class ShellContext:
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().data
+        describe_fsm = self.get_driver("controller").describe_fsm().data
+        current_state = status.state
         if status.in_error:
             log.error(
                 f"[red] FSM is in error ({status})[/red], not currently accepting new commands."
             )
         else:
             available_actions = [
-                command.name.replace("_", "-")
-                for command in self.get_driver("controller")
-                .describe_fsm()
-                .data.commands
+                command.name.replace("_", "-") for command in describe_fsm.commands
             ]
+            available_sequences = [
+                seq.id.replace("_", "-") for seq in describe_fsm.sequences
+            ]
+
             log.info(
-                f"Current FSM status is [green]{status.state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]."
+                f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )

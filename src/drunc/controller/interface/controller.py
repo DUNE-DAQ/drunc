@@ -94,7 +94,7 @@ def controller_cli(
             obj_uid=name,
             session=configurationid,  # some of the function for enable/disable require the full dal of the session
         ),
-        session_name=sessionname
+        session_name=sessionname,
     )
 
     commandfacility = resolve_localhost_and_127_ip_to_network_ip(commandfacility)
@@ -122,6 +122,8 @@ def controller_cli(
     def kill_me(sig, frame):
         l = get_logger("controller.kill_me")
         l.info("Sending SIGKILL")
+        if ctrlr.top_segment_controller:
+            ctrlr.connectivity_service.retract_partition(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())
         os.killpg(pgrp, signal.SIGKILL)
 

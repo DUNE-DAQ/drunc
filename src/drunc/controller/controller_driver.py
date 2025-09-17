@@ -7,20 +7,18 @@ from druncschema.controller_pb2 import (
     Status,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.description_pb2 import OldDescription
 from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Description
 
 from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
 
 
 class ControllerDriver(GRPCDriver):
     def __init__(self, address: str, token, **kwargs):
-        super(ControllerDriver, self).__init__(
+        super().__init__(
             name="controller_driver", address=address, token=token, **kwargs
         )
-
-    def create_stub(self, channel):
-        return ControllerStub(channel)
+        self.stub = ControllerStub(self.channel)
 
     def pack_empty_addressed_command(cmd):
         @wraps(cmd)
@@ -51,7 +49,10 @@ class ControllerDriver(GRPCDriver):
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
         return self.send_command(
-            "describe", data=addressed_command, outformat=Description, timeout=timeout
+            "describe",
+            data=addressed_command,
+            outformat=OldDescription,
+            timeout=timeout,
         )
 
     @pack_empty_addressed_command
@@ -164,5 +165,17 @@ class ControllerDriver(GRPCDriver):
             "execute_expert_command",
             data=new_command,
             outformat=PlainText,
+            timeout=timeout,
+        )
+
+    @pack_empty_addressed_command
+    def to_error(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        self.log.error(f"{addressed_command=}")
+        return self.send_command(
+            "to_error",
+            data=addressed_command,
+            outformat=OldDescription,
             timeout=timeout,
         )

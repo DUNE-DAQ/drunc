@@ -1,4 +1,5 @@
 import getpass
+import sys
 
 import click
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -30,9 +31,9 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
-    if len(processes.data.values) > 0:
+    if len(processes.values) > 0:
         click.confirm(
-            f"You already have {len(processes.data.values)} processes running in session {session_name}, are you sure you want to boot a session?",
+            f"You already have {len(processes.values)} processes running in session {session_name}, are you sure you want to boot a session?",
             abort=True,
         )
 
@@ -50,7 +51,7 @@ def boot(
             if not result:
                 break
             log.debug(
-                f"'{result.data.process_description.metadata.name}' ({result.data.uuid.uuid}) started"
+                f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) started"
             )
     except InterruptedCommand:
         log.warning("Booting interrupted")
@@ -71,3 +72,8 @@ def boot(
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
+        if obj.batch_mode:
+            log.error(
+                "Unified shell: Running in batch mode, and because error state is detected, exiting."
+            )
+            sys.exit(1)
