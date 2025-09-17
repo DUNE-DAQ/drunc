@@ -51,12 +51,12 @@ class ProcessManagerConfHandler(ConfHandler):
             )
         new_data.environment = data.get("environment", {})
         new_data.settings = data.get("settings", {})
-
+        self.log.critical(f"{data=}")
         match data["type"].lower():
             case "ssh":
                 new_data.type = ProcessManagerTypes.SSH
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
-            case "popen":
+            case "subprocess":
                 new_data.type = ProcessManagerTypes.SubProcess
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
