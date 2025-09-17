@@ -405,3 +405,72 @@ def test_ps(mock_tabulate):
 
     assert result.exit_code == 0
     mock_driver.ps.assert_called_once()
+
+
+############################################################################
+# Tests for Cli arguments
+############################################################################
+
+
+@pytest.mark.parametrize(
+    "args, missing_arg",
+    [
+        ([], "CONFIGURATION_FILE"),
+        (["config.yaml"], "SESSION_NAME"),
+        (["config.yaml", "session1"], "CONFIGURATION_ID"),
+    ],
+)
+def test_boot_missing_positional_arguments(args, missing_arg):
+    runner = CliRunner()
+    result = runner.invoke(boot, args)
+    assert result.exit_code != 0
+    assert f"Missing argument '{missing_arg}'" in result.output
+
+
+def test_dummy_boot_missing_session_name():
+    runner = CliRunner()
+    result = runner.invoke(dummy_boot, [])
+    assert result.exit_code != 0
+    assert "Missing argument 'SESSION_NAME'" in result.output
+
+
+@pytest.mark.parametrize(
+    "args, error_msg",
+    [
+        (["test-session", "--n-processes", "three"], "Invalid value for '-n'"),
+        (["test-session", "--sleep", "ten"], "Invalid value for '-s'"),
+        [["test-session", "--n_sleeps", "six"], "Invalid value for '--n_sleeps'"],
+    ],
+)
+def test_dummy_boot_invalid_values(args, error_msg):
+    """
+    Test when str are passed to arguments that require int
+    """
+    runner = CliRunner()
+    result = runner.invoke(dummy_boot, args)
+    assert result.exit_code != 0
+    assert error_msg in result.output
+
+
+def test_kill_missing_required_arg():
+    runner = CliRunner()
+    result = runner.invoke(kill, [], obj=MagicMock())
+
+    assert result.exit_code != 0
+    assert "Invalid value: You need to provide at least" in result.output
+
+
+def test_logs_missing_required_arg():
+    runner = CliRunner()
+    result = runner.invoke(logs, [], obj=MagicMock())
+
+    assert result.exit_code != 0
+    assert "Invalid value: You need to provide at least" in result.output
+
+
+def test_restart_missing_required_arg():
+    runner = CliRunner()
+    result = runner.invoke(restart, [], obj=MagicMock())
+
+    assert result.exit_code != 0
+    assert "Invalid value: You need to provide at least" in result.output
