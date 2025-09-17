@@ -148,14 +148,14 @@ def test_production_grpc_settings_idle(capsys):
             )
             if error_found:
                 pytest.fail(
-                    f"Error detected too early during idle period with production settings. Grpc behaviour may have changed. Error: {error_found}"
+                    f"Error detected during idle period with production settings. Error: {error_found}"
                 )
 
             process_manager.perform_full_communication_test()
             error_found = tree_manager.check_for_errors()
             if error_found:
                 pytest.fail(
-                    "Error detected after trying to communicate following idle period with production settings."
+                    f"Error detected after trying to communicate following idle period with production settings. Error: {error_found}"
                 )
 
 
