@@ -10,6 +10,7 @@ from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.utils import send_command
 from drunc.exceptions import DruncSetupException
+from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
 from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import ControlType, get_logger
@@ -43,7 +44,9 @@ class gRPCChildNode(ChildNode):
 
         self.uri = f"{host}:{port}"
 
-        self.channel = grpc.insecure_channel(self.uri)
+        self.channel = grpc.insecure_channel(
+            self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
+        )
         self.controller = ControllerStub(self.channel)
 
         desc = OldDescription()

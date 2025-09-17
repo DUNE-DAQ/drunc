@@ -15,6 +15,7 @@ from drunc.exceptions import (
     DruncSetupException,
     DruncShellException,
 )
+from drunc.grpc_settings import MANAGER_CLIENT_GRPC_CONFIG
 from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.utils import get_logger
 
@@ -88,11 +89,10 @@ class GRPCDriver:
             raise DruncSetupException(
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
-        options = [
-            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
-        ]
         self.address = address
-        self.channel = grpc.insecure_channel(self.address, options=options)
+        self.channel = grpc.insecure_channel(
+            self.address, options=MANAGER_CLIENT_GRPC_CONFIG
+        )
         self.token = Token()
         self.token.CopyFrom(token)
 

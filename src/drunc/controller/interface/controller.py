@@ -9,6 +9,10 @@ from druncschema.token_pb2 import Token
 
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.controller import Controller
+from drunc.grpc_settings import (
+    CONTROLLER_SERVER_GRPC_CONFIG,
+    CONTROLLER_SERVER_GRPC_MAX_WORKERS,
+)
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.utils import (
     create_logger_handler,
@@ -107,7 +111,12 @@ def controller_cli(
     )
 
     def serve(listen_addr: str) -> None:
-        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
+        server = grpc.server(
+            concurrent.futures.ThreadPoolExecutor(
+                max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS
+            ),
+            options=CONTROLLER_SERVER_GRPC_CONFIG,
+        )
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)
 
