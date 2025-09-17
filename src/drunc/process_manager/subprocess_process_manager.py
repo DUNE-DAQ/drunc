@@ -228,7 +228,7 @@ class SubProcessProcessManager(ProcessManager):
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
 
-                cmd = "echo SubProcessPM: Starting process $$ on host $HOSTNAME as user $USER;"
+                cmd = f'SubProcessPM: Starting process {os.getpid()} on host {os.uname().nodename} as user {getpass.getuser()}; '
 
                 # Add exported environment variables
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_var.items()])
@@ -250,7 +250,6 @@ class SubProcessProcessManager(ProcessManager):
 
                 # full_cmd = f"{{ {cmd} ; }} &> {log_file}"
                 arguments = f'drunc-process-wrapper --log {log_file} "{cmd_env}; {cmd}"'
-                # self.log.debug(f"{full_cmd}")
                 process = Popen(
                     arguments,
                     shell=True,
