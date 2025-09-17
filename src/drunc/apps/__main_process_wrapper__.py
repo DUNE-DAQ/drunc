@@ -5,7 +5,7 @@ import time
 
 import click
 
-from drunc.process_manager.popen_process_manager import on_parent_exit
+from drunc.process_manager.subprocess_process_manager import on_parent_exit
 
 
 def terminate_all(sig, frame):

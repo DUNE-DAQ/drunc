@@ -51,7 +51,6 @@ class ProcessManagerConfHandler(ConfHandler):
             )
         new_data.environment = data.get("environment", {})
         new_data.settings = data.get("settings", {})
-        self.log.critical(f"{data=}")
         match data["type"].lower():
             case "ssh":
                 new_data.type = ProcessManagerTypes.SSH
