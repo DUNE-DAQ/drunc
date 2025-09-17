@@ -7,73 +7,153 @@
     {
       "type": "object",
       "properties": {
-        "type": {"type": "string", "enum": ["ssh", "k8s"]},
-        "name": {"type": "string"},
+        "type": {
+          "type": "string",
+          "enum": [
+            "ssh",
+            "k8s",
+            "subprocess"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
         "authoriser": {
           "type": "object",
-          "properties": {"type": {"type": "string"}},
-          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
           "additionalProperties": true
         },
-        "environment": {"type": "object"},
+        "environment": {
+          "type": "object"
+        },
         "opmon_uri": {
           "type": "object",
           "properties": {
-            "path": {"type": "string"},
-            "type": {"type": "string", "enum": ["file", "stream"]}
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "file",
+                "stream"
+              ]
+            }
           },
-          "required": ["path", "type"],
+          "required": [
+            "path",
+            "type"
+          ],
           "additionalProperties": true
         },
         "opmon_conf": {
           "type": "object",
           "properties": {
-            "level": {"type": "string"},
-            "interval_s": {"type": ["number", "integer"]}
+            "level": {
+              "type": "string"
+            },
+            "interval_s": {
+              "type": [
+                "number",
+                "integer"
+              ]
+            }
           },
           "additionalProperties": true
         },
         "broadcaster": {
           "type": "object",
           "properties": {
-            "type": {"type": "string"},
-            "kafka_address": {"type": "string"},
-            "publish_timeout": {"type": ["integer", "number"]}
+            "type": {
+              "type": "string"
+            },
+            "kafka_address": {
+              "type": "string"
+            },
+            "publish_timeout": {
+              "type": [
+                "integer",
+                "number"
+              ]
+            }
           },
-          "required": ["type", "kafka_address", "publish_timeout"],
+          "required": [
+            "type",
+            "kafka_address",
+            "publish_timeout"
+          ],
           "additionalProperties": true
         },
-        "command_address": {"type": "string"}
+        "command_address": {
+          "type": "string"
+        }
       },
-      "required": ["type", "name"],
+      "required": [
+        "type",
+        "name"
+      ],
       "additionalProperties": true
     },
     {
-      "if": {"properties": {"type": {"const": "ssh"}}},
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ssh"
+          }
+        }
+      },
       "then": {
         "type": "object",
         "properties": {
           "settings": {
             "type": "object",
             "properties": {
-              "disable_localhost_host_key_check": {"type": "boolean"},
-              "disable_host_key_check": {"type": "boolean"}
+              "disable_localhost_host_key_check": {
+                "type": "boolean"
+              },
+              "disable_host_key_check": {
+                "type": "boolean"
+              }
             },
             "additionalProperties": true
           },
-          "command_address": {"type": "string"},
-          "kill_timeout": {"type": ["number", "integer"]}
+          "command_address": {
+            "type": "string"
+          },
+          "kill_timeout": {
+            "type": [
+              "number",
+              "integer"
+            ]
+          }
         },
         "additionalProperties": true
       }
     },
     {
-      "if": {"properties": {"type": {"const": "k8s"}}},
+      "if": {
+        "properties": {
+          "type": {
+            "const": "k8s"
+          }
+        }
+      },
       "then": {
         "type": "object",
         "properties": {
-          "command_address": {"type": "string"},
-          "image": {"type": "string"}
+          "command_address": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          }
         },
         "additionalProperties": true
       }
