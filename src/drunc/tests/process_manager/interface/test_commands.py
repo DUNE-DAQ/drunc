@@ -148,7 +148,7 @@ def test_terminate_no_processes(mock_logger):
 
     mock_logger.debug.assert_called_with("Terminating")
 
-    assert mock_context.output == [] 
+    assert mock_context.output == []
     mock_context.delete_driver.assert_not_called()
 
 
@@ -182,9 +182,7 @@ def test_boot_exiting_processes_abort():
 
     mock_driver.boot = MagicMock()  # to check if boot is called
 
-    mock_context = MockContext(
-        driver=mock_driver 
-    )
+    mock_context = MockContext(driver=mock_driver)
 
     result = CliRunner().invoke(
         boot,
@@ -212,7 +210,7 @@ def test_boot_exiting_processes_user_confirm():
     existing_process = [MagicMock(), MagicMock()]
     mock_driver = MockDriver(existing_processes=existing_process, boot_result=[])
 
-    mock_driver.boot = MagicMock()  
+    mock_driver.boot = MagicMock()
 
     mock_context = MockContext(driver=mock_driver)
 
@@ -223,7 +221,7 @@ def test_boot_exiting_processes_user_confirm():
         input="y",  # simulate user typing 'y' to confirm
     )
 
-    assert result.exit_code == 0  
+    assert result.exit_code == 0
 
     mock_driver.boot.assert_called()
 
@@ -305,7 +303,7 @@ def test_dummy_boot_command_successful(mock_logger):
 
     result = CliRunner().invoke(dummy_boot, dummy_boot_arguments, obj=mock_context)
 
-    assert result.exit_code == 0 
+    assert result.exit_code == 0
 
     # Check that each process was logged as started
     mock_logger.debug.assert_any_call("'process1' (uuid-123) process started")
@@ -328,7 +326,7 @@ def test_dummy_boot_command_interrupted(mock_logger):
         "5",
         "--n_sleeps",
         "3",
-        "test_session",  
+        "test_session",
     ]
 
     result = CliRunner().invoke(dummy_boot, dummy_boot_arguments, obj=mock_context)

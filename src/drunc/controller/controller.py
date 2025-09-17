@@ -1237,7 +1237,6 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -1250,7 +1249,7 @@ class Controller(ControllerServicer):
         self,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token
+        token: Token,
     ) -> PlainText:
         """
         Transitions the stateful node to an error state. Used for testing purposes.
