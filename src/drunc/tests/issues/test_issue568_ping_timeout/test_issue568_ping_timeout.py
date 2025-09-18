@@ -40,7 +40,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
     2. Direct client connections work as expected
     3. gRPC trace logging is enabled and producing output in all log files
     """
-    
+
     monkeypatch.setenv("GRPC_VERBOSITY", "INFO")
     monkeypatch.setenv("GRPC_TRACE", "http")
     
@@ -73,6 +73,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
             # Verify gRPC http trace logging is working in all log files
             log_files = tree_manager.log_file_manager.get_all_log_files()
             missing_trace_files = []
+            time.sleep(2)  # Allow some time for logs to be written
             for log_file in log_files:
                 log_path = Path(log_file)
                 # Check if log file exists and is readable
@@ -83,6 +84,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
                     # Read log file content
                     with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
                         content = f.read()
+                    print(f"Contents of {log_file}:\n{content}\n{'-'*40}\n")
                     # Check for expected gRPC trace output
                     assert "http" in content
                 except (IOError, OSError) as e:
