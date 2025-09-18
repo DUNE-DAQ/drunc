@@ -48,9 +48,6 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
     monkeypatch.setenv("GRPC_VERBOSITY", "DEBUG")
     monkeypatch.setenv("GRPC_TRACE", "http")
 
-    print(f"GRPC_VERBOSITY={os.getenv('GRPC_VERBOSITY')}")
-    print(f"GRPC_TRACE={os.getenv('GRPC_TRACE')}")
-
     with capsys.disabled():
         from pathlib import Path
         
@@ -65,7 +62,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
             root_client_config=basic_config,
             child_server_config=basic_config,
             child_client_config=basic_config,
-            env_vars={"GRPC_VERBOSITY": "INFO", "GRPC_TRACE": "http"},
+            env_vars={"GRPC_VERBOSITY": "DEBUG", "GRPC_TRACE": "http"},
         )
         with tree_manager as process_manager:
             # Connect to all servers and perform communication tests
