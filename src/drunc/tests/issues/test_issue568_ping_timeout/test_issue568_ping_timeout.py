@@ -9,7 +9,6 @@ grpc errors.
 
 """
 
-import os
 import time
 
 import pytest
@@ -19,7 +18,7 @@ from drunc.tests.issues.test_issue568_ping_timeout.grpc_connection_tree import (
 )
 
 # amount of seconds to recreate specific issue with ping_timeout
-IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 90
+IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 120
 
 
 def monitor_for_errors_while_idle(

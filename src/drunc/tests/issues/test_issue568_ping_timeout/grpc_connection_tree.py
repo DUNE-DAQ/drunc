@@ -243,8 +243,6 @@ def run_process_manager_server(
     try:
         server.start()
         print(f"Manager server started on port {port}")
-        print(f"GRPC_VERBOSITY={os.getenv('GRPC_VERBOSITY')}")
-        print(f"GRPC_TRACE={os.getenv('GRPC_TRACE')}")
 
         # Signal readiness to parent process
         if ready_event:
