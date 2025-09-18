@@ -9,6 +9,7 @@ grpc errors.
 
 """
 
+import os
 import time
 
 import pytest
@@ -44,8 +45,11 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
     3. gRPC trace logging is enabled and producing output in all log files
     """
 
-    monkeypatch.setenv("GRPC_VERBOSITY", "INFO")
+    monkeypatch.setenv("GRPC_VERBOSITY", "DEBUG")
     monkeypatch.setenv("GRPC_TRACE", "http")
+
+    print(f"GRPC_VERBOSITY={os.getenv('GRPC_VERBOSITY')}")
+    print(f"GRPC_TRACE={os.getenv('GRPC_TRACE')}")
 
     with capsys.disabled():
         from pathlib import Path

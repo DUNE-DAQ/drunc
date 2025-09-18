@@ -243,6 +243,8 @@ def run_process_manager_server(
     try:
         server.start()
         print(f"Manager server started on port {port}")
+        print(f"GRPC_VERBOSITY={os.getenv('GRPC_VERBOSITY')}")
+        print(f"GRPC_TRACE={os.getenv('GRPC_TRACE')}")
 
         # Signal readiness to parent process
         if ready_event:
@@ -555,21 +557,9 @@ class ProcessManagerClient:
         """Perform comprehensive communication test with all components."""
         print(f"Testing communication with {len(self.child_ports)} children...")
 
-        # Test Manager communication
-        print("   ProcessManagerClient → Manager")
-        response = self.talk_to_manager()
-        print(f"     Response: {response.reply}")
-
-        # Test RootController communication
-        print("   ProcessManagerClient → RootController")
-        response = self.talk_to_root_controller()
-        print(f"     Response: {response.reply}")
-
-        # Test all ChildController communications
-        child_responses = self.talk_to_all_child_controllers()
-        for child_name, response in child_responses.items():
-            print(f"   ProcessManagerClient → {child_name}")
-            print(f"     Response: {response.reply}")
+        self.talk_to_manager()
+        self.talk_to_root_controller()
+        self.talk_to_all_child_controllers()
 
         print("   All communications successful")
 
