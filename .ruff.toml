@@ -1,4 +1,4 @@
-exclude = ["tests/*"]
+exclude = ["src/drunc/tests/*"]
 
 [lint]
 ignore = ["ALL"]

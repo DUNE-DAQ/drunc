@@ -4,11 +4,11 @@
 
 MANAGER_SERVER_GRPC_CONFIG = []
 MANAGER_CLIENT_GRPC_CONFIG = [
-    ("grpc.keepalive_time_ms", 600_000),
+    ("grpc.keepalive_time_ms", 36_000_000),
 ]
 CONTROLLER_SERVER_GRPC_CONFIG = []
 CONTROLLER_CLIENT_GRPC_CONFIG = [
-    ("grpc.keepalive_time_ms", 600_000),
+    ("grpc.keepalive_time_ms", 36_000_000),
 ]
 
 MANAGER_SERVER_GRPC_MAX_WORKERS = 10
