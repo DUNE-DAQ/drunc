@@ -714,6 +714,7 @@ class GrpcProcessTreeManager:
         root_client_config: List[Tuple[str, any]] = None,
         child_server_config: List[Tuple[str, any]] = None,
         child_client_config: List[Tuple[str, any]] = None,
+        env_vars: Dict[str, str] = {}
     ):
         """
         Initialise GrpcTreeManager with configuration for all components.
@@ -751,6 +752,7 @@ class GrpcProcessTreeManager:
         self.process_manager = None
         self.log_file_manager = LogFileManager()
         self.direct_clients = {}
+        self.env_vars = env_vars
 
     def __enter__(self):
         """
@@ -787,8 +789,9 @@ class GrpcProcessTreeManager:
         manager_log = self.log_file_manager.create_log_file("ManagerServer")
 
         manager_process = multiprocessing.Process(
-            target=run_process_manager_server,
+            target=self._run_with_env,
             args=(
+                run_process_manager_server,
                 self.manager_max_workers,
                 self.manager_port,
                 manager_log,
@@ -809,8 +812,9 @@ class GrpcProcessTreeManager:
         root_log = self.log_file_manager.create_log_file("RootControllerServer")
 
         root_process = multiprocessing.Process(
-            target=run_root_controller_server,
+            target=self._run_with_env,
             args=(
+                run_root_controller_server,
                 self.controller_max_workers,
                 self.root_port,
                 self.manager_port,
@@ -836,8 +840,9 @@ class GrpcProcessTreeManager:
             child_log = self.log_file_manager.create_log_file(f"ChildServer{i + 1}")
 
             child_process = multiprocessing.Process(
-                target=run_child_controller_server,
+                target=self._run_with_env,
                 args=(
+                    run_child_controller_server,
                     self.controller_max_workers,
                     child_port,
                     self.root_port,
@@ -883,6 +888,13 @@ class GrpcProcessTreeManager:
         )
 
         return self.process_manager
+
+    def _run_with_env(self, target_func, *args, **kwargs):
+        """Wrapper to set environment variables before running target function."""
+        import os
+        for key, value in self.env_vars.items():
+            os.environ[key] = value
+        return target_func(*args, **kwargs)
 
     def _cleanup_tree(self) -> None:
         """Internal method to clean up all resources."""

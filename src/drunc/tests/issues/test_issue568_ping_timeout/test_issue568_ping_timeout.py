@@ -17,6 +17,9 @@ from drunc.tests.issues.test_issue568_ping_timeout.grpc_connection_tree import (
     GrpcProcessTreeManager,
 )
 
+# amount of seconds to recreate specific issue with ping_timeout
+IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 90
+
 
 def monitor_for_errors_while_idle(
     tree_manager, total_duration_seconds, check_interval_seconds
@@ -43,7 +46,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
 
     monkeypatch.setenv("GRPC_VERBOSITY", "INFO")
     monkeypatch.setenv("GRPC_TRACE", "http")
-    
+
     with capsys.disabled():
         from pathlib import Path
         
@@ -58,6 +61,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
             root_client_config=basic_config,
             child_server_config=basic_config,
             child_client_config=basic_config,
+            env_vars={"GRPC_VERBOSITY": "INFO", "GRPC_TRACE": "http"},
         )
         with tree_manager as process_manager:
             # Connect to all servers and perform communication tests
@@ -73,7 +77,6 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
             # Verify gRPC http trace logging is working in all log files
             log_files = tree_manager.log_file_manager.get_all_log_files()
             missing_trace_files = []
-            time.sleep(2)  # Allow some time for logs to be written
             for log_file in log_files:
                 log_path = Path(log_file)
                 # Check if log file exists and is readable
@@ -195,7 +198,7 @@ def test_production_grpc_settings_communicate_with_root_controller_after_idle(
 
             # go idle and monitor for errors during idle period
             error_found, time_elapsed = monitor_for_errors_while_idle(
-                tree_manager, total_duration_seconds=90, check_interval_seconds=5
+                tree_manager, total_duration_seconds=IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR, check_interval_seconds=5
             )
             if error_found is not None:
                 pytest.fail(
@@ -304,7 +307,7 @@ def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeo
 
             # go idle and monitor for errors during idle period
             error_found, time_elapsed = monitor_for_errors_while_idle(
-                tree_manager, total_duration_seconds=90, check_interval_seconds=5
+                tree_manager, total_duration_seconds=IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR, check_interval_seconds=5
             )
             if error_found is not None:
                 pytest.fail(
