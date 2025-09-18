@@ -167,3 +167,15 @@ class ControllerDriver(GRPCDriver):
             outformat=PlainText,
             timeout=timeout,
         )
+
+    @pack_empty_addressed_command
+    def to_error(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        self.log.error(f"{addressed_command=}")
+        return self.send_command(
+            "to_error",
+            data=addressed_command,
+            outformat=OldDescription,
+            timeout=timeout,
+        )

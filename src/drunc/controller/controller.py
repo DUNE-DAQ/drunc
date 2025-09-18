@@ -110,20 +110,19 @@ class Controller(ControllerServicer):
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
-        top_segment_controller = (
+        self.top_segment_controller = (
             self.configuration.db.get_dal(
                 class_name="Session", uid=self.configuration.oks_key.session
             ).segment.controller.id
             == self.name
         )
-        self.custom_origin = {"top_segment_controller": top_segment_controller}
+        self.custom_origin = {"top_segment_controller": self.top_segment_controller}
 
         self.runinfo = {}
         self.runinfo["Configuration"] = self.configuration.initial_data.removeprefix(
             "oksconflibs:"
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
-
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
         )
@@ -144,7 +143,7 @@ class Controller(ControllerServicer):
             init_state="initialising",
             name=name,
             session=session,
-            top_segment_controller=top_segment_controller,
+            top_segment_controller=self.top_segment_controller,
         )
 
         dach = DummyAuthoriserConfHandler(
@@ -1233,3 +1232,52 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=response_children,
         )
+
+    ##########################################
+    ####### Integration test commands ########
+    ##########################################
+
+
+    # ORDER MATTERS!
+    @broadcasted  # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control
+    @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
+    def to_error(
+        self,
+        addressed_commands: dict[str, AddressedCommand],
+        execute_on_self: bool,
+        token: Token
+    ) -> PlainText:
+        """
+        Transitions the stateful node to an error state. Used for testing purposes.
+        """
+        try:
+            if execute_on_self:
+                self.stateful_node.to_error()
+
+            response_children = self.propagate_addressed_command(
+                "to_error",
+                addressed_commands=addressed_commands,
+                token=token,
+            )
+
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=response_children,
+            )
+        except Exception as e:
+            self.log.exception(e)
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children=None,
+            )
