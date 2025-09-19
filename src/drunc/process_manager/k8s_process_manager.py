@@ -591,19 +591,68 @@ done
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """Handles the 'restart' command."""
         uuids = self._get_process_uid(query)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        if not uuids:
+            raise DruncCommandException("No processes found matching the query.")
+    
+        # Create copies of boot requests for each process
+        br_by_uuid = {}
+        for u in uuids:
+            br = BootRequest()
+            br.CopyFrom(self.boot_request[u])
+            br_by_uuid[u] = br
 
-        if uuid not in self.boot_request:
-            raise DruncCommandException(f"Cannot restart process with UUID {uuid}: Not found.")
+        ret = []
 
-        br_copy = BootRequest()
-        br_copy.CopyFrom(self.boot_request[uuid])
+        for u in uuids:
+            try:
+                if u in self.boot_request:
+                    pod_name = self.boot_request[u].process_description.metadata.name
+                    session = self.boot_request[u].process_description.metadata.session
+                    
+                    self.log.info(f"Restarting {pod_name} in session {session}")
+                    
+                    # Kill the existing process
+                    kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=u)])
+                    self._kill_impl(kill_query)
+                    
+                    # Handle case where pod completes but isn't deleted (race condition fix)
+                    try:
+                        pod_status = self._core_v1_api.read_namespaced_pod_status(pod_name, session)
+                        if pod_status.status.phase in ["Succeeded", "Failed"]:
+                            self.log.info(f"Pod {pod_name} is in terminal state {pod_status.status.phase}, deleting it")
+                            self._core_v1_api.delete_namespaced_pod(name=pod_name, namespace=session)
+                            sleep(2)  # Wait for deletion to complete
+                    except self._api_error_v1_api as e:
+                        if e.status != 404:  # 404 means pod is already deleted
+                            self.log.warning(f"Error checking pod status after kill: {e}")
 
-        kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=uuid)])
-        self._kill_impl(kill_query)
+                # Boot the new process
+                pi = self.__boot(br_by_uuid[u], u)
+                ret.append(pi)
 
-        restarted_process = self.__boot(br_copy, uuid)
-        return ProcessInstanceList(values=[restarted_process])
+            except Exception as e:
+                self.log.error(f"Restart failed for UUID {u}: {e!s}")
+
+                # Create a dead process instance for failed restarts
+                pd = ProcessDescription()
+                pr = ProcessRestriction()
+                try:
+                    pd.CopyFrom(br_by_uuid[u].process_description)
+                    pr.CopyFrom(br_by_uuid[u].process_restriction)
+                except Exception:
+                    pass
+
+                ret.append(
+                    ProcessInstance(
+                        process_description=pd,
+                        process_restriction=pr,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        return_code=None,
+                        uuid=ProcessUUID(uuid=u),
+                    )
+                )
+
+        return ProcessInstanceList(values=ret)
 
     def _kill_pod(self, podname, session, grace_period_seconds=None):
         """Deletes a specific pod from a namespace."""

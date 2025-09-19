@@ -448,7 +448,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         return response
 
     def restart(
-        self, request: ProcessQuery, timeout: int | float = 60
+        self, request: ProcessQuery, timeout: int | float = 300
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
 
