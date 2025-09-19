@@ -321,5 +321,5 @@ def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeo
                 return
 
             pytest.fail(
-                "No ping timeout errors detected after idle period with default settings. Grpc behaviour may have changed."
+                f"No ping timeout errors detected after direct client request following the idle period with default settings. Grpc behaviour may have changed."
             )
