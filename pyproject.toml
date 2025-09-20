@@ -4,28 +4,30 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drunc"
+description = "A flexible run control infrastructure for a distributed DAQ system"
+version = "0.19.0"
+readme = "docs/README.md"
 requires-python = ">=3.10"
-dynamic = ["version", "readme"]
 dependencies = [
-    "click==8.1.7",
-    "click-shell==2.1",
+    "click",
+    "click-shell",
     "protobuf",
     "types-protobuf",
-    "grpcio==1.68.0",
-    "grpcio-status==1.68.0",
-    "grpcio-tools==1.68.0",
+    "grpcio",
+    "grpcio-status",
+    "grpcio-tools",
     "types-grpcio",
-    "gunicorn==23.0.0",
-    "kafka-python==2.0.2",
-    "nest-asyncio==1.6.0",
-    "rich==13.9.4",
-    "requests==2.32.3",
-    "Flask==3.1.0",
-    "Flask-RESTful==0.3.10",
-    "sh==2.1.0",
-    "kubernetes==31.0.0",
-    "pytz==2024.2",
-    "psutil==6.1.0",
+    "gunicorn",
+    "kafka-python",
+    "nest-asyncio",
+    "rich",
+    "requests",
+    "Flask",
+    "Flask-RESTful",
+    "sh",
+    "kubernetes",
+    "pytz",
+    "psutil",
 ]
 
 [project.optional-dependencies]
@@ -44,10 +46,6 @@ drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
 application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
 drunc-ssh-validator = "drunc.apps.__main_ssh_validator__:main"
 drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
-
-[tool.setuptools.dynamic]
-version = {attr = "drunc.__version__"}
-readme = {file = ["docs/README.md"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]
