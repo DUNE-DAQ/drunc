@@ -18,7 +18,7 @@ def load_test_config():
     if DUNEDAQ_DB_PATH is None:
         DUNEDAQ_DB_PATH = ""
     cwd = Path(os.path.abspath(__file__))
-    test_configs = cwd.parent / ".." / ".." / ".." / "config" / "tests"
+    test_configs = cwd.parent / ".." / "config" / "tests"
     test_configs = test_configs.resolve()
     os.makedirs(consolidated_conf_path, exist_ok=True)
     # os.remove(f"{consolidated_conf_path}/*")
