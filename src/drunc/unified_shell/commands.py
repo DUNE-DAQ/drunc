@@ -1,4 +1,5 @@
 import getpass
+import sys
 
 import click
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -71,3 +72,8 @@ def boot(
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
+        if obj.batch_mode:
+            log.error(
+                "Unified shell: Running in batch mode, and because error state is detected, exiting."
+            )
+            sys.exit(1)

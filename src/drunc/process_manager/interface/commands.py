@@ -31,8 +31,8 @@ from drunc.utils.utils import get_logger
     help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
 )
 @click.argument("configuration-file", type=str, callback=validate_conf_string)
-@click.argument("session-name", type=str)
 @click.argument("configuration-id", type=str)
+@click.argument("session-name", type=str)
 @click.pass_obj
 def boot(
     obj: ProcessManagerContext,
@@ -176,7 +176,6 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     obj.print(
         tabulate_process_instance_list(result, "Killed process", False)
     )  # rich tables require console printing
-    obj.delete_driver("controller")
 
 
 @click.command("flush")
