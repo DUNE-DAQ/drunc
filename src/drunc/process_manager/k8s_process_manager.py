@@ -343,34 +343,10 @@ done
             )
         )
 
-        # Prepare environment variables
-        env_vars = [client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()]
-        
-        # Add pod IP as environment variable for controllers
-        if "controller" in podname:
-            env_vars.append(client.V1EnvVar(
-                name="POD_IP",
-                value_from=client.V1EnvVarSource(
-                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
-                )
-            ))
-            env_vars.append(client.V1EnvVar(
-                name="POD_NAME",
-                value_from=client.V1EnvVarSource(
-                    field_ref=client.V1ObjectFieldSelector(field_path="metadata.name")
-                )
-            ))
-            env_vars.append(client.V1EnvVar(
-                name="POD_NAMESPACE",
-                value_from=client.V1EnvVarSource(
-                    field_ref=client.V1ObjectFieldSelector(field_path="metadata.namespace")
-                )
-            ))
-
         main_container = client.V1Container(
             name=podname, image=pod_image, command=["/bin/sh", "-c"],
             args=[main_command_str],
-            env=env_vars,
+            env=[client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()],
             lifecycle=lifecycle_hook,
             ports=[],
             volume_mounts=[
