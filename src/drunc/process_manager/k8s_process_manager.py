@@ -298,7 +298,7 @@ class K8sProcessManager(ProcessManager):
             if "controller" not in podname and podname != self.connection_server_name and is_last_command and e_and_a.exec != "source":
                 prefix = "exec "
             
-            # For controllers, replace hostname with 0.0.0.0 for binding and use pod IP for advertising
+            # For controllers, replace hostname with 0.0.0.0 for binding 
             if "controller" in podname:
                 modified_args = []
                 for arg in e_and_a.args:
