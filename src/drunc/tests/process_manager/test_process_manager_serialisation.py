@@ -183,8 +183,13 @@ def test_wrong_request_type_raises_serialisation_error(serialisation_test_suite)
     serialisation_test_suite.setup_server_and_client("boot", BOOT_RESPONSE)
 
     # Expect gRPC error when sending invalid request type
-    with pytest.raises(_InactiveRpcError):
+    with pytest.raises(_InactiveRpcError) as exc_info:
         serialisation_test_suite.stub.boot("invalid_request_type")
+
+    # Check specific error code and message
+    error = exc_info.value
+    assert error.code() == grpc.StatusCode.INTERNAL
+    assert "exception serializing request!" in error.details().lower()
 
 
 def test_wrong_response_type_raises_deserialisation_error(serialisation_test_suite):
@@ -203,5 +208,10 @@ def test_wrong_response_type_raises_deserialisation_error(serialisation_test_sui
     serialisation_test_suite.setup_server_and_client("boot", MagicMock())
 
     # Expect gRPC error when server returns invalid response type
-    with pytest.raises(_InactiveRpcError):
+    with pytest.raises(_InactiveRpcError) as exc_info:
         serialisation_test_suite.stub.boot(BOOT_REQUEST)
+
+    # Check specific error code and message
+    error = exc_info.value
+    assert error.code() == grpc.StatusCode.INTERNAL
+    assert "failed to serialize response!" in error.details().lower()
