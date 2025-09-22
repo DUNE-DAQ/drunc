@@ -129,8 +129,6 @@ class K8sProcessManager(ProcessManager):
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         
-        self.forced_node = settings.get("force_node", "np04-srv-016") # TODO: change this later
-
         self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
 
         namespaces = self._core_v1_api.list_namespace(
@@ -207,6 +205,7 @@ class K8sProcessManager(ProcessManager):
     def _get_creator_label_selector(self):
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
+
 
     def _create_namespace(self, session):
         """Creates a Kubernetes namespace if it doesn't already exist."""
@@ -298,7 +297,27 @@ class K8sProcessManager(ProcessManager):
             # Only add 'exec' to the C++ apps (non-controllers)
             if "controller" not in podname and podname != self.connection_server_name and is_last_command and e_and_a.exec != "source":
                 prefix = "exec "
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+            
+            # For controllers, replace hostname with 0.0.0.0 for binding and use pod IP for advertising
+            if "controller" in podname:
+                modified_args = []
+                for arg in e_and_a.args:
+                    if "://" in arg and ":" in arg.split("://")[1]:
+                        # This looks like a command facility URL
+                        protocol, address = arg.split("://", 1)
+                        if ":" in address:
+                            hostname, port = address.split(":", 1)
+                            # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
+                            new_address = f"{protocol}://0.0.0.0:{port}"
+                            modified_args.append(new_address)
+                            self.log.info(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
+                        else:
+                            modified_args.append(arg)
+                    else:
+                        modified_args.append(arg)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
         # Determine the correct shutdown command for the preStop hook
@@ -324,10 +343,34 @@ done
             )
         )
 
+        # Prepare environment variables
+        env_vars = [client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()]
+        
+        # Add pod IP as environment variable for controllers
+        if "controller" in podname:
+            env_vars.append(client.V1EnvVar(
+                name="POD_IP",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
+                )
+            ))
+            env_vars.append(client.V1EnvVar(
+                name="POD_NAME",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="metadata.name")
+                )
+            ))
+            env_vars.append(client.V1EnvVar(
+                name="POD_NAMESPACE",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="metadata.namespace")
+                )
+            ))
+
         main_container = client.V1Container(
             name=podname, image=pod_image, command=["/bin/sh", "-c"],
             args=[main_command_str],
-            env=[client.V1EnvVar(name=k, value=v) for k, v in boot_request.process_description.env.items()],
+            env=env_vars,
             lifecycle=lifecycle_hook,
             ports=[],
             volume_mounts=[
@@ -363,10 +406,7 @@ done
             all_containers.append(sidecar_container)
 
         node_selector = {}
-        if self.forced_node:
-            node_selector = {"kubernetes.io/hostname": self.forced_node}
-            self.log.info(f"Pod '{podname}' will be forced to run on node '{self.forced_node}' (from config)")
-        elif boot_request.process_restriction.allowed_hosts:
+        if boot_request.process_restriction.allowed_hosts:
             target_host = boot_request.process_restriction.allowed_hosts[0]
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)")
