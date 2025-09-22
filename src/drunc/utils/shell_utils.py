@@ -79,6 +79,8 @@ class ShellContext:
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
+        self.dynamic_commands = set()
+        self.batch_mode = False
         try:
             self.reset(*args, **kwargs)
         except Exception as e:

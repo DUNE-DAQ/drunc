@@ -44,7 +44,10 @@ class ProcessManagerDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ProcessManagerDriver")
         self.address = address
-        self.channel = grpc.insecure_channel(self.address)
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
         self.token = copy_token(token)
 

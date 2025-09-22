@@ -10,6 +10,7 @@ from druncschema.controller_pb2 import (
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -29,7 +30,10 @@ class ControllerDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ControllerDriver")
         self.address = address
-        self.channel = grpc.insecure_channel(self.address)
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ControllerStub(self.channel)
         self.token = copy_token(token)
 
@@ -210,6 +214,18 @@ class ControllerDriver:
             "execute_expert_command",
             data=new_command,
             outformat=PlainText,
+            timeout=timeout,
+        )
+
+    @pack_empty_addressed_command
+    def to_error(
+        self, addressed_command: AddressedCommand, timeout: int | float = 60
+    ) -> DecodedResponse:
+        self.log.error(f"{addressed_command=}")
+        return self.send_command(
+            "to_error",
+            data=addressed_command,
+            outformat=Description,
             timeout=timeout,
         )
 

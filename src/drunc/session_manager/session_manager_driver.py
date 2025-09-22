@@ -28,7 +28,10 @@ class SessionManagerDriver:
         """
         self.log = get_logger("controller.SessionManagerDriver")
         self.address = address
-        self.channel = grpc.insecure_channel(self.address)
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = SessionManagerStub(self.channel)
         self.token = copy_token(token)
 

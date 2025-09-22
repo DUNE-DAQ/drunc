@@ -43,10 +43,10 @@ jobs:
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }}
           cd druncschema
-          pip install .
+          pip install .[test]
           cd -
           cd drunc
-          pip install .
+          pip install .[test]
           echo "DRUNC_DIR=$(pwd)" >> $GITHUB_ENV
 
       - name: Test with pytest/pytest-cov
