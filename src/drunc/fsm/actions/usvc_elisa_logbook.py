@@ -15,7 +15,9 @@ class ElisaLogbook(FSMAction):
         self.log = get_logger("controller.elisa-logbook")
 
         dotdrunc = get_dotdrunc_json()
-        self.elisa_hardware: str | None = os.getenv("DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None)
+        self.elisa_hardware: str | None = os.getenv(
+            "DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None
+        )
         default_elisa_logbook: bool = False
         self.no_publish_hardware = ["unified_shell", None]
         if self.elisa_hardware == "unified_shell":
@@ -32,12 +34,11 @@ class ElisaLogbook(FSMAction):
             # default_elisa_logbook = True
             # self.elisa_hardware = "pdsp"
             self.log.warning(
-                "Environment variable DUNEDAQ_ELISA_LOGBOOK_APPARATUS is not set, " \
+                "Environment variable DUNEDAQ_ELISA_LOGBOOK_APPARATUS is not set, "
                 "nothing will be posted to ELisA logbook."
             )
             return
 
-        
         if dotdrunc["elisa_configuration"].get(self.elisa_hardware):
             ec = dotdrunc["elisa_configuration"][self.elisa_hardware]
             self.API_SOCKET = ec.get("socket")
@@ -51,7 +52,6 @@ class ElisaLogbook(FSMAction):
                 )
                 raise DotDruncJsonIncorrectFormat(err_msg) from KeyError
         else:
-
             err_msg: str = ""
             if default_elisa_logbook:
                 err_msg = (
