@@ -1,6 +1,7 @@
 import datetime
 import logging
 import os
+import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -465,6 +466,13 @@ def run_one_fsm_command(
     log.info(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
+
+    if obj.batch_mode and obj.get_driver("controller").status().data.in_error:
+        obj.get_driver("controller").status()
+        log.error(
+            "Running in batch mode, and because error state is detected, exiting."
+        )
+        sys.exit(1)
 
     execute_along_path = False
     execute_on_all_subsequent_children_in_path = True
