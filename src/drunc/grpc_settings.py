@@ -2,28 +2,11 @@
 # for a list of all possible gRPC channel arguments
 # gRPC keepalive reference: https://github.com/grpc/grpc/blob/master/doc/keepalive.md
 
-INT_MAX = 2**31 - 1
 
-MANAGER_SERVER_GRPC_CONFIG = [
-    ("grpc.http2.max_ping_strikes", 0)
-    #  ("grpc.keepalive_permit_without_calls", 1),
-    #  ("grpc.keepalive_time_ms", INT_MAX),
-]
-MANAGER_CLIENT_GRPC_CONFIG = [
-    ("grpc.http2.max_ping_strikes", 0)
-    #  ("grpc.keepalive_permit_without_calls", 1),
-    #  ("grpc.keepalive_time_ms", 7_200_000),
-]
-CONTROLLER_SERVER_GRPC_CONFIG = [
-    ("grpc.http2.max_ping_strikes", 0)
-    #  ("grpc.keepalive_permit_without_calls", 1),
-    #  ("grpc.keepalive_time_ms", INT_MAX),
-]
-CONTROLLER_CLIENT_GRPC_CONFIG = [
-    ("grpc.http2.max_ping_strikes", 0)
-    #  ("grpc.keepalive_permit_without_calls", 1),
-    #  ("grpc.keepalive_time_ms", 7_200_000),
-]
+MANAGER_SERVER_GRPC_CONFIG = []
+MANAGER_CLIENT_GRPC_CONFIG = []
+CONTROLLER_SERVER_GRPC_CONFIG = []
+CONTROLLER_CLIENT_GRPC_CONFIG = []
 
 MANAGER_SERVER_GRPC_MAX_WORKERS = 10
 CONTROLLER_SERVER_GRPC_MAX_WORKERS = 10
