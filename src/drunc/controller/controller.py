@@ -139,10 +139,12 @@ class Controller(ControllerServicer):
         )
 
         self.fsm_config = FSMConfHandler(
+        self.fsm_config = FSMConfHandler(
             data=self.configuration.data.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
+            fsm_configuration=self.fsm_config,
             fsm_configuration=self.fsm_config,
             publisher=self.controller_publisher,
             init_state="initialising",
@@ -791,11 +793,6 @@ class Controller(ControllerServicer):
                     self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
 
             if payload.command_name == "start":
-                try:
-                    get_dotdrunc_json()
-                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
-                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
-
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=self.runinfo.get("production_vs_test", ""),
@@ -811,14 +808,6 @@ class Controller(ControllerServicer):
                     ),
                     custom_origin=self.custom_origin,
                 )
-
-            if payload.command_name == "drain_dataflow":
-                try:
-                    get_dotdrunc_json()
-                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
-                    self.log.warning(
-                        f"ELisaLogbook entry will not be posted after drain-dataflow. {e}"
-                    )
 
             self.stateful_node.propagate_transition_mark(transition)
 
