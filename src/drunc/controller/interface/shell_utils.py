@@ -455,7 +455,7 @@ def run_one_fsm_command(
                 execute_along_path=True,
                 execute_on_all_subsequent_children_in_path=False,
             )
-            .data
+            .description
         )
 
         command_desc = search_fsm_command(transition_name, fsm_description.commands)

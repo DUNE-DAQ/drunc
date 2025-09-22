@@ -105,10 +105,6 @@ class gRPCChildNode(ChildNode):
     def send_command(self, token, command: str, data=None):
         log = get_logger("controller.send_command")
 
-        # Grab the command from the controller stub in the context
-        # Add the token to the data (which can be of any protobuf type)
-        # Send the command to the controller
-
         cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
 
         request = Request(token=token)
