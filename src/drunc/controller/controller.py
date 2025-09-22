@@ -792,19 +792,8 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        try:
-            payload = unpack_any(request.command_data, PlainText)
-        except UnpackingError as e:
-            self.log.exception(e)
-            return Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(PlainText(text=str(e))),
-                flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                children=[],
-            )
-
         if execute_on_self:
+            payload = unpack_any(request.command_data, PlainText)
             if payload.text == "all-transitions":
                 description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()

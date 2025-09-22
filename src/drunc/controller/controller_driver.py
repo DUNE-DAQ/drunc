@@ -67,7 +67,6 @@ class ControllerDriver:
         request = AddressedCommand(
             token=copy_token(self.token),
             command_name="status",
-            command_data=None,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -90,7 +89,6 @@ class ControllerDriver:
         request = AddressedCommand(
             token=copy_token(self.token),
             command_name="describe",
-            command_data=None,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -108,20 +106,17 @@ class ControllerDriver:
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-        key: str | None = None,
+        key: str = "",
         timeout: int | float = 60,
     ) -> DescribeFSMResponse:
         request = AddressedCommand(
             token=copy_token(self.token),
             command_name="describe_fsm",
-            command_data=None,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
-
-        if key is not None:
-            request.command_data.Pack(PlainText(text=key))
+        request.command_data.Pack(PlainText(text=key))
 
         try:
             response = self.stub.describe_fsm(request, timeout=timeout)
