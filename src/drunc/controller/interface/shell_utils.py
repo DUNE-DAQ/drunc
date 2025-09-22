@@ -437,7 +437,7 @@ def run_one_fsm_command(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
 
-    if obj.batch_mode and obj.get_driver("controller").status().data.in_error:
+    if obj.batch_mode and obj.get_driver("controller").status().status.in_error:
         obj.get_driver("controller").status()
         log.error(
             "Running in batch mode, and because error state is detected, exiting."
