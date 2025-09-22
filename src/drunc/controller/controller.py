@@ -346,29 +346,8 @@ class Controller(ControllerServicer):
             )
             children_states = {}
             for response in children_statuses:
-                in_error = False
-                try:
-                    status = unpack_any(response.data, Status)
-                    in_error = status.in_error
-                    children_states[response.name] = status.state
-                except UnpackingError:
-                    log_init_controller.error(
-                        f"Failed to unpack status from {response.name}:"
-                    )
-                    if response.data.Is(Stacktrace.DESCRIPTOR):
-                        stack = unpack_any(response.data, Stacktrace)
-                        for line in stack.text:
-                            log_init_controller.error(f"{response.name}: {line}")
-                    elif response.data.Is(PlainText.DESCRIPTOR):
-                        log_init_controller.error(
-                            f"{response.name}: {unpack_any(response.data, PlainText).text}"
-                        )
-                    else:
-                        log_init_controller.error(
-                            f"{response.name}: Unknown data type: {type(response.data)}"
-                        )
-
-                if in_error:
+                children_states[response.name] = response.status.state
+                if response.status.in_error:
                     self.stateful_node.to_error()
                     break
 
