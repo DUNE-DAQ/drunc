@@ -22,11 +22,11 @@ from typing import Dict, List, Tuple
 import grpc
 
 # Import generated gRPC code
-from drunc.tests.issues.test_issue568_ping_timeout.test_pb2 import (
+from drunc.tests.grpc.test_pb2 import (
     DummyRequest,
     DummyResponse,
 )
-from drunc.tests.issues.test_issue568_ping_timeout.test_pb2_grpc import (
+from drunc.tests.grpc.test_pb2_grpc import (
     ChildControllerServiceServicer,
     ChildControllerServiceStub,
     ManagerServiceServicer,
