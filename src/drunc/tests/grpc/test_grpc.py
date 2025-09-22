@@ -13,9 +13,7 @@ import time
 
 import pytest
 
-from drunc.tests.issues.test_issue568_ping_timeout.grpc_connection_tree import (
-    GrpcProcessTreeManager,
-)
+from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
 # amount of seconds to recreate specific issue with ping_timeout
 IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 120
@@ -35,6 +33,7 @@ def monitor_for_errors_while_idle(
         time.sleep(check_interval_seconds)
     return None, (time.time() - start_time) 
 
+@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_basic_grpc_tree_communication(capsys, monkeypatch):
     """
     Basic test to verify gRPC tree setup, communication, and trace logging.
@@ -107,7 +106,7 @@ def test_basic_grpc_tree_communication(capsys, monkeypatch):
 ## This tests the live grpc configuration for grpc errors
 #######################################################################################
 
-
+@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_production_grpc_settings_idle(capsys):
     """
     Test current gRPC production settings for grpc errors during idle time
@@ -153,7 +152,7 @@ def test_production_grpc_settings_idle(capsys):
                     f"Error detected after trying to communicate following idle period with production settings. Error: {error_found}"
                 )
 
-
+@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_production_grpc_settings_communicate_with_root_controller_after_idle(
     capsys,
 ):
@@ -219,7 +218,8 @@ def test_production_grpc_settings_communicate_with_root_controller_after_idle(
 ## which have previously caused grpc errors
 ########################################################################################
 
-
+# TODO DELETE THIS TEST AFTER UPGRADING FROM GRPC 1.68
+@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(capsys):
     """
     Test that aggressive client keepalive settings creates ping_timeout message
@@ -262,8 +262,8 @@ def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(cap
             pytest.fail(
                 "No ping timeout errors detected during aggressive keepalive test. Grpc behaviour may have changed."
             )
-
-
+# TODO DELETE THIS TEST AFTER UPGRADING FROM GRPC 1.68
+@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeout(
     capsys,
 ):
