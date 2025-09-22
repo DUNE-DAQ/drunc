@@ -27,7 +27,7 @@ from kubernetes import client, config, watch
 
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -384,6 +384,11 @@ done
         node_selector = {}
         if boot_request.process_restriction.allowed_hosts:
             target_host = boot_request.process_restriction.allowed_hosts[0]
+            # Resolve localhost to actual hostname for Kubernetes node selection
+            if target_host == "localhost":
+                target_host = resolve_localhost_to_hostname(target_host)
+                self.log.info(f"Resolved localhost to '{target_host}' for Kubernetes node selection")
+            
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)")
 
