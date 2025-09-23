@@ -41,6 +41,10 @@ class ChildNode:  # abc.ABC):
         pass
 
     # @abc.abstractmethod
+    def get_endpoint(self) -> str | None:
+        return None
+
+    # @abc.abstractmethod
     def propagate_command(self, command, data, token):
         if command == "status":
             return self.status(token)
@@ -114,10 +118,6 @@ class ChildNode:  # abc.ABC):
         )
 
         return response
-
-    # @abc.abstractmethod
-    def get_endpoint(self) -> str | None:
-        return None
 
     @staticmethod
     def get_child(

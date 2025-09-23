@@ -83,7 +83,7 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
-    ):  #
+    ):
         super().__init__(name=name, node_type=node_type, configuration=configuration)
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
@@ -94,12 +94,6 @@ class ClientSideChild(ChildNode):
 
     def __str__(self):
         return f"'{self.name}' is in error state (type {self.node_type})"
-
-    def terminate(self):
-        pass
-
-    def get_endpoint(self):
-        pass
 
     def status(self, token: Token) -> StatusResponse:
         status = Status(
