@@ -612,7 +612,7 @@ def run_one_fsm_command(
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
     log = get_logger("controller.shell_utils")
     cmd = partial(run_one_fsm_command, controller_name, transition.name)
-    cmd = click.pass_context(cmd)
+    cmd = click.pass_obj(cmd)
     cmd = click.option(
         "--target",
         type=str,

@@ -29,7 +29,7 @@ def get_dotdrunc_json(path: str | None = None):
         f = open(expand_path(file_path))
         dotdrunc = json.load(f)
     except FileNotFoundError:
-        raise DotDruncJsonNotFound(f"~/.drunc.json file not found: '{path}'")
+        raise DotDruncJsonNotFound(f"~/.drunc.json file not found: '{path}'") from None
     except json.JSONDecodeError as exc:
         raise DotDruncJsonIncorrectFormat(
             f"~/.drunc.json file is not a valid JSON: '{path}'"

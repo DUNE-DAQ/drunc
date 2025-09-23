@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional
 
@@ -5,7 +6,11 @@ import requests
 
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.core import FSMAction
-from drunc.fsm.exceptions import CannotSendElisaMessage
+from drunc.fsm.exceptions import (
+    CannotSendElisaMessage,
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.utils.utils import get_logger
 
 
@@ -14,7 +19,15 @@ class ElisaLogbook(FSMAction):
         super().__init__(name="elisa-logbook")
         self.log = get_logger("controller.elisa-logbook")
 
-        dotdrunc = get_dotdrunc_json()
+        try:
+            dotdrunc = get_dotdrunc_json()
+        except (FileNotFoundError, DotDruncJsonNotFound) as e:
+            self.log.warning(f"ELisaLogbook entries will not be posted. {e}")
+            return
+        except (json.JSONDecodeError, DotDruncJsonIncorrectFormat) as e:
+            self.log.warning(f"ELisaLogbook entries will not be posted. {e}")
+            return
+
         self.elisa_hardware: str | None = os.getenv(
             "DUNEDAQ_ELISA_LOGBOOK_APPARATUS", None
         )
@@ -52,7 +65,6 @@ class ElisaLogbook(FSMAction):
                 )
                 self.log.warning(warn_msg)
         else:
-
             warn_msg: str = ""
             if default_elisa_logbook:
                 warn_msg = (
