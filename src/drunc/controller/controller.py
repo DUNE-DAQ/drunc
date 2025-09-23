@@ -791,6 +791,11 @@ class Controller(ControllerServicer):
                     self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
 
             if payload.command_name == "start":
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
+
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=self.runinfo.get("production_vs_test", ""),
@@ -806,6 +811,14 @@ class Controller(ControllerServicer):
                     ),
                     custom_origin=self.custom_origin,
                 )
+
+            if payload.command_name == "drain_dataflow":
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(
+                        f"ELisaLogbook entry will not be posted after drain-dataflow. {e}"
+                    )
 
             self.stateful_node.propagate_transition_mark(transition)
 
@@ -1254,7 +1267,6 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -1267,7 +1279,7 @@ class Controller(ControllerServicer):
         self,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token
+        token: Token,
     ) -> PlainText:
         """
         Transitions the stateful node to an error state. Used for testing purposes.
