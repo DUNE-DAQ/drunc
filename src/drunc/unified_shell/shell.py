@@ -29,7 +29,12 @@ from drunc.controller.interface.commands import (
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import DruncSetupException
+from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
+from drunc.fsm.exceptions import (
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
     get_process_manager_configuration,
@@ -139,7 +144,9 @@ def unified_shell(
         process_manager_conf_file = get_process_manager_configuration(process_manager)
 
         if not validate_pm_config(process_manager_conf_file):
-            unified_shell_log.error("Process manager configuration validation failed. Exiting.")
+            unified_shell_log.error(
+                "Process manager configuration validation failed. Exiting."
+            )
             sys.exit(1)
 
         ready_event = mp.Event()
@@ -370,12 +377,19 @@ def unified_shell(
     ctx.obj.dynamic_commands.add("expert_command")
     ctx.obj.dynamic_commands.add("to_error")
 
+    if "elisa-logbook" in fsmch.get_actions().keys():
+        try:
+            get_dotdrunc_json()
+        except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+            unified_shell_log.warning(f"ELisaLogbook entries will not be posted. {e}")
+
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
 
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
+
 
 def on_exit(ctx, unified_shell_log):
     """Handle exit from the shell."""

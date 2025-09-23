@@ -5,6 +5,7 @@ import sys
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 import click
 import grpc
@@ -30,11 +31,6 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.fsm.actions.utils import get_dotdrunc_json
-from drunc.fsm.exceptions import (
-    DotDruncJsonIncorrectFormat,
-    DotDruncJsonNotFound,
-)
 from drunc.utils.grpc_utils import (
     ServerTimeout,
     ServerUnreachable,
@@ -615,19 +611,8 @@ def run_one_fsm_command(
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
     log = get_logger("controller.shell_utils")
-
-    def wrapped_cmd(obj, *args, **kwargs):
-        """
-        Wrapper function to warn that ELisa Logbook are not posted if ~/.drunc.json is missing or malformed
-        """
-        if transition.name.lower() in ["start", "drain_dataflow"]:
-            try:
-                get_dotdrunc_json()
-            except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
-                log.warning(f"ELisa Logbook entry will not be posted. {e}")
-        return run_one_fsm_command(controller_name, transition.name, obj, *args, **kwargs)
-
-    cmd = click.pass_obj(wrapped_cmd)
+    cmd = partial(run_one_fsm_command, controller_name, transition.name)
+    cmd = click.pass_context(cmd)
     cmd = click.option(
         "--target",
         type=str,
