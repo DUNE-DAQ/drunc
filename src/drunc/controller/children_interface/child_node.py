@@ -2,7 +2,8 @@ import os
 
 from druncschema.controller_pb2 import DescribeResponse, Status, StatusResponse
 from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Response
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
@@ -14,11 +15,6 @@ from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
 )
-
-from druncschema.request_response_pb2 import (  # isort: skip
-    ResponseFlag,
-)
-from druncschema.token_pb2 import Token  # isort: skip
 
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):
