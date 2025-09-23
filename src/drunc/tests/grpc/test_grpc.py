@@ -10,10 +10,7 @@ grpc errors.
 """
 
 import time
-
 import pytest
-
-from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
 # amount of seconds to recreate specific issue with ping_timeout
 IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 120
@@ -33,35 +30,37 @@ def monitor_for_errors_while_idle(
         time.sleep(check_interval_seconds)
     return None, (time.time() - start_time) 
 
-@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
-def test_basic_grpc_tree_communication(capsys, monkeypatch):
+
+def test_basic_grpc_tree_communication(capsys):
     """
     Basic test to verify gRPC tree setup, communication, and trace logging.
     This test validates that:
     1. All gRPC servers start correctly and can communicate
     2. Direct client connections work as expected
-    3. gRPC trace logging is enabled and producing output in all log files
+    3. gRPC trace logging is working and producing output in all log files
     """
 
-    monkeypatch.setenv("GRPC_VERBOSITY", "DEBUG")
-    monkeypatch.setenv("GRPC_TRACE", "http")
+    
+    from pathlib import Path
+    import os
+    os.environ['GRPC_TRACE'] = 'http'
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
+    basic_config = []
+    tree_manager = GrpcProcessTreeManager(
+        number_of_children=2,
+        manager_max_workers=2,
+        controller_max_workers=2,
+        manager_server_config=basic_config,
+        manager_client_config=basic_config,
+        root_server_config=basic_config,
+        root_client_config=basic_config,
+        child_server_config=basic_config,
+        child_client_config=basic_config,
+        env_vars={'GRPC_TRACE' : 'http'},
+    )
+    
     with capsys.disabled():
-        from pathlib import Path
-        
-        basic_config = []
-        tree_manager = GrpcProcessTreeManager(
-            number_of_children=2,
-            manager_max_workers=2,
-            controller_max_workers=2,
-            manager_server_config=basic_config,
-            manager_client_config=basic_config,
-            root_server_config=basic_config,
-            root_client_config=basic_config,
-            child_server_config=basic_config,
-            child_client_config=basic_config,
-            env_vars={"GRPC_VERBOSITY": "DEBUG", "GRPC_TRACE": "http"},
-        )
         with tree_manager as process_manager:
             # Connect to all servers and perform communication tests
             process_manager.connect_to_all_servers()
@@ -119,6 +118,7 @@ def test_production_grpc_settings_idle(capsys):
         MANAGER_SERVER_GRPC_CONFIG,
         MANAGER_SERVER_GRPC_MAX_WORKERS,
     )
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
     with capsys.disabled():
         tree_manager = GrpcProcessTreeManager(

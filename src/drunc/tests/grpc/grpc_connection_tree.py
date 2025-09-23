@@ -19,8 +19,6 @@ from concurrent import futures
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-import grpc
-
 # Import generated gRPC code
 from drunc.tests.grpc.test_pb2 import (
     DummyRequest,
@@ -56,7 +54,6 @@ GRPC_ERROR_PATTERNS = [
     "Other threads are currently calling into gRPC"
 ]
 
-
 def stderr_observer(log_file_name):
     r, w = os.pipe()
     stderr_fd = sys.stderr.fileno()
@@ -73,6 +70,7 @@ def stderr_observer(log_file_name):
 
     reader_thread = threading.Thread(target=reader, daemon=True)
     reader_thread.start()
+
 
 
 class LogFileManager:
@@ -213,8 +211,8 @@ def run_process_manager_server(
         ready_event: Event to signal when server is ready
         stop_event: Event to signal server shutdown request
     """
-    # Redirect all output to log file
     stderr_observer(log_file)
+    import grpc
 
     def signal_handler(signum, frame):
         """Handle shutdown signals gracefully."""
@@ -285,8 +283,8 @@ def run_root_controller_server(
         ready_event: Event to signal when server is ready
         stop_event: Event to signal server shutdown request
     """
-    # Redirect all output to log file
     stderr_observer(log_file)
+    import grpc
 
     def signal_handler(signum, frame):
         """Handle shutdown signals gracefully."""
@@ -372,8 +370,8 @@ def run_child_controller_server(
         ready_event: Event to signal when server is ready
         stop_event: Event to signal server shutdown request
     """
-    # Redirect all output to log file
     stderr_observer(log_file)
+    import grpc
 
     def signal_handler(signum, frame):
         """Handle shutdown signals gracefully."""
@@ -480,6 +478,7 @@ class ProcessManagerClient:
 
     def connect_to_all_servers(self) -> None:
         """Establish gRPC client connections to all servers in the tree."""
+        import grpc
         # Connect to Manager server
         self.manager_channel = grpc.insecure_channel(
             f"localhost:{self.manager_port}", options=self.client_options
@@ -618,12 +617,14 @@ class IndependentRootControllerClient:
 
         Raises:
             RuntimeError: If connection fails
+   
         """
         if self._connected:
             return
 
         self.log_file = log_file
         stderr_observer(log_file)
+        import grpc
 
         try:
             self.channel = grpc.insecure_channel(
