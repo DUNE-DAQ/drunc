@@ -139,12 +139,10 @@ class Controller(ControllerServicer):
         )
 
         self.fsm_config = FSMConfHandler(
-        self.fsm_config = FSMConfHandler(
             data=self.configuration.data.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
-            fsm_configuration=self.fsm_config,
             fsm_configuration=self.fsm_config,
             publisher=self.controller_publisher,
             init_state="initialising",
