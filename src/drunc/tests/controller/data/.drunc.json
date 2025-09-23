@@ -1,0 +1,17 @@
+{
+    "run_registry_configuration":{
+        "socket": "foosocket",
+        "user": "fooUsr",
+        "password": "barPass"
+    },
+    "run_number_configuration":{
+        "socket": "fooSocket",
+        "user": "fooUsr",
+        "password": "barPass"
+    },
+    "elisa_configuration": {
+        "socket": "fooSocket",
+        "user": "fooUsr",
+        "password": "barPass"
+    }
+}
