@@ -1,11 +1,12 @@
 import time
-from typing import cast
+from typing import NoReturn, cast
 
 import grpc
 from druncschema.controller_pb2 import AddressedCommand
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
@@ -71,7 +72,7 @@ class gRPCChildNode(ChildNode):
 
             except grpc.RpcError as error:
                 try:
-                    self.handle_controller_grpc_error(error)
+                    self.handle_child_grpc_error(error)
                 except ServerUnreachable as server_unreachable_error:
                     if n_tries == 0:
                         raise server_unreachable_error
@@ -102,24 +103,6 @@ class gRPCChildNode(ChildNode):
             )
         )
 
-    def send_command(self, token, command: str, data=None):
-        log = get_logger("controller.send_command")
-
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = Request(token=token)
-        if data is not None:
-            request.data.Pack(data)
-
-        log.debug(f"Sending: {command} to the controller, with {request=}")
-
-        try:
-            response = cmd(request)
-        except grpc.RpcError as error:
-            self.handle_controller_grpc_error(error)
-
-        return response
-
     def terminate(self):
         if self.channel:
             self.channel.close()
@@ -131,16 +114,28 @@ class gRPCChildNode(ChildNode):
         self.stub = None
         self.broadcast.stop()
 
-    def propagate_command(self, command, data, token) -> Response:
-        return self.send_command(
-            token=token,
-            command=command,
-            data=data,
-        )
+    def propagate_command(
+        self,
+        command: str,
+        data=None,
+        token: Token | None = None,
+        timeout: int | float = 60,
+    ) -> Response:
+        request = Request(token=token)
+        if data is not None:
+            request.data.Pack(data)
+
+        try:
+            cmd = getattr(self.stub, command)
+            response = cmd(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_child_grpc_error(e)
+
+        return response
 
     @staticmethod
-    def handle_controller_grpc_error(error: grpc.RpcError) -> None:
-        """Handle gRPC errors from sending commands to the controller.
+    def handle_child_grpc_error(error: grpc.RpcError) -> NoReturn:
+        """Handle gRPC errors from sending commands to the child.
 
         Args:
             error: The gRPC error to handle.
