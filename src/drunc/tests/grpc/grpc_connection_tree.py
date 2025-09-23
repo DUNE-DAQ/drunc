@@ -53,6 +53,7 @@ GRPC_ERROR_PATTERNS = [
     "GOAWAY.*UNAVAILABLE",
     "Error code.*ping_timeout",
     "grpc.*UNAVAILABLE.*ping",
+    "Other threads are currently calling into gRPC"
 ]
 
 
