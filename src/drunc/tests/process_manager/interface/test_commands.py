@@ -136,6 +136,10 @@ def test_terminate_command(mock_logger, mock_tabulate):
 
 
 def test_terminate_no_processes(mock_logger):
+    """
+    Test that the terminate command handles no processes to terminate.
+    """
+
     mock_driver = MagicMock()
     mock_driver.terminate.return_value = ""
 
@@ -153,6 +157,10 @@ def test_terminate_no_processes(mock_logger):
 
 
 def test_boot_command_successful(mock_logger):
+    """
+    Test a successful boot command with no existing processes.
+    """
+
     mock_driver = MockDriver(
         existing_processes=[],
         boot_result=[
@@ -177,6 +185,7 @@ def test_boot_exiting_processes_abort():
     """
     Test user aborts command when existing processes.
     """
+
     existing_process = [MagicMock(), MagicMock()]
     mock_driver = MockDriver(existing_processes=existing_process, boot_result=[])
 
@@ -207,6 +216,7 @@ def test_boot_exiting_processes_user_confirm():
     """
     Test when user confirms 'boot' command when there are existing processes.
     """
+
     existing_process = [MagicMock(), MagicMock()]
     mock_driver = MockDriver(existing_processes=existing_process, boot_result=[])
 
@@ -235,6 +245,7 @@ def test_boot_interrupted_command():
     """
     Test that boot exits gracefully when InterruptedCommand is raised.
     """
+
     mock_driver = MockDriver(existing_processes=[])
 
     mock_driver.boot = MagicMock(side_effect=InterruptedCommand())
@@ -250,6 +261,7 @@ def test_boot_returns_none(mock_logger):
     """
     Check if calling boot on the driver returns None.
     """
+
     mock_driver = MockDriver(existing_processes=[], boot_result=[None])
     mock_context = MockContext(driver=mock_driver)
 
@@ -262,6 +274,10 @@ def test_boot_returns_none(mock_logger):
 
 
 def test_boot_missing_controller_address(mock_logger):
+    """
+    Test boot command when the root controller address is missing.
+    """
+
     mock_driver = MockDriver()
     mock_driver.controller_address = None
     context = MockContext(driver=mock_driver)
@@ -278,6 +294,10 @@ def test_boot_missing_controller_address(mock_logger):
 
 
 def test_dummy_boot_command_successful(mock_logger):
+    """
+    Test a successful dummy_boot command with no existing processes.
+    """
+
     mock_driver = MockDriver(
         existing_processes=[],
         boot_result=[
@@ -311,6 +331,10 @@ def test_dummy_boot_command_successful(mock_logger):
 
 
 def test_dummy_boot_command_interrupted(mock_logger):
+    """
+    Test that the dummy_boot command handles interruptions gracefully.
+    """
+
     mock_driver = MockDriver(existing_processes=[])
 
     mock_driver.dummy_boot = MagicMock(side_effect=InterruptedCommand())
@@ -336,6 +360,10 @@ def test_dummy_boot_command_interrupted(mock_logger):
 
 
 def test_kill_command(mock_tabulate):
+    """
+    Test the kill command.
+    """
+
     mock_driver = MockDriver()
     mock_driver.kill = MagicMock()
     mock_context = MockContext(driver=mock_driver)
@@ -351,6 +379,10 @@ def test_kill_command(mock_tabulate):
 
 
 def test_flush(mock_tabulate):
+    """
+    Test the flush command.
+    """
+
     mock_driver = MockDriver()
     mock_driver.flush = MagicMock()
     mock_context = MockContext(driver=mock_driver)
@@ -365,6 +397,10 @@ def test_flush(mock_tabulate):
 
 
 def test_logs_command_with_grep_and_lines():
+    """
+    Test the logs command with grep and lines options.
+    """
+
     mock_driver = MockDriver()
     mock_context = MockContext(driver=mock_driver)
     mock_context.rule = MagicMock()
@@ -384,6 +420,10 @@ def test_logs_command_with_grep_and_lines():
 
 
 def test_restart():
+    """
+    Test the restart command.
+    """
+
     mock_driver = MockDriver()
     mock_driver.restart = MagicMock()
     mock_context = MockContext(driver=mock_driver)
@@ -396,6 +436,29 @@ def test_restart():
 
 
 def test_ps(mock_tabulate):
+    """
+    Test the ps command.
+    """
+
+    mock_driver = MockDriver()
+    mock_driver.ps = MagicMock()
+    mock_context = MockContext(driver=mock_driver)
+
+    result = CliRunner().invoke(ps, None, obj=mock_context)
+
+    assert result.exit_code == 0
+    assert "proc1" in result.output
+    assert "proc2" in result.output
+    assert "123" in result.output
+    assert "456" in result.output
+    mock_driver.ps.assert_called_once()
+
+
+def test_ps_with_process_query(mock_tabulate):
+    """
+    Test the ps command with process query options.
+    """
+
     mock_driver = MockDriver()
     mock_driver.ps = MagicMock()
     mock_context = MockContext(driver=mock_driver)
@@ -421,6 +484,9 @@ def test_ps(mock_tabulate):
     ],
 )
 def test_boot_missing_positional_arguments(args, missing_arg):
+    """
+    Test boot command with missing positional arguments.
+    """
     runner = CliRunner()
     result = runner.invoke(boot, args)
     assert result.exit_code != 0
@@ -428,6 +494,9 @@ def test_boot_missing_positional_arguments(args, missing_arg):
 
 
 def test_dummy_boot_missing_session_name():
+    """
+    Test dummy_boot command with missing session-name argument.
+    """
     runner = CliRunner()
     result = runner.invoke(dummy_boot, [])
     assert result.exit_code != 0
@@ -453,6 +522,9 @@ def test_dummy_boot_invalid_values(args, error_msg):
 
 
 def test_kill_missing_required_arg():
+    """
+    Test the kill command with missing required argument.
+    """
     runner = CliRunner()
     result = runner.invoke(kill, [], obj=MagicMock())
 
@@ -461,6 +533,9 @@ def test_kill_missing_required_arg():
 
 
 def test_logs_missing_required_arg():
+    """
+    Test the logs command with missing required argument.
+    """
     runner = CliRunner()
     result = runner.invoke(logs, [], obj=MagicMock())
 
@@ -469,6 +544,9 @@ def test_logs_missing_required_arg():
 
 
 def test_restart_missing_required_arg():
+    """
+    Test the restart command with missing required argument.
+    """
     runner = CliRunner()
     result = runner.invoke(restart, [], obj=MagicMock())
 
