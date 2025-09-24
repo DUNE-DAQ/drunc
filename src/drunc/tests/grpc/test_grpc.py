@@ -31,35 +31,105 @@ def monitor_for_errors_while_idle(
     return None, (time.time() - start_time) 
 
 
-def test_basic_grpc_tree_communication(capsys):
+def test_basic_grpc_tree_communication_multiprocessing(capsys):
     """
-    Basic test to verify gRPC tree setup, communication, and trace logging.
+    Basic test to verify gRPC tree setup, communication, and trace logging using multiprocessing.
     This test validates that:
     1. All gRPC servers start correctly and can communicate
     2. Direct client connections work as expected
     3. gRPC trace logging is working and producing output in all log files
     """
-
     
     from pathlib import Path
     import os
     os.environ['GRPC_TRACE'] = 'http'
     from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
-
+    
     basic_config = []
-    tree_manager = GrpcProcessTreeManager(
+    tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
         number_of_children=2,
         manager_max_workers=2,
         controller_max_workers=2,
+        env_vars={'GRPC_TRACE': 'http'},
         manager_server_config=basic_config,
         manager_client_config=basic_config,
         root_server_config=basic_config,
         root_client_config=basic_config,
         child_server_config=basic_config,
         child_client_config=basic_config,
-        env_vars={'GRPC_TRACE' : 'http'},
     )
+    with capsys.disabled():
+        with tree_manager as process_manager:
+            # Connect to all servers and perform communication tests
+            process_manager.connect_to_all_servers()
+            process_manager.perform_full_communication_test()
+            
+            # Test direct client to generate additional gRPC traffic
+            direct_client = tree_manager.create_direct_client(
+                client_id="IdleTestClient", client_options=basic_config
+            )
+            direct_client.make_request("Initial test from managed DirectRootClient")
+            
+            # Verify gRPC http trace logging is working in all log files
+            log_files = tree_manager.log_file_manager.get_all_log_files()
+            missing_trace_files = []
+            for log_file in log_files:
+                log_path = Path(log_file)
+                # Check if log file exists and is readable
+                if not log_path.exists():
+                    missing_trace_files.append(f"{log_file} (file does not exist)")
+                    continue
+                try:
+                    # Read log file content
+                    with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    print(f"Contents of {log_file}:\n{content}\n{'-'*40}\n")
+                    # Check for expected gRPC trace output
+                    assert "http" in content
+                except (IOError, OSError) as e:
+                    pytest.fail(f"Error reading log file {log_file}: {e}")
+            
+            # Assert that all log files contain the expected trace output
+            if missing_trace_files:
+                error_msg = (
+                    f"gRPC trace logging verification failed for {len(missing_trace_files)} files:\n"
+                    + "\n".join(
+                        f"  - {file_issue}" for file_issue in missing_trace_files
+                    )
+                )
+                pytest.fail(error_msg)
+
+
+def test_basic_grpc_tree_communication_ssh(capsys):
+    """
+    Basic test to verify gRPC tree setup, communication, and trace logging using SSH.
+    This test validates that:
+    1. All gRPC servers start correctly and can communicate
+    2. Direct client connections work as expected
+    3. gRPC trace logging is working and producing output in all log files
+    """
     
+    from pathlib import Path
+    import os
+    os.environ['GRPC_TRACE'] = 'http'
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+    
+    basic_config = []
+    tree_manager = GrpcProcessTreeManager.create_with_ssh(
+        number_of_children=2,
+        manager_max_workers=2,
+        controller_max_workers=2,
+        hosts=['localhost'],
+        default_user=os.getenv('USER', 'testuser'),
+        env_vars={'GRPC_TRACE': 'http'},
+        disable_host_key_check=True,
+        manager_server_config=basic_config,
+        manager_client_config=basic_config,
+        root_server_config=basic_config,
+        root_client_config=basic_config,
+        child_server_config=basic_config,
+        child_client_config=basic_config,
+    )
     with capsys.disabled():
         with tree_manager as process_manager:
             # Connect to all servers and perform communication tests
@@ -105,7 +175,7 @@ def test_basic_grpc_tree_communication(capsys):
 ## This tests the live grpc configuration for grpc errors
 #######################################################################################
 
-@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
+# @pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_production_grpc_settings_idle(capsys):
     """
     Test current gRPC production settings for grpc errors during idle time
@@ -152,7 +222,7 @@ def test_production_grpc_settings_idle(capsys):
                     f"Error detected after trying to communicate following idle period with production settings. Error: {error_found}"
                 )
 
-@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
+#@pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_production_grpc_settings_communicate_with_root_controller_after_idle(
     capsys,
 ):
@@ -169,6 +239,7 @@ def test_production_grpc_settings_communicate_with_root_controller_after_idle(
         MANAGER_SERVER_GRPC_CONFIG,
         MANAGER_SERVER_GRPC_MAX_WORKERS,
     )
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
     with capsys.disabled():
         keepalive_config = []

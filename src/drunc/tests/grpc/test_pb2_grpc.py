@@ -5,7 +5,7 @@ import warnings
 
 import test_pb2 as test__pb2
 
-GRPC_GENERATED_VERSION = '1.68.0'
+GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -45,6 +45,11 @@ class ManagerServiceStub(object):
                 request_serializer=test__pb2.UpdateRequest.SerializeToString,
                 response_deserializer=test__pb2.UpdateResponse.FromString,
                 _registered_method=True)
+        self.Kill = channel.unary_unary(
+                '/drunc.tests.grpc_tree.ManagerService/Kill',
+                request_serializer=test__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__pb2.KillResponse.FromString,
+                _registered_method=True)
 
 
 class ManagerServiceServicer(object):
@@ -65,6 +70,13 @@ class ManagerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Kill(self, request, context):
+        """Method for graceful shutdown of the Manager service
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ManagerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -77,6 +89,11 @@ def add_ManagerServiceServicer_to_server(servicer, server):
                     servicer.ReceiveUpdate,
                     request_deserializer=test__pb2.UpdateRequest.FromString,
                     response_serializer=test__pb2.UpdateResponse.SerializeToString,
+            ),
+            'Kill': grpc.unary_unary_rpc_method_handler(
+                    servicer.Kill,
+                    request_deserializer=test__pb2.KillRequest.FromString,
+                    response_serializer=test__pb2.KillResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -144,6 +161,33 @@ class ManagerService(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def Kill(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/drunc.tests.grpc_tree.ManagerService/Kill',
+            test__pb2.KillRequest.SerializeToString,
+            test__pb2.KillResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class RootControllerServiceStub(object):
     """Service for RootController component  
@@ -169,6 +213,11 @@ class RootControllerServiceStub(object):
                 '/drunc.tests.grpc_tree.RootControllerService/ReceiveStatus',
                 request_serializer=test__pb2.StatusRequest.SerializeToString,
                 response_deserializer=test__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.Kill = channel.unary_unary(
+                '/drunc.tests.grpc_tree.RootControllerService/Kill',
+                request_serializer=test__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__pb2.KillResponse.FromString,
                 _registered_method=True)
 
 
@@ -197,6 +246,13 @@ class RootControllerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Kill(self, request, context):
+        """Method for graceful shutdown of the RootController service
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RootControllerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -214,6 +270,11 @@ def add_RootControllerServiceServicer_to_server(servicer, server):
                     servicer.ReceiveStatus,
                     request_deserializer=test__pb2.StatusRequest.FromString,
                     response_serializer=test__pb2.StatusResponse.SerializeToString,
+            ),
+            'Kill': grpc.unary_unary_rpc_method_handler(
+                    servicer.Kill,
+                    request_deserializer=test__pb2.KillRequest.FromString,
+                    response_serializer=test__pb2.KillResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -308,6 +369,33 @@ class RootControllerService(object):
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def Kill(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/drunc.tests.grpc_tree.RootControllerService/Kill',
+            test__pb2.KillRequest.SerializeToString,
+            test__pb2.KillResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class ChildControllerServiceStub(object):
     """Service for ChildController components
@@ -329,6 +417,11 @@ class ChildControllerServiceStub(object):
                 request_serializer=test__pb2.InstructionRequest.SerializeToString,
                 response_deserializer=test__pb2.InstructionResponse.FromString,
                 _registered_method=True)
+        self.Kill = channel.unary_unary(
+                '/drunc.tests.grpc_tree.ChildControllerService/Kill',
+                request_serializer=test__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__pb2.KillResponse.FromString,
+                _registered_method=True)
 
 
 class ChildControllerServiceServicer(object):
@@ -349,6 +442,13 @@ class ChildControllerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Kill(self, request, context):
+        """Method for graceful shutdown of the ChildController service
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ChildControllerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -361,6 +461,11 @@ def add_ChildControllerServiceServicer_to_server(servicer, server):
                     servicer.ReceiveInstruction,
                     request_deserializer=test__pb2.InstructionRequest.FromString,
                     response_serializer=test__pb2.InstructionResponse.SerializeToString,
+            ),
+            'Kill': grpc.unary_unary_rpc_method_handler(
+                    servicer.Kill,
+                    request_deserializer=test__pb2.KillRequest.FromString,
+                    response_serializer=test__pb2.KillResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -418,6 +523,33 @@ class ChildControllerService(object):
             '/drunc.tests.grpc_tree.ChildControllerService/ReceiveInstruction',
             test__pb2.InstructionRequest.SerializeToString,
             test__pb2.InstructionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Kill(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/drunc.tests.grpc_tree.ChildControllerService/Kill',
+            test__pb2.KillRequest.SerializeToString,
+            test__pb2.KillResponse.FromString,
             options,
             channel_credentials,
             insecure,

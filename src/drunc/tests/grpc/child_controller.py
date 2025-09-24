@@ -1,0 +1,93 @@
+"""
+ChildController Service Implementation
+
+Provides the gRPC servicer implementation for ChildController services,
+which act as leaf nodes in the system hierarchy, handling specific tasks
+and reporting to the RootController.
+"""
+
+import os
+import signal
+import threading
+
+from drunc.tests.grpc.test_pb2 import (
+    DummyResponse,
+    KillRequest,
+    KillResponse,
+)
+from drunc.tests.grpc.test_pb2_grpc import ChildControllerServiceServicer
+
+
+class ChildControllerServiceImpl(ChildControllerServiceServicer):
+    """
+    Implementation of ChildController gRPC service.
+    
+    ChildController services are leaf nodes that handle specific tasks
+    while maintaining connections to their RootController. Each child
+    has a unique name identifier and handles connectivity testing,
+    instruction processing, and graceful shutdown requests.
+    """
+
+    def __init__(self, name: str):
+        """
+        Initialise the ChildController service implementation.
+        
+        Args:
+            name: Unique identifier for this child controller instance
+        """
+        self.name = name
+
+    def MakeRequest(self, request, context):
+        """
+        Handle incoming connectivity test requests.
+        
+        Args:
+            request: DummyRequest containing message and timestamp
+            context: gRPC context object
+            
+        Returns:
+            DummyResponse with echoed message confirming ChildController is responsive
+        """
+        return DummyResponse(
+            reply=f"{self.name} server response: {request.message}"
+        )
+
+    def Kill(self, request: KillRequest, context) -> KillResponse:
+        """
+        Handle graceful shutdown requests for the ChildController service.
+        
+        This method initiates a graceful shutdown of the ChildController process
+        by sending a SIGTERM signal to itself after a brief delay to allow
+        the response to be sent back to the client.
+        
+        Args:
+            request: KillRequest containing optional confirmation token and reason
+            context: gRPC context object
+            
+        Returns:
+            KillResponse indicating shutdown has been initiated
+        """
+        # Default grace period if not specified
+        grace_period = max(request.grace_period_seconds, 1) if request.grace_period_seconds > 0 else 2
+        
+        # Log the shutdown request
+        reason = request.reason or "No reason provided"
+        print(f"{self.name} shutdown requested. Reason: {reason}")
+        print(f"Grace period: {grace_period} seconds")
+        
+        def delayed_shutdown():
+            """Send SIGTERM to this process after a brief delay."""
+            import time
+            time.sleep(0.5)  # Allow response to be sent
+            os.kill(os.getpid(), signal.SIGTERM)
+        
+        # Start shutdown in separate thread to avoid blocking the response
+        shutdown_thread = threading.Thread(target=delayed_shutdown)
+        shutdown_thread.daemon = True
+        shutdown_thread.start()
+        
+        return KillResponse(
+            shutdown_initiated=True,
+            message=f"{self.name} shutdown initiated",
+            estimated_shutdown_time_seconds=grace_period
+        )

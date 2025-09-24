@@ -1,442 +1,30 @@
 """
-Multi-Process gRPC Tree Structure with Log File Monitoring
-
-Architecture:
-- Manager Server: Central coordination service
-- RootController Server: Primary controller with Manager client
-- ChildController Servers: Leaf nodes with RootController clients
+gRPC multi-process tree management with pluggable server managers.
 """
 
-import multiprocessing
-import os
-import re
-import signal
-import sys
-import tempfile
-import threading
 import time
-from concurrent import futures
-from pathlib import Path
 from typing import Dict, List, Tuple
 
-# Import generated gRPC code
-from drunc.tests.grpc.test_pb2 import (
-    DummyRequest,
-    DummyResponse,
-)
-from drunc.tests.grpc.test_pb2_grpc import (
-    ChildControllerServiceServicer,
-    ChildControllerServiceStub,
-    ManagerServiceServicer,
-    ManagerServiceStub,
-    RootControllerServiceServicer,
-    RootControllerServiceStub,
-    add_ChildControllerServiceServicer_to_server,
-    add_ManagerServiceServicer_to_server,
-    add_RootControllerServiceServicer_to_server,
+from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
+from drunc.tests.grpc.grpc_independent_root_controller_client import IndependentRootControllerClient
+from drunc.tests.grpc.grpc_server_manager import (
+    GrpcServerManager,
+    GrpcServerConfig,
 )
 
-SERVER_GRACE_PERIOD = 2
+# Import generated gRPC code
+from drunc.tests.grpc.test_pb2 import DummyRequest
+from drunc.tests.grpc.test_pb2_grpc import (
+    ChildControllerServiceStub,
+    ManagerServiceStub,
+    RootControllerServiceStub,
+)
+
 
 # Base port assignments for dynamic allocation
 BASE_MANAGER_PORT = 50070
 BASE_ROOT_PORT = 50071
 BASE_CHILD_PORT = 50072
-
-# gRPC error patterns to detect in log files
-GRPC_ERROR_PATTERNS = [
-    "ping_timeout",
-    "keepalive.*timeout",
-    "chttp2_transport.*GOAWAY",
-    "GOAWAY.*UNAVAILABLE",
-    "Error code.*ping_timeout",
-    "grpc.*UNAVAILABLE.*ping",
-    "Other threads are currently calling into gRPC"
-]
-
-def stderr_observer(log_file_name):
-    r, w = os.pipe()
-    stderr_fd = sys.stderr.fileno()
-    os.dup2(w, stderr_fd)
-    os.close(w)
-
-    def reader():
-        log_handle = open(log_file_name, "w", buffering=1)
-        with os.fdopen(r) as pipe:
-            for line in pipe:
-                log_handle.write(f"{line.strip()}\n")
-                log_handle.flush()
-        log_handle.close()
-
-    reader_thread = threading.Thread(target=reader, daemon=True)
-    reader_thread.start()
-
-
-
-class LogFileManager:
-    """
-    Manager for process log files with automatic creation and cleanup.
-
-    Creates unique log files in /tmp for each process and ensures proper
-    cleanup after test completion to prevent file system clutter.
-    """
-
-    def __init__(self):
-        """Initialise log file manager with empty state."""
-        self.log_files = []
-        self.file_positions = {}
-        self.temp_dir = None
-
-    def create_log_file(self, process_name: str) -> str:
-        """
-        Create a unique log file for a process.
-
-        Args:
-            process_name: Name of the process requiring logging
-
-        Returns:
-            Full path to the created log file
-        """
-        if not self.temp_dir:
-            # Create temporary directory for all test log files
-            self.temp_dir = tempfile.mkdtemp(prefix="grpc_test_logs_")
-
-        # Generate unique log file path with timestamp
-        timestamp = int(time.time())
-        log_file = os.path.join(self.temp_dir, f"{process_name}_{timestamp}.log")
-
-        # Create empty log file
-        Path(log_file).touch()
-        self.log_files.append(log_file)
-        self.file_positions[log_file] = 0
-
-        return log_file
-
-    def get_all_log_files(self) -> List[str]:
-        """
-        Retrieve list of all created log files.
-
-        Returns:
-            List of absolute paths to all created log files
-        """
-        return self.log_files.copy()
-
-    def cleanup(self):
-        """Remove all log files and temporary directory."""
-        for log_file in self.log_files:
-            try:
-                if os.path.exists(log_file):
-                    os.remove(log_file)
-            except Exception as e:
-                print(f"Warning: Could not remove log file {log_file}: {e}")
-
-        if self.temp_dir and os.path.exists(self.temp_dir):
-            try:
-                os.rmdir(self.temp_dir)
-            except Exception as e:
-                print(f"Warning: Could not remove temp directory {self.temp_dir}: {e}")
-
-        self.log_files.clear()
-        self.file_positions.clear()
-        self.temp_dir = None
-
-    def _scan_content_for_errors(self, content: str) -> List[str]:
-        """
-        Scan text content for gRPC error patterns.
-
-        Args:
-            content: Text content to scan for error patterns
-
-        Returns:
-            List of lines containing detected error patterns
-        """
-        detected_errors = []
-
-        for line in content.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-
-            # Check each error pattern against the line
-            for pattern in GRPC_ERROR_PATTERNS:
-                if re.search(pattern, line, re.IGNORECASE):
-                    detected_errors.append(line)
-                    break  # Avoid duplicate detection of same line
-
-        return detected_errors
-
-    def check_for_errors(self):
-        for log_file in self.get_all_log_files():
-            if not os.path.exists(log_file):
-                continue
-
-            # Read new content since last check
-            try:
-                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-                    f.seek(self.file_positions[log_file])
-                    new_content = f.read()
-                    self.file_positions[log_file] = f.tell()
-            except (IOError, OSError):
-                # File may not be ready yet, continue monitoring
-                continue
-
-            if new_content:
-                # Check new content for error patterns
-                error_lines = self._scan_content_for_errors(new_content)
-                if error_lines:
-                    # Store error details and signal detection
-                    self.detected_error = {
-                        "file": log_file,
-                        "lines": error_lines,
-                    }
-                    return self.detected_error
-        return None
-
-
-def run_process_manager_server(
-    manager_max_workers: int,
-    server_port: int,
-    log_file: str,
-    server_options: List[Tuple[str, any]] = None,
-    ready_event: multiprocessing.Event = None,
-    stop_event: multiprocessing.Event = None,
-) -> None:
-    """
-    Run Manager server in a separate process with output logging.
-
-    Args:
-        server_port: Port number for the Manager's gRPC server
-        log_file: Path to log file for process output
-        server_options: List of gRPC server configuration options
-        ready_event: Event to signal when server is ready
-        stop_event: Event to signal server shutdown request
-    """
-    stderr_observer(log_file)
-    import grpc
-
-    def signal_handler(signum, frame):
-        """Handle shutdown signals gracefully."""
-        if stop_event:
-            stop_event.set()
-
-    # Configure signal handlers for graceful shutdown
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-
-    class ManagerServiceImpl(ManagerServiceServicer):
-        """Implementation of Manager gRPC service."""
-
-        def MakeRequest(self, request, context):
-            """Handle incoming requests to Manager service."""
-            return DummyResponse(reply=f"Manager server response: {request.message}")
-
-    # Create and configure gRPC server
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=manager_max_workers),
-        options=server_options or [],
-    )
-
-    add_ManagerServiceServicer_to_server(ManagerServiceImpl(), server)
-    port = server.add_insecure_port(f"[::]:{server_port}")
-
-    try:
-        server.start()
-        print(f"Manager server started on port {port}")
-
-        # Signal readiness to parent process
-        if ready_event:
-            ready_event.set()
-
-        # Wait for stop signal or run indefinitely
-        if stop_event:
-            while not stop_event.is_set():
-                time.sleep(0.1)
-        else:
-            server.wait_for_termination()
-
-    except Exception as e:
-        print(f"Manager server error: {e}")
-    finally:
-        print("Shutting down Manager server...")
-        server.stop(grace=SERVER_GRACE_PERIOD)
-
-
-def run_root_controller_server(
-    controller_max_workers: int,
-    server_port: int,
-    manager_port: int,
-    log_file: str,
-    server_options: List[Tuple[str, any]] = None,
-    client_options: List[Tuple[str, any]] = None,
-    ready_event: multiprocessing.Event = None,
-    stop_event: multiprocessing.Event = None,
-) -> None:
-    """
-    Run RootController server with Manager client in a separate process.
-
-    Args:
-        server_port: Port number for the RootController's gRPC server
-        manager_port: Port number of the Manager server to connect to
-        log_file: Path to log file for process output
-        server_options: List of gRPC server configuration options
-        client_options: List of gRPC client configuration options
-        ready_event: Event to signal when server is ready
-        stop_event: Event to signal server shutdown request
-    """
-    stderr_observer(log_file)
-    import grpc
-
-    def signal_handler(signum, frame):
-        """Handle shutdown signals gracefully."""
-        if stop_event:
-            stop_event.set()
-
-    # Configure signal handlers for graceful shutdown
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-
-    class RootControllerServiceImpl(RootControllerServiceServicer):
-        """Implementation of RootController gRPC service."""
-
-        def MakeRequest(self, request, context):
-            """Handle incoming requests to RootController service."""
-            return DummyResponse(
-                reply=f"RootController server response: {request.message}"
-            )
-
-    # Create and configure gRPC server
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=controller_max_workers),
-        options=server_options or [],
-    )
-
-    add_RootControllerServiceServicer_to_server(RootControllerServiceImpl(), server)
-    port = server.add_insecure_port(f"[::]:{server_port}")
-
-    # Set up client connection to Manager
-    manager_channel = None
-    try:
-        server.start()
-
-        # Establish connection to Manager server
-        manager_channel = grpc.insecure_channel(
-            f"localhost:{manager_port}", options=client_options or []
-        )
-        print(
-            f"RootController server started on port {port}, connected to Manager on {manager_port}"
-        )
-
-        # Signal readiness to parent process
-        if ready_event:
-            ready_event.set()
-
-        # Wait for stop signal or run indefinitely
-        if stop_event:
-            while not stop_event.is_set():
-                time.sleep(0.1)
-        else:
-            server.wait_for_termination()
-
-    except Exception as e:
-        print(f"RootController server error: {e}")
-    finally:
-        print("Shutting down RootController server...")
-        if manager_channel:
-            manager_channel.close()
-        server.stop(grace=SERVER_GRACE_PERIOD)
-
-
-def run_child_controller_server(
-    controller_max_workers: int,
-    server_port: int,
-    root_port: int,
-    child_name: str,
-    log_file: str,
-    server_options: List[Tuple[str, any]] = None,
-    client_options: List[Tuple[str, any]] = None,
-    ready_event: multiprocessing.Event = None,
-    stop_event: multiprocessing.Event = None,
-) -> None:
-    """
-    Run ChildController server with RootController client in a separate process.
-
-    Args:
-        server_port: Port number for the ChildController's gRPC server
-        root_port: Port number of the RootController server to connect to
-        child_name: Unique identifier for this child controller
-        log_file: Path to log file for process output
-        server_options: List of gRPC server configuration options
-        client_options: List of gRPC client configuration options
-        ready_event: Event to signal when server is ready
-        stop_event: Event to signal server shutdown request
-    """
-    stderr_observer(log_file)
-    import grpc
-
-    def signal_handler(signum, frame):
-        """Handle shutdown signals gracefully."""
-        if stop_event:
-            stop_event.set()
-
-    # Configure signal handlers for graceful shutdown
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-
-    class ChildControllerServiceImpl(ChildControllerServiceServicer):
-        """Implementation of ChildController gRPC service."""
-
-        def __init__(self, name: str):
-            """Initialise with child controller name."""
-            self.name = name
-
-        def MakeRequest(self, request, context):
-            """Handle incoming requests to ChildController service."""
-            return DummyResponse(
-                reply=f"{self.name} server response: {request.message}"
-            )
-
-    # Create and configure gRPC server
-    server = grpc.server(
-        futures.ThreadPoolExecutor(max_workers=controller_max_workers),
-        options=server_options or [],
-    )
-
-    add_ChildControllerServiceServicer_to_server(
-        ChildControllerServiceImpl(child_name), server
-    )
-    port = server.add_insecure_port(f"[::]:{server_port}")
-
-    # Set up client connection to RootController
-    root_channel = None
-    try:
-        server.start()
-
-        # Establish connection to RootController server
-        root_channel = grpc.insecure_channel(
-            f"localhost:{root_port}", options=client_options or []
-        )
-        print(
-            f"{child_name} server started on port {port}, connected to RootController on {root_port}"
-        )
-
-        # Signal readiness to parent process
-        if ready_event:
-            ready_event.set()
-
-        # Wait for stop signal or run indefinitely
-        if stop_event:
-            while not stop_event.is_set():
-                time.sleep(0.1)
-        else:
-            server.wait_for_termination()
-
-    except Exception as e:
-        print(f"{child_name} server error: {e}")
-    finally:
-        print(f"Shutting down {child_name} server...")
-        if root_channel:
-            root_channel.close()
-        server.stop(grace=SERVER_GRACE_PERIOD)
 
 
 class ProcessManagerClient:
@@ -445,15 +33,14 @@ class ProcessManagerClient:
 
     Manages connections to all server processes and provides unified
     interface for testing communication across the entire tree structure.
+    This class remains unchanged as it's purely client-side logic.
     """
 
-    def __init__(
-        self,
-        manager_port: int,
-        root_port: int,
-        child_ports: List[int],
-        client_options: List[Tuple[str, any]] = None,
-    ):
+    def __init__(self,
+                 manager_port: int,
+                 root_port: int,
+                 child_ports: List[int],
+                 client_options: List[Tuple[str, any]] = None):
         """
         Initialise ProcessManagerClient with connection details.
 
@@ -479,6 +66,7 @@ class ProcessManagerClient:
     def connect_to_all_servers(self) -> None:
         """Establish gRPC client connections to all servers in the tree."""
         import grpc
+        
         # Connect to Manager server
         self.manager_channel = grpc.insecure_channel(
             f"localhost:{self.manager_port}", options=self.client_options
@@ -505,7 +93,7 @@ class ProcessManagerClient:
         # Allow time for connections to be established
         time.sleep(0.5)
 
-    def talk_to_manager(self) -> DummyResponse:
+    def talk_to_manager(self):
         """Send a request to the Manager server."""
         if not self.manager_stub:
             raise RuntimeError(
@@ -518,7 +106,7 @@ class ProcessManagerClient:
         )
         return self.manager_stub.MakeRequest(request)
 
-    def talk_to_root_controller(self) -> DummyResponse:
+    def talk_to_root_controller(self):
         """Send a request to the RootController server."""
         if not self.root_stub:
             raise RuntimeError(
@@ -531,7 +119,7 @@ class ProcessManagerClient:
         )
         return self.root_stub.MakeRequest(request)
 
-    def talk_to_child_controller(self, child_name: str) -> DummyResponse:
+    def talk_to_child_controller(self, child_name: str):
         """Send a request to a specific ChildController server."""
         if child_name not in self.child_stubs:
             raise RuntimeError(
@@ -544,7 +132,7 @@ class ProcessManagerClient:
         )
         return self.child_stubs[child_name].MakeRequest(request)
 
-    def talk_to_all_child_controllers(self) -> Dict[str, DummyResponse]:
+    def talk_to_all_child_controllers(self) -> Dict[str, any]:
         """Send requests to all ChildController servers."""
         responses = {}
         for child_name in self.child_stubs.keys():
@@ -576,141 +164,34 @@ class ProcessManagerClient:
         self.child_stubs.clear()
 
 
-class IndependentRootControllerClient:
-    """
-    Managed direct gRPC client connection to RootController server.
-
-    Uses file descriptor level stderr redirection to capture gRPC absl logging
-    output that bypasses Python's sys.stderr object.
-    """
-
-    def __init__(
-        self,
-        client_id: str,
-        root_port: int,
-        client_options: List[Tuple[str, any]] = None,
-    ):
-        """
-        Initialise DirectRootClient.
-
-        Args:
-            client_id: Unique identifier for this client instance
-            root_port: Port number of the RootController server
-            client_options: List of gRPC client configuration options
-        """
-        self.client_id = client_id
-        self.root_port = root_port
-        self.client_options = client_options or []
-
-        # Connection state
-        self.channel = None
-        self.stub = None
-        self.log_file = None
-        self._connected = False
-
-    def _connect_with_stderr_redirect(self, log_file: str):
-        """
-        Internal method to establish connection with file descriptor level stderr redirection.
-
-        Args:
-            log_file: Path to log file for stderr redirection
-
-        Raises:
-            RuntimeError: If connection fails
-   
-        """
-        if self._connected:
-            return
-
-        self.log_file = log_file
-        stderr_observer(log_file)
-        import grpc
-
-        try:
-            self.channel = grpc.insecure_channel(
-                f"localhost:{self.root_port}", options=self.client_options
-            )
-            self.stub = RootControllerServiceStub(self.channel)
-            self._connected = True
-
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to establish gRPC connection for {self.client_id}: {e}"
-            )
-
-    def make_request(self, message: str) -> DummyResponse:
-        """
-        Send request to RootController server.
-
-        Args:
-            message: Message to include in the request
-
-        Returns:
-            Response from the RootController server
-
-        Raises:
-            RuntimeError: If not connected
-        """
-        if not self._connected or not self.stub:
-            raise RuntimeError(f"DirectRootClient {self.client_id} is not connected")
-
-        request = DummyRequest(
-            message=message,
-            timestamp=int(time.time() * 1000),
-        )
-
-        return self.stub.MakeRequest(request)
-
-    def _disconnect(self):
-        """Internal method to close connection and restore stderr."""
-        if self.channel:
-            self.channel.close()
-            self.channel = None
-            self.stub = None
-
-        self._connected = False
-
-    def get_log_file(self) -> str:
-        """Get path to log file where client errors are written."""
-        return self.log_file
-
-    def is_connected(self) -> bool:
-        """Check if client is currently connected."""
-        return self._connected
-
-    def get_id(self) -> str:
-        """Get unique identifier for this client."""
-        return self.client_id
-
-
 class GrpcProcessTreeManager:
     """
-    Context manager for multi-process gRPC tree lifecycle management.
+    Context manager for multi-process gRPC tree lifecycle management using server manager abstraction.
 
-    Provides automatic setup and cleanup of all server processes, log files,
-    and monitoring infrastructure.
-    support for process manager -> root controller -> child controllers
-    and connecticting independent direct clients to the root controller.
+    This updated implementation separates server management from process execution,
+    enabling robust SSH support and cleaner architecture. Server lifecycle is now
+    managed through pluggable GrpcServerManager implementations.
     """
 
-    def __init__(
-        self,
-        number_of_children: int,
-        manager_max_workers: int,
-        controller_max_workers: int,
-        manager_server_config: List[Tuple[str, any]] = None,
-        manager_client_config: List[Tuple[str, any]] = None,
-        root_server_config: List[Tuple[str, any]] = None,
-        root_client_config: List[Tuple[str, any]] = None,
-        child_server_config: List[Tuple[str, any]] = None,
-        child_client_config: List[Tuple[str, any]] = None,
-        env_vars: Dict[str, str] = {}
-    ):
+    def __init__(self,
+                 server_manager: GrpcServerManager,
+                 number_of_children: int,
+                 manager_max_workers: int,
+                 controller_max_workers: int,
+                 manager_server_config: List[Tuple[str, any]] = None,
+                 manager_client_config: List[Tuple[str, any]] = None,
+                 root_server_config: List[Tuple[str, any]] = None,
+                 root_client_config: List[Tuple[str, any]] = None,
+                 child_server_config: List[Tuple[str, any]] = None,
+                 child_client_config: List[Tuple[str, any]] = None):
         """
-        Initialise GrpcTreeManager with configuration for all components.
+        Initialise GrpcProcessTreeManager with server manager and configuration.
 
         Args:
+            server_manager: GrpcServerManager implementation for server lifecycle
             number_of_children: Number of child controllers to create
+            manager_max_workers: Maximum worker threads for Manager server
+            controller_max_workers: Maximum worker threads for Controller servers
             manager_server_config: gRPC options for Manager's server
             manager_client_config: gRPC options for Manager's client
             root_server_config: gRPC options for RootController's server
@@ -721,6 +202,7 @@ class GrpcProcessTreeManager:
         if number_of_children < 0:
             raise ValueError("Number of children must be non-negative")
 
+        self.server_manager = server_manager
         self.manager_max_workers = manager_max_workers
         self.controller_max_workers = controller_max_workers
         self.number_of_children = number_of_children
@@ -737,12 +219,10 @@ class GrpcProcessTreeManager:
         self.child_ports = [BASE_CHILD_PORT + i for i in range(number_of_children)]
 
         # Runtime state
-        self.processes = []
-        self.stop_events = []
+        self.server_ids: List[str] = []
         self.process_manager = None
         self.log_file_manager = LogFileManager()
         self.direct_clients = {}
-        self.env_vars = env_vars
 
     def __enter__(self):
         """
@@ -766,107 +246,77 @@ class GrpcProcessTreeManager:
 
     def _setup_tree(self) -> ProcessManagerClient:
         """
-        Internal method to create and start all server processes.
+        Internal method to create and start all server processes using server manager.
 
         Returns:
             ProcessManagerClient: Client for communicating with all servers
         """
-        ready_events = []
+        print(f"Starting {1 + 1 + self.number_of_children} gRPC servers...")
 
-        # Create Manager server process
-        manager_ready = multiprocessing.Event()
-        manager_stop = multiprocessing.Event()
-        manager_log = self.log_file_manager.create_log_file("ManagerServer")
-
-        manager_process = multiprocessing.Process(
-            target=self._run_with_env,
-            args=(
-                run_process_manager_server,
-                self.manager_max_workers,
-                self.manager_port,
-                manager_log,
-                self.manager_server_config,
-                manager_ready,
-                manager_stop,
-            ),
-            name="ManagerServer",
+        # Create Manager server
+        manager_config = GrpcServerConfig(
+            server_id="ManagerServer",
+            server_type="manager",
+            port=self.manager_port,
+            max_workers=self.manager_max_workers,
+            log_file=self.log_file_manager.create_log_file("ManagerServer"),
+            server_options=self.manager_server_config,
+            client_options=self.manager_client_config,
         )
+        
+        self.server_manager.start_manager_server(manager_config)
+        self.server_ids.append("ManagerServer")
 
-        self.processes.append(manager_process)
-        ready_events.append(manager_ready)
-        self.stop_events.append(manager_stop)
-
-        # Create RootController server process
-        root_ready = multiprocessing.Event()
-        root_stop = multiprocessing.Event()
-        root_log = self.log_file_manager.create_log_file("RootControllerServer")
-
-        root_process = multiprocessing.Process(
-            target=self._run_with_env,
-            args=(
-                run_root_controller_server,
-                self.controller_max_workers,
-                self.root_port,
-                self.manager_port,
-                root_log,
-                self.root_server_config,
-                self.root_client_config,
-                root_ready,
-                root_stop,
-            ),
-            name="RootControllerServer",
+        # Create RootController server
+        root_config = GrpcServerConfig(
+            server_id="RootControllerServer",
+            server_type="root_controller", 
+            port=self.root_port,
+            max_workers=self.controller_max_workers,
+            log_file=self.log_file_manager.create_log_file("RootControllerServer"),
+            server_options=self.root_server_config,
+            client_options=self.root_client_config,
+            manager_port=self.manager_port,
         )
+        
+        self.server_manager.start_root_controller_server(root_config)
+        self.server_ids.append("RootControllerServer")
 
-        self.processes.append(root_process)
-        ready_events.append(root_ready)
-        self.stop_events.append(root_stop)
-
-        # Create ChildController server processes
+        # Create ChildController servers
         for i in range(self.number_of_children):
             child_port = self.child_ports[i]
             child_name = f"ChildController{i + 1}"
-            child_ready = multiprocessing.Event()
-            child_stop = multiprocessing.Event()
-            child_log = self.log_file_manager.create_log_file(f"ChildServer{i + 1}")
-
-            child_process = multiprocessing.Process(
-                target=self._run_with_env,
-                args=(
-                    run_child_controller_server,
-                    self.controller_max_workers,
-                    child_port,
-                    self.root_port,
-                    child_name,
-                    child_log,
-                    self.child_server_config,
-                    self.child_client_config,
-                    child_ready,
-                    child_stop,
-                ),
-                name=f"ChildServer{i + 1}",
+            child_server_id = f"ChildServer{i + 1}"
+            
+            child_config = GrpcServerConfig(
+                server_id=child_server_id,
+                server_type="child_controller",
+                port=child_port,
+                max_workers=self.controller_max_workers,
+                log_file=self.log_file_manager.create_log_file(child_server_id),
+                server_options=self.child_server_config,
+                client_options=self.child_client_config,
+                root_port=self.root_port,
+                child_name=child_name,
             )
+            
+            self.server_manager.start_child_controller_server(child_config)
+            self.server_ids.append(child_server_id)
 
-            self.processes.append(child_process)
-            ready_events.append(child_ready)
-            self.stop_events.append(child_stop)
-
+        # Display log files for debugging
         log_files = self.log_file_manager.get_all_log_files()
-
         print("Log files:")
         for log_file in log_files:
             print(f"   {log_file}")
 
-        # Start all server processes
-        print(f"Starting {len(self.processes)} server processes...")
-        for process in self.processes:
-            process.start()
-
         # Wait for all servers to be ready
         print("Waiting for all servers to be ready...")
-        for ready_event in ready_events:
-            ready_event.wait(timeout=10)
+        for server_id in self.server_ids:
+            ready = self.server_manager.wait_for_server_ready(server_id, timeout=10.0)
+            if not ready:
+                print(f"Warning: Server {server_id} did not signal ready within timeout")
 
-        # Allow extra time for servers to be fully ready
+        # Allow extra time for servers to be fully operational
         time.sleep(1)
 
         # Create and return ProcessManagerClient
@@ -879,15 +329,9 @@ class GrpcProcessTreeManager:
 
         return self.process_manager
 
-    def _run_with_env(self, target_func, *args, **kwargs):
-        """Wrapper to set environment variables before running target function."""
-        import os
-        for key, value in self.env_vars.items():
-            os.environ[key] = value
-        return target_func(*args, **kwargs)
-
     def _cleanup_tree(self) -> None:
-        """Internal method to clean up all resources."""
+        """Internal method to clean up all resources using server manager."""
+        # Clean up direct clients
         if hasattr(self, "direct_clients"):
             for client_id in list(self.direct_clients.keys()):
                 self.remove_direct_client(client_id)
@@ -896,43 +340,31 @@ class GrpcProcessTreeManager:
         if self.process_manager:
             self.process_manager.close_all_connections()
 
-        # Stop all server processes
+        # Stop all servers using server manager
         self._stop_all_processes()
+
+        # Clean up server manager
+        self.server_manager.cleanup()
 
         # Clean up log files
         self.log_file_manager.cleanup()
 
-    def _stop_all_processes(self):
-        """Stop all server processes gracefully with proper cleanup."""
-        print("Shutting down all processes...")
+    def _stop_all_processes(self) -> None:
+        """Stop all server processes gracefully using server manager."""
+        print("Shutting down all servers...")
 
-        # Signal graceful shutdown to all processes
-        for stop_event in self.stop_events:
-            stop_event.set()
+        # Stop all servers through server manager
+        self.server_manager.stop_all_servers(timeout=10.0)
 
-        # Wait for processes to terminate gracefully
-        start_time = time.time()
-        timeout = 10
-
-        for process in self.processes:
-            remaining_time = max(0, timeout - (time.time() - start_time))
-            process.join(timeout=remaining_time)
-
-            # Force termination if process didn't exit gracefully
-            if process.is_alive():
-                print(f"Force terminating process {process.name}")
-                process.terminate()
-                process.join(timeout=2)
-
-                # Last resort: kill the process
-                if process.is_alive():
-                    print(f"Force killing process {process.name}")
-                    process.kill()
-                    process.join()
+        # Clear server tracking
+        self.server_ids.clear()
 
     def check_for_errors(self):
         """
         Check if any gRPC errors have been detected in log files.
+        
+        Returns:
+            Error details if found, None otherwise
         """
         return self.log_file_manager.check_for_errors()
 
@@ -945,9 +377,9 @@ class GrpcProcessTreeManager:
         """
         return self.root_port
 
-    def create_direct_client(
-        self, client_id: str = None, client_options: List[Tuple[str, any]] = None
-    ) -> IndependentRootControllerClient:
+    def create_direct_client(self,
+                           client_id: str = None,
+                           client_options: List[Tuple[str, any]] = None) -> IndependentRootControllerClient:
         """
         Create and manage a DirectRootClient with automatic lifecycle management.
 
@@ -959,12 +391,11 @@ class GrpcProcessTreeManager:
             client_options: gRPC client configuration options (uses root_client_config if None)
 
         Returns:
-            DirectRootClient: Ready-to-use direct client connection
+            IndependentRootControllerClient: Ready-to-use direct client connection
 
         Raises:
             RuntimeError: If tree is not active or client creation fails
         """
-
         # Generate client ID if not provided
         if client_id is None:
             client_id = f"DirectClient{len(self.direct_clients) + 1}"
@@ -1043,7 +474,7 @@ class GrpcProcessTreeManager:
             client_id: ID of the client to retrieve
 
         Returns:
-            DirectRootClient instance
+            IndependentRootControllerClient instance
 
         Raises:
             KeyError: If client with given ID doesn't exist
@@ -1061,3 +492,160 @@ class GrpcProcessTreeManager:
             List of client IDs
         """
         return list(self.direct_clients.keys())
+
+    @classmethod
+    def create_with_multiprocessing(cls,
+                                  number_of_children: int,
+                                  manager_max_workers: int,
+                                  controller_max_workers: int,
+                                  env_vars: Dict[str, str] = None,
+                                  **kwargs) -> 'GrpcProcessTreeManager':
+        """
+        Factory method to create GrpcProcessTreeManager with multiprocessing server manager.
+
+        Args:
+            number_of_children: Number of child controllers to create
+            manager_max_workers: Maximum worker threads for Manager server
+            controller_max_workers: Maximum worker threads for Controller servers
+            env_vars: Environment variables to set in child processes
+            **kwargs: Additional arguments for GrpcProcessTreeManager
+
+        Returns:
+            GrpcProcessTreeManager configured with multiprocessing
+        """
+        from drunc.tests.grpc.multiprocessing_connection_manager import MultiprocessingConnectionManager
+        from drunc.tests.grpc.multiprocessing_server_manager import MultiprocessingGrpcServerManager
+
+        connection_manager = MultiprocessingConnectionManager(env_vars=env_vars)
+        server_manager = MultiprocessingGrpcServerManager(connection_manager)
+        
+        return cls(
+            server_manager=server_manager,
+            number_of_children=number_of_children,
+            manager_max_workers=manager_max_workers,
+            controller_max_workers=controller_max_workers,
+            **kwargs
+        )
+
+    @classmethod
+    def create_with_ssh(cls,
+                       number_of_children: int,
+                       manager_max_workers: int,
+                       controller_max_workers: int,
+                       env_setup_script: str,
+                       hosts: List[str],
+                       manager_port: int = BASE_MANAGER_PORT,
+                       root_port: int = BASE_ROOT_PORT,
+                       child_base_port: int = BASE_CHILD_PORT,
+                       default_user: str = None,
+                       env_vars: Dict[str, str] = None,
+                       disable_host_key_check: bool = False,
+                       ssh_options: List[str] = None,
+                       log_directory: str = None,
+                       python_executable: str = "python3",
+                       working_directory: str = None,
+                       **kwargs) -> 'GrpcProcessTreeManager':
+        """
+        Factory method to create GrpcProcessTreeManager with SSH server manager.
+
+        Args:
+            number_of_children: Number of child controllers to create
+            manager_max_workers: Maximum worker threads for Manager server
+            controller_max_workers: Maximum worker threads for Controller servers
+            env_setup_script: Path to shell script that sets up the Python environment
+            hosts: List of hosts available for SSH execution
+            manager_port: Port for Manager server
+            root_port: Port for RootController server
+            child_base_port: Base port for ChildController servers
+            default_user: Default SSH username
+            env_vars: Environment variables to export on remote hosts
+            disable_host_key_check: Disable SSH host key verification
+            ssh_options: Additional SSH options
+            log_directory: Directory for remote process logs
+            python_executable: Python interpreter to use on remote hosts
+            working_directory: Working directory for remote processes
+            **kwargs: Additional arguments for GrpcProcessTreeManager
+
+        Returns:
+            GrpcProcessTreeManager configured with SSH
+        """
+
+        from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
+        from drunc.tests.grpc.ssh_server_manager import SSHGrpcServerManager
+        from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
+        from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
+
+        # Create temporary log manager for boot command log files
+        temp_log_manager = LogFileManager()
+        
+        # Create command builder with all necessary parameters
+        command_builder = RemoteCLICommandBuilder(
+            env_setup_script=env_setup_script,
+            python_executable=python_executable,
+            working_directory=working_directory,
+            default_user=default_user,
+            hosts=hosts,
+            disable_host_key_check=disable_host_key_check,
+            ssh_options=ssh_options,
+            env_vars=env_vars
+        )
+        
+        # Calculate child ports
+        child_ports = [child_base_port + i for i in range(number_of_children)]
+        
+        # Build all boot commands upfront with specific server IDs
+        boot_commands = {}
+        
+        # Manager boot command
+        boot_commands["ManagerServer"] = command_builder.build_manager_server_command(
+            server_id="ManagerServer",
+            port=manager_port,
+            max_workers=manager_max_workers,
+            log_file=temp_log_manager.create_log_file("ManagerServer"),
+            host_index=0
+        )
+        
+        # RootController boot command
+        boot_commands["RootControllerServer"] = command_builder.build_root_controller_server_command(
+            server_id="RootControllerServer",
+            port=root_port,
+            max_workers=controller_max_workers,
+            log_file=temp_log_manager.create_log_file("RootControllerServer"),
+            manager_port=manager_port,
+            host_index=1
+        )
+        
+        # ChildController boot commands
+        for i in range(number_of_children):
+            child_server_id = f"ChildServer{i + 1}"
+            child_name = f"ChildController{i + 1}"
+            
+            boot_commands[child_server_id] = command_builder.build_child_controller_server_command(
+                server_id=child_server_id,
+                port=child_ports[i],
+                max_workers=controller_max_workers,
+                log_file=temp_log_manager.create_log_file(child_server_id),
+                root_port=root_port,
+                child_name=child_name,
+                host_index=i + 2
+            )
+
+        connection_manager = SSHConnectionManager(
+            boot_commands=boot_commands,
+            log_directory=log_directory
+        )
+        
+        server_manager = SSHGrpcServerManager(
+            connection_manager=connection_manager
+        )
+        
+        # Clean up temporary log manager
+        temp_log_manager.cleanup()
+        
+        return cls(
+            server_manager=server_manager,
+            number_of_children=number_of_children,
+            manager_max_workers=manager_max_workers,
+            controller_max_workers=controller_max_workers,
+            **kwargs
+        )

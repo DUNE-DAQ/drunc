@@ -1,5 +1,4 @@
 syntax = "proto3";
-
 package drunc.tests.grpc_tree;
 
 // Service for Manager component
@@ -9,6 +8,9 @@ service ManagerService {
     
     // Method for receiving updates from RootController
     rpc ReceiveUpdate(UpdateRequest) returns (UpdateResponse);
+    
+    // Method for graceful shutdown of the Manager service
+    rpc Kill(KillRequest) returns (KillResponse);
 }
 
 // Service for RootController component  
@@ -21,6 +23,9 @@ service RootControllerService {
     
     // Method for receiving status from ChildControllers
     rpc ReceiveStatus(StatusRequest) returns (StatusResponse);
+    
+    // Method for graceful shutdown of the RootController service
+    rpc Kill(KillRequest) returns (KillResponse);
 }
 
 // Service for ChildController components
@@ -30,6 +35,9 @@ service ChildControllerService {
     
     // Method for receiving instructions from RootController
     rpc ReceiveInstruction(InstructionRequest) returns (InstructionResponse);
+    
+    // Method for graceful shutdown of the ChildController service
+    rpc Kill(KillRequest) returns (KillResponse);
 }
 
 // Basic request/response for keepalive testing
@@ -89,4 +97,23 @@ message InstructionResponse {
     bool understood = 1;
     string execution_status = 2;
     int64 estimated_completion_time = 3;
+}
+
+// Shutdown/kill functionality messages
+message KillRequest {
+    // Optional confirmation token to prevent accidental shutdowns
+    string confirmation_token = 1;
+    // Reason for shutdown (for logging purposes)
+    string reason = 2;
+    // Grace period in seconds before force shutdown
+    int32 grace_period_seconds = 3;
+}
+
+message KillResponse {
+    // Indicates if the shutdown request was accepted
+    bool shutdown_initiated = 1;
+    // Message describing the shutdown status
+    string message = 2;
+    // Estimated time until complete shutdown
+    int32 estimated_shutdown_time_seconds = 3;
 }
