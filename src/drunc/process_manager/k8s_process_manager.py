@@ -206,6 +206,52 @@ class K8sProcessManager(ProcessManager):
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
+    def _verify_host_in_cluster(self, target_host):
+        """Verifies that the target host is available in the Kubernetes cluster."""
+        try:
+            # Get all nodes and find the target
+            nodes = self._core_v1_api.list_node()
+            target_node = next((node for node in nodes.items if node.metadata.name == target_host), None)
+            
+            if not target_node:
+                available_nodes = [node.metadata.name for node in nodes.items]
+                self.log.error(f"Host '{target_host}' not found in cluster. Available nodes: {available_nodes}")
+                raise DruncException(
+                    f"Target host '{target_host}' is not part of the Kubernetes cluster. "
+                    f"Available nodes: {', '.join(available_nodes)}"
+                )
+            
+            # Check if the node is ready
+            node_conditions = target_node.status.conditions
+            is_ready = False
+            ready_condition = None
+            
+            for condition in node_conditions:
+                if condition.type == "Ready":
+                    is_ready = condition.status == "True"
+                    ready_condition = condition
+                    break
+            
+            if not is_ready:
+                reason = ready_condition.reason if ready_condition else "Unknown"
+                raise DruncException(f"Host '{target_host}' not ready. Reason: {reason}")
+            
+            # Check node is schedulable
+            if target_node.spec and target_node.spec.unschedulable:
+                raise DruncException(f"Host '{target_host}' is cordoned and not schedulable")
+            
+            self.log.info(f"Host '{target_host}' verified and available")
+            return True
+            
+        except self._api_error_v1_api as e:
+            if e.status in [401, 403]:
+                raise DruncException(f"Permission denied accessing cluster to verify '{target_host}': {e}")
+            raise DruncException(f"Failed to verify host '{target_host}': {e}")
+        except DruncException:
+            raise
+        except Exception as e:
+            raise DruncException(f"Error verifying host '{target_host}': {e}")
+
 
     def _create_namespace(self, session):
         """Creates a Kubernetes namespace if it doesn't already exist."""
@@ -388,6 +434,9 @@ done
             if target_host == "localhost":
                 target_host = resolve_localhost_to_hostname(target_host)
                 self.log.info(f"Resolved localhost to '{target_host}' for Kubernetes node selection")
+            
+            # Verify the target host is available in the cluster before scheduling
+            self._verify_host_in_cluster(target_host)
             
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)")
