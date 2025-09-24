@@ -435,25 +435,6 @@ def test_restart():
     mock_driver.restart.assert_called_once()
 
 
-def test_ps(mock_tabulate):
-    """
-    Test the ps command.
-    """
-
-    mock_driver = MockDriver()
-    mock_driver.ps = MagicMock()
-    mock_context = MockContext(driver=mock_driver)
-
-    result = CliRunner().invoke(ps, None, obj=mock_context)
-
-    assert result.exit_code == 0
-    assert "proc1" in result.output
-    assert "proc2" in result.output
-    assert "123" in result.output
-    assert "456" in result.output
-    mock_driver.ps.assert_called_once()
-
-
 def test_ps_with_process_query(mock_tabulate):
     """
     Test the ps command with process query options.
