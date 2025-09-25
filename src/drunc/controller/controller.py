@@ -121,48 +121,6 @@ def address_command(
     return ret
 
 
-def TODO_unpack_addressed_command_to():
-    def decor(cmd):
-        command_name = cmd.__name__
-        logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
-
-        @wraps(cmd)
-        def wrap(obj, request, context):
-            command = request
-
-            try:
-                addressed_commands = address_command(
-                    obj=obj,
-                    command_name=command_name,
-                    command_data=command.command_data,
-                    target=command.target,
-                    execute_along_path=command.execute_along_path,
-                    execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
-                )
-                logger.debug(f"Addressed commands: {addressed_commands}")
-            except DruncCommandException as e:
-                logger.exception(e)
-                return Response(
-                    name=obj.name,
-                    token=None,
-                    data=pack_to_any(PlainText(text=str(e))),
-                    flag=ResponseFlag.FAILED,
-                    children=[],
-                )
-
-            execute_on_self = (
-                obj.is_target(command.target) or command.execute_along_path
-            )
-
-            response = cmd(obj, request, context, addressed_commands, execute_on_self)
-
-            return response
-
-        return wrap
-
-    return decor
-
-
 def unpack_addressed_command_to(data_type=None):
     def decor(cmd):
         command_name = cmd.__name__
@@ -587,7 +545,6 @@ class Controller(ControllerServicer):
             command_name=command_name,
             addressed_commands=addressed_commands,
             token=token,
-            override_payload=command_data,
         )
 
     def propagate_addressed_command(
@@ -595,7 +552,6 @@ class Controller(ControllerServicer):
         command_name: str,
         addressed_commands: dict[str, AddressedCommand],
         token: Token,
-        override_payload: Any = None,
     ):
         self.log.debug(f"Propagating {command_name} to children")
         response_children = []
@@ -617,11 +573,12 @@ class Controller(ControllerServicer):
                 self.log.error(f"Child {child_name} not found")
                 return
 
+            command_data_str = str(command_data).replace("\n", " ")
+            self.log.debug(
+                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
+            )
+
             try:
-                command_data_str = str(command_data).replace("\n", " ")
-                self.log.debug(
-                    f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
-                )
                 response = child.propagate_command(
                     command=command_name,
                     data=command_data,
@@ -678,7 +635,7 @@ class Controller(ControllerServicer):
                 kwargs={
                     "child_name": child,
                     "command_name": command_name,
-                    "command_data": data if not override_payload else override_payload,
+                    "command_data": data,
                     "token": token,
                     "response_lock": response_lock,
                     "response_children": response_children,
@@ -701,24 +658,27 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @TODO_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def status(
-        self,
-        request: AddressedCommand,
-        context: ServicerContext,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
+        self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
         response = StatusResponse(
             token=None,
             name=self.name,
         )
 
-        if execute_on_self:
+        if self.is_target(request.target) or request.execute_along_path:
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
+        addressed_commands = address_command(
+            obj=self,
+            command_name="status",
+            command_data=request.command_data,
+            target=request.target,
+            execute_along_path=request.execute_along_path,
+            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        )
         children = self.propagate_addressed_command(
             "status",
             addressed_commands=addressed_commands,
@@ -735,21 +695,16 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @TODO_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def describe(
-        self,
-        request: AddressedCommand,
-        context: ServicerContext,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
+        self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
         response = DescribeResponse(
             token=None,
             name=self.name,
         )
 
-        if execute_on_self:
+        if self.is_target(request.target) or request.execute_along_path:
             description = Description(
                 type="controller",
                 name=self.name,
@@ -762,6 +717,14 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
+        addressed_commands = address_command(
+            obj=self,
+            command_name="describe",
+            command_data=request.command_data,
+            target=request.target,
+            execute_along_path=request.execute_along_path,
+            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        )
         children = self.propagate_addressed_command(
             "describe",
             addressed_commands=addressed_commands,
@@ -778,21 +741,16 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @TODO_unpack_addressed_command_to()  # 4th step
     @publish_command_time
     def describe_fsm(
-        self,
-        request: AddressedCommand,
-        context: ServicerContext,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
+        self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeFSMResponse:
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
         )
 
-        if execute_on_self:
+        if self.is_target(request.target) or request.execute_along_path:
             payload = unpack_any(request.command_data, PlainText)
             if payload.text == "all-transitions":
                 description = convert_fsm_transition(
@@ -819,6 +777,14 @@ class Controller(ControllerServicer):
                 description.sequences.append(seq)
             response.description.CopyFrom(description)
 
+        addressed_commands = address_command(
+            obj=self,
+            command_name="describe_fsm",
+            command_data=request.command_data,
+            target=request.target,
+            execute_along_path=request.execute_along_path,
+            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        )
         children = self.propagate_addressed_command(
             "describe_fsm",
             addressed_commands=addressed_commands,
