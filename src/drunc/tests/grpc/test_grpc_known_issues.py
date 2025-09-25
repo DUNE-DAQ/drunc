@@ -26,9 +26,9 @@ def monitor_for_errors_while_idle(
     while (time.time() - start_time) < total_duration_seconds:
         error_found = tree_manager.check_for_errors()
         if error_found is not None:
-            return error_found, (time.time() - start_time) 
+            return error_found, (time.time() - start_time)
         time.sleep(check_interval_seconds)
-    return None, (time.time() - start_time) 
+    return None, (time.time() - start_time)
 
 
 # This test recreates issue #568 if run in grpc versions 1.68-1.73
@@ -75,6 +75,8 @@ def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(cap
             pytest.fail(
                 "No ping timeout errors detected during aggressive keepalive test. Grpc behaviour may have changed."
             )
+
+
 # This test recreates issue #505 if run in grpc versions 1.68-1.73
 @pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeout(
@@ -120,7 +122,9 @@ def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeo
 
             # go idle and monitor for errors during idle period
             error_found, time_elapsed = monitor_for_errors_while_idle(
-                tree_manager, total_duration_seconds=IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR, check_interval_seconds=5
+                tree_manager,
+                total_duration_seconds=IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR,
+                check_interval_seconds=5,
             )
             if error_found is not None:
                 pytest.fail(
@@ -134,5 +138,5 @@ def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeo
                 return
 
             pytest.fail(
-                f"No ping timeout errors detected after direct client request following the idle period with default settings. Grpc behaviour may have changed."
+                "No ping timeout errors detected after direct client request following the idle period with default settings. Grpc behaviour may have changed."
             )

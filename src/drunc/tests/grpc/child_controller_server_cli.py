@@ -6,8 +6,8 @@ This module provides a standalone CLI for starting ChildController servers.
 It handles argument parsing and delegates to the main server runner function.
 """
 
-import sys
 import argparse
+import sys
 
 from drunc.tests.grpc.run_grpc_services import run_child_controller_server
 
@@ -15,61 +15,61 @@ from drunc.tests.grpc.run_grpc_services import run_child_controller_server
 def main():
     """
     Main entry point for ChildController server CLI.
-    
+
     Parses command-line arguments and starts the ChildController server
     with the specified configuration parameters.
     """
     parser = argparse.ArgumentParser(
         description="Start a ChildController gRPC server",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    
+
     # Required arguments
     parser.add_argument(
-        "--port", 
-        type=int, 
+        "--port",
+        type=int,
         required=True,
-        help="TCP port number for the ChildController server to bind to"
+        help="TCP port number for the ChildController server to bind to",
     )
     parser.add_argument(
-        "--workers", 
-        type=int, 
+        "--workers",
+        type=int,
         required=True,
-        help="Maximum number of worker threads for the gRPC server"
+        help="Maximum number of worker threads for the gRPC server",
     )
     parser.add_argument(
-        "--log-file", 
+        "--log-file",
         required=True,
-        help="Path to log file for server output and error messages"
+        help="Path to log file for server output and error messages",
     )
     parser.add_argument(
-        "--root-port", 
-        type=int, 
+        "--root-port",
+        type=int,
         required=True,
-        help="Port number of the RootController server to connect to"
+        help="Port number of the RootController server to connect to",
     )
     parser.add_argument(
-        "--child-name", 
+        "--child-name",
         required=True,
-        help="Unique identifier name for this ChildController instance"
+        help="Unique identifier name for this ChildController instance",
     )
-    
+
     args = parser.parse_args()
-    
+
     try:
         print(f"Starting ChildController '{args.child_name}' on port {args.port}")
         print(f"Connecting to RootController on port {args.root_port}")
         print(f"Logging to: {args.log_file}")
-        
+
         # Start the ChildController server with parsed arguments
         run_child_controller_server(
             controller_max_workers=args.workers,
             server_port=args.port,
             root_port=args.root_port,
             child_name=args.child_name,
-            log_file=args.log_file
+            log_file=args.log_file,
         )
-        
+
     except KeyboardInterrupt:
         print(f"\nChildController '{args.child_name}' interrupted by user")
     except Exception as e:

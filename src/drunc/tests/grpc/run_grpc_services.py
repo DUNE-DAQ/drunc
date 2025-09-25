@@ -1,17 +1,17 @@
 import signal
 import time
 from concurrent import futures
-from typing import List, Tuple, Dict, Optional, Any
+from typing import Any, Dict, List, Optional, Tuple
 
+from drunc.tests.grpc.child_controller import ChildControllerServiceImpl
+from drunc.tests.grpc.grpc_log_util import stderr_observer
+from drunc.tests.grpc.process_manager import ManagerServiceImpl
+from drunc.tests.grpc.root_controller import RootControllerServiceImpl
 from drunc.tests.grpc.test_pb2_grpc import (
     add_ChildControllerServiceServicer_to_server,
     add_ManagerServiceServicer_to_server,
     add_RootControllerServiceServicer_to_server,
 )
-from drunc.tests.grpc.grpc_log_util import stderr_observer
-from drunc.tests.grpc.process_manager import ManagerServiceImpl
-from drunc.tests.grpc.root_controller import RootControllerServiceImpl
-from drunc.tests.grpc.child_controller import ChildControllerServiceImpl
 
 SERVER_GRACE_PERIOD = 2
 
@@ -58,18 +58,19 @@ def run_grpc_server(
         server.start()
 
         if upstream_connection:
-            upstream_host = upstream_connection['host']
-            upstream_port = upstream_connection['port']
-            client_options = upstream_connection.get('options', [])
-            
+            upstream_host = upstream_connection["host"]
+            upstream_port = upstream_connection["port"]
+            client_options = upstream_connection.get("options", [])
+
             upstream_channel = grpc.insecure_channel(
-                f"{upstream_host}:{upstream_port}", 
-                options=client_options
+                f"{upstream_host}:{upstream_port}", options=client_options
             )
-            print(f"{server_name} server started on port {port}, connected to upstream on {upstream_port}")
+            print(
+                f"{server_name} server started on port {port}, connected to upstream on {upstream_port}"
+            )
         else:
             print(f"{server_name} server started on port {port}")
-        
+
         if ready_event:
             ready_event.set()
 
@@ -132,9 +133,9 @@ def run_root_controller_server(
         log_file=log_file,
         server_options=server_options,
         upstream_connection={
-            'host': 'localhost',
-            'port': manager_port,
-            'options': client_options or []
+            "host": "localhost",
+            "port": manager_port,
+            "options": client_options or [],
         },
         ready_event=ready_event,
         stop_event=stop_event,
@@ -162,9 +163,9 @@ def run_child_controller_server(
         log_file=log_file,
         server_options=server_options,
         upstream_connection={
-            'host': 'localhost',
-            'port': root_port,
-            'options': client_options or []
+            "host": "localhost",
+            "port": root_port,
+            "options": client_options or [],
         },
         ready_event=ready_event,
         stop_event=stop_event,

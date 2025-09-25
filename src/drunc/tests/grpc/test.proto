@@ -101,12 +101,10 @@ message InstructionResponse {
 
 // Shutdown/kill functionality messages
 message KillRequest {
-    // Optional confirmation token to prevent accidental shutdowns
-    string confirmation_token = 1;
     // Reason for shutdown (for logging purposes)
-    string reason = 2;
+    string reason = 1;
     // Grace period in seconds before force shutdown
-    int32 grace_period_seconds = 3;
+    int32 grace_period_seconds = 2;
 }
 
 message KillResponse {
@@ -114,6 +112,4 @@ message KillResponse {
     bool shutdown_initiated = 1;
     // Message describing the shutdown status
     string message = 2;
-    // Estimated time until complete shutdown
-    int32 estimated_shutdown_time_seconds = 3;
 }

@@ -1,4 +1,4 @@
-exclude = ["src/drunc/tests/*"]
+exclude = ["*_pb2.py", "*_pb2_grpc.py"]
 
 [lint]
 ignore = ["ALL"]

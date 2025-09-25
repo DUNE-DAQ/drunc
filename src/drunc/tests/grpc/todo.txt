@@ -1,2 +1,0 @@
-remove the ProcessHandle abstraction
-wait_for_server should use if_server_running

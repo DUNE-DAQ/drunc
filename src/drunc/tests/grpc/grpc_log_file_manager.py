@@ -1,9 +1,9 @@
 import os
 import re
-from typing import List
-import time
 import tempfile
+import time
 from pathlib import Path
+from typing import List
 
 # gRPC error patterns to detect in log files
 GRPC_ERROR_PATTERNS = [
@@ -13,8 +13,9 @@ GRPC_ERROR_PATTERNS = [
     "GOAWAY.*UNAVAILABLE",
     "Error code.*ping_timeout",
     "grpc.*UNAVAILABLE.*ping",
-    "Other threads are currently calling into gRPC"
+    "Other threads are currently calling into gRPC",
 ]
+
 
 class LogFileManager:
     """
@@ -111,7 +112,7 @@ class LogFileManager:
     def check_for_errors(self):
         """
         Check all log files for gRPC error patterns.
-        
+
         Returns:
             Error details if found, None otherwise
         """
@@ -140,4 +141,3 @@ class LogFileManager:
                     }
                     return self.detected_error
         return None
-

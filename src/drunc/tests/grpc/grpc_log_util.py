@@ -2,10 +2,11 @@ import os
 import sys
 import threading
 
+
 def stderr_observer(log_file_name):
     """
     Redirect stderr to a log file for process output capture.
-    
+
     Args:
         log_file_name: Path to log file for stderr redirection
     """
