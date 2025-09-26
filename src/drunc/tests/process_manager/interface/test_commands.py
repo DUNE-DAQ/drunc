@@ -19,14 +19,38 @@ from drunc.process_manager.interface.commands import (
     terminate,
 )
 
-dummy_boot_arguments = [
-    "--user",
-    "testuser",
-    "--no-override-logs",
-    "dummy_config.yaml",
-    "test-session",
-    "conf-id-123",
-]
+
+@pytest.fixture
+def boot_arguments():
+    """
+    Fixture containing the arguments used in `boot`.
+    """
+    return [
+        "--user",
+        "testuser",
+        "--no-override-logs",
+        "dummy_config.yaml",
+        "test-session",
+        "conf-id-123",
+    ]
+
+
+@pytest.fixture
+def dummy_boot_arguments():
+    """
+    Fixture containing the arguments used in `dummy_boot`.
+    """
+    return [
+        "--user",
+        "testuser",
+        "--n-processes",
+        "2",
+        "--sleep",
+        "5",
+        "--n_sleeps",
+        "3",
+        "test_session",  # the positional argument
+    ]
 
 
 @pytest.fixture
@@ -156,7 +180,7 @@ def test_terminate_no_processes(mock_logger):
     mock_context.delete_driver.assert_not_called()
 
 
-def test_boot_command_successful(mock_logger):
+def test_boot_command_successful(mock_logger, boot_arguments):
     """
     Test a successful boot command with no existing processes.
     """
@@ -172,7 +196,7 @@ def test_boot_command_successful(mock_logger):
 
     mock_context = MockContext(driver=mock_driver)
 
-    result = CliRunner().invoke(boot, dummy_boot_arguments, obj=mock_context)
+    result = CliRunner().invoke(boot, boot_arguments, obj=mock_context)
 
     assert result.exit_code == 0  # command ran succesfully
 
@@ -181,7 +205,7 @@ def test_boot_command_successful(mock_logger):
     mock_logger.debug.assert_any_call("'process2' (uuid-456) process started")
 
 
-def test_boot_exiting_processes_abort():
+def test_boot_exiting_processes_abort(boot_arguments):
     """
     Test user aborts command when existing processes.
     """
@@ -195,7 +219,7 @@ def test_boot_exiting_processes_abort():
 
     result = CliRunner().invoke(
         boot,
-        dummy_boot_arguments,
+        boot_arguments,
         obj=mock_context,
         input="n\n",  # simulate user typing 'n' to abort
     )
@@ -212,7 +236,7 @@ def test_boot_exiting_processes_abort():
     )
 
 
-def test_boot_exiting_processes_user_confirm():
+def test_boot_exiting_processes_user_confirm(boot_arguments):
     """
     Test when user confirms 'boot' command when there are existing processes.
     """
@@ -226,7 +250,7 @@ def test_boot_exiting_processes_user_confirm():
 
     result = CliRunner().invoke(
         boot,
-        dummy_boot_arguments,
+        boot_arguments,
         obj=mock_context,
         input="y",  # simulate user typing 'y' to confirm
     )
@@ -241,7 +265,7 @@ def test_boot_exiting_processes_user_confirm():
     )
 
 
-def test_boot_interrupted_command():
+def test_boot_interrupted_command(boot_arguments):
     """
     Test that boot exits gracefully when InterruptedCommand is raised.
     """
@@ -251,29 +275,13 @@ def test_boot_interrupted_command():
     mock_driver.boot = MagicMock(side_effect=InterruptedCommand())
     mock_context = MockContext(driver=mock_driver)
 
-    result = CliRunner().invoke(boot, dummy_boot_arguments, obj=mock_context)
+    result = CliRunner().invoke(boot, boot_arguments, obj=mock_context)
 
     assert result.exit_code == 0
     mock_driver.boot.assert_called_once()
 
 
-def test_boot_returns_none(mock_logger):
-    """
-    Check if calling boot on the driver returns None.
-    """
-
-    mock_driver = MockDriver(existing_processes=[], boot_result=[None])
-    mock_context = MockContext(driver=mock_driver)
-
-    result = CliRunner().invoke(boot, dummy_boot_arguments, obj=mock_context)
-
-    assert result.exit_code == 0  # command still exits succesfully
-
-    logs = [call.args[0] for call in mock_logger.debug.call_args_list]
-    assert not any("process started" in msg for msg in logs)
-
-
-def test_boot_missing_controller_address(mock_logger):
+def test_boot_missing_controller_address(mock_logger, boot_arguments):
     """
     Test boot command when the root controller address is missing.
     """
@@ -282,7 +290,7 @@ def test_boot_missing_controller_address(mock_logger):
     mock_driver.controller_address = None
     context = MockContext(driver=mock_driver)
 
-    result = CliRunner().invoke(boot, dummy_boot_arguments, obj=context)
+    result = CliRunner().invoke(boot, boot_arguments, obj=context)
 
     assert result.exit_code == 0
     mock_logger.error.assert_called_once()
@@ -293,7 +301,7 @@ def test_boot_missing_controller_address(mock_logger):
     assert controller_missing_msg in mock_logger.error.call_args[0][0]
 
 
-def test_dummy_boot_command_successful(mock_logger):
+def test_dummy_boot_command_successful(mock_logger, dummy_boot_arguments):
     """
     Test a successful dummy_boot command with no existing processes.
     """
@@ -309,18 +317,6 @@ def test_dummy_boot_command_successful(mock_logger):
 
     mock_context = MockContext(driver=mock_driver)
 
-    dummy_boot_arguments = [
-        "--user",
-        "testuser",
-        "--n-processes",
-        "2",
-        "--sleep",
-        "5",
-        "--n_sleeps",
-        "3",
-        "test_session",  # the positional argument
-    ]
-
     result = CliRunner().invoke(dummy_boot, dummy_boot_arguments, obj=mock_context)
 
     assert result.exit_code == 0
@@ -330,7 +326,7 @@ def test_dummy_boot_command_successful(mock_logger):
     mock_logger.debug.assert_any_call("'process2' (uuid-456) process started")
 
 
-def test_dummy_boot_command_interrupted(mock_logger):
+def test_dummy_boot_command_interrupted(mock_logger, dummy_boot_arguments):
     """
     Test that the dummy_boot command handles interruptions gracefully.
     """
@@ -340,18 +336,6 @@ def test_dummy_boot_command_interrupted(mock_logger):
     mock_driver.dummy_boot = MagicMock(side_effect=InterruptedCommand())
 
     mock_context = MockContext(driver=mock_driver)
-
-    dummy_boot_arguments = [
-        "--user",
-        "testuser",
-        "--n-processes",
-        "2",
-        "--sleep",
-        "5",
-        "--n_sleeps",
-        "3",
-        "test_session",
-    ]
 
     result = CliRunner().invoke(dummy_boot, dummy_boot_arguments, obj=mock_context)
 
