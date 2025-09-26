@@ -530,6 +530,7 @@ class Controller(ControllerServicer):
         children_to_execute = [
             cn.name for cn in self.children_nodes if not only_included or cn.included
         ]
+
         addressed_commands = {
             cn: AddressedCommand(
                 command_name=command_name,
@@ -542,9 +543,9 @@ class Controller(ControllerServicer):
         }
 
         return self.propagate_addressed_command(
-            command_name=command_name,
-            addressed_commands=addressed_commands,
-            token=token,
+            command_name,
+            addressed_commands,
+            token,
         )
 
     def propagate_addressed_command(
@@ -681,8 +682,8 @@ class Controller(ControllerServicer):
         )
         children = self.propagate_addressed_command(
             "status",
-            addressed_commands=addressed_commands,
-            token=None,
+            addressed_commands,
+            None,
         )
         response.children.extend(children)
 
@@ -727,8 +728,8 @@ class Controller(ControllerServicer):
         )
         children = self.propagate_addressed_command(
             "describe",
-            addressed_commands=addressed_commands,
-            token=None,
+            addressed_commands,
+            None,
         )
         response.children.extend(children)
 
@@ -787,8 +788,8 @@ class Controller(ControllerServicer):
         )
         children = self.propagate_addressed_command(
             "describe_fsm",
-            addressed_commands=addressed_commands,
-            token=None,
+            addressed_commands,
+            None,
         )
         response.children.extend(children)
 
@@ -926,8 +927,8 @@ class Controller(ControllerServicer):
 
             response_children = self.propagate_addressed_command(
                 "execute_fsm_command",
-                addressed_commands=children_fsm_commands,
-                token=token,
+                children_fsm_commands,
+                token,
             )
 
             child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -990,8 +991,8 @@ class Controller(ControllerServicer):
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children=self.propagate_addressed_command(
                     "execute_fsm_command",
-                    addressed_commands=addressed_commands,
-                    token=token,
+                    addressed_commands,
+                    token,
                 ),
             )
 
@@ -1096,8 +1097,8 @@ class Controller(ControllerServicer):
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children=self.propagate_addressed_command(
                     "recompute_status",
-                    addressed_commands=addressed_commands,
-                    token=token,
+                    addressed_commands,
+                    token,
                 ),
             )
 
@@ -1132,8 +1133,8 @@ class Controller(ControllerServicer):
 
         response_children = self.propagate_addressed_command(
             "include",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1175,8 +1176,8 @@ class Controller(ControllerServicer):
 
         response_children = self.propagate_addressed_command(
             "exclude",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1204,8 +1205,8 @@ class Controller(ControllerServicer):
     ) -> Response:
         children_expert_command_response = self.propagate_addressed_command(
             "execute_expert_command",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1242,8 +1243,8 @@ class Controller(ControllerServicer):
 
         response_children = self.propagate_addressed_command(
             "take_control",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
         if any(
             cr.flag
@@ -1287,8 +1288,8 @@ class Controller(ControllerServicer):
 
         response_children = self.propagate_addressed_command(
             "surrender_control",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         if any(
@@ -1329,8 +1330,8 @@ class Controller(ControllerServicer):
 
         response_children = self.propagate_addressed_command(
             "who_is_in_charge",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1368,8 +1369,8 @@ class Controller(ControllerServicer):
 
             response_children = self.propagate_addressed_command(
                 "to_error",
-                addressed_commands=addressed_commands,
-                token=token,
+                addressed_commands,
+                token,
             )
 
             return Response(
