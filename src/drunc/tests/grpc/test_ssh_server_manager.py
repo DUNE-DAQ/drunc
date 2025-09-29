@@ -10,12 +10,11 @@ import pytest
 
 from drunc.tests.grpc.available_grpc_servers import ServerType
 from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig
+from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig, GrpcServerManager
 from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
 
 # Import the updated SSH managers
 from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-from drunc.tests.grpc.ssh_server_manager import SSHGrpcServerManager
 
 # Import gRPC generated code for client communication
 from drunc.tests.grpc.test_pb2 import DummyRequest, KillRequest
@@ -94,7 +93,7 @@ def test_ssh_manager_server_lifecycle_with_env():
     )
 
     # Create SSH server manager
-    ssh_server_manager = SSHGrpcServerManager(connection_manager=ssh_connection_manager)
+    ssh_server_manager = GrpcServerManager(connection_manager=ssh_connection_manager)
 
     server_handle = None
     channel = None

@@ -1,101 +1,39 @@
 """
-Abstract gRPC Server Manager
+gRPC Server Manager
 
-Provides abstraction over gRPC server lifecycle management,
-separating server-specific configuration and startup logic from the underlying
-process execution mechanism (multiprocessing, SSH, ...).
+Provides unified server lifecycle management across different process execution
+methods (multiprocessing, SSH, etc.). Delegates process creation and execution
+to connection managers while handling server-specific configuration and coordination.
 """
 
 import time
-from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional
 
-from drunc.tests.grpc.available_grpc_servers import ServerType
-from drunc.tests.grpc.process_connection_manager import (
-    ProcessConnectionManager,
-    RunningGrpcServer,
+from grpc import (
+    FutureCancelledError,
+    FutureTimeoutError,
+    channel_ready_future,
+    insecure_channel,
+)
+
+from drunc.tests.grpc.grpc_running_server_data import RunningGrpcServer
+from drunc.tests.grpc.grpc_server_config import GrpcServerConfig
+from drunc.tests.grpc.process_connection_manager import ProcessConnectionManager
+from drunc.tests.grpc.run_grpc_services import (
+    run_child_controller_server,
+    run_process_manager_server,
+    run_root_controller_server,
 )
 
 
-class GrpcServerConfig:
+class GrpcServerManager:
     """
-    Configuration container for a gRPC server instance.
+    Manager for gRPC server lifecycle across different execution environments.
 
-    Encapsulates all parameters needed to start and manage a gRPC server,
-    providing a consistent interface across different execution environments.
-    """
-
-    def __init__(
-        self,
-        server_id: str,
-        server_type: ServerType,
-        host: str,
-        port: int,
-        max_workers: int,
-        log_file: str,
-        server_options: List[Tuple[str, Any]] = None,
-        client_options: List[Tuple[str, Any]] = None,
-        **kwargs,
-    ):
-        """
-        Initialise gRPC server configuration.
-
-        Args:
-            server_id: Unique identifier for this server instance
-            server_type: Type of server ('manager', 'root_controller', 'child_controller')
-            host: Hostname or IP address where the server will run
-            port: TCP port for the server to bind to
-            max_workers: Maximum number of worker threads for the server
-            log_file: Path to log file for server output
-            server_options: gRPC server configuration options
-            client_options: gRPC client configuration options (for servers that act as clients)
-            **kwargs: Additional server-specific parameters
-        """
-        self.server_id = server_id
-        self.server_type = server_type
-        self.host = host
-        self.port = port
-        self.max_workers = max_workers
-        self.log_file = log_file
-        self.server_options = server_options or []
-        self.client_options = client_options or []
-
-        if server_type == ServerType.MANAGER:
-            required_params = []
-        elif server_type == ServerType.ROOT_CONTROLLER:
-            required_params = ["manager_port"]
-        elif server_type == ServerType.CHILD_CONTROLLER:
-            required_params = ["root_port", "child_name"]
-        else:
-            required_params = []
-
-        self.extra_params = {}
-
-        for key, param in kwargs.items():
-            if key in required_params:
-                self.extra_params[key] = param
-                required_params.remove(key)
-            else:
-                print(
-                    f"Warning: Unrecognized parameter '{key}' for server type '{server_type}'"
-                )
-
-        for param in required_params:
-            raise ValueError(
-                f"Missing required parameter '{param}' for server type '{server_type}'"
-            )
-
-    def get_param(self, key: str, default: Any = None) -> Any:
-        """Get an additional parameter value."""
-        return self.extra_params.get(key, default)
-
-
-class GrpcServerManager(ABC):
-    """
-    Abstract base class for managing gRPC server lifecycle.
-
-    Defines the interface that all gRPC server management implementations must
-    follow, whether using local multiprocessing or remote SSH execution.
+    Provides unified interface for starting, stopping, and monitoring gRPC servers
+    regardless of underlying process execution method (multiprocessing, SSH, etc.).
+    Delegates actual process creation and management to connection managers while
+    providing server-specific configuration and function references.
     """
 
     def __init__(self, connection_manager: ProcessConnectionManager):
@@ -103,73 +41,190 @@ class GrpcServerManager(ABC):
         Initialise gRPC server manager.
 
         Args:
-            connection_manager: Process execution manager (multiprocessing or SSH)
+            connection_manager: Process execution manager (e.g., multiprocessing or SSH)
         """
         self.connection_manager = connection_manager
         self.server_handles: Dict[str, RunningGrpcServer] = {}
 
-    @abstractmethod
     def start_manager_server(self, config: GrpcServerConfig) -> RunningGrpcServer:
         """
         Start a Manager gRPC server.
+
+        Creates and starts a Manager server process using the configured connection
+        manager. The Manager is the top-level coordinator in the system hierarchy.
 
         Args:
             config: Configuration for the Manager server
 
         Returns:
-            ProcessHandle for the started server
+            RunningGrpcServer handle for the started server
 
         Raises:
             RuntimeError: If server cannot be started
         """
-        pass
+        try:
+            # Create process handle with complete server function and arguments
+            handle = self.connection_manager.create_process(
+                config.server_id,
+                run_process_manager_server,
+                config.max_workers,
+                config.port,
+                config.log_file,
+                config.server_options,
+            )
 
-    @abstractmethod
+            # Set server information for tracking and connectivity checking
+            handle.set_server_info(
+                config.server_id, config.host, config.port, config.server_type
+            )
+
+            # Track server before starting
+            self.server_handles[config.server_id] = handle
+
+            # Start the process (connection manager handles implementation details)
+            self.connection_manager.start_process(handle)
+
+            return handle
+
+        except Exception as e:
+            # Clean up tracking on failure
+            if config.server_id in self.server_handles:
+                del self.server_handles[config.server_id]
+            raise RuntimeError(
+                f"Failed to start Manager server {config.server_id}: {e}"
+            )
+
     def start_root_controller_server(
         self, config: GrpcServerConfig
     ) -> RunningGrpcServer:
         """
         Start a RootController gRPC server.
 
+        Creates and starts a RootController server process. The RootController
+        acts as an intermediate coordinator between the Manager and ChildControllers.
+
         Args:
-            config: Configuration for the RootController server
+            config: Configuration for the RootController server (must include manager_port)
 
         Returns:
-            ProcessHandle for the started server
+            RunningGrpcServer handle for the started server
 
         Raises:
             RuntimeError: If server cannot be started
         """
-        pass
+        manager_port = config.get_param("manager_port")
+        if manager_port is None:
+            raise ValueError("RootController server requires 'manager_port' parameter")
 
-    @abstractmethod
+        try:
+            # Create process handle with complete server function and arguments
+            handle = self.connection_manager.create_process(
+                config.server_id,
+                run_root_controller_server,
+                config.max_workers,
+                config.port,
+                manager_port,
+                config.log_file,
+                config.server_options,
+                config.client_options,
+            )
+
+            # Set server information
+            handle.set_server_info(
+                config.server_id, config.host, config.port, config.server_type
+            )
+
+            # Track server before starting
+            self.server_handles[config.server_id] = handle
+
+            # Start the process
+            self.connection_manager.start_process(handle)
+
+            return handle
+
+        except Exception as e:
+            # Clean up tracking on failure
+            if config.server_id in self.server_handles:
+                del self.server_handles[config.server_id]
+            raise RuntimeError(
+                f"Failed to start RootController server {config.server_id}: {e}"
+            )
+
     def start_child_controller_server(
         self, config: GrpcServerConfig
     ) -> RunningGrpcServer:
         """
         Start a ChildController gRPC server.
 
+        Creates and starts a ChildController server process. ChildControllers
+        are leaf nodes that handle specific tasks and report to the RootController.
+
         Args:
-            config: Configuration for the ChildController server
+            config: Configuration for the ChildController server (must include root_port and child_name)
 
         Returns:
-            ProcessHandle for the started server
+            RunningGrpcServer handle for the started server
 
         Raises:
             RuntimeError: If server cannot be started
         """
-        pass
+        root_port = config.get_param("root_port")
+        child_name = config.get_param("child_name")
+
+        if root_port is None:
+            raise ValueError("ChildController server requires 'root_port' parameter")
+        if child_name is None:
+            raise ValueError("ChildController server requires 'child_name' parameter")
+
+        try:
+            # Create process handle with complete server function and arguments
+            handle = self.connection_manager.create_process(
+                config.server_id,
+                run_child_controller_server,
+                config.max_workers,
+                config.port,
+                root_port,
+                child_name,
+                config.log_file,
+                config.server_options,
+                config.client_options,
+            )
+
+            # Set server information
+            handle.set_server_info(
+                config.server_id, config.host, config.port, config.server_type
+            )
+
+            # Track server before starting
+            self.server_handles[config.server_id] = handle
+
+            # Start the process
+            self.connection_manager.start_process(handle)
+
+            return handle
+
+        except Exception as e:
+            # Clean up tracking on failure
+            if config.server_id in self.server_handles:
+                del self.server_handles[config.server_id]
+            raise RuntimeError(
+                f"Failed to start ChildController server {config.server_id}: {e}"
+            )
 
     def wait_for_server_ready(self, server_id: str, timeout: float = 10.0) -> bool:
         """
-        Wait for a server to signal that it's ready to accept connections.
+        Wait for a server to become ready and accept connections.
+
+        Polls the server's gRPC port to determine when it's ready to handle requests.
+        This method is implementation-agnostic and works regardless of how the
+        server process was started.
 
         Args:
             server_id: ID of the server to wait for
             timeout: Maximum time to wait in seconds
 
         Returns:
-            True if server is ready and port accessible, False otherwise
+            True if server is ready and accepting connections, False if timeout occurs
         """
         if server_id not in self.server_handles:
             print(f"Server {server_id} not found in server handles")
@@ -187,10 +242,13 @@ class GrpcServerManager(ABC):
         print(f"Timed out waiting for server {server_id} to be accessible")
         return False
 
-    @abstractmethod
     def stop_server(self, server_id: str, timeout: float = 10.0) -> None:
         """
         Stop a running gRPC server gracefully.
+
+        Delegates to the connection manager for actual process termination,
+        handling any implementation-specific shutdown procedures (e.g., signalling
+        stop events for multiprocessing, terminating SSH connections).
 
         Args:
             server_id: ID of the server to stop
@@ -199,19 +257,34 @@ class GrpcServerManager(ABC):
         Raises:
             RuntimeError: If server cannot be stopped
         """
-        pass
+        if server_id not in self.server_handles:
+            return
 
-    @abstractmethod
+        handle = self.server_handles[server_id]
+
+        # Delegate process stopping to connection manager
+        self.connection_manager.stop_process(handle, timeout=timeout)
+
+        # Remove from tracking
+        del self.server_handles[server_id]
+
     def stop_all_servers(self, timeout: float = 10.0) -> None:
         """
         Stop all managed gRPC servers.
 
+        Iterates through all tracked servers and stops them gracefully.
+        Continues attempting to stop remaining servers even if individual
+        stops fail.
+
         Args:
             timeout: Maximum time to wait for each server to stop
         """
-        pass
+        for server_id in list(self.server_handles.keys()):
+            try:
+                self.stop_server(server_id, timeout=timeout)
+            except Exception as e:
+                print(f"Warning: Error stopping server {server_id}: {e}")
 
-    @abstractmethod
     def get_server_handle(self, server_id: str) -> Optional[RunningGrpcServer]:
         """
         Get process handle for a managed server.
@@ -220,16 +293,26 @@ class GrpcServerManager(ABC):
             server_id: ID of the server
 
         Returns:
-            ProcessHandle if server exists, None otherwise
+            RunningGrpcServer handle if server exists, None otherwise
         """
-        pass
+        return self.server_handles.get(server_id)
 
-    def get_server_handles(self) -> dict[str, RunningGrpcServer]:
+    def get_server_handles(self) -> Dict[str, RunningGrpcServer]:
+        """
+        Get all server handles managed by this instance.
+
+        Returns:
+            Dictionary mapping server IDs to their RunningGrpcServer handles
+        """
         return self.server_handles
 
     def is_server_running(self, server_id: str) -> bool:
         """
-        Check if a gRPC server is currently running using channel state checking.
+        Check if a gRPC server is currently running and accepting connections.
+
+        Uses gRPC channel readiness checking to determine if the server is
+        operational. This is implementation-agnostic and works regardless of
+        how the server process was started.
 
         Args:
             server_id: ID of the server to check
@@ -244,26 +327,29 @@ class GrpcServerManager(ABC):
         if server_handle is None or not server_handle.is_valid():
             return False
 
-        import grpc
-
-        channel = grpc.insecure_channel(
+        channel = insecure_channel(
             f"{server_handle.host}:{server_handle.port}",
         )
-        ready_future = grpc.channel_ready_future(channel)
+        ready_future = channel_ready_future(channel)
 
         try:
-            # throws an exception if server unavilable
+            # Wait for channel to be ready (throws exception if unavailable)
             ready_future.result(timeout=1.0)
             channel.close()
             return True
-        except grpc.FutureTimeoutError:
+        except FutureTimeoutError:
             channel.close()
             return False
-        except grpc.FutureCancelledError:
+        except FutureCancelledError:
             channel.close()
             return False
 
-    @abstractmethod
     def cleanup(self) -> None:
-        """Clean up all resources and stop remaining servers."""
-        pass
+        """
+        Clean up all resources and stop remaining servers.
+
+        Stops all managed servers and delegates cleanup to the connection manager
+        for any implementation-specific resource cleanup.
+        """
+        self.stop_all_servers()
+        self.connection_manager.cleanup()

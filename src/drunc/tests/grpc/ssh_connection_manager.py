@@ -1,17 +1,19 @@
 """
-SSH connection manager for managing processes created from
-pre-built ssh commands.
+SSH connection manager using subprocess for managing processes created from
+pre-built SSH commands.
+
+This implementation uses subprocess.Popen instead of sh.Command to avoid
+fork safety issues when spawning processes from within multi-threaded gRPC servers.
 """
 
 import os
 import signal
+import subprocess
 import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-
-import sh
 
 from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig
 from drunc.tests.grpc.process_connection_manager import (
@@ -26,10 +28,11 @@ from drunc.tests.grpc.remote_cli_command_builder import (
 
 class SSHConnectionManager(ProcessConnectionManager):
     """
-    SSH connection manager for executing pre-built server boot commands.
+    SSH connection manager using subprocess.Popen for executing pre-built server boot commands.
 
-    Executes complete SSH commands that have been pre-built externally.
-    Handles ssh process execution, closing and monitoring
+    Uses subprocess instead of sh.Command to provide better compatibility with
+    multi-threaded gRPC servers by avoiding fork safety issues. Handles SSH process
+    execution, termination, and monitoring.
     """
 
     def __init__(
@@ -42,7 +45,8 @@ class SSHConnectionManager(ProcessConnectionManager):
         Initialise SSH connection manager with pre-built boot commands.
 
         Args:
-            boot_commands: Dict mapping server_id to complete BootServerCommand objects
+            command_builder: Builder for constructing SSH commands
+            boot_command_configs: Dict mapping server_id to GrpcServerConfig objects
             log_directory: Directory for storing remote process logs
         """
         super().__init__(env_vars={})  # No env_vars needed - handled in boot commands
@@ -81,23 +85,30 @@ class SSHConnectionManager(ProcessConnectionManager):
         """
         Create a process handle for SSH execution.
 
+        For SSH execution, the target function and arguments are not directly used
+        since the complete command is pre-built. This method creates a handle that
+        stores the function signature for reference but execution uses the pre-built
+        SSH command associated with the server_id.
+
         Args:
             process_id: Unique identifier for the process
-            target_func: Function to execute remotely (placeholder for SSH)
-            *args: Arguments for the target function
-            **kwargs: Keyword arguments for the target function
+            target_func: Function to execute remotely (stored for reference)
+            *args: Arguments for the target function (stored for reference)
+            **kwargs: Keyword arguments for the target function (stored for reference)
 
         Returns:
-            RunningGrpcServer configured for SSH execution
+            RunningGrpcServer configured for SSH execution (ready_event and stop_event remain None)
         """
         handle = RunningGrpcServer(process_id, target_func, args, kwargs)
         self.process_handles[process_id] = handle
-
         return handle
 
     def start_process(self, handle: RunningGrpcServer) -> None:
         """
         Start a process using the pre-built boot command for the server ID.
+
+        Uses subprocess.Popen to spawn the SSH process, which provides better
+        compatibility with multi-threaded environments than fork-based approaches.
 
         Args:
             handle: RunningGrpcServer to execute remotely (must have server_id set)
@@ -121,34 +132,34 @@ class SSHConnectionManager(ProcessConnectionManager):
         log_file = self.log_directory / f"{handle.process_id}.log"
 
         try:
-            print(f"Starting {boot_command.description}")
-
-            # Execute the complete pre-built command
-            ssh_process = sh.Command(boot_command.complete_ssh_command[0])(
-                *boot_command.complete_ssh_command[1:],
-                _out=str(log_file),
-                _err=str(log_file),
-                _bg=True,
-                _bg_exc=False,
-                _new_session=True,
+            # Execute SSH command using subprocess.Popen
+            ssh_process = subprocess.Popen(
+                boot_command.complete_ssh_command,
+                start_new_session=True,
+                close_fds=True,
             )
 
-            # Check if SSH process failed immediately
-            if not ssh_process.is_alive():
+            # Check if process failed immediately
+            poll_result = ssh_process.poll()
+            if poll_result is not None:
                 error_output = self._read_recent_log_output(log_file, max_lines=100)
                 raise RuntimeError(
                     f"=== SSH process for {handle.process_id} failed to start.\n\n"
                     f"=== Command:\n {' '.join(boot_command.complete_ssh_command)}.\n\n"
+                    f"=== Exit code: {poll_result}\n\n"
                     f"=== Log output:\n {error_output}"
                 )
 
+            # Store process and log handle
             handle.set_process(ssh_process)
             handle.mark_started()
 
             # Start monitoring thread
             self._start_process_watcher(handle, boot_command)
 
-            print(f"SSH process {handle.process_id} started successfully")
+            print(
+                f"SSH process {handle.process_id} started successfully (PID: {ssh_process.pid})"
+            )
 
         except Exception as e:
             error_msg = f"Failed to start SSH process {handle.process_id}: {e}"
@@ -188,7 +199,7 @@ class SSHConnectionManager(ProcessConnectionManager):
             max_lines: Maximum number of lines to read
 
         Returns:
-            Recent log content or error message if file can't be read
+            Recent log content or error message if file cannot be read
         """
         try:
             if log_file.exists():
@@ -206,7 +217,7 @@ class SSHConnectionManager(ProcessConnectionManager):
         self, handle: RunningGrpcServer, boot_command: BootServerCommand
     ) -> None:
         """
-        Start a monitoring thread for an SSH process.
+        Start a monitoring thread for a subprocess.
 
         Args:
             handle: RunningGrpcServer to monitor
@@ -214,14 +225,10 @@ class SSHConnectionManager(ProcessConnectionManager):
         """
 
         def watch_process():
-            """Monitor SSH process and handle termination."""
+            """Monitor subprocess and handle termination."""
             try:
-                handle.process.wait()
-                exit_code = (
-                    handle.process.exit_code
-                    if hasattr(handle.process, "exit_code")
-                    else None
-                )
+                # Wait for process to complete
+                exit_code = handle.process.wait()
 
                 # SSH exit code 255 is common when the remote process keeps running
                 if exit_code == 0:
@@ -245,9 +252,7 @@ class SSHConnectionManager(ProcessConnectionManager):
                     handle.startup_error = error_msg
 
             except Exception as e:
-                error_msg = (
-                    f"SSH process {handle.process_id} terminated with exception: {e}"
-                )
+                error_msg = f"SSH process {handle.process_id} watcher encountered exception: {e}"
                 print(f"ERROR: {error_msg}")
                 handle.startup_error = error_msg
 
@@ -259,10 +264,13 @@ class SSHConnectionManager(ProcessConnectionManager):
 
     def stop_process(self, handle: RunningGrpcServer, timeout: float = 10.0) -> None:
         """
-        Stop an SSH process by terminating the SSH connection.
+        Stop a subprocess by terminating the SSH connection.
+
+        Sends SIGTERM to the process group to ensure child processes are also terminated.
+        Forces SIGKILL if graceful shutdown does not complete within timeout.
 
         Args:
-            handle: ProcessHandle for the SSH process to stop
+            handle: RunningGrpcServer for the SSH process to stop
             timeout: Maximum time to wait for graceful shutdown
         """
         if not handle.started or (handle.process is None):
@@ -270,28 +278,45 @@ class SSHConnectionManager(ProcessConnectionManager):
 
         ssh_process = handle.process
 
-        if not ssh_process.is_alive():
+        # Check if already terminated
+        if ssh_process.poll() is not None:
             return
 
         try:
-            print(f"Stopping SSH process {handle.process_id}...")
+            print(
+                f"Stopping SSH process {handle.process_id} (PID: {ssh_process.pid})..."
+            )
 
-            # Send termination signals with proper grace period
-            ssh_process.signal_group(signal.SIGTERM)
+            # Send SIGTERM to process group (negative PID targets entire process group)
+            try:
+                os.killpg(os.getpgid(ssh_process.pid), signal.SIGTERM)
+            except ProcessLookupError:
+                # Process already terminated
+                return
+            except Exception as e:
+                print(f"Warning: Could not send SIGTERM to process group: {e}")
+                # Fall back to terminating just the main process
+                ssh_process.terminate()
 
             # Wait for graceful termination
             start_time = time.time()
-            while ssh_process.is_alive() and (time.time() - start_time) < timeout:
+            while ssh_process.poll() is None and (time.time() - start_time) < timeout:
                 time.sleep(0.1)
 
             # Force kill if still alive
-            if ssh_process.is_alive():
+            if ssh_process.poll() is None:
                 print(f"Force killing SSH process {handle.process_id} after timeout")
-                ssh_process.signal_group(signal.SIGKILL)
+                try:
+                    os.killpg(os.getpgid(ssh_process.pid), signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                except Exception as e:
+                    print(f"Warning: Could not send SIGKILL to process group: {e}")
+                    ssh_process.kill()
 
                 # Wait a bit more for forced termination
                 start_time = time.time()
-                while ssh_process.is_alive() and (time.time() - start_time) < 2.0:
+                while ssh_process.poll() is None and (time.time() - start_time) < 2.0:
                     time.sleep(0.1)
 
             print(f"SSH process {handle.process_id} stopped")
@@ -301,10 +326,10 @@ class SSHConnectionManager(ProcessConnectionManager):
 
     def is_process_alive(self, handle: RunningGrpcServer) -> bool:
         """
-        Check if an SSH process is still running.
+        Check if a subprocess is still running.
 
         Args:
-            handle: ProcessHandle to check
+            handle: RunningGrpcServer to check
 
         Returns:
             True if SSH connection is active, False otherwise
@@ -313,7 +338,8 @@ class SSHConnectionManager(ProcessConnectionManager):
             return False
 
         try:
-            return handle.process.is_alive()
+            # poll() returns None if process is still running, exit code otherwise
+            return handle.process.poll() is None
         except Exception:
             return False
 
@@ -321,24 +347,22 @@ class SSHConnectionManager(ProcessConnectionManager):
         self, handle: RunningGrpcServer, timeout: Optional[float] = None
     ) -> None:
         """
-        Wait for SSH process to terminate.
+        Wait for subprocess to terminate.
 
         Args:
-            handle: ProcessHandle to wait for
+            handle: RunningGrpcServer to wait for
             timeout: Maximum time to wait
         """
         if handle.started and handle.process:
             try:
-                start_time = time.time()
-                while handle.process.is_alive():
-                    if timeout and (time.time() - start_time) > timeout:
-                        break
-                    time.sleep(0.1)
+                handle.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                pass
             except Exception:
                 pass
 
     def cleanup(self) -> None:
-        """Stop all SSH processes and cleanup resources."""
+        """Stop all SSH processes and clean up resources."""
         print("Cleaning up SSH connection manager...")
 
         # Stop all processes

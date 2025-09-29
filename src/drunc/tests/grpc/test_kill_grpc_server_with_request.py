@@ -6,24 +6,19 @@ and that subsequent requests fail as expected.
 """
 
 import os
-import tempfile
 import time
 
-import grpc
 import pytest
+from grpc import RpcError, StatusCode, insecure_channel
 
 from drunc.tests.grpc.available_grpc_servers import ServerType
 from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig
+from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig, GrpcServerManager
 from drunc.tests.grpc.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
-from drunc.tests.grpc.multiprocessing_server_manager import (
-    MultiprocessingGrpcServerManager,
-)
 from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
 from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-from drunc.tests.grpc.ssh_server_manager import SSHGrpcServerManager
 
 # Import gRPC generated code
 from drunc.tests.grpc.test_pb2 import DummyRequest, KillRequest
@@ -52,15 +47,16 @@ def test_kill_multiprocessing_server_via_grpc():
     print(f"Max workers: {max_workers}")
     print(f"Timeout: {server_timeout}s")
 
-    # Create temporary log file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as log_file:
-        log_file_path = log_file.name
-
-    print(f"Log file: {log_file_path}")
+    # Create log file manager
+    log_manager = LogFileManager()
+    log_file = log_manager.create_log_file("TestKillServer")
+    print(f"Log file: {log_file}")
 
     # Create connection and server managers
-    connection_manager = MultiprocessingConnectionManager()
-    server_manager = MultiprocessingGrpcServerManager(connection_manager)
+    connection_manager = MultiprocessingConnectionManager(
+        env_vars={"GRPC_TRACE": "http"}
+    )
+    server_manager = GrpcServerManager(connection_manager)
 
     # Configure Manager server
     manager_config = GrpcServerConfig(
@@ -69,7 +65,7 @@ def test_kill_multiprocessing_server_via_grpc():
         host="localhost",
         port=server_port,
         max_workers=max_workers,
-        log_file=log_file_path,
+        log_file=log_file,
         server_options=[],
         client_options=[],
     )
@@ -99,7 +95,7 @@ def test_kill_multiprocessing_server_via_grpc():
 
         # Create gRPC client connection
         print("\n=== Testing Initial gRPC Communication ===")
-        channel = grpc.insecure_channel(f"localhost:{server_port}")
+        channel = insecure_channel(f"localhost:{server_port}")
         stub = ManagerServiceStub(channel)
 
         # Send initial test request to verify server is working
@@ -150,21 +146,21 @@ def test_kill_multiprocessing_server_via_grpc():
         )
 
         # we expect this to raise a gRPC exception as server is down
-        with pytest.raises(grpc.RpcError) as exc_info:
+        with pytest.raises(RpcError) as exc_info:
             stub.Kill(second_kill_request)
 
         # Verify it's the right type of error
         rpc_error = exc_info.value
         assert rpc_error.code() in [
-            grpc.StatusCode.UNAVAILABLE,
-            grpc.StatusCode.CANCELLED,
-            grpc.StatusCode.DEADLINE_EXCEEDED,
+            StatusCode.UNAVAILABLE,
+            StatusCode.CANCELLED,
+            StatusCode.DEADLINE_EXCEEDED,
         ], f"Expected connection error, got: {rpc_error.code()}"
 
         print(f"Second Kill request properly failed with: {rpc_error.code()}")
         print("Test passed: Second request failed as expected")
 
-    except grpc.RpcError as e:
+    except RpcError as e:
         if "Second Kill request" in str(e):
             # This is expected for the second kill request
             print(f"Expected gRPC error on second kill: {e}")
@@ -198,16 +194,6 @@ def test_kill_multiprocessing_server_via_grpc():
             print("Connection manager cleanup completed")
         except Exception as e:
             print(f"Warning: Error during connection cleanup: {e}")
-
-        # Clean up log file
-        import os
-
-        try:
-            if os.path.exists(log_file_path):
-                os.unlink(log_file_path)
-                print("Log file cleaned up")
-        except Exception as e:
-            print(f"Warning: Error cleaning up log file: {e}")
 
     print("\nTest kill_server_via_grpc completed successfully")
 
@@ -285,7 +271,7 @@ def test_kill_ssh_server_via_grpc():
     )
 
     # Create SSH server manager
-    ssh_server_manager = SSHGrpcServerManager(connection_manager=ssh_connection_manager)
+    ssh_server_manager = GrpcServerManager(connection_manager=ssh_connection_manager)
 
     server_handle = None
     channel = None
@@ -319,7 +305,7 @@ def test_kill_ssh_server_via_grpc():
 
         # Create gRPC client connection
         print("\n=== Testing Initial gRPC Communication ===")
-        channel = grpc.insecure_channel(f"localhost:{server_port}")
+        channel = insecure_channel(f"localhost:{server_port}")
         stub = ManagerServiceStub(channel)
 
         # Send initial test request to verify server is working
@@ -387,15 +373,15 @@ def test_kill_ssh_server_via_grpc():
                 "Second Kill request should have failed with gRPC exception, "
                 f"but got response: {second_response.message}"
             )
-        except grpc.RpcError as e:
+        except RpcError as e:
             exception_raised = True
             print(f"Second Kill request properly failed with: {e.code()}")
 
             # Verify it's the right type of error (connection failure)
             assert e.code() in [
-                grpc.StatusCode.UNAVAILABLE,
-                grpc.StatusCode.CANCELLED,
-                grpc.StatusCode.DEADLINE_EXCEEDED,
+                StatusCode.UNAVAILABLE,
+                StatusCode.CANCELLED,
+                StatusCode.DEADLINE_EXCEEDED,
             ], f"Expected connection error, got: {e.code()}"
 
         if not exception_raised:

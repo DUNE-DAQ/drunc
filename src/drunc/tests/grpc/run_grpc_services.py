@@ -3,15 +3,7 @@ import time
 from concurrent import futures
 from typing import Any, Dict, List, Optional, Tuple
 
-from drunc.tests.grpc.child_controller import ChildControllerServiceImpl
-from drunc.tests.grpc.grpc_log_util import stderr_observer
-from drunc.tests.grpc.process_manager import ManagerServiceImpl
-from drunc.tests.grpc.root_controller import RootControllerServiceImpl
-from drunc.tests.grpc.test_pb2_grpc import (
-    add_ChildControllerServiceServicer_to_server,
-    add_ManagerServiceServicer_to_server,
-    add_RootControllerServiceServicer_to_server,
-)
+from drunc.tests.grpc.grpc_log_util import stderr_observer, stdout_observer
 
 SERVER_GRACE_PERIOD = 2
 
@@ -29,8 +21,16 @@ def run_grpc_server(
     stop_event=None,
 ) -> None:
     """Generic gRPC server runner that handles the common server lifecycle."""
+    import os
+    import sys
+
+    print(f"[{server_name}] grpc already imported: {'grpc' in sys.modules}")
+    print(f"[{server_name}] GRPC_TRACE={os.environ.get('GRPC_TRACE', 'NOT SET')}")
     stderr_observer(log_file)
-    import grpc
+    stdout_observer(log_file)
+
+    from grpc import insecure_channel
+    from grpc import server as grpc_server
 
     shutdown_requested = False
 
@@ -45,7 +45,7 @@ def run_grpc_server(
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    server = grpc.server(
+    server = grpc_server(
         futures.ThreadPoolExecutor(max_workers=max_workers),
         options=server_options or [],
     )
@@ -62,7 +62,7 @@ def run_grpc_server(
             upstream_port = upstream_connection["port"]
             client_options = upstream_connection.get("options", [])
 
-            upstream_channel = grpc.insecure_channel(
+            upstream_channel = insecure_channel(
                 f"{upstream_host}:{upstream_port}", options=client_options
             )
             print(
@@ -99,6 +99,9 @@ def run_process_manager_server(
     stop_event=None,
 ) -> None:
     """Run Manager server process with output logging."""
+    from drunc.tests.grpc.process_manager import ManagerServiceImpl
+    from drunc.tests.grpc.test_pb2_grpc import add_ManagerServiceServicer_to_server
+
     run_grpc_server(
         server_name="Manager",
         servicer_instance=ManagerServiceImpl(),
@@ -124,6 +127,11 @@ def run_root_controller_server(
     stop_event=None,
 ) -> None:
     """Run RootController server with Manager client connection."""
+    from drunc.tests.grpc.root_controller import RootControllerServiceImpl
+    from drunc.tests.grpc.test_pb2_grpc import (
+        add_RootControllerServiceServicer_to_server,
+    )
+
     run_grpc_server(
         server_name="RootController",
         servicer_instance=RootControllerServiceImpl(),
@@ -154,6 +162,11 @@ def run_child_controller_server(
     stop_event=None,
 ) -> None:
     """Run ChildController server with RootController client connection."""
+    from drunc.tests.grpc.child_controller import ChildControllerServiceImpl
+    from drunc.tests.grpc.test_pb2_grpc import (
+        add_ChildControllerServiceServicer_to_server,
+    )
+
     run_grpc_server(
         server_name=child_name,
         servicer_instance=ChildControllerServiceImpl(child_name),

@@ -12,13 +12,13 @@ import threading
 import time
 from typing import Dict
 
-import grpc
+from grpc import RpcError, StatusCode, insecure_channel
 
 from drunc.tests.grpc.available_grpc_servers import ServerType
-from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig
+from drunc.tests.grpc.grpc_server_config import GrpcServerConfig
+from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
 from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
 from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-from drunc.tests.grpc.ssh_server_manager import SSHGrpcServerManager
 from drunc.tests.grpc.test_pb2 import (
     BootRequest,
     BootResponse,
@@ -131,7 +131,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
                 )
 
                 # Create SSH server manager
-                ssh_server_manager = SSHGrpcServerManager(
+                ssh_server_manager = GrpcServerManager(
                     connection_manager=ssh_connection_manager
                 )
 
@@ -224,7 +224,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
         """
         try:
             # Create gRPC channel to the booted server
-            channel = grpc.insecure_channel(f"{host}:{port}")
+            channel = insecure_channel(f"{host}:{port}")
 
             # Create appropriate stub based on server type
             if server_type == ServerType.MANAGER:
@@ -251,11 +251,11 @@ class ManagerServiceImpl(ManagerServiceServicer):
             else:
                 return False, f"Kill request rejected: {kill_response.message}"
 
-        except grpc.RpcError as e:
+        except RpcError as e:
             # If server is already down, that's acceptable
             if e.code() in [
-                grpc.StatusCode.UNAVAILABLE,
-                grpc.StatusCode.DEADLINE_EXCEEDED,
+                StatusCode.UNAVAILABLE,
+                StatusCode.DEADLINE_EXCEEDED,
             ]:
                 return (
                     True,

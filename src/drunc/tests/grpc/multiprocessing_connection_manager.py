@@ -1,3 +1,11 @@
+"""
+Multiprocessing Connection Manager
+
+Manages gRPC server processes using Python's multiprocessing module for
+local execution. Handles process creation, event coordination, and lifecycle
+management for servers running as separate processes on the same machine.
+"""
+
 import multiprocessing
 import os
 from typing import Any, Dict, Optional
@@ -14,6 +22,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
 
     Executes processes locally using multiprocessing.Process, suitable for
     single-machine testing scenarios where all gRPC servers run on localhost.
+    Creates and manages ready/stop events for process coordination.
     """
 
     def __init__(self, env_vars: Dict[str, str] = None):
@@ -29,7 +38,12 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         self, process_id: str, target_func: Any, *args, **kwargs
     ) -> RunningGrpcServer:
         """
-        Create a multiprocessing.Process handle.
+        Create a multiprocessing.Process handle with coordination events.
+
+        Creates ready and stop events for process lifecycle coordination,
+        wraps the target function to set environment variables, and prepares
+        the process for execution. Events are appended to the argument list
+        so the server functions can use them for signalling.
 
         Args:
             process_id: Unique identifier for the process
@@ -38,8 +52,11 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
             **kwargs: Keyword arguments to pass to target function
 
         Returns:
-            ProcessHandle containing the multiprocessing.Process
+            RunningGrpcServer containing the multiprocessing.Process and events
         """
+        # Create coordination events for this process
+        ready_event = multiprocessing.Event()
+        stop_event = multiprocessing.Event()
 
         # Wrap target function to set environment variables
         def wrapped_target(*target_args, **target_kwargs):
@@ -48,14 +65,23 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
                 os.environ[key] = value
             return target_func(*target_args, **target_kwargs)
 
-        handle = RunningGrpcServer(process_id, wrapped_target, args, kwargs)
+        # Append events to arguments so server functions can use them
+        extended_args = args + (ready_event, stop_event)
+
+        # Create process handle with wrapped function and extended arguments
+        handle = RunningGrpcServer(process_id, wrapped_target, extended_args, kwargs)
 
         # Create multiprocessing.Process
         mp_process = multiprocessing.Process(
-            target=wrapped_target, args=args, kwargs=kwargs, name=process_id
+            target=wrapped_target, args=extended_args, kwargs=kwargs, name=process_id
         )
 
         handle.set_process(mp_process)
+
+        # Store events in handle for access by server manager
+        handle.ready_event = ready_event
+        handle.stop_event = stop_event
+
         self.process_handles[process_id] = handle
 
         return handle
@@ -65,7 +91,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         Start a multiprocessing.Process.
 
         Args:
-            handle: ProcessHandle containing multiprocessing.Process
+            handle: RunningGrpcServer containing multiprocessing.Process
 
         Raises:
             RuntimeError: If process is already started or cannot start
@@ -83,8 +109,12 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         """
         Stop a multiprocessing.Process gracefully.
 
+        Signals the stop event if present to allow graceful shutdown, then
+        attempts termination. Forces kill if process doesn't terminate within
+        the timeout period.
+
         Args:
-            handle: ProcessHandle containing the process to stop
+            handle: RunningGrpcServer containing the process to stop
             timeout: Maximum time to wait for graceful shutdown
 
         Raises:
@@ -97,6 +127,10 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
 
         if not process.is_alive():
             return
+
+        # Signal graceful shutdown if event exists
+        if handle.stop_event:
+            handle.stop_event.set()
 
         # Attempt graceful termination
         process.terminate()
@@ -112,7 +146,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         Check if a multiprocessing.Process is alive.
 
         Args:
-            handle: ProcessHandle to check
+            handle: RunningGrpcServer to check
 
         Returns:
             True if process is running, False otherwise
@@ -129,7 +163,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         Wait for multiprocessing.Process to terminate.
 
         Args:
-            handle: ProcessHandle to wait for
+            handle: RunningGrpcServer to wait for
             timeout: Maximum time to wait
         """
         if handle.started and handle.process:

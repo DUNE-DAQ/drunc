@@ -515,26 +515,14 @@ class GrpcProcessTreeManager:
     ) -> "GrpcProcessTreeManager":
         """
         Factory method to create GrpcProcessTreeManager with multiprocessing server manager.
-
-        Args:
-            number_of_children: Number of child controllers to create
-            manager_max_workers: Maximum worker threads for Manager server
-            controller_max_workers: Maximum worker threads for Controller servers
-            env_vars: Environment variables to set in child processes
-            **kwargs: Additional arguments for GrpcProcessTreeManager
-
-        Returns:
-            GrpcProcessTreeManager configured with multiprocessing
         """
+        from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
         from drunc.tests.grpc.multiprocessing_connection_manager import (
             MultiprocessingConnectionManager,
         )
-        from drunc.tests.grpc.multiprocessing_server_manager import (
-            MultiprocessingGrpcServerManager,
-        )
 
         connection_manager = MultiprocessingConnectionManager(env_vars=env_vars)
-        server_manager = MultiprocessingGrpcServerManager(connection_manager)
+        server_manager = GrpcServerManager(connection_manager)
 
         return cls(
             server_manager=server_manager,
@@ -590,9 +578,9 @@ class GrpcProcessTreeManager:
         """
 
         from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
+        from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
         from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
         from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-        from drunc.tests.grpc.ssh_server_manager import SSHGrpcServerManager
 
         # Create temporary log manager for boot command log files
         temp_log_manager = LogFileManager()
@@ -657,7 +645,7 @@ class GrpcProcessTreeManager:
             boot_commands=boot_commands, log_directory=log_directory
         )
 
-        server_manager = SSHGrpcServerManager(connection_manager=connection_manager)
+        server_manager = GrpcServerManager(connection_manager=connection_manager)
 
         # Clean up temporary log manager
         temp_log_manager.cleanup()

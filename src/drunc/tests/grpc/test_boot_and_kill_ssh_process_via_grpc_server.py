@@ -11,17 +11,14 @@ This test verifies that:
 import os
 import time
 
-import grpc
 import pytest
+from grpc import RpcError, StatusCode, insecure_channel
 
 from drunc.tests.grpc.available_grpc_servers import ServerType
 from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig
+from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig, GrpcServerManager
 from drunc.tests.grpc.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
-)
-from drunc.tests.grpc.multiprocessing_server_manager import (
-    MultiprocessingGrpcServerManager,
 )
 
 # Import gRPC generated code
@@ -75,8 +72,10 @@ def test_manager_boot_and_kill_via_grpc():
     print(f"RootController log (local): {root_log}")
 
     # Create connection and server managers for Manager (multiprocessing)
-    connection_manager = MultiprocessingConnectionManager()
-    server_manager = MultiprocessingGrpcServerManager(connection_manager)
+    connection_manager = MultiprocessingConnectionManager(
+        env_vars={"GRPC_TRACE": "http"}
+    )
+    server_manager = GrpcServerManager(connection_manager)
 
     # Configure Manager server
     manager_config = GrpcServerConfig(
@@ -116,7 +115,8 @@ def test_manager_boot_and_kill_via_grpc():
 
         # Create gRPC client connection to Manager
         print("\n=== Testing Manager Communication ===")
-        manager_channel = grpc.insecure_channel(f"localhost:{manager_port}")
+
+        manager_channel = insecure_channel(f"localhost:{manager_port}")
         manager_stub = ManagerServiceStub(manager_channel)
 
         # Send test request to verify Manager is working
@@ -160,7 +160,7 @@ def test_manager_boot_and_kill_via_grpc():
 
         # Verify RootController is operational by connecting to it
         print("\n=== Verifying RootController is Operational ===")
-        root_channel = grpc.insecure_channel(f"localhost:{root_controller_port}")
+        root_channel = insecure_channel(f"localhost:{root_controller_port}")
         root_stub = RootControllerServiceStub(root_channel)
 
         root_test_request = DummyRequest(
@@ -202,13 +202,13 @@ def test_manager_boot_and_kill_via_grpc():
                     f"Attempt {attempt + 1}: RootController still responding, waiting..."
                 )
                 time.sleep(0.5)
-            except grpc.RpcError as e:
+            except RpcError as e:
                 # Expected - RootController should be terminated
                 print(f"RootController properly terminated: {e.code()}")
                 assert e.code() in [
-                    grpc.StatusCode.UNAVAILABLE,
-                    grpc.StatusCode.CANCELLED,
-                    grpc.StatusCode.DEADLINE_EXCEEDED,
+                    StatusCode.UNAVAILABLE,
+                    StatusCode.CANCELLED,
+                    StatusCode.DEADLINE_EXCEEDED,
                 ]
                 root_down = True
                 break
@@ -237,17 +237,8 @@ def test_manager_boot_and_kill_via_grpc():
 
         # Verify Manager is no longer responding
         print("\n=== Verifying Manager Terminated ===")
-        try:
+        with pytest.raises(RpcError):
             manager_stub.MakeRequest(test_request, timeout=2.0)
-            pytest.fail("Manager should not be responding after kill")
-        except grpc.RpcError as e:
-            # Expected - Manager should be terminated
-            print(f"Manager properly terminated: {e.code()}")
-            assert e.code() in [
-                grpc.StatusCode.UNAVAILABLE,
-                grpc.StatusCode.CANCELLED,
-                grpc.StatusCode.DEADLINE_EXCEEDED,
-            ]
 
         print("\n✓ Test passed: Manager successfully booted and killed RootController")
 
