@@ -5,8 +5,6 @@ This module provides simple server lifecycle coordination using
 an SSH connection manager with pre-built boot commands.
 """
 
-import socket
-import time
 from typing import Optional
 
 from drunc.tests.grpc.grpc_server_manager import GrpcServerConfig, GrpcServerManager
@@ -35,25 +33,6 @@ class SSHGrpcServerManager(GrpcServerManager):
         self.server_handles = {}
 
         print("SSH server manager initialised")
-
-    def _check_port_accessibility(self, port: int, timeout: float = 1.0) -> bool:
-        """
-        Check if a port is accessible for gRPC connections.
-
-        Args:
-            port: Port number to check
-            timeout: Connection timeout in seconds
-
-        Returns:
-            True if port is accessible, False otherwise
-        """
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                sock.settimeout(timeout)
-                result = sock.connect_ex(("localhost", port))
-                return result == 0
-        except Exception:
-            return False
 
     def start_manager_server(self, config: GrpcServerConfig) -> RunningGrpcServer:
         """
@@ -177,94 +156,6 @@ class SSHGrpcServerManager(GrpcServerManager):
             raise RuntimeError(
                 f"Failed to start ChildController server {config.server_id}: {e}"
             )
-
-    def wait_for_server_ready(self, server_id: str, timeout: float = 10.0) -> bool:
-        """
-        Wait for a server to signal that it's ready to accept connections.
-
-        Args:
-            server_id: ID of the server to wait for
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            True if server is ready and port accessible, False otherwise
-        """
-        if server_id not in self.server_handles:
-            print(f"Server {server_id} not found in server handles")
-            return False
-
-        handle = self.server_handles[server_id]
-
-        # Get expected port from connection manager
-        server_port = self.connection_manager.get_expected_port_for_server_id(server_id)
-
-        if server_port is None:
-            print(f"Error: Could not determine port for server {server_id}")
-            return False
-
-        start_time = time.time()
-        last_status_time = start_time
-
-        print(
-            f"Waiting for server {server_id} to be accessible on port {server_port} (timeout: {timeout}s)..."
-        )
-
-        # For SSH processes, give the remote command time to start before checking port
-        initial_wait = min(2.0, timeout / 3)
-        print(f"Initial wait of {initial_wait}s for remote process to start...")
-        time.sleep(initial_wait)
-
-        consecutive_successes = 0
-        required_successes = (
-            2  # Require 2 consecutive successful connections for stability
-        )
-
-        while (time.time() - start_time) < timeout:
-            # Check port accessibility (this is the primary indicator for SSH processes)
-            if self._check_port_accessibility(server_port, timeout=1.0):
-                consecutive_successes += 1
-                if consecutive_successes >= required_successes:
-                    print(
-                        f"✓ Server {server_id} is ready and accessible on port {server_port}"
-                    )
-                    return True
-                else:
-                    print(
-                        f"Port {server_port} accessible ({consecutive_successes}/{required_successes})"
-                    )
-            else:
-                consecutive_successes = 0
-
-                # Check if SSH process died very early (indicates startup failure)
-                elapsed = time.time() - start_time
-                if (
-                    elapsed < initial_wait
-                    and not self.connection_manager.is_process_alive(handle)
-                ):
-                    startup_error = self.connection_manager.get_process_startup_error(
-                        handle
-                    )
-                    if startup_error:
-                        print(
-                            f"Server {server_id} failed during startup: {startup_error}"
-                        )
-                        return False
-
-            # Periodic status updates
-            elapsed = time.time() - start_time
-            if elapsed - (last_status_time - start_time) >= 2.0:
-                print(
-                    f"Waiting for server {server_id} port {server_port} (elapsed: {elapsed:.1f}s)"
-                )
-                last_status_time = time.time()
-
-            time.sleep(0.5)
-
-        # Final timeout
-        print(
-            f"Timeout waiting for server {server_id} port {server_port} to be accessible"
-        )
-        return False
 
     def stop_server(self, server_id: str, timeout: float = 10.0) -> None:
         """

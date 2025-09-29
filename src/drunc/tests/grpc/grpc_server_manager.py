@@ -6,6 +6,7 @@ separating server-specific configuration and startup logic from the underlying
 process execution mechanism (multiprocessing, SSH, ...).
 """
 
+import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -159,7 +160,6 @@ class GrpcServerManager(ABC):
         """
         pass
 
-    @abstractmethod
     def wait_for_server_ready(self, server_id: str, timeout: float = 10.0) -> bool:
         """
         Wait for a server to signal that it's ready to accept connections.
@@ -169,9 +169,23 @@ class GrpcServerManager(ABC):
             timeout: Maximum time to wait in seconds
 
         Returns:
-            True if server became ready, False if timeout occurred
+            True if server is ready and port accessible, False otherwise
         """
-        pass
+        if server_id not in self.server_handles:
+            print(f"Server {server_id} not found in server handles")
+            return False
+
+        start_time = time.time()
+
+        while (time.time() - start_time) < timeout:
+            if self.is_server_running(server_id):
+                return True
+            elapsed = time.time() - start_time
+            print(f"Waiting for server {server_id} (elapsed: {elapsed:.1f}s)")
+            time.sleep(0.5)
+
+        print(f"Timed out waiting for server {server_id} to be accessible")
+        return False
 
     @abstractmethod
     def stop_server(self, server_id: str, timeout: float = 10.0) -> None:
@@ -230,21 +244,24 @@ class GrpcServerManager(ABC):
         if server_handle is None or not server_handle.is_valid():
             return False
 
-        channel = None
+        import grpc
+
+        channel = grpc.insecure_channel(
+            f"{server_handle.host}:{server_handle.port}",
+        )
+        ready_future = grpc.channel_ready_future(channel)
 
         try:
-            import grpc
-
-            channel = grpc.insecure_channel(
-                f"{server_handle.host}:{server_handle.port}",
-            )
-            grpc.channel_ready_future(channel).result(timeout=2.0)
-
-        except Exception:
+            # throws an exception if server unavilable
+            ready_future.result(timeout=1.0)
+            channel.close()
+            return True
+        except grpc.FutureTimeoutError:
+            channel.close()
             return False
-        finally:
-            if channel is not None:
-                channel.close()
+        except grpc.FutureCancelledError:
+            channel.close()
+            return False
 
     @abstractmethod
     def cleanup(self) -> None:

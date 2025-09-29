@@ -154,22 +154,6 @@ class MultiprocessingGrpcServerManager(GrpcServerManager):
             config, run_child_controller_server, root_port, child_name
         )
 
-    def wait_for_server_ready(self, server_id: str, timeout: float = 10.0) -> bool:
-        """
-        Wait for a server to signal that it's ready to accept connections.
-
-        Args:
-            server_id: ID of the server to wait for
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            True if server became ready, False if timeout occurred
-        """
-        if server_id not in self.ready_events:
-            return False
-
-        return self.ready_events[server_id].wait(timeout=timeout)
-
     def stop_server(self, server_id: str, timeout: float = 10.0) -> None:
         """
         Stop a running gRPC server gracefully.

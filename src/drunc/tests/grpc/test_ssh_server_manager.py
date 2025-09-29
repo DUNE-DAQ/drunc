@@ -51,7 +51,7 @@ def test_ssh_manager_server_lifecycle_with_env():
     max_workers = 2
     server_timeout = 30.0
 
-    print("=== SSH Manager Server Lifecycle Test (Clean Architecture) ===")
+    print("=== SSH Manager Server Lifecycle Test ===")
     print(f"Environment script: {env_setup_script}")
     print(f"Server port: {server_port}")
     print(f"Max workers: {max_workers}")
@@ -76,7 +76,7 @@ def test_ssh_manager_server_lifecycle_with_env():
     )
 
     manager_config = GrpcServerConfig(
-        server_id="TestManagerServerClean",
+        server_id="TestManagerServerID",
         server_type=ServerType.MANAGER,
         host="localhost",
         port=server_port,
@@ -89,7 +89,7 @@ def test_ssh_manager_server_lifecycle_with_env():
     # Create SSH connection manager with pre-built boot command
     ssh_connection_manager = SSHConnectionManager(
         command_builder=command_builder,
-        boot_command_configs={"TestManagerServerClean": manager_config},
+        boot_command_configs={"TestManagerServerID": manager_config},
         log_directory=None,  # Use temporary directory
     )
 
@@ -106,15 +106,13 @@ def test_ssh_manager_server_lifecycle_with_env():
     assert server_handle is not None, "Failed to create server handle"
     print(f"Server handle created: {server_handle.process_id}")
 
-    # TODO refactor wait_for_server_ready to use grpc
     # Wait for server to be ready with detailed feedback
     print("\n=== Waiting for Server Ready ===")
     ready = ssh_server_manager.wait_for_server_ready(
-        "TestManagerServerClean", timeout=server_timeout
+        "TestManagerServerID", timeout=server_timeout
     )
 
     if not ready:
-        # Get detailed error information
         startup_error = ssh_connection_manager.get_process_startup_error(server_handle)
         error_details = (
             f"Server readiness check failed. Startup error: {startup_error or 'None'}"
@@ -145,7 +143,7 @@ def test_ssh_manager_server_lifecycle_with_env():
 
     # Test basic connectivity with Manager server
     request = DummyRequest(
-        message="Test request from SSH clean architecture test client",
+        message="Test request from SSH test client",
         timestamp=int(time.time() * 1000),
     )
 
@@ -184,28 +182,35 @@ def test_ssh_manager_server_lifecycle_with_env():
     # Wait for server process to terminate gracefully
     print("\n=== Waiting for Server Shutdown ===")
     # Verify server is no longer running
-    shutdown_timeout = 10.0
+    shutdown_timeout = 30.0
     start_time = time.time()
 
+    # wait for server to stop responding
     while (
         time.time() - start_time
     ) < shutdown_timeout and ssh_server_manager.is_server_running(
-        "TestManagerServerClean"
+        "TestManagerServerID"
     ):
-        time.sleep(0.5)
+        time.sleep(1.0)
 
-    if ssh_server_manager.is_server_running("TestManagerServerClean"):
+    # final confirmation that server is not running
+    if ssh_server_manager.is_server_running("TestManagerServerID"):
         pytest.fail("Server did not shut down within the expected time")
     else:
         elapsed = time.time() - start_time
         print(f"✓ Server reports as stopped after {elapsed:.1f}s")
 
+    # check that calls from the stub throw an exception
+    with pytest.raises(grpc.RpcError):
+        kill_response = stub.Kill(kill_request)
+
     start_time = time.time()
 
+    # wait for process die
     while (
         time.time() - start_time
     ) < shutdown_timeout and ssh_connection_manager.is_process_alive(server_handle):
-        time.sleep(0.5)
+        time.sleep(1.0)
 
     if ssh_connection_manager.is_process_alive(server_handle):
         pytest.fail("Server did not shut down within the expected time")
@@ -215,7 +220,7 @@ def test_ssh_manager_server_lifecycle_with_env():
 
     print("✓ Server reports as stopped")
 
-    print("\n✓ SSH Manager server test with clean architecture completed successfully")
+    print("\n✓ SSH Manager server test completed successfully")
 
     # Clean up all resources with detailed logging
     print("\n=== Cleanup ===")

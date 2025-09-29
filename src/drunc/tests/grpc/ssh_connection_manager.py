@@ -1,8 +1,6 @@
 """
-SSH connection manager for executing pre-built server commands.
-
-This module provides simple SSH-based process execution using complete
-pre-built SSH commands. All command construction is handled externally.
+SSH connection manager for managing processes created from
+pre-built ssh commands.
 """
 
 import os
@@ -31,7 +29,7 @@ class SSHConnectionManager(ProcessConnectionManager):
     SSH connection manager for executing pre-built server boot commands.
 
     Executes complete SSH commands that have been pre-built externally.
-    Handles only process execution and monitoring - no command construction.
+    Handles ssh process execution, closing and monitoring
     """
 
     def __init__(
@@ -267,7 +265,7 @@ class SSHConnectionManager(ProcessConnectionManager):
             handle: ProcessHandle for the SSH process to stop
             timeout: Maximum time to wait for graceful shutdown
         """
-        if not handle.started or not handle.process:
+        if not handle.started or (handle.process is None):
             return
 
         ssh_process = handle.process

@@ -24,45 +24,53 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ntest.proto\x12\x15\x64runc.tests.grpc_tree\"2\n\x0c\x44ummyRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"1\n\rDummyResponse\x12\r\n\x05reply\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"N\n\rUpdateRequest\x12\x13\n\x0bupdate_type\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x17\n\x0fsequence_number\x18\x03 \x01(\x03\"@\n\x0eUpdateResponse\x12\x14\n\x0c\x61\x63knowledged\x18\x01 \x01(\x08\x12\x18\n\x10response_message\x18\x02 \x01(\t\"N\n\x0e\x43ommandRequest\x12\x14\n\x0c\x63ommand_type\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x01(\t\x12\x12\n\ncommand_id\x18\x03 \x01(\x03\"I\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0e\n\x06result\x18\x02 \x01(\t\x12\x15\n\rerror_message\x18\x03 \x01(\t\"\xaa\x01\n\rStatusRequest\x12\x15\n\rcontroller_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x42\n\x07metrics\x18\x03 \x03(\x0b\x32\x31.drunc.tests.grpc_tree.StatusRequest.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\";\n\x0eStatusResponse\x12\x10\n\x08received\x18\x01 \x01(\x08\x12\x17\n\x0f\x61\x63knowledgement\x18\x02 \x01(\t\"Q\n\x12InstructionRequest\x12\x18\n\x10instruction_type\x18\x01 \x01(\t\x12\x0f\n\x07payload\x18\x02 \x01(\t\x12\x10\n\x08priority\x18\x03 \x01(\x05\"f\n\x13InstructionResponse\x12\x12\n\nunderstood\x18\x01 \x01(\x08\x12\x18\n\x10\x65xecution_status\x18\x02 \x01(\t\x12!\n\x19\x65stimated_completion_time\x18\x03 \x01(\x03\";\n\x0bKillRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t\x12\x1c\n\x14grace_period_seconds\x18\x02 \x01(\x05\";\n\x0cKillResponse\x12\x1a\n\x12shutdown_initiated\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\x99\x02\n\x0eManagerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12\\\n\rReceiveUpdate\x12$.drunc.tests.grpc_tree.UpdateRequest\x1a%.drunc.tests.grpc_tree.UpdateResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponse2\x81\x03\n\x15RootControllerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12_\n\x0eReceiveCommand\x12%.drunc.tests.grpc_tree.CommandRequest\x1a&.drunc.tests.grpc_tree.CommandResponse\x12\\\n\rReceiveStatus\x12$.drunc.tests.grpc_tree.StatusRequest\x1a%.drunc.tests.grpc_tree.StatusResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponse2\xb0\x02\n\x16\x43hildControllerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12k\n\x12ReceiveInstruction\x12).drunc.tests.grpc_tree.InstructionRequest\x1a*.drunc.tests.grpc_tree.InstructionResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\ntest.proto\x12\x15\x64runc.tests.grpc_tree\"\xa0\x02\n\x0b\x42ootRequest\x12\x12\n\nprocess_id\x18\x01 \x01(\t\x12\x13\n\x0bserver_type\x18\x02 \x01(\t\x12\x0c\n\x04port\x18\x03 \x01(\x05\x12\x13\n\x0bmax_workers\x18\x04 \x01(\x05\x12\x10\n\x08log_file\x18\x05 \x01(\t\x12\x18\n\x10\x65nv_setup_script\x18\x06 \x01(\t\x12\x0c\n\x04host\x18\x07 \x01(\t\x12\x0c\n\x04user\x18\x08 \x01(\t\x12I\n\x0c\x65xtra_params\x18\t \x03(\x0b\x32\x33.drunc.tests.grpc_tree.BootRequest.ExtraParamsEntry\x1a\x32\n\x10\x45xtraParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"R\n\x0c\x42ootResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x12\n\nprocess_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\x12\x0c\n\x04port\x18\x04 \x01(\x05\"2\n\x0c\x44ummyRequest\x12\x0f\n\x07message\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"1\n\rDummyResponse\x12\r\n\x05reply\x18\x01 \x01(\t\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\"N\n\rUpdateRequest\x12\x13\n\x0bupdate_type\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\t\x12\x17\n\x0fsequence_number\x18\x03 \x01(\x03\"@\n\x0eUpdateResponse\x12\x14\n\x0c\x61\x63knowledged\x18\x01 \x01(\x08\x12\x18\n\x10response_message\x18\x02 \x01(\t\"N\n\x0e\x43ommandRequest\x12\x14\n\x0c\x63ommand_type\x18\x01 \x01(\t\x12\x12\n\nparameters\x18\x02 \x01(\t\x12\x12\n\ncommand_id\x18\x03 \x01(\x03\"I\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0e\n\x06result\x18\x02 \x01(\t\x12\x15\n\rerror_message\x18\x03 \x01(\t\"\xaa\x01\n\rStatusRequest\x12\x15\n\rcontroller_id\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x42\n\x07metrics\x18\x03 \x03(\x0b\x32\x31.drunc.tests.grpc_tree.StatusRequest.MetricsEntry\x1a.\n\x0cMetricsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\";\n\x0eStatusResponse\x12\x10\n\x08received\x18\x01 \x01(\x08\x12\x17\n\x0f\x61\x63knowledgement\x18\x02 \x01(\t\"Q\n\x12InstructionRequest\x12\x18\n\x10instruction_type\x18\x01 \x01(\t\x12\x0f\n\x07payload\x18\x02 \x01(\t\x12\x10\n\x08priority\x18\x03 \x01(\x05\"f\n\x13InstructionResponse\x12\x12\n\nunderstood\x18\x01 \x01(\x08\x12\x18\n\x10\x65xecution_status\x18\x02 \x01(\t\x12!\n\x19\x65stimated_completion_time\x18\x03 \x01(\x03\";\n\x0bKillRequest\x12\x0e\n\x06reason\x18\x01 \x01(\t\x12\x1c\n\x14grace_period_seconds\x18\x02 \x01(\x05\";\n\x0cKillResponse\x12\x1a\n\x12shutdown_initiated\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\xea\x02\n\x0eManagerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12\\\n\rReceiveUpdate\x12$.drunc.tests.grpc_tree.UpdateRequest\x1a%.drunc.tests.grpc_tree.UpdateResponse\x12O\n\x04\x42oot\x12\".drunc.tests.grpc_tree.BootRequest\x1a#.drunc.tests.grpc_tree.BootResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponse2\x81\x03\n\x15RootControllerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12_\n\x0eReceiveCommand\x12%.drunc.tests.grpc_tree.CommandRequest\x1a&.drunc.tests.grpc_tree.CommandResponse\x12\\\n\rReceiveStatus\x12$.drunc.tests.grpc_tree.StatusRequest\x1a%.drunc.tests.grpc_tree.StatusResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponse2\xb0\x02\n\x16\x43hildControllerService\x12X\n\x0bMakeRequest\x12#.drunc.tests.grpc_tree.DummyRequest\x1a$.drunc.tests.grpc_tree.DummyResponse\x12k\n\x12ReceiveInstruction\x12).drunc.tests.grpc_tree.InstructionRequest\x1a*.drunc.tests.grpc_tree.InstructionResponse\x12O\n\x04Kill\x12\".drunc.tests.grpc_tree.KillRequest\x1a#.drunc.tests.grpc_tree.KillResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'test_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
+  _globals['_BOOTREQUEST_EXTRAPARAMSENTRY']._loaded_options = None
+  _globals['_BOOTREQUEST_EXTRAPARAMSENTRY']._serialized_options = b'8\001'
   _globals['_STATUSREQUEST_METRICSENTRY']._loaded_options = None
   _globals['_STATUSREQUEST_METRICSENTRY']._serialized_options = b'8\001'
-  _globals['_DUMMYREQUEST']._serialized_start=37
-  _globals['_DUMMYREQUEST']._serialized_end=87
-  _globals['_DUMMYRESPONSE']._serialized_start=89
-  _globals['_DUMMYRESPONSE']._serialized_end=138
-  _globals['_UPDATEREQUEST']._serialized_start=140
-  _globals['_UPDATEREQUEST']._serialized_end=218
-  _globals['_UPDATERESPONSE']._serialized_start=220
-  _globals['_UPDATERESPONSE']._serialized_end=284
-  _globals['_COMMANDREQUEST']._serialized_start=286
-  _globals['_COMMANDREQUEST']._serialized_end=364
-  _globals['_COMMANDRESPONSE']._serialized_start=366
-  _globals['_COMMANDRESPONSE']._serialized_end=439
-  _globals['_STATUSREQUEST']._serialized_start=442
-  _globals['_STATUSREQUEST']._serialized_end=612
-  _globals['_STATUSREQUEST_METRICSENTRY']._serialized_start=566
-  _globals['_STATUSREQUEST_METRICSENTRY']._serialized_end=612
-  _globals['_STATUSRESPONSE']._serialized_start=614
-  _globals['_STATUSRESPONSE']._serialized_end=673
-  _globals['_INSTRUCTIONREQUEST']._serialized_start=675
-  _globals['_INSTRUCTIONREQUEST']._serialized_end=756
-  _globals['_INSTRUCTIONRESPONSE']._serialized_start=758
-  _globals['_INSTRUCTIONRESPONSE']._serialized_end=860
-  _globals['_KILLREQUEST']._serialized_start=862
-  _globals['_KILLREQUEST']._serialized_end=921
-  _globals['_KILLRESPONSE']._serialized_start=923
-  _globals['_KILLRESPONSE']._serialized_end=982
-  _globals['_MANAGERSERVICE']._serialized_start=985
-  _globals['_MANAGERSERVICE']._serialized_end=1266
-  _globals['_ROOTCONTROLLERSERVICE']._serialized_start=1269
-  _globals['_ROOTCONTROLLERSERVICE']._serialized_end=1654
-  _globals['_CHILDCONTROLLERSERVICE']._serialized_start=1657
-  _globals['_CHILDCONTROLLERSERVICE']._serialized_end=1961
+  _globals['_BOOTREQUEST']._serialized_start=38
+  _globals['_BOOTREQUEST']._serialized_end=326
+  _globals['_BOOTREQUEST_EXTRAPARAMSENTRY']._serialized_start=276
+  _globals['_BOOTREQUEST_EXTRAPARAMSENTRY']._serialized_end=326
+  _globals['_BOOTRESPONSE']._serialized_start=328
+  _globals['_BOOTRESPONSE']._serialized_end=410
+  _globals['_DUMMYREQUEST']._serialized_start=412
+  _globals['_DUMMYREQUEST']._serialized_end=462
+  _globals['_DUMMYRESPONSE']._serialized_start=464
+  _globals['_DUMMYRESPONSE']._serialized_end=513
+  _globals['_UPDATEREQUEST']._serialized_start=515
+  _globals['_UPDATEREQUEST']._serialized_end=593
+  _globals['_UPDATERESPONSE']._serialized_start=595
+  _globals['_UPDATERESPONSE']._serialized_end=659
+  _globals['_COMMANDREQUEST']._serialized_start=661
+  _globals['_COMMANDREQUEST']._serialized_end=739
+  _globals['_COMMANDRESPONSE']._serialized_start=741
+  _globals['_COMMANDRESPONSE']._serialized_end=814
+  _globals['_STATUSREQUEST']._serialized_start=817
+  _globals['_STATUSREQUEST']._serialized_end=987
+  _globals['_STATUSREQUEST_METRICSENTRY']._serialized_start=941
+  _globals['_STATUSREQUEST_METRICSENTRY']._serialized_end=987
+  _globals['_STATUSRESPONSE']._serialized_start=989
+  _globals['_STATUSRESPONSE']._serialized_end=1048
+  _globals['_INSTRUCTIONREQUEST']._serialized_start=1050
+  _globals['_INSTRUCTIONREQUEST']._serialized_end=1131
+  _globals['_INSTRUCTIONRESPONSE']._serialized_start=1133
+  _globals['_INSTRUCTIONRESPONSE']._serialized_end=1235
+  _globals['_KILLREQUEST']._serialized_start=1237
+  _globals['_KILLREQUEST']._serialized_end=1296
+  _globals['_KILLRESPONSE']._serialized_start=1298
+  _globals['_KILLRESPONSE']._serialized_end=1357
+  _globals['_MANAGERSERVICE']._serialized_start=1360
+  _globals['_MANAGERSERVICE']._serialized_end=1722
+  _globals['_ROOTCONTROLLERSERVICE']._serialized_start=1725
+  _globals['_ROOTCONTROLLERSERVICE']._serialized_end=2110
+  _globals['_CHILDCONTROLLERSERVICE']._serialized_start=2113
+  _globals['_CHILDCONTROLLERSERVICE']._serialized_end=2417
 # @@protoc_insertion_point(module_scope)

@@ -32,6 +32,11 @@ def monitor_for_errors_while_idle(
     return None, (time.time() - start_time)
 
 
+#######################################################################################
+## This tests the live grpc configuration for grpc errors
+#######################################################################################
+
+
 def test_basic_grpc_tree_communication_multiprocessing(capsys):
     """
     Basic test to verify gRPC tree setup, communication, and trace logging using multiprocessing.
@@ -45,20 +50,27 @@ def test_basic_grpc_tree_communication_multiprocessing(capsys):
     from pathlib import Path
 
     os.environ["GRPC_TRACE"] = "http"
+    from drunc.grpc_settings import (
+        CONTROLLER_CLIENT_GRPC_CONFIG,
+        CONTROLLER_SERVER_GRPC_CONFIG,
+        CONTROLLER_SERVER_GRPC_MAX_WORKERS,
+        MANAGER_CLIENT_GRPC_CONFIG,
+        MANAGER_SERVER_GRPC_CONFIG,
+        MANAGER_SERVER_GRPC_MAX_WORKERS,
+    )
     from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
-    basic_config = []
     tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
         number_of_children=2,
-        manager_max_workers=2,
-        controller_max_workers=2,
         env_vars={"GRPC_TRACE": "http"},
-        manager_server_config=basic_config,
-        manager_client_config=basic_config,
-        root_server_config=basic_config,
-        root_client_config=basic_config,
-        child_server_config=basic_config,
-        child_client_config=basic_config,
+        manager_max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS,
+        controller_max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS,
+        manager_server_config=MANAGER_SERVER_GRPC_CONFIG,
+        manager_client_config=MANAGER_CLIENT_GRPC_CONFIG,
+        root_server_config=CONTROLLER_SERVER_GRPC_CONFIG,
+        root_client_config=CONTROLLER_CLIENT_GRPC_CONFIG,
+        child_server_config=CONTROLLER_SERVER_GRPC_CONFIG,
+        child_client_config=CONTROLLER_CLIENT_GRPC_CONFIG,
     )
     with capsys.disabled():
         with tree_manager as process_manager:
@@ -68,7 +80,7 @@ def test_basic_grpc_tree_communication_multiprocessing(capsys):
 
             # Test direct client to generate additional gRPC traffic
             direct_client = tree_manager.create_direct_client(
-                client_id="IdleTestClient", client_options=basic_config
+                client_id="IdleTestClient", client_options=MANAGER_CLIENT_GRPC_CONFIG
             )
             direct_client.make_request("Initial test from managed DirectRootClient")
 
@@ -115,23 +127,30 @@ def test_basic_grpc_tree_communication_ssh(capsys):
     from pathlib import Path
 
     os.environ["GRPC_TRACE"] = "http"
+    from drunc.grpc_settings import (
+        CONTROLLER_CLIENT_GRPC_CONFIG,
+        CONTROLLER_SERVER_GRPC_CONFIG,
+        CONTROLLER_SERVER_GRPC_MAX_WORKERS,
+        MANAGER_CLIENT_GRPC_CONFIG,
+        MANAGER_SERVER_GRPC_CONFIG,
+        MANAGER_SERVER_GRPC_MAX_WORKERS,
+    )
     from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
-    basic_config = []
     tree_manager = GrpcProcessTreeManager.create_with_ssh(
         number_of_children=2,
-        manager_max_workers=2,
-        controller_max_workers=2,
         hosts=["localhost"],
         default_user=os.getenv("USER", "testuser"),
         env_vars={"GRPC_TRACE": "http"},
         disable_host_key_check=True,
-        manager_server_config=basic_config,
-        manager_client_config=basic_config,
-        root_server_config=basic_config,
-        root_client_config=basic_config,
-        child_server_config=basic_config,
-        child_client_config=basic_config,
+        manager_max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS,
+        controller_max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS,
+        manager_server_config=MANAGER_SERVER_GRPC_CONFIG,
+        manager_client_config=MANAGER_CLIENT_GRPC_CONFIG,
+        root_server_config=CONTROLLER_SERVER_GRPC_CONFIG,
+        root_client_config=CONTROLLER_CLIENT_GRPC_CONFIG,
+        child_server_config=CONTROLLER_SERVER_GRPC_CONFIG,
+        child_client_config=CONTROLLER_CLIENT_GRPC_CONFIG,
     )
     with capsys.disabled():
         with tree_manager as process_manager:
@@ -141,7 +160,7 @@ def test_basic_grpc_tree_communication_ssh(capsys):
 
             # Test direct client to generate additional gRPC traffic
             direct_client = tree_manager.create_direct_client(
-                client_id="IdleTestClient", client_options=basic_config
+                client_id="IdleTestClient", client_options=MANAGER_CLIENT_GRPC_CONFIG
             )
             direct_client.make_request("Initial test from managed DirectRootClient")
 
@@ -173,11 +192,6 @@ def test_basic_grpc_tree_communication_ssh(capsys):
                     )
                 )
                 pytest.fail(error_msg)
-
-
-#######################################################################################
-## This tests the live grpc configuration for grpc errors
-#######################################################################################
 
 
 # @pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")

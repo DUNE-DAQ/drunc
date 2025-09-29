@@ -9,8 +9,46 @@ service ManagerService {
     // Method for receiving updates from RootController
     rpc ReceiveUpdate(UpdateRequest) returns (UpdateResponse);
     
+    // boot other processes via the manager
+    rpc Boot(BootRequest) returns (BootResponse);
+
     // Method for graceful shutdown of the Manager service
     rpc Kill(KillRequest) returns (KillResponse);
+}
+
+message BootRequest {
+    // Unique identifier for this booted process
+    string process_id = 1;
+    
+    // Type of server to boot
+    string server_type = 2;
+    
+    // Server configuration
+    int32 port = 3;
+    int32 max_workers = 4;
+    string log_file = 5;
+    
+    // SSH connection details
+    string env_setup_script = 6;
+    string host = 7;
+    string user = 8;
+    
+    // Optional server-specific parameters
+    map<string, string> extra_params = 9;
+}
+
+message BootResponse {
+    // Indicates if the boot request was successful
+    bool success = 1;
+    
+    // Process ID of the booted server
+    string process_id = 2;
+    
+    // Message describing the boot status or error
+    string message = 3;
+    
+    // Port the server is running on
+    int32 port = 4;
 }
 
 // Service for RootController component  

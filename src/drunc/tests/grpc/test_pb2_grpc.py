@@ -45,6 +45,11 @@ class ManagerServiceStub(object):
                 request_serializer=test__pb2.UpdateRequest.SerializeToString,
                 response_deserializer=test__pb2.UpdateResponse.FromString,
                 _registered_method=True)
+        self.Boot = channel.unary_unary(
+                '/drunc.tests.grpc_tree.ManagerService/Boot',
+                request_serializer=test__pb2.BootRequest.SerializeToString,
+                response_deserializer=test__pb2.BootResponse.FromString,
+                _registered_method=True)
         self.Kill = channel.unary_unary(
                 '/drunc.tests.grpc_tree.ManagerService/Kill',
                 request_serializer=test__pb2.KillRequest.SerializeToString,
@@ -70,6 +75,13 @@ class ManagerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Boot(self, request, context):
+        """boot other processes via the manager
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Kill(self, request, context):
         """Method for graceful shutdown of the Manager service
         """
@@ -89,6 +101,11 @@ def add_ManagerServiceServicer_to_server(servicer, server):
                     servicer.ReceiveUpdate,
                     request_deserializer=test__pb2.UpdateRequest.FromString,
                     response_serializer=test__pb2.UpdateResponse.SerializeToString,
+            ),
+            'Boot': grpc.unary_unary_rpc_method_handler(
+                    servicer.Boot,
+                    request_deserializer=test__pb2.BootRequest.FromString,
+                    response_serializer=test__pb2.BootResponse.SerializeToString,
             ),
             'Kill': grpc.unary_unary_rpc_method_handler(
                     servicer.Kill,
@@ -151,6 +168,33 @@ class ManagerService(object):
             '/drunc.tests.grpc_tree.ManagerService/ReceiveUpdate',
             test__pb2.UpdateRequest.SerializeToString,
             test__pb2.UpdateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Boot(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/drunc.tests.grpc_tree.ManagerService/Boot',
+            test__pb2.BootRequest.SerializeToString,
+            test__pb2.BootResponse.FromString,
             options,
             channel_credentials,
             insecure,
