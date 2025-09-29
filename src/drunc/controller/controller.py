@@ -43,7 +43,12 @@ from drunc.controller.utils import (
     get_status_message,
 )
 from drunc.exceptions import DruncException
+from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
+from drunc.fsm.exceptions import (
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
@@ -133,12 +138,12 @@ class Controller(ControllerServicer):
             configuration=bsch,
         )
 
-        fsmch = FSMConfHandler(
+        self.fsm_config = FSMConfHandler(
             data=self.configuration.data.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
-            fsm_configuration=fsmch,
+            fsm_configuration=self.fsm_config,
             publisher=self.controller_publisher,
             init_state="initialising",
             name=name,
@@ -773,6 +778,18 @@ class Controller(ControllerServicer):
                 transition_data=payload.data,
                 ctx=self,
             )
+
+            # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
+            # is present and well formatted
+            if (
+                "elisa-logbook" in self.fsm_config.get_actions()
+                and payload.command_name in ["start", "drain_dataflow"]
+            ):
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
+
             if payload.command_name == "start":
                 self.controller_publisher(
                     message=RunInfo(
@@ -1237,7 +1254,6 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -1250,7 +1266,7 @@ class Controller(ControllerServicer):
         self,
         addressed_commands: dict[str, AddressedCommand],
         execute_on_self: bool,
-        token: Token
+        token: Token,
     ) -> PlainText:
         """
         Transitions the stateful node to an error state. Used for testing purposes.
