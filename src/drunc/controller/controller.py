@@ -51,7 +51,7 @@ from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
 
-def address_command(
+def OLD_address_command(
     obj,
     command_name,
     command_data,
@@ -59,7 +59,7 @@ def address_command(
     execute_along_path,
     execute_on_all_subsequent_children_in_path,
 ):
-    log = get_logger("controller.address_command")
+    log = get_logger("controller.OLD_address_command")
 
     ret = {}
     children_names = [c.name for c in obj.children_nodes]
@@ -141,7 +141,7 @@ def unpack_addressed_command_to(data_type=None):
                 )
 
             try:
-                addressed_commands = address_command(
+                addressed_commands = OLD_address_command(
                     obj=obj,
                     command_name=command_name,
                     command_data=command.command_data,
@@ -175,7 +175,10 @@ def unpack_addressed_command_to(data_type=None):
                     )
 
             execute_on_self = (
-                obj.is_target(command.target) or command.execute_along_path
+                command.target == obj.name
+                or command.target == ""
+                or command.target == "/"
+                or command.execute_along_path
             )
 
             kwargs = {
@@ -508,17 +511,41 @@ class Controller(ControllerServicer):
     def __del__(self):
         self.terminate()
 
-    def is_target(self, target: str) -> bool:
-        """
-        Check if we are the target of a command.
+    def address_command(
+        self,
+        target_path: list[str],
+        execute_on_descendants: bool,
+    ) -> dict[ChildNode, list[str]]:
+        """Takes a target path and returns a dict of ChildNode to new target paths.
+
+        target_path must be a list of strings, starting with the name of this controller,
+        with further elements specifying the path to the target child node.
 
         Args:
-            target: The target string to check.
+            target_path: The target path to address.
+            execute_on_descendants: Whether to execute on subsequent children beyond target_path.
 
         Returns:
-            True if we are the target of the command, False otherwise.
+            A dict of ChildNodes and their associated target paths.
         """
-        return target == self.name or target == "" or target == "/"
+        log = get_logger("controller.address_command")
+        targets = {}
+
+        new_target_path = target_path[1:]
+
+        if new_target_path:
+            for child in self.children_nodes:
+                if child.name == new_target_path[0]:
+                    targets[child] = new_target_path
+            if not targets:
+                t = "/".join(new_target_path)
+                log.info(f"Target '{t}' not found in children of '{self.name}'")
+
+        elif execute_on_descendants:
+            for child in self.children_nodes:
+                targets[child] = [child.name]
+
+        return targets
 
     def propagate_to_all_children(
         self,
@@ -654,6 +681,14 @@ class Controller(ControllerServicer):
     ############# Status, description commands #############
     ########################################################
 
+    # TODO: HAVE SPECIALISED PER-COMMAND CODE TO POPULATE FUNCTION LAMBDAS AND MESSAGE ARGUMENTS
+    # ret[child.name] = AddressedCommand(
+    #     target="/".join(new_target_path),
+    #     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    # )
+
+    # TODO: MAKE propagate_addressed_command GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
+
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -668,17 +703,13 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        if self.is_target(request.target) or request.execute_along_path:
+        target_path = request.target.split("/") if request.target else [self.name]
+        if target_path == [self.name] or request.execute_along_path:
             status = get_status_message(self)
             response.status.CopyFrom(status)
-
-        addressed_commands = address_command(
-            obj=self,
-            command_name="status",
-            command_data=request.command_data,
-            target=request.target,
-            execute_along_path=request.execute_along_path,
-            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        addressed_commands = self.address_command(
+            target_path,
+            request.execute_on_all_subsequent_children_in_path,
         )
         children = self.propagate_addressed_command(
             "status",
@@ -705,7 +736,12 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        if self.is_target(request.target) or request.execute_along_path:
+        if (
+            request.target == self.name
+            or request.target == ""
+            or request.target == "/"
+            or request.execute_along_path
+        ):
             description = Description(
                 type="controller",
                 name=self.name,
@@ -718,7 +754,7 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        addressed_commands = address_command(
+        addressed_commands = OLD_address_command(
             obj=self,
             command_name="describe",
             command_data=request.command_data,
@@ -751,7 +787,12 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        if self.is_target(request.target) or request.execute_along_path:
+        if (
+            request.target == self.name
+            or request.target == ""
+            or request.target == "/"
+            or request.execute_along_path
+        ):
             payload = unpack_any(request.command_data, PlainText)
             if payload.text == "all-transitions":
                 description = convert_fsm_transition(
@@ -778,7 +819,7 @@ class Controller(ControllerServicer):
                 description.sequences.append(seq)
             response.description.CopyFrom(description)
 
-        addressed_commands = address_command(
+        addressed_commands = OLD_address_command(
             obj=self,
             command_name="describe_fsm",
             command_data=request.command_data,
