@@ -732,14 +732,15 @@ class Controller(ControllerServicer):
         response_lock = threading.Lock()
         command_name = parent_request.command_name
 
-        def propagate(node: ChildNode, request: AddressedCommand):
+        def propagate(child: ChildNode, request: AddressedCommand):
             request_str = str(request).replace("\n", " ")
             self.log.debug(
-                f"Propagating {command_name} to child {node.name}, request: {request_str}"
+                f"Propagating {command_name} to child {child.name}, request: {request_str}"
             )
 
             try:
-                response = node.propagate_command(
+                # TODO: replace with direct child command calls.
+                response = child.propagate_command(
                     command=command_name,
                     data=request,
                     token=None,
@@ -752,15 +753,17 @@ class Controller(ControllerServicer):
                     ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ]:
                     self.log.debug(
-                        f"Propagated {command_name} to child ({node.name}) successfully"
+                        f"Propagated {command_name} to child ({child.name}) successfully"
                     )
                 else:
                     self.log.error(
-                        f"Propagating {command_name} to child ({node.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
+                        f"Propagating {command_name} to child ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
                     )
 
             except Exception as e:
-                self.log.exception(f"Failed to propagate {command_name} to {node.name}")
+                self.log.exception(
+                    f"Failed to propagate {command_name} to {child.name}"
+                )
                 flag = (
                     ResponseFlag.DRUNC_EXCEPTION_THROWN
                     if isinstance(e, DruncException)
@@ -772,7 +775,7 @@ class Controller(ControllerServicer):
                     response_children.append(
                         Response(
                             token=None,
-                            name=node.name,
+                            name=child.name,
                             data=pack_to_any(Stacktrace(text=stack)),
                             flag=flag,
                             children=[],
@@ -780,14 +783,14 @@ class Controller(ControllerServicer):
                     )
 
         threads = []
-        for node, target in child_list:
+        for child, target in child_list:
             request = AddressedCommand()
             request.CopyFrom(parent_request)
             request.target = "/".join(target)
             threads.append(
                 threading.Thread(
                     target=propagate,
-                    args=(node, request),
+                    args=(child, request),
                 )
             )
             threads[-1].start()
