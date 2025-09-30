@@ -388,10 +388,27 @@ done
                 ],
             ),
         )
+
         try:
-            created_pod = self._core_v1_api.create_namespaced_pod(session, pod_manifest)
-            self.log.info(f'Creating pod "{session}.{podname}"')
-            pod_uid = created_pod.metadata.uid
+            MAX_WAIT_TIME = 10  # in the case of restart, this allows for completele cleanup 
+            start_time = time()
+            pod_uid = None
+
+            while True:
+                try:
+                    created_pod = self._core_v1_api.create_namespaced_pod(session, pod_manifest)
+                    self.log.info(f'Creating pod "{session}.{podname}"')
+                    pod_uid = created_pod.metadata.uid
+                    break
+
+                # this covers restart where we need to wait for cleanup
+                except self._api_error_v1_api as e:
+                    is_409_conflict = e.status == 409
+                    
+                    if is_409_conflict and time() - start_time < MAX_WAIT_TIME:
+                        sleep(0.5)
+                        continue
+                    raise e
 
             if podname == self.connection_server_name:
                 self._create_clusterip_service(podname, session, pod_uid)
@@ -399,8 +416,16 @@ done
                 self._create_headless_service(podname, session, pod_uid)
 
         except self._api_error_v1_api as e:
-            self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
-            raise e
+            error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
+            
+            if e.status == 409 and time() - start_time >= MAX_WAIT_TIME:
+                error_message = (
+                    f'Timeout (>{MAX_WAIT_TIME}s) waiting for old pod object '
+                    f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
+                )
+            
+            self.log.error(error_message)
+            raise DruncException(error_message) from e
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
         """
