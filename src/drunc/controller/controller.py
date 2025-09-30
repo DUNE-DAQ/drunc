@@ -301,7 +301,7 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-            children_statuses = self.address_all(
+            children_statuses = self.OLD_propagate_to_all_children(
                 command_name="status",
                 token=self.actor.get_token(),
             )
@@ -554,6 +554,34 @@ class Controller(ControllerServicer):
     # TODO: UPDATE address_all: like address_target_path, but for all children and include/exclude
 
     def address_all(
+        self,
+        command_name: str,
+        token: Token,
+        command_data: Any = None,
+        only_included: bool = True,
+    ):
+        children_to_execute = [
+            cn.name for cn in self.children_nodes if cn.included or not only_included
+        ]
+
+        addressed_commands = {
+            cn: AddressedCommand(
+                command_name=command_name,
+                command_data=command_data,
+                target=cn,
+                execute_along_path=True,
+                execute_on_all_subsequent_children_in_path=True,
+            )
+            for cn in children_to_execute
+        }
+
+        return self.propagate_addressed_command(
+            command_name,
+            addressed_commands,
+            token,
+        )
+
+    def OLD_propagate_to_all_children(
         self,
         command_name: str,
         token: Token,
@@ -1039,7 +1067,7 @@ class Controller(ControllerServicer):
         token: Token,
     ) -> Response:
         if execute_on_self:
-            statuses = self.address_all(
+            statuses = self.OLD_propagate_to_all_children(
                 "recompute_status",
                 command_data=None,
                 token=token,
@@ -1103,7 +1131,7 @@ class Controller(ControllerServicer):
 
             status = get_status_message(self.stateful_node)
 
-            post_statuses = self.address_all(
+            post_statuses = self.OLD_propagate_to_all_children(
                 "status",
                 command_data=None,
                 token=token,
