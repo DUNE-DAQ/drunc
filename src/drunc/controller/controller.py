@@ -533,7 +533,7 @@ class Controller(ControllerServicer):
             for cn in children_to_execute
         }
 
-        return self.propagate_addressed_command(
+        return self.propagate_to_children(
             command_name,
             addressed_commands,
             token,
@@ -621,7 +621,7 @@ class Controller(ControllerServicer):
             if child.included or not only_included
         ]
 
-    def propagate_addressed_command(
+    def propagate_to_children(
         self,
         command_name: str,
         addressed_commands: dict[str, AddressedCommand],
@@ -733,7 +733,7 @@ class Controller(ControllerServicer):
     #     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     # )
 
-    # TODO: MAKE propagate_addressed_command GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
+    # TODO: MAKE propagate_to_children GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
 
     @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
@@ -741,12 +741,12 @@ class Controller(ControllerServicer):
     def status(
         self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
+        target_path = self.parse_target_path(request.target)
+
         response = StatusResponse(
             token=None,
             name=self.name,
         )
-
-        target_path = self.parse_target_path(request.target)
 
         if target_path == [self.name] or request.execute_along_path:
             status = get_status_message(self)
@@ -756,7 +756,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_addressed_command("status", children, None)
+        children_responses = self.propagate_to_children("status", children, None)
         response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -769,12 +769,12 @@ class Controller(ControllerServicer):
     def describe(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
+        target_path = self.parse_target_path(request.target)
+
         response = DescribeResponse(
             token=None,
             name=self.name,
         )
-
-        target_path = self.parse_target_path(request.target)
 
         if target_path == [self.name] or request.execute_along_path:
             description = Description(
@@ -793,9 +793,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_addressed_command(
-            "describe", children, None
-        )
+        children_responses = self.propagate_to_children("describe", children, None)
         response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -853,7 +851,7 @@ class Controller(ControllerServicer):
             execute_along_path=request.execute_along_path,
             execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_addressed_command(
+        children_responses = self.propagate_to_children(
             "describe_fsm",
             addressed_commands,
             None,
@@ -993,7 +991,7 @@ class Controller(ControllerServicer):
                     execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
                 )
 
-            response_children = self.propagate_addressed_command(
+            response_children = self.propagate_to_children(
                 "execute_fsm_command",
                 children_fsm_commands,
                 token,
@@ -1057,7 +1055,7 @@ class Controller(ControllerServicer):
                 token=token,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_addressed_command(
+                children=self.propagate_to_children(
                     "execute_fsm_command",
                     addressed_commands,
                     token,
@@ -1163,7 +1161,7 @@ class Controller(ControllerServicer):
                 token=token,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_addressed_command(
+                children=self.propagate_to_children(
                     "recompute_status",
                     addressed_commands,
                     token,
@@ -1199,7 +1197,7 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = True
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.propagate_to_children(
             "include",
             addressed_commands,
             token,
@@ -1242,7 +1240,7 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = False
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.propagate_to_children(
             "exclude",
             addressed_commands,
             token,
@@ -1271,7 +1269,7 @@ class Controller(ControllerServicer):
         execute_on_self: bool,
         token: Token,
     ) -> Response:
-        children_expert_command_response = self.propagate_addressed_command(
+        children_expert_command_response = self.propagate_to_children(
             "execute_expert_command",
             addressed_commands,
             token,
@@ -1309,7 +1307,7 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{token.user_name} took control on {self.name}"
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.propagate_to_children(
             "take_control",
             addressed_commands,
             token,
@@ -1354,7 +1352,7 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{user} surrendered control on {self.name}"
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.propagate_to_children(
             "surrender_control",
             addressed_commands,
             token,
@@ -1396,7 +1394,7 @@ class Controller(ControllerServicer):
         else:
             user = None
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.propagate_to_children(
             "who_is_in_charge",
             addressed_commands,
             token,
@@ -1435,7 +1433,7 @@ class Controller(ControllerServicer):
             if execute_on_self:
                 self.stateful_node.to_error()
 
-            response_children = self.propagate_addressed_command(
+            response_children = self.propagate_to_children(
                 "to_error",
                 addressed_commands,
                 token,
