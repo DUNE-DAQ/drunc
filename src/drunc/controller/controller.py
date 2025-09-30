@@ -544,14 +544,12 @@ class Controller(ControllerServicer):
         target_path: list[str],
         execute_on_children: bool,
     ) -> list[tuple[ChildNode, list[str]]]:
-        """Finds the target child node(s) for a given target path.
+        """Finds the next node(s) along a given path to a target node.
 
-        Takes a target path from a parent node and returns a list of node and
-        target path pairs for each child node addressed by the command.
-
-        The target paths of all nodes must be lists of strings, starting with
-        the name of that node, with further elements specifying the names of
-        subsequent child nodes in the path.
+        Given a path from the current node to the target node, a list of node
+        and path pairs is returned. This will contain either a single child
+        node, next along the path, or all child nodes if the path is exhausted
+        and the execute_on_children flag is set.
 
         Args:
             target_path: The target path from the parent node.
@@ -560,20 +558,20 @@ class Controller(ControllerServicer):
         Returns:
             A list of (ChildNode, target_path) for each addressed child.
         """
-        targets: list[tuple[ChildNode, list[str]]] = []
         new_target_path = target_path[1:]
 
-        if new_target_path:
-            for child in self.children_nodes:
-                if child.name == new_target_path[0]:
-                    targets.append((child, new_target_path))
-            if not targets:
-                t = "/".join(new_target_path)
-                self.log.info(f"Target '{t}' not found in children of '{self.name}'")
+        # Handle execute_on_children case only at the end of the target path.
+        if not new_target_path and execute_on_children:
+            return [(child, [child.name]) for child in self.children_nodes]
 
-        elif execute_on_children:
-            for child in self.children_nodes:
-                targets.append((child, [child.name]))
+        targets = [
+            (child, new_target_path)
+            for child in self.children_nodes
+            if child.name == new_target_path[0]
+        ]
+        if not targets:
+            t = "/".join(new_target_path)
+            self.log.info(f"Target '{t}' not found in children of '{self.name}'")
 
         return targets
 
@@ -581,14 +579,17 @@ class Controller(ControllerServicer):
         self,
         only_included: bool = True,
     ) -> list[tuple[ChildNode, list[str]]]:
-        """Finds all child nodes, with optional node exclusion.
+        """Finds all child nodes, with optional node inclusion/exclusion.
 
         Returns a list of node and target path pairs for each child node. The
-        returned data structure is the same as that of address_target_path.
+        returned data structure is identical to that of address_target_path.
 
         Args:
-            only_included: If True, only search for nodes that are marked for
-                inclusion (default: True).
+            only_included: If True, only traverse nodes that are explicitly
+                marked for inclusion.
+
+        Returns:
+            A list of (ChildNode, target_path) for each addressed child.
         """
         return [
             (child, [child.name])
