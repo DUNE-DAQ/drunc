@@ -514,7 +514,7 @@ class Controller(ControllerServicer):
     def address_command(
         self,
         target_path: list[str],
-        execute_on_descendants: bool,
+        execute_on_children: bool,
     ) -> dict[ChildNode, list[str]]:
         """Takes a target path and returns a dict of ChildNode to new target paths.
 
@@ -523,7 +523,7 @@ class Controller(ControllerServicer):
 
         Args:
             target_path: The target path to address.
-            execute_on_descendants: Whether to execute on subsequent children beyond target_path.
+            execute_on_children: Whether to execute on subsequent children beyond target_path.
 
         Returns:
             A dict of ChildNodes and their associated target paths.
@@ -541,7 +541,7 @@ class Controller(ControllerServicer):
                 t = "/".join(new_target_path)
                 log.info(f"Target '{t}' not found in children of '{self.name}'")
 
-        elif execute_on_descendants:
+        elif execute_on_children:
             for child in self.children_nodes:
                 targets[child] = [child.name]
 
