@@ -206,9 +206,7 @@ class ProcessManagerDriver(GRPCDriver):
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
-        executable_and_arguments = self._prepare_exec_and_args(
-            session_dal, exe, args
-        )
+        executable_and_arguments = self._prepare_exec_and_args(session_dal, exe, args)
 
         log_path = get_log_path(
             user=user,
@@ -412,7 +410,9 @@ To debug it, close drunc and run the following command:
         pwd = os.getcwd()
 
         # Construct the list of commands to send to the dummy_boot process
-        executable_and_arguments = self._prepare_exec_and_args_dummy_boot(sleep, n_sleeps)
+        executable_and_arguments = self._prepare_exec_and_args_dummy_boot(
+            sleep, n_sleeps
+        )
 
         for process in range(n_processes):
             request = self._build_boot_request_dummy_boot(
