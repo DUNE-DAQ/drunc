@@ -532,8 +532,6 @@ class Controller(ControllerServicer):
         Returns:
             A list of (ChildNode, target_path) for each addressed child.
         """
-        log = get_logger("controller.address_target_path")
-
         targets: list[tuple[ChildNode, list[str]]] = []
         new_target_path = target_path[1:]
 
@@ -543,7 +541,7 @@ class Controller(ControllerServicer):
                     targets.append((child, new_target_path))
             if not targets:
                 t = "/".join(new_target_path)
-                log.info(f"Target '{t}' not found in children of '{self.name}'")
+                self.log.info(f"Target '{t}' not found in children of '{self.name}'")
 
         elif execute_on_children:
             for child in self.children_nodes:
