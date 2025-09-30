@@ -701,9 +701,11 @@ class Controller(ControllerServicer):
         )
 
         target_path = request.target.split("/") if request.target else [self.name]
+
         if target_path == [self.name] or request.execute_along_path:
             status = get_status_message(self)
             response.status.CopyFrom(status)
+
         addressed_commands = self.address_command(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
@@ -730,13 +732,9 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        # target_path
-        if (
-            request.target == self.name
-            or request.target == ""
-            or request.target == "/"
-            or request.execute_along_path
-        ):
+        target_path = request.target.split("/") if request.target else [self.name]
+
+        if target_path == [self.name] or request.execute_along_path:
             description = Description(
                 type="controller",
                 name=self.name,
@@ -749,13 +747,9 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        addressed_commands = OLD_address_command(
-            obj=self,
-            command_name="describe",
-            command_data=request.command_data,
-            target=request.target,
-            execute_along_path=request.execute_along_path,
-            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        addressed_commands = self.address_command(
+            target_path,
+            request.execute_on_all_subsequent_children_in_path,
         )
         children = self.propagate_addressed_command(
             "describe",
