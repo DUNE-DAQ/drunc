@@ -9,7 +9,10 @@ This test verifies that:
 """
 
 import os
+import signal
+import subprocess
 import time
+from typing import Generator, List, Optional
 
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
@@ -26,7 +29,195 @@ from drunc.tests.grpc.test_pb2 import BootRequest, DummyRequest, KillRequest
 from drunc.tests.grpc.test_pb2_grpc import ManagerServiceStub, RootControllerServiceStub
 
 
-def test_manager_boot_and_kill_via_grpc():
+class TestResources:
+    """Container for test resources requiring cleanup."""
+
+    def __init__(self):
+        self.log_manager: Optional[LogFileManager] = None
+        self.connection_manager: Optional[MultiprocessingConnectionManager] = None
+        self.server_manager: Optional[GrpcServerManager] = None
+        self.manager_channel = None
+        self.root_channel = None
+        self.ports_to_cleanup: List[int] = []
+
+
+def kill_process_on_port(port: int, timeout: float = 5.0) -> bool:
+    """
+    Find and kill any process listening on the specified port.
+
+    Args:
+        port: Port number to check and clean up
+        timeout: Maximum time to wait for process termination
+
+    Returns:
+        True if a process was found and killed, False otherwise
+    """
+    try:
+        # Find process ID listening on the port
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True,
+            timeout=2.0,
+        )
+
+        if result.returncode != 0 or not result.stdout.strip():
+            return False
+
+        # Get PIDs (may be multiple)
+        pids = [int(pid) for pid in result.stdout.strip().split("\n") if pid]
+
+        for pid in pids:
+            try:
+                print(f"Killing process {pid} on port {port}")
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                # Process already gone
+                continue
+            except PermissionError:
+                print(f"Warning: No permission to kill process {pid}")
+                continue
+
+        # Wait for processes to terminate
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            # Check if any processes still exist
+            still_alive = False
+            for pid in pids:
+                try:
+                    os.kill(pid, 0)  # Check if process exists
+                    still_alive = True
+                except ProcessLookupError:
+                    pass
+
+            if not still_alive:
+                return True
+
+            time.sleep(0.2)
+
+        # Force kill if still alive
+        for pid in pids:
+            try:
+                os.kill(pid, signal.SIGKILL)
+                print(f"Force killed process {pid} on port {port}")
+            except ProcessLookupError:
+                pass
+
+        return True
+
+    except subprocess.TimeoutExpired:
+        print(f"Warning: lsof timeout while checking port {port}")
+        return False
+    except FileNotFoundError:
+        # lsof not available, try alternative method with netstat
+        try:
+            result = subprocess.run(
+                ["netstat", "-tlnp"],
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+
+            for line in result.stdout.split("\n"):
+                if f":{port}" in line and "LISTEN" in line:
+                    # Extract PID from netstat output
+                    parts = line.split()
+                    if len(parts) >= 7:
+                        pid_program = parts[6]
+                        if "/" in pid_program:
+                            pid = int(pid_program.split("/")[0])
+                            try:
+                                print(
+                                    f"Killing process {pid} on port {port} (via netstat)"
+                                )
+                                os.kill(pid, signal.SIGTERM)
+                                time.sleep(1)
+                                try:
+                                    os.kill(pid, signal.SIGKILL)
+                                except ProcessLookupError:
+                                    pass
+                                return True
+                            except (ProcessLookupError, PermissionError):
+                                pass
+
+        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError):
+            pass
+
+        return False
+    except Exception as e:
+        print(f"Warning: Error killing process on port {port}: {e}")
+        return False
+
+
+@pytest.fixture
+def test_resources() -> Generator[TestResources, None, None]:
+    """
+    Fixture providing test resources with guaranteed cleanup.
+
+    Ensures all resources are cleaned up even if the test fails,
+    preventing orphaned processes and open channels. Also forcefully
+    kills any processes still bound to test ports.
+
+    Yields:
+        TestResources: Container for test resources
+    """
+    resources = TestResources()
+
+    try:
+        yield resources
+    finally:
+        # Guaranteed cleanup in reverse order of creation
+        print("\n=== Fixture Cleanup ===")
+
+        # Close gRPC channels
+        if resources.root_channel:
+            try:
+                resources.root_channel.close()
+                print("RootController channel closed")
+            except Exception as e:
+                print(f"Warning: Error closing root channel: {e}")
+
+        if resources.manager_channel:
+            try:
+                resources.manager_channel.close()
+                print("Manager channel closed")
+            except Exception as e:
+                print(f"Warning: Error closing manager channel: {e}")
+
+        # Clean up server manager (stops all servers)
+        if resources.server_manager:
+            try:
+                resources.server_manager.cleanup()
+                print("Server manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during server cleanup: {e}")
+
+        # Clean up connection manager
+        if resources.connection_manager:
+            try:
+                resources.connection_manager.cleanup()
+                print("Connection manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during connection cleanup: {e}")
+
+        # Force kill any remaining processes on test ports
+        if resources.ports_to_cleanup:
+            print("\n=== Force cleanup of test ports ===")
+            for port in resources.ports_to_cleanup:
+                killed = kill_process_on_port(port)
+                if killed:
+                    print(f"Cleaned up orphaned process on port {port}")
+
+        # Clean up log manager
+        if resources.log_manager:
+            try:
+                resources.log_manager.cleanup()
+                print("Log manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during log cleanup: {e}")
+
+
+def test_manager_boot_and_kill_via_grpc(capsys, test_resources):
     """
     Test that verifies Manager can boot servers via Boot RPC and kill them via Kill RPC.
 
@@ -35,80 +226,90 @@ def test_manager_boot_and_kill_via_grpc():
     2. Sends Boot request to start RootController via SSH
     3. Verifies RootController is operational
     4. Sends Kill request to Manager
-    5. Verifies Manager terminates booted RootController first
+
+
+
+                5. Verifies Manager terminates booted RootController first
     6. Verifies Manager itself terminates
     7. Checks all processes are cleaned up
+
+    Args:
+        capsys: Pytest fixture for capturing stdout/stderr
+        test_resources: Fixture providing managed test resources with guaranteed cleanup
     """
 
-    # Environment configuration for SSH boot
-    env_script_dir = "/home/aurash/work/09sept"
-    env_file = "env.sh"
-    env_setup_script = f"cd {env_script_dir} && source {env_file}"
+    with capsys.disabled():
+        # Environment configuration for SSH boot
+        env_script_dir = "/home/aurash/work/09sept"
+        env_file = "env.sh"
+        env_setup_script = f"cd {env_script_dir} && source {env_file}"
 
-    # Verify environment setup exists
-    assert os.path.exists(env_script_dir), (
-        f"Environment script directory not found: {env_script_dir}"
-    )
-    assert os.path.exists(os.path.join(env_script_dir, env_file)), (
-        f"Environment script file not found: {env_file}"
-    )
+        # Verify environment setup exists
+        assert os.path.exists(env_script_dir), (
+            f"Environment script directory not found: {env_script_dir}"
+        )
+        assert os.path.exists(os.path.join(env_script_dir, env_file)), (
+            f"Environment script file not found: {env_file}"
+        )
 
-    # Test configuration
-    manager_port = 50090
-    root_controller_port = 50091
-    max_workers = 2
-    server_timeout = 30.0
+        # Test configuration
+        manager_port = 50090
+        root_controller_port = 50091
+        max_workers = 2
+        server_timeout = 30.0
 
-    print("=== Test Manager Boot and Kill via gRPC ===")
-    print(f"Manager port: {manager_port}")
-    print(f"RootController port: {root_controller_port}")
-    print(f"Environment script: {env_setup_script}")
+        # Register ports for cleanup
+        test_resources.ports_to_cleanup = [manager_port, root_controller_port]
 
-    # Create log file manager
-    log_manager = LogFileManager()
-    manager_log = log_manager.create_log_file("ManagerServer")
-    root_log = log_manager.create_log_file("RootControllerServer")
-    print(f"Manager log: {manager_log}")
-    print(f"RootController log (local): {root_log}")
+        print("=== Test Manager Boot and Kill via gRPC ===")
+        print(f"Manager port: {manager_port}")
+        print(f"RootController port: {root_controller_port}")
+        print(f"Environment script: {env_setup_script}")
 
-    # Create connection and server managers for Manager (multiprocessing)
-    connection_manager = MultiprocessingConnectionManager(
-        env_vars={"GRPC_TRACE": "http"}
-    )
-    server_manager = GrpcServerManager(connection_manager)
+        # Create log file manager
+        test_resources.log_manager = LogFileManager()
+        manager_log = test_resources.log_manager.create_log_file("ManagerServer")
+        root_log = test_resources.log_manager.create_log_file("RootControllerServer")
+        print(f"Manager log: {manager_log}")
+        print(f"RootController log (local): {root_log}")
 
-    # Configure Manager server
-    manager_config = GrpcServerConfig(
-        server_id="TestManagerServer",
-        server_type=ServerType.MANAGER,
-        host="localhost",
-        port=manager_port,
-        max_workers=max_workers,
-        log_file=manager_log,
-        server_options=[],
-        client_options=[],
-    )
+        # Create connection and server managers for Manager (multiprocessing)
+        test_resources.connection_manager = MultiprocessingConnectionManager(
+            env_vars={"GRPC_TRACE": "http"}
+        )
+        test_resources.server_manager = GrpcServerManager(
+            test_resources.connection_manager
+        )
 
-    manager_handle = None
-    manager_channel = None
-    root_channel = None
+        # Configure Manager server
+        manager_config = GrpcServerConfig(
+            server_id="TestManagerServer",
+            server_type=ServerType.MANAGER,
+            host="localhost",
+            port=manager_port,
+            max_workers=max_workers,
+            log_file=manager_log,
+            server_options=[],
+            client_options=[],
+        )
 
-    try:
         print("\n=== Starting Manager Server ===")
 
         # Start the Manager server
-        manager_handle = server_manager.start_manager_server(manager_config)
+        manager_handle = test_resources.server_manager.start_manager_server(
+            manager_config
+        )
         assert manager_handle is not None, "Failed to create Manager server handle"
         print(f"Manager server handle created: {manager_handle.process_id}")
 
         # Wait for Manager to be ready
         print("\n=== Waiting for Manager Ready ===")
-        ready = server_manager.wait_for_server_ready(
+        ready = test_resources.server_manager.wait_for_server_ready(
             "TestManagerServer", timeout=server_timeout
         )
 
         assert ready, "Manager server failed to become ready within timeout"
-        assert connection_manager.is_process_alive(manager_handle), (
+        assert test_resources.connection_manager.is_process_alive(manager_handle), (
             "Manager server process should be alive"
         )
         print("Manager server is ready and process is alive")
@@ -116,8 +317,8 @@ def test_manager_boot_and_kill_via_grpc():
         # Create gRPC client connection to Manager
         print("\n=== Testing Manager Communication ===")
 
-        manager_channel = insecure_channel(f"localhost:{manager_port}")
-        manager_stub = ManagerServiceStub(manager_channel)
+        test_resources.manager_channel = insecure_channel(f"localhost:{manager_port}")
+        manager_stub = ManagerServiceStub(test_resources.manager_channel)
 
         # Send test request to verify Manager is working
         test_request = DummyRequest(
@@ -152,16 +353,20 @@ def test_manager_boot_and_kill_via_grpc():
         print(f"Boot port: {boot_response.port}")
         print(f"RootController log (SSH remote): {root_log}")
 
+        # Check for fork() issue after triggering SSH boot on gRPC server
+        error = test_resources.log_manager.check_for_errors()
+        if error is not None:
+            pytest.fail(f"Error detected after Boot request. Error: {error}")
+
         assert boot_response.success, f"Boot request failed: {boot_response.message}"
         assert boot_response.port == root_controller_port, "Boot response port mismatch"
 
-        # Wait a moment for RootController to fully start
-        time.sleep(2.0)
-
         # Verify RootController is operational by connecting to it
         print("\n=== Verifying RootController is Operational ===")
-        root_channel = insecure_channel(f"localhost:{root_controller_port}")
-        root_stub = RootControllerServiceStub(root_channel)
+        test_resources.root_channel = insecure_channel(
+            f"localhost:{root_controller_port}"
+        )
+        root_stub = RootControllerServiceStub(test_resources.root_channel)
 
         root_test_request = DummyRequest(
             message="Test request to booted RootController",
@@ -189,9 +394,6 @@ def test_manager_boot_and_kill_via_grpc():
 
         # Verify RootController is no longer responding (killed by Manager)
         print("\n=== Verifying RootController Terminated ===")
-
-        # Wait a moment for RootController to process the kill
-        time.sleep(2.0)
 
         # Keep trying for up to 5 seconds to confirm RootController is down
         root_down = False
@@ -223,13 +425,15 @@ def test_manager_boot_and_kill_via_grpc():
 
         while (
             time.time() - start_time
-        ) < termination_timeout and connection_manager.is_process_alive(manager_handle):
+        ) < termination_timeout and test_resources.connection_manager.is_process_alive(
+            manager_handle
+        ):
             time.sleep(0.5)
             print(".", end="", flush=True)
 
         print()  # New line after dots
 
-        if connection_manager.is_process_alive(manager_handle):
+        if test_resources.connection_manager.is_process_alive(manager_handle):
             pytest.fail("Manager process did not terminate within expected time")
 
         elapsed = time.time() - start_time
@@ -241,59 +445,3 @@ def test_manager_boot_and_kill_via_grpc():
             manager_stub.MakeRequest(test_request, timeout=2.0)
 
         print("\n✓ Test passed: Manager successfully booted and killed RootController")
-
-    except Exception as e:
-        pytest.fail(f"Test failed with unexpected error: {e}")
-
-    finally:
-        print("\n=== Cleanup ===")
-
-        # Close gRPC channels
-        if root_channel:
-            try:
-                root_channel.close()
-                print("RootController channel closed")
-            except Exception as e:
-                print(f"Warning: Error closing root channel: {e}")
-
-        if manager_channel:
-            try:
-                manager_channel.close()
-                print("Manager channel closed")
-            except Exception as e:
-                print(f"Warning: Error closing manager channel: {e}")
-
-        # Clean up server manager
-        try:
-            server_manager.cleanup()
-            print("Server manager cleanup completed")
-        except Exception as e:
-            print(f"Warning: Error during server cleanup: {e}")
-
-        # Clean up connection manager
-        try:
-            connection_manager.cleanup()
-            print("Connection manager cleanup completed")
-        except Exception as e:
-            print(f"Warning: Error during connection cleanup: {e}")
-
-        # Clean up log manager
-        try:
-            log_manager.cleanup()
-            print("Log manager cleanup completed")
-        except Exception as e:
-            print(f"Warning: Error during log cleanup: {e}")
-
-    print("\nTest boot_and_kill_via_grpc completed successfully")
-
-
-if __name__ == "__main__":
-    """
-    Run the test directly for debugging purposes.
-    """
-    try:
-        test_manager_boot_and_kill_via_grpc()
-        print("\n✓ Manager boot and kill test passed!")
-    except Exception as e:
-        print(f"\n✗ Manager boot and kill test failed: {e}")
-        raise

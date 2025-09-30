@@ -9,11 +9,11 @@ from typing import List
 GRPC_ERROR_PATTERNS = [
     "ping_timeout",
     "keepalive.*timeout",
-    "chttp2_transport.*GOAWAY",
     "GOAWAY.*UNAVAILABLE",
     "Error code.*ping_timeout",
     "grpc.*UNAVAILABLE.*ping",
     "Other threads are currently calling into gRPC",
+    "skipping fork()",
 ]
 
 
