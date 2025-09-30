@@ -511,6 +511,34 @@ class Controller(ControllerServicer):
     def __del__(self):
         self.terminate()
 
+    def OLD_propagate_to_all_children(
+        self,
+        command_name: str,
+        token: Token,
+        command_data: Any = None,
+        only_included: bool = True,
+    ):
+        children_to_execute = [
+            cn.name for cn in self.children_nodes if not only_included or cn.included
+        ]
+
+        addressed_commands = {
+            cn: AddressedCommand(
+                command_name=command_name,
+                command_data=command_data,
+                target=cn,
+                execute_along_path=True,
+                execute_on_all_subsequent_children_in_path=True,
+            )
+            for cn in children_to_execute
+        }
+
+        return self.propagate_addressed_command(
+            command_name,
+            addressed_commands,
+            token,
+        )
+
     def address_target_path(
         self,
         target_path: list[str],
@@ -549,63 +577,24 @@ class Controller(ControllerServicer):
 
         return targets
 
-    # TODO: UPDATE address_all: like address_target_path, but for all children and include/exclude
-
     def address_all(
         self,
-        command_name: str,
-        token: Token,
-        command_data: Any = None,
         only_included: bool = True,
-    ):
-        children_to_execute = [
-            cn.name for cn in self.children_nodes if cn.included or not only_included
+    ) -> list[tuple[ChildNode, list[str]]]:
+        """Finds all child nodes, with optional node exclusion.
+
+        Returns a list of node and target path pairs for each child node. The
+        returned data structure is the same as that of address_target_path.
+
+        Args:
+            only_included: If True, only search for nodes that are marked for
+                inclusion (default: True).
+        """
+        return [
+            (child, [child.name])
+            for child in self.children_nodes
+            if child.included or not only_included
         ]
-
-        addressed_commands = {
-            cn: AddressedCommand(
-                command_name=command_name,
-                command_data=command_data,
-                target=cn,
-                execute_along_path=True,
-                execute_on_all_subsequent_children_in_path=True,
-            )
-            for cn in children_to_execute
-        }
-
-        return self.propagate_addressed_command(
-            command_name,
-            addressed_commands,
-            token,
-        )
-
-    def OLD_propagate_to_all_children(
-        self,
-        command_name: str,
-        token: Token,
-        command_data: Any = None,
-        only_included: bool = True,
-    ):
-        children_to_execute = [
-            cn.name for cn in self.children_nodes if not only_included or cn.included
-        ]
-
-        addressed_commands = {
-            cn: AddressedCommand(
-                command_name=command_name,
-                command_data=command_data,
-                target=cn,
-                execute_along_path=True,
-                execute_on_all_subsequent_children_in_path=True,
-            )
-            for cn in children_to_execute
-        }
-
-        return self.propagate_addressed_command(
-            command_name,
-            addressed_commands,
-            token,
-        )
 
     def propagate_addressed_command(
         self,
