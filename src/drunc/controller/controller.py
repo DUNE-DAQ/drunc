@@ -502,7 +502,7 @@ class Controller(ControllerServicer):
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
-            self.log.debug(f"{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}")
+            self.log.debug(f"{t.name} TID: {t.native_id} is_alive: {t.is_alive}")
 
         with multiprocessing.Manager() as manager:
             self.log.debug("Multiprocess threads")
