@@ -515,35 +515,39 @@ class Controller(ControllerServicer):
         self,
         target_path: list[str],
         execute_on_children: bool,
-    ) -> dict[ChildNode, list[str]]:
-        """Takes a target path and returns a dict of ChildNode to new target paths.
+    ) -> list[tuple[ChildNode, list[str]]]:
+        """Finds the target child node(s) for a given target path.
 
-        target_path must be a list of strings, starting with the name of this controller,
-        with further elements specifying the path to the target child node.
+        Takes a target path from a parent node and returns a list of node and
+        target path pairs for each child node addressed by the command.
+
+        The target paths of all nodes must be lists of strings, starting with
+        the name of that node, with further elements specifying the names of
+        subsequent child nodes in the path.
 
         Args:
-            target_path: The target path to address.
-            execute_on_children: Whether to execute on subsequent children beyond target_path.
+            target_path: The target path from the parent node.
+            execute_on_children: If True, run on nodes beyond target_path.
 
         Returns:
-            A dict of ChildNodes and their associated target paths.
+            A list of (ChildNode, target_path) for each addressed child.
         """
         log = get_logger("controller.address_command")
-        targets = {}
 
+        targets: list[tuple[ChildNode, list[str]]] = []
         new_target_path = target_path[1:]
 
         if new_target_path:
             for child in self.children_nodes:
                 if child.name == new_target_path[0]:
-                    targets[child] = new_target_path
+                    targets.append((child, new_target_path))
             if not targets:
                 t = "/".join(new_target_path)
                 log.info(f"Target '{t}' not found in children of '{self.name}'")
 
         elif execute_on_children:
             for child in self.children_nodes:
-                targets[child] = [child.name]
+                targets.append((child, [child.name]))
 
         return targets
 
