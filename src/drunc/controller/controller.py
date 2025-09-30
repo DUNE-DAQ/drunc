@@ -689,11 +689,8 @@ class Controller(ControllerServicer):
 
     # TODO: MAKE propagate_addressed_command GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
         self, request: AddressedCommand, context: ServicerContext
@@ -722,11 +719,8 @@ class Controller(ControllerServicer):
 
         return response
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
         self, request: AddressedCommand, context: ServicerContext
@@ -736,6 +730,7 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
+        # target_path
         if (
             request.target == self.name
             or request.target == ""
@@ -773,11 +768,8 @@ class Controller(ControllerServicer):
 
         return response
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
         self, request: AddressedCommand, context: ServicerContext
