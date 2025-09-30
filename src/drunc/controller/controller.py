@@ -539,6 +539,30 @@ class Controller(ControllerServicer):
             token,
         )
 
+    def parse_target_path(self, target: str) -> list[str]:
+        """Parse and check the target path.
+
+        Args:
+            target: The path to the target, as a raw string.
+
+        Returns:
+            The (checked) path to the target, parsed as a list.
+
+        Raises:
+            ValueError: If target does not start at the current node.
+        """
+        if not target:
+            return [self.name]
+        target_path = target.split("/")
+
+        # Check that the target path starts with the current node name.
+        if target_path[0] != self.name:
+            error_str = f"Target '{target}' does not start with '{self.name}'"
+            self.log.error(error_str)
+            raise ValueError(error_str)
+
+        return target_path
+
     def address_target_path(
         self,
         target_path: list[str],
@@ -722,7 +746,7 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        target_path = request.target.split("/") if request.target else [self.name]
+        target_path = self.parse_target_path(request.target)
 
         if target_path == [self.name] or request.execute_along_path:
             status = get_status_message(self)
@@ -750,7 +774,7 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        target_path = request.target.split("/") if request.target else [self.name]
+        target_path = self.parse_target_path(request.target)
 
         if target_path == [self.name] or request.execute_along_path:
             description = Description(
