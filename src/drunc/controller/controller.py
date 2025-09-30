@@ -723,32 +723,25 @@ class Controller(ControllerServicer):
             if child.included or not only_included
         ]
 
-    # TODO: MAKE propagate_to_children GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
-
     def propagate_to_children(
         self,
-        command_name: str,
-        request: AddressedCommand,
-        child_nodes: list[tuple[ChildNode, list[str]]],
+        parent_request: AddressedCommand,
+        child_list: list[tuple[ChildNode, list[str]]],
     ):
-        self.log.debug(f"Propagating {command_name} to children")
         response_children: list[Response] = []
         response_lock = threading.Lock()
+        command_name = parent_request.command_name
 
-        def propagate_to_child(
-            child: ChildNode,
-            command_name: str,
-            command_data,
-        ):
-            command_data_str = str(command_data).replace("\n", " ")
+        def propagate(node: ChildNode, request: AddressedCommand):
+            request_str = str(request).replace("\n", " ")
             self.log.debug(
-                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}"
+                f"Propagating {command_name} to child {node.name}, request: {request_str}"
             )
 
             try:
-                response = child.propagate_command(
+                response = node.propagate_command(
                     command=command_name,
-                    data=command_data,
+                    data=request,
                     token=None,
                 )
                 with response_lock:
@@ -759,18 +752,15 @@ class Controller(ControllerServicer):
                     ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ]:
                     self.log.debug(
-                        f"Propagated {command_name} to children ({child.name}) successfully"
+                        f"Propagated {command_name} to child ({node.name}) successfully"
                     )
                 else:
                     self.log.error(
-                        f"Propagating {command_name} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
+                        f"Propagating {command_name} to child ({node.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
                     )
 
-            except Exception as e:  # Catch all, we are in a thread and want to do something sensible when an exception is thrown
-                self.log.error(
-                    f"Something wrong happened while sending the command to {child.name}: Error raised: {e!s}"
-                )
-                self.log.exception(e)
+            except Exception as e:
+                self.log.exception(f"Failed to propagate {command_name} to {node.name}")
                 flag = (
                     ResponseFlag.DRUNC_EXCEPTION_THROWN
                     if isinstance(e, DruncException)
@@ -782,31 +772,25 @@ class Controller(ControllerServicer):
                     response_children.append(
                         Response(
                             token=None,
-                            name=child.name,
+                            name=node.name,
                             data=pack_to_any(Stacktrace(text=stack)),
                             flag=flag,
                             children=[],
                         )
                     )
 
-                self.log.error(
-                    f"Failed to propagate {command_name} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}"
-                )
-
         threads = []
-
-        for child, data in child_nodes:
-            self.log.debug(f"Propagating to {child}")
-            t = threading.Thread(
-                target=propagate_to_child,
-                kwargs={
-                    "child": child,
-                    "command_name": command_name,
-                    "command_data": data,
-                },
+        for node, target in child_list:
+            request = AddressedCommand()
+            request.CopyFrom(parent_request)
+            request.target = "/".join(target)
+            threads.append(
+                threading.Thread(
+                    target=propagate,
+                    args=(node, request),
+                )
             )
-            t.start()
-            threads.append(t)
+            threads[-1].start()
 
         for thread in threads:
             thread.join()
@@ -816,12 +800,6 @@ class Controller(ControllerServicer):
     ########################################################
     ############# Status, description commands #############
     ########################################################
-
-    # TODO: HAVE SPECIALISED PER-COMMAND CODE TO POPULATE FUNCTION LAMBDAS AND MESSAGE ARGUMENTS
-    # ret[child.name] = AddressedCommand(
-    #     target="/".join(new_target_path),
-    #     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    # )
 
     @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
@@ -840,11 +818,13 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        child_nodes = self.address_target_path(
+        child_list = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_to_children("status", request, child_nodes)
+
+        child_responses = self.propagate_to_children(request, child_list)
+
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -877,11 +857,13 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        child_nodes = self.address_target_path(
+        child_list = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_to_children("describe", request, child_nodes)
+
+        child_responses = self.propagate_to_children(request, child_list)
+
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
