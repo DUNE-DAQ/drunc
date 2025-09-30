@@ -511,7 +511,7 @@ class Controller(ControllerServicer):
     def __del__(self):
         self.terminate()
 
-    def address_command(
+    def address_target_path(
         self,
         target_path: list[str],
         execute_on_children: bool,
@@ -532,7 +532,7 @@ class Controller(ControllerServicer):
         Returns:
             A list of (ChildNode, target_path) for each addressed child.
         """
-        log = get_logger("controller.address_command")
+        log = get_logger("controller.address_target_path")
 
         targets: list[tuple[ChildNode, list[str]]] = []
         new_target_path = target_path[1:]
@@ -558,6 +558,9 @@ class Controller(ControllerServicer):
         command_data: Any = None,
         only_included: bool = True,
     ):
+        # TODO: UPDATE THIS: it will basically be address_target_path, but for all children with include/exclude
+        # TODO: this should be renamed (for clarity and to reflect its similarity to address_target_path)
+
         children_to_execute = [
             cn.name for cn in self.children_nodes if not only_included or cn.included
         ]
@@ -710,16 +713,12 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        addressed_commands = self.address_command(
+        children = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children = self.propagate_addressed_command(
-            "status",
-            addressed_commands,
-            None,
-        )
-        response.children.extend(children)
+        children_responses = self.propagate_addressed_command("status", children, None)
+        response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
@@ -751,16 +750,14 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        addressed_commands = self.address_command(
+        children = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children = self.propagate_addressed_command(
-            "describe",
-            addressed_commands,
-            None,
+        children_responses = self.propagate_addressed_command(
+            "describe", children, None
         )
-        response.children.extend(children)
+        response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
@@ -817,12 +814,12 @@ class Controller(ControllerServicer):
             execute_along_path=request.execute_along_path,
             execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
         )
-        children = self.propagate_addressed_command(
+        children_responses = self.propagate_addressed_command(
             "describe_fsm",
             addressed_commands,
             None,
         )
-        response.children.extend(children)
+        response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
