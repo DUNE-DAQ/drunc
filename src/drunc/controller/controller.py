@@ -533,11 +533,113 @@ class Controller(ControllerServicer):
             for cn in children_to_execute
         }
 
-        return self.propagate_to_children(
+        return self.OLD_propagate_to_children(
             command_name,
             addressed_commands,
             token,
         )
+
+    def OLD_propagate_to_children(
+        self,
+        command_name: str,
+        addressed_commands: dict[str, AddressedCommand],
+        token: Token,
+    ):
+        self.log.debug(f"Propagating {command_name} to children")
+        response_children: list[Response] = []
+        response_lock = threading.Lock()
+
+        def propagate_to_child(
+            child_name,
+            command_name,
+            command_data,
+            token,
+            response_lock,
+            response_children,
+        ):
+            child = next(
+                (cn for cn in self.children_nodes if cn.name == child_name), None
+            )
+
+            if child is None:
+                self.log.error(f"Child {child_name} not found")
+                return
+
+            command_data_str = str(command_data).replace("\n", " ")
+            self.log.debug(
+                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
+            )
+
+            try:
+                response = child.propagate_command(
+                    command=command_name,
+                    data=command_data,
+                    token=token,
+                )
+                with response_lock:
+                    response_children.append(response)
+
+                if response.flag in [
+                    ResponseFlag.EXECUTED_SUCCESSFULLY,
+                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                ]:
+                    self.log.debug(
+                        f"Propagated {command_name} to children ({child.name}) successfully"
+                    )
+                else:
+                    self.log.error(
+                        f"Propagating {command_name} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
+                    )
+
+            except Exception as e:  # Catch all, we are in a thread and want to do something sensible when an exception is thrown
+                self.log.error(
+                    f"Something wrong happened while sending the command to {child.name}: Error raised: {e!s}"
+                )
+                self.log.exception(e)
+                flag = (
+                    ResponseFlag.DRUNC_EXCEPTION_THROWN
+                    if isinstance(e, DruncException)
+                    else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+                )
+
+                with response_lock:
+                    stack = traceback.format_exc().split("\n")
+                    response_children.append(
+                        Response(
+                            name=child.name,
+                            token=token,
+                            data=pack_to_any(Stacktrace(text=stack)),
+                            flag=flag,
+                            children=[],
+                        )
+                    )
+
+                self.log.error(
+                    f"Failed to propagate {command_name} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}"
+                )
+
+        threads = []
+
+        for child, data in addressed_commands.items():
+            self.log.debug(f"Propagating to {child}")
+            t = threading.Thread(
+                target=propagate_to_child,
+                kwargs={
+                    "child_name": child,
+                    "command_name": command_name,
+                    "command_data": data,
+                    "token": token,
+                    "response_lock": response_lock,
+                    "response_children": response_children,
+                },
+            )
+            t.start()
+            threads.append(t)
+
+        for thread in threads:
+            thread.join()
+
+        return response_children
 
     def parse_target_path(self, target: str) -> list[str]:
         """Parse and check the target path.
@@ -621,6 +723,8 @@ class Controller(ControllerServicer):
             if child.included or not only_included
         ]
 
+    # TODO: MAKE propagate_to_children GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
+
     def propagate_to_children(
         self,
         command_name: str,
@@ -628,7 +732,7 @@ class Controller(ControllerServicer):
         token: Token,
     ):
         self.log.debug(f"Propagating {command_name} to children")
-        response_children = []
+        response_children: list[Response] = []
         response_lock = threading.Lock()
 
         def propagate_to_child(
@@ -733,8 +837,6 @@ class Controller(ControllerServicer):
     #     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     # )
 
-    # TODO: MAKE propagate_to_children GENERIC (ACCEPT LAMBDAS AND MESSAGE ARGUMENTS)
-
     @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
@@ -756,7 +858,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_to_children("status", children, None)
+        children_responses = self.OLD_propagate_to_children("status", children, None)
         response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -793,7 +895,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_to_children("describe", children, None)
+        children_responses = self.OLD_propagate_to_children("describe", children, None)
         response.children.extend(children_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -851,7 +953,7 @@ class Controller(ControllerServicer):
             execute_along_path=request.execute_along_path,
             execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.propagate_to_children(
+        children_responses = self.OLD_propagate_to_children(
             "describe_fsm",
             addressed_commands,
             None,
@@ -991,7 +1093,7 @@ class Controller(ControllerServicer):
                     execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
                 )
 
-            response_children = self.propagate_to_children(
+            response_children = self.OLD_propagate_to_children(
                 "execute_fsm_command",
                 children_fsm_commands,
                 token,
@@ -1055,7 +1157,7 @@ class Controller(ControllerServicer):
                 token=token,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_to_children(
+                children=self.OLD_propagate_to_children(
                     "execute_fsm_command",
                     addressed_commands,
                     token,
@@ -1161,7 +1263,7 @@ class Controller(ControllerServicer):
                 token=token,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_to_children(
+                children=self.OLD_propagate_to_children(
                     "recompute_status",
                     addressed_commands,
                     token,
@@ -1197,7 +1299,7 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = True
 
-        response_children = self.propagate_to_children(
+        response_children = self.OLD_propagate_to_children(
             "include",
             addressed_commands,
             token,
@@ -1240,7 +1342,7 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = False
 
-        response_children = self.propagate_to_children(
+        response_children = self.OLD_propagate_to_children(
             "exclude",
             addressed_commands,
             token,
@@ -1269,7 +1371,7 @@ class Controller(ControllerServicer):
         execute_on_self: bool,
         token: Token,
     ) -> Response:
-        children_expert_command_response = self.propagate_to_children(
+        children_expert_command_response = self.OLD_propagate_to_children(
             "execute_expert_command",
             addressed_commands,
             token,
@@ -1307,7 +1409,7 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{token.user_name} took control on {self.name}"
 
-        response_children = self.propagate_to_children(
+        response_children = self.OLD_propagate_to_children(
             "take_control",
             addressed_commands,
             token,
@@ -1352,7 +1454,7 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{user} surrendered control on {self.name}"
 
-        response_children = self.propagate_to_children(
+        response_children = self.OLD_propagate_to_children(
             "surrender_control",
             addressed_commands,
             token,
@@ -1394,7 +1496,7 @@ class Controller(ControllerServicer):
         else:
             user = None
 
-        response_children = self.propagate_to_children(
+        response_children = self.OLD_propagate_to_children(
             "who_is_in_charge",
             addressed_commands,
             token,
@@ -1433,7 +1535,7 @@ class Controller(ControllerServicer):
             if execute_on_self:
                 self.stateful_node.to_error()
 
-            response_children = self.propagate_to_children(
+            response_children = self.OLD_propagate_to_children(
                 "to_error",
                 addressed_commands,
                 token,
