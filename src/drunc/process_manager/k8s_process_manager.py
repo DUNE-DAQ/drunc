@@ -25,7 +25,12 @@ from druncschema.process_manager_pb2 import (
 # Third-Party Imports
 from kubernetes import client, config, watch
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.k8s_exceptions import (
+    DruncK8sException,
+    DruncK8sNamespaceException,
+    DruncK8sNodeException,
+    DruncK8sPodException,
+)
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
@@ -183,7 +188,7 @@ class K8sProcessManager(ProcessManager):
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
         if obj_type == "pod":
-            if not session: raise DruncException("Session (namespace) must be provided to label a pod.")
+            if not session: raise DruncK8sNamespaceException("Session (namespace) must be provided to label a pod.")
             try:
                 self._core_v1_api.patch_namespaced_pod(name=obj_name, namespace=session, body=body)
                 self.log.info(f'Added label "{key}.{self.drunc_label}:{label}" to pod "{session}.{obj_name}"')
@@ -196,7 +201,7 @@ class K8sProcessManager(ProcessManager):
             except self._api_error_v1_api as e:
                 self.log.error(f"Failed to apply label to namespace {obj_name}: {e}")
         else:
-            raise DruncException(f"Cannot add label to object type: {obj_type}")
+            raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
 
     def _add_creator_label(self, obj_name, obj_type):
         """Adds a 'creator' label to a Kubernetes object."""
@@ -216,7 +221,7 @@ class K8sProcessManager(ProcessManager):
             if not target_node:
                 available_nodes = [node.metadata.name for node in nodes.items]
                 self.log.error(f"Host '{target_host}' not found in cluster. Available nodes: {available_nodes}")
-                raise DruncException(
+                raise DruncK8sNodeException(
                     f"Target host '{target_host}' is not part of the Kubernetes cluster. "
                     f"Available nodes: {', '.join(available_nodes)}"
                 )
@@ -234,23 +239,23 @@ class K8sProcessManager(ProcessManager):
             
             if not is_ready:
                 reason = ready_condition.reason if ready_condition else "Unknown"
-                raise DruncException(f"Host '{target_host}' not ready. Reason: {reason}")
+                raise DruncK8sNodeException(f"Host '{target_host}' not ready. Reason: {reason}")
             
             # Check node is schedulable
             if target_node.spec and target_node.spec.unschedulable:
-                raise DruncException(f"Host '{target_host}' is cordoned and not schedulable")
+                raise DruncK8sNodeException(f"Host '{target_host}' is cordoned and not schedulable")
             
             self.log.info(f"Host '{target_host}' verified and available")
             return True
             
         except self._api_error_v1_api as e:
             if e.status in [401, 403]:
-                raise DruncException(f"Permission denied accessing cluster to verify '{target_host}': {e}")
-            raise DruncException(f"Failed to verify host '{target_host}': {e}")
-        except DruncException:
+                raise DruncK8sException(f"Permission denied accessing cluster to verify '{target_host}': {e}")
+            raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
+        except DruncK8sException:
             raise
         except Exception as e:
-            raise DruncException(f"Error verifying host '{target_host}': {e}")
+            raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
 
     def _create_namespace(self, session):
@@ -263,7 +268,7 @@ class K8sProcessManager(ProcessManager):
 
         try:
             self._core_v1_api.read_namespace(name=session)
-            raise DruncException(
+            raise DruncK8sNamespaceException(
                 f"Namespace '{session}' already exists. Please use a different session name."
             )
 
@@ -278,7 +283,7 @@ class K8sProcessManager(ProcessManager):
                 self._add_creator_label(session, "namespace")
                 self.managed_sessions.add(session)
             else:
-                raise e
+                raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
     def _create_headless_service(self, podname, session, pod_uid):
         """Creates a headless service for a pod."""
@@ -470,7 +475,10 @@ done
 
         except self._api_error_v1_api as e:
             self.log.error(f'Couldn\'t create pod "{session}.{podname}": {e}')
-            raise e
+            if e.status == 409:
+                raise DruncK8sPodException(f"Pod '{session}.{podname}' already exists: {e}")
+            else:
+                raise DruncK8sException(f"Failed to create pod '{session}.{podname}': {e}")
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
         """
@@ -541,7 +549,7 @@ done
             boot_request.process_description.metadata.hostname = hostname
 
         if uuid in self.boot_request:
-            raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
+            raise DruncK8sPodException(f'"{session}.{podname}":{uuid} already exists!')
 
         self._create_namespace(session)
 
@@ -568,7 +576,7 @@ done
                     else: raise e
                 sleep(1)
             else:
-                raise DruncException(f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds.")
+                raise DruncK8sException(f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds.")
 
             kubeconfig_path = os.environ.get('KUBECONFIG')
             proxy_unset_script = "~np04daq/bin/web_proxy.sh -u"
@@ -603,7 +611,7 @@ done
 
                 if thread.is_alive():
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncException(f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds.")
+                    raise DruncK8sException(f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds.")
 
                 line = output.get('line', '').strip()
                 if "Forwarding from" in line:
@@ -611,14 +619,14 @@ done
                 else:
                     error_output = proc.stderr.read()
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncException(f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'")
+                    raise DruncK8sException(f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'")
 
             except Exception as e:
                 self.log.error(f"Failed to start or validate port-forwarding for '{podname}': {e}")
                 if uuid in self.port_forwards:
                     os.killpg(os.getpgid(self.port_forwards[uuid].pid), signal.SIGTERM)
                     del self.port_forwards[uuid]
-                raise
+                raise DruncK8sException(f"Port-forward error for '{podname}': {e}")
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -664,7 +672,7 @@ done
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
         if uuid not in self.boot_request:
-            raise DruncCommandException(f"Cannot restart process with UUID {uuid}: Not found.")
+            raise DruncK8sPodException(f"Cannot restart process with UUID {uuid}: Not found.")
 
         br_copy = BootRequest()
         br_copy.CopyFrom(self.boot_request[uuid])
@@ -680,7 +688,8 @@ done
         try:
             self._core_v1_api.delete_namespaced_pod(name=podname, namespace=session, grace_period_seconds=grace_period_seconds)
         except self._api_error_v1_api as e:
-            if e.status != 404: raise e
+            if e.status != 404:
+                raise DruncK8sException(f"Failed to delete pod '{session}.{podname}': {e}")
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """Handles the 'kill' command."""
