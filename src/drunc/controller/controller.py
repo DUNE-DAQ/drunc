@@ -728,39 +728,28 @@ class Controller(ControllerServicer):
     def propagate_to_children(
         self,
         command_name: str,
-        addressed_commands: dict[str, AddressedCommand],
-        token: Token,
+        request: AddressedCommand,
+        child_nodes: list[tuple[ChildNode, list[str]]],
     ):
         self.log.debug(f"Propagating {command_name} to children")
         response_children: list[Response] = []
         response_lock = threading.Lock()
 
         def propagate_to_child(
-            child_name,
-            command_name,
+            child: ChildNode,
+            command_name: str,
             command_data,
-            token,
-            response_lock,
-            response_children,
         ):
-            child = next(
-                (cn for cn in self.children_nodes if cn.name == child_name), None
-            )
-
-            if child is None:
-                self.log.error(f"Child {child_name} not found")
-                return
-
             command_data_str = str(command_data).replace("\n", " ")
             self.log.debug(
-                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
+                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}"
             )
 
             try:
                 response = child.propagate_command(
                     command=command_name,
                     data=command_data,
-                    token=token,
+                    token=None,
                 )
                 with response_lock:
                     response_children.append(response)
@@ -792,8 +781,8 @@ class Controller(ControllerServicer):
                     stack = traceback.format_exc().split("\n")
                     response_children.append(
                         Response(
+                            token=None,
                             name=child.name,
-                            token=token,
                             data=pack_to_any(Stacktrace(text=stack)),
                             flag=flag,
                             children=[],
@@ -806,17 +795,14 @@ class Controller(ControllerServicer):
 
         threads = []
 
-        for child, data in addressed_commands.items():
+        for child, data in child_nodes:
             self.log.debug(f"Propagating to {child}")
             t = threading.Thread(
                 target=propagate_to_child,
                 kwargs={
-                    "child_name": child,
+                    "child": child,
                     "command_name": command_name,
                     "command_data": data,
-                    "token": token,
-                    "response_lock": response_lock,
-                    "response_children": response_children,
                 },
             )
             t.start()
@@ -854,12 +840,12 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        children = self.address_target_path(
+        child_nodes = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.OLD_propagate_to_children("status", children, None)
-        response.children.extend(children_responses)
+        child_responses = self.propagate_to_children("status", request, child_nodes)
+        response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
@@ -891,12 +877,12 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        children = self.address_target_path(
+        child_nodes = self.address_target_path(
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.OLD_propagate_to_children("describe", children, None)
-        response.children.extend(children_responses)
+        child_responses = self.propagate_to_children("describe", request, child_nodes)
+        response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
