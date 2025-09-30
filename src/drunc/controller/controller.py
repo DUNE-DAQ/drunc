@@ -301,7 +301,7 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-            children_statuses = self.propagate_to_all_children(
+            children_statuses = self.address_all(
                 command_name="status",
                 token=self.actor.get_token(),
             )
@@ -551,16 +551,15 @@ class Controller(ControllerServicer):
 
         return targets
 
-    def propagate_to_all_children(
+    # TODO: UPDATE address_all: like address_target_path, but for all children and include/exclude
+
+    def address_all(
         self,
         command_name: str,
         token: Token,
         command_data: Any = None,
         only_included: bool = True,
     ):
-        # TODO: UPDATE THIS: it will basically be address_target_path, but for all children with include/exclude
-        # TODO: this should be renamed (for clarity and to reflect its similarity to address_target_path)
-
         children_to_execute = [
             cn.name for cn in self.children_nodes if not only_included or cn.included
         ]
@@ -1040,7 +1039,7 @@ class Controller(ControllerServicer):
         token: Token,
     ) -> Response:
         if execute_on_self:
-            statuses = self.propagate_to_all_children(
+            statuses = self.address_all(
                 "recompute_status",
                 command_data=None,
                 token=token,
@@ -1104,7 +1103,7 @@ class Controller(ControllerServicer):
 
             status = get_status_message(self.stateful_node)
 
-            post_statuses = self.propagate_to_all_children(
+            post_statuses = self.address_all(
                 "status",
                 command_data=None,
                 token=token,
