@@ -120,6 +120,9 @@ class K8sProcessManager(ProcessManager):
         self.final_exit_codes = {}
         self.port_forwards = {}
         self.local_connection_server_is_booted = False
+        
+        # Host verification cache: {hostname: (is_valid, timestamp)}
+        self._host_cache = {}
 
         # Safely get settings from the configuration object
         settings = {}
@@ -133,6 +136,7 @@ class K8sProcessManager(ProcessManager):
         self.port_forward_timeout = settings.get("port_forward_timeout", 15)
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
+        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
         
         self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
 
@@ -211,40 +215,48 @@ class K8sProcessManager(ProcessManager):
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
+    def _is_host_cached(self, host):
+        """Check if host is cached and not expired."""
+        if host not in self._host_cache:
+            return None
+        is_valid, timestamp = self._host_cache[host]
+        if time() - timestamp > self._host_cache_expiry:
+            del self._host_cache[host]
+            return None
+        return is_valid
+
     def _verify_host_in_cluster(self, target_host):
         """Verifies that the target host is available in the Kubernetes cluster."""
+        cached = self._is_host_cached(target_host)
+        if cached is not None:
+            if cached:
+                self.log.debug(f"Host '{target_host}' cached (valid)")
+                return True
+            else:
+                raise DruncK8sNodeException(f"Host '{target_host}' was previously verified as unavailable")
+        
         try:
-            # Get all nodes and find the target
             nodes = self._core_v1_api.list_node()
             target_node = next((node for node in nodes.items if node.metadata.name == target_host), None)
             
             if not target_node:
                 available_nodes = [node.metadata.name for node in nodes.items]
-                self.log.error(f"Host '{target_host}' not found in cluster. Available nodes: {available_nodes}")
+                self._host_cache[target_host] = (False, time())
                 raise DruncK8sNodeException(
                     f"Target host '{target_host}' is not part of the Kubernetes cluster. "
                     f"Available nodes: {', '.join(available_nodes)}"
                 )
             
-            # Check if the node is ready
-            node_conditions = target_node.status.conditions
-            is_ready = False
-            ready_condition = None
+            # Check node is ready and schedulable
+            is_ready = any(c.type == "Ready" and c.status == "True" for c in target_node.status.conditions or [])
+            is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
             
-            for condition in node_conditions:
-                if condition.type == "Ready":
-                    is_ready = condition.status == "True"
-                    ready_condition = condition
-                    break
+            if not is_ready or not is_schedulable:
+                self._host_cache[target_host] = (False, time())
+                reason = "not ready" if not is_ready else "cordoned"
+                raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
             
-            if not is_ready:
-                reason = ready_condition.reason if ready_condition else "Unknown"
-                raise DruncK8sNodeException(f"Host '{target_host}' not ready. Reason: {reason}")
-            
-            # Check node is schedulable
-            if target_node.spec and target_node.spec.unschedulable:
-                raise DruncK8sNodeException(f"Host '{target_host}' is cordoned and not schedulable")
-            
+            self._host_cache[target_host] = (True, time())
             self.log.info(f"Host '{target_host}' verified and available")
             return True
             
@@ -361,7 +373,7 @@ class K8sProcessManager(ProcessManager):
                             # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
                             new_address = f"{protocol}://0.0.0.0:{port}"
                             modified_args.append(new_address)
-                            self.log.info(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
+                            self.log.debug(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
                         else:
                             modified_args.append(arg)
                     else:
