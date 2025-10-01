@@ -1,6 +1,7 @@
 from threading import Lock
 
 from druncschema.controller_pb2 import (
+    AddressedCommand,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
@@ -115,7 +116,12 @@ class ClientSideChild(ChildNode):
 
         return response
 
-    def propagate_command(self, command: str, data, token: Token) -> Response:
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
         if command == "exclude":
             self.state.exclude()
             return Response(
@@ -149,7 +155,7 @@ class ClientSideChild(ChildNode):
                 data=pack_to_any(
                     FSMCommandResponse(
                         flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                        command_name=data.command_name,
+                        command_name=request.command_name,
                         data=None,
                     )
                 ),
@@ -160,11 +166,11 @@ class ClientSideChild(ChildNode):
         # here lies the mother of all the problems
         if command == "execute_fsm_command":
             return self.propagate_fsm_command(
-                unpack_any(data.command_data, FSMCommand), token
+                unpack_any(request.command_data, FSMCommand), token
             )
         elif command == "execute_expert_command":
             return self.propagate_expert_command(
-                unpack_any(data.command_data, PlainText), token
+                unpack_any(request.command_data, PlainText), token
             )
         elif command == "describe":
             return self.describe(token)

@@ -571,11 +571,7 @@ class Controller(ControllerServicer):
             )
 
             try:
-                response = child.propagate_command(
-                    command=command_name,
-                    data=command_data,
-                    token=token,
-                )
+                response = child.propagate_command(command_name, command_data, None)
                 with response_lock:
                     response_children.append(response)
 
@@ -740,13 +736,12 @@ class Controller(ControllerServicer):
 
             try:
                 # TODO: replace with direct child command calls.
-                response = child.propagate_command(
-                    command=command_name,
-                    data=request,
-                    token=None,
-                )
-                with response_lock:
-                    response_children.append(response)
+
+                # TODO: only thing child is used for in this function besides propagate_command is name
+                # TODO: so we could just replace child with the child command function directly
+                # TODO: but what to do about all the child.name in the logging?
+
+                response = child.propagate_command(command_name, request, None)
 
                 if response.flag in [
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -760,27 +755,30 @@ class Controller(ControllerServicer):
                         f"Propagating {command_name} to child ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
                     )
 
+                with response_lock:
+                    response_children.append(response)
+
             except Exception as e:
                 self.log.exception(
                     f"Failed to propagate {command_name} to {child.name}"
                 )
+
                 flag = (
                     ResponseFlag.DRUNC_EXCEPTION_THROWN
                     if isinstance(e, DruncException)
                     else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
                 )
+                stack = traceback.format_exc().split("\n")
+                response = Response(
+                    token=None,
+                    name=child.name,
+                    data=pack_to_any(Stacktrace(text=stack)),
+                    flag=flag,
+                    children=[],
+                )
 
                 with response_lock:
-                    stack = traceback.format_exc().split("\n")
-                    response_children.append(
-                        Response(
-                            token=None,
-                            name=child.name,
-                            data=pack_to_any(Stacktrace(text=stack)),
-                            flag=flag,
-                            children=[],
-                        )
-                    )
+                    response_children.append(response)
 
         threads = []
         for child, target in child_list:
@@ -825,9 +823,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-
         child_responses = self.propagate_to_children(request, child_list)
-
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -864,9 +860,7 @@ class Controller(ControllerServicer):
             target_path,
             request.execute_on_all_subsequent_children_in_path,
         )
-
         child_responses = self.propagate_to_children(request, child_list)
-
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY

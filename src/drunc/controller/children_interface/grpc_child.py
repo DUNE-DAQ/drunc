@@ -5,7 +5,7 @@ import grpc
 from druncschema.controller_pb2 import AddressedCommand
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, Response
+from druncschema.request_response_pb2 import Response
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
@@ -117,14 +117,10 @@ class gRPCChildNode(ChildNode):
     def propagate_command(
         self,
         command: str,
-        data=None,
-        token: Token | None = None,
+        request: AddressedCommand,
+        token: Token | None,
         timeout: int | float = 60,
     ) -> Response:
-        request = Request(token=token)
-        if data is not None:
-            request.data.Pack(data)
-
         try:
             cmd = getattr(self.stub, command)
             response = cmd(request, timeout=timeout)

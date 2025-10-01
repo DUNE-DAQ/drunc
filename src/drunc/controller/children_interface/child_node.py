@@ -1,6 +1,11 @@
 import os
 
-from druncschema.controller_pb2 import DescribeResponse, Status, StatusResponse
+from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeResponse,
+    Status,
+    StatusResponse,
+)
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -45,7 +50,12 @@ class ChildNode:  # abc.ABC):
         return None
 
     # @abc.abstractmethod
-    def propagate_command(self, command, data, token):
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
         if command == "status":
             return self.status(token)
         elif command == "describe":
