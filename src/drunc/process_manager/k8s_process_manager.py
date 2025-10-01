@@ -129,7 +129,7 @@ class K8sProcessManager(ProcessManager):
         self.final_exit_codes = {}
         self.port_forwards = {}
         self.local_connection_server_is_booted = False
-        
+
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
 
@@ -151,13 +151,12 @@ class K8sProcessManager(ProcessManager):
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
-        
-        self.log.debug(f'Using kill_timeout of {self.kill_timeout} seconds.')
+
+        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
         self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
         self.restart_cleanup_polling = float(
             settings.get("restart_cleanup_polling", "0.5")
         )
-
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -218,7 +217,10 @@ class K8sProcessManager(ProcessManager):
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
         if obj_type == "pod":
-            if not session: raise DruncK8sNamespaceException("Session (namespace) must be provided to label a pod.")
+            if not session:
+                raise DruncK8sNamespaceException(
+                    "Session (namespace) must be provided to label a pod."
+                )
 
             try:
                 self._core_v1_api.patch_namespaced_pod(
@@ -268,12 +270,17 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug(f"Host '{target_host}' cached (valid)")
                 return True
             else:
-                raise DruncK8sNodeException(f"Host '{target_host}' was previously verified as unavailable")
-        
+                raise DruncK8sNodeException(
+                    f"Host '{target_host}' was previously verified as unavailable"
+                )
+
         try:
             nodes = self._core_v1_api.list_node()
-            target_node = next((node for node in nodes.items if node.metadata.name == target_host), None)
-            
+            target_node = next(
+                (node for node in nodes.items if node.metadata.name == target_host),
+                None,
+            )
+
             if not target_node:
                 available_nodes = [node.metadata.name for node in nodes.items]
                 self._host_cache[target_host] = (False, time())
@@ -281,29 +288,33 @@ class K8sProcessManager(ProcessManager):
                     f"Target host '{target_host}' is not part of the Kubernetes cluster. "
                     f"Available nodes: {', '.join(available_nodes)}"
                 )
-            
+
             # Check node is ready and schedulable
-            is_ready = any(c.type == "Ready" and c.status == "True" for c in target_node.status.conditions or [])
+            is_ready = any(
+                c.type == "Ready" and c.status == "True"
+                for c in target_node.status.conditions or []
+            )
             is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
-            
+
             if not is_ready or not is_schedulable:
                 self._host_cache[target_host] = (False, time())
                 reason = "not ready" if not is_ready else "cordoned"
                 raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
-            
+
             self._host_cache[target_host] = (True, time())
             self.log.info(f"Host '{target_host}' verified and available")
             return True
-            
+
         except self._api_error_v1_api as e:
             if e.status in [401, 403]:
-                raise DruncK8sException(f"Permission denied accessing cluster to verify '{target_host}': {e}")
+                raise DruncK8sException(
+                    f"Permission denied accessing cluster to verify '{target_host}': {e}"
+                )
             raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
         except DruncK8sException:
             raise
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
-
 
     def _create_namespace(self, session):
         """Creates a Kubernetes namespace if it doesn't already exist."""
@@ -431,8 +442,8 @@ class K8sProcessManager(ProcessManager):
                 and e_and_a.exec != "source"
             ):
                 prefix = "exec "
-            
-            # For controllers, replace hostname with 0.0.0.0 for binding 
+
+            # For controllers, replace hostname with 0.0.0.0 for binding
             if "controller" in podname:
                 modified_args = []
                 for arg in e_and_a.args:
@@ -444,14 +455,18 @@ class K8sProcessManager(ProcessManager):
                             # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
                             new_address = f"{protocol}://0.0.0.0:{port}"
                             modified_args.append(new_address)
-                            self.log.debug(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
+                            self.log.debug(
+                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)"
+                            )
                         else:
                             modified_args.append(arg)
                     else:
                         modified_args.append(arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
-                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
         main_command_str = " && ".join(command_parts)
 
         # Determine the correct shutdown command for the preStop hook
@@ -529,11 +544,13 @@ done
             # Resolve localhost to actual hostname for Kubernetes node selection
             if target_host == "localhost":
                 target_host = resolve_localhost_to_hostname(target_host)
-                self.log.info(f"Resolved localhost to '{target_host}' for Kubernetes node selection")
-            
+                self.log.info(
+                    f"Resolved localhost to '{target_host}' for Kubernetes node selection"
+                )
+
             # Verify the target host is available in the cluster before scheduling
             self._verify_host_in_cluster(target_host)
-            
+
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(
                 f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
@@ -598,7 +615,6 @@ done
                 self._create_headless_service(podname, session, pod_uid)
 
         except self._api_error_v1_api as e:
-
             error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
 
             if e.status == 409 and time() - start_time >= self.restart_cleanup_time:
@@ -608,7 +624,7 @@ done
                 )
 
             self.log.error(error_message)
-            raise DruncException(error_message) from e
+            raise DruncK8sException(error_message) from e
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
         """
@@ -722,8 +738,9 @@ done
                         raise e
                 sleep(1)
             else:
-                raise DruncK8sException(f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds.")
-
+                raise DruncK8sException(
+                    f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
+                )
 
             kubeconfig_path = os.environ.get("KUBECONFIG")
             proxy_unset_script = "~np04daq/bin/web_proxy.sh -u"
@@ -773,8 +790,9 @@ done
 
                 if thread.is_alive():
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncK8sException(f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds.")
-
+                    raise DruncK8sException(
+                        f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds."
+                    )
 
                 line = output.get("line", "").strip()
                 if "Forwarding from" in line:
@@ -782,8 +800,9 @@ done
                 else:
                     error_output = proc.stderr.read()
                     os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncK8sException(f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'")
-
+                    raise DruncK8sException(
+                        f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'"
+                    )
 
             except Exception as e:
                 self.log.error(
@@ -858,8 +877,9 @@ done
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
         if uuid not in self.boot_request:
-            raise DruncK8sPodException(f"Cannot restart process with UUID {uuid}: Not found.")
-
+            raise DruncK8sPodException(
+                f"Cannot restart process with UUID {uuid}: Not found."
+            )
 
         br_copy = BootRequest()
         br_copy.CopyFrom(self.boot_request[uuid])
@@ -880,8 +900,9 @@ done
             )
         except self._api_error_v1_api as e:
             if e.status != 404:
-                raise DruncK8sException(f"Failed to delete pod '{session}.{podname}': {e}")
-
+                raise DruncK8sException(
+                    f"Failed to delete pod '{session}.{podname}': {e}"
+                )
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """Handles the 'kill' command."""
