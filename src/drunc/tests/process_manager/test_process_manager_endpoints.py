@@ -1,5 +1,14 @@
 """
+Test suite for Process Manager gRPC endpoints.
+
 This suite tests the grpc endpoints of the abstract process manager class.
+It is assumed that the serialisation/deserialisation works correctly
+for each endpoint. Each test checks the behaviour of the
+method after it is invoked via the grpc testing library.
+
+If any of these tests fail it is due to a change in one of the process manager
+endpoint method implementations. It should be checked if the test needs to be
+updated or a bug was introduced.
 """
 
 from unittest.mock import MagicMock, patch
@@ -7,9 +16,7 @@ from unittest.mock import MagicMock, patch
 import grpc
 import grpc_testing
 import pytest
-from druncschema.process_manager_pb2 import (
-    DESCRIPTOR,
-)
+from druncschema.process_manager_pb2 import DESCRIPTOR
 
 from drunc.tests.process_manager.process_manager_mock_impls import (
     ConcreteProcessManager,
@@ -41,7 +48,7 @@ def grpc_servicer(mock_logger):
     """
     Create and configure a ConcreteProcessManager instance for testing.
 
-    This fixture instantiates the process manager servicer with a mocked logger
+    This fixture instantiates the process manager servicer with a mocked logger.
     The servicer implements the ProcessManager gRPC service interface.
 
     Args:
@@ -93,18 +100,15 @@ def grpc_test_server_factory(grpc_servicer):
     return create_server
 
 
-def test_kill_endpoint(grpc_test_server_factory):
+def test_kill_endpoint(grpc_test_server_factory, process_query_request, kill_response):
     """
     Test that invoking the kill method gives the expected response.
 
     Validates that the kill endpoint correctly processes ProcessQuery requests
     and returns the expected ProcessInstanceList response format.
     """
-    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
-    from drunc.tests.process_manager.dummy_responses import KILL_RESPONSE
-
     grpc_test_server, expected_response = grpc_test_server_factory(
-        "kill", KILL_RESPONSE
+        "kill", kill_response
     )
 
     # Invoke the kill method via gRPC testing framework
@@ -113,7 +117,7 @@ def test_kill_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["kill"]
         ),
         invocation_metadata={},
-        request=PROCESS_QUERY_REQUEST,
+        request=process_query_request,
         timeout=1,
     )
 
@@ -127,18 +131,15 @@ def test_kill_endpoint(grpc_test_server_factory):
     assert expected_response == response
 
 
-def test_boot_endpoint(grpc_test_server_factory):
+def test_boot_endpoint(grpc_test_server_factory, boot_request, boot_response):
     """
     Test that invoking the boot method gives the expected response.
 
     Validates that the boot endpoint correctly processes BootRequest messages
     and returns the expected ProcessInstanceList response format.
     """
-    from drunc.tests.process_manager.dummy_requests import BOOT_REQUEST
-    from drunc.tests.process_manager.dummy_responses import BOOT_RESPONSE
-
     grpc_test_server, expected_response = grpc_test_server_factory(
-        "boot", BOOT_RESPONSE
+        "boot", boot_response
     )
 
     # Invoke the boot method via gRPC testing framework
@@ -147,7 +148,7 @@ def test_boot_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["boot"]
         ),
         invocation_metadata={},
-        request=BOOT_REQUEST,
+        request=boot_request,
         timeout=1,
     )
 
@@ -161,18 +162,17 @@ def test_boot_endpoint(grpc_test_server_factory):
     assert expected_response == response
 
 
-def test_terminate_endpoint(grpc_test_server_factory):
+def test_terminate_endpoint(
+    grpc_test_server_factory, generic_request, terminate_response
+):
     """
     Test that invoking the terminate method gives the expected response.
 
     Validates that the terminate endpoint correctly processes generic requests
     and returns the expected ProcessInstanceList response format.
     """
-    from drunc.tests.process_manager.dummy_requests import GENERIC_REQUEST
-    from drunc.tests.process_manager.dummy_responses import TERMINATE_RESPONSE
-
     grpc_test_server, expected_response = grpc_test_server_factory(
-        "terminate", TERMINATE_RESPONSE
+        "terminate", terminate_response
     )
 
     # Invoke the terminate method via gRPC testing framework
@@ -181,7 +181,7 @@ def test_terminate_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["terminate"]
         ),
         invocation_metadata={},
-        request=GENERIC_REQUEST,
+        request=generic_request,
         timeout=1,
     )
 
@@ -195,18 +195,17 @@ def test_terminate_endpoint(grpc_test_server_factory):
     assert expected_response == response
 
 
-def test_restart_endpoint(grpc_test_server_factory):
+def test_restart_endpoint(
+    grpc_test_server_factory, process_query_request, restart_response
+):
     """
     Test that invoking the restart method gives the expected response.
 
     Validates that the restart endpoint correctly processes ProcessQuery requests
     and returns the expected ProcessInstanceList response format.
     """
-    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
-    from drunc.tests.process_manager.dummy_responses import RESTART_RESPONSE
-
     grpc_test_server, expected_response = grpc_test_server_factory(
-        "restart", RESTART_RESPONSE
+        "restart", restart_response
     )
 
     # Invoke the restart method via gRPC testing framework
@@ -215,7 +214,7 @@ def test_restart_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["restart"]
         ),
         invocation_metadata={},
-        request=PROCESS_QUERY_REQUEST,
+        request=process_query_request,
         timeout=1,
     )
 
@@ -229,17 +228,14 @@ def test_restart_endpoint(grpc_test_server_factory):
     assert expected_response == response
 
 
-def test_ps_endpoint(grpc_test_server_factory):
+def test_ps_endpoint(grpc_test_server_factory, process_query_request, ps_response):
     """
     Test that invoking the ps method gives the expected response.
 
     Validates that the ps endpoint correctly processes ProcessQuery requests
     and returns the expected ProcessInstanceList response format.
     """
-    from drunc.tests.process_manager.dummy_requests import PROCESS_QUERY_REQUEST
-    from drunc.tests.process_manager.dummy_responses import PS_RESPONSE
-
-    grpc_test_server, expected_response = grpc_test_server_factory("ps", PS_RESPONSE)
+    grpc_test_server, expected_response = grpc_test_server_factory("ps", ps_response)
 
     # Invoke the ps method via gRPC testing framework
     ps_method = grpc_test_server.invoke_unary_unary(
@@ -247,7 +243,7 @@ def test_ps_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["ps"]
         ),
         invocation_metadata={},
-        request=PROCESS_QUERY_REQUEST,
+        request=process_query_request,
         timeout=1,
     )
 
@@ -261,17 +257,14 @@ def test_ps_endpoint(grpc_test_server_factory):
     assert expected_response == response
 
 
-def test_logs_endpoint(grpc_test_server_factory):
+def test_logs_endpoint(grpc_test_server_factory, log_request, logs_response):
     """
     Test that invoking the logs method gives the expected response.
 
-    Validates that the logs endpoint correctly processes LogRequest messages
+    Validates that the logs endpoint correctly processes LogRequest messages.
     """
-    from drunc.tests.process_manager.dummy_requests import LOG_REQUEST
-    from drunc.tests.process_manager.dummy_responses import LOGS_RESPONSE
-
     grpc_test_server, expected_response = grpc_test_server_factory(
-        "logs", LOGS_RESPONSE
+        "logs", logs_response
     )
 
     # Invoke the logs method via gRPC testing framework
@@ -280,7 +273,7 @@ def test_logs_endpoint(grpc_test_server_factory):
             DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["logs"]
         ),
         invocation_metadata={},
-        request=LOG_REQUEST,
+        request=log_request,
         timeout=1,
     )
 
