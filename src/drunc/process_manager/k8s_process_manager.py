@@ -2,8 +2,6 @@
 import getpass
 import os
 import re
-import signal
-import subprocess
 import threading
 import uuid
 from time import sleep, time
@@ -99,8 +97,7 @@ class K8sProcessManager(ProcessManager):
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
         applications running in Pods. It includes special handling for a local connectivity
         service, which involves:
-        1.  Automating a `kubectl port-forward` in a background shell process for the orchestrator.
-        2.  Injecting a proxy sidecar container into other pods for transparent service discovery.
+        1.  Using a NodePort service for the orchestrator for external access.
         """
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -122,7 +119,6 @@ class K8sProcessManager(ProcessManager):
         self.uuids_pending_deletion = set()
         self.termination_complete_event = threading.Event()
         self.final_exit_codes = {}
-        self.port_forwards = {}
         self.local_connection_server_is_booted = False
 
         # Safely get settings from the configuration object
@@ -136,10 +132,15 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_name = settings.get(
             "connection_server_name", "local-connection-server"
         )
-        self.connection_server_port = settings.get("connection_server_port", 5000)
-        self.sidecar_image = settings.get("sidecar_image", "alpine/socat")
+        self.connection_server_port = settings.get("connection_server_port", 30000)
+        self.connection_server_node_port = settings.get(
+            "connection_server_node_port", 30000
+        )
+        self.connection_server_hostname = settings.get(
+            "connection_server_hostname", "localhost"
+        )
+        self.nodeport_port = settings.get("nodeport_port", 30000)
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
-        self.port_forward_timeout = settings.get("port_forward_timeout", 15)
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
         self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
@@ -312,8 +313,8 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_clusterip_service(self, podname, session, pod_uid):
-        """Creates a standard ClusterIP service for the connection server."""
+    def _create_nodeport_service(self, podname, session, pod_uid):
+        """Creates a NodePort service for the connection server (external + internal access)."""
         service_manifest = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -333,12 +334,14 @@ class K8sProcessManager(ProcessManager):
                 ],
             ),
             spec=client.V1ServiceSpec(
+                type="NodePort",
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
                         protocol="TCP",
                         port=self.connection_server_port,
                         target_port=self.connection_server_port,
+                        node_port=self.nodeport_port,
                     )
                 ],
             ),
@@ -348,11 +351,12 @@ class K8sProcessManager(ProcessManager):
                 namespace=session, body=service_manifest
             )
             self.log.info(
-                f'Created ClusterIP service "{session}.{podname}" on port {self.connection_server_port}'
+                f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
+                f"(NodePort: {self.nodeport_port} for external access)"
             )
         except self._api_error_v1_api as e:
             if e.status != 409:
-                self.log.error(f"Failed to create ClusterIP service for {podname}: {e}")
+                self.log.error(f"Failed to create NodePort service for {podname}: {e}")
 
     def _create_pod(self, podname, session, boot_request: BootRequest):
         """Constructs and creates a Kubernetes Pod manifest."""
@@ -421,29 +425,6 @@ done
 
         all_containers = [main_container]
 
-        # If the local connection server is active, inject a proxy sidecar into all other pods.
-        if (
-            podname != self.connection_server_name
-            and self.local_connection_server_is_booted
-        ):
-            self.log.info(f"Adding proxy sidecar to pod '{podname}'")
-            sidecar_container = client.V1Container(
-                name="proxy-sidecar",
-                image=self.sidecar_image,
-                args=[
-                    f"TCP-LISTEN:{self.connection_server_port},fork,reuseaddr",
-                    f"TCP:{self.connection_server_name}.{session}:{self.connection_server_port}",
-                ],
-                # This hook delays the sidecar's termination, allowing the main C++ app
-                # to shut down gracefully while its network connection is still alive.
-                lifecycle=client.V1Lifecycle(
-                    pre_stop=client.V1LifecycleHandler(
-                        _exec=client.V1ExecAction(command=["/bin/sh", "-c", "sleep 10"])
-                    )
-                ),
-            )
-            all_containers.append(sidecar_container)
-
         node_selector = {}
         if self.forced_node:
             node_selector = {"kubernetes.io/hostname": self.forced_node}
@@ -456,6 +437,33 @@ done
             self.log.info(
                 f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
             )
+
+        host_aliases = []
+        if (
+            podname != self.connection_server_name
+            and self.local_connection_server_is_booted
+        ):
+            # Wait for service to get ClusterIP
+            connection_server_ip = None
+            retry_count = 0
+            max_retries = 10
+            while not connection_server_ip and retry_count < max_retries:
+                connection_server_ip = self._get_connection_server_cluster_ip(session)
+                if not connection_server_ip:
+                    sleep(1)
+                    retry_count += 1
+
+            if connection_server_ip:
+                host_aliases = [
+                    client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+                ]
+                self.log.info(
+                    f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
+                )
+            else:
+                self.log.warning(
+                    f"Could not get connection server ClusterIP for pod '{podname}'"
+                )
 
         pod_manifest = client.V1Pod(
             api_version="v1",
@@ -473,6 +481,7 @@ done
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
                 containers=all_containers,
+                host_aliases=host_aliases if host_aliases else None,
                 volumes=[
                     client.V1Volume(
                         name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")
@@ -511,7 +520,7 @@ done
                     raise e
 
             if podname == self.connection_server_name:
-                self._create_clusterip_service(podname, session, pod_uid)
+                self._create_nodeport_service(podname, session, pod_uid)
             else:
                 self._create_headless_service(podname, session, pod_uid)
 
@@ -526,6 +535,17 @@ done
 
             self.log.error(error_message)
             raise DruncException(error_message) from e
+
+    def _get_connection_server_cluster_ip(self, session):
+        """Gets the ClusterIP of the connection server service."""
+        try:
+            service = self._core_v1_api.read_namespaced_service(
+                name=self.connection_server_name, namespace=session
+            )
+            return service.spec.cluster_ip
+        except self._api_error_v1_api as e:
+            self.log.error(f"Failed to get connection server service IP: {e}")
+            return None
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
         """
@@ -592,7 +612,7 @@ done
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
         Internal boot method. Handles pod creation and special logic for the connection server.
-        - For the connection server: Boot is BLOCKING, and a port-forward is automated.
+        - For the connection server: Wait for it to be ready and check the NodePort service
         - For all other pods: Boot is NON-BLOCKING.
         """
         session = boot_request.process_description.metadata.session
@@ -631,6 +651,13 @@ done
                             f"'{podname}' is ready with IP {pod_status.status.pod_ip}."
                         )
                         self.local_connection_server_is_booted = True
+
+                        # Log connection information using the NodePort service
+                        connection_url = f"http://{self.connection_server_hostname}:{self.connection_server_node_port}"
+                        self.log.info(
+                            f"Connection server available at: {connection_url}"
+                        )
+
                         break
                 except self._api_error_v1_api as e:
                     if e.status == 404:
@@ -642,77 +669,6 @@ done
                 raise DruncException(
                     f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
                 )
-
-            kubeconfig_path = os.environ.get("KUBECONFIG")
-            proxy_unset_script = "~np04daq/bin/web_proxy.sh -u"
-
-            command_parts = []
-            if kubeconfig_path:
-                command_parts.append(f"export KUBECONFIG='{kubeconfig_path}'")
-            else:
-                self.log.warning(
-                    "KUBECONFIG env var not set; assuming kubectl is configured."
-                )
-
-            command_parts.append(f"source {proxy_unset_script}")
-            command_parts.append(
-                f"kubectl port-forward -n {session} pod/{podname} {self.connection_server_port}:{self.connection_server_port}"
-            )
-            command = "; ".join(command_parts)
-
-            self.log.info(
-                "Starting port-forward for orchestrator. Executing shell command..."
-            )
-            try:
-                # preexec_fn=os.setsid creates a new process group, allowing us to kill the shell and all its children.
-                proc = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    preexec_fn=os.setsid,
-                )
-                self.port_forwards[uuid] = proc
-                self.log.info(
-                    f"Port-forward process for '{podname}' started with PID {proc.pid}. Waiting for tunnel..."
-                )
-
-                output = {}
-
-                def read_output(pipe, storage):
-                    storage["line"] = pipe.readline()
-
-                thread = threading.Thread(
-                    target=read_output, args=(proc.stdout, output)
-                )
-                thread.start()
-                thread.join(timeout=self.port_forward_timeout)
-
-                if thread.is_alive():
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncException(
-                        f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds."
-                    )
-
-                line = output.get("line", "").strip()
-                if "Forwarding from" in line:
-                    self.log.info(f"Port-forward is active: {line}")
-                else:
-                    error_output = proc.stderr.read()
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncException(
-                        f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'"
-                    )
-
-            except Exception as e:
-                self.log.error(
-                    f"Failed to start or validate port-forwarding for '{podname}': {e}"
-                )
-                if uuid in self.port_forwards:
-                    os.killpg(os.getpgid(self.port_forwards[uuid].pid), signal.SIGTERM)
-                    del self.port_forwards[uuid]
-                raise
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -868,14 +824,6 @@ done
         kill_and_wait(graceful_apps, "Standalone C++ Applications")
 
         kill_and_wait(forced_apps, "Controllers & Local Session Apps", grace_period=0)
-
-        # Terminate port-forward if its pod was killed
-        for uuid_str in forced_apps:
-            if uuid_str in self.port_forwards:
-                self.log.info("Terminating port-forward process")
-                proc = self.port_forwards.pop(uuid_str)
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                proc.wait()
 
         final_ret = []
         for proc_uuid in uuids_to_kill:
