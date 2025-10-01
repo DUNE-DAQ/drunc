@@ -1,4 +1,5 @@
 import json
+import os
 
 from drunc.fsm.exceptions import (
     DotDruncJsonIncorrectFormat,
@@ -21,15 +22,17 @@ def validate_run_type(run_type: str) -> str:
     return run_type
 
 
-def get_dotdrunc_json(path: str = "~/.drunc.json"):
+def get_dotdrunc_json(path: str | None = None):
+    # Resolution order: DOTDRUNC env var -> provided path -> default path
+    file_path = os.getenv("DOTDRUNC") or path or "~/.drunc.json"
     try:
-        f = open(expand_path(path))
+        f = open(expand_path(file_path))
         dotdrunc = json.load(f)
     except FileNotFoundError:
-        raise DotDruncJsonNotFound(f"dotdrunc file not found: '{path}'")
+        raise DotDruncJsonNotFound(f"~/.drunc.json file not found: '{path}'") from None
     except json.JSONDecodeError as exc:
         raise DotDruncJsonIncorrectFormat(
-            f"dotdrunc file is not a valid JSON: '{path}'"
+            f"~/.drunc.json file is not a valid JSON: '{path}'"
         ) from exc
 
     expected_keys = [
@@ -40,7 +43,7 @@ def get_dotdrunc_json(path: str = "~/.drunc.json"):
 
     if not all(key in dotdrunc for key in expected_keys):
         raise DotDruncJsonIncorrectFormat(
-            f"dotdrunc file is missing some expected keys: {expected_keys}"
+            f"~/.drunc.json file is outdated or is missing some expected keys: {expected_keys}"
         )
 
     return dotdrunc

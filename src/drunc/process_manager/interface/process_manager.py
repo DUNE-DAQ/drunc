@@ -1,6 +1,7 @@
 import concurrent
 import getpass
 import os
+import sys
 
 import click
 import grpc
@@ -10,6 +11,7 @@ from drunc.exceptions import DruncSetupException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     get_process_manager_configuration,
+    validate_pm_config,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
@@ -39,15 +41,22 @@ def run_pm(
     appName = "process_manager"
     log = get_logger(logger_name=appName)
 
+    
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
         signal_handler()
 
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
 
-    log.debug(f"Using '{pm_conf}' as the ProcessManager configuration")
+    log.debug(f"Validating process_manager configuration: {pm_conf}")
+    if not validate_pm_config(pm_conf):   
+        log.error("Process manager configuration validation failed. Exiting.")
+        sys.exit(1)
+    log.debug("Process manager configuration is valid.")
 
     conf_path, conf_type = parse_conf_url(pm_conf)
+    
+
     pmch = ProcessManagerConfHandler(
         log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
     )
@@ -69,7 +78,6 @@ def run_pm(
 
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
-
 
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
