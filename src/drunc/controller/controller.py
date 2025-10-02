@@ -428,7 +428,7 @@ class Controller(ControllerServicer):
             time.sleep(interval_s)
 
     def construct_error_node_response(
-        self, command_name: str, token: Token, cause: FSMResponseFlag
+        self, command_name: str, token: Token, cause: FSMResponseFlag.ValueType
     ) -> Response:
         fsm_result = FSMCommandResponse(
             flag=cause,
@@ -734,35 +734,17 @@ class Controller(ControllerServicer):
                 f"Propagating {command_name} to child {child.name}, request: {request_str}"
             )
 
+            # TODO: make each thread target the driver command directly
+            # TODO: so basically do all of this inside the controller command function
+            # TODO: need to also make request messages inside the controller command function
+            # TODO: error handling should be done on the driver object
+
             try:
-                # TODO: replace with direct child command calls.
-
-                # TODO: only thing child is used for in this function besides propagate_command is name
-                # TODO: so we could just replace child with the child command function directly
-                # TODO: but what to do about all the child.name in the logging?
-
                 response = child.propagate_command(command_name, request, None)
-
-                if response.flag in [
-                    ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                ]:
-                    self.log.debug(
-                        f"Propagated {command_name} to child ({child.name}) successfully"
-                    )
-                else:
-                    self.log.error(
-                        f"Propagating {command_name} to child ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
-                    )
-
-                with response_lock:
-                    response_children.append(response)
-
             except Exception as e:
                 self.log.exception(
                     f"Failed to propagate {command_name} to {child.name}"
                 )
-
                 flag = (
                     ResponseFlag.DRUNC_EXCEPTION_THROWN
                     if isinstance(e, DruncException)
@@ -777,8 +759,8 @@ class Controller(ControllerServicer):
                     children=[],
                 )
 
-                with response_lock:
-                    response_children.append(response)
+            with response_lock:
+                response_children.append(response)
 
         threads = []
         for child, target in child_list:
