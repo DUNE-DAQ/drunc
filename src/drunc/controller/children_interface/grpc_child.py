@@ -119,11 +119,10 @@ class gRPCChildNode(ChildNode):
         command: str,
         request: AddressedCommand,
         token: Token | None,
-        timeout: int | float = 60,
     ) -> Response:
         try:
             cmd = getattr(self.stub, command)
-            response = cmd(request, timeout=timeout)
+            response = cmd(request)
         except grpc.RpcError as error:
             self.handle_child_grpc_error(error)
 
