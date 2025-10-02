@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest",]
+dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
 test = ["pytest", "grpcio-testing"]
 
 [project.scripts]
