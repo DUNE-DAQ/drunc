@@ -96,26 +96,6 @@ class ClientSideChild(ChildNode):
     def __str__(self):
         return f"'{self.name}' is in error state (type {self.node_type})"
 
-    def status(self, token: Token) -> StatusResponse:
-        status = Status(
-            state=self.state.get_operational_state(),
-            sub_state=(
-                "idle" if not self.state.get_executing_command() else "executing_cmd"
-            ),
-            in_error=self.state.in_error() or not self.commander.ping(),  # meh
-            included=self.state.included(),
-        )
-
-        response = StatusResponse(
-            token=None,
-            name=self.name,
-            status=status,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
-
-        return response
-
     def propagate_command(
         self,
         command: str,
@@ -142,11 +122,12 @@ class ClientSideChild(ChildNode):
                 children=[],
             )
 
-        elif command == "describe":
-            return self.describe(token)
-
-        elif command in ["status", "recompute_status"]:
-            return self.status(token)
+        elif command == "recompute_status":
+            return self.status(
+                target=request.target,
+                execute_along_path=request.execute_along_path,
+                execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+            )
 
         if self.state.excluded() and command == "execute_fsm_command":
             return Response(
@@ -172,8 +153,6 @@ class ClientSideChild(ChildNode):
             return self.propagate_expert_command(
                 unpack_any(request.command_data, PlainText), token
             )
-        elif command == "describe":
-            return self.describe(token)
         else:
             self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
             return Response(
@@ -183,6 +162,31 @@ class ClientSideChild(ChildNode):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 children=[],
             )
+
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        status = Status(
+            state=self.state.get_operational_state(),
+            sub_state=(
+                "idle" if not self.state.get_executing_command() else "executing_cmd"
+            ),
+            in_error=self.state.in_error() or not self.commander.ping(),
+            included=self.state.included(),
+        )
+
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+            status=status,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
 
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
         return Response(

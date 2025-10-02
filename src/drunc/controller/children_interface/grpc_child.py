@@ -2,7 +2,11 @@ import time
 from typing import NoReturn, cast
 
 import grpc
-from druncschema.controller_pb2 import AddressedCommand
+from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeResponse,
+    StatusResponse,
+)
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Response
@@ -111,7 +115,6 @@ class gRPCChildNode(ChildNode):
             del self.stub
 
         self.channel = None
-        self.stub = None
         self.broadcast.stop()
 
     def propagate_command(
@@ -123,6 +126,48 @@ class gRPCChildNode(ChildNode):
         try:
             cmd = getattr(self.stub, command)
             response = cmd(request)
+        except grpc.RpcError as error:
+            self.handle_child_grpc_error(error)
+
+        return response
+
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.status(request)
+        except grpc.RpcError as error:
+            self.handle_child_grpc_error(error)
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="describe",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.describe(request)
         except grpc.RpcError as error:
             self.handle_child_grpc_error(error)
 

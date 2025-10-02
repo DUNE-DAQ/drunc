@@ -3,6 +3,7 @@ import re
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from typing import List
 
@@ -637,148 +638,80 @@ class Controller(ControllerServicer):
 
         return response_children
 
-    def parse_target_path(self, target: str) -> list[str]:
-        """Parse and check the target path.
+    def check_target_path(self, target: str) -> None:
+        """Check that the target path starts with the current node name.
 
         Args:
             target: The path to the target, as a raw string.
 
-        Returns:
-            The (checked) path to the target, parsed as a list.
-
         Raises:
             ValueError: If target does not start at the current node.
         """
-        if not target:
-            return [self.name]
         target_path = target.split("/")
-
-        # Check that the target path starts with the current node name.
         if target_path[0] != self.name:
             error_str = f"Target '{target}' does not start with '{self.name}'"
             self.log.error(error_str)
             raise ValueError(error_str)
 
-        return target_path
-
     def address_target_path(
         self,
-        target_path: list[str],
+        target: str,
         execute_on_children: bool,
-    ) -> list[tuple[ChildNode, list[str]]]:
+    ) -> list[tuple[ChildNode, str]]:
         """Finds the next node(s) along a given path to a target node.
 
         Given a path from the current node to the target node, a list of node
-        and path pairs is returned. This will contain either a single child
+        and target pairs is returned. This will contain either a single child
         node, next along the path, or all child nodes if the path is exhausted
         and the execute_on_children flag is set.
 
         Args:
-            target_path: The target path from the parent node.
-            execute_on_children: If True, run on nodes beyond target_path.
+            target: The path to the target from the current node.
+            execute_on_children: If True, run on nodes beyond the target.
 
         Returns:
-            A list of (ChildNode, target_path) for each addressed child.
+            A list of (ChildNode, target) for each addressed child.
         """
-        new_target_path = target_path[1:]
+        new_target_path = target.split("/")[1:]
+        new_target = "/".join(new_target_path)
 
         # Handle execute_on_children case only at the end of the target path.
         if not new_target_path and execute_on_children:
-            return [(child, [child.name]) for child in self.children_nodes]
+            return [(child, child.name) for child in self.children_nodes]
 
         targets = [
-            (child, new_target_path)
+            (child, new_target)
             for child in self.children_nodes
             if child.name == new_target_path[0]
         ]
         if not targets:
-            t = "/".join(new_target_path)
-            self.log.info(f"Target '{t}' not found in children of '{self.name}'")
+            self.log.info(
+                f"Target '{new_target}' not found in children of '{self.name}'"
+            )
 
         return targets
 
     def address_all(
         self,
         only_included: bool = True,
-    ) -> list[tuple[ChildNode, list[str]]]:
+    ) -> list[tuple[ChildNode, str]]:
         """Finds all child nodes, with optional node inclusion/exclusion.
 
-        Returns a list of node and target path pairs for each child node. The
-        returned data structure is identical to that of address_target_path.
+        Returns a list of node and target pairs for each child node. The
+        returned data is structured the same as that of address_target_path.
 
         Args:
             only_included: If True, only traverse nodes that are explicitly
                 marked for inclusion.
 
         Returns:
-            A list of (ChildNode, target_path) for each addressed child.
+            A list of (ChildNode, target) for each addressed child.
         """
         return [
-            (child, [child.name])
+            (child, child.name)
             for child in self.children_nodes
             if child.included or not only_included
         ]
-
-    def propagate_to_children(
-        self,
-        parent_request: AddressedCommand,
-        child_list: list[tuple[ChildNode, list[str]]],
-    ):
-        response_children: list[Response] = []
-        response_lock = threading.Lock()
-        command_name = parent_request.command_name
-
-        def propagate(child: ChildNode, request: AddressedCommand):
-            request_str = str(request).replace("\n", " ")
-            self.log.debug(
-                f"Propagating {command_name} to child {child.name}, request: {request_str}"
-            )
-
-            # TODO: make each thread target the driver command directly
-            # TODO: so basically do all of this inside the controller command function
-            # TODO: need to also make request messages inside the controller command function
-            # TODO: error handling should be done on the driver object
-
-            try:
-                response = child.propagate_command(command_name, request, None)
-            except Exception as e:
-                self.log.exception(
-                    f"Failed to propagate {command_name} to {child.name}"
-                )
-                flag = (
-                    ResponseFlag.DRUNC_EXCEPTION_THROWN
-                    if isinstance(e, DruncException)
-                    else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-                )
-                stack = traceback.format_exc().split("\n")
-                response = Response(
-                    token=None,
-                    name=child.name,
-                    data=pack_to_any(Stacktrace(text=stack)),
-                    flag=flag,
-                    children=[],
-                )
-
-            with response_lock:
-                response_children.append(response)
-
-        threads = []
-        for child, target in child_list:
-            request = AddressedCommand()
-            request.CopyFrom(parent_request)
-            request.target = "/".join(target)
-            threads.append(
-                threading.Thread(
-                    target=propagate,
-                    args=(child, request),
-                )
-            )
-            threads[-1].start()
-
-        for thread in threads:
-            thread.join()
-
-        return response_children
 
     ########################################################
     ############# Status, description commands #############
@@ -790,23 +723,34 @@ class Controller(ControllerServicer):
     def status(
         self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
-        target_path = self.parse_target_path(request.target)
+        self.check_target_path(request.target)
 
         response = StatusResponse(
             token=None,
             name=self.name,
         )
 
-        if target_path == [self.name] or request.execute_along_path:
+        # This node.
+        if request.target == self.name or request.execute_along_path:
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
+        # Children nodes.
         child_list = self.address_target_path(
-            target_path,
+            request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_to_children(request, child_list)
-        response.children.extend(child_responses)
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    child.status,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+                for child, target in child_list
+            ]
+            response.children.extend([f.result() for f in as_completed(futures)])
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
@@ -818,14 +762,15 @@ class Controller(ControllerServicer):
     def describe(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
-        target_path = self.parse_target_path(request.target)
+        self.check_target_path(request.target)
 
         response = DescribeResponse(
             token=None,
             name=self.name,
         )
 
-        if target_path == [self.name] or request.execute_along_path:
+        # This node.
+        if request.target == self.name or request.execute_along_path:
             description = Description(
                 type="controller",
                 name=self.name,
@@ -838,12 +783,22 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
+        # Children nodes.
         child_list = self.address_target_path(
-            target_path,
+            request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_to_children(request, child_list)
-        response.children.extend(child_responses)
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    child.describe,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+                for child, target in child_list
+            ]
+            response.children.extend([f.result() for f in as_completed(futures)])
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 

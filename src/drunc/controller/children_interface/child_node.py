@@ -56,21 +56,21 @@ class ChildNode:  # abc.ABC):
         request: AddressedCommand,
         token: Token | None,
     ) -> Response:
-        if command == "status":
-            return self.status(token)
-        elif command == "describe":
-            return self.describe(token)
-        else:
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                children=[],
-            )
+        return Response(
+            name=self.name,
+            token=token,
+            data=None,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+            children=[],
+        )
 
     # @abc.abstractmethod
-    def status(self, token: Token) -> StatusResponse:
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
         status = Status(
             state="unknown",
             sub_state="unknown",
@@ -88,7 +88,12 @@ class ChildNode:  # abc.ABC):
 
         return response
 
-    def describe(self, token: Token) -> DescribeResponse:
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
         descriptionType = None
         descriptionName = None
 
