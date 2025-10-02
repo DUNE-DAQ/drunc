@@ -29,13 +29,13 @@ from drunc.utils.utils import get_logger
 
 
 class K8sPodWatcherThread(threading.Thread):
-    def __init__(self, pm):
+    def __init__(self, pm) -> None:
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
         self.processed_uuids = set()
 
-    def run(self):
+    def run(self) -> None:
         self.pm.log.info("K8sPodWatcherThread started")
         while True:
             try:
@@ -91,7 +91,7 @@ class K8sPodWatcherThread(threading.Thread):
 
 
 class K8sProcessManager(ProcessManager):
-    def __init__(self, configuration, **kwargs):
+    def __init__(self, configuration, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
@@ -165,14 +165,14 @@ class K8sProcessManager(ProcessManager):
         else:
             self.log.info("No active namespace created by drunc")
 
-    def _start_watcher(self):
+    def _start_watcher(self) -> None:
         """Starts the background thread that watches for Pod status changes."""
         self.log.debug("Starting K8s pod watcher thread")
         t = K8sPodWatcherThread(pm=self)
         t.start()
         self.watchers.append(t)
 
-    def notify_termination(self, proc_uuid, exit_code, reason, session):
+    def notify_termination(self, proc_uuid, exit_code, reason, session) -> None:
         """Callback for when a pod terminates."""
         self.log.debug(
             f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}"
@@ -195,7 +195,7 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug("All pending pods terminated, setting event.")
                 self.termination_complete_event.set()
 
-    def is_alive(self, podname, session):
+    def is_alive(self, podname, session) -> bool:
         """Checks if a pod is currently in the 'Running' phase."""
         try:
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
@@ -206,7 +206,7 @@ class K8sProcessManager(ProcessManager):
             self.log.error(f"Error checking status for pod {session}.{podname}: {e}")
             return False
 
-    def _add_label(self, obj_name, obj_type, key, label, session=None):
+    def _add_label(self, obj_name, obj_type, key, label, session=None) -> None:
         """Adds a label to a Kubernetes object (Pod or Namespace)."""
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
@@ -237,15 +237,15 @@ class K8sProcessManager(ProcessManager):
         else:
             raise DruncException(f"Cannot add label to object type: {obj_type}")
 
-    def _add_creator_label(self, obj_name, obj_type):
+    def _add_creator_label(self, obj_name, obj_type) -> None:
         """Adds a 'creator' label to a Kubernetes object."""
         self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
-    def _get_creator_label_selector(self):
+    def _get_creator_label_selector(self) -> str:
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
-    def _create_namespace(self, session):
+    def _create_namespace(self, session) -> None:
         """Creates a Kubernetes namespace if it doesn't already exist."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
@@ -276,7 +276,7 @@ class K8sProcessManager(ProcessManager):
             else:
                 raise e
 
-    def _create_headless_service(self, podname, session, pod_uid):
+    def _create_headless_service(self, podname, session, pod_uid) -> None:
         """Creates a headless service for a pod."""
         service_manifest = client.V1Service(
             api_version="v1",
@@ -311,7 +311,7 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_nodeport_service(self, podname, session, pod_uid):
+    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
         """Creates a NodePort service for the connection server (external + internal access)."""
         service_manifest = client.V1Service(
             api_version="v1",
@@ -356,7 +356,7 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create NodePort service for {podname}: {e}")
 
-    def _create_pod(self, podname, session, boot_request: BootRequest):
+    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
         """Constructs and creates a Kubernetes Pod manifest."""
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
@@ -534,7 +534,7 @@ done
             self.log.error(error_message)
             raise DruncException(error_message) from e
 
-    def _get_connection_server_cluster_ip(self, session):
+    def _get_connection_server_cluster_ip(self, session) -> str:
         """Gets the ClusterIP of the connection server service."""
         try:
             service = self._core_v1_api.read_namespaced_service(
@@ -545,7 +545,7 @@ done
             self.log.error(f"Failed to get connection server service IP: {e}")
             return None
 
-    def _extract_port_from_cmd(self, boot_request):
+    def _extract_port_from_cmd(self, boot_request) -> int | None:
         # Find the gunicorn port argument from exec_and_args_list
         for e_and_a in boot_request.process_description.executable_and_arguments:
             if "gunicorn" in e_and_a.exec or (
@@ -561,7 +561,7 @@ done
                     return int(match.group(1))
         return None
 
-    def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
+    def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
         """
         Finds process UUIDs matching a query.
 
@@ -792,7 +792,7 @@ done
         restarted_process = self.__boot(br_copy, uuid)
         return ProcessInstanceList(values=[restarted_process])
 
-    def _kill_pod(self, podname, session, grace_period_seconds=None):
+    def _kill_pod(self, podname, session, grace_period_seconds=None) -> None:
         """Deletes a specific pod from a namespace."""
         try:
             self._core_v1_api.delete_namespaced_pod(
@@ -823,12 +823,12 @@ done
                 or pd.metadata.name == self.connection_server_name
             )
 
-            if is_controller or pd.metadata.name == self.connection_server_name:
+            if is_controller:
                 forced_apps.append(uuid_str)
             else:
                 graceful_apps.append(uuid_str)
 
-        def kill_and_wait(uuids, stage_name, grace_period=None):
+        def kill_and_wait(uuids, stage_name, grace_period=None) -> None:
             if not uuids:
                 return
             action = (
