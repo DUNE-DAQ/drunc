@@ -132,14 +132,12 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_name = settings.get(
             "connection_server_name", "local-connection-server"
         )
-        self.connection_server_port = settings.get("connection_server_port", 30000)
-        self.connection_server_node_port = settings.get(
-            "connection_server_node_port", 30000
-        )
         self.connection_server_hostname = settings.get(
             "connection_server_hostname", "localhost"
         )
-        self.nodeport_port = settings.get("nodeport_port", 30000)
+        self.connection_server_port = None
+        self.connection_server_node_port = None
+
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
@@ -341,7 +339,7 @@ class K8sProcessManager(ProcessManager):
                         protocol="TCP",
                         port=self.connection_server_port,
                         target_port=self.connection_server_port,
-                        node_port=self.nodeport_port,
+                        node_port=self.connection_server_node_port,
                     )
                 ],
             ),
@@ -352,7 +350,7 @@ class K8sProcessManager(ProcessManager):
             )
             self.log.info(
                 f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
-                f"(NodePort: {self.nodeport_port} for external access)"
+                f"(NodePort: {self.connection_server_node_port} for external access)"
             )
         except self._api_error_v1_api as e:
             if e.status != 409:
@@ -547,6 +545,22 @@ done
             self.log.error(f"Failed to get connection server service IP: {e}")
             return None
 
+    def _extract_port_from_cmd(self, boot_request):
+        # Find the gunicorn port argument from exec_and_args_list
+        for e_and_a in boot_request.process_description.executable_and_arguments:
+            if "gunicorn" in e_and_a.exec or (
+                "gunicorn" in " ".join(list(e_and_a.args))
+            ):
+                all_args = [e_and_a.exec] + list(e_and_a.args)
+                arg_str = " ".join(all_args)
+                match = re.search(r"-b\s+[\w\.]+:(\d+)", arg_str)
+                if not match:
+                    # Try to match '--bind'
+                    match = re.search(r"--bind[\s=]+[\w\.]+:(\d+)", arg_str)
+                if match:
+                    return int(match.group(1))
+        return None
+
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
         """
         Finds process UUIDs matching a query.
@@ -630,6 +644,19 @@ done
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
+        # Extract ports for LCS
+        if podname == self.connection_server_name:
+            self.log.info(f"Waiting for '{podname}' to become ready...")
+
+            port = self._extract_port_from_cmd(boot_request)
+            if port:
+                self.connection_server_port = port
+                self.connection_server_node_port = port
+            else:
+                raise DruncException(
+                    "Could not extract port from boot request for connection server"
+                )
+
         self._create_pod(podname, session, boot_request)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
@@ -637,6 +664,7 @@ done
         # Special handling only for the connection server
         if podname == self.connection_server_name:
             self.log.info(f"Waiting for '{podname}' to become ready...")
+
             start_time = time()
             while time() - start_time < self.pod_ready_timeout:
                 try:
