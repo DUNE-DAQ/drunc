@@ -302,16 +302,18 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-            children_statuses = self.OLD_propagate_to_all_children(
-                command_name="status",
-                token=self.actor.get_token(),
-            )
+            with ThreadPoolExecutor() as executor:
+                futures = [
+                    executor.submit(child.status, target)
+                    for child, target in self.address_all()
+                ]
+                children_responses = [f.result() for f in as_completed(futures)]
+
             children_states = {}
-            for response in children_statuses:
+            for response in children_responses:
                 children_states[response.name] = response.status.state
                 if response.status.in_error:
                     self.stateful_node.to_error()
-                    break
 
             if any([c.lower() != "initial" for c in children_states.values()]):
                 time.sleep(0.5)
@@ -1092,8 +1094,7 @@ class Controller(ControllerServicer):
         if execute_on_self:
             statuses = self.OLD_propagate_to_all_children(
                 "recompute_status",
-                command_data=None,
-                token=token,
+                token,
                 only_included=True,
             )
 
@@ -1154,10 +1155,10 @@ class Controller(ControllerServicer):
 
             status = get_status_message(self.stateful_node)
 
+            # TODO: OLD_propagate_to_all_children to handle new status and description
             post_statuses = self.OLD_propagate_to_all_children(
                 "status",
-                command_data=None,
-                token=token,
+                token,
                 only_included=False,
             )
             return Response(
