@@ -638,20 +638,31 @@ class Controller(ControllerServicer):
 
         return response_children
 
-    def check_target_path(self, target: str) -> None:
-        """Check that the target path starts with the current node name.
+    def parse_target_string(self, target: str) -> str:
+        """Parse and check a target string.
+
+        1. Set it to the current node name if it is empty.
+        2. Ensure that it starts with the current node name.
 
         Args:
             target: The path to the target, as a raw string.
 
+        Returns:
+            The (possibly modified) target string.
+
         Raises:
-            ValueError: If target does not start at the current node.
+            ValueError: If it does not start at the current node.
         """
+        if not target:
+            return self.name
+
         target_path = target.split("/")
         if target_path[0] != self.name:
             error_str = f"Target '{target}' does not start with '{self.name}'"
             self.log.error(error_str)
             raise ValueError(error_str)
+
+        return target
 
     def address_target_path(
         self,
@@ -723,8 +734,7 @@ class Controller(ControllerServicer):
     def status(
         self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
-        self.check_target_path(request.target)
-
+        request.target = self.parse_target_string(request.target)
         response = StatusResponse(
             token=None,
             name=self.name,
@@ -762,8 +772,7 @@ class Controller(ControllerServicer):
     def describe(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
-        self.check_target_path(request.target)
-
+        request.target = self.parse_target_string(request.target)
         response = DescribeResponse(
             token=None,
             name=self.name,
