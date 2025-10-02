@@ -639,11 +639,6 @@ done
         if uuid in self.boot_request:
             raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
 
-        self._create_namespace(session)
-
-        self.boot_request[uuid] = BootRequest()
-        self.boot_request[uuid].CopyFrom(boot_request)
-
         # Extract ports for LCS
         if podname == self.connection_server_name:
             self.log.info(f"Waiting for '{podname}' to become ready...")
@@ -656,6 +651,28 @@ done
                 raise DruncException(
                     "Could not extract port from boot request for connection server"
                 )
+
+            # Check for NodePort collision
+            api = self._core_v1_api
+            all_services = api.list_service_for_all_namespaces()
+            for svc in all_services.items:
+                if not svc.spec.type == "NodePort":
+                    continue
+                for p in svc.spec.ports:
+                    if p.node_port == self.connection_server_node_port and (
+                        svc.metadata.namespace != session
+                        or svc.metadata.name != podname
+                    ):
+                        raise DruncException(
+                            f"NodePort {self.connection_server_node_port} is already in use by service "
+                            f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
+                            "Cannot start another local connection server with the same port."
+                        )
+
+        self._create_namespace(session)
+
+        self.boot_request[uuid] = BootRequest()
+        self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_pod(podname, session, boot_request)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
