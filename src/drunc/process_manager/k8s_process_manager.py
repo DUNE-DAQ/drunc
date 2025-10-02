@@ -135,26 +135,37 @@ class K8sProcessManager(ProcessManager):
         # Get settings from configuration
         settings = getattr(self.configuration.data, "settings", {})
 
-        self.drunc_label = settings.get("drunc_label", "drunc.daq")
-        self.connection_server_name = settings.get(
-            "connection_server_name", "local-connection-server"
+        # Labels
+        labels = settings.get("labels", {})
+        self.drunc_label = labels.get("drunc_label", "drunc.daq")
+
+        # Connection server
+        connection_server = settings.get("connection_server", {})
+        self.connection_server_name = connection_server.get(
+            "name", "local-connection-server"
         )
-        self.connection_server_port = settings.get("connection_server_port", 5000)
-        self.sidecar_image = settings.get("sidecar_image", "alpine/socat")
-        self.kill_timeout = settings.get("kill_timeout", 20)
-        self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
-        self.port_forward_timeout = settings.get("port_forward_timeout", 15)
-        self.proxy_unset_script = settings.get(
+        self.connection_server_port = connection_server.get("port", 5000)
+        self.proxy_unset_script = connection_server.get(
             "proxy_unset_script", "~np04daq/bin/web_proxy.sh -u"
         )
-        self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
-        self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
-        self.restart_cleanup_polling = float(
-            settings.get("restart_cleanup_polling", "0.5")
-        )
-        self.watcher_retry_sleep = settings.get("watcher_retry_sleep", 5)
-        self.pod_status_check_sleep = settings.get("pod_status_check_sleep", 1)
-        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
+        self.port_forward_timeout = connection_server.get("port_forward_timeout", 15)
+
+        # Pod management
+        pod_management = settings.get("pod_management", {})
+        self.sidecar_image = pod_management.get("sidecar_image", "alpine/socat")
+        self.kill_timeout = pod_management.get("kill_timeout", 20)
+        self.pod_ready_timeout = pod_management.get("ready_timeout", 60)
+
+        # Cleanup
+        cleanup = settings.get("cleanup", {})
+        self.restart_cleanup_time = float(cleanup.get("restart_time", "10"))
+        self.restart_cleanup_polling = float(cleanup.get("restart_polling", "0.5"))
+
+        # Checking
+        checking = settings.get("checking", {})
+        self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
+        self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
+        self._host_cache_expiry = checking.get("host_verification_cache_expiry", 300)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
