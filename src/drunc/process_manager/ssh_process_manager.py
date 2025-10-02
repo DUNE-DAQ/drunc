@@ -1,12 +1,7 @@
 import getpass
-import os
-import signal
-import tempfile
-import threading
 import uuid
-from time import sleep
+from typing import Optional
 
-import sh
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -23,28 +18,7 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import on_parent_exit
-
-
-class AppProcessWatcherThread(threading.Thread):
-    def __init__(self, pm, name, user, session, process):
-        threading.Thread.__init__(self)
-        self.pm = pm
-        self.user = user
-        self.session = session
-        self.name = name
-        self.process = process
-
-    def run(self):
-        exc = None
-        try:
-            self.process.wait()
-        except sh.ErrorReturnCode as e:
-            exc = e
-
-        self.pm.notify_join(
-            name=self.name, session=self.session, user=self.user, exec=exc
-        )
+from drunc.ssh.ssh_connection_manager import SSHConnectionManager
 
 
 class SSHProcessManager(ProcessManager):
@@ -68,44 +42,78 @@ class SSHProcessManager(ProcessManager):
 
         # self.children_logs_depth = 1000
         # self.children_logs = {}
-        self.watchers = []
 
-        self.ssh = sh.Command("/usr/bin/ssh")
+        self.ssh_manager = SSHConnectionManager(
+            disable_host_key_check=self.disable_host_key_check,
+            disable_localhost_host_key_check=self.disable_localhost_host_key_check,
+            logger=self.log,
+            on_process_exit=self._on_ssh_process_exit,
+        )
+
+    def _on_ssh_process_exit(
+        self, uuid: str, exit_code: Optional[int], exception: Optional[Exception]
+    ) -> None:
+        """
+        Callback invoked when an SSH process exits.
+
+        Args:
+            uuid: Process UUID that exited
+            exit_code: Exit code from process (None if still running)
+            exception: Exception if process failed abnormally
+        """
+        if uuid not in self.boot_request:
+            return
+
+        if exit_code is None:
+            self.log.debug(
+                f"Process with UUID {uuid} is still running but on_ssh_process_exit was called."
+            )
+        else:
+            self.log.debug(f"Process with UUID {uuid} exited with code {exit_code}.")
+
+        boot_req = self.boot_request[uuid]
+        name = boot_req.process_description.metadata.name
+        session = boot_req.process_description.metadata.session
+        user = boot_req.process_description.metadata.user
+
+        self.notify_join(name=name, session=session, user=user, exec=exception)
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
+        """
+        Terminate processes by their UUIDs.
+
+        Iterates through the provided UUID list and terminates each process
+        via the SSH connection manager. Collects process status information
+        for each terminated process.
+
+        Args:
+            uuids: List of process UUIDs to terminate
+
+        Returns:
+            ProcessInstanceList containing status of terminated processes
+        """
         ret = []
+
         for proc_uuid in uuids:
-            process = self.process_store[proc_uuid]
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
-            if process.is_alive():
-                sequence = [
-                    # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
-                    signal.SIGQUIT,
-                    signal.SIGKILL,  # Kept as nuclear option
-                ]
-                for sig in sequence:
-                    if not process.is_alive():
-                        self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
-                        break
-                    self.log.debug(
-                        f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
-                    )
-                    process.signal_group(sig)  # TODO grab this from the inputs
-                    if not process.is_alive():
-                        break
-                    sleep(self.configuration.data.kill_timeout)
+
+            # Terminate process if still alive
+            if self.ssh_manager.is_process_alive(proc_uuid):
+                self.log.debug(f"Terminating '{app_name}' with UUID {proc_uuid}")
+                self.ssh_manager.terminate_process(
+                    proc_uuid, timeout=self.configuration.data.kill_timeout
+                )
+                self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
+
+            # Build process instance for response
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
             pu = ProcessUUID(uuid=proc_uuid)
 
-            return_code = None
-            if not self.process_store[proc_uuid].is_alive():
-                try:
-                    return_code = self.process_store[proc_uuid].exit_code
-                except Exception:
-                    pass
+            # Get final exit code
+            return_code = self.ssh_manager.get_exit_code(proc_uuid)
 
             ret += [
                 ProcessInstance(
@@ -116,7 +124,9 @@ class SSHProcessManager(ProcessManager):
                     uuid=pu,
                 )
             ]
-            del self.process_store[proc_uuid]
+
+            # Clean up SSH resources
+            self.ssh_manager.cleanup_process(proc_uuid)
 
         return ProcessInstanceList(
             name=self.name,
@@ -126,16 +136,34 @@ class SSHProcessManager(ProcessManager):
         )
 
     def _terminate_impl(self) -> ProcessInstanceList:
+        """
+        Terminate all managed processes and clean up resources.
+
+        Called during process manager shutdown to ensure all SSH connections
+        and remote processes are properly terminated.
+
+        Returns:
+            ProcessInstanceList containing status of terminated processes
+        """
         self.log.info("Terminating")
 
-        if self.process_store:
+        if self.boot_request:
             self.log.info("Killing all the known processes before exiting")
             uuids = self._get_process_uid(
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
-            return self.kill_processes(uuids)
+            result = self.kill_processes(uuids)
+
+            # Clean up all SSH manager resources
+            self.ssh_manager.cleanup_all()
+
+            return result
 
         self.log.info("No known process to kill before exiting")
+
+        # Still clean up SSH manager even if no processes
+        self.ssh_manager.cleanup_all()
+
         return ProcessInstanceList(
             name=self.name,
             token=None,
@@ -144,71 +172,37 @@ class SSHProcessManager(ProcessManager):
         )
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
+        """
+        Retrieve log output from a remote process.
+
+        Reads the last N lines from the remote process log file via SSH connection.
+        The log file location is determined from the process boot request metadata.
+
+        Args:
+            log_request: LogRequest object containing query and line count (how_far)
+
+        Returns:
+            LogLines object containing retrieved log lines or error information
+        """
         self.log.debug(f"Retrieving logs for {log_request.query}")
+
+        # Ensure exactly one process matches the query
         uid = self._ensure_one_process(self._get_process_uid(log_request.query))
+
+        # Extract log file location and connection details from boot request
         logfile = self.boot_request[uid].process_description.process_logs_path
         user = self.boot_request[uid].process_description.metadata.user
         host = self.boot_request[uid].process_description.metadata.hostname
-        user_host = f"{user}@{host}"
-        disable_host_key_check = self.disable_host_key_check or (
-            self.disable_localhost_host_key_check
-            and host in ("localhost", "127.0.0.1", "::1")
-        )
 
-        # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
-        # "Not the straight forward way"...
-        f = tempfile.NamedTemporaryFile(delete=False)
-        nlines = log_request.how_far
-        if not nlines:
-            nlines = 100
+        # Determine number of lines to retrieve (default: 100)
+        nlines = log_request.how_far if log_request.how_far else 100
 
         try:
-            cmd = [
-                "tail",
-                f"-{nlines}",
-                logfile,
-            ]
-            self.log.debug(f"cmd: {cmd}")
-            arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
-            arguments += (
-                [
-                    "-o LogLevel=error",
-                    "-o GlobalKnownHostsFile=/dev/null",
-                    "-o UserKnownHostsFile=/dev/null",
-                ]
-                if disable_host_key_check
-                else []
-            )
-            arguments += cmd
-
-            self.ssh(
-                *arguments,
-                _out=f.name,
-                _err_to_out=True,
-            )
-        except Exception as e:
-            lines = [f"Could not retrieve logs: {e!s}"]
-            if uid in self.process_store:
-                lines.extend(
-                    [
-                        f"stdout: {self.process_store[uid].stdout}",
-                        f"stderr: {self.process_store[uid].stderr}",
-                    ]
-                )
-
-            return LogLines(
-                name=self.name,
-                token=None,
-                uuid=ProcessUUID(uuid=uid),
-                lines=lines,
-                flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+            # Read log file from remote host via SSH
+            lines = self.ssh_manager.read_remote_log_file(
+                hostname=host, user=user, log_file=logfile, num_lines=nlines
             )
 
-        f.close()
-        with open(f.name) as fi:
-            lines = fi.readlines()
-            if "Connection to " in lines[-1] and " closed." in lines[-1]:
-                lines = lines[:-1]
             return LogLines(
                 name=self.name,
                 token=None,
@@ -217,7 +211,28 @@ class SSHProcessManager(ProcessManager):
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
 
-        os.remove(f.name)
+        except Exception as e:
+            # Log retrieval failed - provide error message and fallback to SSH output buffers
+            lines = [f"Could not retrieve logs: {e!s}"]
+
+            # Attempt to retrieve any captured stdout/stderr from SSH connection
+            # Note: Most output is redirected to log files, so this is primarily
+            # for SSH-level messages and diagnostics
+            stdout = self.ssh_manager.get_process_stdout(uid)
+            stderr = self.ssh_manager.get_process_stderr(uid)
+
+            if stdout:
+                lines.append(f"stdout: {stdout}")
+            if stderr:
+                lines.append(f"stderr: {stderr}")
+
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=ProcessUUID(uuid=uid),
+                lines=lines,
+                flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
+            )
 
     def notify_join(self, name, session, user, exec):
         self.log.debug(f"{self.name} joining processes from the event loop")
@@ -231,26 +246,13 @@ class SSHProcessManager(ProcessManager):
 
         self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
-    def _watch(self, name, session, user, process):
-        self.log.debug(f"{self.name} watching process {name}")
-        t = AppProcessWatcherThread(
-            pm=self, session=session, user=user, name=name, process=process
-        )
-        t.start()
-        self.watchers.append(t)
-
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         self.log.debug(
             f"{self.name} booting '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}'"
         )
-        platform = os.uname().sysname.lower()
-        macos = "darwin" in platform
 
-        meta = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise DruncCommandException("No allowed host provided! bailing")
-
-        error = ""
 
         if uuid in self.boot_request:
             raise DruncCommandException(f"Process {uuid} already exists!")
@@ -258,31 +260,17 @@ class SSHProcessManager(ProcessManager):
         self.boot_request[uuid].CopyFrom(boot_request)
         hostname = ""
 
+        errors = ""
+
         for host in boot_request.process_restriction.allowed_hosts:
             try:
                 user = boot_request.process_description.metadata.user
-                user_host = host if not user else f"{user}@{host}"
                 hostname = host
-
                 log_file = boot_request.process_description.process_logs_path
                 env_var = boot_request.process_description.env
-                disable_host_key_check = self.disable_host_key_check or (
-                    self.disable_localhost_host_key_check
-                    and host in ("localhost", "127.0.0.1", "::1")
-                )
 
-                # Add EXIT trap and use it kill child processes on the ssh client side when the ssh connection is closed
-                cmd = (
-                    'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
-                )
-
-                # Add exported environment variables
-                cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_var.items()])
-                if cmd_env:
-                    cmd += cmd_env + ";"
-
-                cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
-
+                # Build command from executable and arguments
+                cmd = ""
                 for (
                     exe_arg
                 ) in boot_request.process_description.executable_and_arguments:
@@ -291,45 +279,25 @@ class SSHProcessManager(ProcessManager):
                         cmd += f" {arg}"
                     cmd += ";"
 
-                if cmd[-1] == ";":
+                if cmd.endswith(";"):
                     cmd = cmd[:-1]
 
-                arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no"]
-                arguments += (
-                    [
-                        "-o LogLevel=error",
-                        "-o GlobalKnownHostsFile=/dev/null",
-                        "-o UserKnownHostsFile=/dev/null",
-                    ]
-                    if disable_host_key_check
-                    else []
+                # Execute via SSH connection manager
+                self.ssh_manager.execute_ssh_command(
+                    uuid=uuid,
+                    boot_request=boot_request,
+                    hostname=host,
+                    user=user if user else getpass.getuser(),
+                    command=cmd,
+                    log_file=log_file,
+                    env_vars=dict(env_var) if env_var else {},
                 )
-                arguments += [
-                    f"{{ {cmd} ; }} &> {log_file}",
-                ]
-                # arguments = [user_host, "-tt", "-o StrictHostKeyChecking=no", f'{{ {cmd} ; }} > >(tee -a {log_file}) 2> >(tee -a {log_file} >&2)']
-                # I'm gonna bail now and read that log file, anyway, it's probably better that heavy logger applications don't clog up the process manager CPU.
-                self.process_store[uuid] = self.ssh(
-                    *arguments,
-                    # _out=partial(self._process_children_logs, uuid),
-                    _out=self.log.debug,
-                    _err=self.log.error,
-                    _bg=True,
-                    _bg_exc=False,
-                    _new_session=True,
-                    _preexec_fn=on_parent_exit(signal.SIGTERM) if not macos else None,
-                )
-                self._watch(
-                    name=meta.name,
-                    user=meta.user,
-                    session=meta.session,
-                    process=self.process_store[uuid],
-                )
-                self.log.debug(f"Command:\nssh '{' '.join(arguments)}'")
+
+                self.log.debug(f"Command: {cmd}")
                 break
 
             except Exception as e:
-                error += str(e)
+                errors += str(e)
                 print(f"Couldn't start on host {host}, reason:\n{e!s}")
                 print("\nTrying on a different host")
                 continue
@@ -345,35 +313,18 @@ class SSHProcessManager(ProcessManager):
         pr.CopyFrom(self.boot_request[uuid].process_restriction)
         pu = ProcessUUID(uuid=uuid)
 
-        return_code = None
-        alive = False
-
-        if uuid not in self.process_store:
-            pi = ProcessInstance(
-                process_description=pd,
-                process_restriction=pr,
-                status_code=ProcessInstance.StatusCode.DEAD,  ## should be unknown
-                return_code=return_code,
-                uuid=pu,
-            )
-            return pi
-
-        try:
-            if not self.process_store[uuid].is_alive():
-                return_code = self.process_store[uuid].exit_code
-            else:
-                alive = True
-        except Exception:
-            pass
+        alive = self.ssh_manager.is_process_alive(uuid)
+        return_code = self.ssh_manager.get_exit_code(uuid)
+        status_code = (
+            ProcessInstance.StatusCode.RUNNING
+            if alive
+            else ProcessInstance.StatusCode.DEAD
+        )
 
         pi = ProcessInstance(
             process_description=pd,
             process_restriction=pr,
-            status_code=(
-                ProcessInstance.StatusCode.RUNNING
-                if alive
-                else ProcessInstance.StatusCode.DEAD
-            ),
+            status_code=status_code,
             return_code=return_code,
             uuid=pu,
         )
@@ -381,38 +332,56 @@ class SSHProcessManager(ProcessManager):
         return pi
 
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """
+        Retrieve process status information for processes matching the query.
+
+        Returns process details including running status, exit codes, and metadata
+        for all processes that match the provided query criteria.
+
+        Args:
+            query: ProcessQuery object containing process selection criteria
+
+        Returns:
+            ProcessInstanceList containing status information for matching processes
+        """
         ret = []
 
+        # Iterate through all processes matching the query
         for proc_uuid in self._get_process_uid(query):
-            if proc_uuid not in self.process_store:
+            # Handle case where process UUID exists in boot_request but not in SSH manager
+            # This can occur if process failed to start or has been cleaned up
+            if proc_uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=proc_uuid)
                 pi = ProcessInstance(
                     process_description=ProcessDescription(),
                     process_restriction=ProcessRestriction(),
-                    status_code=ProcessInstance.StatusCode.DEAD,  # should be unknown
+                    status_code=ProcessInstance.StatusCode.DEAD,
                     return_code=None,
                     uuid=pu,
                 )
                 ret += [pi]
                 continue
+
+            # Copy process description and restriction from boot request
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
             pu = ProcessUUID(uuid=proc_uuid)
-            return_code = None
-            if not self.process_store[proc_uuid].is_alive():
-                try:
-                    return_code = self.process_store[proc_uuid].exit_code
-                except Exception:
-                    pass
 
+            # Query SSH manager for process status
+            alive = self.ssh_manager.is_process_alive(proc_uuid)
+            return_code = (
+                self.ssh_manager.get_exit_code(proc_uuid) if not alive else None
+            )
+
+            # Create process instance with current status
             pi = ProcessInstance(
                 process_description=pd,
                 process_restriction=pr,
                 status_code=(
                     ProcessInstance.StatusCode.RUNNING
-                    if self.process_store[proc_uuid].is_alive()
+                    if alive
                     else ProcessInstance.StatusCode.DEAD
                 ),
                 return_code=return_code,
@@ -447,12 +416,10 @@ class SSHProcessManager(ProcessManager):
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
 
-        if uuid in self.process_store:
-            process = self.process_store[uuid]
-            if process.is_alive():
-                process.terminate()
+        if self.ssh_manager.is_process_alive(uuid):
+            self.ssh_manager.terminate_process(uuid)
 
-        del self.process_store[uuid]
+        self.ssh_manager.cleanup_process(uuid)
         del self.boot_request[uuid]
         del uuid
 
@@ -469,13 +436,24 @@ class SSHProcessManager(ProcessManager):
         )
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """
+        Kill processes matching the query.
+
+        Terminates all processes that match the provided query criteria.
+
+        Args:
+            query: ProcessQuery object containing process selection criteria
+
+        Returns:
+            ProcessInstanceList containing status of killed processes
+        """
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
 
-        if self.process_store:
+        if self.boot_request:
             uuids = self._get_process_uid(query, order_by="leaf_first")
             return self.kill_processes(uuids)
 
-        self.log.info("No known process to kill before exiting")
+        self.log.info("No known process to kill")
         return ProcessInstanceList(
             name=self.name,
             token=None,
