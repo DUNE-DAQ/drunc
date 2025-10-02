@@ -6,6 +6,7 @@ which acts as the top-level coordinator in the system hierarchy.
 Supports booting remote servers via SSH and managing their lifecycle.
 """
 
+import logging
 import os
 import signal
 import threading
@@ -45,6 +46,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
         self.ssh_manager = SSHConnectionManager(
             disable_host_key_check=True,
             disable_localhost_host_key_check=True,
+            logger=logging.getLogger(__name__),
         )
 
         # Track booted processes

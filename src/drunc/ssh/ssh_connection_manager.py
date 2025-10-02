@@ -1,15 +1,15 @@
 """
-SSH Connection Manager for SSHProcessManager
+SSH Connection Manager for Process Management
 
-This module provides SSH connection management specifically designed to be used
-within SSHProcessManager, replacing subprocess-based SSH execution with paramiko
-for better reliability and cross-platform compatibility.
+Provides SSH connection management using paramiko for reliable cross-platform
+SSH execution. Each remote process receives its own dedicated SSH connection,
+ensuring proper process isolation and termination behaviour.
 """
 
 import logging
 import threading
 import time
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import paramiko
 from druncschema.process_manager_pb2 import BootRequest
@@ -19,15 +19,19 @@ class SSHConnectionManager:
     """
     SSH connection manager using paramiko for SSH execution.
 
-    Each remote process gets its own dedicated SSH connection, ensuring that
+    Each remote process receives its own dedicated SSH connection, ensuring that
     closing a connection terminates only that specific remote process via SIGHUP.
+    Supports process lifecycle management, output capture, and exit code tracking.
     """
 
     def __init__(
         self,
         disable_host_key_check: bool = False,
         disable_localhost_host_key_check: bool = False,
-        ssh_executable: str = "/usr/bin/ssh",  # Kept for interface compatibility, unused
+        logger: Optional[logging.Logger] = None,
+        on_process_exit: Optional[
+            Callable[[str, Optional[int], Optional[Exception]], None]
+        ] = None,
     ):
         """
         Initialise SSH connection manager.
@@ -35,10 +39,13 @@ class SSHConnectionManager:
         Args:
             disable_host_key_check: Disable SSH host key verification for all hosts
             disable_localhost_host_key_check: Disable SSH host key verification for localhost
-            ssh_executable: Unused, kept for interface compatibility
+            logger: Logger instance for real-time output logging
+            on_process_exit: Optional callback function(uuid, exit_code, exception) invoked when process exits
         """
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
+        self.log = logger if logger else logging.getLogger(__name__)
+        self.on_process_exit = on_process_exit
 
         # Connection and channel tracking (one per UUID)
         self.connections: Dict[str, paramiko.SSHClient] = {}
@@ -47,7 +54,7 @@ class SSHConnectionManager:
         # Thread tracking for monitoring
         self.watchers: List[threading.Thread] = []
 
-        # Output capture for compatibility with sh.Command interface
+        # Output capture for process monitoring
         self.stdout_buffers: Dict[str, List[str]] = {}
         self.stderr_buffers: Dict[str, List[str]] = {}
 
@@ -57,9 +64,6 @@ class SSHConnectionManager:
         # Thread-safe locks
         self.locks: Dict[str, threading.Lock] = {}
         self.global_lock = threading.Lock()
-
-        # Logger
-        self.log = logging.getLogger(__name__)
 
     def execute_ssh_command(
         self,
@@ -126,7 +130,7 @@ class SSHConnectionManager:
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_vars.items()])
                 remote_cmd += cmd_env + ";"
 
-            # Add working directory change
+            # Add working directory change if specified
             if hasattr(boot_request.process_description, "process_execution_directory"):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
@@ -231,39 +235,12 @@ class SSHConnectionManager:
                 ):
                     time.sleep(0.1)
 
-                # Note: We cannot force SIGKILL remotely through paramiko easily
-                # The PTY should ensure termination, but if the process ignores SIGHUP,
-                # it may continue running. This matches the limitation of the original
-                # implementation where remote processes could potentially survive.
-
         except Exception as e:
             self.log.warning(f"Error terminating process {uuid}: {e}")
 
-    def signal_process(self, uuid: str, sig: int) -> None:
-        """
-        Send signal to SSH process.
-
-        Note: Paramiko does not provide direct signal sending to remote processes.
-        This method will log a warning as it cannot be implemented without
-        executing additional remote commands to find and signal the PID.
-
-        Args:
-            uuid: Process UUID
-            sig: Signal number to send
-        """
-        if uuid not in self.channels:
-            return
-
-        # Paramiko limitation: Cannot send arbitrary signals to remote processes
-        # without executing additional commands to find the PID
-        self.log.warning(
-            f"signal_process() called for {uuid} with signal {sig}, "
-            "but paramiko cannot send arbitrary signals. Use terminate_process() instead."
-        )
-
     def get_process_stdout(self, uuid: str) -> Optional[str]:
         """
-        Get stdout from process (for compatibility with sh.Command interface).
+        Get stdout from process.
 
         Note: With output redirection to log files, stdout capture is minimal.
         This primarily captures the initial "SSHPM: Starting process..." message.
@@ -282,7 +259,7 @@ class SSHConnectionManager:
 
     def get_process_stderr(self, uuid: str) -> Optional[str]:
         """
-        Get stderr from process (for compatibility with sh.Command interface).
+        Get stderr from process.
 
         Note: With output redirection to log files, stderr capture is minimal.
 
@@ -361,9 +338,9 @@ class SSHConnectionManager:
         """
         Start a monitoring thread for a channel.
 
-        This thread waits for the channel to complete and captures the exit code.
-        Since output is redirected to a log file, we only capture any SSH-level
-        output (like the initial "SSHPM: Starting process..." message).
+        This thread waits for the channel to complete, captures the exit code,
+        and invokes the exit callback if provided. Output is logged in real-time
+        and buffered for later retrieval.
 
         Args:
             uuid: Process UUID
@@ -371,12 +348,10 @@ class SSHConnectionManager:
         """
 
         def watch_process():
+            exception = None
             try:
-                # Read any output that comes through (minimal due to redirection)
-                # This primarily captures the initial echo message
-                stdout_data = []
-                stderr_data = []
-
+                # Read output for real-time logging
+                # Most output goes to log file, but we capture SSH-level messages
                 while not channel.exit_status_ready():
                     # Non-blocking read with timeout
                     if channel.recv_ready():
@@ -385,7 +360,7 @@ class SSHConnectionManager:
                             if line:
                                 self.log.debug(line)
                                 with self.locks[uuid]:
-                                    stdout_data.append(line)
+                                    self.stdout_buffers[uuid].append(line)
 
                     if channel.recv_stderr_ready():
                         data = channel.recv_stderr(4096).decode(
@@ -395,7 +370,7 @@ class SSHConnectionManager:
                             if line:
                                 self.log.error(line)
                                 with self.locks[uuid]:
-                                    stderr_data.append(line)
+                                    self.stderr_buffers[uuid].append(line)
 
                     time.sleep(0.1)
 
@@ -404,15 +379,24 @@ class SSHConnectionManager:
 
                 with self.global_lock:
                     self.exit_codes[uuid] = exit_code
-                    if stdout_data:
-                        self.stdout_buffers[uuid].extend(stdout_data)
-                    if stderr_data:
-                        self.stderr_buffers[uuid].extend(stderr_data)
 
                 self.log.debug(f"SSH process {uuid} exited with code {exit_code}")
 
             except Exception as e:
+                exception = e
                 self.log.error(f"SSH process {uuid} watcher error: {e}")
+                with self.global_lock:
+                    self.exit_codes[uuid] = -1  # Indicate error condition
+
+            # Invoke callback with results
+            if self.on_process_exit:
+                exit_code = self.exit_codes.get(uuid)
+                try:
+                    self.on_process_exit(uuid, exit_code, exception)
+                except Exception as callback_error:
+                    self.log.error(
+                        f"Error in process exit callback for {uuid}: {callback_error}"
+                    )
 
         watcher = threading.Thread(
             target=watch_process, name=f"SSHWatcher-{uuid}", daemon=True
