@@ -129,9 +129,8 @@ class gRPCChildNode(ChildNode):
 
         return response
 
-    @staticmethod
-    def handle_child_grpc_error(error: grpc.RpcError) -> NoReturn:
-        """Handle gRPC errors from sending commands to the child.
+    def handle_child_grpc_error(self, error: grpc.RpcError) -> NoReturn:
+        """Handle gRPC errors from sending commands to the child controller.
 
         Args:
             error: The gRPC error to handle.
@@ -143,11 +142,10 @@ class gRPCChildNode(ChildNode):
         # See https://github.com/grpc/grpc/issues/10885.
         status = rpc_status.from_call(cast(grpc.Call, error))
 
-        log = get_logger("controller.handle_controller_grpc_error")
-        log.error("Error sending command to controller")
+        self.log.error(f"Error sending command to child node {self.name} at {self.uri}")
 
         if hasattr(status, "message"):
-            log.error(status.message)
+            self.log.error(status.message)
 
         if hasattr(status, "details"):
             for detail in status.details:
@@ -156,9 +154,9 @@ class gRPCChildNode(ChildNode):
                     stack = unpack_any(detail, Stacktrace)
                     for l in stack.text:
                         text += l + "\n"
-                    log.error(text)
+                    self.log.error(text)
                 elif detail.Is(PlainText.DESCRIPTOR):
                     text = unpack_any(detail, PlainText)
-                    log.error(text)
+                    self.log.error(text)
 
         raise error
