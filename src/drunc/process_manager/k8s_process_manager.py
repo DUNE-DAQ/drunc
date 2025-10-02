@@ -731,11 +731,20 @@ done
         queried_uuids = self._get_process_uid(query)
         if not queried_uuids:
             return ProcessInstanceList(values=[])
-        all_pods = self._core_v1_api.list_pod_for_all_namespaces(
-            label_selector=self._get_creator_label_selector()
-        )
+
+        pod_list = None
+        if query.session:
+            pod_list = self._core_v1_api.list_namespaced_pod(
+                namespace=query.session,
+                label_selector=self._get_creator_label_selector(),
+            )
+        else:
+            pod_list = self._core_v1_api.list_pod_for_all_namespaces(
+                label_selector=self._get_creator_label_selector()
+            )
+
         uuid_to_pod = {
-            p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in all_pods.items
+            p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in pod_list.items
         }
         ret = []
         for proc_uuid in queried_uuids:
@@ -838,10 +847,12 @@ done
             )
             self.log.info(f"Stage '{stage_name}': {action} {len(uuids)} pod(s)...")
 
-            self.uuids_pending_deletion.update(uuids)
             self.termination_complete_event.clear()
+            self.uuids_pending_deletion.update(uuids)
 
             for proc_uuid in uuids:
+                if proc_uuid not in self.boot_request:
+                    continue  # Sanity check
                 pd = self.boot_request[proc_uuid].process_description
                 self.log.info(
                     f'Killing pod "{pd.metadata.session}/{pd.metadata.name}" (UUID {proc_uuid})'
@@ -857,6 +868,7 @@ done
                 self.log.warning(
                     f"Timeout in stage '{stage_name}'. Remaining: {self.uuids_pending_deletion}"
                 )
+
             self.uuids_pending_deletion.clear()
 
         kill_and_wait(graceful_apps, "Standalone C++ Applications")
