@@ -795,13 +795,6 @@ done
 
         self.log.info(f"Starting termination of {len(uuids_to_kill)} pods...")
 
-        is_local_session = any(
-            self.boot_request[uuid].process_description.metadata.name
-            == self.connection_server_name
-            for uuid in uuids_to_kill
-            if uuid in self.boot_request
-        )
-
         graceful_apps, forced_apps = [], []
         for uuid_str in uuids_to_kill:
             if uuid_str not in self.boot_request:
@@ -813,7 +806,7 @@ done
                 or pd.metadata.name == self.connection_server_name
             )
 
-            if is_controller or is_local_session:
+            if is_controller or pd.metadata.name == self.connection_server_name:
                 forced_apps.append(uuid_str)
             else:
                 graceful_apps.append(uuid_str)
