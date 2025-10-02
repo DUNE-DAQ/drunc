@@ -63,9 +63,9 @@ class gRPCChildNode(ChildNode):
             execute_on_all_subsequent_children_in_path=False,
         )
 
-        n_tries = 20
+        tries_remaining = 20
         while True:
-            n_tries -= 1
+            tries_remaining -= 1
 
             try:
                 response = self.stub.describe(request)
@@ -74,12 +74,12 @@ class gRPCChildNode(ChildNode):
                 try:
                     self.handle_child_grpc_error(error)
                 except ServerUnreachable as server_unreachable_error:
-                    if n_tries == 0:
+                    if tries_remaining == 0:
                         raise server_unreachable_error
                     self.log.info(
                         (
                             f"Could not connect to the controller ({self.uri}). "
-                            f"Trying {n_tries} more times..."
+                            f"Trying {tries_remaining} more times..."
                         )
                     )
                     time.sleep(5)
@@ -124,8 +124,8 @@ class gRPCChildNode(ChildNode):
         try:
             cmd = getattr(self.stub, command)
             response = cmd(request, timeout=timeout)
-        except grpc.RpcError as e:
-            self.handle_child_grpc_error(e)
+        except grpc.RpcError as error:
+            self.handle_child_grpc_error(error)
 
         return response
 
