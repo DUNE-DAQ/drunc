@@ -42,6 +42,9 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log_path = log_path
         self.log = get_logger("process_manager.conf_handler")
 
+    def get_log_path(self):
+        return self.log_path
+
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
         if data.get("broadcaster"):

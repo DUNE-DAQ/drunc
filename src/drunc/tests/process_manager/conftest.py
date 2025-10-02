@@ -1,20 +1,36 @@
-from unittest.mock import MagicMock, patch
+"""
+This module provides reusable fixtures for dummy requests and responses used
+across multiple test files for the process manager to ensure the tests always
+use the correct data structures.
 
+If the serialisation tests fail, it is likely that the fixtures need to be updated
+to be back in line with druncschema definitions.
+"""
+
+import google.protobuf.any_pb2
 import pytest
+from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    LogLines,
+    LogRequest,
     ProcessDescription,
+    ProcessInstance,
+    ProcessInstanceList,
     ProcessMetadata,
+    ProcessQuery,
     ProcessRestriction,
+    ProcessUUID,
 )
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
-from drunc.process_manager.process_manager_driver import (
-    ProcessManagerDriver,
-)
+# ============================================================================
+#  `boot` Fixtures
+# ============================================================================
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def app_data():
     """
     Provides a mock application dictionary with required keys.
@@ -30,8 +46,8 @@ def app_data():
     }
 
 
-@pytest.fixture
-def dummy_bootrequest(app_data):
+@pytest.fixture(scope="session")
+def bootrequest(app_data):
     return BootRequest(
         token=Token(),
         process_description=ProcessDescription(
@@ -57,79 +73,219 @@ def dummy_bootrequest(app_data):
     )
 
 
-@pytest.fixture(scope="module")
-def mock_logger():
-    with patch("drunc.utils.shell_utils.get_logger") as mock_get_logger:
-        mock_logger_instance = MagicMock()
-        mock_get_logger.return_value = mock_logger_instance
-        yield mock_logger_instance
+# ============================================================================
+# Request Fixtures
+# ============================================================================
 
 
-@pytest.fixture(scope="function")
-def mock_driver(mock_logger):
+@pytest.fixture(scope="session")
+def boot_request():
     """
-    Create a ProcessManagerDriver instance with a mocked gRPC stub.
-    This fixture creates a driver instance where the underlying gRPC channel
-    and stub are mocked.
+    Provide a standard BootRequest for testing boot endpoint behaviour.
+
     Returns:
-        ProcessManagerDriver: Driver instance with mocked dependencies
+        BootRequest: Request containing process description and restrictions
     """
-    with (
-        patch("drunc.process_manager.process_manager_driver.grpc.insecure_channel"),
-        patch(
-            "drunc.process_manager.process_manager_driver.ProcessManagerStub"
-        ) as mock_stub_class,
-    ):
-        mock_stub = MagicMock()
-        mock_stub_class.return_value = mock_stub
-
-        # Initialise driver with mocked dependencies
-        driver = ProcessManagerDriver(address="localhost:50051", token=Token())
-
-        driver.log = mock_logger
-
-        # Attach mock stub for easy access in tests
-        driver._mock_stub = mock_stub
-
-        return driver
+    return BootRequest(
+        token=Token(),
+        process_description=ProcessDescription(
+            metadata=ProcessMetadata(name="test_process")
+        ),
+        process_restriction=ProcessRestriction(),
+    )
 
 
-@pytest.fixture
-def boot_test_setup(mock_driver):
+@pytest.fixture(scope="session")
+def process_query_request():
     """
-    Fixture to prepare common mocks for testing the `boot` method of a process manager driver.
+    Provide a standard ProcessQuery for testing endpoints that query processes.
+
+    This request type is used by multiple endpoints (kill, restart, ps, flush)
+    that need to identify specific processes by UUID, name, user, or session.
+
+    Returns:
+        ProcessQuery: Query containing process identification parameters
     """
+    return ProcessQuery(
+        token=Token(),
+        uuids=[ProcessUUID(uuid="test-uuid")],
+        names=["test_process"],
+        user="test_user",
+        session="test_session",
+    )
 
-    def _setup(*, is_ready=True, grpc_error=None):
-        # Create a mock boot request with metadata and host restriction
-        mock_request = MagicMock()
-        mock_request.process_description.metadata.name = "test_app"
-        mock_request.process_restriction.allowed_hosts = {"host1"}
 
-        # Create a mock session DAL with no infrastructure applications
-        fake_dal = MagicMock(infrastructure_applications=[])
+@pytest.fixture(scope="session")
+def generic_request():
+    """
+    Provide a generic Request for testing endpoints that accept any data.
 
-        # Mock connectivity service
-        csc_mock = MagicMock(is_ready=MagicMock(return_value=is_ready))
-        mock_driver._connect_to_service = MagicMock(
-            return_value=(csc_mock, "server", 1234)
-        )
+    Returns:
+        Request: Basic request containing token and arbitrary data payload
+    """
+    return Request(token=Token(), data=google.protobuf.any_pb2.Any(value=b"test_data"))
 
-        # Internal methods of the driver
-        mock_driver._consolidate_config = MagicMock()
-        mock_driver._initialise_session = MagicMock(return_value=("db", fake_dal))
 
-        mock_driver._convert_oks_to_boot_request = MagicMock(
-            return_value=[mock_request]
-        )
-        mock_driver._discover_controller = MagicMock()
+@pytest.fixture(scope="session")
+def log_request():
+    """
+    Provide a LogRequest for testing log retrieval endpoint.
 
-        # Configure the boot stub to either return a response or raise an error
-        if grpc_error:
-            mock_driver.stub.boot = MagicMock(side_effect=grpc_error)
-        else:
-            mock_driver.stub.boot = MagicMock(return_value="boot_response")
+    Returns:
+        LogRequest: Request containing process query and log line limit
+    """
+    return LogRequest(
+        token=Token(),
+        query=ProcessQuery(
+            token=Token(),
+            uuids=[ProcessUUID(uuid="test-uuid")],
+            names=["test_process"],
+            user="test_user",
+            session="test_session",
+        ),
+        how_far=100,
+    )
 
-        return mock_request, csc_mock
 
-    return _setup
+# ============================================================================
+# Response Fixtures
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def boot_response():
+    """
+    Provide a standard boot response containing a running process instance.
+
+    Returns:
+        ProcessInstanceList: Response with single running process
+    """
+    return ProcessInstanceList(
+        name="boot_endpoint",
+        token=Token(),
+        values=[
+            ProcessInstance(
+                uuid=ProcessUUID(uuid="test-boot-uuid"),
+                status_code=ProcessInstance.StatusCode.RUNNING,
+                return_code=0,
+            )
+        ],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def kill_response():
+    """
+    Provide a standard kill response indicating successful process termination.
+
+    Returns:
+        ProcessInstanceList: Empty response indicating processes were killed
+    """
+    return ProcessInstanceList(
+        name="kill_endpoint",
+        token=Token(),
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def restart_response():
+    """
+    Provide a standard restart response indicating successful process restart.
+
+    Returns:
+        ProcessInstanceList: Empty response indicating processes were restarted
+    """
+    return ProcessInstanceList(
+        name="restart_endpoint",
+        token=Token(),
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def ps_response():
+    """
+    Provide a standard ps response for process status queries.
+
+    Returns:
+        ProcessInstanceList: Empty response representing process status list
+    """
+    return ProcessInstanceList(
+        name="ps_endpoint",
+        token=Token(),
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def terminate_response():
+    """
+    Provide a standard terminate response indicating graceful shutdown.
+
+    Returns:
+        ProcessInstanceList: Empty response indicating manager termination
+    """
+    return ProcessInstanceList(
+        name="terminate_endpoint",
+        token=Token(),
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def logs_response():
+    """
+    Provide a standard logs response containing process log lines.
+
+    Returns:
+        LogLines: Response containing sample log entries for a process
+    """
+    return LogLines(
+        name="logs_endpoint",
+        token=Token(),
+        uuid=ProcessUUID(uuid="test-uuid"),
+        lines=["test log line 1", "test log line 2"],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def describe_response():
+    """
+    Provide a standard describe response containing manager metadata.
+
+    Returns:
+        Description: Response with process manager configuration details
+    """
+    return Description(
+        type="process_manager",
+        name="test_process_manager",
+        info="/var/log/test",
+        session="test_session",
+        commands=[],
+        children=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        token=Token(),
+    )
+
+
+@pytest.fixture(scope="session")
+def flush_response():
+    """
+    Provide a standard flush response indicating successful process cleanup.
+
+    Returns:
+        ProcessInstanceList: Empty response indicating processes were flushed
+    """
+    return ProcessInstanceList(
+        name="flush_endpoint",
+        token=Token(),
+        values=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
