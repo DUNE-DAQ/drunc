@@ -88,9 +88,11 @@ class GRPCDriver:
             raise DruncSetupException(
                 f"You need to provide a valid IP address for the driver. Provided '{address}'"
             )
-
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
         self.address = address
-        self.channel = grpc.insecure_channel(self.address)
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.token = Token()
         self.token.CopyFrom(token)
 
@@ -201,6 +203,8 @@ class ShellContext:
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
+        self.dynamic_commands = set()
+        self.batch_mode = False
         try:
             self.reset(*args, **kwargs)
         except Exception as e:

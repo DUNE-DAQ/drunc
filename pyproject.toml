@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["ruff", "pre-commit", "pytest",]
+test = ["pytest"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
@@ -53,3 +54,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "drunc.data.process_manager" = ["*.json"]
+"drunc.data.process_manager.schema" = ["*.json"]

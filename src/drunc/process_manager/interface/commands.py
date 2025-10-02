@@ -161,6 +161,7 @@ def terminate(obj: ProcessManagerContext) -> None:
     obj.print(
         tabulate_process_instance_list(result, "Terminated process", False)
     )  # rich tables require console printing
+    obj.delete_driver("controller")
 
 
 @click.command("kill")
