@@ -94,7 +94,7 @@ class K8sPodWatcherThread(threading.Thread):
 
             except Exception as e:
                 self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
-                sleep(5)
+                sleep(self.pm.watcher_retry_sleep)
 
 
 class K8sProcessManager(ProcessManager):
@@ -119,7 +119,6 @@ class K8sProcessManager(ProcessManager):
         self._pod_spec_v1_api = client.V1PodSpec
         self._api_error_v1_api = client.rest.ApiException
 
-        self.drunc_label = "drunc.daq"
         self.managed_sessions = set()
         self.watchers = []
         self._start_watcher()
@@ -133,30 +132,31 @@ class K8sProcessManager(ProcessManager):
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
 
-        # Safely get settings from the configuration object
-        settings = {}
-        if (
-            hasattr(self.configuration.data, "settings")
-            and self.configuration.data.settings is not None
-        ):
-            settings = self.configuration.data.settings
+        # Get settings from configuration
+        settings = getattr(self.configuration.data, "settings", {})
 
+        self.drunc_label = settings.get("drunc_label", "drunc.daq")
         self.connection_server_name = settings.get(
             "connection_server_name", "local-connection-server"
         )
         self.connection_server_port = settings.get("connection_server_port", 5000)
         self.sidecar_image = settings.get("sidecar_image", "alpine/socat")
+        self.kill_timeout = settings.get("kill_timeout", 20)
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
         self.port_forward_timeout = settings.get("port_forward_timeout", 15)
-        self.kill_timeout = settings.get("kill_timeout", 20)
+        self.proxy_unset_script = settings.get(
+            "proxy_unset_script", "~np04daq/bin/web_proxy.sh -u"
+        )
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
-        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
-
-        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
         self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
         self.restart_cleanup_polling = float(
             settings.get("restart_cleanup_polling", "0.5")
         )
+        self.watcher_retry_sleep = settings.get("watcher_retry_sleep", 5)
+        self.pod_status_check_sleep = settings.get("pod_status_check_sleep", 1)
+        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
+
+        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -736,14 +736,13 @@ done
                         pass
                     else:
                         raise e
-                sleep(1)
+                sleep(self.pod_status_check_sleep)
             else:
                 raise DruncK8sException(
                     f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
                 )
 
             kubeconfig_path = os.environ.get("KUBECONFIG")
-            proxy_unset_script = "~np04daq/bin/web_proxy.sh -u"
 
             command_parts = []
             if kubeconfig_path:
@@ -753,7 +752,7 @@ done
                     "KUBECONFIG env var not set; assuming kubectl is configured."
                 )
 
-            command_parts.append(f"source {proxy_unset_script}")
+            command_parts.append(f"source {self.proxy_unset_script}")
             command_parts.append(
                 f"kubectl port-forward -n {session} pod/{podname} {self.connection_server_port}:{self.connection_server_port}"
             )

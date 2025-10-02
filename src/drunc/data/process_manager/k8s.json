@@ -23,5 +23,21 @@
     "opmon_conf":{
         "level": "info",
         "interval_s" : 10.0
+    },
+    "settings": {
+        "drunc_label": "drunc.daq",
+        "connection_server_name": "local-connection-server",
+        "connection_server_port": 5000,
+        "sidecar_image": "alpine/socat",
+        "kill_timeout": 20,
+        "pod_ready_timeout": 60,
+        "port_forward_timeout": 15,
+        "proxy_unset_script": "~np04daq/bin/web_proxy.sh -u",
+        "namespace_cleanup_timeout": 10,
+        "restart_cleanup_time": "10",
+        "restart_cleanup_polling": "0.5",
+        "watcher_retry_sleep": 5,
+        "pod_status_check_sleep": 1,
+        "host_verification_cache_expiry": 300
     }
 }
