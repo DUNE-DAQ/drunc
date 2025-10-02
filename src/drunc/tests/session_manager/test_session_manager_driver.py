@@ -8,21 +8,17 @@ from unittest.mock import patch
 import grpc
 import pytest
 
-from drunc.tests.session_manager.dummy_requests import GENERIC_REQUEST
-from drunc.tests.session_manager.dummy_responses import (
-    DUMMY_ALLACTIVESESSIONS_RESPONSE,
-    DUMMY_ALLCONFIGKEYS_RESPONSE,
-    DUMMY_DESCRIBE_RESPONSE,
-)
-
 
 @pytest.mark.parametrize(
     "method_name, expected_response",
     [
-        ("describe", DUMMY_DESCRIBE_RESPONSE),
-        ("list_all_sessions", DUMMY_ALLACTIVESESSIONS_RESPONSE),
-        ("list_all_configs", DUMMY_ALLCONFIGKEYS_RESPONSE),
+        ("describe", "describe_response"),
+        ("list_all_sessions", "all_active_sessions_response"),
+        ("list_all_configs", "all_config_keys_response"),
     ],
+    indirect=[
+        "expected_response"
+    ],  # Tells pytest to treat 'expected_response' as fixture names
 )
 def test_grpc_success(mock_driver, method_name, expected_response):
     """
@@ -51,7 +47,7 @@ def test_grpc_success(mock_driver, method_name, expected_response):
         "list_all_configs",
     ],
 )
-def test_grpc_error(mock_driver, method_name):
+def test_grpc_error(mock_driver, method_name, generic_request):
     """
     Test that the methods handle grpc exceptions.
     """
@@ -66,6 +62,6 @@ def test_grpc_error(mock_driver, method_name):
 
         with pytest.raises(grpc.RpcError):
             # Dynamically call the method on the driver
-            getattr(mock_driver, method_name)(GENERIC_REQUEST)
+            getattr(mock_driver, method_name)(generic_request)
 
         mock_handler.assert_called_once()

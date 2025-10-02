@@ -1,12 +1,17 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import google.protobuf.any_pb2
 import grpc_testing
 import pytest
-from druncschema.description_pb2 import CommandDescription
-from druncschema.request_response_pb2 import Request
+from druncschema.description_pb2 import CommandDescription, Description
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.session_manager_pb2 import (
     DESCRIPTOR,
+    ActiveSession,
+    AllActiveSessions,
+    AllConfigKeys,
+    ConfigKey,
 )
 from druncschema.token_pb2 import Token
 
@@ -14,12 +19,15 @@ from drunc.session_manager.session_manager import SessionManager
 from drunc.session_manager.session_manager_driver import SessionManagerDriver
 
 # -----------------------------------------------------
-#    Session Manager serialisation tests fixtures
+#    Session Manager Serialisation Tests Fixtures
 # -----------------------------------------------------
 
 
 @pytest.fixture
 def mock_config_environment(monkeypatch):
+    """
+    Fixture that sets up a mocked configuration environment for testing.
+    """
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
     mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
 
@@ -34,7 +42,7 @@ def mock_config_environment(monkeypatch):
 
 
 # -----------------------------------------------------
-#    Session Manager server tests fixtures
+#    Session Manager Server Tests Fixtures
 # -----------------------------------------------------
 
 
@@ -50,6 +58,9 @@ def mock_context():
 
 @pytest.fixture(scope="function")
 def mock_logger():
+    """
+    Mocks the logger used by the session manager.
+    """
     with patch("drunc.session_manager.session_manager.get_logger") as mock_get_logger:
         mock_logger_instance = MagicMock()
         mock_get_logger.return_value = mock_logger_instance
@@ -62,7 +73,7 @@ def session_manager(mock_logger):
     return SessionManager(name="dummy_name", configuration=dummy_conf_handler)
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def commands():
     return [
         CommandDescription(
@@ -86,8 +97,20 @@ def commands():
     ]
 
 
+@pytest.fixture(scope="session")
+def config_keys():
+    """
+    Fixture that provides a list of mock ConfigKey objects for testing.
+    """
+    return [
+        ConfigKey(file=f"mock_file_{i}.data.xml", session_id=f"session_{j}")
+        for i in range(1, 4)
+        for j in range(1, 3)
+    ]
+
+
 # -----------------------------------------------------
-#    Session Manager endpoints tests fixtures
+#    Session Manager Endpoints Tests Fixtures
 # -----------------------------------------------------
 
 
@@ -132,7 +155,7 @@ def grpc_test_server_factory(grpc_servicer):
 
 
 # -----------------------------------------------------
-#    Session Manager driver tests fixtures
+#    Session Manager Driver Rests Fixtures
 # -----------------------------------------------------
 
 
@@ -162,3 +185,116 @@ def mock_driver():
         driver._mock_stub = mock_stub
 
         return driver
+
+
+# -----------------------------------------------------
+#    Request Fixtures
+# -----------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def generic_request():
+    """
+    Provide a generic Request for testing endpoints that accept any data.
+
+    Returns:
+        Request: Basic request containing token and arbitrary data payload
+    """
+    return Request(token=Token(), data=google.protobuf.any_pb2.Any(value=b"test_data"))
+
+
+@pytest.fixture(scope="session")
+def invalid_request_type():
+    return "invalid_request_type"
+
+
+@pytest.fixture(scope="session")
+def request_type(request):
+    """
+    This fixture resolves the name to the actual fixture for expected_responses
+    to be used in parameterised tests.
+    """
+    return request.getfixturevalue(request.param)
+
+
+# -----------------------------------------------------
+#    Response Fixtures
+# -----------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def command_description_list():
+    return [
+        CommandDescription(
+            name="describe",
+            data_type=["None"],
+            help="List the methods exposed by this endpoint.",
+            return_type="description_pb2.Description",
+        ),
+        CommandDescription(
+            name="list_all_sessions",
+            data_type=["None"],
+            help="List all active sessions.",
+            return_type="session_manager_pb2.AllActiveSessions",
+        ),
+        CommandDescription(
+            name="list_all_configs",
+            data_type=["None"],
+            help="List all available configurations.",
+            return_type="session_manager_pb2.AllConfigKeys",
+        ),
+    ]
+
+
+@pytest.fixture(scope="session")
+def describe_response(command_description_list):
+    return Description(
+        type="session_manager",
+        name="dummy_session",
+        commands=command_description_list,
+        children=[],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        token=None,
+    )
+
+
+@pytest.fixture(scope="session")
+def config_key():
+    return ConfigKey(file="dummy_config_file", session_id="dummy_config_session_id")
+
+
+@pytest.fixture(scope="session")
+def active_session(config_key):
+    return ActiveSession(name="dummy_session", user="dummy_user", config_key=config_key)
+
+
+@pytest.fixture(scope="session")
+def all_active_sessions_response(active_session):
+    return AllActiveSessions(
+        name="dummy_session",
+        token=None,
+        active_sessions=[active_session],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture(scope="session")
+def all_config_keys_response(config_keys):
+    return AllConfigKeys(
+        name="dummy_session",
+        token=None,
+        config_keys=config_keys,
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+
+@pytest.fixture
+def expected_response(request):
+    """
+    This fixture resolves the name to the actual fixture for various expected 
+    responses to be used in parameterised tests.
+    """
+    param = request.param
+    if isinstance(param, str):
+        return request.getfixturevalue(param)
+    return param  # Direct value like MagicMock

@@ -17,12 +17,6 @@ from druncschema.session_manager_pb2_grpc import (
 from grpc._channel import _InactiveRpcError
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.tests.session_manager.dummy_requests import GENERIC_REQUEST
-from drunc.tests.session_manager.dummy_responses import (
-    DUMMY_ALLACTIVESESSIONS_RESPONSE,
-    DUMMY_ALLCONFIGKEYS_RESPONSE,
-    DUMMY_DESCRIBE_RESPONSE,
-)
 
 
 class SessionManagerSerialisationTestSuite:
@@ -86,16 +80,18 @@ def serialisation_test_suite():
 @pytest.mark.parametrize(
     "method_name, expected_response",
     [
-        ("describe", DUMMY_DESCRIBE_RESPONSE),
-        ("list_all_sessions", DUMMY_ALLACTIVESESSIONS_RESPONSE),
-        ("list_all_configs", DUMMY_ALLCONFIGKEYS_RESPONSE),
+        ("describe", "describe_response"),
+        ("list_all_sessions", "all_active_sessions_response"),
+        ("list_all_configs", "all_config_keys_response"),
     ],
+    indirect=["expected_response"],
 )
 def test_serialisation(
     serialisation_test_suite,
     method_name,
     expected_response,
     mock_config_environment,
+    generic_request,
 ):
     """Test roundtrip endpoint serialisation/deserialisation."""
 
@@ -110,23 +106,25 @@ def test_serialisation(
     else:
         serialisation_test_suite.setup_server_and_client(method_name, expected_response)
 
-    response = getattr(serialisation_test_suite.stub, method_name)(GENERIC_REQUEST)
+    response = getattr(serialisation_test_suite.stub, method_name)(generic_request)
 
     assert response == expected_response
 
 
 @pytest.mark.parametrize(
-    "method_name, request_type, expected_response",
+    "method_name, expected_response",
     [
-        ("describe", "invalid_request_type", DUMMY_DESCRIBE_RESPONSE),
-        ("list_all_sessions", "invalid_request_type", DUMMY_ALLACTIVESESSIONS_RESPONSE),
-        ("list_all_configs", "invalid_request_type", DUMMY_ALLCONFIGKEYS_RESPONSE),
+        ("describe", "describe_response"),
+        ("list_all_sessions", "all_active_sessions_response"),
+        ("list_all_configs", "all_config_keys_response"),
     ],
+    indirect=[
+        "expected_response"
+    ],  # Tells pytest to treat 'expected_response' as fixture names
 )
 def test_serialisation_round_trip_wrong_request(
     serialisation_test_suite,
     method_name,
-    request_type,
     expected_response,
     mock_config_environment,
 ):
@@ -146,7 +144,9 @@ def test_serialisation_round_trip_wrong_request(
                 method_name, expected_response
             )
     else:
-        serialisation_test_suite.setup_server_and_client(method_name, request_type)
+        serialisation_test_suite.setup_server_and_client(
+            method_name, "invalid_request_type"
+        )
 
     # Expect gRPC error when when sending invalid request type
     with pytest.raises(_InactiveRpcError) as exc_info:
@@ -161,14 +161,18 @@ def test_serialisation_round_trip_wrong_request(
 @pytest.mark.parametrize(
     "method_name, request_type, expected_response",
     [
-        ("describe", GENERIC_REQUEST, MagicMock(return_value="not a protobuf")),
+        ("describe", "generic_request", MagicMock(return_value="not a protobuf")),
         (
             "list_all_sessions",
-            GENERIC_REQUEST,
+            "generic_request",
             MagicMock(return_value="not a protobuf"),
         ),
-        ("list_all_configs", "invalid_request_type", DUMMY_ALLCONFIGKEYS_RESPONSE),
+        ("list_all_configs", "invalid_request_type", "all_config_keys_response"),
     ],
+    indirect=[
+        "request_type",
+        "expected_response",
+    ],  # Tells pytest to treat 'request types' and 'expected_response' as fixture names
 )
 def test_serialisation_round_trip_wrong_response(
     serialisation_test_suite,
