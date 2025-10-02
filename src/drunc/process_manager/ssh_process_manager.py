@@ -99,7 +99,7 @@ class SSHProcessManager(ProcessManager):
 
             # Terminate process if still alive
             if self.ssh_manager.is_process_alive(proc_uuid):
-                self.log.debug(f"Terminating '{app_name}' with UUID {proc_uuid}")
+                self.log.debug(f"Killing '{app_name}' with UUID {proc_uuid}")
                 self.ssh_manager.terminate_process(
                     proc_uuid, timeout=self.configuration.data.kill_timeout
                 )
@@ -149,8 +149,12 @@ class SSHProcessManager(ProcessManager):
 
         if self.boot_request:
             self.log.info("Killing all the known processes before exiting")
-            uuids = self._get_process_uid(
-                query=ProcessQuery(names=[".*"]), order_by="leaf_first"
+            query = ProcessQuery(names=[".*"])
+            uuids = ProcessManager._match_processes_against_query(
+                query=query,
+                available_uuids=list(self.ssh_manager.get_active_process_keys()),
+                boot_request_dict=self.boot_request,
+                order_by="leaf_first",
             )
             result = self.kill_processes(uuids)
 
@@ -186,8 +190,15 @@ class SSHProcessManager(ProcessManager):
         """
         self.log.debug(f"Retrieving logs for {log_request.query}")
 
+        matching_uuids = ProcessManager._match_processes_against_query(
+            query=log_request.query,
+            available_uuids=list(self.ssh_manager.get_active_process_keys()),
+            boot_request_dict=self.boot_request,
+            order_by="random",
+        )
+
         # Ensure exactly one process matches the query
-        uid = self._ensure_one_process(self._get_process_uid(log_request.query))
+        uid = self._ensure_one_process(matching_uuids)
 
         # Extract log file location and connection details from boot request
         logfile = self.boot_request[uid].process_description.process_logs_path
@@ -334,7 +345,6 @@ class SSHProcessManager(ProcessManager):
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
         Retrieve process status information for processes matching the query.
-
         Returns process details including running status, exit codes, and metadata
         for all processes that match the provided query criteria.
 
@@ -346,8 +356,15 @@ class SSHProcessManager(ProcessManager):
         """
         ret = []
 
+        process_uuids = ProcessManager._match_processes_against_query(
+            query=query,
+            available_uuids=list(self.ssh_manager.get_active_process_keys()),
+            boot_request_dict=self.boot_request,
+            order_by="random",
+        )
+
         # Iterate through all processes matching the query
-        for proc_uuid in self._get_process_uid(query):
+        for proc_uuid in process_uuids:
             # Handle case where process UUID exists in boot_request but not in SSH manager
             # This can occur if process failed to start or has been cleaned up
             if proc_uuid not in self.boot_request:
@@ -371,9 +388,14 @@ class SSHProcessManager(ProcessManager):
 
             # Query SSH manager for process status
             alive = self.ssh_manager.is_process_alive(proc_uuid)
+
             return_code = (
                 self.ssh_manager.get_exit_code(proc_uuid) if not alive else None
             )
+            if not alive:
+                self.log.debug(
+                    f"Process {proc_uuid} is dead with exit code: {return_code}"
+                )
 
             # Create process instance with current status
             pi = ProcessInstance(
@@ -409,7 +431,13 @@ class SSHProcessManager(ProcessManager):
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
-        uuids = self._get_process_uid(query, in_boot_request=True)
+
+        uuids = ProcessManager._match_processes_against_query(
+            query=query,
+            available_uuids=list(self.boot_request.keys()),
+            boot_request_dict=self.boot_request,
+            order_by="random",
+        )
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
         same_uuid_br = BootRequest()
@@ -450,7 +478,12 @@ class SSHProcessManager(ProcessManager):
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
 
         if self.boot_request:
-            uuids = self._get_process_uid(query, order_by="leaf_first")
+            uuids = ProcessManager._match_processes_against_query(
+                query=query,
+                available_uuids=list(self.ssh_manager.get_active_process_keys()),
+                boot_request_dict=self.boot_request,
+                order_by="leaf_first",
+            )
             return self.kill_processes(uuids)
 
         self.log.info("No known process to kill")

@@ -65,6 +65,11 @@ class SSHConnectionManager:
         self.locks: Dict[str, threading.Lock] = {}
         self.global_lock = threading.Lock()
 
+    def get_active_process_keys(self) -> List[str]:
+        """Get list of active process UUIDs."""
+        with self.global_lock:
+            return list(self.connections.keys())
+
     def execute_ssh_command(
         self,
         uuid: str,
