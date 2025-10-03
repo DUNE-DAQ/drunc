@@ -22,6 +22,7 @@ from druncschema.process_manager_pb2 import (
 
 # Third-Party Imports
 from kubernetes import client, config, watch
+from kubernetes.client.rest import ApiException
 
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.process_manager.process_manager import ProcessManager
@@ -85,9 +86,18 @@ class K8sPodWatcherThread(threading.Thread):
                             proc_uuid, exit_code, reason, session
                         )
 
+            except ApiException as e:
+                if e.status == 410:
+                    pass
+                else:
+                    self.pm.log.error(
+                        f"K8s API error in watcher: {e}. Restarting watch."
+                    )
+                sleep(3)
+
             except Exception as e:
                 self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
-                sleep(5)
+                sleep(3)
 
 
 class K8sProcessManager(ProcessManager):
@@ -631,8 +641,6 @@ done
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
-
-        print(boot_request)
 
         if boot_request.process_restriction.allowed_hosts:
             hostname = boot_request.process_restriction.allowed_hosts[0]
