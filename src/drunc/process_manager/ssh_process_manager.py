@@ -135,7 +135,7 @@ class SSHProcessManager(ProcessManager):
             values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-    
+
     def _get_active_process_keys(self) -> list:
         """
         Retrieve a list of active process UUIDs managed by the SSH process manager.
@@ -143,7 +143,11 @@ class SSHProcessManager(ProcessManager):
         Returns:
             List of active process UUID strings
         """
-        return list(self.ssh_manager.get_active_process_keys()) if self.ssh_manager is not None else []
+        return (
+            list(self.ssh_manager.get_active_process_keys())
+            if self.ssh_manager is not None
+            else []
+        )
 
     def _terminate_impl(self) -> ProcessInstanceList:
         """
@@ -320,8 +324,8 @@ class SSHProcessManager(ProcessManager):
             except Exception as e:
                 errors += str(e)
                 print(f"Couldn't start on host {host}, reason:\n{e!s}")
-                print("\nTrying on a different host")
                 continue
+
         ## Saving the host to the metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
