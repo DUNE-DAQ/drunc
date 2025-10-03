@@ -23,6 +23,7 @@ from drunc.ssh.ssh_connection_manager import SSHConnectionManager
 
 class SSHProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
+        self.ssh_manager = None
         self.session = getpass.getuser()  # unfortunate
 
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -134,6 +135,15 @@ class SSHProcessManager(ProcessManager):
             values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+    
+    def _get_active_process_keys(self) -> list:
+        """
+        Retrieve a list of active process UUIDs managed by the SSH process manager.
+
+        Returns:
+            List of active process UUID strings
+        """
+        return list(self.ssh_manager.get_active_process_keys()) if self.ssh_manager is not None else []
 
     def _terminate_impl(self) -> ProcessInstanceList:
         """
@@ -152,7 +162,7 @@ class SSHProcessManager(ProcessManager):
             query = ProcessQuery(names=[".*"])
             uuids = ProcessManager._match_processes_against_query(
                 query=query,
-                available_uuids=list(self.ssh_manager.get_active_process_keys()),
+                available_uuids=list(self._get_active_process_keys()),
                 boot_request_dict=self.boot_request,
                 order_by="leaf_first",
             )
@@ -192,7 +202,7 @@ class SSHProcessManager(ProcessManager):
 
         matching_uuids = ProcessManager._match_processes_against_query(
             query=log_request.query,
-            available_uuids=list(self.ssh_manager.get_active_process_keys()),
+            available_uuids=list(self._get_active_process_keys()),
             boot_request_dict=self.boot_request,
             order_by="random",
         )
@@ -358,7 +368,7 @@ class SSHProcessManager(ProcessManager):
 
         process_uuids = ProcessManager._match_processes_against_query(
             query=query,
-            available_uuids=list(self.ssh_manager.get_active_process_keys()),
+            available_uuids=list(self._get_active_process_keys()),
             boot_request_dict=self.boot_request,
             order_by="random",
         )
@@ -480,7 +490,7 @@ class SSHProcessManager(ProcessManager):
         if self.boot_request:
             uuids = ProcessManager._match_processes_against_query(
                 query=query,
-                available_uuids=list(self.ssh_manager.get_active_process_keys()),
+                available_uuids=list(self._get_active_process_keys()),
                 boot_request_dict=self.boot_request,
                 order_by="leaf_first",
             )
