@@ -38,7 +38,7 @@ def publish_command_time(cmd):
 
         cmd_start_time = time.time()
         try:
-            log.debug("Executing wrapped function")
+            log.debug(f"Executing wrapped function ({cmd.__name__})")
             ret = cmd(obj, *args, **kwargs)
 
         except Exception as e:

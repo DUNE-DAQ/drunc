@@ -685,24 +685,27 @@ class Controller(ControllerServicer):
         Returns:
             A list of (ChildNode, target) for each addressed child.
         """
-        new_target_path = target.split("/")[1:]
-        new_target = "/".join(new_target_path)
+        next_target_path = target.split("/")[1:]
 
-        # Handle execute_on_children case only at the end of the target path.
-        if not new_target_path and execute_on_children:
+        # Still more path to go, so find the next node along it.
+        if next_target_path:
+            targets = [
+                (child, "/".join(next_target_path))
+                for child in self.children_nodes
+                if child.name == next_target_path[0]
+            ]
+            if not targets:
+                self.log.info(
+                    f"'{next_target_path[0]}' is not a child of '{self.name}'"
+                )
+            return targets
+
+        # Handle execute_on_children only if the path is exhausted.
+        if execute_on_children:
             return [(child, child.name) for child in self.children_nodes]
 
-        targets = [
-            (child, new_target)
-            for child in self.children_nodes
-            if child.name == new_target_path[0]
-        ]
-        if not targets:
-            self.log.info(
-                f"Target '{new_target}' not found in children of '{self.name}'"
-            )
-
-        return targets
+        # Path is exhausted and we are NOT executing on children.
+        return []
 
     def address_all(
         self,
