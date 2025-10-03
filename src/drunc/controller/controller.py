@@ -871,8 +871,7 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
         )
         with ThreadPoolExecutor() as executor:
-            # TODO: child describe_fsm
-            # TODO: only needed on child_node and grpc_child
+            # TODO: child describe_fsm in grpc_child
 
             futures = [
                 executor.submit(

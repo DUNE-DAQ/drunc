@@ -2,7 +2,9 @@ import os
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMResponse,
     DescribeResponse,
+    FSMCommandsDescription,
     Status,
     StatusResponse,
 )
@@ -125,6 +127,24 @@ class ChildNode:  # abc.ABC):
         )
 
         response = DescribeResponse(
+            token=None,
+            name=self.name,
+            description=description,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
+
+    def describe_fsm(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeFSMResponse:
+        description = FSMCommandsDescription()
+
+        response = DescribeFSMResponse(
             token=None,
             name=self.name,
             description=description,
