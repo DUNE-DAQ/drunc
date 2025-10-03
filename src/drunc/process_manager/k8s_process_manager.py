@@ -632,6 +632,8 @@ done
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
+        print(boot_request)
+
         if boot_request.process_restriction.allowed_hosts:
             hostname = boot_request.process_restriction.allowed_hosts[0]
             boot_request.process_description.metadata.hostname = hostname
@@ -643,13 +645,33 @@ done
         if podname == self.connection_server_name:
             self.log.info(f"Waiting for '{podname}' to become ready...")
 
-            port = self._extract_port_from_cmd(boot_request)
+            port = None
+            env_vars = boot_request.process_description.env
+
+            if "CONNECTION_PORT" in env_vars:
+                port_str = env_vars["CONNECTION_PORT"]
+                try:
+                    port = int(port_str)
+                    self.log.info(
+                        f"Using port {port} from 'CONNECTION_PORT' environment variable."
+                    )
+                except (ValueError, TypeError):
+                    raise DruncException(
+                        f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
+                    )
+
+            if port is None:
+                self.log.info(
+                    "CONNECTION_PORT not found in env, falling back to parsing gunicorn command."
+                )
+                port = self._extract_port_from_cmd(boot_request)
+
             if port:
                 self.connection_server_port = port
                 self.connection_server_node_port = port
             else:
                 raise DruncException(
-                    "Could not extract port from boot request for connection server"
+                    "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
                 )
 
             # Check for NodePort collision
