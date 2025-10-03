@@ -9,7 +9,7 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Response
+from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
@@ -123,9 +123,13 @@ class gRPCChildNode(ChildNode):
         request: AddressedCommand,
         token: Token | None,
     ) -> Response:
+        packed_request = Request(token=token)
+        packed_request.data.Pack(request)
+
+        cmd = getattr(self.stub, command)
+
         try:
-            cmd = getattr(self.stub, command)
-            response = cmd(request)
+            response = cmd(packed_request)
         except grpc.RpcError as error:
             self.handle_child_grpc_error(error)
 

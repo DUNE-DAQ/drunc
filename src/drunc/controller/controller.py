@@ -331,7 +331,15 @@ class Controller(ControllerServicer):
             if child.name in bad_children:
                 continue
             log_init_controller.info(f"Taking control of {child.name}")
-            child.propagate_command("take_control", None, self.actor.get_token())
+            request = AddressedCommand(
+                token=self.actor.get_token(),
+                command_name="take_control",
+                command_data=None,
+                target=child.name,
+                execute_along_path=True,
+                execute_on_all_subsequent_children_in_path=True,
+            )
+            child.propagate_command("take_control", request, self.actor.get_token())
 
         interval_s = getattr(self.configuration.data, "interval_s", 10.0)
 
