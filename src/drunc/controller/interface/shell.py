@@ -82,11 +82,7 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     # ctx.call_on_close(cleanup)
 
     transitions = (
-        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").data
-    )
-
-    transitions = (
-        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").data
+        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").description
     )
 
     ctx.command.add_command(status, "status")

@@ -39,7 +39,7 @@ def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
     else:
         log.info(f"\nCurrently available controller transitions on '{desc.name}' are:")
 
-    for c in desc.data.commands:
+    for c in desc.description.commands:
         log.info(f" - [yellow]{c.name.replace('_', '-').lower()}[/]")
 
     log.info("\nUse [yellow]help <command>[/] for more information on a command.\n")
@@ -407,6 +407,7 @@ def expert_command(
 
     print_result(result)
 
+
 @click.command("to_error")
 @click.option("--target", type=str, help="The target to address", default="")
 @click.option(
@@ -428,7 +429,7 @@ def to_error(
     obj: ControllerContext,
     target: str,
     execute_along_path: bool,
-    execute_on_all_subsequent_children_in_path: bool
+    execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
     obj.get_driver("controller").to_error(
         target=target,
