@@ -862,8 +862,7 @@ class Controller(ControllerServicer):
             description.type = "controller"
             description.name = self.name
             description.session = self.session
-            for seq in self.stateful_node.get_fsm_sequences():
-                description.sequences.append(seq)
+            description.sequences.extend(self.stateful_node.get_fsm_sequences())
             response.description.CopyFrom(description)
 
         # Children nodes.
@@ -872,9 +871,12 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
         )
         with ThreadPoolExecutor() as executor:
+            # TODO: child describe_fsm
+            # TODO: only needed on child_node and grpc_child
+
             futures = [
                 executor.submit(
-                    child.describe_fsm,  # TODO: child describe_fsm
+                    child.describe_fsm,
                     target,
                     request.execute_along_path,
                     request.execute_on_all_subsequent_children_in_path,
