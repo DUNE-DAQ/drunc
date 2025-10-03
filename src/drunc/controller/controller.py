@@ -832,17 +832,14 @@ class Controller(ControllerServicer):
     def describe_fsm(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeFSMResponse:
+        request.target = self.parse_target_string(request.target)
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
         )
 
-        if (
-            request.target == self.name
-            or request.target == ""
-            or request.target == "/"
-            or request.execute_along_path
-        ):
+        # This node.
+        if request.target == self.name or request.execute_along_path:
             payload = unpack_any(request.command_data, PlainText)
             if payload.text == "all-transitions":
                 description = convert_fsm_transition(
@@ -869,20 +866,22 @@ class Controller(ControllerServicer):
                 description.sequences.append(seq)
             response.description.CopyFrom(description)
 
-        addressed_commands = OLD_address_command(
-            obj=self,
-            command_name="describe_fsm",
-            command_data=request.command_data,
-            target=request.target,
-            execute_along_path=request.execute_along_path,
-            execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
+        # Children nodes.
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
         )
-        children_responses = self.OLD_propagate_to_children(
-            "describe_fsm",
-            addressed_commands,
-            None,
-        )
-        response.children.extend(children_responses)
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    child.describe_fsm,  # TODO: child describe_fsm
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+                for child, target in child_list
+            ]
+            response.children.extend([f.result() for f in as_completed(futures)])
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
