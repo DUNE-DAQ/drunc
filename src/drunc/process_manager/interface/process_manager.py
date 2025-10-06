@@ -41,7 +41,6 @@ def run_pm(
     appName = "process_manager"
     log = get_logger(logger_name=appName)
 
-    
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
         signal_handler()
@@ -49,13 +48,12 @@ def run_pm(
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
 
     log.debug(f"Validating process_manager configuration: {pm_conf}")
-    if not validate_pm_config(pm_conf):   
+    if not validate_pm_config(pm_conf):
         log.error("Process manager configuration validation failed. Exiting.")
         sys.exit(1)
     log.debug("Process manager configuration is valid.")
 
     conf_path, conf_type = parse_conf_url(pm_conf)
-    
 
     pmch = ProcessManagerConfHandler(
         log_path=log_path, type=conf_type, data=conf_path.split(":")[1]

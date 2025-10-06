@@ -407,6 +407,7 @@ def expert_command(
 
     print_result(result)
 
+
 @click.command("to_error")
 @click.option("--target", type=str, help="The target to address", default="")
 @click.option(
@@ -428,7 +429,7 @@ def to_error(
     obj: ControllerContext,
     target: str,
     execute_along_path: bool,
-    execute_on_all_subsequent_children_in_path: bool
+    execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
     obj.get_driver("controller").to_error(
         target=target,
