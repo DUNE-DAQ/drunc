@@ -14,7 +14,7 @@ from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.utils.utils import ControlType
 
-import confmodel  # isort: skip
+import confmodel_dal  # isort: skip
 
 
 class ControllerConfData:  # the bastardised OKS
@@ -110,7 +110,7 @@ class ControllerConfHandler(ConfHandler):
         session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
 
         for seg in self.data.segments:
-            if confmodel.component_disabled(self.db._obj, session.id, seg.id):
+            if confmodel_dal.component_disabled(self.db._obj, session.id, seg.id):
                 continue
             ret.append(
                 ChildNode(
@@ -120,7 +120,7 @@ class ControllerConfHandler(ConfHandler):
                 )
             )
         for app in self.data.applications:
-            if confmodel.component_disabled(self.db._obj, session.id, app.id):
+            if confmodel_dal.component_disabled(self.db._obj, session.id, app.id):
                 continue
             ret.append(
                 ChildNode(
@@ -161,7 +161,7 @@ class ControllerConfHandler(ConfHandler):
 
         def process_segment(segment):
             if enabled_only:
-                if confmodel.component_disabled(self.db._obj, session.id, segment.id):
+                if confmodel_dal.component_disabled(self.db._obj, session.id, segment.id):
                     return
 
             new_node = ChildNode.get_child(
@@ -191,7 +191,7 @@ class ControllerConfHandler(ConfHandler):
 
         def process_application(app):
             if enabled_only:
-                if confmodel.component_disabled(self.db._obj, session.id, app.id):
+                if confmodel_dal.component_disabled(self.db._obj, session.id, app.id):
                     return
 
             commandline_parameters = get_commandline_parameters(

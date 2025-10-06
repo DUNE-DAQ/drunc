@@ -139,7 +139,9 @@ def unified_shell(
         process_manager_conf_file = get_process_manager_configuration(process_manager)
 
         if not validate_pm_config(process_manager_conf_file):
-            unified_shell_log.error("Process manager configuration validation failed. Exiting.")
+            unified_shell_log.error(
+                "Process manager configuration validation failed. Exiting."
+            )
             sys.exit(1)
 
         ready_event = mp.Event()
@@ -376,6 +378,7 @@ def unified_shell(
 
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
+
 
 def on_exit(ctx, unified_shell_log):
     """Handle exit from the shell."""

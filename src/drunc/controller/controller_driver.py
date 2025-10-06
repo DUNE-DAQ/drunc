@@ -37,7 +37,7 @@ class ControllerDriver:
         self.stub = ControllerStub(self.channel)
         self.token = copy_token(token)
 
-    def pack_empty_addressed_command(cmd):
+    def OLD_pack_empty_addressed_command(cmd):
         @wraps(cmd)
         def wrapper(
             self,
@@ -129,7 +129,7 @@ class ControllerDriver:
 
         return response
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def recompute_status(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -140,7 +140,7 @@ class ControllerDriver:
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def take_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -148,7 +148,7 @@ class ControllerDriver:
             "take_control", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def who_is_in_charge(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -159,7 +159,7 @@ class ControllerDriver:
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def surrender_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -170,7 +170,7 @@ class ControllerDriver:
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def execute_fsm_command(
         self, addressed_command: AddressedCommand, arguments, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -184,7 +184,7 @@ class ControllerDriver:
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def include(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -192,7 +192,7 @@ class ControllerDriver:
             "include", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def exclude(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
@@ -200,7 +200,7 @@ class ControllerDriver:
             "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def expert_command(
         self,
         addressed_command: AddressedCommand,
@@ -217,11 +217,10 @@ class ControllerDriver:
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def to_error(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        self.log.error(f"{addressed_command=}")
         return self.send_command(
             "to_error",
             data=addressed_command,
