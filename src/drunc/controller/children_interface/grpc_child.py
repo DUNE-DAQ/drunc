@@ -201,6 +201,28 @@ class gRPCChildNode(ChildNode):
 
         return response
 
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="recompute_status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.recompute_status(request, timeout=timeout)
+        except grpc.RpcError as e:
+            self.handle_child_grpc_error(e)
+
+        return response
+
     def handle_child_grpc_error(self, error: grpc.RpcError) -> NoReturn:
         """Handle gRPC errors from sending commands to the child controller.
 
