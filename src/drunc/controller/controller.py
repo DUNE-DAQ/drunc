@@ -5,7 +5,7 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
-from typing import List
+from typing import Callable, List, TypeVar
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -55,6 +55,8 @@ from drunc.fsm.exceptions import (
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
+
+T = TypeVar("T")
 
 
 def OLD_address_command(
@@ -281,7 +283,7 @@ class Controller(ControllerServicer):
 
         self.children_nodes = self.configuration.get_dummy_children()
 
-    def init_controller(self):
+    def init_controller(self) -> None:
         log_init_controller = get_logger("controller.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
         self.configuration.update_children(
@@ -308,7 +310,10 @@ class Controller(ControllerServicer):
             and self.stateful_node.node_is_in_error() == False
         ):
             child_list = self.address_all()
-            child_command = lambda child, target: child.status(target)
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.status(target)
+
             child_responses = self.propagate_concurrently(child_list, child_command)
 
             children_states = {}
@@ -693,7 +698,7 @@ class Controller(ControllerServicer):
             execute_on_children: If True, run on nodes beyond the target.
 
         Returns:
-            A list of (ChildNode, target) for each addressed child.
+            A list of (child, target) for each addressed child.
         """
         next_target_path = target.split("/")[1:]
 
@@ -731,7 +736,7 @@ class Controller(ControllerServicer):
                 marked as excluded (default: False).
 
         Returns:
-            A list of (ChildNode, target) for each addressed child.
+            A list of (child, target) for each addressed child.
         """
         return [
             (child, child.name)
@@ -740,8 +745,20 @@ class Controller(ControllerServicer):
         ]
 
     @staticmethod
-    def propagate_concurrently(child_list, child_command):
-        """Helper function to propagate commands concurrently to a list of children."""
+    def propagate_concurrently(
+        child_list: list[tuple[ChildNode, str]],
+        child_command: Callable[[ChildNode, str], T],
+    ) -> list[T]:
+        """Propagate commands concurrently to a list of children.
+
+        Args:
+            child_list: List of (node, target) for each addressed child.
+            child_command: Callable to be executed for each child, with
+                arguments (child, target).
+
+        Returns:
+            List of responses from each child.
+        """
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(child_command, child_node, child_target)
@@ -775,11 +792,14 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_command = lambda child, target: child.status(
-            target,
-            request.execute_along_path,
-            request.execute_on_all_subsequent_children_in_path,
-        )
+
+        def child_command(child: ChildNode, target: str) -> StatusResponse:
+            return child.status(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
         child_responses = self.propagate_concurrently(child_list, child_command)
         response.children.extend(child_responses)
 
@@ -818,11 +838,14 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_command = lambda child, target: child.describe(
-            target,
-            request.execute_along_path,
-            request.execute_on_all_subsequent_children_in_path,
-        )
+
+        def child_command(child: ChildNode, target: str) -> DescribeResponse:
+            return child.describe(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
         child_responses = self.propagate_concurrently(child_list, child_command)
         response.children.extend(child_responses)
 
@@ -874,11 +897,14 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_command = lambda child, target: child.describe_fsm(
-            target,
-            request.execute_along_path,
-            request.execute_on_all_subsequent_children_in_path,
-        )
+
+        def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
+            return child.describe_fsm(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
         child_responses = self.propagate_concurrently(child_list, child_command)
         response.children.extend(child_responses)
 
@@ -1114,11 +1140,14 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             child_list = self.address_all()
-            child_command = lambda child, target: child.recompute_status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_responses = self.propagate_concurrently(child_list, child_command)
 
             self_should_go_to_error = False
@@ -1179,11 +1208,14 @@ class Controller(ControllerServicer):
             status = get_status_message(self.stateful_node)
 
             child_list = self.address_all(ignore_exclusion=True)
-            child_command = lambda child, target: child.status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             post_child_responses = self.propagate_concurrently(
                 child_list, child_command
             )
@@ -1195,11 +1227,14 @@ class Controller(ControllerServicer):
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_command = lambda child, target: child.recompute_status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_responses = self.propagate_concurrently(child_list, child_command)
             response.children.extend(child_responses)
 
