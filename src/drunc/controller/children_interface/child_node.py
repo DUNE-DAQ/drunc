@@ -155,6 +155,18 @@ class ChildNode:  # abc.ABC):
 
         return response
 
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        return self.status(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
     @staticmethod
     def get_child(
         name: str,

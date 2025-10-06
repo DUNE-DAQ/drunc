@@ -122,13 +122,6 @@ class ClientSideChild(ChildNode):
                 children=[],
             )
 
-        elif command == "recompute_status":
-            return self.status(
-                target=request.target,
-                execute_along_path=request.execute_along_path,
-                execute_on_all_subsequent_children_in_path=request.execute_on_all_subsequent_children_in_path,
-            )
-
         if self.state.excluded() and command == "execute_fsm_command":
             return Response(
                 name=self.name,
