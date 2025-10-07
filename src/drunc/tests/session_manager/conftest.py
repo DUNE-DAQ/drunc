@@ -42,7 +42,7 @@ def mock_config_environment(monkeypatch):
 
 
 # -----------------------------------------------------
-#    Session Manager Server Tests Fixtures
+#    Session Manager Servicer Tests Fixtures
 # -----------------------------------------------------
 
 
@@ -71,30 +71,6 @@ def mock_logger():
 def session_manager(mock_logger):
     dummy_conf_handler = MagicMock()
     return SessionManager(name="dummy_name", configuration=dummy_conf_handler)
-
-
-@pytest.fixture(scope="session")
-def commands():
-    return [
-        CommandDescription(
-            name="describe",
-            data_type=["None"],
-            help="List the methods exposed by this endpoint.",
-            return_type="description_pb2.Description",
-        ),
-        CommandDescription(
-            name="list_all_sessions",
-            data_type=["None"],
-            help="List all active sessions.",
-            return_type="session_manager_pb2.AllActiveSessions",
-        ),
-        CommandDescription(
-            name="list_all_configs",
-            data_type=["None"],
-            help="List all available configurations.",
-            return_type="session_manager_pb2.AllConfigKeys",
-        ),
-    ]
 
 
 @pytest.fixture(scope="session")
@@ -155,7 +131,7 @@ def grpc_test_server_factory(grpc_servicer):
 
 
 # -----------------------------------------------------
-#    Session Manager Driver Rests Fixtures
+#    Session Manager Driver Tests Fixtures
 # -----------------------------------------------------
 
 
