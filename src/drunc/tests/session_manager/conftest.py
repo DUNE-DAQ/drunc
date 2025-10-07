@@ -291,7 +291,7 @@ def all_config_keys_response(config_keys):
 @pytest.fixture
 def expected_response(request):
     """
-    This fixture resolves the name to the actual fixture for various expected 
+    This fixture resolves the name to the actual fixture for various expected
     responses to be used in parameterised tests.
     """
     param = request.param
