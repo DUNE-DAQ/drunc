@@ -319,11 +319,13 @@ def unified_shell(
         ctx.command.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
+        ctx.obj.dynamic_commands.add(transition.name.replace("_", "-").lower())
 
     for sequence in session_dal.segment.controller.fsm.command_sequences:
         ctx.command.add_command(
             *generate_fsm_sequence_command(ctx, sequence, controller_name)
         )
+        ctx.obj.dynamic_commands.add(sequence.id.replace("_", "-").lower())
 
     ctx.command.add_command(status, "status")
     ctx.command.add_command(recompute_status, "recompute-status")
@@ -339,18 +341,18 @@ def unified_shell(
     ctx.command.add_command(expert_command, "expert-command")
     ctx.command.add_command(to_error, "to-error")
     ctx.obj.dynamic_commands.add("status")
-    ctx.obj.dynamic_commands.add("recompute_status")
+    ctx.obj.dynamic_commands.add("recompute-status")
     ctx.obj.dynamic_commands.add("connect")
     ctx.obj.dynamic_commands.add("disconnect")
-    ctx.obj.dynamic_commands.add("take_control")
-    ctx.obj.dynamic_commands.add("surrender_control")
-    ctx.obj.dynamic_commands.add("who_am_i")
-    ctx.obj.dynamic_commands.add("who_is_in_charge")
+    ctx.obj.dynamic_commands.add("take-control")
+    ctx.obj.dynamic_commands.add("surrender-control")
+    ctx.obj.dynamic_commands.add("who-am-i")
+    ctx.obj.dynamic_commands.add("who-is-in-charge")
     ctx.obj.dynamic_commands.add("include")
     ctx.obj.dynamic_commands.add("exclude")
     ctx.obj.dynamic_commands.add("wait")
-    ctx.obj.dynamic_commands.add("expert_command")
-    ctx.obj.dynamic_commands.add("to_error")
+    ctx.obj.dynamic_commands.add("expert-command")
+    ctx.obj.dynamic_commands.add("to-error")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
@@ -360,20 +362,27 @@ def unified_shell(
         ctx.obj.batch_mode = True
 
     def cleanup():
+        """
+        Cleanup function to be called on exit.
+
+        This function handles the termination of processes, retraction from the
+        connectivity service, and logging shutdown.
+        """
         unified_shell_log.info("[green]Exiting unified_shell[/green]")
-        unified_shell_log.info("Cleanup")
 
         # ctx.obj.shutdown()
+        unified_shell_log.info("Terminating remaining processes")
         ctx.obj.terminate()
         if internal_pm:
             ctx.obj.pm_process.terminate()
             ctx.obj.pm_process.join()
+        unified_shell_log.info("Remaining processes terminated")
 
+        unified_shell_log.info(
+            f"Retracting session {ctx.obj.session_name} from the connectivity service"
+        )
         csc = ConnectivityServiceClient(
             ctx.obj.session_name, connectivity_service_address
-        )
-        unified_shell_log.info(
-            f"Retracting the session {ctx.obj.session_name} from the connectivity service"
         )
         csc.retract_partition(fail_quickly=True)
 

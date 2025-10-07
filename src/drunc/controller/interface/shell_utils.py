@@ -684,9 +684,11 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             help=argument.help,
         )(cmd)
 
+    cmd_name = transition.name.replace("_", "-").lower()
+
     cmd = click.command(
-        name=transition.name.replace("_", "-").lower(),
+        name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
     )(cmd)
 
-    return cmd, transition.name.replace("_", "-").lower()
+    return cmd, cmd_name

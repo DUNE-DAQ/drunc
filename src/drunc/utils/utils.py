@@ -468,3 +468,17 @@ def print_with_timestamp(message):
     now = datetime.now()
     now_str = now.isoformat()
     print(f"{now_str}: {message}")
+
+
+def format_name_for_cli(name: str) -> str:
+    """
+    Format a command name or argument name to be CLI-friendly by replacing underscores
+    with hyphens and converting to lowercase.
+
+    Args:
+        name (str): The original command name.
+
+    Returns:
+        str: The formatted command name suitable for CLI usage.
+    """
+    return name.replace("_", "-").lower()
