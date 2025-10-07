@@ -1,3 +1,4 @@
+import getpass
 import logging
 import multiprocessing as mp
 import os
@@ -8,6 +9,7 @@ from urllib.parse import urlparse
 import click
 import click_shell
 import conffwk
+from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.configuration import ControllerConfHandler
@@ -386,13 +388,9 @@ def unified_shell(
                     )
             ctx.obj.delete_driver("controller")
 
-        # Terminate any residual processes
-        ctx.obj.get_driver("process_manager").terminate()
-        if internal_pm:
-            ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join()
-            unified_shell_log.info("Process manager terminated")
-
+        # Retract from the connectivity service
+        # Note - this must happen prior to terminating the processes in case of local
+        # connectivity service
         unified_shell_log.info(
             f"Retracting session {ctx.obj.session_name} from the connectivity service"
         )
@@ -400,6 +398,28 @@ def unified_shell(
             ctx.obj.session_name, connectivity_service_address
         )
         csc.retract_partition(fail_quickly=True)
+
+        # Terminate any residual processes
+        ctx.obj.get_driver("process_manager").terminate()
+
+        # Check if any processes are still running
+        if (
+            len(
+                ctx.obj.get_driver("process_manager")
+                .ps(ProcessQuery(user=getpass.getuser(), session=ctx.obj.session_name))
+                .values
+            )
+            > 0
+        ):
+            unified_shell_log.warning(
+                "Some processes are still running, you might want to check them"
+            )
+
+        # Remove the process manager
+        if internal_pm:
+            ctx.obj.pm_process.terminate()
+            ctx.obj.pm_process.join()
+            unified_shell_log.info("Process manager terminated")
 
         unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
         logging.shutdown()
