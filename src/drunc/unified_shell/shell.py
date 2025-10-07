@@ -191,7 +191,6 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]{process_manager_address}[/green]"
     )
     ctx.obj.reset(address_pm=process_manager_address)
-    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
 
     desc = None
     try:
@@ -247,25 +246,6 @@ def unified_shell(
         ctx.obj.start_listening_pm(
             broadcaster_conf=desc.broadcast,
         )
-
-    def cleanup():
-        unified_shell_log.debug("Cleanup")
-        ctx.obj.terminate()
-        if internal_pm:
-            ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join()
-
-        csc = ConnectivityServiceClient(
-            ctx.obj.session_name, connectivity_service_address
-        )
-        unified_shell_log.info(
-            f"Retracting the session {ctx.obj.session_name} from the connectivity service"
-        )
-        csc.retract_partition(fail_quickly=True)
-
-        logging.shutdown()
-
-    ctx.call_on_close(cleanup)
 
     unified_shell_log.debug(
         "Adding [green]unified_shell[/green] commands to the context"
@@ -379,9 +359,25 @@ def unified_shell(
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
 
+    def cleanup():
+        unified_shell_log.info("[green]Exiting unified_shell[/green]")
+        unified_shell_log.info("Cleanup")
 
-def on_exit(ctx, unified_shell_log):
-    """Handle exit from the shell."""
-    unified_shell_log.info("[green]Exiting unified_shell[/green]")
-    # TODO - cleanup needs to happen
-    unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
+        # ctx.obj.shutdown()
+        ctx.obj.terminate()
+        if internal_pm:
+            ctx.obj.pm_process.terminate()
+            ctx.obj.pm_process.join()
+
+        csc = ConnectivityServiceClient(
+            ctx.obj.session_name, connectivity_service_address
+        )
+        unified_shell_log.info(
+            f"Retracting the session {ctx.obj.session_name} from the connectivity service"
+        )
+        csc.retract_partition(fail_quickly=True)
+
+        unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
+        logging.shutdown()
+
+    ctx.call_on_close(cleanup)
