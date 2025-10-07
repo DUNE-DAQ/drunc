@@ -16,7 +16,6 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
-    Status,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
@@ -309,12 +308,12 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-            child_list = self.address_all()
 
             def child_command(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(target)
 
-            child_responses = self.propagate_concurrently(child_list, child_command)
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(child_command, child_list)
 
             children_states = {}
             for response in child_responses:
@@ -746,15 +745,15 @@ class Controller(ControllerServicer):
 
     @staticmethod
     def propagate_concurrently(
-        child_list: list[tuple[ChildNode, str]],
         child_command: Callable[[ChildNode, str], T],
+        child_list: list[tuple[ChildNode, str]],
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
 
         Args:
-            child_list: List of (node, target) for each addressed child.
             child_command: Callable to be executed for each child, with
                 arguments (child, target).
+            child_list: List of (node, target) for each addressed child.
 
         Returns:
             List of responses from each child.
@@ -788,11 +787,6 @@ class Controller(ControllerServicer):
             response.status.CopyFrom(status)
 
         # Children nodes.
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-        )
-
         def child_command(child: ChildNode, target: str) -> StatusResponse:
             return child.status(
                 target,
@@ -800,7 +794,11 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             )
 
-        child_responses = self.propagate_concurrently(child_list, child_command)
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(child_command, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -834,11 +832,6 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-        )
-
         def child_command(child: ChildNode, target: str) -> DescribeResponse:
             return child.describe(
                 target,
@@ -846,7 +839,11 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             )
 
-        child_responses = self.propagate_concurrently(child_list, child_command)
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(child_command, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -893,11 +890,6 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-        )
-
         def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
             return child.describe_fsm(
                 target,
@@ -905,7 +897,11 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             )
 
-        child_responses = self.propagate_concurrently(child_list, child_command)
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(child_command, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -1139,7 +1135,6 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-            child_list = self.address_all()
 
             def child_command(child: ChildNode, target: str) -> StatusResponse:
                 return child.recompute_status(
@@ -1148,7 +1143,8 @@ class Controller(ControllerServicer):
                     request.execute_on_all_subsequent_children_in_path,
                 )
 
-            child_responses = self.propagate_concurrently(child_list, child_command)
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(child_command, child_list)
 
             self_should_go_to_error = False
             children_states = set()
@@ -1159,10 +1155,10 @@ class Controller(ControllerServicer):
                     self_should_go_to_error = True
 
                 try:
-                    status = unpack_any(s.data, Status)
-                    children_states.add(status.state)
-                    children_sub_states.add(status.sub_state)
-                    if status.in_error:
+                    child_status = s.status
+                    children_states.add(child_status.state)
+                    children_sub_states.add(child_status.sub_state)
+                    if child_status.in_error:
                         self_should_go_to_error = True
 
                 except UnpackingError as e:
@@ -1205,9 +1201,8 @@ class Controller(ControllerServicer):
                     children_sub_state
                 )
 
-            status = get_status_message(self.stateful_node)
-
-            child_list = self.address_all(ignore_exclusion=True)
+            status = get_status_message(self)
+            response.status.CopyFrom(status)
 
             def child_command(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(
@@ -1216,17 +1211,12 @@ class Controller(ControllerServicer):
                     request.execute_on_all_subsequent_children_in_path,
                 )
 
-            post_child_responses = self.propagate_concurrently(
-                child_list, child_command
-            )
-            response.children.extend(post_child_responses)
+            child_list = self.address_all(ignore_exclusion=True)
+            child_responses = self.propagate_concurrently(child_command, child_list)
+            response.children.extend(child_responses)
 
         # Children nodes.
         else:
-            child_list = self.address_target_path(
-                request.target,
-                request.execute_on_all_subsequent_children_in_path,
-            )
 
             def child_command(child: ChildNode, target: str) -> StatusResponse:
                 return child.recompute_status(
@@ -1235,7 +1225,11 @@ class Controller(ControllerServicer):
                     request.execute_on_all_subsequent_children_in_path,
                 )
 
-            child_responses = self.propagate_concurrently(child_list, child_command)
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+            child_responses = self.propagate_concurrently(child_command, child_list)
             response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
