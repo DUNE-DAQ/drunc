@@ -154,6 +154,26 @@ class gRPCChildNode(ChildNode):
                             self.uri = new_uri
                             self._setup_connection()
 
+                            # Give control back to the child controller after reconnection
+                            self.log.info(
+                                f"Taking control of {self.name} after reconnection..."
+                            )
+                            try:
+                                send_command(
+                                    controller=self.controller,
+                                    token=token,
+                                    command="take_control",
+                                    rethrow=True,
+                                    data=None,
+                                )
+                                self.log.info(
+                                    f"Successfully took control of {self.name}"
+                                )
+                            except Exception as control_error:
+                                self.log.warning(
+                                    f"Failed to take control of {self.name}: {control_error}"
+                                )
+
                             # Retry the command with new connection
                             return send_command(
                                 controller=self.controller,
@@ -170,4 +190,5 @@ class gRPCChildNode(ChildNode):
 
             except Exception as reconnect_error:
                 self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
+                self.set_error()  # Set child to error state when reconnection fails
                 raise e

@@ -37,6 +37,7 @@ class ChildNode:  # abc.ABC):
         self.name = name
         self.configuration = configuration
         self.included = True
+        self.in_error = False
 
     def __str__(self):
         pass
@@ -45,6 +46,16 @@ class ChildNode:  # abc.ABC):
     # @abc.abstractmethod
     def terminate(self):
         pass
+
+    def set_error(self):
+        """Set the child node to error state"""
+        self.in_error = True
+        self.log.warning(f"Child {self.name} set to error state")
+
+    def clear_error(self):
+        """Clear the error state of the child node"""
+        self.in_error = False
+        self.log.info(f"Child {self.name} error state cleared")
 
     # @abc.abstractmethod
     def propagate_command(self, command, data, token):
