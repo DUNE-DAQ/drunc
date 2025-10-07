@@ -59,7 +59,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     ):
         super().__init__()
         self.log = get_logger(
-            f"process_manager.{configuration.data.type._name_}_process_manager"
+            f"process_manager.{configuration.get_data_type_name()}_process_manager"
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -68,26 +68,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.name = name
         self.session = session
 
-        bsch = BroadcastSenderConfHandler(
-            data=self.configuration.data.broadcaster, type=ConfTypes.PyObject
-        )
-
-        self.broadcast_service = (
-            BroadcastSender(
-                name=name,
-                session=session,
-                configuration=bsch,
-            )
-            if bsch.data
-            else None
-        )
+        self._create_broadcast_service(self.name, self.session)
 
         dach = DummyAuthoriserConfHandler(
-            data=self.configuration.data.authoriser, type=ConfTypes.PyObject
+            data=self.configuration.get_data_authoriser(), type=ConfTypes.PyObject
         )
 
-        self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
-        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+        self.opmon_publisher = getattr(
+            self.configuration.get_data(), "opmon_publisher", None
+        )
+        interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand]
@@ -157,6 +147,24 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 daemon=True,
             )
             self.thread.start()
+
+    def get_log_path(self):
+        return self.configuration.get_log_path()
+
+    def _create_broadcast_service(self, name, session):
+        bsch = BroadcastSenderConfHandler(
+            data=self.configuration.get_data_broadcaster(), type=ConfTypes.PyObject
+        )
+
+        self.broadcast_service = (
+            BroadcastSender(
+                name=name,
+                session=session,
+                configuration=bsch,
+            )
+            if bsch.data
+            else None
+        )
 
     def __del__(self):
         if self.opmon_publisher is not None:
@@ -431,7 +439,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         description = Description(
             type="process_manager",
             name=self.name,
-            info=self.configuration.log_path,
+            info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
             commands=self.commands,
             children=[],
