@@ -184,6 +184,7 @@ class ChildNode:  # abc.ABC):
                     init_token=init_token,
                     name=name,
                     uri=uri,
+                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
 

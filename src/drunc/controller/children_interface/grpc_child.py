@@ -1,3 +1,4 @@
+import threading
 import time
 
 import grpc
@@ -26,12 +27,22 @@ class gRCPChildConfHandler(ConfHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration: gRCPChildConfHandler, init_token, uri):
+    def __init__(
+        self,
+        name,
+        configuration: gRCPChildConfHandler,
+        init_token,
+        uri,
+        connectivity_service=None,
+    ):
         super().__init__(
             name=name, node_type=ControlType.gRPC, configuration=configuration
         )
 
         self.log = get_logger(f"controller.{self.name}-grpc-child")
+        self.connectivity_service = connectivity_service
+        self.init_token = init_token
+        self._lock = threading.Lock()
 
         host, port = uri.split(":")
         port = int(port)
@@ -43,8 +54,16 @@ class gRPCChildNode(ChildNode):
 
         self.uri = f"{host}:{port}"
 
-        self.channel = grpc.insecure_channel(self.uri)
-        self.controller = ControllerStub(self.channel)
+        self._setup_connection()
+
+    def _setup_connection(self):
+        """Setup the gRPC connection to the child controller"""
+        with self._lock:
+            if hasattr(self, "channel") and self.channel:
+                self.channel.close()
+
+            self.channel = grpc.insecure_channel(self.uri)
+            self.controller = ControllerStub(self.channel)
 
         desc = OldDescription()
         ntries = 20
@@ -53,7 +72,7 @@ class gRPCChildNode(ChildNode):
             try:
                 response = send_command(
                     controller=self.controller,
-                    token=init_token,
+                    token=self.init_token,
                     command="describe",
                     rethrow=True,
                 )
@@ -71,6 +90,7 @@ class gRPCChildNode(ChildNode):
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
                 break
+
         self.start_listening(desc.broadcast)
 
     def __str__(self):
@@ -99,10 +119,55 @@ class gRPCChildNode(ChildNode):
         self.broadcast.stop()
 
     def propagate_command(self, command, data, token) -> Response:
-        return send_command(
-            controller=self.controller,
-            token=token,
-            command=command,
-            rethrow=True,
-            data=data,
-        )
+        try:
+            return send_command(
+                controller=self.controller,
+                token=token,
+                command=command,
+                rethrow=True,
+                data=data,
+            )
+        except ServerUnreachable as e:
+            self.log.warning(
+                f"Connection to {self.name} failed, attempting to reconnect..."
+            )
+            try:
+                # Try to reconnect using connectivity service
+                if self.connectivity_service:
+                    from drunc.connectivity_service.exceptions import (
+                        ApplicationLookupUnsuccessful,
+                    )
+                    from drunc.utils.utils import (
+                        get_control_type_and_uri_from_connectivity_service,
+                    )
+
+                    try:
+                        ctype, new_uri = (
+                            get_control_type_and_uri_from_connectivity_service(
+                                self.connectivity_service, self.name, timeout=10
+                            )
+                        )
+                        if new_uri != self.uri:
+                            self.log.info(
+                                f"Found new IP {new_uri} for {self.name}, reconnecting..."
+                            )
+                            self.uri = new_uri
+                            self._setup_connection()
+
+                            # Retry the command with new connection
+                            return send_command(
+                                controller=self.controller,
+                                token=token,
+                                command=command,
+                                rethrow=True,
+                                data=data,
+                            )
+                    except ApplicationLookupUnsuccessful:
+                        self.log.error(
+                            f"Child {self.name} not found in connectivity service"
+                        )
+                        raise e
+
+            except Exception as reconnect_error:
+                self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
+                raise e
