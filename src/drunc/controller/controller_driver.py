@@ -155,7 +155,7 @@ class ControllerDriver:
     def take_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "take_control", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
@@ -163,7 +163,7 @@ class ControllerDriver:
     def who_is_in_charge(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "who_is_in_charge",
             data=addressed_command,
             outformat=PlainText,
@@ -174,7 +174,7 @@ class ControllerDriver:
     def surrender_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "surrender_control",
             data=addressed_command,
             outformat=PlainText,
@@ -188,7 +188,7 @@ class ControllerDriver:
         new_command = AddressedCommand()
         new_command.CopyFrom(addressed_command)
         new_command.command_data.Pack(arguments)
-        return self.send_command(
+        return self.OLD_send_command(
             "execute_fsm_command",
             data=new_command,
             outformat=FSMCommandResponse,
@@ -199,7 +199,7 @@ class ControllerDriver:
     def include(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "include", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
@@ -207,7 +207,7 @@ class ControllerDriver:
     def exclude(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
@@ -221,7 +221,7 @@ class ControllerDriver:
         new_command = AddressedCommand()
         new_command.CopyFrom(addressed_command)
         new_command.command_data.Pack(PlainText(text=json_string))
-        return self.send_command(
+        return self.OLD_send_command(
             "execute_expert_command",
             data=new_command,
             outformat=PlainText,
@@ -232,7 +232,7 @@ class ControllerDriver:
     def to_error(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "to_error",
             data=addressed_command,
             outformat=Description,
@@ -301,7 +301,7 @@ class ControllerDriver:
 
         return dr
 
-    def send_command(
+    def OLD_send_command(
         self,
         command: str,
         data=None,
