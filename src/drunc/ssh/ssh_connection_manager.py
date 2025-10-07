@@ -439,7 +439,9 @@ class SSHConnectionManager:
 
                     time.sleep(0.1)
 
-                # Capture exit code
+                # Note that because we use SIGHUP to terminate
+                # we don't get an exit code from the remote process
+                # in this case paramiko give us a -1 exit status.
                 exit_code = channel.recv_exit_status()
 
                 with self.global_lock:
@@ -451,7 +453,7 @@ class SSHConnectionManager:
                 exception = e
                 self.log.error(f"SSH process {uuid} watcher error: {e}")
                 with self.global_lock:
-                    self.exit_codes[uuid] = -1  # Indicate error condition
+                    self.exit_codes[uuid] = None
 
             # Invoke callback with results
             if self.on_process_exit:

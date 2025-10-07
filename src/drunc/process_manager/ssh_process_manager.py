@@ -65,10 +65,16 @@ class SSHProcessManager(ProcessManager):
         if uuid not in self.boot_request:
             return
 
+        if exception is not None:
+            self.log.error(
+                f"Process with UUID {uuid} threw an exception when we tried to kill it: {exception!s}"
+            )
+
         if exit_code is None:
-            self.log.debug(
+            self.log.error(
                 f"Process with UUID {uuid} is still running but on_ssh_process_exit was called."
             )
+            return
         else:
             self.log.debug(f"Process with UUID {uuid} exited with code {exit_code}.")
 
@@ -77,7 +83,7 @@ class SSHProcessManager(ProcessManager):
         session = boot_req.process_description.metadata.session
         user = boot_req.process_description.metadata.user
 
-        self.notify_join(name=name, session=session, user=user, exec=exception)
+        self.notify_join(name=name, session=session, user=user, exit_code=exit_code)
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
         """
@@ -259,16 +265,10 @@ class SSHProcessManager(ProcessManager):
                 flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
             )
 
-    def notify_join(self, name, session, user, exec):
-        self.log.debug(f"{self.name} joining processes from the event loop")
-        exit_code = None
-        if exec:
-            exit_code = exec.exit_code
+    def notify_join(self, name, session, user, exit_code):
+        self.log.debug(f"{self.name} sending broadcast after ssh process exit")
         end_str = f"Process '{name}' (session: '{session}', user: '{user}') process exited with exit code {exit_code}"
         self.log.info(end_str)
-        if exec:
-            self.log.debug(name + str(exec))
-
         self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
