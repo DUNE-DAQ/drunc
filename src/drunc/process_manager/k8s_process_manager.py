@@ -325,7 +325,6 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
-
     def _create_namespace(self, session) -> None:
         """Creates a Kubernetes namespace if it doesn't already exist."""
         if session in self.sessions_pending_deletion:
@@ -741,7 +740,7 @@ done
                         f"Using port {port} from 'CONNECTION_PORT' environment variable."
                     )
                 except (ValueError, TypeError):
-                    raise DruncException(
+                    raise DruncK8sException(
                         f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
                     )
 
@@ -755,7 +754,7 @@ done
                 self.connection_server_port = port
                 self.connection_server_node_port = port
             else:
-                raise DruncException(
+                raise DruncK8sException(
                     "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
                 )
 
@@ -770,7 +769,7 @@ done
                         svc.metadata.namespace != session
                         or svc.metadata.name != podname
                     ):
-                        raise DruncException(
+                        raise DruncK8sException(
                             f"NodePort {self.connection_server_node_port} is already in use by service "
                             f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
                             "Cannot start another local connection server with the same port."
