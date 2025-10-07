@@ -356,15 +356,18 @@ class RESTAPIChildNode(ClientSideChild):
         configuration: RESTAPIChildNodeConfHandler,
         fsm_configuration: FSMConfHandler,
         uri,
+        connectivity_service=None,
     ):
         super().__init__(
             name=name,
             node_type=ControlType.REST_API,
             configuration=configuration,
+            connectivity_service=connectivity_service,
             fsm_configuration=fsm_configuration,
         )
 
         self.log = get_logger(f"controller.{name}_rest_api_child")
+        self.uri = uri  # Store URI for reconnection logic
 
         self.response_listener = ResponseListener.get()
 
@@ -546,3 +549,57 @@ class RESTAPIChildNode(ClientSideChild):
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
         return response
+
+    def propagate_command(self, command, data, token):
+        """Override propagate_command to handle connection failures for REST API"""
+        # Handle take_control command for REST API
+        if command == "take_control":
+            # REST API doesn't have explicit take_control, it's implicit
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=[],
+            )
+
+        try:
+            # Try the base class implementation first
+            return super().propagate_command(command, data, token)
+        except requests.ConnectionError as e:
+            self.log.warning(
+                f"Connection to {self.name} failed, attempting to reconnect..."
+            )
+            result = self._attempt_reconnection(token, command, data)
+            if result is not None:
+                return result
+            else:
+                raise e
+        except Exception as e:
+            # For other exceptions, let them propagate
+            raise e
+
+    def _reconnect_to_new_uri(self):
+        """Reconnect to the new URI for REST API child"""
+        # Update the URI and recreate the commander
+        self.app_host, app_port = self.uri.split(":")
+        self.app_port = int(app_port)
+
+        # Recreate the commander with new host/port
+        proxy_host, proxy_port = getattr(self.configuration.data, "proxy", [None, None])
+        proxy_port = int(proxy_port) if proxy_port is not None else None
+
+        response_listener_host = socket.gethostname()
+
+        self.commander = AppCommander(
+            app_name=self.name,
+            app_host=self.app_host,
+            app_port=self.app_port,
+            response_host=response_listener_host,
+            response_port=self.response_listener.get_port(),
+            proxy_host=proxy_host,
+            proxy_port=proxy_port,
+        )
+
+        # Re-register with the response listener
+        self.response_listener.register(self.name, self.commander)

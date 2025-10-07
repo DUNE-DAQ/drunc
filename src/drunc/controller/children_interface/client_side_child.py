@@ -82,8 +82,14 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
+        connectivity_service=None,
     ):  #
-        super().__init__(name=name, node_type=node_type, configuration=configuration)
+        super().__init__(
+            name=name,
+            node_type=node_type,
+            configuration=configuration,
+            connectivity_service=connectivity_service,
+        )
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
         self.fsm_configuration = fsm_configuration
@@ -213,3 +219,9 @@ class ClientSideChild(ChildNode):
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
         return response
+
+    def _reconnect_to_new_uri(self):
+        """Reconnect to the new URI for client-side child"""
+        # Client-side children don't have network connections to reconnect
+        # This is a no-op for client-side children
+        pass

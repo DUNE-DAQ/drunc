@@ -36,11 +36,13 @@ class gRPCChildNode(ChildNode):
         connectivity_service=None,
     ):
         super().__init__(
-            name=name, node_type=ControlType.gRPC, configuration=configuration
+            name=name,
+            node_type=ControlType.gRPC,
+            configuration=configuration,
+            connectivity_service=connectivity_service,
         )
 
         self.log = get_logger(f"controller.{self.name}-grpc-child")
-        self.connectivity_service = connectivity_service
         self.init_token = init_token
         self._lock = threading.Lock()
 
@@ -93,6 +95,10 @@ class gRPCChildNode(ChildNode):
 
         self.start_listening(desc.broadcast)
 
+    def _reconnect_to_new_uri(self):
+        """Reconnect to the new URI for gRPC child"""
+        self._setup_connection()
+
     def __str__(self):
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
@@ -131,64 +137,8 @@ class gRPCChildNode(ChildNode):
             self.log.warning(
                 f"Connection to {self.name} failed, attempting to reconnect..."
             )
-            try:
-                # Try to reconnect using connectivity service
-                if self.connectivity_service:
-                    from drunc.connectivity_service.exceptions import (
-                        ApplicationLookupUnsuccessful,
-                    )
-                    from drunc.utils.utils import (
-                        get_control_type_and_uri_from_connectivity_service,
-                    )
-
-                    try:
-                        ctype, new_uri = (
-                            get_control_type_and_uri_from_connectivity_service(
-                                self.connectivity_service, self.name, timeout=10
-                            )
-                        )
-                        if new_uri != self.uri:
-                            self.log.info(
-                                f"Found new IP {new_uri} for {self.name}, reconnecting..."
-                            )
-                            self.uri = new_uri
-                            self._setup_connection()
-
-                            # Give control back to the child controller after reconnection
-                            self.log.info(
-                                f"Taking control of {self.name} after reconnection..."
-                            )
-                            try:
-                                send_command(
-                                    controller=self.controller,
-                                    token=token,
-                                    command="take_control",
-                                    rethrow=True,
-                                    data=None,
-                                )
-                                self.log.info(
-                                    f"Successfully took control of {self.name}"
-                                )
-                            except Exception as control_error:
-                                self.log.warning(
-                                    f"Failed to take control of {self.name}: {control_error}"
-                                )
-
-                            # Retry the command with new connection
-                            return send_command(
-                                controller=self.controller,
-                                token=token,
-                                command=command,
-                                rethrow=True,
-                                data=data,
-                            )
-                    except ApplicationLookupUnsuccessful:
-                        self.log.error(
-                            f"Child {self.name} not found in connectivity service"
-                        )
-                        raise e
-
-            except Exception as reconnect_error:
-                self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
-                self.set_error()  # Set child to error state when reconnection fails
+            result = self._attempt_reconnection(token, command, data)
+            if result is not None:
+                return result
+            else:
                 raise e

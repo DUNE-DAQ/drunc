@@ -777,7 +777,7 @@ done
         uuids = self._get_process_uid(query)
         if not uuids:
             raise DruncCommandException("No processes found matching the query.")
-    
+
         # Create copies of boot requests for each process
         br_by_uuid = {}
         for u in uuids:
@@ -786,33 +786,36 @@ done
             br_by_uuid[u] = br
 
         ret = []
-        if uuid not in self.boot_request:
-            raise DruncCommandException(
-                f"Cannot restart process with UUID {uuid}: Not found."
-            )
-
         for u in uuids:
             try:
                 if u in self.boot_request:
                     pod_name = self.boot_request[u].process_description.metadata.name
                     session = self.boot_request[u].process_description.metadata.session
-                    
+
                     self.log.info(f"Restarting {pod_name} in session {session}")
-                    
+
                     # Kill the existing process
                     kill_query = ProcessQuery(uuids=[ProcessUUID(uuid=u)])
                     self._kill_impl(kill_query)
-                    
+
                     # Handle case where pod completes but isn't deleted (race condition fix)
                     try:
-                        pod_status = self._core_v1_api.read_namespaced_pod_status(pod_name, session)
+                        pod_status = self._core_v1_api.read_namespaced_pod_status(
+                            pod_name, session
+                        )
                         if pod_status.status.phase in ["Succeeded", "Failed"]:
-                            self.log.info(f"Pod {pod_name} is in terminal state {pod_status.status.phase}, deleting it")
-                            self._core_v1_api.delete_namespaced_pod(name=pod_name, namespace=session)
+                            self.log.info(
+                                f"Pod {pod_name} is in terminal state {pod_status.status.phase}, deleting it"
+                            )
+                            self._core_v1_api.delete_namespaced_pod(
+                                name=pod_name, namespace=session
+                            )
                             sleep(2)  # Wait for deletion to complete
                     except self._api_error_v1_api as e:
                         if e.status != 404:  # 404 means pod is already deleted
-                            self.log.warning(f"Error checking pod status after kill: {e}")
+                            self.log.warning(
+                                f"Error checking pod status after kill: {e}"
+                            )
 
                 # Boot the new process
                 pi = self.__boot(br_by_uuid[u], u)
