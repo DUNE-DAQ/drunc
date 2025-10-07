@@ -12,7 +12,7 @@ logger = get_logger("unified_shell.shell_utils")
 
 def run_fsm_sequence(
     sequence_commands: list[str],
-    cmd_to_options_and_args: dict[str, list[str]],
+    sequence_command_opts_and_args: dict[str, list[str]],
     ctx: click.core.Context,
     obj: click.core.Context,
     **kwargs,
@@ -24,9 +24,12 @@ def run_fsm_sequence(
     each command in order using the provided Click context. It gathers the necessary
     options and arguments for each command from the provided keyword arguments.
 
+    Note - sequence commands are the names of the commands in the sequence, while the
+    sequence name is the name of the overall sequence being executed.
+
     Args:
         sequence_commands (list[str]): List of command names to execute in order.
-        cmd_to_options_and_args (dict[str, list[str]]): Mapping of command names to their options and arguments.
+        sequence_command_opts_and_args (dict[str, list[str]]): Mapping of sequence command names to their options and arguments.
         ctx (click.core.Context): The Click context for invoking commands.
         obj (click.core.Context): The object passed to commands, typically containing shared state.
         **kwargs: Additional keyword arguments representing command options and arguments.
@@ -36,14 +39,14 @@ def run_fsm_sequence(
     for command in sequence_commands:
         accepted_command = ["terminate"]  # Always accept terminate
 
-        cd = obj.get_driver("controller", quiet_fail=True)
+        controller_driver = obj.get_driver("controller", quiet_fail=True)
         if command == "boot":
             pmd = obj.get_driver("process_manager", quiet_fail=True)
             process_list = pmd.ps(ProcessQuery(names=[".*"]))
             if not process_list.values:  # We haven't started anything yet
                 accepted_command.append("boot")
-        if cd:
-            accepted_command_raw = cd.describe_fsm()
+        if controller_driver:
+            accepted_command_raw = controller_driver.describe_fsm()
             accepted_command += [
                 format_name_for_cli(c.name) for c in accepted_command_raw.data.commands
             ]
@@ -57,7 +60,7 @@ def run_fsm_sequence(
 
         cmd_kwargs = {
             kwarg_name: kwargs[kwarg_name]
-            for kwarg_name in cmd_to_options_and_args[command]
+            for kwarg_name in sequence_command_opts_and_args[command]
         }
 
         try:
@@ -95,7 +98,7 @@ def generate_fsm_sequence_command(
     sequence_commands: list[str] = []
     sequence_command_options: dict[
         str, list[str]
-    ] = {}  # {sequence_command: [sequence_command_option]}
+    ] = {}  # {sequence_command: [sequence_command_option_name]}
     sequence_options: dict[
         str, conffwk.dal.FSMParameter
     ] = {}  # {option_name: option}, dict removes duplicates
