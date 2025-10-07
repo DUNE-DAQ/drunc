@@ -221,7 +221,6 @@ def describe_response():
         info="/var/log/test",
         session="test_session",
         commands=[],
-        children=[],
         flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         token=Token(),
     )
