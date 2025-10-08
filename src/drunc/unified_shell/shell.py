@@ -384,7 +384,7 @@ def unified_shell(
                         )
                     else:
                         unified_shell_log.info(
-                            "Attemting graceful shutdown of the controller"
+                            "Attempting graceful shutdown of the controller"
                         )
                         ctx.invoke(ctx.command.commands.get("stop-run"))
                         unified_shell_log.info("Controller shutdown gracefully")
