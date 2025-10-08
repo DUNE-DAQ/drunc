@@ -373,7 +373,7 @@ def unified_shell(
                     unified_shell_log.info(
                         "Attemting graceful shutdown of the controller"
                     )
-                    ctx.obj.get_driver("controller").disable_triggers()
+                    ctx.invoke(ctx.command.commands.get("stop-run"))
                     unified_shell_log.info("Controller shutdown gracefully")
             except Exception as e:
                 unified_shell_log.error(
