@@ -10,9 +10,11 @@ from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
 from drunc.process_manager.configuration import (
+    ProcessManagerConfHandler,
     ProcessManagerTypes,
     get_process_manager_configuration,
 )
+from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
 
@@ -251,4 +253,10 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         ProcessManagerTypes: The corresponding enum value.
     """
     pm_conf_file = get_process_manager_configuration(pm_name)
-    return pm_conf_file
+
+    conf_path, conf_type = parse_conf_url(pm_conf_file)
+    pmch = ProcessManagerConfHandler(
+        log_path="./", type=conf_type, data=conf_path.split(":")[1]
+    )
+
+    return pmch
