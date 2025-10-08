@@ -320,8 +320,6 @@ class K8sProcessManager(ProcessManager):
                     f"Permission denied accessing cluster to verify '{target_host}': {e}"
                 )
             raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
-        except DruncK8sException:
-            raise
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
@@ -511,7 +509,7 @@ done
             if target_host == "localhost":
                 target_host = resolve_localhost_to_hostname(target_host)
                 self.log.info(
-                    f"Resolved localhost to '{target_host}' for Kubernetes node selection"
+                    f"Resolved localhost to '{target_host}' for node selection"
                 )
 
             # Verify the target host is available in the cluster before scheduling
