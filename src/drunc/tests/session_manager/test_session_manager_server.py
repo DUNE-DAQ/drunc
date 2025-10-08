@@ -130,7 +130,7 @@ def test_list_all_configs_files_not_parsed(
     session_manager, mock_request, mock_context, mock_logger, monkeypatch
 ):
     """
-    Test when configuration files are found but not parsed succesfully.
+    Test when configuration files are found but not parsed successfully.
     """
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
     mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
