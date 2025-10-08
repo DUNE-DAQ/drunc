@@ -376,22 +376,23 @@ def unified_shell(
         unified_shell_log.info("[green]Exiting unified_shell[/green]")
 
         if ctx.obj.get_driver("controller", quiet_fail=True):
-            if safe_mode:
-                try:
-                    if ctx.obj.get_driver("controller").status().data.in_error:
-                        unified_shell_log.warning(
-                            "Controller is in error, cannot gracefully shutdown"
-                        )
-                    else:
-                        unified_shell_log.info(
-                            "Attempting graceful shutdown of the controller"
-                        )
-                        ctx.invoke(ctx.command.commands.get("stop-run"))
-                        unified_shell_log.info("Controller shutdown gracefully")
-                except Exception as e:
-                    unified_shell_log.error(
-                        f"Could not shutdown the controller gracefully, reason: {e}"
+            try:
+                if ctx.obj.get_driver("controller").status().data.in_error:
+                    unified_shell_log.warning(
+                        "Controller is in error, cannot gracefully shutdown"
                     )
+                else:
+                    unified_shell_log.info(
+                        "Attemting graceful shutdown of the controller"
+                    )
+                    if safe_mode:
+                        ctx.invoke(ctx.command.commands.get("stop-run"))
+                        ctx.invoke(ctx.command.commands.get("scrap"))
+                    unified_shell_log.info("Controller shutdown gracefully")
+            except Exception as e:
+                unified_shell_log.error(
+                    f"Could not shutdown the controller gracefully, reason: {e}"
+                )
             ctx.obj.delete_driver("controller")
 
         # Retract from the connectivity service
