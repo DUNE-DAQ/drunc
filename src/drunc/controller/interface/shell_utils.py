@@ -38,7 +38,7 @@ from drunc.utils.grpc_utils import (
     unpack_any,
 )
 from drunc.utils.shell_utils import DecodedResponse
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import format_name_for_cli, get_logger
 
 
 def generate_none_status() -> Status:
@@ -684,7 +684,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             help=argument.help,
         )(cmd)
 
-    cmd_name = transition.name.replace("_", "-").lower()
+    cmd_name = format_name_for_cli(transition.name)
 
     cmd = click.command(
         name=cmd_name,

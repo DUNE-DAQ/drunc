@@ -52,6 +52,7 @@ from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     create_logger_handler,
+    format_name_for_cli,
     get_logger,
     ignore_sigint_sighandler,
     log_levels,
@@ -321,45 +322,35 @@ def unified_shell(
         ctx.command.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
-        ctx.obj.dynamic_commands.add(transition.name.replace("_", "-").lower())
+        ctx.obj.dynamic_commands.add(format_name_for_cli(transition.name))
 
     for sequence in session_dal.segment.controller.fsm.command_sequences:
         ctx.command.add_command(
             *generate_fsm_sequence_command(ctx, sequence, controller_name)
         )
-        ctx.obj.dynamic_commands.add(sequence.id.replace("_", "-").lower())
+        ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
 
-    ctx.command.add_command(status, "status")
-    ctx.command.add_command(recompute_status, "recompute-status")
-    ctx.command.add_command(connect, "connect")
-    ctx.command.add_command(disconnect, "disconnect")
-    ctx.command.add_command(take_control, "take-control")
-    ctx.command.add_command(surrender_control, "surrender-control")
-    ctx.command.add_command(who_am_i, "whoami")
-    ctx.command.add_command(who_is_in_charge, "who-is-in-charge")
-    ctx.command.add_command(include, "include")
-    ctx.command.add_command(exclude, "exclude")
-    ctx.command.add_command(wait, "wait")
-    ctx.command.add_command(expert_command, "expert-command")
-    ctx.command.add_command(to_error, "to-error")
-    ctx.obj.dynamic_commands.add("status")
-    ctx.obj.dynamic_commands.add("recompute-status")
-    ctx.obj.dynamic_commands.add("connect")
-    ctx.obj.dynamic_commands.add("disconnect")
-    ctx.obj.dynamic_commands.add("take-control")
-    ctx.obj.dynamic_commands.add("surrender-control")
-    ctx.obj.dynamic_commands.add("who-am-i")
-    ctx.obj.dynamic_commands.add("who-is-in-charge")
-    ctx.obj.dynamic_commands.add("include")
-    ctx.obj.dynamic_commands.add("exclude")
-    ctx.obj.dynamic_commands.add("wait")
-    ctx.obj.dynamic_commands.add("expert-command")
-    ctx.obj.dynamic_commands.add("to-error")
+    # Add the controller Click commands to the CLI
+    controller_commands = [
+        status,
+        recompute_status,
+        connect,
+        disconnect,
+        take_control,
+        surrender_control,
+        who_am_i,
+        who_is_in_charge,
+        include,
+        exclude,
+        wait,
+        expert_command,
+        to_error,
+    ]
+    for cmd in controller_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
-    unified_shell_log.info(
-        "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
-    )
-
+    # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
 
@@ -389,8 +380,9 @@ def unified_shell(
             ctx.obj.delete_driver("controller")
 
         # Retract from the connectivity service
-        # Note - this must happen prior to terminating the processes in case of local
-        # connectivity service
+        # Note - this must happen prior to terminating the processes - using a local
+        # connectivity service, terminate will kill the connectivity service and retract
+        # will log warnings
         unified_shell_log.info(
             f"Retracting session {ctx.obj.session_name} from the connectivity service"
         )
@@ -415,9 +407,13 @@ def unified_shell(
                 "Some processes are still running, you might want to check them"
             )
 
-        # Delete the session from the connectivity service using service
-        # Needed as daq_applications continue to publish during terminate, with many
-        # processes they can continue to publish for a while during terminate
+        # Retract the session from the connectivity service if using a standalone
+        # (microservice) connectivity service instead of a local process.
+        # Needed as daq_applications continue to publish during terminate. With a large
+        # number of daq_applications, sending terminate will take some time to get to
+        # all the processes. During this time the non-terminated processes will continue
+        # to publish to the connectivity service, and this stale information needs to be
+        # cleaned up by retracting the session (again).
         if session_dal.connectivity_service.host != "localhost":
             try:
                 csc.retract_partition(fail_quickly=True, fail_quietly=True)
@@ -439,3 +435,7 @@ def unified_shell(
         logging.shutdown()
 
     ctx.call_on_close(cleanup)
+
+    unified_shell_log.info(
+        "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
+    )
