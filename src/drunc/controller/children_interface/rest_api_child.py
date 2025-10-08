@@ -365,7 +365,6 @@ class RESTAPIChildNode(ClientSideChild):
         )
 
         self.log = get_logger(f"controller.{name}_rest_api_child")
-        self.uri = uri  # Store URI for reconnection logic
 
         self.response_listener = ResponseListener.get()
 
