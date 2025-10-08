@@ -144,6 +144,10 @@ def unified_shell(
             )
             sys.exit(1)
 
+        # if process_manager_type == k8s and validate_k8s_session_name(session_name) is False:
+        #     unified_shell_log.error(f'Invalid session/namespace name "{session_name}". Must match RFC1123 label: lowercase alphanumeric or \'-\', start/end with alphanumeric, max 63 chars.')
+        #     sys.exit(1)
+
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 

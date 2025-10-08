@@ -218,3 +218,19 @@ def on_parent_exit(signum):
 
 
 # ------------------------------------------------
+
+
+def validate_k8s_session_name(session: str) -> bool:
+    """
+    Validate that the session/namespace name is valid according to RFC1123 label standard.
+
+    Args:
+        session (str): The session/namespace name to validate.
+
+    Returns:
+        bool: True if the session name is valid, False otherwise.
+    """
+    session_re = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+    if not session_re.match(session):
+        return False
+    return True

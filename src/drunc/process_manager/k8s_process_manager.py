@@ -26,6 +26,7 @@ from kubernetes.client.rest import ApiException
 
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_manager.utils import validate_k8s_session_name
 from drunc.utils.utils import get_logger
 
 
@@ -642,10 +643,11 @@ done
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
-        session_re = re.compile(r'^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$')
-        if not session_re.match(session):
-            raise DruncCommandException(f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
-                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars.")
+        if not validate_k8s_session_name(session):
+            raise DruncCommandException(
+                f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
+                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
+            )
 
         if boot_request.process_restriction.allowed_hosts:
             hostname = boot_request.process_restriction.allowed_hosts[0]
