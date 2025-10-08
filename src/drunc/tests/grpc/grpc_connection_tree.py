@@ -1,20 +1,21 @@
 """
-gRPC multi-process tree management with pluggable server managers.
+A class for managing gRPC server processes started
+with multiprocessing
 """
 
 import time
 from typing import Dict, List, Tuple
 
-from drunc.tests.grpc.available_grpc_servers import ServerType
 from drunc.tests.grpc.grpc_independent_root_controller_client import (
     IndependentRootControllerClient,
 )
-from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc.grpc_server_manager import (
+from drunc.tests.grpc_testing_tools.available_grpc_servers import ServerType
+from drunc.tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from drunc.tests.grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from drunc.tests.grpc.multiprocessing_connection_manager import (
+from drunc.tests.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
 

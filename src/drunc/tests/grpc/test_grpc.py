@@ -42,6 +42,7 @@ def test_basic_grpc_tree_communication_multiprocessing(capsys):
     import os
     from pathlib import Path
 
+    # This must be set before the grpc module is loaded
     os.environ["GRPC_TRACE"] = "http"
     from drunc.grpc_settings import (
         CONTROLLER_CLIENT_GRPC_CONFIG,
