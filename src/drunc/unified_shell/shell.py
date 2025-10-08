@@ -383,15 +383,20 @@ def unified_shell(
                     )
                 else:
                     unified_shell_log.info(
-                        "Attemting graceful shutdown of the controller"
+                        "Attempting graceful shutdown of the controller"
                     )
-                    if safe_mode:
-                        ctx.invoke(ctx.command.commands.get("stop-run"))
-                        ctx.invoke(ctx.command.commands.get("scrap"))
-                    unified_shell_log.info("Controller shutdown gracefully")
+                    try:
+                        if safe_mode:
+                            ctx.invoke(ctx.command.commands.get("stop-run"))
+                            ctx.invoke(ctx.command.commands.get("scrap"))
+                            unified_shell_log.info("Controller shutdown gracefully")
+                    except Exception as e:
+                        unified_shell_log.error(
+                            f"Could not shutdown the controller gracefully, reason: {e}"
+                        )
             except Exception as e:
                 unified_shell_log.error(
-                    f"Could not shutdown the controller gracefully, reason: {e}"
+                    f"Could not retrieve the controller status, reason: {e}"
                 )
             ctx.obj.delete_driver("controller")
 
