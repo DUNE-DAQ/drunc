@@ -219,9 +219,3 @@ class ClientSideChild(ChildNode):
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
         return response
-
-    def _reconnect_to_new_uri(self):
-        """Reconnect to the new URI for client-side child"""
-        # Client-side children don't have network connections to reconnect
-        # This is a no-op for client-side children
-        pass

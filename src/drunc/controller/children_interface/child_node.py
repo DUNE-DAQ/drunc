@@ -41,8 +41,8 @@ class ChildNode:  # abc.ABC):
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
         self.configuration = configuration
-        self.included = True
         self.connectivity_service = connectivity_service
+        self.included = True
 
     def __str__(self):
         pass
@@ -105,8 +105,7 @@ class ChildNode:  # abc.ABC):
             return None
 
     def _reconnect_to_new_uri(self):
-        """Reconnect to the new URI - to be implemented by subclasses"""
-        raise NotImplementedError("Subclasses must implement _reconnect_to_new_uri")
+        pass
 
     # @abc.abstractmethod
     def propagate_command(self, command, data, token):
@@ -274,6 +273,7 @@ class ChildNode:  # abc.ABC):
 
                 node = ClientSideChild(
                     name=name,
+                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
                 if node_in_error:
