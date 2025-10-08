@@ -32,6 +32,7 @@ from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
 )
@@ -117,17 +118,15 @@ def unified_shell(
     else:
         internal_pm = False
 
-    pm_type = get_pm_type_from_name(process_manager)
-    unified_shell_log.error(f"pm_type={pm_type.name}")
-
-    valid_name = validate_k8s_session_name(session_name)
-    unified_shell_log.error(f"valid_name={valid_name}")
-
-    # if internal_pm and get_pm_type_from_name(process_manager) == "k8s" and not validate_k8s_session_name(session_name):
-    #     unified_shell_log.error(
-    #         f'Invalid session/namespace name "{session_name}". Must match RFC1123 label: lowercase alphanumeric or \'-\', start/end with alphanumeric, max 63 chars.'
-    #     )
-    #     sys.exit(1)
+    if get_pm_type_from_name(
+        process_manager
+    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+        unified_shell_log.error(
+            f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
+            "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
+            "alphanumeric, max 63 chars."
+        )
+        sys.exit(1)
 
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id

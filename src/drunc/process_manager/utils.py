@@ -259,4 +259,4 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         log_path="./", type=conf_type, data=conf_path.split(":")[1]
     )
 
-    return pmch.type
+    return pmch.data.type
