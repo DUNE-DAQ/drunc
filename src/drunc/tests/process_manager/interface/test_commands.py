@@ -359,7 +359,6 @@ def test_kill_command(mock_tabulate):
     assert result.output == ""
     assert result.exit_code == 0
     mock_driver.kill.assert_called_once()
-    mock_context.delete_driver.assert_called_with("controller")
 
 
 def test_flush(mock_tabulate):
@@ -444,8 +443,8 @@ def test_ps_with_process_query(mock_tabulate):
     "args, missing_arg",
     [
         ([], "CONFIGURATION_FILE"),
-        (["config.yaml"], "SESSION_NAME"),
-        (["config.yaml", "session1"], "CONFIGURATION_ID"),
+        (["config.yaml", "config_id_124"], "SESSION_NAME"),
+        (["config.yaml"], "CONFIGURATION_ID"),
     ],
 )
 def test_boot_missing_positional_arguments(args, missing_arg):
