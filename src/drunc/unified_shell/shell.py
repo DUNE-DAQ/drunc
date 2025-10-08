@@ -44,6 +44,7 @@ from drunc.process_manager.interface.commands import (
     terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import boot
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -116,7 +117,18 @@ def unified_shell(
     else:
         internal_pm = False
 
-    # Set up process_manager logger
+    pm_type = get_pm_type_from_name(process_manager)
+    unified_shell_log.error(f"pm_type={pm_type.name}")
+
+    valid_name = validate_k8s_session_name(session_name)
+    unified_shell_log.error(f"valid_name={valid_name}")
+
+    # if internal_pm and get_pm_type_from_name(process_manager) == "k8s" and not validate_k8s_session_name(session_name):
+    #     unified_shell_log.error(
+    #         f'Invalid session/namespace name "{session_name}". Must match RFC1123 label: lowercase alphanumeric or \'-\', start/end with alphanumeric, max 63 chars.'
+    #     )
+    #     sys.exit(1)
+
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
