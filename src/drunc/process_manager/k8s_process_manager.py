@@ -138,6 +138,7 @@ class K8sProcessManager(ProcessManager):
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
+        self._host_cache_lock = threading.Lock()
 
         # Safely get settings from the configuration object
         settings = {}
@@ -263,13 +264,14 @@ class K8sProcessManager(ProcessManager):
 
     def _is_host_cached(self, host):
         """Check if host is cached and not expired."""
-        if host not in self._host_cache:
-            return None
-        is_valid, timestamp = self._host_cache[host]
-        if time() - timestamp > self._host_cache_expiry:
-            del self._host_cache[host]
-            return None
-        return is_valid
+        with self._host_cache_lock:
+            if host not in self._host_cache:
+                return None
+            is_valid, timestamp = self._host_cache[host]
+            if time() - timestamp > self._host_cache_expiry:
+                del self._host_cache[host]
+                return None
+            return is_valid
 
     def _verify_host_in_cluster(self, target_host):
         """Verifies that the target host is available in the Kubernetes cluster."""
@@ -284,20 +286,7 @@ class K8sProcessManager(ProcessManager):
                 )
 
         try:
-            nodes = self._core_v1_api.list_node()
-            target_node = next(
-                (node for node in nodes.items if node.metadata.name == target_host),
-                None,
-            )
-
-            if not target_node:
-                available_nodes = [node.metadata.name for node in nodes.items]
-                self._host_cache[target_host] = (False, time())
-                raise DruncK8sNodeException(
-                    f"Target host '{target_host}' is not part of the Kubernetes cluster. "
-                    f"Available nodes: {', '.join(available_nodes)}"
-                )
-
+            target_node = self._core_v1_api.read_node(name=target_host)
             # Check node is ready and schedulable
             is_ready = any(
                 c.type == "Ready" and c.status == "True"
@@ -306,16 +295,24 @@ class K8sProcessManager(ProcessManager):
             is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
 
             if not is_ready or not is_schedulable:
-                self._host_cache[target_host] = (False, time())
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
                 reason = "not ready" if not is_ready else "cordoned"
                 raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
 
-            self._host_cache[target_host] = (True, time())
+            with self._host_cache_lock:
+                self._host_cache[target_host] = (True, time())
             self.log.info(f"Host '{target_host}' verified and available")
             return True
 
         except self._api_error_v1_api as e:
-            if e.status in [401, 403]:
+            if e.status == 404:
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
+                raise DruncK8sNodeException(
+                    f"Target host '{target_host}' is not part of the Kubernetes cluster"
+                )
+            elif e.status in [401, 403]:
                 raise DruncK8sException(
                     f"Permission denied accessing cluster to verify '{target_host}': {e}"
                 )
