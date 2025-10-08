@@ -405,10 +405,6 @@ def test_manager_boot_and_kill_via_grpc(capsys, test_resources):
             f"Boot request failed: {boot_response.flag.message}"
         )
 
-        booted_process_uuid = (
-            boot_response.values[0].uuid.uuid if boot_response.values else None
-        )
-
         # Verify RootController is operational by connecting to it
         print("\n=== Verifying RootController is Operational ===")
         test_resources.root_channel = insecure_channel(

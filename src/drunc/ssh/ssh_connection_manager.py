@@ -1,9 +1,5 @@
 """
-SSH Connection Manager for Process Management
-
-Provides SSH connection management using paramiko for reliable cross-platform
-SSH execution. Each remote process receives its own dedicated SSH connection,
-ensuring proper process isolation and termination behaviour.
+Provides SSH connection management using paramiko
 """
 
 import logging
@@ -19,10 +15,8 @@ from druncschema.process_manager_pb2 import BootRequest
 class SSHConnectionManager:
     """
     SSH connection manager using paramiko for SSH execution.
-
-    Each remote process receives its own dedicated SSH connection, ensuring that
-    closing a connection terminates only that specific remote process via SIGHUP.
-    Supports process lifecycle management, output capture, and exit code tracking.
+    Supports process lifecycle management of processes started via
+    SSH, output capture, and exit code tracking.
     """
 
     def __init__(
@@ -98,6 +92,87 @@ class SSHConnectionManager:
         self.log.debug(f"SSH config identity files: {ssh_config.get('identityfile')}")
         return ssh_config
 
+    def _create_ssh_client(
+        self, hostname: str, user: str, enable_agent: bool = True
+    ) -> paramiko.SSHClient:
+        """
+        Create and connect an SSH client
+
+        Args:
+            hostname: Target hostname (may be alias from SSH config)
+            user: Default SSH username (overridden by SSH config if specified)
+            enable_agent: Whether to allow SSH agent and key lookups (default: True)
+
+        Returns:
+            Connected paramiko.SSHClient instance
+
+        Raises:
+            RuntimeError: If connection fails
+        """
+        client = paramiko.SSHClient()
+
+        try:
+            # Load SSH config for this host
+            ssh_config = self._load_ssh_config(hostname)
+
+            # Determine actual connection parameters from SSH config
+            actual_hostname = ssh_config.get("hostname", hostname)
+            actual_user = ssh_config.get("user", user)
+            port = int(ssh_config.get("port", 22))
+            identity_files = ssh_config.get("identityfile", None)
+
+            # Determine host key checking policy
+            # Special case: localhost connections may bypass host key checks
+            disable_host_key_check = self.disable_host_key_check or (
+                self.disable_localhost_host_key_check
+                and hostname in ("localhost", "127.0.0.1", "::1")
+            )
+
+            if disable_host_key_check:
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            else:
+                client.load_system_host_keys()
+                client.set_missing_host_key_policy(paramiko.RejectPolicy())
+
+            # Build connection parameters with common timeout values
+            connect_kwargs = {
+                "hostname": actual_hostname,
+                "username": actual_user,
+                "port": port,
+                "timeout": 10.0,
+                "banner_timeout": 10.0,
+            }
+
+            # Configure authentication methods based on caller requirements
+            if not enable_agent:
+                connect_kwargs["look_for_keys"] = False
+                connect_kwargs["allow_agent"] = False
+
+            # Add identity file from SSH config if present
+            if identity_files:
+                connect_kwargs["key_filename"] = identity_files
+                self.log.debug(
+                    f"Using identity files from SSH config: {identity_files}"
+                )
+            else:
+                self.log.warning(
+                    f"No identity files found in SSH config for {hostname}"
+                )
+
+            # Establish connection to remote host
+            self.log.debug(f"Connecting to {actual_user}@{actual_hostname}:{port}")
+            client.connect(**connect_kwargs)
+
+            return client
+
+        except Exception as e:
+            # Clean up client on connection failure
+            try:
+                client.close()
+            except Exception:
+                pass
+            raise RuntimeError(f"Failed to connect to {user}@{hostname}: {e}") from e
+
     def get_active_process_keys(self) -> List[str]:
         """Get list of active process UUIDs."""
         with self.global_lock:
@@ -114,10 +189,7 @@ class SSHConnectionManager:
         env_vars: Dict[str, str] = None,
     ) -> paramiko.Channel:
         """
-        Execute SSH command using paramiko.
-
-        Creates a dedicated SSH connection for this specific command, ensuring
-        that closing the connection terminates only this remote process.
+        Execute SSH command
 
         Args:
             uuid: Unique identifier for this process
@@ -135,55 +207,8 @@ class SSHConnectionManager:
             RuntimeError: If SSH connection or execution fails
         """
         try:
-            # Create SSH client with appropriate host key policy
-            client = paramiko.SSHClient()
-
-            # Load SSH config for this host
-            ssh_config = self._load_ssh_config(hostname)
-
-            # Determine actual connection parameters from SSH config
-            actual_hostname = ssh_config.get("hostname", hostname)
-            actual_user = ssh_config.get("user", user)
-            port = int(ssh_config.get("port", 22))
-            identity_files = ssh_config.get("identityfile", None)
-
-            # Determine host key checking policy
-            disable_host_key_check = self.disable_host_key_check or (
-                self.disable_localhost_host_key_check
-                and hostname in ("localhost", "127.0.0.1", "::1")
-            )
-
-            if disable_host_key_check:
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            else:
-                client.load_system_host_keys()
-                client.set_missing_host_key_policy(paramiko.RejectPolicy())
-
-            # Build connection parameters
-            connect_kwargs = {
-                "hostname": actual_hostname,
-                "username": actual_user,
-                "port": port,
-                "timeout": 10.0,
-                "banner_timeout": 10.0,
-            }
-
-            # Add identity file from SSH config if present
-            if identity_files:
-                connect_kwargs["key_filename"] = identity_files
-                self.log.debug(
-                    f"Using identity files from SSH config: {identity_files}"
-                )
-            else:
-                self.log.warning(
-                    f"No identity files found in SSH config for {hostname}"
-                )
-
-            # Connect to remote host
-            self.log.debug(
-                f"Connecting to {actual_user}@{actual_hostname}:{port} for process {uuid}"
-            )
-            client.connect(**connect_kwargs)
+            # Create and connect SSH client
+            client = self._create_ssh_client(hostname, user, enable_agent=True)
 
             # Build remote command with environment setup and output redirection
             remote_cmd = (
@@ -202,14 +227,13 @@ class SSHConnectionManager:
             # Add the actual command with output redirection
             remote_cmd += f"{{ {command} ; }} &> {log_file}"
 
-            # Execute command with PTY (matches -tt behaviour)
-            # PTY ensures remote process receives SIGHUP when connection closes
             transport = client.get_transport()
             channel = transport.open_session()
-            channel.get_pty()  # Allocate pseudo-terminal
+            # PTY ensures remote process receives SIGHUP when connection closes
+            channel.get_pty()
             channel.exec_command(remote_cmd)
 
-            # Store connection and channel
+            # Store connection and channel for lifecycle management
             with self.global_lock:
                 self.connections[uuid] = client
                 self.channels[uuid] = channel
@@ -218,7 +242,7 @@ class SSHConnectionManager:
                 self.stdout_buffers[uuid] = []
                 self.stderr_buffers[uuid] = []
 
-            # Start monitoring thread
+            # Start monitoring thread for output capture and exit detection
             self._start_process_watcher(uuid, channel)
 
             self.log.debug(f"SSH command started for {uuid}: {command}")
@@ -265,7 +289,7 @@ class SSHConnectionManager:
 
         return self.exit_codes[uuid]
 
-    def terminate_process(self, uuid: str, timeout: float = 5.0) -> None:
+    def terminate_process(self, uuid: str, timeout: float = 10.0) -> None:
         """
         Terminate SSH process by closing the connection.
 
@@ -457,7 +481,7 @@ class SSHConnectionManager:
 
             # Invoke callback with results
             if self.on_process_exit:
-                exit_code = self.exit_codes.get(uuid)
+                exit_code = self.exit_codes.pop(uuid, None)
                 try:
                     self.on_process_exit(uuid, exit_code, exception)
                 except Exception as callback_error:
@@ -491,61 +515,19 @@ class SSHConnectionManager:
         """
         client = None
         try:
-            # Create temporary SSH client
-            client = paramiko.SSHClient()
+            # Create temporary SSH client for log retrieval
+            # Disable agent/key lookup for simpler temporary connection
+            client = self._create_ssh_client(hostname, user, enable_agent=False)
 
-            # Load SSH config for this host
-            ssh_config = self._load_ssh_config(hostname)
-
-            # Determine actual connection parameters from SSH config
-            actual_hostname = ssh_config.get("hostname", hostname)
-            actual_user = ssh_config.get("user", user)
-            port = int(ssh_config.get("port", 22))
-            identity_files = ssh_config.get("identityfile", None)
-
-            # Determine host key checking policy
-            disable_host_key_check = self.disable_host_key_check or (
-                self.disable_localhost_host_key_check
-                and hostname in ("localhost", "127.0.0.1", "::1")
-            )
-
-            if disable_host_key_check:
-                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            else:
-                client.load_system_host_keys()
-                client.set_missing_host_key_policy(paramiko.RejectPolicy())
-
-            # Build connection parameters
-            connect_kwargs = {
-                "hostname": actual_hostname,
-                "username": actual_user,
-                "port": port,
-                "timeout": 10.0,
-                "look_for_keys": False,
-                "allow_agent": False,
-            }
-
-            if identity_files:
-                connect_kwargs["key_filename"] = identity_files
-                self.log.debug(
-                    f"Using identity files from SSH config: {identity_files}"
-                )
-            else:
-                self.log.warning(
-                    f"No identity files found in SSH config for {hostname}"
-                )
-
-            client.connect(**connect_kwargs)
-
-            # Execute tail command
+            # Execute tail command to retrieve last N lines
             stdin, stdout, stderr = client.exec_command(
                 f"tail -{num_lines} {log_file}", timeout=10.0
             )
 
-            # Read output
+            # Read output lines
             lines = stdout.readlines()
 
-            # Check for errors
+            # Check for errors during command execution
             error_output = stderr.read().decode("utf-8", errors="replace")
             if error_output:
                 self.log.warning(f"Error reading log file: {error_output}")
@@ -558,6 +540,7 @@ class SSHConnectionManager:
             return [f"Could not retrieve logs: {e!s}"]
 
         finally:
+            # Always close temporary connection
             if client:
                 try:
                     client.close()
