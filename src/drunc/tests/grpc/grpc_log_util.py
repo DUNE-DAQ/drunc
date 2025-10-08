@@ -16,7 +16,7 @@ def stderr_observer(log_file_name):
     os.close(w)
 
     def reader():
-        log_handle = open(log_file_name, "w", buffering=1)
+        log_handle = open(log_file_name, "a", buffering=1)
         with os.fdopen(r) as pipe:
             for line in pipe:
                 log_handle.write(f"{line.strip()}\n")

@@ -18,13 +18,7 @@ from typing import Generator, List, Optional
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
 
-from drunc.tests.ssh.available_grpc_servers import ServerType
-from drunc.tests.ssh.grpc_log_file_manager import LogFileManager
-from drunc.tests.ssh.grpc_server_manager import GrpcServerConfig, GrpcServerManager
-from drunc.tests.ssh.multiprocessing_connection_manager import (
-    MultiprocessingConnectionManager,
-)
-from drunc.tests.ssh.process_manager_pb2 import (
+from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
     KillRequest,
@@ -36,9 +30,15 @@ from drunc.tests.ssh.process_manager_pb2 import (
 )
 
 # Import gRPC generated code
-from drunc.tests.ssh.process_manager_pb2_grpc import (
+from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
+)
+from drunc.tests.ssh.available_grpc_servers import ServerType
+from drunc.tests.ssh.grpc_log_file_manager import LogFileManager
+from drunc.tests.ssh.grpc_server_manager import GrpcServerConfig, GrpcServerManager
+from drunc.tests.ssh.multiprocessing_connection_manager import (
+    MultiprocessingConnectionManager,
 )
 
 
@@ -341,7 +341,7 @@ def test_manager_boot_and_kill_via_grpc(capsys, test_resources):
         print(f"Manager communication successful: {test_response.reply}")
 
         # Send Boot request to start RootController via SSH
-        print("\n=== Sending Boot Request for RootController (druncschema-style) ===")
+        print("\n=== Sending Boot Request for RootController")
 
         # Create process UUID
         process_uuid = ProcessUUID(uuid=str(uuid.uuid4()))

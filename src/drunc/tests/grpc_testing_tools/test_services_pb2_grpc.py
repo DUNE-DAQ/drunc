@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import test_pb2 as test__pb2
+import drunc.tests.grpc_testing_tools.test_services_pb2 as test__services__pb2
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__
@@ -18,7 +18,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in test_pb2_grpc.py depends on'
+        + f' but the generated code in test_services_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
@@ -36,24 +36,24 @@ class ManagerServiceStub(object):
             channel: A grpc.Channel.
         """
         self.MakeRequest = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ManagerService/MakeRequest',
-                request_serializer=test__pb2.DummyRequest.SerializeToString,
-                response_deserializer=test__pb2.DummyResponse.FromString,
+                '/test_services.ManagerService/MakeRequest',
+                request_serializer=test__services__pb2.DummyRequest.SerializeToString,
+                response_deserializer=test__services__pb2.DummyResponse.FromString,
                 _registered_method=True)
-        self.ReceiveUpdate = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ManagerService/ReceiveUpdate',
-                request_serializer=test__pb2.UpdateRequest.SerializeToString,
-                response_deserializer=test__pb2.UpdateResponse.FromString,
-                _registered_method=True)
-        self.Boot = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ManagerService/Boot',
-                request_serializer=test__pb2.BootRequest.SerializeToString,
-                response_deserializer=test__pb2.BootResponse.FromString,
+        self.boot = channel.unary_unary(
+                '/test_services.ManagerService/boot',
+                request_serializer=test__services__pb2.BootRequest.SerializeToString,
+                response_deserializer=test__services__pb2.ProcessInstanceList.FromString,
                 _registered_method=True)
         self.Kill = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ManagerService/Kill',
-                request_serializer=test__pb2.KillRequest.SerializeToString,
-                response_deserializer=test__pb2.KillResponse.FromString,
+                '/test_services.ManagerService/Kill',
+                request_serializer=test__services__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__services__pb2.KillResponse.FromString,
+                _registered_method=True)
+        self.ReceiveUpdate = channel.unary_unary(
+                '/test_services.ManagerService/ReceiveUpdate',
+                request_serializer=test__services__pb2.UpdateRequest.SerializeToString,
+                response_deserializer=test__services__pb2.UpdateResponse.FromString,
                 _registered_method=True)
 
 
@@ -68,15 +68,8 @@ class ManagerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReceiveUpdate(self, request, context):
-        """Method for receiving updates from RootController
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Boot(self, request, context):
-        """boot other processes via the manager
+    def boot(self, request, context):
+        """Boot other processes via the manager 
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -89,34 +82,41 @@ class ManagerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def ReceiveUpdate(self, request, context):
+        """Method for receiving updates from RootController
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ManagerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'MakeRequest': grpc.unary_unary_rpc_method_handler(
                     servicer.MakeRequest,
-                    request_deserializer=test__pb2.DummyRequest.FromString,
-                    response_serializer=test__pb2.DummyResponse.SerializeToString,
+                    request_deserializer=test__services__pb2.DummyRequest.FromString,
+                    response_serializer=test__services__pb2.DummyResponse.SerializeToString,
             ),
-            'ReceiveUpdate': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReceiveUpdate,
-                    request_deserializer=test__pb2.UpdateRequest.FromString,
-                    response_serializer=test__pb2.UpdateResponse.SerializeToString,
-            ),
-            'Boot': grpc.unary_unary_rpc_method_handler(
-                    servicer.Boot,
-                    request_deserializer=test__pb2.BootRequest.FromString,
-                    response_serializer=test__pb2.BootResponse.SerializeToString,
+            'boot': grpc.unary_unary_rpc_method_handler(
+                    servicer.boot,
+                    request_deserializer=test__services__pb2.BootRequest.FromString,
+                    response_serializer=test__services__pb2.ProcessInstanceList.SerializeToString,
             ),
             'Kill': grpc.unary_unary_rpc_method_handler(
                     servicer.Kill,
-                    request_deserializer=test__pb2.KillRequest.FromString,
-                    response_serializer=test__pb2.KillResponse.SerializeToString,
+                    request_deserializer=test__services__pb2.KillRequest.FromString,
+                    response_serializer=test__services__pb2.KillResponse.SerializeToString,
+            ),
+            'ReceiveUpdate': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReceiveUpdate,
+                    request_deserializer=test__services__pb2.UpdateRequest.FromString,
+                    response_serializer=test__services__pb2.UpdateResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'drunc.tests.grpc_tree.ManagerService', rpc_method_handlers)
+            'test_services.ManagerService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('drunc.tests.grpc_tree.ManagerService', rpc_method_handlers)
+    server.add_registered_method_handlers('test_services.ManagerService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -138,9 +138,63 @@ class ManagerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ManagerService/MakeRequest',
-            test__pb2.DummyRequest.SerializeToString,
-            test__pb2.DummyResponse.FromString,
+            '/test_services.ManagerService/MakeRequest',
+            test__services__pb2.DummyRequest.SerializeToString,
+            test__services__pb2.DummyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def boot(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/test_services.ManagerService/boot',
+            test__services__pb2.BootRequest.SerializeToString,
+            test__services__pb2.ProcessInstanceList.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Kill(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/test_services.ManagerService/Kill',
+            test__services__pb2.KillRequest.SerializeToString,
+            test__services__pb2.KillResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -165,9 +219,9 @@ class ManagerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ManagerService/ReceiveUpdate',
-            test__pb2.UpdateRequest.SerializeToString,
-            test__pb2.UpdateResponse.FromString,
+            '/test_services.ManagerService/ReceiveUpdate',
+            test__services__pb2.UpdateRequest.SerializeToString,
+            test__services__pb2.UpdateResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -178,8 +232,108 @@ class ManagerService(object):
             metadata,
             _registered_method=True)
 
+
+class RootControllerServiceStub(object):
+    """Service for RootController component (for testing connectivity to booted servers)
+    """
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.MakeRequest = channel.unary_unary(
+                '/test_services.RootControllerService/MakeRequest',
+                request_serializer=test__services__pb2.DummyRequest.SerializeToString,
+                response_deserializer=test__services__pb2.DummyResponse.FromString,
+                _registered_method=True)
+        self.Kill = channel.unary_unary(
+                '/test_services.RootControllerService/Kill',
+                request_serializer=test__services__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__services__pb2.KillResponse.FromString,
+                _registered_method=True)
+        self.ReceiveCommand = channel.unary_unary(
+                '/test_services.RootControllerService/ReceiveCommand',
+                request_serializer=test__services__pb2.CommandRequest.SerializeToString,
+                response_deserializer=test__services__pb2.CommandResponse.FromString,
+                _registered_method=True)
+        self.ReceiveStatus = channel.unary_unary(
+                '/test_services.RootControllerService/ReceiveStatus',
+                request_serializer=test__services__pb2.StatusRequest.SerializeToString,
+                response_deserializer=test__services__pb2.StatusResponse.FromString,
+                _registered_method=True)
+
+
+class RootControllerServiceServicer(object):
+    """Service for RootController component (for testing connectivity to booted servers)
+    """
+
+    def MakeRequest(self, request, context):
+        """Basic method for connectivity testing
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Kill(self, request, context):
+        """Method for graceful shutdown
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReceiveCommand(self, request, context):
+        """Method for receiving commands from Manager
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReceiveStatus(self, request, context):
+        """Method for receiving status from ChildControllers
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_RootControllerServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'MakeRequest': grpc.unary_unary_rpc_method_handler(
+                    servicer.MakeRequest,
+                    request_deserializer=test__services__pb2.DummyRequest.FromString,
+                    response_serializer=test__services__pb2.DummyResponse.SerializeToString,
+            ),
+            'Kill': grpc.unary_unary_rpc_method_handler(
+                    servicer.Kill,
+                    request_deserializer=test__services__pb2.KillRequest.FromString,
+                    response_serializer=test__services__pb2.KillResponse.SerializeToString,
+            ),
+            'ReceiveCommand': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReceiveCommand,
+                    request_deserializer=test__services__pb2.CommandRequest.FromString,
+                    response_serializer=test__services__pb2.CommandResponse.SerializeToString,
+            ),
+            'ReceiveStatus': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReceiveStatus,
+                    request_deserializer=test__services__pb2.StatusRequest.FromString,
+                    response_serializer=test__services__pb2.StatusResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'test_services.RootControllerService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('test_services.RootControllerService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class RootControllerService(object):
+    """Service for RootController component (for testing connectivity to booted servers)
+    """
+
     @staticmethod
-    def Boot(request,
+    def MakeRequest(request,
             target,
             options=(),
             channel_credentials=None,
@@ -192,9 +346,9 @@ class ManagerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ManagerService/Boot',
-            test__pb2.BootRequest.SerializeToString,
-            test__pb2.BootResponse.FromString,
+            '/test_services.RootControllerService/MakeRequest',
+            test__services__pb2.DummyRequest.SerializeToString,
+            test__services__pb2.DummyResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -219,136 +373,9 @@ class ManagerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ManagerService/Kill',
-            test__pb2.KillRequest.SerializeToString,
-            test__pb2.KillResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-
-class RootControllerServiceStub(object):
-    """Service for RootController component  
-    """
-
-    def __init__(self, channel):
-        """Constructor.
-
-        Args:
-            channel: A grpc.Channel.
-        """
-        self.MakeRequest = channel.unary_unary(
-                '/drunc.tests.grpc_tree.RootControllerService/MakeRequest',
-                request_serializer=test__pb2.DummyRequest.SerializeToString,
-                response_deserializer=test__pb2.DummyResponse.FromString,
-                _registered_method=True)
-        self.ReceiveCommand = channel.unary_unary(
-                '/drunc.tests.grpc_tree.RootControllerService/ReceiveCommand',
-                request_serializer=test__pb2.CommandRequest.SerializeToString,
-                response_deserializer=test__pb2.CommandResponse.FromString,
-                _registered_method=True)
-        self.ReceiveStatus = channel.unary_unary(
-                '/drunc.tests.grpc_tree.RootControllerService/ReceiveStatus',
-                request_serializer=test__pb2.StatusRequest.SerializeToString,
-                response_deserializer=test__pb2.StatusResponse.FromString,
-                _registered_method=True)
-        self.Kill = channel.unary_unary(
-                '/drunc.tests.grpc_tree.RootControllerService/Kill',
-                request_serializer=test__pb2.KillRequest.SerializeToString,
-                response_deserializer=test__pb2.KillResponse.FromString,
-                _registered_method=True)
-
-
-class RootControllerServiceServicer(object):
-    """Service for RootController component  
-    """
-
-    def MakeRequest(self, request, context):
-        """Basic method for connectivity testing
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ReceiveCommand(self, request, context):
-        """Method for receiving commands from Manager
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ReceiveStatus(self, request, context):
-        """Method for receiving status from ChildControllers
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Kill(self, request, context):
-        """Method for graceful shutdown of the RootController service
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-
-def add_RootControllerServiceServicer_to_server(servicer, server):
-    rpc_method_handlers = {
-            'MakeRequest': grpc.unary_unary_rpc_method_handler(
-                    servicer.MakeRequest,
-                    request_deserializer=test__pb2.DummyRequest.FromString,
-                    response_serializer=test__pb2.DummyResponse.SerializeToString,
-            ),
-            'ReceiveCommand': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReceiveCommand,
-                    request_deserializer=test__pb2.CommandRequest.FromString,
-                    response_serializer=test__pb2.CommandResponse.SerializeToString,
-            ),
-            'ReceiveStatus': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReceiveStatus,
-                    request_deserializer=test__pb2.StatusRequest.FromString,
-                    response_serializer=test__pb2.StatusResponse.SerializeToString,
-            ),
-            'Kill': grpc.unary_unary_rpc_method_handler(
-                    servicer.Kill,
-                    request_deserializer=test__pb2.KillRequest.FromString,
-                    response_serializer=test__pb2.KillResponse.SerializeToString,
-            ),
-    }
-    generic_handler = grpc.method_handlers_generic_handler(
-            'drunc.tests.grpc_tree.RootControllerService', rpc_method_handlers)
-    server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('drunc.tests.grpc_tree.RootControllerService', rpc_method_handlers)
-
-
- # This class is part of an EXPERIMENTAL API.
-class RootControllerService(object):
-    """Service for RootController component  
-    """
-
-    @staticmethod
-    def MakeRequest(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/drunc.tests.grpc_tree.RootControllerService/MakeRequest',
-            test__pb2.DummyRequest.SerializeToString,
-            test__pb2.DummyResponse.FromString,
+            '/test_services.RootControllerService/Kill',
+            test__services__pb2.KillRequest.SerializeToString,
+            test__services__pb2.KillResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -373,9 +400,9 @@ class RootControllerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.RootControllerService/ReceiveCommand',
-            test__pb2.CommandRequest.SerializeToString,
-            test__pb2.CommandResponse.FromString,
+            '/test_services.RootControllerService/ReceiveCommand',
+            test__services__pb2.CommandRequest.SerializeToString,
+            test__services__pb2.CommandResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -400,36 +427,9 @@ class RootControllerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.RootControllerService/ReceiveStatus',
-            test__pb2.StatusRequest.SerializeToString,
-            test__pb2.StatusResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def Kill(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/drunc.tests.grpc_tree.RootControllerService/Kill',
-            test__pb2.KillRequest.SerializeToString,
-            test__pb2.KillResponse.FromString,
+            '/test_services.RootControllerService/ReceiveStatus',
+            test__services__pb2.StatusRequest.SerializeToString,
+            test__services__pb2.StatusResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -452,19 +452,14 @@ class ChildControllerServiceStub(object):
             channel: A grpc.Channel.
         """
         self.MakeRequest = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ChildControllerService/MakeRequest',
-                request_serializer=test__pb2.DummyRequest.SerializeToString,
-                response_deserializer=test__pb2.DummyResponse.FromString,
-                _registered_method=True)
-        self.ReceiveInstruction = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ChildControllerService/ReceiveInstruction',
-                request_serializer=test__pb2.InstructionRequest.SerializeToString,
-                response_deserializer=test__pb2.InstructionResponse.FromString,
+                '/test_services.ChildControllerService/MakeRequest',
+                request_serializer=test__services__pb2.DummyRequest.SerializeToString,
+                response_deserializer=test__services__pb2.DummyResponse.FromString,
                 _registered_method=True)
         self.Kill = channel.unary_unary(
-                '/drunc.tests.grpc_tree.ChildControllerService/Kill',
-                request_serializer=test__pb2.KillRequest.SerializeToString,
-                response_deserializer=test__pb2.KillResponse.FromString,
+                '/test_services.ChildControllerService/Kill',
+                request_serializer=test__services__pb2.KillRequest.SerializeToString,
+                response_deserializer=test__services__pb2.KillResponse.FromString,
                 _registered_method=True)
 
 
@@ -474,13 +469,6 @@ class ChildControllerServiceServicer(object):
 
     def MakeRequest(self, request, context):
         """Basic method for connectivity testing
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def ReceiveInstruction(self, request, context):
-        """Method for receiving instructions from RootController
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -498,24 +486,19 @@ def add_ChildControllerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'MakeRequest': grpc.unary_unary_rpc_method_handler(
                     servicer.MakeRequest,
-                    request_deserializer=test__pb2.DummyRequest.FromString,
-                    response_serializer=test__pb2.DummyResponse.SerializeToString,
-            ),
-            'ReceiveInstruction': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReceiveInstruction,
-                    request_deserializer=test__pb2.InstructionRequest.FromString,
-                    response_serializer=test__pb2.InstructionResponse.SerializeToString,
+                    request_deserializer=test__services__pb2.DummyRequest.FromString,
+                    response_serializer=test__services__pb2.DummyResponse.SerializeToString,
             ),
             'Kill': grpc.unary_unary_rpc_method_handler(
                     servicer.Kill,
-                    request_deserializer=test__pb2.KillRequest.FromString,
-                    response_serializer=test__pb2.KillResponse.SerializeToString,
+                    request_deserializer=test__services__pb2.KillRequest.FromString,
+                    response_serializer=test__services__pb2.KillResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'drunc.tests.grpc_tree.ChildControllerService', rpc_method_handlers)
+            'test_services.ChildControllerService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('drunc.tests.grpc_tree.ChildControllerService', rpc_method_handlers)
+    server.add_registered_method_handlers('test_services.ChildControllerService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -537,36 +520,9 @@ class ChildControllerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ChildControllerService/MakeRequest',
-            test__pb2.DummyRequest.SerializeToString,
-            test__pb2.DummyResponse.FromString,
-            options,
-            channel_credentials,
-            insecure,
-            call_credentials,
-            compression,
-            wait_for_ready,
-            timeout,
-            metadata,
-            _registered_method=True)
-
-    @staticmethod
-    def ReceiveInstruction(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(
-            request,
-            target,
-            '/drunc.tests.grpc_tree.ChildControllerService/ReceiveInstruction',
-            test__pb2.InstructionRequest.SerializeToString,
-            test__pb2.InstructionResponse.FromString,
+            '/test_services.ChildControllerService/MakeRequest',
+            test__services__pb2.DummyRequest.SerializeToString,
+            test__services__pb2.DummyResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -591,9 +547,9 @@ class ChildControllerService(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/drunc.tests.grpc_tree.ChildControllerService/Kill',
-            test__pb2.KillRequest.SerializeToString,
-            test__pb2.KillResponse.FromString,
+            '/test_services.ChildControllerService/Kill',
+            test__services__pb2.KillRequest.SerializeToString,
+            test__services__pb2.KillResponse.FromString,
             options,
             channel_credentials,
             insecure,

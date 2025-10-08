@@ -99,10 +99,10 @@ def run_process_manager_server(
     stop_event=None,
 ) -> None:
     """Run Manager server process with output logging."""
-    from drunc.tests.ssh.process_manager import ManagerServiceImpl
-    from drunc.tests.ssh.process_manager_pb2_grpc import (
+    from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
         add_ManagerServiceServicer_to_server,
     )
+    from drunc.tests.ssh.process_manager import ManagerServiceImpl
 
     run_grpc_server(
         server_name="Manager",
@@ -129,7 +129,7 @@ def run_root_controller_server(
     stop_event=None,
 ) -> None:
     """Run RootController server with Manager client connection."""
-    from drunc.tests.ssh.process_manager_pb2_grpc import (
+    from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
         add_RootControllerServiceServicer_to_server,
     )
     from drunc.tests.ssh.root_controller import RootControllerServiceImpl

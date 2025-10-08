@@ -10,12 +10,14 @@ import os
 import signal
 import threading
 
-from drunc.tests.ssh.process_manager_pb2 import (
+from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     DummyResponse,
     KillRequest,
     KillResponse,
 )
-from drunc.tests.ssh.process_manager_pb2_grpc import RootControllerServiceServicer
+from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
+    RootControllerServiceServicer,
+)
 
 
 class RootControllerServiceImpl(RootControllerServiceServicer):

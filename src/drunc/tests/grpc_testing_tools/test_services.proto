@@ -1,69 +1,34 @@
 syntax = "proto3";
-package drunc.tests.grpc_tree;
+package test_services;
 
 // Service for Manager component
 service ManagerService {
     // Basic method for connectivity testing
     rpc MakeRequest(DummyRequest) returns (DummyResponse);
     
-    // Method for receiving updates from RootController
-    rpc ReceiveUpdate(UpdateRequest) returns (UpdateResponse);
+    // Boot other processes via the manager 
+    rpc boot(BootRequest) returns (ProcessInstanceList);
     
-    // boot other processes via the manager
-    rpc Boot(BootRequest) returns (BootResponse);
-
     // Method for graceful shutdown of the Manager service
     rpc Kill(KillRequest) returns (KillResponse);
+    
+    // Method for receiving updates from RootController
+    rpc ReceiveUpdate(UpdateRequest) returns (UpdateResponse);
 }
 
-message BootRequest {
-    // Unique identifier for this booted process
-    string process_id = 1;
-    
-    // Type of server to boot
-    string server_type = 2;
-    
-    // Server configuration
-    int32 port = 3;
-    int32 max_workers = 4;
-    string log_file = 5;
-    
-    // SSH connection details
-    string env_setup_script = 6;
-    string host = 7;
-    string user = 8;
-    
-    // Optional server-specific parameters
-    map<string, string> extra_params = 9;
-}
-
-message BootResponse {
-    // Indicates if the boot request was successful
-    bool success = 1;
-    
-    // Process ID of the booted server
-    string process_id = 2;
-    
-    // Message describing the boot status or error
-    string message = 3;
-    
-    // Port the server is running on
-    int32 port = 4;
-}
-
-// Service for RootController component  
+// Service for RootController component (for testing connectivity to booted servers)
 service RootControllerService {
     // Basic method for connectivity testing
     rpc MakeRequest(DummyRequest) returns (DummyResponse);
+    
+    // Method for graceful shutdown
+    rpc Kill(KillRequest) returns (KillResponse);
     
     // Method for receiving commands from Manager
     rpc ReceiveCommand(CommandRequest) returns (CommandResponse);
     
     // Method for receiving status from ChildControllers
     rpc ReceiveStatus(StatusRequest) returns (StatusResponse);
-    
-    // Method for graceful shutdown of the RootController service
-    rpc Kill(KillRequest) returns (KillResponse);
 }
 
 // Service for ChildController components
@@ -71,14 +36,11 @@ service ChildControllerService {
     // Basic method for connectivity testing
     rpc MakeRequest(DummyRequest) returns (DummyResponse);
     
-    // Method for receiving instructions from RootController
-    rpc ReceiveInstruction(InstructionRequest) returns (InstructionResponse);
-    
     // Method for graceful shutdown of the ChildController service
     rpc Kill(KillRequest) returns (KillResponse);
 }
 
-// Basic request/response for keepalive testing
+// Basic request/response for connectivity testing
 message DummyRequest {
     string message = 1;
     int64 timestamp = 2;
@@ -87,6 +49,86 @@ message DummyRequest {
 message DummyResponse {
     string reply = 1;
     int64 timestamp = 2;
+}
+
+// Token message 
+message Token {
+    string token = 1;
+}
+
+// Response flag 
+message ResponseFlag {
+    bool success = 1;
+    string message = 2;
+}
+
+// Process UUID 
+message ProcessUUID {
+    string uuid = 1;
+}
+
+// Process metadata 
+message ProcessMetadata {
+    ProcessUUID uuid = 1;
+    string user = 2;
+    optional string session = 3;
+    string name = 4;
+    string hostname = 5;
+    optional string tree_id = 6;
+}
+
+// Process restriction 
+message ProcessRestriction {
+    repeated string allowed_hosts = 1;
+    repeated string allowed_host_types = 2;
+}
+
+// Process description 
+message ProcessDescription {
+    message StringList {
+        repeated string values = 1;
+    }
+    
+    message ExecAndArgs {
+        string exec = 1;
+        repeated string args = 2;
+    }
+    
+    ProcessMetadata metadata = 1;
+    map<string,string> env = 2;
+    repeated ExecAndArgs executable_and_arguments = 3;
+    string process_execution_directory = 4;
+    string process_logs_path = 5;
+}
+
+// Process instance 
+message ProcessInstance {
+    ProcessDescription process_description = 1;
+    ProcessRestriction process_restriction = 2;
+    
+    enum StatusCode {
+        RUNNING = 0;
+        DEAD = 1;
+    }
+    
+    StatusCode status_code = 3;
+    int32 return_code = 4;
+    ProcessUUID uuid = 5;
+}
+
+// Process instance list 
+message ProcessInstanceList {
+    string name = 1;
+    Token token = 2;
+    repeated ProcessInstance values = 3;
+    ResponseFlag flag = 4;
+}
+
+// Boot request 
+message BootRequest {
+    Token token = 1;
+    ProcessDescription process_description = 2;
+    ProcessRestriction process_restriction = 3;
 }
 
 // Manager-RootController communication messages
@@ -125,19 +167,7 @@ message StatusResponse {
     string acknowledgement = 2;
 }
 
-message InstructionRequest {
-    string instruction_type = 1;
-    string payload = 2;
-    int32 priority = 3;
-}
-
-message InstructionResponse {
-    bool understood = 1;
-    string execution_status = 2;
-    int64 estimated_completion_time = 3;
-}
-
-// Shutdown/kill functionality messages
+// Shutdown/kill functionality messages (custom for test simplicity)
 message KillRequest {
     // Reason for shutdown (for logging purposes)
     string reason = 1;

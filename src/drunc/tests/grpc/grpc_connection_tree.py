@@ -14,10 +14,13 @@ from drunc.tests.grpc.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
+from drunc.tests.grpc.multiprocessing_connection_manager import (
+    MultiprocessingConnectionManager,
+)
 
 # Import generated gRPC code
-from drunc.tests.grpc.test_pb2 import DummyRequest
-from drunc.tests.grpc.test_pb2_grpc import (
+from drunc.tests.grpc_testing_tools.test_services_pb2 import DummyRequest
+from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceStub,
     ManagerServiceStub,
     RootControllerServiceStub,
@@ -171,10 +174,6 @@ class ProcessManagerClient:
 class GrpcProcessTreeManager:
     """
     Context manager for multi-process gRPC tree lifecycle management using server manager abstraction.
-
-    This updated implementation separates server management from process execution,
-    enabling robust SSH support and cleaner architecture. Server lifecycle is now
-    managed through pluggable GrpcServerManager implementations.
     """
 
     def __init__(
@@ -516,139 +515,9 @@ class GrpcProcessTreeManager:
         """
         Factory method to create GrpcProcessTreeManager with multiprocessing server manager.
         """
-        from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
-        from drunc.tests.grpc.multiprocessing_connection_manager import (
-            MultiprocessingConnectionManager,
-        )
 
         connection_manager = MultiprocessingConnectionManager(env_vars=env_vars)
         server_manager = GrpcServerManager(connection_manager)
-
-        return cls(
-            server_manager=server_manager,
-            number_of_children=number_of_children,
-            manager_max_workers=manager_max_workers,
-            controller_max_workers=controller_max_workers,
-            **kwargs,
-        )
-
-    @classmethod
-    def create_with_ssh(
-        cls,
-        number_of_children: int,
-        manager_max_workers: int,
-        controller_max_workers: int,
-        env_setup_script: str,
-        hosts: List[str],
-        manager_port: int = BASE_MANAGER_PORT,
-        root_port: int = BASE_ROOT_PORT,
-        child_base_port: int = BASE_CHILD_PORT,
-        default_user: str = None,
-        env_vars: Dict[str, str] = None,
-        disable_host_key_check: bool = False,
-        ssh_options: List[str] = None,
-        log_directory: str = None,
-        python_executable: str = "python3",
-        working_directory: str = None,
-        **kwargs,
-    ) -> "GrpcProcessTreeManager":
-        """
-        Factory method to create GrpcProcessTreeManager with SSH server manager.
-
-        Args:
-            number_of_children: Number of child controllers to create
-            manager_max_workers: Maximum worker threads for Manager server
-            controller_max_workers: Maximum worker threads for Controller servers
-            env_setup_script: Path to shell script that sets up the Python environment
-            hosts: List of hosts available for SSH execution
-            manager_port: Port for Manager server
-            root_port: Port for RootController server
-            child_base_port: Base port for ChildController servers
-            default_user: Default SSH username
-            env_vars: Environment variables to export on remote hosts
-            disable_host_key_check: Disable SSH host key verification
-            ssh_options: Additional SSH options
-            log_directory: Directory for remote process logs
-            python_executable: Python interpreter to use on remote hosts
-            working_directory: Working directory for remote processes
-            **kwargs: Additional arguments for GrpcProcessTreeManager
-
-        Returns:
-            GrpcProcessTreeManager configured with SSH
-        """
-
-        from drunc.tests.grpc.grpc_log_file_manager import LogFileManager
-        from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
-        from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
-        from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-
-        # Create temporary log manager for boot command log files
-        temp_log_manager = LogFileManager()
-
-        # Create command builder with all necessary parameters
-        command_builder = RemoteCLICommandBuilder(
-            env_setup_script=env_setup_script,
-            python_executable=python_executable,
-            working_directory=working_directory,
-            default_user=default_user,
-            hosts=hosts,
-            disable_host_key_check=disable_host_key_check,
-            ssh_options=ssh_options,
-            env_vars=env_vars,
-        )
-
-        # Calculate child ports
-        child_ports = [child_base_port + i for i in range(number_of_children)]
-
-        # Build all boot commands upfront with specific server IDs
-        boot_commands = {}
-
-        # Manager boot command
-        boot_commands["ManagerServer"] = command_builder.build_manager_server_command(
-            server_id="ManagerServer",
-            port=manager_port,
-            max_workers=manager_max_workers,
-            log_file=temp_log_manager.create_log_file("ManagerServer"),
-            host_index=0,
-        )
-
-        # RootController boot command
-        boot_commands["RootControllerServer"] = (
-            command_builder.build_root_controller_server_command(
-                server_id="RootControllerServer",
-                port=root_port,
-                max_workers=controller_max_workers,
-                log_file=temp_log_manager.create_log_file("RootControllerServer"),
-                manager_port=manager_port,
-                host_index=1,
-            )
-        )
-
-        # ChildController boot commands
-        for i in range(number_of_children):
-            child_server_id = f"ChildServer{i + 1}"
-            child_name = f"ChildController{i + 1}"
-
-            boot_commands[child_server_id] = (
-                command_builder.build_child_controller_server_command(
-                    server_id=child_server_id,
-                    port=child_ports[i],
-                    max_workers=controller_max_workers,
-                    log_file=temp_log_manager.create_log_file(child_server_id),
-                    root_port=root_port,
-                    child_name=child_name,
-                    host_index=i + 2,
-                )
-            )
-
-        connection_manager = SSHConnectionManager(
-            boot_commands=boot_commands, log_directory=log_directory
-        )
-
-        server_manager = GrpcServerManager(connection_manager=connection_manager)
-
-        # Clean up temporary log manager
-        temp_log_manager.cleanup()
 
         return cls(
             server_manager=server_manager,

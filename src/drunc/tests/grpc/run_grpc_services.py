@@ -100,7 +100,9 @@ def run_process_manager_server(
 ) -> None:
     """Run Manager server process with output logging."""
     from drunc.tests.grpc.process_manager import ManagerServiceImpl
-    from drunc.tests.grpc.test_pb2_grpc import add_ManagerServiceServicer_to_server
+    from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
+        add_ManagerServiceServicer_to_server,
+    )
 
     run_grpc_server(
         server_name="Manager",
@@ -128,7 +130,7 @@ def run_root_controller_server(
 ) -> None:
     """Run RootController server with Manager client connection."""
     from drunc.tests.grpc.root_controller import RootControllerServiceImpl
-    from drunc.tests.grpc.test_pb2_grpc import (
+    from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
         add_RootControllerServiceServicer_to_server,
     )
 
@@ -163,7 +165,7 @@ def run_child_controller_server(
 ) -> None:
     """Run ChildController server with RootController client connection."""
     from drunc.tests.grpc.child_controller import ChildControllerServiceImpl
-    from drunc.tests.grpc.test_pb2_grpc import (
+    from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
         add_ChildControllerServiceServicer_to_server,
     )
 

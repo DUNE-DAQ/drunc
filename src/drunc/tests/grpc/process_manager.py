@@ -15,18 +15,15 @@ from typing import Dict
 from grpc import RpcError, StatusCode, insecure_channel
 
 from drunc.tests.grpc.available_grpc_servers import ServerType
-from drunc.tests.grpc.grpc_server_config import GrpcServerConfig
-from drunc.tests.grpc.grpc_server_manager import GrpcServerManager
-from drunc.tests.grpc.remote_cli_command_builder import RemoteCLICommandBuilder
-from drunc.tests.grpc.ssh_connection_manager import SSHConnectionManager
-from drunc.tests.grpc.test_pb2 import (
+from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
-    BootResponse,
     DummyResponse,
     KillRequest,
     KillResponse,
+    ProcessInstanceList,
+    ResponseFlag,
 )
-from drunc.tests.grpc.test_pb2_grpc import (
+from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceStub,
     ManagerServiceServicer,
     ManagerServiceStub,
@@ -62,7 +59,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
         """
         return DummyResponse(reply=f"Manager server response: {request.message}")
 
-    def Boot(self, request: BootRequest, context) -> BootResponse:
+    def Boot(self, request: BootRequest, context) -> ProcessInstanceList:
         """
         Boot a new gRPC server process via SSH.
 
@@ -76,130 +73,16 @@ class ManagerServiceImpl(ManagerServiceServicer):
         Returns:
             BootResponse indicating success/failure and providing server details
         """
-        with self.boot_lock:
-            # Validate process_id is unique
-            if request.process_id in self.booted_servers:
-                return BootResponse(
-                    success=False,
-                    process_id=request.process_id,
-                    message=f"Process ID '{request.process_id}' already exists",
-                    port=0,
-                )
 
-            try:
-                # Validate server type
-                try:
-                    server_type = ServerType[request.server_type.upper()]
-                except KeyError:
-                    return BootResponse(
-                        success=False,
-                        process_id=request.process_id,
-                        message=f"Invalid server type: {request.server_type}",
-                        port=0,
-                    )
-
-                # Create command builder with SSH configuration
-                command_builder = RemoteCLICommandBuilder(
-                    env_setup_script=request.env_setup_script,
-                    python_executable="python3",
-                    working_directory=None,
-                    default_user=request.user,
-                    hosts=[request.host],
-                    disable_host_key_check=True,
-                    ssh_options=[],
-                    env_vars={"GRPC_TRACE": "http"},
-                )
-
-                # Create server configuration
-                server_config = GrpcServerConfig(
-                    server_id=request.process_id,
-                    server_type=server_type,
-                    host=request.host,
-                    port=request.port,
-                    max_workers=request.max_workers,
-                    log_file=request.log_file,
-                    server_options=[],
-                    client_options=[],
-                    **dict(request.extra_params),
-                )
-
-                # Create SSH connection manager
-                ssh_connection_manager = SSHConnectionManager(
-                    command_builder=command_builder,
-                    boot_command_configs={request.process_id: server_config},
-                    log_directory=None,
-                )
-
-                # Create SSH server manager
-                ssh_server_manager = GrpcServerManager(
-                    connection_manager=ssh_connection_manager
-                )
-
-                # Start the server based on type
-                if server_type == ServerType.MANAGER:
-                    server_handle = ssh_server_manager.start_manager_server(
-                        server_config
-                    )
-                elif server_type == ServerType.ROOT_CONTROLLER:
-                    server_handle = ssh_server_manager.start_root_controller_server(
-                        server_config
-                    )
-                elif server_type == ServerType.CHILD_CONTROLLER:
-                    server_handle = ssh_server_manager.start_child_controller_server(
-                        server_config
-                    )
-                else:
-                    return BootResponse(
-                        success=False,
-                        process_id=request.process_id,
-                        message=f"Unsupported server type: {server_type}",
-                        port=0,
-                    )
-
-                # Wait for server to be ready with timeout
-                ready = ssh_server_manager.wait_for_server_ready(
-                    request.process_id, timeout=30.0
-                )
-
-                if not ready:
-                    # Cleanup failed server
-                    ssh_server_manager.cleanup()
-                    startup_error = ssh_connection_manager.get_process_startup_error(
-                        server_handle
-                    )
-                    error_msg = f"Server failed to become ready: {startup_error or 'Unknown error'}"
-                    return BootResponse(
-                        success=False,
-                        process_id=request.process_id,
-                        message=error_msg,
-                        port=0,
-                    )
-
-                # Store server management objects for lifecycle control
-                self.booted_servers[request.process_id] = {
-                    "server_id": request.process_id,
-                    "server_handle": server_handle,
-                    "connection_manager": ssh_connection_manager,
-                    "server_manager": ssh_server_manager,
-                    "server_type": server_type,
-                    "port": request.port,
-                    "host": request.host,
-                }
-
-                return BootResponse(
-                    success=True,
-                    process_id=request.process_id,
-                    message=f"Successfully booted {server_type.name} on {request.host}:{request.port}",
-                    port=request.port,
-                )
-
-            except Exception as e:
-                return BootResponse(
-                    success=False,
-                    process_id=request.process_id,
-                    message=f"Boot failed: {str(e)}",
-                    port=0,
-                )
+        return ProcessInstanceList(
+            name="",
+            token=request.token,
+            values=[],
+            flag=ResponseFlag(
+                success=False,
+                message="",
+            ),
+        )
 
     def _kill_booted_server_via_grpc(
         self,
