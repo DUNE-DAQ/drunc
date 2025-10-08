@@ -9,6 +9,10 @@ from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, Proce
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
+from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
+    get_process_manager_configuration,
+)
 from drunc.utils.utils import now_str
 
 
@@ -234,3 +238,17 @@ def validate_k8s_session_name(session: str) -> bool:
     if not session_re.match(session):
         return False
     return True
+
+
+def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
+    """
+    Get the ProcessManagerTypes enum value from a string name.
+
+    Args:
+        pm_name (str): The name of the process manager type (e.g., "SSH", "K8s").
+
+    Returns:
+        ProcessManagerTypes: The corresponding enum value.
+    """
+    pm_conf_file = get_process_manager_configuration(pm_name)
+    return pm_conf_file

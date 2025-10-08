@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from enum import Enum
 from importlib import resources
 from typing import Any, Dict, Union
@@ -163,7 +164,7 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
             log.error(
                 f"Configuration [red]{process_manager_conf_filename}[/red] not found, check filename spelling or use a packaged configuration as one of [green]{'[/green], [green]'.join(packaged_configurations)}[/green]."
             )
-            exit()
+            sys.exit(1)
     return process_manager_conf_filename
 
 
