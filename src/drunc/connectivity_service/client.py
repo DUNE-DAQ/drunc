@@ -90,7 +90,18 @@ class ConnectivityServiceClient:
                 if fail_quickly:
                     return
 
-    def retract_partition(self, fail_quickly=False):
+    def retract_partition(
+        self, fail_quickly: bool = False, fail_quietly: bool = False
+    ) -> None:
+        """
+        Retract the whole partition (session) from the connectivity service.
+
+        Args:
+            fail_quickly (bool): If True, the function will return immediately on failure without
+                                 raising exceptions. Default is False.
+            fail_quietly (bool): If True, the function will suppress all exceptions and log
+                                 errors as warnings. Default is False.
+        """
         data = {"partition": self.session}
         for i in range(50):
             try:
@@ -108,9 +119,10 @@ class ConnectivityServiceClient:
                 )
 
                 if r.status_code == 404:
-                    self.log.warning(
-                        f"Session {self.session} not found on the connectivity service"
-                    )
+                    if not fail_quietly:
+                        self.log.warning(
+                            f"Session {self.session} not found on the connectivity service"
+                        )
                     break
 
                 r.raise_for_status()
@@ -123,10 +135,11 @@ class ConnectivityServiceClient:
 
             except Exception as e:
                 if fail_quickly:
-                    self.log.info(
-                        f"Could not retract session {self.session} on the connectivity service at the address {self.address}"
-                    )
-                    self.log.debug(e)
+                    if not fail_quietly:
+                        self.log.info(
+                            f"Could not retract session {self.session} on the connectivity service at the address {self.address}"
+                        )
+                        self.log.debug(e)
                 else:
                     raise e
 

@@ -411,9 +411,23 @@ def unified_shell(
             )
             > 0
         ):
-            unified_shell_log.warning(
+            unified_shell_log.error(
                 "Some processes are still running, you might want to check them"
             )
+
+        # Delete the session from the connectivity service using service
+        # Needed as daq_applications continue to publish during terminate, with many
+        # processes they can continue to publish for a while during terminate
+        if session_dal.connectivity_service.host != "localhost":
+            try:
+                csc.retract_partition(fail_quickly=True, fail_quietly=True)
+                unified_shell_log.info(
+                    "Session retracted from the connectivity service"
+                )
+            except Exception as e:
+                unified_shell_log.error(
+                    f"Could not retract the session from the connectivity service, reason: {e}"
+                )
 
         # Remove the process manager
         if internal_pm:
