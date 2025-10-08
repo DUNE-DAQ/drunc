@@ -364,19 +364,21 @@ def unified_shell(
         unified_shell_log.info("[green]Exiting unified_shell[/green]")
 
         if ctx.obj.get_driver("controller", quiet_fail=True):
-            if ctx.obj.get_driver("controller").status().data.in_error:
-                unified_shell_log.warning(
-                    "Controller is in error, cannot gracefully shutdown"
-                )
-            else:
-                unified_shell_log.info("Attemting graceful shutdown of the controller")
-                try:
-                    ctx.obj.get_driver("controller").stop_run()
-                    unified_shell_log.info("Controller shutdown gracefully")
-                except Exception as e:
-                    unified_shell_log.error(
-                        f"Could not shutdown the controller gracefully, reason: {e}"
+            try:
+                if ctx.obj.get_driver("controller").status().data.in_error:
+                    unified_shell_log.warning(
+                        "Controller is in error, cannot gracefully shutdown"
                     )
+                else:
+                    unified_shell_log.info(
+                        "Attemting graceful shutdown of the controller"
+                    )
+                    ctx.obj.get_driver("controller").disable_triggers()
+                    unified_shell_log.info("Controller shutdown gracefully")
+            except Exception as e:
+                unified_shell_log.error(
+                    f"Could not shutdown the controller gracefully, reason: {e}"
+                )
             ctx.obj.delete_driver("controller")
 
         # Retract from the connectivity service
@@ -429,7 +431,7 @@ def unified_shell(
         if internal_pm:
             ctx.obj.pm_process.terminate()
             ctx.obj.pm_process.join()
-            unified_shell_log.info("Process manager terminated")
+            unified_shell_log.debug("Process manager terminated")
 
         unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
         logging.shutdown()
