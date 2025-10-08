@@ -92,6 +92,17 @@ from drunc.utils.utils import (
     default=None,
     help="Log path of process_manager logs.",
 )
+@click.option(
+    "-s",
+    "--safe-mode",
+    is_flag=True,
+    default=False,
+    help=(
+        "Enable safe mode. This will force attempting to return the state to initial "
+        "before running terminate. This is not particularly useful for testing but "
+        "will be useful for hardware operations."
+    ),
+)  # For production, change default to true/remove it
 @click.pass_context
 def unified_shell(
     ctx,
@@ -102,6 +113,7 @@ def unified_shell(
     log_level: str,
     override_logs: bool,
     log_path: str,
+    safe_mode: bool,
 ) -> None:
     # Set up the drunc and unified_shell loggers
     setup_root_logger(log_level)
@@ -364,21 +376,22 @@ def unified_shell(
         unified_shell_log.info("[green]Exiting unified_shell[/green]")
 
         if ctx.obj.get_driver("controller", quiet_fail=True):
-            try:
-                if ctx.obj.get_driver("controller").status().data.in_error:
-                    unified_shell_log.warning(
-                        "Controller is in error, cannot gracefully shutdown"
+            if safe_mode:
+                try:
+                    if ctx.obj.get_driver("controller").status().data.in_error:
+                        unified_shell_log.warning(
+                            "Controller is in error, cannot gracefully shutdown"
+                        )
+                    else:
+                        unified_shell_log.info(
+                            "Attemting graceful shutdown of the controller"
+                        )
+                        ctx.invoke(ctx.command.commands.get("stop-run"))
+                        unified_shell_log.info("Controller shutdown gracefully")
+                except Exception as e:
+                    unified_shell_log.error(
+                        f"Could not shutdown the controller gracefully, reason: {e}"
                     )
-                else:
-                    unified_shell_log.info(
-                        "Attemting graceful shutdown of the controller"
-                    )
-                    ctx.invoke(ctx.command.commands.get("stop-run"))
-                    unified_shell_log.info("Controller shutdown gracefully")
-            except Exception as e:
-                unified_shell_log.error(
-                    f"Could not shutdown the controller gracefully, reason: {e}"
-                )
             ctx.obj.delete_driver("controller")
 
         # Retract from the connectivity service
