@@ -356,14 +356,12 @@ class RESTAPIChildNode(ClientSideChild):
         configuration: RESTAPIChildNodeConfHandler,
         fsm_configuration: FSMConfHandler,
         uri,
-        connectivity_service=None,
     ):
         super().__init__(
             name=name,
             node_type=ControlType.REST_API,
             configuration=configuration,
             fsm_configuration=fsm_configuration,
-            connectivity_service=connectivity_service,
         )
 
         self.log = get_logger(f"controller.{name}_rest_api_child")

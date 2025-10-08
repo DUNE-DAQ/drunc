@@ -33,7 +33,6 @@ class ChildNode:  # abc.ABC):
         name: str,
         configuration,
         node_type: ControlType,
-        connectivity_service=None,
         **kwargs,
     ) -> None:
         # super().__init__(**kwargs)
@@ -41,7 +40,6 @@ class ChildNode:  # abc.ABC):
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
         self.configuration = configuration
-        self.connectivity_service = connectivity_service
         self.included = True
 
     def __str__(self):
@@ -50,61 +48,6 @@ class ChildNode:  # abc.ABC):
 
     # @abc.abstractmethod
     def terminate(self):
-        pass
-
-    def _attempt_reconnection(self, token, command, data):
-        """Attempt to reconnect using connectivity service and retry command"""
-        if not self.connectivity_service:
-            self.log.error(f"No connectivity service available for {self.name}")
-            return None
-
-        try:
-            from drunc.connectivity_service.exceptions import (
-                ApplicationLookupUnsuccessful,
-            )
-            from drunc.utils.utils import (
-                get_control_type_and_uri_from_connectivity_service,
-            )
-
-            self.log.debug(f"Checking connectivity service for {self.name}...")
-            ctype, new_uri = get_control_type_and_uri_from_connectivity_service(
-                self.connectivity_service, self.name, timeout=10
-            )
-
-            if new_uri != self.uri:
-                self.log.info(
-                    f"Found new IP {new_uri} for {self.name}, reconnecting..."
-                )
-                self.uri = new_uri
-                self._reconnect_to_new_uri()
-            else:
-                self.log.info(
-                    f"IP address for {self.name} has not changed, reconnecting to same address..."
-                )
-                self._reconnect_to_new_uri()
-
-            # Give control back to the child controller after reconnection
-            self.log.info(f"Taking control of {self.name} after reconnection...")
-            try:
-                self.propagate_command("take_control", None, token)
-                self.log.info(f"Successfully took control of {self.name}")
-            except Exception as control_error:
-                self.log.warning(
-                    f"Failed to take control of {self.name}: {control_error}"
-                )
-
-            # Retry the original command
-            self.log.info(f"Retrying original command {command} to {self.name}...")
-            return self.propagate_command(command, data, token)
-
-        except ApplicationLookupUnsuccessful:
-            self.log.error(f"Child {self.name} not found in connectivity service")
-            return None
-        except Exception as reconnect_error:
-            self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
-            return None
-
-    def _reconnect_to_new_uri(self):
         pass
 
     # @abc.abstractmethod
@@ -261,7 +204,6 @@ class ChildNode:  # abc.ABC):
                     ),
                     name=name,
                     uri=uri,
-                    connectivity_service=connectivity_service,
                     # init_token = init_token, # No authentication for RESTAPI
                     **kwargs,
                 )
@@ -273,7 +215,6 @@ class ChildNode:  # abc.ABC):
 
                 node = ClientSideChild(
                     name=name,
-                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
                 if node_in_error:

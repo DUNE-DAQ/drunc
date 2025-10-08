@@ -39,12 +39,12 @@ class gRPCChildNode(ChildNode):
             name=name,
             node_type=ControlType.gRPC,
             configuration=configuration,
-            connectivity_service=connectivity_service,
         )
 
         self.log = get_logger(f"controller.{self.name}-grpc-child")
-        self.init_token = init_token
+        self.connectivity_service = connectivity_service
         self._lock = threading.Lock()
+        self.init_token = init_token
 
         host, port = uri.split(":")
         port = int(port)
@@ -94,6 +94,58 @@ class gRPCChildNode(ChildNode):
                 break
 
         self.start_listening(desc.broadcast)
+
+    def _attempt_reconnection(self, token, command, data):
+        """Attempt to reconnect using connectivity service and retry command"""
+        if not self.connectivity_service:
+            self.log.error(f"No connectivity service available for {self.name}")
+            return None
+
+        try:
+            from drunc.connectivity_service.exceptions import (
+                ApplicationLookupUnsuccessful,
+            )
+            from drunc.utils.utils import (
+                get_control_type_and_uri_from_connectivity_service,
+            )
+
+            self.log.debug(f"Checking connectivity service for {self.name}...")
+            ctype, new_uri = get_control_type_and_uri_from_connectivity_service(
+                self.connectivity_service, self.name, timeout=10
+            )
+
+            if new_uri != self.uri:
+                self.log.info(
+                    f"Found new IP {new_uri} for {self.name}, reconnecting..."
+                )
+                self.uri = new_uri
+                self._reconnect_to_new_uri()
+            else:
+                self.log.info(
+                    f"IP address for {self.name} has not changed, reconnecting to same address..."
+                )
+                self._reconnect_to_new_uri()
+
+            # Give control back to the child controller after reconnection
+            self.log.info(f"Taking control of {self.name} after reconnection...")
+            try:
+                self.propagate_command("take_control", None, token)
+                self.log.info(f"Successfully took control of {self.name}")
+            except Exception as control_error:
+                self.log.warning(
+                    f"Failed to take control of {self.name}: {control_error}"
+                )
+
+            # Retry the original command
+            self.log.info(f"Retrying original command {command} to {self.name}...")
+            return self.propagate_command(command, data, token)
+
+        except ApplicationLookupUnsuccessful:
+            self.log.error(f"Child {self.name} not found in connectivity service")
+            return None
+        except Exception as reconnect_error:
+            self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
+            return None
 
     def _reconnect_to_new_uri(self):
         """Reconnect to the new URI for gRPC child"""

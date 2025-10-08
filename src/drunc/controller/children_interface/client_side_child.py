@@ -82,13 +82,11 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
-        connectivity_service=None,
     ):  #
         super().__init__(
             name=name,
             node_type=node_type,
             configuration=configuration,
-            connectivity_service=connectivity_service,
         )
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
