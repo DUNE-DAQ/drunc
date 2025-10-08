@@ -223,7 +223,7 @@ def resolve_localhost_to_hostname(address):
         address = address.replace("localhost", hostname)
 
     ip_match = re.search(
-        "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
         address,
     )
     # https://stackoverflow.com/a/25969006
@@ -246,7 +246,7 @@ def resolve_localhost_and_127_ip_to_network_ip(address):
         address = address.replace("localhost", this_ip)
 
     ip_match = re.search(
-        "((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
         address,
     )
     # https://stackoverflow.com/a/25969006
