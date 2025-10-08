@@ -13,11 +13,21 @@ import signal
 import subprocess
 import time
 import uuid
+from pathlib import Path
 from typing import Generator, List, Optional
 
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
 
+from drunc.tests.grpc_testing_tools.available_grpc_servers import ServerType
+from drunc.tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from drunc.tests.grpc_testing_tools.grpc_server_manager import (
+    GrpcServerConfig,
+    GrpcServerManager,
+)
+from drunc.tests.grpc_testing_tools.multiprocessing_connection_manager import (
+    MultiprocessingConnectionManager,
+)
 from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
@@ -33,12 +43,6 @@ from drunc.tests.grpc_testing_tools.test_services_pb2 import (
 from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
-)
-from drunc.tests.ssh.available_grpc_servers import ServerType
-from drunc.tests.ssh.grpc_log_file_manager import LogFileManager
-from drunc.tests.ssh.grpc_server_manager import GrpcServerConfig, GrpcServerManager
-from drunc.tests.ssh.multiprocessing_connection_manager import (
-    MultiprocessingConnectionManager,
 )
 
 
@@ -248,9 +252,12 @@ def test_manager_boot_and_kill_via_grpc(capsys, test_resources):
         test_resources: Fixture providing managed test resources with guaranteed cleanup
     """
 
+    PROJECT_ROOT = Path(__file__).resolve().parents[4]
+    ENV_SCRIPT_DIR = PROJECT_ROOT.parent.parent
+
     with capsys.disabled():
         # Environment configuration for SSH boot
-        env_script_dir = "/home/aurash/work/09sept"
+        env_script_dir = ENV_SCRIPT_DIR
         env_file = "env.sh"
         env_setup_script = f"cd {env_script_dir} && source {env_file}"
 
@@ -360,12 +367,26 @@ def test_manager_boot_and_kill_via_grpc(capsys, test_resources):
             metadata=process_metadata,
             env={
                 "GRPC_TRACE": "http",
-                "PYTHONPATH": "/home/aurash/work/09sept",
+                "PYTHONPATH": str(ENV_SCRIPT_DIR),
             },
             executable_and_arguments=[
                 ProcessDescription.ExecAndArgs(
                     args=[
-                        f"cd {env_script_dir} && source {env_file} && python3 /home/aurash/work/09sept/sourcecode/drunc/src/drunc/tests/ssh/root_controller_server_cli.py --port {root_controller_port} --workers {max_workers} --log-file {root_log} --manager-port {manager_port}",
+                        " && ".join(
+                            [
+                                f"cd {env_script_dir}",
+                                f"source {env_file}",
+                                " ".join(
+                                    [
+                                        f"python3 {PROJECT_ROOT}/src/drunc/tests/grpc_testing_tools/root_controller_server_cli.py",
+                                        f"--port {root_controller_port}",
+                                        f"--workers {max_workers}",
+                                        f"--log-file {root_log}",
+                                        f"--manager-port {manager_port}",
+                                    ]
+                                ),
+                            ]
+                        ),
                     ],
                 )
             ],
