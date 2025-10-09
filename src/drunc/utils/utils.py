@@ -215,52 +215,82 @@ def validate_command_facility(ctx, param, value):
             )
 
 
-def resolve_localhost_to_hostname(address):
+def match_and_rename_ip_address(
+    ip_address: str, hostname_or_network_ip: str
+) -> re.Match | None:
+    """
+    Check if the given string is a valid IPv4 address.
+
+    Args:
+        ip_address (str): The string to be checked.
+
+    Returns:
+        re.Match | None: A match object if the string is a valid IPv4 address, otherwise
+                         None.
+    """
+
+    ip_match = re.match(
+        r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+        ip_address,
+    )
+    if not ip_match:
+        return hostname_or_network_ip
+
+    if ip_match.group(0).startswith("127."):
+        hostname_or_network_ip = hostname_or_network_ip.replace(
+            ip_match.group(0), hostname_or_network_ip
+        )
+
+    if ip_match.group(0).startswith("0."):
+        hostname_or_network_ip = hostname_or_network_ip.replace(
+            ip_match.group(0), hostname_or_network_ip
+        )
+
+    return hostname_or_network_ip
+
+
+def resolve_localhost_to_hostname(address: str) -> str | None:
+    """
+    Replace localhost or 127.x.x.x in the address with the actual hostname.
+    This is useful for scenarios where a service running on localhost needs to be
+    accessed by other machines in the network.
+
+    Args:
+        address (str): The address string to be processed.
+
+    Returns:
+        str | None: The modified address with localhost replaced by the hostname,
+                    or None if the input address is empty.
+    """
+
     if not address:
         return None
     hostname = socket.gethostname()
     if "localhost" in address:
         address = address.replace("localhost", hostname)
 
-    ip_match = re.search(
-        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
-        address,
-    )
-    # https://stackoverflow.com/a/25969006
-
-    if not ip_match:
-        return address
-
-    if ip_match.group(0).startswith("127."):
-        address = address.replace(ip_match.group(0), hostname)
-
-    if ip_match.group(0).startswith("0."):
-        address = address.replace(ip_match.group(0), hostname)
-
-    return address
+    return match_and_rename_ip_address(address, hostname)
 
 
-def resolve_localhost_and_127_ip_to_network_ip(address):
+def resolve_localhost_and_127_ip_to_network_ip(address: str) -> str | None:
+    """
+    Replace localhost or 127.x.x.x in the address with the actual network IP.
+    This is useful for scenarios where a service running on localhost needs to be
+    accessed by other machines in the network.
+
+    Args:
+        address (str): The address string to be processed.
+
+    Returns:
+        str | None: The modified address with localhost replaced by the network IP,
+                    or None if the input address is empty.
+    """
+
     this_ip = socket.gethostbyname(socket.gethostname())
     if "localhost" in address:
         address = address.replace("localhost", this_ip)
 
-    ip_match = re.search(
-        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
-        address,
-    )
-    # https://stackoverflow.com/a/25969006
-
-    if not ip_match:
-        return address
-
-    if ip_match.group(0).startswith("127."):
-        address = address.replace(ip_match.group(0), this_ip)
-
-    if ip_match.group(0).startswith("0."):
-        address = address.replace(ip_match.group(0), this_ip)
-
-    return address
+    return match_and_rename_ip_address(address, this_ip)
 
 
 def host_is_local(host):
