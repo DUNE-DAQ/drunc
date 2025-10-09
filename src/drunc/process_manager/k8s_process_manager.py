@@ -157,18 +157,18 @@ class K8sProcessManager(ProcessManager):
         # Pod management
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 20)
-        self.pod_ready_timeout = pod_management.get("ready_timeout", 60)
+        self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
 
         # Cleanup
         cleanup = settings.get("cleanup", {})
-        self.restart_cleanup_time = float(cleanup.get("restart_time", 10.0))
-        self.restart_cleanup_polling = float(cleanup.get("restart_polling", 0.5))
+        self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
+        self.restart_cleanup_polling = cleanup.get("restart_cleanup_polling", 0.5)
 
         # Checking
         checking = settings.get("checking", {})
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
-        self._host_cache_expiry = checking.get("host_verification_cache_expiry", 300)
+        self._host_cache_expiry = checking.get("host_cache_expiry", 300)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 

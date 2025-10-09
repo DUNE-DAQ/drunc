@@ -33,16 +33,16 @@
         },
         "pod_management": {
             "kill_timeout": 20,
-            "ready_timeout": 60
+            "pod_ready_timeout": 60
         },
         "cleanup": {
-            "restart_time": "10",
-            "restart_polling": 0.5
+            "restart_cleanup_time": 10,
+            "restart_cleanup_polling": 0.5
         },
         "checking": {
             "watcher_retry_sleep": 5,
             "pod_status_check_sleep": 1,
-            "host_verification_cache_expiry": 300
+            "host_cache_expiry": 300
         }
     }
 }
