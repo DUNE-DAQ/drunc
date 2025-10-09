@@ -10,8 +10,6 @@ import time
 
 import pytest
 
-from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
-
 # amount of seconds to recreate specific issue with ping_timeout
 IDLE_TIME_REQUIRED_FOR_PING_TIMEOUT_TO_OCCUR = 120
 
@@ -32,12 +30,19 @@ def monitor_for_errors_while_idle(
 
 
 # This test recreates issue #568 if run in grpc versions 1.68-1.73
+# It fails when a ping_timeout error is NOT reproduced
+# only useful for verifying grpc behaviour changes
 @pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
-def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(capsys):
+def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(
+    grpc_port_cleaner, capsys
+):
     """
     Test that aggressive client keepalive settings creates ping_timeout message
     from grpc
     """
+
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+
     manager_server_config = []
     # aggressive pinging from process manager client
     manager_client_config = [("grpc.keepalive_time_ms", 100)]
@@ -49,7 +54,7 @@ def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(cap
     controller_max_workers = 2
 
     with capsys.disabled():
-        tree_manager = GrpcProcessTreeManager(
+        tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
             number_of_children=5,
             manager_max_workers=manager_max_workers,
             controller_max_workers=controller_max_workers,
@@ -78,14 +83,18 @@ def test_that_aggressive_client_pinging_during_idle_time_causes_ping_timeout(cap
 
 
 # This test recreates issue #505 if run in grpc versions 1.68-1.73
+# It fails when a ping_timeout error is NOT reproduced
+# only useful for verifying grpc behaviour changes
 @pytest.mark.skip(reason="Not enabled in CI - Use for isolating grpc issues")
 def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeout(
-    capsys,
+    grpc_port_cleaner, capsys
 ):
     """
     Test that a root controller client left idle for two minutes
     will create a ping_timeout when all-default gRPC settings are used.
     """
+    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+
     manager_server_config = []
     manager_client_config = []
     root_server_config = []
@@ -98,7 +107,7 @@ def test_with_default_settings_after_root_controller_left_idle_causes_ping_timeo
     with capsys.disabled():
         keepalive_config = []
 
-        tree_manager = GrpcProcessTreeManager(
+        tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
             number_of_children=5,
             manager_max_workers=manager_max_workers,
             controller_max_workers=controller_max_workers,

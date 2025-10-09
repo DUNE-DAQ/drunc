@@ -1,6 +1,7 @@
 """
 A class for managing gRPC server processes started
-with multiprocessing
+with multiprocessing.
+Consists of a Manager server, a root controller, and multiple child controllers.
 """
 
 import time
@@ -11,9 +12,19 @@ from drunc.tests.grpc.grpc_independent_root_controller_client import (
 )
 from drunc.tests.grpc_testing_tools.available_grpc_servers import ServerType
 from drunc.tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from drunc.tests.grpc_testing_tools.grpc_log_util import (
+    stderr_observer,
+    stdout_observer,
+)
 from drunc.tests.grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
+)
+from drunc.tests.grpc_testing_tools.grpc_testing_ports import (
+    BASE_CHILD_PORT,
+    BASE_MANAGER_PORT,
+    BASE_ROOT_PORT,
+    MAX_CHILDREN,
 )
 from drunc.tests.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
@@ -26,11 +37,6 @@ from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
-
-# Base port assignments for dynamic allocation
-BASE_MANAGER_PORT = 50070
-BASE_ROOT_PORT = 50071
-BASE_CHILD_PORT = 50072
 
 
 class ProcessManagerClient:
@@ -205,6 +211,9 @@ class GrpcProcessTreeManager:
             child_server_config: gRPC options for ChildController servers
             child_client_config: gRPC options for ChildController clients
         """
+        assert number_of_children < MAX_CHILDREN, (
+            f"Number of children must be less than {MAX_CHILDREN} to ensure correct port cleanup."
+        )
         if number_of_children < 0:
             raise ValueError("Number of children must be non-negative")
 
@@ -257,7 +266,9 @@ class GrpcProcessTreeManager:
         Returns:
             ProcessManagerClient: Client for communicating with all servers
         """
-        print(f"Starting {1 + 1 + self.number_of_children} gRPC servers...")
+        log_file = self.log_file_manager.create_log_file("TreeClient")
+        stderr_observer(log_file)
+        stdout_observer(log_file)
 
         # Create Manager server
         manager_config = GrpcServerConfig(
@@ -312,12 +323,6 @@ class GrpcProcessTreeManager:
             self.server_manager.start_child_controller_server(child_config)
             self.server_ids.append(child_server_id)
 
-        # Display log files for debugging
-        log_files = self.log_file_manager.get_all_log_files()
-        print("Log files:")
-        for log_file in log_files:
-            print(f"   {log_file}")
-
         # Wait for all servers to be ready
         print("Waiting for all servers to be ready...")
         for server_id in self.server_ids:
@@ -326,9 +331,6 @@ class GrpcProcessTreeManager:
                 print(
                     f"Warning: Server {server_id} did not signal ready within timeout"
                 )
-
-        # Allow extra time for servers to be fully operational
-        time.sleep(1)
 
         # Create and return ProcessManagerClient
         self.process_manager = ProcessManagerClient(

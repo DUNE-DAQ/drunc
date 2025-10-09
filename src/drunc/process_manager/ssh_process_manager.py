@@ -18,12 +18,12 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.ssh.ssh_connection_manager import SSHConnectionManager
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 
 class SSHProcessManager(ProcessManager):
     def __init__(self, configuration, **kwargs):
-        self.ssh_manager = None
+        self.ssh_lifetime_manager = None
         self.session = getpass.getuser()  # unfortunate
 
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -44,7 +44,7 @@ class SSHProcessManager(ProcessManager):
         # self.children_logs_depth = 1000
         # self.children_logs = {}
 
-        self.ssh_manager = SSHConnectionManager(
+        self.ssh_lifetime_manager = SSHProcessLifetimeManager(
             disable_host_key_check=self.disable_host_key_check,
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
@@ -105,9 +105,9 @@ class SSHProcessManager(ProcessManager):
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
 
             # Terminate process if still alive
-            if self.ssh_manager.is_process_alive(proc_uuid):
+            if self.ssh_lifetime_manager.is_process_alive(proc_uuid):
                 self.log.debug(f"Killing '{app_name}' with UUID {proc_uuid}")
-                self.ssh_manager.terminate_process(
+                self.ssh_lifetime_manager.terminate_process(
                     proc_uuid, timeout=self.configuration.data.kill_timeout
                 )
                 self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
@@ -120,7 +120,7 @@ class SSHProcessManager(ProcessManager):
             pu = ProcessUUID(uuid=proc_uuid)
 
             # Get final exit code
-            return_code = self.ssh_manager.get_exit_code(proc_uuid)
+            return_code = self.ssh_lifetime_manager.get_exit_code(proc_uuid)
 
             ret += [
                 ProcessInstance(
@@ -133,7 +133,7 @@ class SSHProcessManager(ProcessManager):
             ]
 
             # Clean up SSH resources
-            self.ssh_manager.cleanup_process(proc_uuid)
+            self.ssh_lifetime_manager.cleanup_process(proc_uuid)
 
         return ProcessInstanceList(
             name=self.name,
@@ -150,8 +150,8 @@ class SSHProcessManager(ProcessManager):
             List of active process UUID strings
         """
         return (
-            list(self.ssh_manager.get_active_process_keys())
-            if self.ssh_manager is not None
+            list(self.ssh_lifetime_manager.get_active_process_keys())
+            if self.ssh_lifetime_manager is not None
             else []
         )
 
@@ -179,14 +179,14 @@ class SSHProcessManager(ProcessManager):
             result = self.kill_processes(uuids)
 
             # Clean up all SSH manager resources
-            self.ssh_manager.cleanup_all()
+            self.ssh_lifetime_manager.cleanup_all()
 
             return result
 
         self.log.info("No known process to kill before exiting")
 
         # Still clean up SSH manager even if no processes
-        self.ssh_manager.cleanup_all()
+        self.ssh_lifetime_manager.cleanup_all()
 
         return ProcessInstanceList(
             name=self.name,
@@ -230,7 +230,7 @@ class SSHProcessManager(ProcessManager):
 
         try:
             # Read log file from remote host via SSH
-            lines = self.ssh_manager.read_remote_log_file(
+            lines = self.ssh_lifetime_manager.read_log_file(
                 hostname=host, user=user, log_file=logfile, num_lines=nlines
             )
 
@@ -249,8 +249,8 @@ class SSHProcessManager(ProcessManager):
             # Attempt to retrieve any captured stdout/stderr from SSH connection
             # Note: Most output is redirected to log files, so this is primarily
             # for SSH-level messages and diagnostics
-            stdout = self.ssh_manager.get_process_stdout(uid)
-            stderr = self.ssh_manager.get_process_stderr(uid)
+            stdout = self.ssh_lifetime_manager.get_process_stdout(uid)
+            stderr = self.ssh_lifetime_manager.get_process_stderr(uid)
 
             if stdout:
                 lines.append(f"stdout: {stdout}")
@@ -272,74 +272,81 @@ class SSHProcessManager(ProcessManager):
         self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
+        """
+        Boot a remote process via SSH on an available host.
+
+        Attempts to start the process on each allowed host in sequence until
+        successful. Updates boot request with the actual hostname used and
+        returns process status information.
+
+        Args:
+            boot_request: BootRequest containing process configuration and restrictions
+            uuid: Unique identifier for this process
+
+        Returns:
+            ProcessInstance containing process status and metadata
+
+        Raises:
+            DruncCommandException: If no allowed hosts provided or process already exists
+        """
         self.log.debug(
-            f"{self.name} booting '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}'"
+            f"{self.name} booting '{boot_request.process_description.metadata.name}' "
+            f"from session '{boot_request.process_description.metadata.session}'"
         )
 
+        # Validate boot request
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise DruncCommandException("No allowed host provided! bailing")
 
         if uuid in self.boot_request:
             raise DruncCommandException(f"Process {uuid} already exists!")
+
+        # Store boot request for lifecycle management
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
-        hostname = ""
 
+        hostname = ""
         errors = ""
 
+        # Attempt to start process on each allowed host
         for host in boot_request.process_restriction.allowed_hosts:
             try:
-                user = boot_request.process_description.metadata.user
-                hostname = host
-                log_file = boot_request.process_description.process_logs_path
-                env_var = boot_request.process_description.env
+                # Update hostname in boot request for this attempt
+                self.boot_request[uuid].process_description.metadata.hostname = host
 
-                # Build command from executable and arguments
-                cmd = ""
-                for (
-                    exe_arg
-                ) in boot_request.process_description.executable_and_arguments:
-                    cmd += exe_arg.exec
-                    for arg in exe_arg.args:
-                        cmd += f" {arg}"
-                    cmd += ";"
-
-                if cmd.endswith(";"):
-                    cmd = cmd[:-1]
-
-                # Execute via SSH connection manager
-                self.ssh_manager.execute_ssh_command(
-                    uuid=uuid,
-                    boot_request=boot_request,
-                    hostname=host,
-                    user=user if user else getpass.getuser(),
-                    command=cmd,
-                    log_file=log_file,
-                    env_vars=dict(env_var) if env_var else {},
+                # Start the process via SSH manager
+                self.ssh_lifetime_manager.start_process(
+                    uuid=uuid, boot_request=self.boot_request[uuid]
                 )
 
-                self.log.debug(f"Command: {cmd}")
+                # Success - record the hostname used
+                hostname = host
                 break
 
             except Exception as e:
                 errors += str(e)
-                print(f"Couldn't start on host {host}, reason:\n{e!s}")
+                self.log.warning(f"Couldn't start on host {host}, reason:\n{e!s}")
                 continue
 
-        ## Saving the host to the metadata
+        # Store the successful hostname in boot request metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
         self.log.info(
-            f"Booted '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}' with UUID {uuid}"
+            f"Booted '{boot_request.process_description.metadata.name}' "
+            f"from session '{boot_request.process_description.metadata.session}' "
+            f"with UUID {uuid}"
         )
+
+        # Build process instance response
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[uuid].process_description)
         pr = ProcessRestriction()
         pr.CopyFrom(self.boot_request[uuid].process_restriction)
         pu = ProcessUUID(uuid=uuid)
 
-        alive = self.ssh_manager.is_process_alive(uuid)
-        return_code = self.ssh_manager.get_exit_code(uuid)
+        # Query current process status
+        alive = self.ssh_lifetime_manager.is_process_alive(uuid)
+        return_code = self.ssh_lifetime_manager.get_exit_code(uuid)
         status_code = (
             ProcessInstance.StatusCode.RUNNING
             if alive
@@ -401,10 +408,12 @@ class SSHProcessManager(ProcessManager):
             pu = ProcessUUID(uuid=proc_uuid)
 
             # Query SSH manager for process status
-            alive = self.ssh_manager.is_process_alive(proc_uuid)
+            alive = self.ssh_lifetime_manager.is_process_alive(proc_uuid)
 
             return_code = (
-                self.ssh_manager.get_exit_code(proc_uuid) if not alive else None
+                self.ssh_lifetime_manager.get_exit_code(proc_uuid)
+                if not alive
+                else None
             )
             if not alive:
                 self.log.debug(
@@ -458,10 +467,10 @@ class SSHProcessManager(ProcessManager):
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
 
-        if self.ssh_manager.is_process_alive(uuid):
-            self.ssh_manager.terminate_process(uuid)
+        if self.ssh_lifetime_manager.is_process_alive(uuid):
+            self.ssh_lifetime_manager.terminate_process(uuid)
 
-        self.ssh_manager.cleanup_process(uuid)
+        self.ssh_lifetime_manager.cleanup_process(uuid)
         del self.boot_request[uuid]
         del uuid
 

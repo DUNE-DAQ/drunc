@@ -2,7 +2,7 @@
 Test SSH Connection Manager with multiple concurrent processes.
 
 Verifies that:
-1. SSHConnectionManager can execute multiple remote processes concurrently
+1. SSHProcessLifetimeManager can execute multiple remote processes concurrently
 2. Log output from each process is captured correctly via remote log files
 3. All processes can be terminated cleanly via SIGHUP
 4. Resource cleanup is complete
@@ -12,6 +12,7 @@ import logging
 import os
 import tempfile
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,7 @@ from druncschema.process_manager_pb2 import (
     ProcessMetadata,
 )
 
-from drunc.ssh.ssh_connection_manager import SSHConnectionManager
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 
 @pytest.fixture
@@ -30,7 +31,7 @@ def ssh_manager():
     logger = logging.getLogger("test_ssh")
     logger.setLevel(logging.DEBUG)
 
-    manager = SSHConnectionManager(
+    manager = SSHProcessLifetimeManager(
         disable_localhost_host_key_check=True,
         disable_host_key_check=False,
         logger=logger,
@@ -66,19 +67,15 @@ def test_ssh_multi_process_lifecycle(ssh_manager):
         process_names = []
 
         print(f"\n=== Executing {num_processes} SSH processes ===")
-
         for i in range(num_processes):
             process_name = f"test_process_{i}"
             process_names.append(process_name)
             log_file = str(log_dir / f"{process_name}.log")
 
-            # Generate UUID for this process
-            import uuid
-
             process_uuid = str(uuid.uuid4())
             process_uuids.append(process_uuid)
 
-            # Build boot request for SSHConnectionManager
+            # Build boot request with all necessary parameters
             boot_request = BootRequest(
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
@@ -88,25 +85,22 @@ def test_ssh_multi_process_lifecycle(ssh_manager):
                         hostname="localhost",
                     ),
                     process_execution_directory="/",
+                    process_logs_path=log_file,
                 )
             )
 
-            # Build command to execute
-            command = f"python3 {simple_process_script} {process_name}"
+            # Add executable and arguments to boot request
+            boot_request.process_description.executable_and_arguments.add(
+                exec=f"python3 {simple_process_script}", args=[process_name]
+            )
 
-            # Execute via SSH connection manager
-            ssh_manager.execute_ssh_command(
+            # Execute via start_process method
+            ssh_manager.start_process(
                 uuid=process_uuid,
                 boot_request=boot_request,
-                hostname="localhost",
-                user=os.getenv("USER"),
-                command=command,
-                log_file=log_file,
-                env_vars={},
             )
 
             print(f"Executed {process_name} with UUID {process_uuid}")
-
         # Wait for processes to write log entries
         print("\n=== Waiting for log output ===")
         time.sleep(5.0)
@@ -129,7 +123,7 @@ def test_ssh_multi_process_lifecycle(ssh_manager):
             log_file = str(log_dir / f"{process_name}.log")
 
             # Read log file via SSH
-            log_lines = ssh_manager.read_remote_log_file(
+            log_lines = ssh_manager.read_log_file(
                 hostname="localhost",
                 user=os.getenv("USER"),
                 log_file=log_file,

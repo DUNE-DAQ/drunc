@@ -1,20 +1,20 @@
 """
-Provides SSH connection management using paramiko
+Provides SSH connection and lifetime management
 """
 
 import logging
 import os
 import threading
 import time
+from getpass import getpass
 from typing import Callable, Dict, List, Optional
 
 import paramiko
 from druncschema.process_manager_pb2 import BootRequest
 
 
-class SSHConnectionManager:
+class SSHProcessLifetimeManager:
     """
-    SSH connection manager using paramiko for SSH execution.
     Supports process lifecycle management of processes started via
     SSH, output capture, and exit code tracking.
     """
@@ -178,7 +178,57 @@ class SSHConnectionManager:
         with self.global_lock:
             return list(self.connections.keys())
 
-    def execute_ssh_command(
+    def start_process(self, uuid: str, boot_request: BootRequest) -> None:
+        """
+        Start a remote process via SSH using the boot request configuration.
+
+        Extracts all necessary parameters from the boot request and delegates
+        to _execute_ssh_command for SSH connection and process execution.
+
+        Args:
+            uuid: Unique identifier for this process
+            boot_request: BootRequest containing process configuration, metadata,
+                        environment variables, and execution parameters
+
+        Raises:
+            RuntimeError: If SSH connection or process execution fails
+        """
+        # Extract connection parameters from boot request metadata
+        hostname = boot_request.process_description.metadata.hostname
+        user = boot_request.process_description.metadata.user
+        log_file = boot_request.process_description.process_logs_path
+
+        # Extract environment variables from boot request
+        env_vars = (
+            dict(boot_request.process_description.env)
+            if boot_request.process_description.env
+            else {}
+        )
+
+        # Build command string from executable and arguments
+        cmd = ""
+        for exe_arg in boot_request.process_description.executable_and_arguments:
+            cmd += exe_arg.exec
+            for arg in exe_arg.args:
+                cmd += f" {arg}"
+            cmd += ";"
+
+        # Remove trailing semicolon if present
+        if cmd.endswith(";"):
+            cmd = cmd[:-1]
+
+        # Execute the command via SSH
+        self._execute_ssh_command(
+            uuid=uuid,
+            boot_request=boot_request,
+            hostname=hostname,
+            user=user if user else getpass.getuser(),
+            command=cmd,
+            log_file=log_file,
+            env_vars=env_vars,
+        )
+
+    def _execute_ssh_command(
         self,
         uuid: str,
         boot_request: BootRequest,
@@ -463,9 +513,9 @@ class SSHConnectionManager:
 
                     time.sleep(0.1)
 
-                # Note that because we use SIGHUP to terminate
-                # we don't get an exit code from the remote process
-                # in this case paramiko give us a -1 exit status.
+                # Note that because we use SIGHUP to terminate,
+                # we don't get an exit code from the remote process,
+                # in this case paramiko gives us a -1 exit status.
                 exit_code = channel.recv_exit_status()
 
                 with self.global_lock:
@@ -495,7 +545,7 @@ class SSHConnectionManager:
         watcher.start()
         self.watchers.append(watcher)
 
-    def read_remote_log_file(
+    def read_log_file(
         self, hostname: str, user: str, log_file: str, num_lines: int = 100
     ) -> List[str]:
         """

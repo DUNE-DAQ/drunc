@@ -24,11 +24,7 @@ def run_grpc_server(
     stop_event=None,
 ) -> None:
     """Generic gRPC server runner that handles the common server lifecycle."""
-    import os
-    import sys
 
-    print(f"[{server_name}] grpc already imported: {'grpc' in sys.modules}")
-    print(f"[{server_name}] GRPC_TRACE={os.environ.get('GRPC_TRACE', 'NOT SET')}")
     stderr_observer(log_file)
     stdout_observer(log_file)
 

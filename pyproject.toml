@@ -54,3 +54,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "drunc.data.process_manager" = ["*.json"]
+
+[tool.pytest.ini_options]
+markers = [
+    "grpc: marks tests for gRPC isolation (run with --test-grpc)",
+]

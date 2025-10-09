@@ -15,7 +15,7 @@ from typing import Dict
 
 from grpc import RpcError, StatusCode, insecure_channel
 
-from drunc.ssh.ssh_connection_manager import SSHConnectionManager
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyResponse,
@@ -38,12 +38,12 @@ class ManagerServiceImpl(ManagerServiceServicer):
     Implementation of Manager gRPC service compatible with druncschema components.
 
     The Manager service acts as the top-level coordinator and uses
-    SSHConnectionManager for SSH-based process execution.
+    SSHProcessLifetimeManager for SSH-based process execution.
     """
 
     def __init__(self):
         """Initialise the Manager service implementation."""
-        self.ssh_manager = SSHConnectionManager(
+        self.ssh_manager = SSHProcessLifetimeManager(
             disable_host_key_check=True,
             disable_localhost_host_key_check=True,
             logger=logging.getLogger(__name__),
@@ -68,7 +68,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
 
     def boot(self, request: BootRequest, context) -> ProcessInstanceList:
         """
-        Boot a new gRPC server process via SSH using druncschema-style BootRequest.
+        Boot a new gRPC server process via SSH using BootRequest.
 
         Args:
             request: BootRequest containing ProcessDescription and restrictions
@@ -96,36 +96,19 @@ class ManagerServiceImpl(ManagerServiceServicer):
             try:
                 # Extract connection details from process metadata
                 hostname = request.process_description.metadata.hostname
-                user = request.process_description.metadata.user
 
-                # Build command based on process executable and arguments
-                command = self._build_server_command_from_description(
-                    request.process_description
-                )
-
-                # Set up environment variables from process description
-                env_vars = dict(request.process_description.env)
-                env_vars.update({"GRPC_TRACE": "http"})
-
-                # Extract log file path
-                log_file = request.process_description.process_logs_path
-
-                # Execute via SSH using SSHConnectionManager
-                process = self.ssh_manager.execute_ssh_command(
+                # Start process via SSH using start_process method
+                self.ssh_manager.start_process(
                     uuid=process_uuid,
                     boot_request=request,
-                    hostname=hostname,
-                    user=user,
-                    command=command,
-                    log_file=log_file,
-                    env_vars=env_vars,
                 )
 
                 # Store server info
                 self.booted_servers[process_uuid] = {
-                    "process": process,
                     "request": request,
-                    "command": command,
+                    "command": self._build_server_command_from_description(
+                        request.process_description
+                    ),
                 }
 
                 # Create successful process instance
