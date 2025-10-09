@@ -11,7 +11,8 @@
           "type": "string",
           "enum": [
             "ssh",
-            "k8s"
+            "k8s",
+            "subprocess"
           ]
         },
         "name": {
