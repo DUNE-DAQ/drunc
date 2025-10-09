@@ -31,6 +31,7 @@ from drunc.k8s_exceptions import (
     DruncK8sPodException,
 )
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_manager.utils import validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
@@ -713,8 +714,7 @@ done
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
-        session_re = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
-        if not session_re.match(session):
+        if not validate_k8s_session_name(session):
             raise DruncK8sNamespaceException(
                 f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
                 "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
