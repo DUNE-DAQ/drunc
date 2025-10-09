@@ -4,14 +4,13 @@ import os
 import time
 from pathlib import Path
 from subprocess import Popen
-import psutil
 
+import psutil
 import pytest
 
 logger = logging.getLogger(__name__)
 
 consolidated_conf_path = f"/tmp/drunc-pytests-of-{getpass.getuser()}"
-
 
 
 @pytest.fixture
@@ -30,7 +29,6 @@ def load_test_config():
 
 def boot_session(configuration_name, request):
     from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
-
 
     req_name = request.node.name
     configuration_file = f"{configuration_name}.data.xml"
@@ -111,12 +109,13 @@ def cleanup(processes):
 @pytest.fixture
 def one_controller_running(load_test_config, request):
     configuration_name = "one-controller-config"
-    processes_and_logs, session_dal, session_name = boot_session(configuration_name, request)
+    processes_and_logs, session_dal, session_name = boot_session(
+        configuration_name, request
+    )
 
     yield processes_and_logs, session_dal, session_name
     cleanup(processes_and_logs)
 
-    
 
 @pytest.fixture
 def many_controllers_running(load_test_config, request):
@@ -127,7 +126,6 @@ def many_controllers_running(load_test_config, request):
     yield processes_and_logs, session_dal, session_name
     cleanup(processes_and_logs)
 
-    
 
 def pytest_sessionfinish(session, exitstatus):
     """
@@ -137,11 +135,11 @@ def pytest_sessionfinish(session, exitstatus):
     import glob
 
     # Iterate over all running processes
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        cmdline = proc.info.get('cmdline')
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        cmdline = proc.info.get("cmdline")
         if isinstance(cmdline, list):
-            joined = ' '.join(cmdline)
-            if 'gunicorn' in joined or 'drunc-controller' in joined:
+            joined = " ".join(cmdline)
+            if "gunicorn" in joined or "drunc-controller" in joined:
                 try:
                     proc.kill()
                 except Exception as e:
