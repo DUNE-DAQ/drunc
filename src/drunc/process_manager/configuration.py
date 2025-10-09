@@ -42,6 +42,9 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log_path = log_path
         self.log = get_logger("process_manager.conf_handler")
 
+    def get_log_path(self):
+        return self.log_path
+
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
         if data.get("broadcaster"):
@@ -169,7 +172,8 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
     try:
         # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
         schema_resource = (
-            resources.files("drunc.data.process_manager.schema") / "process_manager.schema.json"
+            resources.files("drunc.data.process_manager.schema")
+            / "process_manager.schema.json"
         )
         if not hasattr(schema_resource, "open"):
             raise FileNotFoundError("process_manager.schema.json resource not found")
@@ -178,7 +182,10 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
     except Exception as e:
         logger = get_logger("process_manager.config_validation")
         logger.error(f"Failed to load packaged schema: {e}")
-        raise DruncCommandException("Packaged process manager schema could not be loaded.")
+        raise DruncCommandException(
+            "Packaged process manager schema could not be loaded."
+        )
+
 
 def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
     """
@@ -216,13 +223,14 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
 
     raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
 
+
 def validate_pm_config(config_or_source: Union[str, Dict[str, Any]]) -> bool:
     try:
         pm_conf = _load_config_from_source(config_or_source)
         schema = _load_pm_schema_from_package()
 
         js_validate(instance=pm_conf, schema=schema)
-        
+
         return True
 
     except ValidationError as e:
