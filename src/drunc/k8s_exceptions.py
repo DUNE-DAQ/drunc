@@ -6,7 +6,7 @@ class DruncK8sException(DruncException):
     pass
 
 class DruncK8sNamespaceException(DruncException):
-    """Exception thrown when namespaces already exist."""
+    """Exception thrown for namespace-related errors."""
     pass
 
 
