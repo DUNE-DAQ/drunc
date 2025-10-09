@@ -216,40 +216,35 @@ def validate_command_facility(ctx, param, value):
 
 
 def match_and_rename_ip_address(
-    ip_address: str, hostname_or_network_ip: str
+    address: str, hostname_or_network_ip: str
 ) -> re.Match | None:
     """
     Check if the given string is a valid IPv4 address.
 
     Args:
-        ip_address (str): The string to be checked.
+        address (str): The string to be checked.
+        hostname_or_network_ip (str): The hostname or network IP to replace localhost or
+                                    127.x.x.x.
 
     Returns:
         re.Match | None: A match object if the string is a valid IPv4 address, otherwise
                          None.
     """
 
-    ip_match = re.match(
+    ip_match: re.Match | None = re.match(
         r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
-        ip_address,
+        address,
     )
     if not ip_match:
-        return hostname_or_network_ip
+        return address
 
-    if ip_match.group(0).startswith("127."):
-        hostname_or_network_ip = hostname_or_network_ip.replace(
-            ip_match.group(0), hostname_or_network_ip
-        )
+    if ip_match.group(0).startswith("127.") or ip_match.group(0).startswith("0."):
+        address = address.replace(ip_match.group(0), hostname_or_network_ip)
 
-    if ip_match.group(0).startswith("0."):
-        hostname_or_network_ip = hostname_or_network_ip.replace(
-            ip_match.group(0), hostname_or_network_ip
-        )
-
-    return hostname_or_network_ip
+    return address
 
 
-def resolve_localhost_to_hostname(address: str) -> str | None:
+def resolve_localhost_to_hostname(address: str | None) -> str | None:
     """
     Replace localhost or 127.x.x.x in the address with the actual hostname.
     This is useful for scenarios where a service running on localhost needs to be
@@ -265,6 +260,7 @@ def resolve_localhost_to_hostname(address: str) -> str | None:
 
     if not address:
         return None
+
     hostname = socket.gethostname()
     if "localhost" in address:
         address = address.replace("localhost", hostname)
