@@ -151,12 +151,8 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_name = connection_server.get(
             "name", "local-connection-server"
         )
-        self.connection_server_hostname = connection_server.get(
-            "hostname", "localhost"
-        )
         self.connection_server_port = None
         self.connection_server_node_port = None
-
 
         # Pod management
         pod_management = settings.get("pod_management", {})
@@ -173,7 +169,6 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_verification_cache_expiry", 300)
-    
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
@@ -815,7 +810,7 @@ done
                         self.local_connection_server_is_booted = True
 
                         # Log connection information using the NodePort service
-                        connection_url = f"http://{self.connection_server_hostname}:{self.connection_server_node_port}"
+                        connection_url = f"http://{pod_status.status.pod_ip}:{self.connection_server_node_port}"
                         self.log.info(
                             f"Connection server available at: {connection_url}"
                         )

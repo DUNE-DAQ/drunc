@@ -29,8 +29,7 @@
             "drunc_label": "drunc.daq"
         },
         "connection_server": {
-            "name": "local-connection-server",
-            "hostname": "localhost1"
+            "name": "local-connection-server"
         },
         "pod_management": {
             "sidecar_image": "alpine/socat",
