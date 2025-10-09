@@ -215,78 +215,80 @@ def validate_command_facility(ctx, param, value):
             )
 
 
-def match_and_rename_ip_address(
-    address: str, hostname_or_network_ip: str
-) -> re.Match | None:
+def address_regex(address: str, hostname_or_ip: str) -> str:
     """
-    Check if the given string is a valid IPv4 address.
+    Replace 127.x.x.x and 0.x.x.x IPs with the provided hostname
+
+    This is useful when a service binds to localhost or 127.x.x.x, but we
+    want to access it using the hostname or network IP.
 
     Args:
-        address (str): The string to be checked.
-        hostname_or_network_ip (str): The hostname or network IP to replace localhost or
-                                    127.x.x.x.
+        address (str): The address to resolve.
+        hostname_or_ip (str): The hostname or IP to replace 127.x.x.x or 0.x.x.x with.
 
     Returns:
-        re.Match | None: A match object if the string is a valid IPv4 address, otherwise
-                         None.
+        str: The address with 127.x.x.x and 0.x.x.x replaced by the hostname or IP.
     """
 
-    ip_match: re.Match | None = re.match(
-        r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$",
+    ip_match: re.Match = re.search(
+        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
         address,
     )
+
     if not ip_match:
         return address
 
-    if ip_match.group(0).startswith("127.") or ip_match.group(0).startswith("0."):
-        address = address.replace(ip_match.group(0), hostname_or_network_ip)
+    if ip_match.group(0).startswith("127."):
+        address = address.replace(ip_match.group(0), hostname_or_ip)
+
+    if ip_match.group(0).startswith("0."):
+        address = address.replace(ip_match.group(0), hostname_or_ip)
 
     return address
 
 
-def resolve_localhost_to_hostname(address: str | None) -> str | None:
+def resolve_localhost_to_hostname(address: str) -> str:
     """
-    Replace localhost or 127.x.x.x in the address with the actual hostname.
-    This is useful for scenarios where a service running on localhost needs to be
-    accessed by other machines in the network.
+    Replace localhost with the actual hostname of this host.
+
+    This is useful when a service binds to localhost, but we want to access it using the
+    hostname.
 
     Args:
-        address (str): The address string to be processed.
+        address (str): The address to resolve.
 
     Returns:
-        str | None: The modified address with localhost replaced by the hostname,
-                    or None if the input address is empty.
+        str: The address with localhost replaced by the hostname.
     """
 
     if not address:
         return None
-
-    hostname = socket.gethostname()
+    hostname: str = socket.gethostname()
     if "localhost" in address:
         address = address.replace("localhost", hostname)
 
-    return match_and_rename_ip_address(address, hostname)
+    return address_regex(address, hostname)
 
 
-def resolve_localhost_and_127_ip_to_network_ip(address: str) -> str | None:
+def resolve_localhost_and_127_ip_to_network_ip(address: str) -> str:
     """
-    Replace localhost or 127.x.x.x in the address with the actual network IP.
-    This is useful for scenarios where a service running on localhost needs to be
-    accessed by other machines in the network.
+    Replace localhost and 127.x.x.x IPs with the actual network IP of this host.
+
+    This is useful when a service binds to localhost or 127.x.x.x, but we
+    want to access it from another machine on the network.
 
     Args:
-        address (str): The address string to be processed.
+        address (str): The address to resolve.
 
     Returns:
-        str | None: The modified address with localhost replaced by the network IP,
-                    or None if the input address is empty.
+        str: The address with localhost and 127.x.x.x replaced by the network IP
     """
 
-    this_ip = socket.gethostbyname(socket.gethostname())
+    this_ip: str = socket.gethostbyname(socket.gethostname())
     if "localhost" in address:
         address = address.replace("localhost", this_ip)
 
-    return match_and_rename_ip_address(address, this_ip)
+    return address_regex(address, this_ip)
 
 
 def host_is_local(host):
