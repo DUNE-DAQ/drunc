@@ -32,7 +32,6 @@
             "name": "local-connection-server"
         },
         "pod_management": {
-            "sidecar_image": "alpine/socat",
             "kill_timeout": 20,
             "ready_timeout": 60
         },
