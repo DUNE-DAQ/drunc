@@ -1,75 +1,25 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.session_manager_pb2 import (
     ActiveSession,
     AllActiveSessions,
     AllConfigKeys,
     ConfigKey,
 )
-from druncschema.token_pb2 import Token
-
-from drunc.session_manager.session_manager import SessionManager
 
 
-@pytest.fixture
-def mock_request():
-    return Request(token=Token(user_name="abc", token="13"))
-
-
-@pytest.fixture
-def mock_context():
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_logger():
-    with patch("drunc.session_manager.session_manager.get_logger") as mock_get_logger:
-        mock_logger_instance = MagicMock()
-        mock_get_logger.return_value = mock_logger_instance
-        yield mock_logger_instance
-
-
-@pytest.fixture
-def session_manager(mock_logger):
-    dummy_conf_handler = MagicMock()
-    return SessionManager(name="dummy_name", configuration=dummy_conf_handler)
-
-
-@pytest.fixture
-def commands():
-    return [
-        CommandDescription(
-            name="describe",
-            data_type=["None"],
-            help="List the methods exposed by this endpoint.",
-            return_type="description_pb2.Description",
-        ),
-        CommandDescription(
-            name="list_all_sessions",
-            data_type=["None"],
-            help="List all active sessions.",
-            return_type="session_manager_pb2.AllActiveSessions",
-        ),
-        CommandDescription(
-            name="list_all_configs",
-            data_type=["None"],
-            help="List all available configurations.",
-            return_type="session_manager_pb2.AllConfigKeys",
-        ),
-    ]
-
-
-def test_describe(session_manager, mock_request, mock_context, commands, mock_logger):
+def test_describe(
+    session_manager, mock_request, mock_context, command_description_list, mock_logger
+):
     response = session_manager.describe(mock_request, mock_context)
     mock_logger.debug.assert_any_call("Initialized SessionManager")
 
     assert isinstance(response, Description)
     assert response.name == "dummy_name"
-    assert response.commands == commands
+    assert response.commands == command_description_list
     assert response.children == []
     assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
