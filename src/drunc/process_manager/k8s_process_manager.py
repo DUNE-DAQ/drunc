@@ -894,7 +894,7 @@ done
         """Handles the 'restart' command."""
         uuids = self._get_process_uid(query)
         if not uuids:
-            raise DruncCommandException("No processes found matching the query.")
+            raise DruncK8sPodException("No processes found matching the query.")
 
         # Create copies of boot requests for each process
         br_by_uuid = {}
