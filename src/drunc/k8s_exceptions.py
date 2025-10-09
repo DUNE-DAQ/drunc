@@ -1,8 +1,20 @@
 from drunc.exceptions import DruncException
 
 
-class DruncK8sNamespaceAlreadyExists(
-    DruncException
-):  # Exceptions that gets thrown when namespaces already exists
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class DruncK8sException(DruncException):
+    """Exception thrown when there is a Kubernetes error."""
+    pass
+
+class DruncK8sNamespaceException(DruncException):
+    """Exception thrown for namespace-related errors."""
+    pass
+
+
+class DruncK8sPodException(DruncException):
+    """Exception thrown for pod-related errors."""
+    pass
+
+class DruncK8sNodeException(DruncException):
+    """Exception thrown for node-related errors such as unavailable or invalid nodes."""
+    pass
+
