@@ -2,8 +2,6 @@
 import getpass
 import os
 import re
-import signal
-import subprocess
 import threading
 import uuid
 from time import sleep, time
@@ -24,6 +22,7 @@ from druncschema.process_manager_pb2 import (
 
 # Third-Party Imports
 from kubernetes import client, config, watch
+from kubernetes.client.rest import ApiException
 
 from drunc.k8s_exceptions import (
     DruncK8sException,
@@ -36,13 +35,13 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class K8sPodWatcherThread(threading.Thread):
-    def __init__(self, pm):
+    def __init__(self, pm) -> None:
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
         self.processed_uuids = set()
 
-    def run(self):
+    def run(self) -> None:
         self.pm.log.info("K8sPodWatcherThread started")
         while True:
             try:
@@ -92,20 +91,28 @@ class K8sPodWatcherThread(threading.Thread):
                             proc_uuid, exit_code, reason, session
                         )
 
+            except ApiException as e:
+                if e.status == 410:
+                    pass
+                else:
+                    self.pm.log.error(
+                        f"K8s API error in watcher: {e}. Restarting watch."
+                    )
+                sleep(3)
+
             except Exception as e:
                 self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
                 sleep(self.pm.watcher_retry_sleep)
 
 
 class K8sProcessManager(ProcessManager):
-    def __init__(self, configuration, **kwargs):
+    def __init__(self, configuration, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
         applications running in Pods. It includes special handling for a local connectivity
         service, which involves:
-        1.  Automating a `kubectl port-forward` in a background shell process for the orchestrator.
-        2.  Injecting a proxy sidecar container into other pods for transparent service discovery.
+        1.  Using a NodePort service for the orchestrator for external access.
         """
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -126,11 +133,11 @@ class K8sProcessManager(ProcessManager):
         self.uuids_pending_deletion = set()
         self.termination_complete_event = threading.Event()
         self.final_exit_codes = {}
-        self.port_forwards = {}
         self.local_connection_server_is_booted = False
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
+        self._host_cache_lock = threading.Lock()
 
         # Get settings from configuration
         settings = getattr(self.configuration.data, "settings", {})
@@ -148,11 +155,9 @@ class K8sProcessManager(ProcessManager):
         self.proxy_unset_script = connection_server.get(
             "proxy_unset_script", "~np04daq/bin/web_proxy.sh -u"
         )
-        self.port_forward_timeout = connection_server.get("port_forward_timeout", 15)
-
+ 
         # Pod management
         pod_management = settings.get("pod_management", {})
-        self.sidecar_image = pod_management.get("sidecar_image", "alpine/socat")
         self.kill_timeout = pod_management.get("kill_timeout", 20)
         self.pod_ready_timeout = pod_management.get("ready_timeout", 60)
 
@@ -166,6 +171,11 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_verification_cache_expiry", 300)
+        self.connection_server_hostname = settings.get(
+            "connection_server_hostname", "localhost"
+        )
+        self.connection_server_node_port = None
+
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
@@ -182,14 +192,14 @@ class K8sProcessManager(ProcessManager):
         else:
             self.log.info("No active namespace created by drunc")
 
-    def _start_watcher(self):
+    def _start_watcher(self) -> None:
         """Starts the background thread that watches for Pod status changes."""
         self.log.debug("Starting K8s pod watcher thread")
         t = K8sPodWatcherThread(pm=self)
         t.start()
         self.watchers.append(t)
 
-    def notify_termination(self, proc_uuid, exit_code, reason, session):
+    def notify_termination(self, proc_uuid, exit_code, reason, session) -> None:
         """Callback for when a pod terminates."""
         self.log.debug(
             f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}"
@@ -212,7 +222,7 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug("All pending pods terminated, setting event.")
                 self.termination_complete_event.set()
 
-    def is_alive(self, podname, session):
+    def is_alive(self, podname, session) -> bool:
         """Checks if a pod is currently in the 'Running' phase."""
         try:
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
@@ -223,7 +233,7 @@ class K8sProcessManager(ProcessManager):
             self.log.error(f"Error checking status for pod {session}.{podname}: {e}")
             return False
 
-    def _add_label(self, obj_name, obj_type, key, label, session=None):
+    def _add_label(self, obj_name, obj_type, key, label, session=None) -> None:
         """Adds a label to a Kubernetes object (Pod or Namespace)."""
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
@@ -255,23 +265,24 @@ class K8sProcessManager(ProcessManager):
         else:
             raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
 
-    def _add_creator_label(self, obj_name, obj_type):
+    def _add_creator_label(self, obj_name, obj_type) -> None:
         """Adds a 'creator' label to a Kubernetes object."""
         self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
-    def _get_creator_label_selector(self):
+    def _get_creator_label_selector(self) -> str:
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _is_host_cached(self, host):
         """Check if host is cached and not expired."""
-        if host not in self._host_cache:
-            return None
-        is_valid, timestamp = self._host_cache[host]
-        if time() - timestamp > self._host_cache_expiry:
-            del self._host_cache[host]
-            return None
-        return is_valid
+        with self._host_cache_lock:
+            if host not in self._host_cache:
+                return None
+            is_valid, timestamp = self._host_cache[host]
+            if time() - timestamp > self._host_cache_expiry:
+                del self._host_cache[host]
+                return None
+            return is_valid
 
     def _verify_host_in_cluster(self, target_host):
         """Verifies that the target host is available in the Kubernetes cluster."""
@@ -286,20 +297,7 @@ class K8sProcessManager(ProcessManager):
                 )
 
         try:
-            nodes = self._core_v1_api.list_node()
-            target_node = next(
-                (node for node in nodes.items if node.metadata.name == target_host),
-                None,
-            )
-
-            if not target_node:
-                available_nodes = [node.metadata.name for node in nodes.items]
-                self._host_cache[target_host] = (False, time())
-                raise DruncK8sNodeException(
-                    f"Target host '{target_host}' is not part of the Kubernetes cluster. "
-                    f"Available nodes: {', '.join(available_nodes)}"
-                )
-
+            target_node = self._core_v1_api.read_node(name=target_host)
             # Check node is ready and schedulable
             is_ready = any(
                 c.type == "Ready" and c.status == "True"
@@ -308,26 +306,32 @@ class K8sProcessManager(ProcessManager):
             is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
 
             if not is_ready or not is_schedulable:
-                self._host_cache[target_host] = (False, time())
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
                 reason = "not ready" if not is_ready else "cordoned"
                 raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
 
-            self._host_cache[target_host] = (True, time())
+            with self._host_cache_lock:
+                self._host_cache[target_host] = (True, time())
             self.log.info(f"Host '{target_host}' verified and available")
             return True
 
         except self._api_error_v1_api as e:
-            if e.status in [401, 403]:
+            if e.status == 404:
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
+                raise DruncK8sNodeException(
+                    f"Target host '{target_host}' is not part of the Kubernetes cluster"
+                )
+            elif e.status in [401, 403]:
                 raise DruncK8sException(
                     f"Permission denied accessing cluster to verify '{target_host}': {e}"
                 )
             raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
-        except DruncK8sException:
-            raise
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
-    def _create_namespace(self, session):
+    def _create_namespace(self, session) -> None:
         """Creates a Kubernetes namespace if it doesn't already exist."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
@@ -358,7 +362,7 @@ class K8sProcessManager(ProcessManager):
             else:
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
-    def _create_headless_service(self, podname, session, pod_uid):
+    def _create_headless_service(self, podname, session, pod_uid) -> None:
         """Creates a headless service for a pod."""
         service_manifest = client.V1Service(
             api_version="v1",
@@ -393,8 +397,8 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_clusterip_service(self, podname, session, pod_uid):
-        """Creates a standard ClusterIP service for the connection server."""
+    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
+        """Creates a NodePort service for the connection server (external + internal access)."""
         service_manifest = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -414,12 +418,14 @@ class K8sProcessManager(ProcessManager):
                 ],
             ),
             spec=client.V1ServiceSpec(
+                type="NodePort",
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
                         protocol="TCP",
                         port=self.connection_server_port,
                         target_port=self.connection_server_port,
+                        node_port=self.connection_server_node_port,
                     )
                 ],
             ),
@@ -429,13 +435,14 @@ class K8sProcessManager(ProcessManager):
                 namespace=session, body=service_manifest
             )
             self.log.info(
-                f'Created ClusterIP service "{session}.{podname}" on port {self.connection_server_port}'
+                f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
+                f"(NodePort: {self.connection_server_node_port} for external access)"
             )
         except self._api_error_v1_api as e:
             if e.status != 409:
-                self.log.error(f"Failed to create ClusterIP service for {podname}: {e}")
+                self.log.error(f"Failed to create NodePort service for {podname}: {e}")
 
-    def _create_pod(self, podname, session, boot_request: BootRequest):
+    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
         """Constructs and creates a Kubernetes Pod manifest."""
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
@@ -454,30 +461,7 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            # For controllers, replace hostname with 0.0.0.0 for binding
-            if "controller" in podname:
-                modified_args = []
-                for arg in e_and_a.args:
-                    if "://" in arg and ":" in arg.split("://")[1]:
-                        # This looks like a command facility URL
-                        protocol, address = arg.split("://", 1)
-                        if ":" in address:
-                            hostname, port = address.split(":", 1)
-                            # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
-                            new_address = f"{protocol}://0.0.0.0:{port}"
-                            modified_args.append(new_address)
-                            self.log.debug(
-                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)"
-                            )
-                        else:
-                            modified_args.append(arg)
-                    else:
-                        modified_args.append(arg)
-                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
-            else:
-                command_parts.append(
-                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
-                )
+            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
         # Determine the correct shutdown command for the preStop hook
@@ -526,29 +510,6 @@ done
 
         all_containers = [main_container]
 
-        # If the local connection server is active, inject a proxy sidecar into all other pods.
-        if (
-            podname != self.connection_server_name
-            and self.local_connection_server_is_booted
-        ):
-            self.log.info(f"Adding proxy sidecar to pod '{podname}'")
-            sidecar_container = client.V1Container(
-                name="proxy-sidecar",
-                image=self.sidecar_image,
-                args=[
-                    f"TCP-LISTEN:{self.connection_server_port},fork,reuseaddr",
-                    f"TCP:{self.connection_server_name}.{session}:{self.connection_server_port}",
-                ],
-                # This hook delays the sidecar's termination, allowing the main C++ app
-                # to shut down gracefully while its network connection is still alive.
-                lifecycle=client.V1Lifecycle(
-                    pre_stop=client.V1LifecycleHandler(
-                        _exec=client.V1ExecAction(command=["/bin/sh", "-c", "sleep 10"])
-                    )
-                ),
-            )
-            all_containers.append(sidecar_container)
-
         node_selector = {}
         if boot_request.process_restriction.allowed_hosts:
             target_host = boot_request.process_restriction.allowed_hosts[0]
@@ -556,7 +517,7 @@ done
             if target_host == "localhost":
                 target_host = resolve_localhost_to_hostname(target_host)
                 self.log.info(
-                    f"Resolved localhost to '{target_host}' for Kubernetes node selection"
+                    f"Resolved localhost to '{target_host}' for node selection"
                 )
 
             # Verify the target host is available in the cluster before scheduling
@@ -566,6 +527,33 @@ done
             self.log.info(
                 f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
             )
+
+        host_aliases = []
+        if (
+            podname != self.connection_server_name
+            and self.local_connection_server_is_booted
+        ):
+            # Wait for service to get ClusterIP
+            connection_server_ip = None
+            retry_count = 0
+            max_retries = 10
+            while not connection_server_ip and retry_count < max_retries:
+                connection_server_ip = self._get_connection_server_cluster_ip(session)
+                if not connection_server_ip:
+                    sleep(1)
+                    retry_count += 1
+
+            if connection_server_ip:
+                host_aliases = [
+                    client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+                ]
+                self.log.info(
+                    f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
+                )
+            else:
+                self.log.warning(
+                    f"Could not get connection server ClusterIP for pod '{podname}'"
+                )
 
         pod_manifest = client.V1Pod(
             api_version="v1",
@@ -583,6 +571,7 @@ done
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
                 containers=all_containers,
+                host_aliases=host_aliases if host_aliases else None,
                 volumes=[
                     client.V1Volume(
                         name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")
@@ -621,7 +610,7 @@ done
                     raise e
 
             if podname == self.connection_server_name:
-                self._create_clusterip_service(podname, session, pod_uid)
+                self._create_nodeport_service(podname, session, pod_uid)
             else:
                 self._create_headless_service(podname, session, pod_uid)
 
@@ -637,7 +626,34 @@ done
             self.log.error(error_message)
             raise DruncK8sException(error_message) from e
 
-    def _get_process_uid(self, query: ProcessQuery, order_by: str = None):
+    def _get_connection_server_cluster_ip(self, session) -> str:
+        """Gets the ClusterIP of the connection server service."""
+        try:
+            service = self._core_v1_api.read_namespaced_service(
+                name=self.connection_server_name, namespace=session
+            )
+            return service.spec.cluster_ip
+        except self._api_error_v1_api as e:
+            self.log.error(f"Failed to get connection server service IP: {e}")
+            return None
+
+    def _extract_port_from_cmd(self, boot_request) -> int | None:
+        # Find the gunicorn port argument from exec_and_args_list
+        for e_and_a in boot_request.process_description.executable_and_arguments:
+            if "gunicorn" in e_and_a.exec or (
+                "gunicorn" in " ".join(list(e_and_a.args))
+            ):
+                all_args = [e_and_a.exec] + list(e_and_a.args)
+                arg_str = " ".join(all_args)
+                match = re.search(r"-b\s+[\w\.]+:(\d+)", arg_str)
+                if not match:
+                    # Try to match '--bind'
+                    match = re.search(r"--bind[\s=]+[\w\.]+:(\d+)", arg_str)
+                if match:
+                    return int(match.group(1))
+        return None
+
+    def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
         """
         Finds process UUIDs matching a query.
 
@@ -702,11 +718,18 @@ done
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
         Internal boot method. Handles pod creation and special logic for the connection server.
-        - For the connection server: Boot is BLOCKING, and a port-forward is automated.
+        - For the connection server: Wait for it to be ready and check the NodePort service
         - For all other pods: Boot is NON-BLOCKING.
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
+
+        session_re = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+        if not session_re.match(session):
+            raise DruncK8sNamespaceException(
+                f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
+                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
+            )
 
         if boot_request.process_restriction.allowed_hosts:
             hostname = boot_request.process_restriction.allowed_hosts[0]
@@ -714,6 +737,56 @@ done
 
         if uuid in self.boot_request:
             raise DruncK8sPodException(f'"{session}.{podname}":{uuid} already exists!')
+
+        # Extract ports for LCS
+        if podname == self.connection_server_name:
+            self.log.info(f"Waiting for '{podname}' to become ready...")
+
+            port = None
+            env_vars = boot_request.process_description.env
+
+            if "CONNECTION_PORT" in env_vars:
+                port_str = env_vars["CONNECTION_PORT"]
+                try:
+                    port = int(port_str)
+                    self.log.info(
+                        f"Using port {port} from 'CONNECTION_PORT' environment variable."
+                    )
+                except (ValueError, TypeError):
+                    raise DruncK8sException(
+                        f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
+                    )
+
+            if port is None:
+                self.log.info(
+                    "CONNECTION_PORT not found in env, falling back to parsing gunicorn command."
+                )
+                port = self._extract_port_from_cmd(boot_request)
+
+            if port:
+                self.connection_server_port = port
+                self.connection_server_node_port = port
+            else:
+                raise DruncK8sException(
+                    "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
+                )
+
+            # Check for NodePort collision
+            api = self._core_v1_api
+            all_services = api.list_service_for_all_namespaces()
+            for svc in all_services.items:
+                if not svc.spec.type == "NodePort":
+                    continue
+                for p in svc.spec.ports:
+                    if p.node_port == self.connection_server_node_port and (
+                        svc.metadata.namespace != session
+                        or svc.metadata.name != podname
+                    ):
+                        raise DruncK8sException(
+                            f"NodePort {self.connection_server_node_port} is already in use by service "
+                            f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
+                            "Cannot start another local connection server with the same port."
+                        )
 
         self._create_namespace(session)
 
@@ -727,6 +800,7 @@ done
         # Special handling only for the connection server
         if podname == self.connection_server_name:
             self.log.info(f"Waiting for '{podname}' to become ready...")
+
             start_time = time()
             while time() - start_time < self.pod_ready_timeout:
                 try:
@@ -741,6 +815,13 @@ done
                             f"'{podname}' is ready with IP {pod_status.status.pod_ip}."
                         )
                         self.local_connection_server_is_booted = True
+
+                        # Log connection information using the NodePort service
+                        connection_url = f"http://{self.connection_server_hostname}:{self.connection_server_node_port}"
+                        self.log.info(
+                            f"Connection server available at: {connection_url}"
+                        )
+
                         break
                 except self._api_error_v1_api as e:
                     if e.status == 404:
@@ -752,76 +833,6 @@ done
                 raise DruncK8sException(
                     f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
                 )
-
-            kubeconfig_path = os.environ.get("KUBECONFIG")
-
-            command_parts = []
-            if kubeconfig_path:
-                command_parts.append(f"export KUBECONFIG='{kubeconfig_path}'")
-            else:
-                self.log.warning(
-                    "KUBECONFIG env var not set; assuming kubectl is configured."
-                )
-
-            command_parts.append(f"source {self.proxy_unset_script}")
-            command_parts.append(
-                f"kubectl port-forward -n {session} pod/{podname} {self.connection_server_port}:{self.connection_server_port}"
-            )
-            command = "; ".join(command_parts)
-
-            self.log.info(
-                "Starting port-forward for orchestrator. Executing shell command..."
-            )
-            try:
-                # preexec_fn=os.setsid creates a new process group, allowing us to kill the shell and all its children.
-                proc = subprocess.Popen(
-                    command,
-                    shell=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    preexec_fn=os.setsid,
-                )
-                self.port_forwards[uuid] = proc
-                self.log.info(
-                    f"Port-forward process for '{podname}' started with PID {proc.pid}. Waiting for tunnel..."
-                )
-
-                output = {}
-
-                def read_output(pipe, storage):
-                    storage["line"] = pipe.readline()
-
-                thread = threading.Thread(
-                    target=read_output, args=(proc.stdout, output)
-                )
-                thread.start()
-                thread.join(timeout=self.port_forward_timeout)
-
-                if thread.is_alive():
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncK8sException(
-                        f"Port-forward for '{podname}' did not become ready in {self.port_forward_timeout} seconds."
-                    )
-
-                line = output.get("line", "").strip()
-                if "Forwarding from" in line:
-                    self.log.info(f"Port-forward is active: {line}")
-                else:
-                    error_output = proc.stderr.read()
-                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                    raise DruncK8sException(
-                        f"Port-forward for '{podname}' failed. Stdout: '{line}'. Stderr: '{error_output}'"
-                    )
-
-            except Exception as e:
-                self.log.error(
-                    f"Failed to start or validate port-forwarding for '{podname}': {e}"
-                )
-                if uuid in self.port_forwards:
-                    os.killpg(os.getpgid(self.port_forwards[uuid].pid), signal.SIGTERM)
-                    del self.port_forwards[uuid]
-                raise DruncK8sException(f"Port-forward error for '{podname}': {e}")
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)
@@ -839,11 +850,20 @@ done
         queried_uuids = self._get_process_uid(query)
         if not queried_uuids:
             return ProcessInstanceList(values=[])
-        all_pods = self._core_v1_api.list_pod_for_all_namespaces(
-            label_selector=self._get_creator_label_selector()
-        )
+
+        pod_list = None
+        if query.session:
+            pod_list = self._core_v1_api.list_namespaced_pod(
+                namespace=query.session,
+                label_selector=self._get_creator_label_selector(),
+            )
+        else:
+            pod_list = self._core_v1_api.list_pod_for_all_namespaces(
+                label_selector=self._get_creator_label_selector()
+            )
+
         uuid_to_pod = {
-            p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in all_pods.items
+            p.metadata.labels.get(f"uuid.{self.drunc_label}"): p for p in pod_list.items
         }
         ret = []
         for proc_uuid in queried_uuids:
@@ -900,7 +920,7 @@ done
         restarted_process = self.__boot(br_copy, uuid)
         return ProcessInstanceList(values=[restarted_process])
 
-    def _kill_pod(self, podname, session, grace_period_seconds=None):
+    def _kill_pod(self, podname, session, grace_period_seconds=None) -> None:
         """Deletes a specific pod from a namespace."""
         try:
             self._core_v1_api.delete_namespaced_pod(
@@ -922,13 +942,6 @@ done
 
         self.log.info(f"Starting termination of {len(uuids_to_kill)} pods...")
 
-        is_local_session = any(
-            self.boot_request[uuid].process_description.metadata.name
-            == self.connection_server_name
-            for uuid in uuids_to_kill
-            if uuid in self.boot_request
-        )
-
         graceful_apps, forced_apps = [], []
         for uuid_str in uuids_to_kill:
             if uuid_str not in self.boot_request:
@@ -940,12 +953,12 @@ done
                 or pd.metadata.name == self.connection_server_name
             )
 
-            if is_controller or is_local_session:
+            if is_controller:
                 forced_apps.append(uuid_str)
             else:
                 graceful_apps.append(uuid_str)
 
-        def kill_and_wait(uuids, stage_name, grace_period=None):
+        def kill_and_wait(uuids, stage_name, grace_period=None) -> None:
             if not uuids:
                 return
             action = (
@@ -955,10 +968,12 @@ done
             )
             self.log.info(f"Stage '{stage_name}': {action} {len(uuids)} pod(s)...")
 
-            self.uuids_pending_deletion.update(uuids)
             self.termination_complete_event.clear()
+            self.uuids_pending_deletion.update(uuids)
 
             for proc_uuid in uuids:
+                if proc_uuid not in self.boot_request:
+                    continue  # Sanity check
                 pd = self.boot_request[proc_uuid].process_description
                 self.log.info(
                     f'Killing pod "{pd.metadata.session}/{pd.metadata.name}" (UUID {proc_uuid})'
@@ -974,19 +989,12 @@ done
                 self.log.warning(
                     f"Timeout in stage '{stage_name}'. Remaining: {self.uuids_pending_deletion}"
                 )
+
             self.uuids_pending_deletion.clear()
 
         kill_and_wait(graceful_apps, "Standalone C++ Applications")
 
         kill_and_wait(forced_apps, "Controllers & Local Session Apps", grace_period=0)
-
-        # Terminate port-forward if its pod was killed
-        for uuid_str in forced_apps:
-            if uuid_str in self.port_forwards:
-                self.log.info("Terminating port-forward process")
-                proc = self.port_forwards.pop(uuid_str)
-                os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-                proc.wait()
 
         final_ret = []
         for proc_uuid in uuids_to_kill:

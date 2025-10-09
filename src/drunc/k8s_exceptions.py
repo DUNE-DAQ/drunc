@@ -6,15 +6,15 @@ class DruncK8sException(DruncException):
     pass
 
 class DruncK8sNamespaceException(DruncException):
-    """Exception thrown when namespaces already exist."""
+    """Exception thrown for namespace-related errors."""
     pass
 
 
 class DruncK8sPodException(DruncException):
-    """Exception thrown when pods already exist."""
+    """Exception thrown for pod-related errors."""
     pass
 
 class DruncK8sNodeException(DruncException):
-    """Exception thrown when nodes are not valid."""
+    """Exception thrown for node-related errors such as unavailable or invalid nodes."""
     pass
 

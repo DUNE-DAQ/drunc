@@ -219,12 +219,11 @@ def logs(
         obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
 
     for line in result.lines:
-        if line == "":
+        if not line.strip():  # keep empty lines for visual clarity
             obj.print("")
             continue
 
-        if line[-1] == "\n":
-            line = line[:-1]
+        line = line.rstrip("\n")  # remove trailing newline
 
         if grep is not None and grep not in line:
             continue
