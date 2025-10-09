@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from subprocess import Popen
 
+import psutil
 import pytest
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,6 @@ def boot_session(configuration_name, request):
 
     processes = {}
     for app_info in apps:
-        args = " ".join([app_info["type"]] + app_info["args"])
         log_file = (
             "log_"
             + getpass.getuser()
@@ -78,7 +78,8 @@ def boot_session(configuration_name, request):
             + ".txt"
         )
         log_file = consolidated_conf_path + "/" + log_file
-        args = "{ " + args + "; } &> " + log_file
+        args = f"{app_info['type']} {' '.join(app_info['args'])} > {log_file} 2>&1"
+
         logger.debug(f"Running {args}")
         process = Popen(
             args=args,
@@ -98,17 +99,22 @@ def boot_session(configuration_name, request):
     return processes, session_dal, session_name
 
 
+def cleanup(processes):
+    for _, process_and_log in processes.items():
+        proc = process_and_log[0]
+        if proc.poll() is None:
+            proc.kill()
+
+
 @pytest.fixture
 def one_controller_running(load_test_config, request):
     configuration_name = "one-controller-config"
     processes_and_logs, session_dal, session_name = boot_session(
         configuration_name, request
     )
+
     yield processes_and_logs, session_dal, session_name
-    for name, process_and_log in processes_and_logs.items():
-        if process_and_log[0].poll() is None:
-            print(f"Killing {name}: {process_and_log[0].pid}")
-            process_and_log[0].kill()
+    cleanup(processes_and_logs)
 
 
 @pytest.fixture
@@ -117,9 +123,31 @@ def many_controllers_running(load_test_config, request):
     processes_and_logs, session_dal, session_name = boot_session(
         configuration_name, request
     )
-
     yield processes_and_logs, session_dal, session_name
-    for name, process_and_log in processes_and_logs.items():
-        if process_and_log[0].poll() is None:
-            print(f"Killing {name}: {process_and_log[0].pid}")
-            process_and_log[0].kill()
+    cleanup(processes_and_logs)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """
+    Pytest hook containing the tear-down steps to kill running processes
+    and remove log files.
+    """
+    import glob
+
+    # Iterate over all running processes
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+        cmdline = proc.info.get("cmdline")
+        if isinstance(cmdline, list):
+            joined = " ".join(cmdline)
+            if "gunicorn" in joined or "drunc-controller" in joined:
+                try:
+                    proc.kill()
+                except Exception as e:
+                    print(f"Failed to kill process {proc.pid}: {e}")
+
+    # Remove logs
+    for path in glob.glob("info.test*"):
+        try:
+            os.remove(path)
+        except Exception as e:
+            print(f"Failed to delete {path}: {e}")
