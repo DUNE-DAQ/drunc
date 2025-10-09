@@ -24,9 +24,14 @@ from druncschema.process_manager_pb2 import (
 from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.k8s_exceptions import (
+    DruncK8sException,
+    DruncK8sNamespaceException,
+    DruncK8sNodeException,
+    DruncK8sPodException,
+)
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -131,6 +136,10 @@ class K8sProcessManager(ProcessManager):
         self.final_exit_codes = {}
         self.local_connection_server_is_booted = False
 
+        # Host verification cache: {hostname: (is_valid, timestamp)}
+        self._host_cache = {}
+        self._host_cache_lock = threading.Lock()
+
         # Safely get settings from the configuration object
         settings = {}
         if (
@@ -151,16 +160,13 @@ class K8sProcessManager(ProcessManager):
         self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
         self.kill_timeout = settings.get("kill_timeout", 20)
         self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
+        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
+
+        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
         self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
         self.restart_cleanup_polling = float(
             settings.get("restart_cleanup_polling", "0.5")
         )
-
-        self.forced_node = settings.get(
-            "force_node", "np04-srv-016"
-        )  # TODO: change this later
-
-        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -222,9 +228,10 @@ class K8sProcessManager(ProcessManager):
 
         if obj_type == "pod":
             if not session:
-                raise DruncException(
+                raise DruncK8sNamespaceException(
                     "Session (namespace) must be provided to label a pod."
                 )
+
             try:
                 self._core_v1_api.patch_namespaced_pod(
                     name=obj_name, namespace=session, body=body
@@ -245,7 +252,7 @@ class K8sProcessManager(ProcessManager):
             except self._api_error_v1_api as e:
                 self.log.error(f"Failed to apply label to namespace {obj_name}: {e}")
         else:
-            raise DruncException(f"Cannot add label to object type: {obj_type}")
+            raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
 
     def _add_creator_label(self, obj_name, obj_type) -> None:
         """Adds a 'creator' label to a Kubernetes object."""
@@ -254,6 +261,64 @@ class K8sProcessManager(ProcessManager):
     def _get_creator_label_selector(self) -> str:
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
+
+    def _is_host_cached(self, host):
+        """Check if host is cached and not expired."""
+        with self._host_cache_lock:
+            if host not in self._host_cache:
+                return None
+            is_valid, timestamp = self._host_cache[host]
+            if time() - timestamp > self._host_cache_expiry:
+                del self._host_cache[host]
+                return None
+            return is_valid
+
+    def _verify_host_in_cluster(self, target_host):
+        """Verifies that the target host is available in the Kubernetes cluster."""
+        cached = self._is_host_cached(target_host)
+        if cached is not None:
+            if cached:
+                self.log.debug(f"Host '{target_host}' cached (valid)")
+                return True
+            else:
+                raise DruncK8sNodeException(
+                    f"Host '{target_host}' was previously verified as unavailable"
+                )
+
+        try:
+            target_node = self._core_v1_api.read_node(name=target_host)
+            # Check node is ready and schedulable
+            is_ready = any(
+                c.type == "Ready" and c.status == "True"
+                for c in target_node.status.conditions or []
+            )
+            is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
+
+            if not is_ready or not is_schedulable:
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
+                reason = "not ready" if not is_ready else "cordoned"
+                raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
+
+            with self._host_cache_lock:
+                self._host_cache[target_host] = (True, time())
+            self.log.info(f"Host '{target_host}' verified and available")
+            return True
+
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                with self._host_cache_lock:
+                    self._host_cache[target_host] = (False, time())
+                raise DruncK8sNodeException(
+                    f"Target host '{target_host}' is not part of the Kubernetes cluster"
+                )
+            elif e.status in [401, 403]:
+                raise DruncK8sException(
+                    f"Permission denied accessing cluster to verify '{target_host}': {e}"
+                )
+            raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
+        except Exception as e:
+            raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
     def _create_namespace(self, session) -> None:
         """Creates a Kubernetes namespace if it doesn't already exist."""
@@ -265,7 +330,7 @@ class K8sProcessManager(ProcessManager):
 
         try:
             self._core_v1_api.read_namespace(name=session)
-            raise DruncException(
+            raise DruncK8sNamespaceException(
                 f"Namespace '{session}' already exists. Please use a different session name."
             )
 
@@ -284,7 +349,7 @@ class K8sProcessManager(ProcessManager):
                 self._add_creator_label(session, "namespace")
                 self.managed_sessions.add(session)
             else:
-                raise e
+                raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
     def _create_headless_service(self, podname, session, pod_uid) -> None:
         """Creates a headless service for a pod."""
@@ -384,6 +449,7 @@ class K8sProcessManager(ProcessManager):
                 and e_and_a.exec != "source"
             ):
                 prefix = "exec "
+
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
@@ -434,13 +500,18 @@ done
         all_containers = [main_container]
 
         node_selector = {}
-        if self.forced_node:
-            node_selector = {"kubernetes.io/hostname": self.forced_node}
-            self.log.info(
-                f"Pod '{podname}' will be forced to run on node '{self.forced_node}' (from config)"
-            )
-        elif boot_request.process_restriction.allowed_hosts:
+        if boot_request.process_restriction.allowed_hosts:
             target_host = boot_request.process_restriction.allowed_hosts[0]
+            # Resolve localhost to actual hostname for Kubernetes node selection
+            if target_host == "localhost":
+                target_host = resolve_localhost_to_hostname(target_host)
+                self.log.info(
+                    f"Resolved localhost to '{target_host}' for node selection"
+                )
+
+            # Verify the target host is available in the cluster before scheduling
+            self._verify_host_in_cluster(target_host)
+
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(
                 f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
@@ -542,7 +613,7 @@ done
                 )
 
             self.log.error(error_message)
-            raise DruncException(error_message) from e
+            raise DruncK8sException(error_message) from e
 
     def _get_connection_server_cluster_ip(self, session) -> str:
         """Gets the ClusterIP of the connection server service."""
@@ -642,17 +713,19 @@ done
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
-        session_re = re.compile(r'^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$')
+        session_re = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
         if not session_re.match(session):
-            raise DruncCommandException(f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
-                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars.")
+            raise DruncK8sNamespaceException(
+                f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
+                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
+            )
 
         if boot_request.process_restriction.allowed_hosts:
             hostname = boot_request.process_restriction.allowed_hosts[0]
             boot_request.process_description.metadata.hostname = hostname
 
         if uuid in self.boot_request:
-            raise DruncCommandException(f'"{session}.{podname}":{uuid} already exists!')
+            raise DruncK8sPodException(f'"{session}.{podname}":{uuid} already exists!')
 
         # Extract ports for LCS
         if podname == self.connection_server_name:
@@ -669,7 +742,7 @@ done
                         f"Using port {port} from 'CONNECTION_PORT' environment variable."
                     )
                 except (ValueError, TypeError):
-                    raise DruncException(
+                    raise DruncK8sException(
                         f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
                     )
 
@@ -683,7 +756,7 @@ done
                 self.connection_server_port = port
                 self.connection_server_node_port = port
             else:
-                raise DruncException(
+                raise DruncK8sException(
                     "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
                 )
 
@@ -698,7 +771,7 @@ done
                         svc.metadata.namespace != session
                         or svc.metadata.name != podname
                     ):
-                        raise DruncException(
+                        raise DruncK8sException(
                             f"NodePort {self.connection_server_node_port} is already in use by service "
                             f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
                             "Cannot start another local connection server with the same port."
@@ -746,7 +819,7 @@ done
                         raise e
                 sleep(1)
             else:
-                raise DruncException(
+                raise DruncK8sException(
                     f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
                 )
 
@@ -823,7 +896,7 @@ done
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
 
         if uuid not in self.boot_request:
-            raise DruncCommandException(
+            raise DruncK8sPodException(
                 f"Cannot restart process with UUID {uuid}: Not found."
             )
 
@@ -846,7 +919,9 @@ done
             )
         except self._api_error_v1_api as e:
             if e.status != 404:
-                raise e
+                raise DruncK8sException(
+                    f"Failed to delete pod '{session}.{podname}': {e}"
+                )
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """Handles the 'kill' command."""
