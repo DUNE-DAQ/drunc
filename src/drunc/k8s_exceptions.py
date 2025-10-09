@@ -11,7 +11,7 @@ class DruncK8sNamespaceException(DruncException):
 
 
 class DruncK8sPodException(DruncException):
-    """Exception thrown when pods already exist."""
+    """Exception thrown for pod-related errors."""
     pass
 
 class DruncK8sNodeException(DruncException):
