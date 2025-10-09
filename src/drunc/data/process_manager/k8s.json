@@ -38,7 +38,7 @@
         },
         "cleanup": {
             "restart_time": "10",
-            "restart_polling": "0.5"
+            "restart_polling": 0.5
         },
         "checking": {
             "watcher_retry_sleep": 5,
