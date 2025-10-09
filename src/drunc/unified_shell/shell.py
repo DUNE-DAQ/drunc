@@ -387,8 +387,16 @@ def unified_shell(
                     )
                     try:
                         if safe_mode:
-                            ctx.invoke(ctx.command.commands.get("stop-run"))
-                            ctx.invoke(ctx.command.commands.get("scrap"))
+                            stop_run_cmd = ctx.command.commands.get("stop-run")
+                            scrap_cmd = ctx.command.commands.get("scrap")
+                            if stop_run_cmd is not None:
+                                ctx.invoke(stop_run_cmd)
+                            else:
+                                unified_shell_log.warning("Command 'stop-run' not found; skipping graceful shutdown step.")
+                            if scrap_cmd is not None:
+                                ctx.invoke(scrap_cmd)
+                            else:
+                                unified_shell_log.warning("Command 'scrap' not found; skipping graceful shutdown step.")
                             unified_shell_log.info("Controller shutdown gracefully")
                     except Exception as e:
                         unified_shell_log.error(
