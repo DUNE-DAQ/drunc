@@ -262,7 +262,7 @@ def resolve_localhost_to_hostname(address: str) -> str:
     """
 
     if not address:
-        return None
+        return ""
     hostname: str = socket.gethostname()
     if "localhost" in address:
         address = address.replace("localhost", hostname)
