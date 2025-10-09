@@ -161,8 +161,8 @@ class K8sProcessManager(ProcessManager):
 
         # Cleanup
         cleanup = settings.get("cleanup", {})
-        self.restart_cleanup_time = float(cleanup.get("restart_time", "10"))
-        self.restart_cleanup_polling = float(cleanup.get("restart_polling", "0.5"))
+        self.restart_cleanup_time = float(cleanup.get("restart_time", 10.0))
+        self.restart_cleanup_polling = float(cleanup.get("restart_polling", 0.5))
 
         # Checking
         checking = settings.get("checking", {})
