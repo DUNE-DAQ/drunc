@@ -151,11 +151,13 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_name = connection_server.get(
             "name", "local-connection-server"
         )
-        self.connection_server_port = connection_server.get("port", 5000)
-        self.proxy_unset_script = connection_server.get(
-            "proxy_unset_script", "~np04daq/bin/web_proxy.sh -u"
+        self.connection_server_hostname = connection_server.get(
+            "hostname", "localhost"
         )
- 
+        self.connection_server_port = None
+        self.connection_server_node_port = None
+
+
         # Pod management
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 20)
@@ -171,11 +173,7 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_verification_cache_expiry", 300)
-        self.connection_server_hostname = settings.get(
-            "connection_server_hostname", "localhost"
-        )
-        self.connection_server_node_port = None
-
+    
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 

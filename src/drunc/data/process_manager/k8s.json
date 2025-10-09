@@ -30,9 +30,7 @@
         },
         "connection_server": {
             "name": "local-connection-server",
-            "port": 5000,
-            "proxy_unset_script": "~np04daq/bin/web_proxy.sh -u",
-            "port_forward_timeout": 15
+            "hostname": "localhost1"
         },
         "pod_management": {
             "sidecar_image": "alpine/socat",
