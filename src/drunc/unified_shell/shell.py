@@ -170,10 +170,7 @@ def unified_shell(
             )
             sys.exit(1)
 
-        # if process_manager_type == k8s and validate_k8s_session_name(session_name) is False:
-        #     unified_shell_log.error(f'Invalid session/namespace name "{session_name}". Must match RFC1123 label: lowercase alphanumeric or \'-\', start/end with alphanumeric, max 63 chars.')
-        #     sys.exit(1)
-
+        unified_shell_log.info("Starting process manager")
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 
@@ -224,7 +221,7 @@ def unified_shell(
 
     desc = None
     try:
-        unified_shell_log.debug("Runnning [green]describe[/green]")
+        unified_shell_log.debug("Running [green]describe[/green]")
         try:
             desc = ctx.obj.get_driver().describe()
         except Exception as e:
@@ -487,7 +484,8 @@ def unified_shell(
 
         unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
         logging.shutdown()
-        os._exit(0)  # Not graceful, but it works....
+        ctx.obj.terminate()
+        # os._exit() # Not graceful, can come back in the future for debugging
 
     ctx.call_on_close(cleanup)
 
