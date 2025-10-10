@@ -109,7 +109,7 @@ class ProcessManagerDriver(GRPCDriver):
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
-
+            self.log.debug(f"Boot request: {request}")
             try:
                 response = self.stub.boot(request, timeout=timeout)
             except grpc.RpcError as e:

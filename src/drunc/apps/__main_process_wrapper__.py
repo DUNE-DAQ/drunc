@@ -14,6 +14,7 @@ def terminate_all(sig, frame):
 
 
 @click.command()
+@click.argument("cmd")
 @click.option(
     "-l",
     "--log",
@@ -21,7 +22,6 @@ def terminate_all(sig, frame):
     type=click.Path(file_okay=True, dir_okay=False),
     required=True,
 )
-@click.argument("cmd")
 def main(cmd: str, log_path: str):
     # signal.signal(signal.SIGHUP, terminate_all)
     # signal.signal(signal.SIGINT, terminate_all)

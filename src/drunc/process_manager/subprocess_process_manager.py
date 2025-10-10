@@ -21,6 +21,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
     ProcessUUID,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.process_manager.process_manager import (
@@ -323,8 +324,8 @@ class SubProcessProcessManager(ProcessManager):
             ProcessInstance: The instance of the booted process.
         """
 
-        self.log.debug(
-            f"{self.name} booting '{boot_request.process_description.metadata.name}' "
+        self.log.error(
+            f"PP: {self.name} booting '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}'"
         )
 
@@ -355,17 +356,15 @@ class SubProcessProcessManager(ProcessManager):
                 )
 
                 # Add exported environment variables
-                cmd_env: str = ";".join(
-                    [f'export {n}="{v}"' for n, v in env_var.items()]
+                env_setup_cmd: str = "; ".join(
+                    [f"export {n}='{v}'" for n, v in env_var.items()]
                 )
-                if cmd_env:
-                    cmd += cmd_env + ";"
 
                 # Change to the specified execution directory
                 exec_dir: str = (
                     boot_request.process_description.process_execution_directory
                 )
-                cmd += f"cd {exec_dir} ; "
+                cmd = f"cd {exec_dir}; "
 
                 # Add the executable and its arguments
                 for (
@@ -374,20 +373,28 @@ class SubProcessProcessManager(ProcessManager):
                     cmd += exe_arg.exec
                     for arg in exe_arg.args:
                         cmd += f" {arg}"
-                    cmd += ";"
+                    cmd += "; "
 
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
                 # Setup the cli command to run
-                arguments: str = (
-                    f'drunc-process-wrapper --log {log_file} "{cmd_env}; {cmd}"'
+                wrapped_cmd: str = (
+                    f'drunc-process-wrapper --log {log_file} "{env_setup_cmd}; {cmd}"'
                 )
+
+                # Log the wrapped command, splitting on ';' and ':' for readability
+                wrapped_cmd_fmt_for_logging = wrapped_cmd.replace(";", ";\n").replace(
+                    ":", ":\n"
+                )
+                self.log.debug(f"PP: Running command:\n{wrapped_cmd_fmt_for_logging}")
+
                 process: Popen = Popen(
-                    arguments,
+                    wrapped_cmd,
                     shell=True,
                     preexec_fn=on_parent_exit(signal.SIGTERM),
                 )
+                self.log.error(f"PP: Started process with PID {process.pid}")
                 self.process_store[str(process.pid)] = process
                 pid: str = str(process.pid)
 
@@ -397,6 +404,7 @@ class SubProcessProcessManager(ProcessManager):
                     session=meta.session,
                     process=self.process_store[pid],
                 )
+                self.log.error("PP: Watcher started")
                 break
 
             except Exception as e:
@@ -514,8 +522,23 @@ class SubProcessProcessManager(ProcessManager):
             ProcessInstance: The instance of the booted process.
         """
 
-        self.log.debug(f"{self.name} running _boot_impl")
-        return self.__boot(boot_request)
+        self.log.error(f"PP: {self.name} running _boot_impl")
+        try:
+            pi: ProcessInstance = self.__boot(boot_request)
+            return ProcessInstanceList(
+                name=self.name,
+                token=None,
+                values=[pi],
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
+        except Exception as e:
+            self.log.error(f"Exception during boot: {e!s}")
+            return ProcessInstanceList(
+                name=self.name,
+                token=None,
+                values=[],
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
