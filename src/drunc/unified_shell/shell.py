@@ -1,4 +1,5 @@
 import getpass
+import logging
 import multiprocessing as mp
 import os
 import sys
@@ -485,7 +486,8 @@ def unified_shell(
             unified_shell_log.debug("Process manager terminated")
 
         unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
-        # logging.shutdown()
+        logging.shutdown()
+        os._exit(0)  # Not graceful, but it works....
 
     ctx.call_on_close(cleanup)
 
