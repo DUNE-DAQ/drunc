@@ -43,7 +43,12 @@ from drunc.controller.utils import (
     get_status_message,
 )
 from drunc.exceptions import DruncException
+from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
+from drunc.fsm.exceptions import (
+    DotDruncJsonIncorrectFormat,
+    DotDruncJsonNotFound,
+)
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
@@ -133,12 +138,12 @@ class Controller(ControllerServicer):
             configuration=bsch,
         )
 
-        fsmch = FSMConfHandler(
+        self.fsm_config = FSMConfHandler(
             data=self.configuration.data.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
-            fsm_configuration=fsmch,
+            fsm_configuration=self.fsm_config,
             publisher=self.controller_publisher,
             init_state="initialising",
             name=name,
@@ -773,6 +778,18 @@ class Controller(ControllerServicer):
                 transition_data=payload.data,
                 ctx=self,
             )
+
+            # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
+            # is present and well formatted
+            if (
+                "elisa-logbook" in self.fsm_config.get_actions()
+                and payload.command_name in ["start", "drain_dataflow"]
+            ):
+                try:
+                    get_dotdrunc_json()
+                except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
+                    self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
+
             if payload.command_name == "start":
                 self.controller_publisher(
                     message=RunInfo(
@@ -1232,3 +1249,51 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=response_children,
         )
+
+    ##########################################
+    ####### Integration test commands ########
+    ##########################################
+
+    # ORDER MATTERS!
+    @broadcasted  # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.UPDATE, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control
+    @unpack_addressed_command_to()  # 3rd step
+    @publish_command_time
+    def to_error(
+        self,
+        addressed_commands: dict[str, AddressedCommand],
+        execute_on_self: bool,
+        token: Token,
+    ) -> PlainText:
+        """
+        Transitions the stateful node to an error state. Used for testing purposes.
+        """
+        try:
+            if execute_on_self:
+                self.stateful_node.to_error()
+
+            response_children = self.propagate_addressed_command(
+                "to_error",
+                addressed_commands=addressed_commands,
+                token=token,
+            )
+
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children=response_children,
+            )
+        except Exception as e:
+            self.log.exception(e)
+            return Response(
+                name=self.name,
+                token=token,
+                data=None,
+                flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
+                children=None,
+            )
