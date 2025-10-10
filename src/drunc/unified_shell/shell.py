@@ -1,5 +1,4 @@
 import getpass
-import logging
 import multiprocessing as mp
 import os
 import sys
@@ -407,11 +406,15 @@ def unified_shell(
                             if stop_run_cmd is not None:
                                 ctx.invoke(stop_run_cmd)
                             else:
-                                unified_shell_log.warning("Command 'stop-run' not found; skipping graceful shutdown step.")
+                                unified_shell_log.warning(
+                                    "Command 'stop-run' not found; skipping graceful shutdown step."
+                                )
                             if scrap_cmd is not None:
                                 ctx.invoke(scrap_cmd)
                             else:
-                                unified_shell_log.warning("Command 'scrap' not found; skipping graceful shutdown step.")
+                                unified_shell_log.warning(
+                                    "Command 'scrap' not found; skipping graceful shutdown step."
+                                )
                             unified_shell_log.info("Controller shutdown gracefully")
                     except Exception as e:
                         unified_shell_log.error(
@@ -472,11 +475,17 @@ def unified_shell(
         # Remove the process manager
         if internal_pm:
             ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join()
+            ctx.obj.pm_process.join(timeout=5)
+            if ctx.obj.pm_process.is_alive():
+                unified_shell_log.warning(
+                    "Process manager did not exit in time, terminating forcefully."
+                )
+                ctx.obj.pm_process.kill()
+                ctx.obj.pm_process.join()
             unified_shell_log.debug("Process manager terminated")
 
         unified_shell_log.info("[green]unified_shell[/green] exited successfully.")
-        logging.shutdown()
+        # logging.shutdown()
 
     ctx.call_on_close(cleanup)
 

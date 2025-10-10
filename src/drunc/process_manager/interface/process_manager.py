@@ -78,7 +78,7 @@ def run_pm(
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
 
-    server = None
+    server: grpc.Server | None = None
 
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
