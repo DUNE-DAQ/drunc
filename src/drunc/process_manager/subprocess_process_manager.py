@@ -7,6 +7,7 @@ from ctypes import CDLL
 from subprocess import Popen
 from time import sleep
 
+import sh
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -15,13 +16,17 @@ from druncschema.process_manager_pb2 import (
     ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
+    ProcessMetadata,
     ProcessQuery,
     ProcessRestriction,
     ProcessUUID,
 )
 
 from drunc.exceptions import DruncCommandException, DruncException
-from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_manager.process_manager import (
+    ProcessManager,
+    ProcessManagerConfHandler,
+)
 
 # # ------------------------------------------------
 # # pexpect.spawn(...,preexec_fn=on_parent_exit('SIGTERM'))
@@ -72,19 +77,51 @@ class AppProcessWatcherThread(threading.Thread):
 
 
 class SubProcessProcessManager(ProcessManager):
-    def __init__(self, configuration, **kwargs):
-        self.session = getpass.getuser()  # unfortunate
+    """
+    A process manager that uses subprocess.Popen to launch and manage processes locally.
+    Used for testing as a CI tool.
+    """
+
+    def __init__(self, configuration: ProcessManagerConfHandler, **kwargs):
+        """
+        Initialize the SubProcessProcessManager with the given configuration.
+
+        Args:
+            configuration (ProcessManagerConfHandler): The configuration handler for the
+                                                        process manager.
+        """
+        self.session: str = getpass.getuser()  # unfortunate
         super().__init__(configuration=configuration, session=self.session, **kwargs)
 
-        self.watchers = []
+        self.watchers: list[AppProcessWatcherThread] = []
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
-        ret = []
+        """
+        Kill the processes with the given UUIDs.
+
+        Args:
+            uuids (list): List of process UUIDs to kill.
+
+        Returns:
+            ProcessInstanceList: List of process instances that were killed.
+        """
+
+        # Make a list of the killed processes to return
+        ret: list[ProcessInstance] = []
+
+        # Iterate over the UUIDs and kill each process
         for proc_uuid in uuids:
-            process = self.process_store[proc_uuid]
-            app_name = self.boot_request[proc_uuid].process_description.metadata.name
+            # Retrieve the process from the store
+            process: sh.RunningCommand = self.process_store[proc_uuid]
+
+            # Get the application name from the boot request metadata
+            app_name: str = self.boot_request[
+                proc_uuid
+            ].process_description.metadata.name
+
+            # Kill the process if it is still running
             if process.poll() is None:
-                sequence = [
+                sequence: list[signal.Signals] = [
                     signal.SIGINT,
                     signal.SIGQUIT,
                     signal.SIGKILL,  # Kept as nuclear option
@@ -102,10 +139,14 @@ class SubProcessProcessManager(ProcessManager):
                     if process.poll() is not None:
                         break
                     sleep(self.configuration.data.kill_timeout)
+
+            # Construct the ProcessInstance to return
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
+
             pr = ProcessRestriction()
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
+
             pu = ProcessUUID(uuid=proc_uuid)
 
             return_code = self.process_store[proc_uuid].poll()
@@ -121,13 +162,23 @@ class SubProcessProcessManager(ProcessManager):
             ]
             del self.process_store[proc_uuid]
 
-        pil = ProcessInstanceList(values=ret)
-        return pil
+        return ProcessInstanceList(values=ret)
 
     def _terminate_impl(self) -> ProcessInstanceList:
+        """
+        Terminate all running processes.
+
+        Returns:
+            ProcessInstanceList: List of process instances that were terminated.
+        """
+
         self.log.info("Terminating")
+
+        # If there are known processes, kill them
         if self.process_store:
             self.log.info("Killing all the known processes before exiting")
+
+            # Get all the process UUIDs
             uuids = self._get_process_uid(
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
@@ -137,24 +188,43 @@ class SubProcessProcessManager(ProcessManager):
             return ProcessInstanceList()
 
     async def _logs_impl(self, log_request: LogRequest) -> LogLines:
+        """
+        Retrieve logs for the specified process.
+
+        Runs the `tail` command to get the last `how_far` lines from the log file as a
+        subprocess, yielding each line as a LogLines object. This is the most efficient
+        way to retrieve logs without loading the entire file into memory.
+
+        Args:
+            log_request (LogRequest): The log request containing the query and how far
+                                        to retrieve.
+
+        Yields:
+            LogLines: The log lines retrieved for the process.
+        """
+
         self.log.debug(f"Retrieving logs for {log_request.query}")
-        uid = self._ensure_one_process(self._get_process_uid(log_request.query))
+
+        # Ensure only one process matches the query, get its log file
+        uid: str = self._ensure_one_process(self._get_process_uid(log_request.query))
         logfile = self.boot_request[uid].process_description.process_logs_path
-        # https://stackoverflow.com/questions/7167008/efficiently-finding-the-last-line-in-a-text-file
-        # "Not the straight forward way"...
+
+        # Use a temporary file to store the logs
         f = tempfile.NamedTemporaryFile(delete=False)
         f_file = open(f.name, "w")
+
+        # Determine how many lines to retrieve
         nlines = log_request.how_far
         if not nlines:
             nlines = 100
 
+        # Run the tail command to get the logs
         try:
             cmd = [
                 "tail",
                 f"-{nlines}",
                 logfile,
             ]
-            self.log.debug(f"cmd: {cmd}")
             p = Popen(
                 cmd,
                 stdout=f_file,
@@ -178,6 +248,7 @@ class SubProcessProcessManager(ProcessManager):
                 yield llstdout
                 yield llstderr
 
+        # Close the temporary file and read its contents
         f.close()
         with open(f.name) as fi:
             lines = fi.readlines()
@@ -185,19 +256,55 @@ class SubProcessProcessManager(ProcessManager):
                 ll = LogLines(uuid=ProcessUUID(uuid=uid), line=line)
                 yield ll
 
+        # Clean up the temporary file
         os.remove(f.name)
 
-    def notify_join(self, name, session, user, exec):
+    def notify_join(
+        self, name: str, session: str, user: str, exec: sh.RunningCommand
+    ) -> None:
+        """
+        Notify that a process has exited and perform cleanup.
+
+        Args:
+            name (str): The name of the process.
+            session (str): The session associated with the process.
+            user (str): The user who started the process.
+            exec (sh.RunningCommand): The process that has exited.
+
+        Returns:
+            None
+        """
         self.log.debug(f"{self.name} joining processes from the event loop")
         exit_code = exec.poll()
-        end_str = f"Process '{name}' (session: '{session}', user: '{user}') process exited with exit code {exit_code}"
-        self.log.info(end_str)
+
+        end_msg: str = (
+            f"Process '{name}' from session '{session}' with PID {exec.pid} "
+            f"exited with code {exit_code}"
+        )
+        self.log.info(end_msg)
+
         if exec:
             self.log.debug(name + str(exec))
 
-        self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+        self.broadcast(end_msg, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+        return
 
-    def _watch(self, name, session, user, process):
+    def _watch(
+        self, name: str, session: str, user: str, process: sh.RunningCommand
+    ) -> None:
+        """
+        Start a watcher thread to monitor the given process.
+
+        Args:
+            name (str): The name of the process.
+            session (str): The session associated with the process.
+            user (str): The user who started the process.
+            process (sh.RunningCommand): The process to watch.
+
+        Returns:
+            None
+        """
+
         self.log.debug(f"{self.name} watching process {name}")
         t = AppProcessWatcherThread(
             pm=self, session=session, user=user, name=name, process=process
@@ -206,37 +313,61 @@ class SubProcessProcessManager(ProcessManager):
         self.watchers.append(t)
 
     def __boot(self, boot_request: BootRequest) -> ProcessInstance:
+        """
+        Boot a new process based on the provided BootRequest.
+
+        Args:
+            boot_request (BootRequest): The request containing process description and restrictions.
+
+        Returns:
+            ProcessInstance: The instance of the booted process.
+        """
+
         self.log.debug(
-            f"{self.name} booting '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}'"
+            f"{self.name} booting '{boot_request.process_description.metadata.name}' "
+            f"from session '{boot_request.process_description.metadata.session}'"
         )
 
-        meta = boot_request.process_description.metadata
+        # Validate the boot request
+        meta: ProcessMetadata = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
             raise DruncCommandException("No allowed host provided! bailing")
 
-        error = ""
-        pid = None
+        error: str = ""
+        pid: int | None = None
         for host in boot_request.process_restriction.allowed_hosts:
+            # We can only run processes on localhost
             if host != "localhost":
                 raise DruncCommandException(
                     "SubProcess process manager does not support remote hosts"
                 )
 
             try:
-                hostname = host
+                # Extract necessary information from the boot request
+                hostname: str = host
+                log_file: str = boot_request.process_description.process_logs_path
+                env_var: dict[str, str] = boot_request.process_description.env
 
-                log_file = boot_request.process_description.process_logs_path
-                env_var = boot_request.process_description.env
-
-                cmd = f"SubProcessPM: Starting process {os.getpid()} on host {os.uname().nodename} as user {getpass.getuser()}; "
+                # Setup the command to run
+                cmd = (
+                    f"SubProcessPM: Starting process {os.getpid()} on host "
+                    f"{os.uname().nodename} as user {getpass.getuser()}; "
+                )
 
                 # Add exported environment variables
-                cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_var.items()])
+                cmd_env: str = ";".join(
+                    [f'export {n}="{v}"' for n, v in env_var.items()]
+                )
                 if cmd_env:
                     cmd += cmd_env + ";"
 
-                cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
+                # Change to the specified execution directory
+                exec_dir: str = (
+                    boot_request.process_description.process_execution_directory
+                )
+                cmd += f"cd {exec_dir} ; "
 
+                # Add the executable and its arguments
                 for (
                     exe_arg
                 ) in boot_request.process_description.executable_and_arguments:
@@ -248,15 +379,17 @@ class SubProcessProcessManager(ProcessManager):
                 if cmd[-1] == ";":
                     cmd = cmd[:-1]
 
-                # full_cmd = f"{{ {cmd} ; }} &> {log_file}"
-                arguments = f'drunc-process-wrapper --log {log_file} "{cmd_env}; {cmd}"'
-                process = Popen(
+                # Setup the cli command to run
+                arguments: str = (
+                    f'drunc-process-wrapper --log {log_file} "{cmd_env}; {cmd}"'
+                )
+                process: Popen = Popen(
                     arguments,
                     shell=True,
                     preexec_fn=on_parent_exit(signal.SIGTERM),
                 )
                 self.process_store[str(process.pid)] = process
-                pid = str(process.pid)
+                pid: str = str(process.pid)
 
                 self._watch(
                     name=meta.name,
@@ -271,37 +404,38 @@ class SubProcessProcessManager(ProcessManager):
                 print(f"Couldn't start on host {host}, reason:\n{e!s}")
                 continue
 
+        # Add the boot request to the boot_request store
         self.boot_request[pid] = BootRequest()
         self.boot_request[pid].CopyFrom(boot_request)
-        hostname = "localhost"  # popen can only run processes on localhost
-        ## Saving the host to the metadata
+        hostname: str = "localhost"
         self.boot_request[pid].process_description.metadata.hostname = hostname
 
         self.log.info(
-            f"Booted '{boot_request.process_description.metadata.name}' from session '{boot_request.process_description.metadata.session}' with PID {pid}"
+            f"Booted '{boot_request.process_description.metadata.name}' from session '"
+            f"{boot_request.process_description.metadata.session}' with PID {pid}"
         )
+
+        # Construct the ProcessInstance to return
         pd = ProcessDescription()
         pd.CopyFrom(self.boot_request[pid].process_description)
         pr = ProcessRestriction()
         pr.CopyFrom(self.boot_request[pid].process_restriction)
         pu = ProcessUUID(uuid=pid)
 
-        return_code = None
-        alive = False
-
+        # If the process failed to start, return a DEAD instance
         if pid not in self.process_store:
             pi = ProcessInstance(
                 process_description=pd,
                 process_restriction=pr,
                 status_code=ProcessInstance.StatusCode.DEAD,  ## should be unknown
-                return_code=return_code,
+                return_code=None,
                 uuid=pu,
             )
             return pi
 
-        return_code = self.process_store[pid].poll()
-        alive = return_code is not None
-
+        # If the process started, return a RUNNING instance
+        return_code: int | None = self.process_store[pid].poll()
+        alive: bool = return_code is not None
         pi = ProcessInstance(
             process_description=pd,
             process_restriction=pr,
@@ -311,12 +445,21 @@ class SubProcessProcessManager(ProcessManager):
             return_code=return_code,
             uuid=pu,
         )
-
         return pi
 
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """
+        List processes matching the given query.
+
+        Args:
+            query (ProcessQuery): The query to filter processes.
+
+        Returns:
+            ProcessInstanceList: List of process instances matching the query.
+        """
+
         self.log.debug(f"{self.name} running ps")
-        ret = []
+        ret: list[ProcessInstance] = []
 
         for proc_uuid in self._get_process_uid(query):
             if proc_uuid not in self.process_store:
@@ -358,36 +501,75 @@ class SubProcessProcessManager(ProcessManager):
         return pil
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstance:
+        """
+        Boot a new process based on the provided BootRequest.
+
+        Overwrites the base class method to call the internal __boot method.
+
+        Args:
+            boot_request (BootRequest): The request containing process description and
+                                        restrictions.
+
+        Returns:
+            ProcessInstance: The instance of the booted process.
+        """
+
         self.log.debug(f"{self.name} running _boot_impl")
         return self.__boot(boot_request)
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
-        uuids = self._get_process_uid(query, in_boot_request=True)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        """
+        Restart the process matching the given query.
 
-        same_uuid_br = []
+        Args:
+            query (ProcessQuery): The query to identify the process to restart.
+
+        Returns:
+            ProcessInstanceList: List of process instances that were restarted.
+        """
+
+        self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
+
+        # Ensure only one process matches the query
+        uuids: list[str] = self._get_process_uid(query, in_boot_request=True)
+        uuid: str = self._ensure_one_process(uuids, in_boot_request=True)
+
+        # Make copies of the boot request and uuid to avoid mutation issues
         same_uuid_br = BootRequest()
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
 
+        # Terminate the existing process if it is running
         if uuid in self.process_store:
             process = self.process_store[uuid]
             if process.poll() is None:
                 process.terminate()
 
+        # Clean up the existing process from the stores
         del self.process_store[uuid]
         del self.boot_request[uuid]
         del uuid
 
+        # Boot a new process with the same boot request
         ret = self.__boot(same_uuid_br, same_uuid)
 
+        # Clean up temporary copies
         del same_uuid_br
         del same_uuid
 
         return ret
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        """
+        Kill the processes matching the given query.
+
+        Args:
+            query (ProcessQuery): The query to identify the processes to kill.
+
+        Returns:
+            ProcessInstanceList: List of process instances that were killed.
+        """
+
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
