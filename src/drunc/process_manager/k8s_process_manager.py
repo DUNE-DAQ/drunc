@@ -103,7 +103,7 @@ class K8sPodWatcherThread(threading.Thread):
 
             except Exception as e:
                 self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
-                sleep(3)
+                sleep(self.pm.watcher_retry_sleep)
 
 
 class K8sProcessManager(ProcessManager):
@@ -127,7 +127,6 @@ class K8sProcessManager(ProcessManager):
         self._pod_spec_v1_api = client.V1PodSpec
         self._api_error_v1_api = client.rest.ApiException
 
-        self.drunc_label = "drunc.daq"
         self.managed_sessions = set()
         self.watchers = []
         self._start_watcher()
@@ -141,33 +140,38 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Safely get settings from the configuration object
-        settings = {}
-        if (
-            hasattr(self.configuration.data, "settings")
-            and self.configuration.data.settings is not None
-        ):
-            settings = self.configuration.data.settings
+        # Get settings from configuration
+        settings = getattr(self.configuration.data, "settings", {})
 
-        self.connection_server_name = settings.get(
-            "connection_server_name", "local-connection-server"
-        )
-        self.connection_server_hostname = settings.get(
-            "connection_server_hostname", "localhost"
+        # Labels
+        labels = settings.get("labels", {})
+        self.drunc_label = labels.get("drunc_label", "drunc.daq")
+
+        # Connection server
+        connection_server = settings.get("connection_server", {})
+        self.connection_server_name = connection_server.get(
+            "name", "local-connection-server"
         )
         self.connection_server_port = None
         self.connection_server_node_port = None
 
-        self.pod_ready_timeout = settings.get("pod_ready_timeout", 60)
-        self.kill_timeout = settings.get("kill_timeout", 20)
-        self.namespace_cleanup_timeout = settings.get("namespace_cleanup_timeout", 10)
-        self._host_cache_expiry = settings.get("host_verification_cache_expiry", 300)
+        # Pod management
+        pod_management = settings.get("pod_management", {})
+        self.kill_timeout = pod_management.get("kill_timeout", 20)
+        self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
+
+        # Cleanup
+        cleanup = settings.get("cleanup", {})
+        self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
+        self.restart_cleanup_polling = cleanup.get("restart_cleanup_polling", 0.5)
+
+        # Checking
+        checking = settings.get("checking", {})
+        self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
+        self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
+        self._host_cache_expiry = checking.get("host_cache_expiry", 300)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
-        self.restart_cleanup_time = float(settings.get("restart_cleanup_time", "10"))
-        self.restart_cleanup_polling = float(
-            settings.get("restart_cleanup_polling", "0.5")
-        )
 
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
@@ -806,9 +810,13 @@ done
                         self.local_connection_server_is_booted = True
 
                         # Log connection information using the NodePort service
-                        connection_url = f"http://{self.connection_server_hostname}:{self.connection_server_node_port}"
+                        node_name = pod_status.spec.node_name
+                        self.log.info(f"Connection server '{podname}' is ready.")
                         self.log.info(
-                            f"Connection server available at: {connection_url}"
+                            f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
+                        )
+                        self.log.info(
+                            f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
                         )
 
                         break
@@ -817,7 +825,7 @@ done
                         pass
                     else:
                         raise e
-                sleep(1)
+                sleep(self.pod_status_check_sleep)
             else:
                 raise DruncK8sException(
                     f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
