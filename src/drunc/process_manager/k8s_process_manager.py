@@ -810,9 +810,13 @@ done
                         self.local_connection_server_is_booted = True
 
                         # Log connection information using the NodePort service
-                        connection_url = f"http://{pod_status.status.pod_ip}:{self.connection_server_node_port}"
+                        node_name = pod_status.spec.node_name
+                        self.log.info(f"Connection server '{podname}' is ready.")
                         self.log.info(
-                            f"Connection server available at: {connection_url}"
+                            f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
+                        )
+                        self.log.info(
+                            f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
                         )
 
                         break
