@@ -89,7 +89,7 @@ def test_basic_grpc_tree_communication_multiprocessing(grpc_port_cleaner, capsys
                 try:
                     # Read log file content
                     with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                        _ = f.read()
 
                     # Check for expected gRPC trace output
                     #####################################################################################
