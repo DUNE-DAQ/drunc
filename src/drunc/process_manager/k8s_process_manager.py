@@ -455,8 +455,29 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+            # For controllers, replace hostname with 0.0.0.0 for binding and use pod IP for advertising
+            if "controller" in podname:
+                modified_args = []
+                for arg in e_and_a.args:
+                    if "://" in arg and ":" in arg.split("://")[1]:
+                        # This looks like a command facility URL
+                        protocol, address = arg.split("://", 1)
+                        if ":" in address:
+                            hostname, port = address.split(":", 1)
+                            # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
+                            new_address = f"{protocol}://0.0.0.0:{port}"
+                            modified_args.append(new_address)
+                            self.log.info(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
+                        else:
+                            modified_args.append(arg)
+                    else:
+                        modified_args.append(arg)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
+        #     command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+        # main_command_str = " && ".join(command_parts)
 
         # Determine the correct shutdown command for the preStop hook
         shutdown_command = ""
