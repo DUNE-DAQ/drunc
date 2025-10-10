@@ -1,6 +1,7 @@
 import concurrent
 import getpass
 import os
+import signal
 import sys
 
 import click
@@ -77,6 +78,8 @@ def run_pm(
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
 
+    server = None
+
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
         log.debug("serve called")
@@ -84,6 +87,7 @@ def run_pm(
             raise DruncSetupException(
                 "The address on which to expect commands/send status wasn't specified"
             )
+        nonlocal server
         server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)
@@ -97,18 +101,24 @@ def run_pm(
             f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
         )  # bold as part of the address was already formatting, couldn't figure out why
 
-        def server_shutdown():
-            log.warning("Starting shutdown...")
-            # Shuts down the server with 5 seconds of grace period. During the
-            # grace period, the server won't accept new connections and allow
-            # existing RPCs to continue within the grace period.
-            server.stop(5)
-            pm._terminate_impl()
-
         _cleanup_coroutines.append(server_shutdown)
         if ready_event is not None:
             ready_event.set()
         server.wait_for_termination()
+
+    def server_shutdown():
+        log.warning("Starting shutdown...")
+        # Shuts down the server with 5 seconds of grace period. During the
+        # grace period, the server won't accept new connections and allow
+        # existing RPCs to continue within the grace period.
+        server.stop(5)
+        pm._terminate_impl()
+
+    def handle_sigterm(signum, frame):
+        log.info("SIGTERM received, shutting down server...")
+        server_shutdown()
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
 
     try:
         log.debug("Serving process_manager")
