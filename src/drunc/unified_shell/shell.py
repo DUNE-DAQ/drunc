@@ -21,6 +21,7 @@ from drunc.controller.interface.commands import (
     status,
     surrender_control,
     take_control,
+    to_error,
     wait,
     who_am_i,
     who_is_in_charge,
@@ -30,7 +31,11 @@ from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.process_manager.configuration import get_process_manager_configuration
+from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
+    get_process_manager_configuration,
+    validate_pm_config,
+)
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
@@ -40,6 +45,7 @@ from drunc.process_manager.interface.commands import (
     terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import boot
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -112,7 +118,16 @@ def unified_shell(
     else:
         internal_pm = False
 
-    # Set up process_manager logger
+    if get_pm_type_from_name(
+        process_manager
+    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+        unified_shell_log.error(
+            f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
+            "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
+            "alphanumeric, max 63 chars."
+        )
+        sys.exit(1)
+
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
@@ -133,6 +148,16 @@ def unified_shell(
         )
         # Check if process_manager is a packaged config
         process_manager_conf_file = get_process_manager_configuration(process_manager)
+
+        if not validate_pm_config(process_manager_conf_file):
+            unified_shell_log.error(
+                "Process manager configuration validation failed. Exiting."
+            )
+            sys.exit(1)
+
+        # if process_manager_type == k8s and validate_k8s_session_name(session_name) is False:
+        #     unified_shell_log.error(f'Invalid session/namespace name "{session_name}". Must match RFC1123 label: lowercase alphanumeric or \'-\', start/end with alphanumeric, max 63 chars.')
+        #     sys.exit(1)
 
         ready_event = mp.Event()
         port = mp.Value("i", 0)
@@ -181,6 +206,7 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]{process_manager_address}[/green]"
     )
     ctx.obj.reset(address_pm=process_manager_address)
+    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
 
     desc = None
     try:
@@ -260,6 +286,7 @@ def unified_shell(
         "Adding [green]unified_shell[/green] commands to the context"
     )
     ctx.command.add_command(boot, "boot")
+    ctx.obj.dynamic_commands.add("boot")
 
     unified_shell_log.debug(
         "Adding [green]process_manager[/green] commands to the context"
@@ -270,6 +297,12 @@ def unified_shell(
     ctx.command.add_command(logs, "logs")
     ctx.command.add_command(restart, "restart")
     ctx.command.add_command(ps, "ps")
+    ctx.obj.dynamic_commands.add("kill")
+    ctx.obj.dynamic_commands.add("terminate")
+    ctx.obj.dynamic_commands.add("flush")
+    ctx.obj.dynamic_commands.add("logs")
+    ctx.obj.dynamic_commands.add("restart")
+    ctx.obj.dynamic_commands.add("ps")
 
     # Not particularly proud of this...
     # We instantiate a stateful node which has the same configuration as the one from this session
@@ -339,11 +372,27 @@ def unified_shell(
     ctx.command.add_command(exclude, "exclude")
     ctx.command.add_command(wait, "wait")
     ctx.command.add_command(expert_command, "expert-command")
+    ctx.command.add_command(to_error, "to-error")
+    ctx.obj.dynamic_commands.add("status")
+    ctx.obj.dynamic_commands.add("recompute_status")
+    ctx.obj.dynamic_commands.add("connect")
+    ctx.obj.dynamic_commands.add("disconnect")
+    ctx.obj.dynamic_commands.add("take_control")
+    ctx.obj.dynamic_commands.add("surrender_control")
+    ctx.obj.dynamic_commands.add("who_am_i")
+    ctx.obj.dynamic_commands.add("who_is_in_charge")
+    ctx.obj.dynamic_commands.add("include")
+    ctx.obj.dynamic_commands.add("exclude")
+    ctx.obj.dynamic_commands.add("wait")
+    ctx.obj.dynamic_commands.add("expert_command")
+    ctx.obj.dynamic_commands.add("to_error")
 
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
-    ctx.call_on_close(lambda: on_exit(ctx, unified_shell_log))
+
+    if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
+        ctx.obj.batch_mode = True
 
 
 def on_exit(ctx, unified_shell_log):

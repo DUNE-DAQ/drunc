@@ -9,6 +9,12 @@ from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, Proce
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
+from drunc.process_manager.configuration import (
+    ProcessManagerConfHandler,
+    ProcessManagerTypes,
+    get_process_manager_configuration,
+)
+from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
 
@@ -218,3 +224,39 @@ def on_parent_exit(signum):
 
 
 # ------------------------------------------------
+
+
+def validate_k8s_session_name(session: str) -> bool:
+    """
+    Validate that the session/namespace name is valid according to RFC1123 label standard.
+
+    Args:
+        session (str): The session/namespace name to validate.
+
+    Returns:
+        bool: True if the session name is valid, False otherwise.
+    """
+    session_re = re.compile(r"^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$")
+    if not session_re.match(session):
+        return False
+    return True
+
+
+def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
+    """
+    Get the ProcessManagerTypes enum value from a string name.
+
+    Args:
+        pm_name (str): The name of the process manager type (e.g., "SSH", "K8s").
+
+    Returns:
+        ProcessManagerTypes: The corresponding enum value.
+    """
+    pm_conf_file = get_process_manager_configuration(pm_name)
+
+    conf_path, conf_type = parse_conf_url(pm_conf_file)
+    pmch = ProcessManagerConfHandler(
+        log_path="./", type=conf_type, data=conf_path.split(":")[1]
+    )
+
+    return pmch.data.type

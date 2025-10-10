@@ -1,7 +1,7 @@
 import os
 from typing import Dict, List
 
-import confmodel
+import confmodel_dal
 
 from drunc.exceptions import DruncException
 from drunc.process_manager.configuration import get_commandline_parameters
@@ -92,7 +92,7 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if confmodel.component_disabled(db._obj, session_obj.id, sub_segment_obj.id):
+        if confmodel_dal.component_disabled(db._obj, session_obj.id, sub_segment_obj.id):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -119,7 +119,7 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not confmodel.component_disabled(db._obj, session_obj.id, app.id)
+            enabled = not confmodel_dal.component_disabled(db._obj, session_obj.id, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
@@ -223,11 +223,11 @@ def find_controlled_apps(db, session, mycontroller, segment):
         for app in segment.applications:
             apps.append(app.id)
         for seg in segment.segments:
-            if not confmodel.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
                 controllers.append(seg.controller.id)
     else:
         for seg in segment.segments:
-            if not confmodel.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
                 aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
                 if len(apps) > 0:
                     break

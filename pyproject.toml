@@ -30,7 +30,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest",]
+dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
+test = ["pytest", "grpcio-testing"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
@@ -54,8 +55,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "drunc.data.process_manager" = ["*.json"]
+"drunc.data.process_manager.schema" = ["*.json"]
 
 [tool.pytest.ini_options]
 markers = [
     "grpc: marks tests for gRPC isolation (run with --test-grpc)",
 ]
+
