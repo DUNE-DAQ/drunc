@@ -45,7 +45,11 @@ class ThreadPinning(FSMAction):
         cmd = f"source {rte}; " if rte else ""
         cmd += f"readout-affinity.py --pinfile {thread_pinning_file}"
 
-        user = getpass.getuser()
+        try:
+            user = environ.get("USER")
+        except KeyError:
+            user = getpass.getuser()
+        self.log.debug(f"USER is set to {user}")
 
         hosts = set()
         for app in apps:
