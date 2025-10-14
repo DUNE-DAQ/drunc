@@ -3,6 +3,7 @@ import getpass
 import os
 import signal
 import sys
+import types
 
 import click
 import grpc
@@ -95,7 +96,6 @@ def run_pm(
             generated_port.value = port
 
         server.start()
-        # hostname = socket.gethostname()
         host = address.split(":")[0]
         log.info(
             f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
@@ -106,18 +106,36 @@ def run_pm(
             ready_event.set()
         server.wait_for_termination()
 
-    def server_shutdown():
-        log.warning("Starting shutdown...")
-        # Shuts down the server with 5 seconds of grace period. During the
-        # grace period, the server won't accept new connections and allow
-        # existing RPCs to continue within the grace period.
-        server.stop(5)
-        pm._terminate_impl()
+    def server_shutdown() -> None:
+        """
+        Cleanly shuts down the gRPC server.
 
-    def handle_sigterm(signum, frame):
+        Shuts down the server with 1 seconds of grace period. During the grace period,
+        the server won't accept new connections and allow existing RPCs to continue
+        within the grace period.
+        """
+
+        nonlocal server
+        if server:
+            log.warning("Starting shutdown...")
+            server.stop(1)
+            server = None
+        return
+
+    def handle_sigterm(signum: int, frame: types.FrameType) -> None:
+        """
+        Handle the SIGTERM signal to gracefully shut down the server.
+
+        Args:
+            signum: The signal number.
+            frame: The current stack frame (not used).
+        """
+
         log.info("SIGTERM received, shutting down server...")
         server_shutdown()
+        return
 
+    # Register the SIGTERM handler to gracefully shut down the server
     signal.signal(signal.SIGTERM, handle_sigterm)
 
     try:

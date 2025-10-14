@@ -472,13 +472,13 @@ def unified_shell(
 
         # Remove the process manager
         if internal_pm:
-            ctx.obj.pm_process.terminate()
-            ctx.obj.pm_process.join(timeout=5)
+            ctx.obj.pm_process.terminate()  # Send a SIGTERM
+            ctx.obj.pm_process.join(timeout=2)
             if ctx.obj.pm_process.is_alive():
                 unified_shell_log.warning(
                     "Process manager did not exit in time, terminating forcefully."
                 )
-                ctx.obj.pm_process.kill()
+                ctx.obj.pm_process.kill()  # Send a SIGKILL
                 ctx.obj.pm_process.join()
             unified_shell_log.debug("Process manager terminated")
 
