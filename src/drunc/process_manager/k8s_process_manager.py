@@ -481,15 +481,34 @@ done
             )
         )
 
+        # Prepare environment variables
+        env_vars = boot_request.process_description.env
+
+        # Add DOTDRUNC environment variable if not already present
+        if "DOTDRUNC" not in env_vars:
+            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            env_vars["DOTDRUNC"] = dotdrunc_path
+
+        # Set USER environment variable for SSH connections in pods
+        try:
+            host_username = getpass.getuser()
+        except KeyError:
+            # Fallback for environments where getpass.getuser() fails
+            try:
+                import pwd
+
+                host_username = pwd.getpwuid(os.getuid()).pw_name
+            except KeyError:
+                host_username = str(os.getuid())
+        env_vars["USER"] = host_username
+        self.log.debug(f"Setting USER environment variable to: {host_username}")
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/sh", "-c"],
             args=[main_command_str],
-            env=[
-                client.V1EnvVar(name=k, value=v)
-                for k, v in boot_request.process_description.env.items()
-            ],
+            env=[client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()],
             lifecycle=lifecycle_hook,
             ports=[],
             volume_mounts=[
