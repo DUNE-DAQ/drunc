@@ -436,48 +436,54 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create NodePort service for {podname}: {e}")
 
-    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
-        """Constructs and creates a Kubernetes Pod manifest."""
-        pod_image = self.configuration.data.image
-        exec_and_args_list = boot_request.process_description.executable_and_arguments
-
-        # This logic correctly prepends 'exec' to the C++ application command.
+    def _build_main_command(self, exec_and_args_list, podname: str) -> str:
+        """Build the main command string from executable and arguments list."""
         command_parts = []
+
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
-            prefix = ""
-            # Only add 'exec' to the C++ apps (non-controllers)
-            if (
+
+            # Determine if we should add 'exec' prefix for C++ applications
+            should_add_exec = (
                 "controller" not in podname
                 and podname != self.connection_server_name
                 and is_last_command
                 and e_and_a.exec != "source"
-            ):
-                prefix = "exec "
+            )
+            prefix = "exec " if should_add_exec else ""
 
-            # For controllers, replace hostname with 0.0.0.0 for binding and use pod IP for advertising
+            # For controllers, modify command facility URLs to use 0.0.0.0 binding
             if "controller" in podname:
                 modified_args = []
                 for arg in e_and_a.args:
                     if "://" in arg and ":" in arg.split("://")[1]:
-                        # This looks like a command facility URL
                         protocol, address = arg.split("://", 1)
                         if ":" in address:
                             hostname, port = address.split(":", 1)
-                            # Replace hostname with 0.0.0.0 for binding (allows binding to any interface)
                             new_address = f"{protocol}://0.0.0.0:{port}"
                             modified_args.append(new_address)
-                            self.log.info(f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces)")
+                            self.log.debug(
+                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces within the pod)"
+                            )
                         else:
                             modified_args.append(arg)
                     else:
                         modified_args.append(arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
-                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
-        main_command_str = " && ".join(command_parts)
-        #     command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
-        # main_command_str = " && ".join(command_parts)
+                # For other pods, use arguments as-is
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
+
+        return " && ".join(command_parts)
+
+    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
+        """Constructs and creates a Kubernetes Pod manifest."""
+        pod_image = self.configuration.data.image
+        exec_and_args_list = boot_request.process_description.executable_and_arguments
+
+        main_command_str = self._build_main_command(exec_and_args_list, podname)
 
         # Determine the correct shutdown command for the preStop hook
         shutdown_command = ""
