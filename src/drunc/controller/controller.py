@@ -69,16 +69,15 @@ class ControllerActor:
         return self._token.user_name
 
     def _update_actor(self, token: Optional[Token] = Token()) -> None:
-        self._lock.acquire()
-        self._token.CopyFrom(token)
-        self._lock.release()
+        with self._lock:
+            self._token.CopyFrom(token)
+        return
 
     def compare_token(self, token1, token2):
-        self._lock.acquire()
-        result = (
-            token1.user_name == token2.user_name and token1.token == token2.token
-        )  #!! come on protobuf, you can compare messages
-        self._lock.release()
+        with self._lock:
+            result = (
+                token1.user_name == token2.user_name and token1.token == token2.token
+            )
         return result
 
     def token_is_current_actor(self, token):
