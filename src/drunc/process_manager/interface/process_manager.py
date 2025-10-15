@@ -117,7 +117,7 @@ def run_pm(
 
         nonlocal server
         if server:
-            log.warning("Starting shutdown...")
+            log.info("Shutting down the process manager server")
             server.stop(1)
             server = None
         return
@@ -131,7 +131,7 @@ def run_pm(
             frame: The current stack frame (not used).
         """
 
-        log.info("SIGTERM received, shutting down server...")
+        log.debug("SIGTERM received, shutting down server...")
         server_shutdown()
         return
 
