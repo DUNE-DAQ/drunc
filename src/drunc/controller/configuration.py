@@ -161,7 +161,9 @@ class ControllerConfHandler(ConfHandler):
 
         def process_segment(segment):
             if enabled_only:
-                if confmodel_dal.component_disabled(self.db._obj, session.id, segment.id):
+                if confmodel_dal.component_disabled(
+                    self.db._obj, session.id, segment.id
+                ):
                     return
 
             new_node = ChildNode.get_child(

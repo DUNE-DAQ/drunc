@@ -92,7 +92,9 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if confmodel_dal.component_disabled(db._obj, session_obj.id, sub_segment_obj.id):
+        if confmodel_dal.component_disabled(
+            db._obj, session_obj.id, sub_segment_obj.id
+        ):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -119,7 +121,9 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not confmodel_dal.component_disabled(db._obj, session_obj.id, app.id)
+            enabled = not confmodel_dal.component_disabled(
+                db._obj, session_obj.id, app.id
+            )
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
