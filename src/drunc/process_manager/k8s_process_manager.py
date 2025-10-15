@@ -2,6 +2,7 @@
 import getpass
 import os
 import re
+import signal
 import threading
 import uuid
 from time import sleep, time
@@ -31,7 +32,7 @@ from drunc.k8s_exceptions import (
     DruncK8sPodException,
 )
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import validate_k8s_session_name
+from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
@@ -186,12 +187,41 @@ class K8sProcessManager(ProcessManager):
         else:
             self.log.info("No active namespace created by drunc")
 
+        # Set up signal handlers for cleanup when parent process dies
+        self._setup_signal_handlers()
+
     def _start_watcher(self) -> None:
         """Starts the background thread that watches for Pod status changes."""
         self.log.debug("Starting K8s pod watcher thread")
         t = K8sPodWatcherThread(pm=self)
         t.start()
         self.watchers.append(t)
+
+    def _setup_signal_handlers(self) -> None:
+        """Set up signal handlers to clean up pods when the process manager is terminated."""
+
+        def signal_handler(signum, frame):
+            self.log.info(f"Received signal {signum}, cleaning up all pods...")
+            try:
+                self._terminate_impl()
+            except Exception as e:
+                self.log.error(f"Error during signal cleanup: {e}")
+            finally:
+                # Exit the process
+                os._exit(0)
+
+        # Register signal handlers for common termination signals
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)
+
+        # Set up parent death signal (Linux only)
+        try:
+            on_parent_exit(signal.SIGTERM)()
+        except Exception as e:
+            self.log.debug(
+                f"Could not set parent death signal (may not be supported on this platform): {e}"
+            )
 
     def notify_termination(self, proc_uuid, exit_code, reason, session) -> None:
         """Callback for when a pod terminates."""
