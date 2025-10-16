@@ -481,6 +481,21 @@ done
             )
         )
 
+        volume_configs = self.configuration.data.settings.get("volumes", [])
+
+        pod_volumes = [
+            client.V1Volume(
+                name=vc["name"],
+                host_path=client.V1HostPathVolumeSource(path=vc["host_path"]),
+            )
+            for vc in volume_configs
+        ]
+
+        container_volume_mounts = [
+            client.V1VolumeMount(name=vc["name"], mount_path=vc["mount_path"])
+            for vc in volume_configs
+        ]
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
@@ -492,10 +507,7 @@ done
             ],
             lifecycle=lifecycle_hook,
             ports=[],
-            volume_mounts=[
-                client.V1VolumeMount(name="nfs", mount_path="/nfs"),
-                client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
-            ],
+            volume_mounts=container_volume_mounts,
             working_dir=boot_request.process_description.process_execution_directory,
             security_context=client.V1SecurityContext(
                 run_as_user=os.getuid(), run_as_group=os.getgid()
@@ -566,15 +578,7 @@ done
                 restart_policy="Never",
                 containers=all_containers,
                 host_aliases=host_aliases if host_aliases else None,
-                volumes=[
-                    client.V1Volume(
-                        name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")
-                    ),
-                    client.V1Volume(
-                        name="cvmfs",
-                        host_path=client.V1HostPathVolumeSource(path="/cvmfs"),
-                    ),
-                ],
+                volumes=pod_volumes,
             ),
         )
 
