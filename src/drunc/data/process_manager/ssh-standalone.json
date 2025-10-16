@@ -1,12 +1,11 @@
 {
     "type": "ssh",
     "name": "SSHProcessManager",
-
-    "settings" : {
+    "kill_timeout": 0.1,
+    "settings": {
         "disable_localhost_host_key_check": true,
         "disable_host_key_check": true
     },
-
     "authoriser": {
         "type": "dummy"
     },
@@ -17,8 +16,8 @@
         "path": "./info.json",
         "type": "file"
     },
-    "opmon_conf":{
+    "opmon_conf": {
         "level": "info",
-        "interval_s" : 10.0
+        "interval_s": 10.0
     }
 }

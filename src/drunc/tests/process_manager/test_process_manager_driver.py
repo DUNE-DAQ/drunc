@@ -398,7 +398,7 @@ def test_consolidate_config_success(mock_tempfile, mock_consolidate_db, mock_dri
     mock_driver._consolidate_config("session1", "oksconflibs:/path/to/config.oks")
 
     # Check correct log message
-    mock_driver.log.info.assert_any_call("Booting session [green]session1[/green]")
+    mock_driver.log.debug.assert_any_call("Validating session1 configuration")
 
     mock_consolidate_db.assert_called_once_with(
         "/path/to/config.oks", "/tmp/fake.data.xml"
