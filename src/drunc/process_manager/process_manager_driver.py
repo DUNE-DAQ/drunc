@@ -273,7 +273,7 @@ class ProcessManagerDriver(GRPCDriver):
     def _consolidate_config(self, session_name, conf_file: str) -> str | None:
         from daqconf.consolidate import consolidate_db
 
-        self.log.info(f"Booting session [green]{session_name}[/green]")
+        self.log.debug(f"Validating {session_name} configuration")
 
         with tempfile.NamedTemporaryFile(suffix=".data.xml", delete=True) as f:
             f.flush()
