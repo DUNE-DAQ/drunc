@@ -2,11 +2,11 @@
 Provides SSH connection and lifetime management
 """
 
+import getpass
 import logging
 import os
 import threading
 import time
-from getpass import getpass
 from typing import Callable, Dict, List, Optional
 
 import paramiko
