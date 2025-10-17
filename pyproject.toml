@@ -26,7 +26,8 @@ dependencies = [
     "kubernetes==31.0.0",
     "pytz==2024.2",
     "psutil==6.1.0",
-    "paramiko"
+    "paramiko",
+    "paramiko[gssapi]"
 ]
 
 [project.optional-dependencies]

@@ -1,6 +1,5 @@
 import getpass
 import logging
-import signal
 
 import click
 import conffwk
@@ -9,7 +8,8 @@ from rich.logging import RichHandler
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.process_manager.ssh_process_manager import on_parent_exit
+
+# from drunc.process_manager.ssh_process_manager import on_parent_exit
 from drunc.utils.utils import log_levels
 
 kDefaultAuth = "default"
@@ -46,7 +46,7 @@ def test_host_connection(host: str, preferred_auth: str = kDefaultAuth) -> bool:
             _bg=False,
             _bg_exc=False,
             _new_session=True,
-            _preexec_fn=on_parent_exit(signal.SIGTERM),
+            # _preexec_fn=on_parent_exit(signal.SIGTERM),
             _err_to_out=True,
         )
         print(":white_check_mark:")

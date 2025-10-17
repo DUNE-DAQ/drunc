@@ -1,14 +1,19 @@
+"""
+SSH validator application.
+
+This script validates the ability to SSH onto all of the hosts required by the
+configuration <configuration> session <session> applications.
+"""
+
 import getpass
 import logging
-import signal
 from pathlib import Path
 
 import click
 import conffwk
-from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.process_manager.ssh_process_manager import on_parent_exit
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
 
@@ -70,68 +75,59 @@ def validate_ssh_connection(
     log.info(f"Validating SSH connection to {len(hosts)} host(s)")
 
     # Attempt SSH connection to each host
-    ssh = Command("/usr/bin/ssh")
+    ssh_manager = SSHProcessLifetimeManager(
+        disable_host_key_check=True,
+        logger=log,
+    )
     for host in hosts:
         log.info(f"Trying to SSH onto host [green]{host}[/green]")
-
-        # Construct SSH command
-        user_host = f"{getpass.getuser()}@{host}"
-        ssh_args = [
-            user_host,
-            "-tt",
-            "-o StrictHostKeyChecking=no",
-            f'echo "{user_host} established SSH successfully";',
-        ]
-        log.debug(f"SSH command: /usr/bin/ssh {' '.join(ssh_args)}")
-
-        # Attempt SSH connection
         try:
-            ssh(
-                *ssh_args,
-                _bg=False,
-                _bg_exc=False,
-                _new_session=True,
-                _preexec_fn=on_parent_exit(signal.SIGTERM),
-                _err_to_out=True,
-            )
+            user = getpass.getuser()
+            ssh_manager.validate_host_connection(host=host)
             log.info(
-                f"SSH connection established successfully on host [green]{user_host}[/green]"
+                f"SSH connection established successfully for user {user} on host [green]{host}[/green]"
             )
         except Exception as e:
-            log.error(f"Failed to SSH onto host [red]{user_host}[/red]")
+            log.error(
+                f"SSH connection failed for user {user} on host [red]{host}[/red]"
+            )
             log.exception(e)
 
 
-@click.command()
+@click.command(
+    short_help="Validate SSH connectivity for a configuration/session.",
+    help=(
+        "Validate the ability to SSH onto all of the hosts required by the "
+        "configuration <configuration> session <session> applications.\n\n"
+        "After running the command, you will see a list of hosts with either a check "
+        "mark or a cross mark.\n\n"
+        "Arguments:\n\n"
+        "  configuration: The configuration name or identifier used by the oksconflibs"
+        "backend (e.g. 'myconfig'). This determines which configuration file is loaded "
+        "to collect applications and hosts.\n\n"
+        "  session: The session name defined within the given configuration (e.g. "
+        "'default'). The command validates SSH access for hosts required by "
+        "applications in this session.\n\n"
+        "Example usage: drunc ssh-validator <configuration> <session>\n"
+    ),
+)
 @click.argument("configuration", type=str, nargs=1)
 @click.argument("session", type=str, nargs=1)
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(list(log_levels.keys()), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
 def main(configuration: str, session: str, log_level: str) -> None:
     """
-    The script validates the ability to SSH onto all of the hosts required by the
-    configuration <configuration> session <session> applications.
+    Entrypoint for the ssh-validator CLI command.
 
-    After running the command, you will see a list of hosts with either a check mark or
-    a cross mark:
-
-    Example usage:
-        drunc ssh-validator <configuration> <session>
 
     Args:
         configuration (str): The configuration file name.
         session (str): The session name.
         log_level (str): The log level to use.
-
-    Returns:
-        None
-
-    Raises:
-        None
     """
     validate_ssh_connection(configuration, session, log_level)

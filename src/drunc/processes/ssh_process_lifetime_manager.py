@@ -5,6 +5,7 @@ Provides SSH connection and lifetime management
 import getpass
 import logging
 import os
+import socket
 import threading
 import time
 from typing import Callable, Dict, List, Optional
@@ -117,6 +118,16 @@ class SSHProcessLifetimeManager:
 
             # Determine actual connection parameters from SSH config
             actual_hostname = ssh_config.get("hostname", hostname)
+
+            # As we are supporting GSSAPI authentication with kerberos, we need to map
+            # the name "localhost" to the actual hostname of the machine (the client
+            # must request the hostname rather than the alias "localhost" or host IP
+            # address to match the server principal in the kerberos ticket, as kerberos
+            # requires a SPN that matches the server's hostname, IP addresses are
+            # ignored).
+            if actual_hostname == "localhost":
+                actual_hostname = socket.gethostname()
+
             actual_user = ssh_config.get("user", user)
             port = int(ssh_config.get("port", 22))
             identity_files = ssh_config.get("identityfile", None)
@@ -141,6 +152,14 @@ class SSHProcessLifetimeManager:
                 "port": port,
                 "timeout": 10.0,
                 "banner_timeout": 10.0,
+                # Pubkey options
+                "key_filename": identity_files,
+                "allow_agent": enable_agent,
+                "look_for_keys": enable_agent,
+                # GSSAPI options
+                "gss_auth": True,
+                "gss_kex": True,
+                "gss_deleg_creds": True,
             }
 
             # Configure authentication methods based on caller requirements
@@ -596,3 +615,33 @@ class SSHProcessLifetimeManager:
                     client.close()
                 except Exception:
                     pass
+
+    def validate_host_connection(
+        self, host: str, user: str = getpass.getuser()
+    ) -> None:
+        """
+        Validate SSH connections for all hosts in the collected applications.
+
+        This method attempts to establish an SSH connection to the specified host
+        and execute a simple command to verify connectivity. Used to validate access.
+
+
+        """
+        client: paramiko.SSHClient | None = None
+        try:
+            # Create and connect SSH client
+            client = self._create_ssh_client(host, user, enable_agent=True)
+
+            # Attempt SSH connection and command execution
+            remote_cmd = f'echo "{user} established SSH successfully";'
+            stdin, stdout, stderr = client.exec_command(remote_cmd, timeout=10.0)
+
+            # recv_exit_status() blocks until the remote command has finished and
+            # returns the exit code
+            exit_status = stdout.channel.recv_exit_status()
+
+            self.log.debug(f"SSH doctor command exit status: {exit_status}")
+
+        finally:
+            if client:
+                client.close()
