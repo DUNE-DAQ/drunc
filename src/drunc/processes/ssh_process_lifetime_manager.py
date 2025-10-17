@@ -94,7 +94,11 @@ class SSHProcessLifetimeManager:
         return ssh_config
 
     def _create_ssh_client(
-        self, hostname: str, user: str, enable_agent: bool = True
+        self,
+        hostname: str,
+        user: str,
+        enable_agent: bool = True,
+        auth_methods: List[str] | None = None,
     ) -> paramiko.SSHClient:
         """
         Create and connect an SSH client
@@ -152,15 +156,17 @@ class SSHProcessLifetimeManager:
                 "port": port,
                 "timeout": 10.0,
                 "banner_timeout": 10.0,
-                # Pubkey options
-                "key_filename": identity_files,
-                "allow_agent": enable_agent,
-                "look_for_keys": enable_agent,
-                # GSSAPI options
-                "gss_auth": True,
-                "gss_kex": True,
-                "gss_deleg_creds": True,
             }
+
+            if "GSSAPIAuthentication" in auth_methods or auth_methods is None:
+                connect_kwargs["gss_auth"] = True
+                connect_kwargs["gss_kex"] = True
+                connect_kwargs["gss_deleg_creds"] = True
+
+            if "publickey" in auth_methods or auth_methods is None:
+                connect_kwargs["key_filename"] = identity_files
+                connect_kwargs["allow_agent"] = enable_agent
+                connect_kwargs["look_for_keys"] = enable_agent
 
             # Configure authentication methods based on caller requirements
             if not enable_agent:
@@ -617,7 +623,10 @@ class SSHProcessLifetimeManager:
                     pass
 
     def validate_host_connection(
-        self, host: str, user: str = getpass.getuser()
+        self,
+        host: str,
+        user: str = getpass.getuser(),
+        auth_methods: List[str] | None = None,
     ) -> None:
         """
         Validate SSH connections for all hosts in the collected applications.
@@ -630,7 +639,9 @@ class SSHProcessLifetimeManager:
         client: paramiko.SSHClient | None = None
         try:
             # Create and connect SSH client
-            client = self._create_ssh_client(host, user, enable_agent=True)
+            client = self._create_ssh_client(
+                hostname=host, user=user, enable_agent=True, auth_methods=auth_methods
+            )
 
             # Attempt SSH connection and command execution
             remote_cmd = f'echo "{user} established SSH successfully";'

@@ -1,68 +1,45 @@
-import getpass
 import logging
 
 import click
 import conffwk
 from rich import print
 from rich.logging import RichHandler
-from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 # from drunc.process_manager.ssh_process_manager import on_parent_exit
 from drunc.utils.utils import log_levels
 
-kDefaultAuth = "default"
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"
+authentication_methods: list[str] = [kPublicKeyAuth, kKerberosAuth]
 
 
-def test_host_connection(host: str, preferred_auth: str = kDefaultAuth) -> bool:
-    ssh = Command("/usr/bin/ssh")
+def test_host_connection(host: str, test_auth: str) -> bool:
+    """
+    Test SSH connection to a specific host using the given authentication method.
 
-    print(f"[blue]{host}[/blue] \[{preferred_auth}]: ", end="")
+    Args:
+        host (str): The hostname or IP address of the target host.
+        test_auth (str): The authentication method to use ('publickey',
+            'gssapi-with-mic', or None for both).
 
-    user_host = f"{getpass.getuser()}@{host}"
-    ssh_args = (
-        [
-            user_host,
-            "-tt",
-            "-o StrictHostKeyChecking=no",
-        ]
-        + (
-            [f"-o PreferredAuthentications={preferred_auth} "]
-            if preferred_auth != kDefaultAuth
-            else []
-        )
-        + [
-            f'echo "{user_host} established SSH successfully";',
-        ]
-    )
-    logging.debug(f"SSH command: /usr/bin/ssh {' '.join(ssh_args)}")
+    Returns:
+        bool: True if the SSH connection is successful, False otherwise.
+    """
+
+    ssh_manager = SSHProcessLifetimeManager(disable_host_key_check=True)
 
     try:
-        ssh(
-            *ssh_args,
-            _bg=False,
-            _bg_exc=False,
-            _new_session=True,
-            # _preexec_fn=on_parent_exit(signal.SIGTERM),
-            _err_to_out=True,
-        )
-        print(":white_check_mark:")
+        ssh_manager.validate_host_connection(host=host, auth_methods=test_auth)
+        return True
     except Exception as e:
-        print(":x:")
-
-        # print(f"Failed to SSH onto host [red]{user_host}[/red]")
-        # print(e)
-        return e
-
-    return True
+        logging.error(f"Failed to validate SSH connection for {host}: {e}")
+        return False
 
 
-def test_session_ssh_connections(
-    configuration: str, session_name: str, log_level: str, preferred_auth=kDefaultAuth
-):
+def test_session_ssh_connections(configuration: str, session_name: str, test_auth: str):
     # log = logging.getLogger()
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
@@ -83,7 +60,7 @@ def test_session_ssh_connections(
         hosts.add(app["host"])
 
     for host in hosts:
-        test_host_connection(host, preferred_auth)
+        test_host_connection(host, test_auth)
     print()
 
 
@@ -96,6 +73,15 @@ def test_session_ssh_connections(
     help="Set the log level",
 )
 def main(log_level: str):
+    """
+    Validate the ability to SSH onto all of the hosts required by the configuration
+    <configuration> session <session> applications.\n\n
+
+    This command groups SSH connection validation using commands as:\n
+        drunc ssh-doctor check-session my_config.oks my_session\n
+        drunc ssh-doctor check-host myhost.example.com\n
+    """
+
     FORMAT = "%(message)s"
     logging.basicConfig(
         level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
@@ -107,22 +93,34 @@ def main(log_level: str):
 @click.argument("configuration", type=str, nargs=1)
 @click.argument("session", type=str, nargs=1)
 def check_session(configuration: str, session: str) -> None:
-    """The script validates the ability to SSH onto all of the hosts required by the configuration <configuration> session <session> applications."""
-    auths = [kDefaultAuth, kPublicKeyAuth, kKerberosAuth]
+    """
+    Validate SSH connectivity for a configuration/session.
+
+    Validates the ability to SSH onto all of the hosts required by the
+    configuration <configuration> session <session> applications.
+
+    Args:
+        configuration (str): The configuration name or identifier used by the
+            oksconflibs backend (e.g. 'myconfig'). This determines which configuration
+            file is loaded to collect applications and hosts.
+
+        session (str): The session name defined within the given configuration (e.g.
+            'local-1x1-config'). The command validates SSH access for hosts required by
+            applications in this session.
+    """
+
     results = {}
-    for auth in auths:
+    for authentication_method in authentication_methods:
         print("-" * 80)
         print(
             f"Testing SSH connection to '{session}' host(s) "
-            + (
-                f"enforcing '{auth}' authentication"
-                if auth != kDefaultAuth
-                else "with default authentication"
-            )
+            f"enforcing '{authentication_method}' authentication"
         )
         print()
 
-        results[auth] = test_session_ssh_connections(configuration, session, auth)
+        results[authentication_method] = test_session_ssh_connections(
+            configuration, session, authentication_method
+        )
     print()
 
     print(results)
@@ -133,15 +131,30 @@ def check_session(configuration: str, session: str) -> None:
 @main.command()
 @click.argument("host", type=str, nargs=1)
 def check_host(host):
-    auths = [kDefaultAuth, kPublicKeyAuth, kKerberosAuth]
+    """
+    Validate SSH connectivity to a specific host.
+
+    Args:\n
+        host (str): The hostname or IP address of the target host.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
 
     print("-" * 80)
-    print(f"Testing SSH connection to '{host}' with {', '.join(auths)} authentications")
+    print(
+        f"Testing SSH connection to '{host}' with {', '.join(authentication_methods)} authentications"
+    )
     print()
 
     results = {}
-    for auth in auths:
-        results[auth] = test_host_connection(host, auth)
+    for authentication_method in authentication_methods:
+        results[authentication_method] = test_host_connection(
+            host, authentication_method
+        )
 
     print()
 
