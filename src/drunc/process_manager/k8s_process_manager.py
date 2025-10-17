@@ -76,7 +76,14 @@ class K8sPodWatcherThread(threading.Thread):
                     if is_terminal_phase or is_deleted_event:
                         exit_code = -1
                         reason = "Unknown"
-                        if (
+
+                        self.pm.log.debug(
+                            f"Pod {proc_uuid} terminated: phase={phase}, is_terminal={is_terminal_phase}, is_deleted={is_deleted_event}"
+                        )
+                        if phase == "Succeeded":
+                            exit_code = 0
+                            reason = "GracefulShutdown"
+                        elif (
                             status.container_statuses
                             and status.container_statuses[0].state.terminated
                         ):
@@ -84,9 +91,20 @@ class K8sPodWatcherThread(threading.Thread):
                                 0
                             ].state.terminated
                             exit_code = terminated_state.exit_code
-                            reason = terminated_state.reason
+                            reason = (
+                                terminated_state.reason
+                            )  # Finally, handle deleted events
                         elif is_deleted_event:
-                            reason = "PodDeleted"
+                            if phase == "Succeeded":
+                                exit_code = 0
+                                reason = "GracefulShutdown"
+                            else:
+                                exit_code = -1
+                                reason = "PodDeleted"
+
+                        self.pm.log.debug(
+                            f"Final result for pod {proc_uuid}: exit_code={exit_code}, reason={reason}"
+                        )
 
                         self.processed_uuids.add(proc_uuid)
                         self.pm.notify_termination(
@@ -214,6 +232,7 @@ class K8sProcessManager(ProcessManager):
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGHUP, signal_handler)
+        signal.signal(signal.SIGQUIT, signal_handler)
 
         # Set up parent death signal (Linux only)
         try:
@@ -488,49 +507,51 @@ class K8sProcessManager(ProcessManager):
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
-        # Determine the correct shutdown command for the preStop hook
-        shutdown_command = ""
-        if "controller" in podname or podname == self.connection_server_name:
+        # Only add preStop hook for C++ applications (non-controllers)
+        lifecycle_hook = None
+        if "controller" not in podname and podname != self.connection_server_name:
             self.log.debug(
-                f"'{podname}' identified as a Python app, using manual PID discovery with SIGINT."
+                f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
             )
-            shutdown_command = """
-for p in /proc/[0-9]*; do
-    if [ -f "$p/cmdline" ] && grep -a "drunc-controller" "$p/cmdline" > /dev/null; then
-        kill -SIGINT $(basename "$p");
-    fi
-done
-"""
-        else:  # C++ Applications
-            self.log.debug(f"'{podname}' identified as a C++ app, using SIGQUIT.")
             shutdown_command = "kill -QUIT 1"
-
-        lifecycle_hook = client.V1Lifecycle(
-            pre_stop=client.V1LifecycleHandler(
-                _exec=client.V1ExecAction(command=["/bin/sh", "-c", shutdown_command])
+            lifecycle_hook = client.V1Lifecycle(
+                pre_stop=client.V1LifecycleHandler(
+                    _exec=client.V1ExecAction(
+                        command=["/bin/sh", "-c", shutdown_command]
+                    )
+                )
             )
-        )
+        else:
+            self.log.debug(
+                f"'{podname}' identified as a Python app, no preStop hook needed."
+            )
 
-        main_container = client.V1Container(
-            name=podname,
-            image=pod_image,
-            command=["/bin/sh", "-c"],
-            args=[main_command_str],
-            env=[
+        # Create container with conditional lifecycle hook
+        container_kwargs = {
+            "name": podname,
+            "image": pod_image,
+            "command": ["/bin/sh", "-c"],
+            "args": [main_command_str],
+            "env": [
                 client.V1EnvVar(name=k, value=v)
                 for k, v in boot_request.process_description.env.items()
             ],
-            lifecycle=lifecycle_hook,
-            ports=[],
-            volume_mounts=[
+            "ports": [],
+            "volume_mounts": [
                 client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
             ],
-            working_dir=boot_request.process_description.process_execution_directory,
-            security_context=client.V1SecurityContext(
+            "working_dir": boot_request.process_description.process_execution_directory,
+            "security_context": client.V1SecurityContext(
                 run_as_user=os.getuid(), run_as_group=os.getgid()
             ),
-        )
+        }
+
+        # Only add lifecycle hook for C++ applications
+        if lifecycle_hook is not None:
+            container_kwargs["lifecycle"] = lifecycle_hook
+
+        main_container = client.V1Container(**container_kwargs)
 
         all_containers = [main_container]
 
@@ -1011,7 +1032,9 @@ done
                     grace_period_seconds=grace_period,
                 )
 
-            wait_timeout = self.kill_timeout if grace_period is None else 15
+            wait_timeout = (
+                self.kill_timeout if grace_period is None else grace_period + 5
+            )
             if not self.termination_complete_event.wait(timeout=wait_timeout):
                 self.log.warning(
                     f"Timeout in stage '{stage_name}'. Remaining: {self.uuids_pending_deletion}"
@@ -1021,7 +1044,7 @@ done
 
         kill_and_wait(graceful_apps, "Standalone C++ Applications")
 
-        kill_and_wait(forced_apps, "Controllers & Local Session Apps", grace_period=0)
+        kill_and_wait(forced_apps, "Controllers & Local Session Apps")
 
         final_ret = []
         for proc_uuid in uuids_to_kill:
