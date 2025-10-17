@@ -202,6 +202,7 @@ class ProcessManagerDriver(GRPCDriver):
         args = app["args"]
         env = app["env"]
         app_log_path = app["log_path"]
+        data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
@@ -221,6 +222,14 @@ class ProcessManagerDriver(GRPCDriver):
             raise DruncShellException(f"Log path {log_path} does not exist.")
 
         self.log.debug(f"{name}'s env:\n{env}")
+
+        process_restriction = ProcessRestriction(allowed_hosts=[host])
+        if data_path:
+            self.log.debug(
+                f"Attaching data_path '{data_path}' to the boot request for '{name}'"
+            )
+            process_restriction.data_mount = data_path
+
         breq = BootRequest(
             token=copy_token(self.token),
             process_description=ProcessDescription(
@@ -236,7 +245,7 @@ class ProcessManagerDriver(GRPCDriver):
                 process_execution_directory=pwd,
                 process_logs_path=log_path,
             ),
-            process_restriction=ProcessRestriction(allowed_hosts=[host]),
+            process_restriction=process_restriction,
         )
         self.log.debug(f"{breq=}\n\n")
         return breq
