@@ -1,0 +1,165 @@
+"""
+Module for SSH configurator main application.
+
+Sets up the SSH configurations based on provided parameters. Currently this configures
+the SSH client configuration file (~/.ssh/config) to facilitate passwordless SSH
+access to np0* hosts and localhost using public key authentication.
+"""
+
+import fnmatch
+import getpass
+from pathlib import Path
+
+import click
+import paramiko
+from jinja2 import Template
+
+import drunc as _drunc
+from drunc.utils.utils import create_logger_handler, get_logger
+
+log = get_logger("ssh_configurator")
+create_logger_handler(rich_handler=True)
+
+kPublicKeyAuth = "publickey"
+kKerberosAuth = "gssapi-with-mic"
+authentication_methods: list[str] = [kPublicKeyAuth, kKerberosAuth]
+
+np0x_servers = [
+    "np04-srv-001",
+    "np04-srv-002",
+    "np04-srv-003",
+    "np04-srv-004",
+    "np04-srv-005",
+    "np04-srv-011",
+    "np04-srv-012",
+    "np04-srv-013",
+    "np04-srv-014",
+    "np04-srv-015",
+    "np04-srv-016",
+    "np04-srv-018",
+    "np04-srv-019",
+    "np04-srv-021",
+    "np04-srv-022",
+    "np04-srv-024",
+    "np04-srv-025",
+    "np04-srv-026",
+    "np04-srv-028",
+    "np04-srv-029",
+    "np04-srv-030",
+    "np04-srv-031",
+    "np02-srv-002",
+    "np02-srv-003",
+    "np02-srv-004",
+    "np02-srv-005",
+]
+
+hosts_to_access = np0x_servers + ["localhost"]
+
+
+@click.command()
+def main():
+    """
+    Configures SSH access for the specified hosts.
+
+    This uses a template SSH configuration file to set up passwordless SSH access using
+    both publickey and GSSAPI authentication methods for np0* hosts and localhost.
+
+    Returns:
+        None
+    """
+
+    # Determine SSH configuration file path
+    ssh_configuration_path: Path = Path("~/.ssh/config").expanduser().resolve()
+    populate_ssh_template: bool = False
+
+    if not ssh_configuration_path.parent.exists():
+        log.warning(
+            "SSH configuration file not found. Will create a new one from template."
+        )
+        populate_ssh_template = True
+    else:
+        log.info(f"SSH configuration file found at {ssh_configuration_path}")
+        log.info("Parsing existing SSH configuration file.")
+
+        ssh_config = paramiko.SSHConfig()
+        with ssh_configuration_path.open("r") as ssh_config_file:
+            ssh_config.parse(ssh_config_file)
+        log.info("Parsed existing SSH configuration file.")
+
+    # Validate that there is a host entry for each of the np0* servers and localhost
+    configured_hosts = ssh_config.get_hostnames()
+    matched_hosts = []
+
+    if not configured_hosts:
+        log.warning("No SSH configurations found in existing SSH configuration file.")
+        populate_ssh_template = True
+    else:
+        log.info(f"Found SSH configurations for hosts: {configured_hosts}")
+
+        # Check each required host against existing configurations
+        for host in hosts_to_access:
+            matched = False
+            for pattern in configured_hosts:
+                # Respect SSH negation patterns like "!badhost"
+                if pattern.startswith("!"):
+                    if fnmatch.fnmatchcase(host, pattern[1:]):
+                        log.error(
+                            f"{host} is excluded by SSH configuration pattern: "
+                            f"{pattern}. Fix the underlying problem and then re-run."
+                        )
+                        return
+                    continue
+
+                # Support wildcard patterns like "np0*"
+                if fnmatch.fnmatchcase(host, pattern):
+                    matched_hosts.append(host)
+                    break
+
+            if not matched:
+                log.warning(f"No SSH configuration found for host: {host}")
+                populate_ssh_template = True
+                break
+
+    if matched_hosts == hosts_to_access:
+        log.info(
+            f"All required hosts {(', '.join(matched_hosts))} are already configured "
+            "in the SSH configuration file."
+        )
+        return
+    else:
+        populate_ssh_template = True
+
+    if not populate_ssh_template:
+        log.critical("Logic error above!")
+        return
+
+    # Populate SSH configuration from template
+    log.info("Populating SSH configuration file from template.")
+    # Path to the root of the installed "drunc" package (the package directory)
+    template_path = (
+        Path(_drunc.__file__).resolve().parent
+        / "data"
+        / "template_ssh_config"
+        / "template.jinja"
+    )
+    if not template_path.exists():
+        log.error(f"SSH configuration template file not found at {template_path}")
+        return
+
+    # Populate the template
+    template_variables = {"USERNAME": getpass.getuser()}
+    template = Template(template_path.read_text())
+    result = template.render(**template_variables)
+
+    if not ssh_configuration_path.parent.exists():
+        ssh_configuration_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with ssh_configuration_path.open("w") as ssh_config_file:
+        ssh_config_file.write(result)
+
+    log.info(f"Populated SSH configuration file at {ssh_configuration_path}")
+    log.info("Rerun this command to ensure that all hosts are properly configured.")
+
+
+if __name__ == "__main__":
+    main()
