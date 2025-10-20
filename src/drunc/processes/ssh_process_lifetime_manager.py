@@ -182,23 +182,27 @@ class SSHProcessLifetimeManager:
             # Configure authentication methods
             kPublicKeyAuth: str = "publickey"
             kKerberosAuth: str = "gssapi-with-mic"
-            if auth_methods == [kKerberosAuth]:
+            if auth_methods is not None and auth_methods == [kKerberosAuth]:
                 connect_kwargs["gss_auth"] = True
                 connect_kwargs["gss_kex"] = True
                 connect_kwargs["gss_deleg_creds"] = True
                 connect_kwargs["allow_agent"] = False
                 connect_kwargs["look_for_keys"] = False
-            elif auth_methods == [kPublicKeyAuth]:
+            elif auth_methods is not None and auth_methods == [kPublicKeyAuth]:
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)
-            elif auth_methods is None or (
+            elif auth_methods is not None and (
                 kKerberosAuth in auth_methods and kPublicKeyAuth in auth_methods
             ):
-                # Set both options, Public Key will be used first (paramiko default)
                 connect_kwargs["gss_auth"] = True
                 connect_kwargs["gss_kex"] = True
                 connect_kwargs["gss_deleg_creds"] = True
+                connect_kwargs["allow_agent"] = enable_agent
+                connect_kwargs["look_for_keys"] = enable_agent
+                self._add_identity_file(connect_kwargs, identity_files)
+
+            if auth_methods is None:
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)
@@ -220,7 +224,8 @@ class SSHProcessLifetimeManager:
                 client.close()
             except Exception:
                 pass
-            raise RuntimeError(f"Failed to connect to {user}@{hostname}: {e}") from e
+            self.log.error(f"SSH client failed to connect to {user}@{hostname}: {e}")
+            return None
 
     def get_active_process_keys(self) -> List[str]:
         """Get list of active process UUIDs."""
@@ -277,6 +282,23 @@ class SSHProcessLifetimeManager:
             env_vars=env_vars,
         )
 
+    def _cleanup_connection(self, uuid: str) -> None:
+        """
+        Clean up SSH connection for a given UUID.
+
+        Args:
+            uuid: Process UUID to clean up
+        """
+        if uuid in self.connections:
+            try:
+                self.connections[uuid].close()
+            except Exception as e:
+                self.log.debug(f"Error closing connection for {uuid}: {e}")
+                pass
+
+            with self.global_lock:
+                del self.connections[uuid]
+
     def _execute_ssh_command(
         self,
         uuid: str,
@@ -305,10 +327,12 @@ class SSHProcessLifetimeManager:
         Raises:
             RuntimeError: If SSH connection or execution fails
         """
-        try:
-            # Create and connect SSH client
-            client = self._create_ssh_client(hostname, user, enable_agent=True)
+        client = self._create_ssh_client(hostname, user, enable_agent=True)
+        if client is None:
+            self._cleanup_connection(uuid)
+            raise RuntimeError(f"SSH connection for {uuid} failed")
 
+        try:
             # Build remote command with environment setup and output redirection
             remote_cmd = (
                 'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
@@ -348,13 +372,7 @@ class SSHProcessLifetimeManager:
             return channel
 
         except Exception as e:
-            # Clean up on failure
-            if uuid in self.connections:
-                try:
-                    self.connections[uuid].close()
-                except Exception:
-                    pass
-                del self.connections[uuid]
+            self._cleanup_connection(uuid)
             raise RuntimeError(f"Failed to execute SSH command for {uuid}: {e}")
 
     def is_process_alive(self, uuid: str) -> bool:
@@ -612,12 +630,16 @@ class SSHProcessLifetimeManager:
         Returns:
             List of log lines
         """
-        client = None
-        try:
-            # Create temporary SSH client for log retrieval
-            # Disable agent/key lookup for simpler temporary connection
-            client = self._create_ssh_client(hostname, user, enable_agent=False)
+        # Create temporary SSH client for log retrieval
+        # Disable agent/key lookup for simpler temporary connection
+        client = self._create_ssh_client(hostname, user, enable_agent=False)
+        if client is None:
+            self.log.debug(
+                f"Returning empty log lines for {hostname}, was unable to connect."
+            )
+            return []
 
+        try:
             # Execute tail command to retrieve last N lines
             stdin, stdout, stderr = client.exec_command(
                 f"tail -{num_lines} {log_file}", timeout=10.0
@@ -640,7 +662,7 @@ class SSHProcessLifetimeManager:
 
         finally:
             # Always close temporary connection
-            if client:
+            if client is not None:
                 try:
                     client.close()
                 except Exception:
@@ -669,15 +691,13 @@ class SSHProcessLifetimeManager:
         Raises:
             RuntimeError: If SSH connection or command execution fails
         """
-
-        client: paramiko.SSHClient | None = None
-
+        # Create and connect SSH client
+        client = self._create_ssh_client(
+            hostname=host, user=user, enable_agent=True, auth_methods=[auth_method]
+        )
+        if client is None:
+            raise RuntimeError("SSH connection failed")
         try:
-            # Create and connect SSH client
-            client = self._create_ssh_client(
-                hostname=host, user=user, enable_agent=True, auth_methods=[auth_method]
-            )
-
             # Attempt SSH connection and command execution
             remote_cmd = f'echo "{user} established SSH successfully";'
             stdin, stdout, stderr = client.exec_command(remote_cmd, timeout=10.0)
