@@ -93,10 +93,10 @@ def test_basic_grpc_tree_communication_multiprocessing(grpc_port_cleaner, capsys
 
                     # Check for expected gRPC trace output
                     #####################################################################################
-                    # TODO this assert below is nice to have because it checks the grpc logging is working
-                    # but I've commented it out because it only works when you run this test on its own
+                    # TODO this assert below is nice to have because it checks the grpc http-level logging
+                    # is working but I've commented it out because it only works when you run this test on its own
                     # and fails when you run the whole test suite. This is likely because the GRPC_TRACE
-                    # env variable MUST be set before grpc is imported anywhere for the logging to work.
+                    # env variable must be set before grpc is imported anywhere for the logging to work.
                     # Fixing it would require a careful audit of where grpc is imported.
                     #####################################################################################
                     # assert "http" in content, f"Missing 'http' trace in {log_file}"

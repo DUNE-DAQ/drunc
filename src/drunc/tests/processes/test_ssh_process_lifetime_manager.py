@@ -27,9 +27,23 @@ from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManag
 
 @pytest.fixture
 def ssh_manager():
-    """Fixture providing SSH Connection Manager with cleanup."""
+    """Fixture providing SSH Connection Manager with cleanup and console logging."""
     logger = logging.getLogger("test_ssh")
     logger.setLevel(logging.DEBUG)
+
+    # Create console handler for command line output
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    # Create formatter for readable log messages
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(formatter)
+
+    # Add handler to logger (avoid duplicate handlers)
+    if not logger.handlers:
+        logger.addHandler(console_handler)
 
     manager = SSHProcessLifetimeManager(
         disable_localhost_host_key_check=True,

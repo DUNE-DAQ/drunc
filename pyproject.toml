@@ -26,11 +26,11 @@ dependencies = [
     "kubernetes==31.0.0",
     "pytz==2024.2",
     "psutil==6.1.0",
-    "paramiko",
-    "paramiko[gssapi]"
+    "paramiko"
 ]
 
 [project.optional-dependencies]
+gssapi = ["paramiko[gssapi]"]
 dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
 test = ["pytest", "grpcio-testing"]
 
