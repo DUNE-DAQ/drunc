@@ -230,7 +230,6 @@ class K8sProcessManager(ProcessManager):
 
         # Register signal handlers for common termination signals
         signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGHUP, signal_handler)
         signal.signal(signal.SIGQUIT, signal_handler)
 
@@ -990,23 +989,14 @@ class K8sProcessManager(ProcessManager):
 
         self.log.info(f"Starting termination of {len(uuids_to_kill)} pods...")
 
-        graceful_apps, forced_apps = [], []
+        apps = []
         for uuid_str in uuids_to_kill:
             if uuid_str not in self.boot_request:
                 continue
 
-            pd = self.boot_request[uuid_str].process_description
-            is_controller = (
-                "controller" in pd.metadata.name
-                or pd.metadata.name == self.connection_server_name
-            )
+            apps.append(uuid_str)
 
-            if is_controller:
-                forced_apps.append(uuid_str)
-            else:
-                graceful_apps.append(uuid_str)
-
-        def kill_and_wait(uuids, stage_name, grace_period=None) -> None:
+        def kill_and_wait(uuids, grace_period=None) -> None:
             if not uuids:
                 return
             action = (
@@ -1014,7 +1004,7 @@ class K8sProcessManager(ProcessManager):
                 if grace_period == 0
                 else "Gracefully terminating"
             )
-            self.log.info(f"Stage '{stage_name}': {action} {len(uuids)} pod(s)...")
+            self.log.info(f"{action} {len(uuids)} pod(s)...")
 
             self.termination_complete_event.clear()
             self.uuids_pending_deletion.update(uuids)
@@ -1036,15 +1026,11 @@ class K8sProcessManager(ProcessManager):
                 self.kill_timeout if grace_period is None else grace_period + 5
             )
             if not self.termination_complete_event.wait(timeout=wait_timeout):
-                self.log.warning(
-                    f"Timeout in stage '{stage_name}'. Remaining: {self.uuids_pending_deletion}"
-                )
+                self.log.warning(f"Timeout. Remaining: {self.uuids_pending_deletion}")
 
             self.uuids_pending_deletion.clear()
 
-        kill_and_wait(graceful_apps, "Standalone C++ Applications")
-
-        kill_and_wait(forced_apps, "Controllers & Local Session Apps")
+        kill_and_wait(apps)
 
         final_ret = []
         for proc_uuid in uuids_to_kill:
