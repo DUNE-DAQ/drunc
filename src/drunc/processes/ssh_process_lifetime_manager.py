@@ -3,6 +3,7 @@ Provides SSH connection and lifetime management
 """
 
 import getpass
+import importlib.util
 import logging
 import os
 import socket
@@ -115,6 +116,19 @@ class SSHProcessLifetimeManager:
             )
         return connect_kwargs
 
+    def _has_gss_api_support(self) -> bool:
+        """
+        Check if paramiko has GSS-API support available.
+
+        Returns:
+            bool: True if GSS-API support is available, False otherwise
+        """
+
+        if importlib.util.find_spec("gssapi") is not None:
+            return True
+        else:
+            return False
+
     def _create_ssh_client(
         self,
         hostname: str,
@@ -179,30 +193,29 @@ class SSHProcessLifetimeManager:
                 "banner_timeout": 10.0,
             }
 
+            has_gssapi = self._has_gss_api_support()
+
             # Configure authentication methods
             kPublicKeyAuth: str = "publickey"
             kKerberosAuth: str = "gssapi-with-mic"
             if auth_methods is not None and auth_methods == [kKerberosAuth]:
-                connect_kwargs["gss_auth"] = True
-                connect_kwargs["gss_kex"] = True
-                connect_kwargs["gss_deleg_creds"] = True
+                if has_gssapi:
+                    connect_kwargs["gss_auth"] = True
+                    connect_kwargs["gss_kex"] = True
+                    connect_kwargs["gss_deleg_creds"] = True
                 connect_kwargs["allow_agent"] = False
                 connect_kwargs["look_for_keys"] = False
             elif auth_methods is not None and auth_methods == [kPublicKeyAuth]:
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)
-            elif auth_methods is not None and (
+            elif auth_methods is None or (
                 kKerberosAuth in auth_methods and kPublicKeyAuth in auth_methods
             ):
-                connect_kwargs["gss_auth"] = True
-                connect_kwargs["gss_kex"] = True
-                connect_kwargs["gss_deleg_creds"] = True
-                connect_kwargs["allow_agent"] = enable_agent
-                connect_kwargs["look_for_keys"] = enable_agent
-                self._add_identity_file(connect_kwargs, identity_files)
-
-            if auth_methods is None:
+                if has_gssapi:
+                    connect_kwargs["gss_auth"] = True
+                    connect_kwargs["gss_kex"] = True
+                    connect_kwargs["gss_deleg_creds"] = True
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)
