@@ -42,7 +42,7 @@ class ThreadPinning(FSMAction):
 
         apps = collect_apps(
             config_filename=configuration,
-            session_name=session_name or session_uid,
+            session_name=session_uid,
             db=db,
             session_obj=session_dal,
             segment_obj=session_dal.segment,
@@ -76,9 +76,7 @@ class ThreadPinning(FSMAction):
         failed_hosts = set()
 
         if is_k8s:
-            # Resolve Kubernetes namespace: prefer CLI session name
-            namespace = session_name or session_uid
-            # Build list of pod names from application names
+            namespace = session_name
             podnames = []
             for app in apps:
                 if "name" in app:
