@@ -1,19 +1,24 @@
+"""
+SSH Doctor Application
+Validate the ability to SSH onto all of the hosts required by the configuration
+<configuration> session <session> applications.
+"""
+
 import logging
 
 import click
 import conffwk
-from rich import print
-from rich.logging import RichHandler
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 # from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import log_levels
+from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"
 authentication_methods: list[str] = [kPublicKeyAuth, kKerberosAuth]
+log = get_logger("ssh_doctor")
 
 
 def test_host_connection(host: str, test_auth: str) -> bool:
@@ -32,20 +37,32 @@ def test_host_connection(host: str, test_auth: str) -> bool:
     ssh_manager = SSHProcessLifetimeManager(disable_host_key_check=True)
 
     try:
-        ssh_manager.validate_host_connection(host=host, auth_methods=test_auth)
+        ssh_manager.validate_host_connection(host=host, auth_method=test_auth)
         return True
     except Exception as e:
         logging.error(f"Failed to validate SSH connection for {host}: {e}")
         return False
 
 
-def test_session_ssh_connections(configuration: str, session_name: str, test_auth: str):
-    # log = logging.getLogger()
+def parse_configuration(configuration: str, session_name: str) -> list[str]:
+    """
+    Parse configurations and collect unique hosts from applications in the given
+    configuration and session.
+
+    Args:
+        configuration (str): The configuration name or identifier used by the
+            oksconflibs backend (e.g. 'myconfig'). This determines which configuration
+            file is loaded to collect applications and hosts.
+        session_name (str): The session name defined within the given configuration (e.g.
+            'local-1x1-config'). The command validates SSH access for hosts required by
+            applications in this session.
+
+    Returns:
+        list[str]: A list of hostnames to test SSH connections to.
+    """
+    # Load configuration and session, collect applications
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
-
-    hosts = set()
-
     apps = collect_apps(
         config_filename=configuration,
         session_name=session_name,
@@ -56,12 +73,41 @@ def test_session_ssh_connections(configuration: str, session_name: str, test_aut
         tree_prefix=[],
     )
 
+    # Gather unique hosts
+    hosts = set()
     for app in apps:
         hosts.add(app["host"])
 
-    for host in hosts:
-        test_host_connection(host, test_auth)
-    print()
+    return sorted(hosts)
+
+
+def print_results(results: dict[str, dict[str, bool]]) -> None:
+    """
+    Print the results of SSH connection tests.
+
+    Args:
+        results (dict): A dictionary containing the results of SSH connection tests.
+            Formatted as {host: {auth_method: success_bool}}.
+
+    Returns:
+        None
+    """
+    for host, auth_methods in results.items():
+        all_valid_connections = False
+        if all(auth_methods.values()):
+            all_valid_connections = True
+        log.info(
+            f"\tHost: {host} - Overall Status: {'[green]✔[/green]' if all_valid_connections else '[red]✘[/red]'}"
+        )
+        for auth_method, successful_connection in auth_methods.items():
+            status = "[green]✔[/green]" if successful_connection else "[red]✘[/red]"
+            if successful_connection:
+                log.info(f"\t\t{auth_method} {status}")
+            else:
+                log.error(
+                    f"\t{host if not all_valid_connections else ''} {auth_method} {status}"
+                )
+    return
 
 
 @click.group()
@@ -69,7 +115,7 @@ def test_session_ssh_connections(configuration: str, session_name: str, test_aut
     "-l",
     "--log-level",
     type=click.Choice(log_levels.keys(), case_sensitive=False),
-    default="WARNING",
+    default="INFO",
     help="Set the log level",
 )
 def main(log_level: str):
@@ -79,14 +125,12 @@ def main(log_level: str):
 
     This command groups SSH connection validation using commands as:\n
         drunc ssh-doctor check-session my_config.oks my_session\n
-        drunc ssh-doctor check-host myhost.example.com\n
-    """
+        drunc ssh-doctor check-host myhost.example.com\n\n
 
-    FORMAT = "%(message)s"
-    logging.basicConfig(
-        level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
-    )
-    logging.getLogger("sh").setLevel(log_level)
+    Set the log level to error to see only failed connections.\n
+    """
+    log.setLevel(log_levels[log_level.upper()])
+    create_logger_handler(rich_handler=True)
 
 
 @main.command()
@@ -94,70 +138,84 @@ def main(log_level: str):
 @click.argument("session", type=str, nargs=1)
 def check_session(configuration: str, session: str) -> None:
     """
-    Validate SSH connectivity for a configuration/session.
+    Validate SSH connectivity for a configuration/session.\n\n
 
     Validates the ability to SSH onto all of the hosts required by the
-    configuration <configuration> session <session> applications.
+    configuration <configuration> session <session> applications.\n\n
 
-    Args:
+    Args:\n
         configuration (str): The configuration name or identifier used by the
             oksconflibs backend (e.g. 'myconfig'). This determines which configuration
-            file is loaded to collect applications and hosts.
+            file is loaded to collect applications and hosts.\n
 
         session (str): The session name defined within the given configuration (e.g.
             'local-1x1-config'). The command validates SSH access for hosts required by
-            applications in this session.
+            applications in this session.\n
+
+    Returns:\n
+        None
+
+    Raises:\n
+        None
     """
 
-    results = {}
-    for authentication_method in authentication_methods:
-        print("-" * 80)
-        print(
-            f"Testing SSH connection to '{session}' host(s) "
-            f"enforcing '{authentication_method}' authentication"
+    # Determine the list of hosts from the configuration and session
+    hosts: list[str] = parse_configuration(configuration, session)
+
+    if hosts:
+        log.info(f"Validating SSH connection to {hosts}")
+    else:
+        log.error(
+            f"No hosts found in configuration '{configuration}' session '{session}'"
         )
-        print()
+        return
 
-        results[authentication_method] = test_session_ssh_connections(
-            configuration, session, authentication_method
+    # Test SSH connections for each host
+    host_results: dict[str, dict[str, bool]] = {}  # host -> auth_method -> result
+    for host in hosts:
+        log.debug(
+            f"Testing connection to '{host}' with {', '.join(authentication_methods)} "
+            "authentications"
         )
-    print()
+        host_results[host] = {}
+        for authentication_method in authentication_methods:
+            host_results[host][authentication_method] = test_host_connection(
+                host, authentication_method
+            )
 
-    print(results)
-
-    print()
+    print_results(host_results)
+    return
 
 
 @main.command()
 @click.argument("host", type=str, nargs=1)
-def check_host(host):
+def check_host(host: str) -> None:
     """
     Validate SSH connectivity to a specific host.
 
     Args:\n
         host (str): The hostname or IP address of the target host.
 
-    Returns:
+    Returns:\n
         None
 
-    Raises:
+    Raises:\n
         None
     """
 
-    print("-" * 80)
-    print(
+    log.info(
         f"Testing SSH connection to '{host}' with {', '.join(authentication_methods)} authentications"
     )
-    print()
 
-    results = {}
+    # Test SSH connections for each authentication method
+    host_results: dict[str, bool] = {}  # auth_method -> result
     for authentication_method in authentication_methods:
-        results[authentication_method] = test_host_connection(
+        host_results[authentication_method] = test_host_connection(
             host, authentication_method
         )
 
-    print()
-
-    print(results)
-
-    print()
+    # Format and print the results
+    results: dict[str, dict[str, bool]] = {}  # host -> auth_method -> result
+    results[host] = host_results
+    print_results(results)
+    return

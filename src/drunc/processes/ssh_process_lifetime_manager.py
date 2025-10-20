@@ -8,10 +8,12 @@ import os
 import socket
 import threading
 import time
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import paramiko
 from druncschema.process_manager_pb2 import BootRequest
+
+from drunc.utils.utils import get_logger
 
 
 class SSHProcessLifetimeManager:
@@ -40,7 +42,7 @@ class SSHProcessLifetimeManager:
         """
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
-        self.log = logger if logger else logging.getLogger(__name__)
+        self.log = logger if logger else get_logger(__name__)
         self.on_process_exit = on_process_exit
 
         # Connection and channel tracking (one per UUID)
@@ -93,6 +95,26 @@ class SSHProcessLifetimeManager:
         self.log.debug(f"SSH config identity files: {ssh_config.get('identityfile')}")
         return ssh_config
 
+    def _add_identity_file(
+        self, connect_kwargs: Dict[str, Any], identity_files: List[str]
+    ) -> None:
+        """
+        Add identity files to the SSH connection parameters.
+
+        Args:
+            connect_kwargs: The connection parameters dictionary to update.
+            identity_files: A list of identity file paths to add.
+        """
+        if identity_files:
+            connect_kwargs["key_filename"] = identity_files
+            self.log.debug(f"Using identity files from SSH config: {identity_files}")
+        else:
+            self.log.critical("No identity files found!")
+            raise RuntimeError(
+                "No identity files specified for public key authentication"
+            )
+        return connect_kwargs
+
     def _create_ssh_client(
         self,
         hostname: str,
@@ -115,7 +137,6 @@ class SSHProcessLifetimeManager:
             RuntimeError: If connection fails
         """
         client = paramiko.SSHClient()
-
         try:
             # Load SSH config for this host
             ssh_config = self._load_ssh_config(hostname)
@@ -158,31 +179,34 @@ class SSHProcessLifetimeManager:
                 "banner_timeout": 10.0,
             }
 
-            if "GSSAPIAuthentication" in auth_methods or auth_methods is None:
+            # Configure authentication methods
+            kPublicKeyAuth: str = "publickey"
+            kKerberosAuth: str = "gssapi-with-mic"
+            if auth_methods == [kKerberosAuth]:
                 connect_kwargs["gss_auth"] = True
                 connect_kwargs["gss_kex"] = True
                 connect_kwargs["gss_deleg_creds"] = True
-
-            if "publickey" in auth_methods or auth_methods is None:
-                connect_kwargs["key_filename"] = identity_files
+                connect_kwargs["allow_agent"] = False
+                connect_kwargs["look_for_keys"] = False
+            elif auth_methods == [kPublicKeyAuth]:
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
+                self._add_identity_file(connect_kwargs, identity_files)
+            elif auth_methods is None or (
+                kKerberosAuth in auth_methods and kPublicKeyAuth in auth_methods
+            ):
+                # Set both options, Public Key will be used first (paramiko default)
+                connect_kwargs["gss_auth"] = True
+                connect_kwargs["gss_kex"] = True
+                connect_kwargs["gss_deleg_creds"] = True
+                connect_kwargs["allow_agent"] = enable_agent
+                connect_kwargs["look_for_keys"] = enable_agent
+                self._add_identity_file(connect_kwargs, identity_files)
 
-            # Configure authentication methods based on caller requirements
+            # Ensure agent options are honored if disabled by caller
             if not enable_agent:
                 connect_kwargs["look_for_keys"] = False
                 connect_kwargs["allow_agent"] = False
-
-            # Add identity file from SSH config if present
-            if identity_files:
-                connect_kwargs["key_filename"] = identity_files
-                self.log.debug(
-                    f"Using identity files from SSH config: {identity_files}"
-                )
-            else:
-                self.log.warning(
-                    f"No identity files found in SSH config for {hostname}"
-                )
 
             # Establish connection to remote host
             self.log.debug(f"Connecting to {actual_user}@{actual_hostname}:{port}")
@@ -625,8 +649,8 @@ class SSHProcessLifetimeManager:
     def validate_host_connection(
         self,
         host: str,
+        auth_method: str,
         user: str = getpass.getuser(),
-        auth_methods: List[str] | None = None,
     ) -> None:
         """
         Validate SSH connections for all hosts in the collected applications.
@@ -634,13 +658,24 @@ class SSHProcessLifetimeManager:
         This method attempts to establish an SSH connection to the specified host
         and execute a simple command to verify connectivity. Used to validate access.
 
+        Args:
+            host: Target hostname
+            auth_method: Authentication method to use ('publickey' or 'gssapi-with-mic')
+            user: SSH username (default: current user)
 
+        Returns:
+            None
+
+        Raises:
+            RuntimeError: If SSH connection or command execution fails
         """
+
         client: paramiko.SSHClient | None = None
+
         try:
             # Create and connect SSH client
             client = self._create_ssh_client(
-                hostname=host, user=user, enable_agent=True, auth_methods=auth_methods
+                hostname=host, user=user, enable_agent=True, auth_methods=[auth_method]
             )
 
             # Attempt SSH connection and command execution
