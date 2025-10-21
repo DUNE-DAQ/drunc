@@ -489,19 +489,6 @@ done
             dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
             env_vars["DOTDRUNC"] = dotdrunc_path
 
-        # Set USER environment variable for SSH connections in pods
-        try:
-            host_username = getpass.getuser()
-        except KeyError:
-            # Fallback for environments where getpass.getuser() fails
-            try:
-                import pwd
-
-                host_username = pwd.getpwuid(os.getuid()).pw_name
-            except KeyError:
-                host_username = str(os.getuid())
-        env_vars["USER"] = host_username
-        self.log.debug(f"Setting USER environment variable to: {host_username}")
 
         main_container = client.V1Container(
             name=podname,
@@ -514,10 +501,19 @@ done
             volume_mounts=[
                 client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
+                # Add device access mounts
+                # client.V1VolumeMount(name="dev", mount_path="/dev", read_only=True),
+                # client.V1VolumeMount(name="sys", mount_path="/sys", read_only=True),
             ],
             working_dir=boot_request.process_description.process_execution_directory,
             security_context=client.V1SecurityContext(
-                run_as_user=os.getuid(), run_as_group=os.getgid()
+               run_as_user=os.getuid(), 
+               run_as_group=os.getgid(),
+                privileged=True  # Enable privileged mode for hardware access
+                # allow_privilege_escalation=True  # Allow privilege escalation
+                # capabilities=client.V1Capabilities(
+                #     add=["SYS_ADMIN", "NET_ADMIN", "SYS_PTRACE"]  # Add necessary capabilities
+                # )
             ),
         )
 
@@ -583,6 +579,8 @@ done
                 node_selector=node_selector,
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
+                # host_network=True,  # Use host network for hardware access
+                # host_pid=True,  # Use host PID namespace
                 containers=all_containers,
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=[
@@ -593,6 +591,15 @@ done
                         name="cvmfs",
                         host_path=client.V1HostPathVolumeSource(path="/cvmfs"),
                     ),
+                    # # Add device access volumes
+                    # client.V1Volume(
+                    #     name="dev",
+                    #     host_path=client.V1HostPathVolumeSource(path="/dev")
+                    # ),
+                    # client.V1Volume(
+                    #     name="sys",
+                    #     host_path=client.V1HostPathVolumeSource(path="/sys")
+                    #),
                 ],
             ),
         )
