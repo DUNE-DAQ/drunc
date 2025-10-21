@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gssapi = ["paramiko[gssapi]"]
+prod = ["paramiko[gssapi]"]
 dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
 test = ["pytest", "grpcio-testing"]
 

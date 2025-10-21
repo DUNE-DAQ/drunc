@@ -203,6 +203,8 @@ class SSHProcessLifetimeManager:
                     connect_kwargs["gss_auth"] = True
                     connect_kwargs["gss_kex"] = True
                     connect_kwargs["gss_deleg_creds"] = True
+                else:
+                    self.log.error("GSS-API authentication requested but not supported")
                 connect_kwargs["allow_agent"] = False
                 connect_kwargs["look_for_keys"] = False
             elif auth_methods is not None and auth_methods == [kPublicKeyAuth]:
@@ -216,6 +218,10 @@ class SSHProcessLifetimeManager:
                     connect_kwargs["gss_auth"] = True
                     connect_kwargs["gss_kex"] = True
                     connect_kwargs["gss_deleg_creds"] = True
+                else:
+                    self.log.warning(
+                        "GSS-API authentication requested but not supported"
+                    )
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)

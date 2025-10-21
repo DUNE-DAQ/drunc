@@ -8,6 +8,8 @@ import logging
 
 import click
 import conffwk
+import sys
+from pathlib import Path
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
@@ -50,9 +52,7 @@ def parse_configuration(configuration: str, session_name: str) -> list[str]:
     configuration and session.
 
     Args:
-        configuration (str): The configuration name or identifier used by the
-            oksconflibs backend (e.g. 'myconfig'). This determines which configuration
-            file is loaded to collect applications and hosts.
+        configuration (str): The configuration file name.
         session_name (str): The session name defined within the given configuration (e.g.
             'local-1x1-config'). The command validates SSH access for hosts required by
             applications in this session.
@@ -60,7 +60,12 @@ def parse_configuration(configuration: str, session_name: str) -> list[str]:
     Returns:
         list[str]: A list of hostnames to test SSH connections to.
     """
+
     # Load configuration and session, collect applications
+    if not Path(configuration).exists():
+        log.error(f"Configuration file '{configuration}' does not exist.")
+        sys.exit(1)
+
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
     apps = collect_apps(
@@ -144,9 +149,7 @@ def check_session(configuration: str, session: str) -> None:
     configuration <configuration> session <session> applications.\n\n
 
     Args:\n
-        configuration (str): The configuration name or identifier used by the
-            oksconflibs backend (e.g. 'myconfig'). This determines which configuration
-            file is loaded to collect applications and hosts.\n
+        configuration (str): The configuration file name.\n
 
         session (str): The session name defined within the given configuration (e.g.
             'local-1x1-config'). The command validates SSH access for hosts required by
