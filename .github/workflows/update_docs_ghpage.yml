@@ -1,8 +1,8 @@
-name: Update GitHub Pages DOc
+name: Update GitHub Pages DOCs
 on:
-  push:
-    branches: miruuna/automate-documentation-gh-pages
-
+  workflow_call:
+  schedule:
+    - cron: "0 0 * * 1" # midnight every Monday
 jobs:
   docs:
     timeout-minutes: 15

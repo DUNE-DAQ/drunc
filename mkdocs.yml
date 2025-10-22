@@ -1,7 +1,5 @@
 site_name: DUNE Run Control (drunc) Developer Documentation
 
-# watch: [main, process_manager, controller, interfaces, session_manager]
-
 theme:
   name: material
 
@@ -34,5 +32,3 @@ plugins:
             merge_init_into_class: true
           paths: [.]
 
-# nav:
-#   - Home: README.md

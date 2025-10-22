@@ -21,7 +21,7 @@ for path in root_folder.rglob("*.py"):
     module_path = path.relative_to(root_folder).with_suffix("")
     doc_path = path.relative_to(root_folder).with_suffix(".md")
 
-    full_doc_path = Path("Code Reference", doc_path)
+    full_doc_path = Path("Code-Reference", doc_path)
 
     # Break module path into parts for nav and identifier
     parts = list(module_path.parts)
@@ -49,5 +49,5 @@ for path in root_folder.rglob("*.py"):
     mkdocs_gen_files.set_edit_path(full_doc_path, Path("../") / path)
 
 # Top-level navigation summary
-with mkdocs_gen_files.open("Code Reference/index.md", "w") as nav_file:
+with mkdocs_gen_files.open("Code-Reference/index.md", "w") as nav_file:
     nav_file.writelines(nav.build_literate_nav())
