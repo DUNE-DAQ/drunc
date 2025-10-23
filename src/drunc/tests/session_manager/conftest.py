@@ -228,7 +228,6 @@ def describe_response(command_description_list):
         type="session_manager",
         name="dummy_session",
         commands=command_description_list,
-        children=[],
         flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         token=None,
     )
