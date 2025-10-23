@@ -28,7 +28,9 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 @pytest.fixture(scope="module")
 def mock_logger():
-    with patch("drunc.utils.shell_utils.get_logger") as mock_get_logger:
+    with patch(
+        "drunc.process_manager.process_manager_driver.get_logger"
+    ) as mock_get_logger:
         mock_logger_instance = MagicMock()
         mock_get_logger.return_value = mock_logger_instance
         yield mock_logger_instance
