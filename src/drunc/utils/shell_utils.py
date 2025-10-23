@@ -134,7 +134,7 @@ class ShellContext:
         log = get_logger("utils.ShellContext")
         if name in self._drivers:
             log.info(
-                f"You will not be able to issue command to {self._drivers[name].name} anymore."
+                f"You will not be able to issue commands to {self._drivers[name]} anymore."
             )
             del self._drivers[name]
             log.info(f"Driver '{name}' has been deleted.")

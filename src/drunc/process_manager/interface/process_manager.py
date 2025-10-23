@@ -1,7 +1,9 @@
 import concurrent
 import getpass
 import os
+import signal
 import sys
+import types
 
 import click
 import grpc
@@ -77,6 +79,8 @@ def run_pm(
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
 
+    server: grpc.Server | None = None
+
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
         log.debug("serve called")
@@ -84,6 +88,7 @@ def run_pm(
             raise DruncSetupException(
                 "The address on which to expect commands/send status wasn't specified"
             )
+        nonlocal server
         server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)
@@ -91,24 +96,47 @@ def run_pm(
             generated_port.value = port
 
         server.start()
-        # hostname = socket.gethostname()
         host = address.split(":")[0]
         log.info(
             f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
         )  # bold as part of the address was already formatting, couldn't figure out why
 
-        def server_shutdown():
-            log.warning("Starting shutdown...")
-            # Shuts down the server with 5 seconds of grace period. During the
-            # grace period, the server won't accept new connections and allow
-            # existing RPCs to continue within the grace period.
-            server.stop(5)
-            pm._terminate_impl()
-
         _cleanup_coroutines.append(server_shutdown)
         if ready_event is not None:
             ready_event.set()
         server.wait_for_termination()
+
+    def server_shutdown() -> None:
+        """
+        Cleanly shuts down the gRPC server.
+
+        Shuts down the server with 1 seconds of grace period. During the grace period,
+        the server won't accept new connections and allow existing RPCs to continue
+        within the grace period.
+        """
+
+        nonlocal server
+        if server:
+            log.info("Shutting down the process manager server")
+            server.stop(1)
+            server = None
+        return
+
+    def handle_sigterm(signum: int, frame: types.FrameType) -> None:
+        """
+        Handle the SIGTERM signal to gracefully shut down the server.
+
+        Args:
+            signum: The signal number.
+            frame: The current stack frame (not used).
+        """
+
+        log.debug("SIGTERM received, shutting down server...")
+        server_shutdown()
+        return
+
+    # Register the SIGTERM handler to gracefully shut down the server
+    signal.signal(signal.SIGTERM, handle_sigterm)
 
     try:
         log.debug("Serving process_manager")

@@ -40,7 +40,8 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.utils import get_logger
+
+from drunc.utils.utils import format_name_for_cli, get_logger
 
 
 @dataclass(slots=True)
@@ -658,9 +659,11 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             help=argument.help,
         )(cmd)
 
+    cmd_name = format_name_for_cli(transition.name)
+
     cmd = click.command(
-        name=transition.name.replace("_", "-").lower(),
+        name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
     )(cmd)
 
-    return cmd, transition.name.replace("_", "-").lower()
+    return cmd, cmd_name

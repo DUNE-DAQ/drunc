@@ -26,6 +26,54 @@ from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
 # ============================================================================
+#  `boot` Fixtures
+# ============================================================================
+
+
+@pytest.fixture(scope="session")
+def app_data():
+    """
+    Provides a mock application dictionary with required keys.
+    """
+    return {
+        "restriction": "localhost",
+        "name": "TestApp",
+        "type": "binary",
+        "args": ["--arg1"],
+        "env": {"CUSTOM_ENV": "value"},
+        "log_path": "/app/logs",
+        "tree_id": "tree123",
+    }
+
+
+@pytest.fixture(scope="session")
+def bootrequest(app_data):
+    return BootRequest(
+        token=Token(),
+        process_description=ProcessDescription(
+            metadata=ProcessMetadata(
+                user="test_user",
+                session="session1",
+                name=app_data["name"],
+                hostname="",
+                tree_id=app_data["tree_id"],
+            ),
+            executable_and_arguments=[{"exec": "binary", "args": ["--arg1"]}],
+            env={
+                **app_data["env"],
+                "DUNE_DAQ_BASE_RELEASE": "release1",
+                "SPACK_RELEASES_DIR": "spack_release",
+            },
+            process_execution_directory="/pwd",
+            process_logs_path=app_data["log_path"],
+        ),
+        process_restriction=ProcessRestriction(
+            allowed_hosts=[app_data["restriction"]],
+        ),
+    )
+
+
+# ============================================================================
 # Request Fixtures
 # ============================================================================
 
