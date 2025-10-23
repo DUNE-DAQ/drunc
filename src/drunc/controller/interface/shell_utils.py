@@ -40,7 +40,6 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-
 from drunc.utils.utils import format_name_for_cli, get_logger
 
 
