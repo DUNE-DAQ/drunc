@@ -38,9 +38,6 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
 )
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import (
-    pack_to_any,
-)
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -436,21 +433,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def describe(self, request: Request, context: ServicerContext) -> Description:
         self.log.debug(f"{self.name} running describe")
 
-        description = Description(
+        response = Description(
             type="process_manager",
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
             commands=self.commands,
-            children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
         )
 
         if broadcast_description := self.describe_broadcast():
-            description.broadcast.CopyFrom(pack_to_any(broadcast_description))
+            response.broadcast.Pack(broadcast_description)
 
-        return description
+        return response
 
     @abc.abstractmethod
     def _logs_impl(self, log_request: LogRequest) -> LogLines:

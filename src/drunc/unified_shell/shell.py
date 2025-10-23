@@ -384,17 +384,17 @@ def unified_shell(
         # initial state before terminating
         if ctx.obj.get_driver("controller", quiet_fail=True):
             try:
-                if ctx.obj.get_driver("controller").status().data.in_error:
+                if ctx.obj.get_driver("controller").status().status.in_error:
                     unified_shell_log.warning(
                         "Controller is in error, cannot gracefully shutdown"
                     )
                 else:
-                    unified_shell_log.info(
-                        "Attempting graceful shutdown of the controller"
-                    )
-                    try:
-                        # Safe mode crucial for use with hardware
-                        if safe_mode:
+                    # Safe mode crucial for use with hardware
+                    if safe_mode:
+                        try:
+                            unified_shell_log.info(
+                                "Attempting graceful shutdown of the controller"
+                            )
                             stop_run_cmd = ctx.command.commands.get("stop-run")
                             scrap_cmd = ctx.command.commands.get("scrap")
                             if stop_run_cmd is not None:
@@ -412,10 +412,10 @@ def unified_shell(
                                     "shutdown step."
                                 )
                             unified_shell_log.info("Controller shutdown gracefully")
-                    except Exception as e:
-                        unified_shell_log.error(
-                            f"Could not shutdown the controller gracefully, reason: {e}"
-                        )
+                        except Exception as e:
+                            unified_shell_log.error(
+                                f"Could not shutdown the controller gracefully, reason: {e}"
+                            )
             except Exception as e:
                 unified_shell_log.error(
                     f"Could not retrieve the controller status, reason: {e}"

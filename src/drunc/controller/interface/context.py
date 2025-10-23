@@ -7,7 +7,6 @@ from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.shell_utils import (
-    GRPCDriver,
     ShellContext,
     create_dummy_token_from_uname,
 )
@@ -26,7 +25,7 @@ class ControllerContext(ShellContext):  # boilerplatefest
             name="controller_context", token_args={}, driver_args={}
         )
 
-    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, object]:
         if not self.address:
             return {}
         return {"controller": ControllerDriver(self.address, self._token)}

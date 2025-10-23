@@ -112,6 +112,7 @@ def one_controller_running(load_test_config, request):
     processes_and_logs, session_dal, session_name = boot_session(
         configuration_name, request
     )
+    time.sleep(2)  # Give gunicorn time to start
 
     yield processes_and_logs, session_dal, session_name
     cleanup(processes_and_logs)
