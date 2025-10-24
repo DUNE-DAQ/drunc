@@ -128,7 +128,7 @@ class ClientSideChild(ChildNode):
                 token=token,
                 data=pack_to_any(
                     ExecuteFSMCommandResponse(
-                        flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                        fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                         command_name=request.command_name,
                     )
                 ),
@@ -196,7 +196,7 @@ class ClientSideChild(ChildNode):
         self.state.executing_command_mark()
 
         fsm_data = ExecuteFSMCommandResponse(
-            flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             command_name=data.command_name,
             data="successful",
         )

@@ -932,7 +932,7 @@ class Controller(ControllerServicer):
             if self.stateful_node.node_is_in_error():
                 fsm_result = ExecuteFSMCommandResponse(
                     command_name=payload.command_name,
-                    flag=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+                    fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
                 )
                 return Response(
                     name=self.name,
@@ -948,7 +948,7 @@ class Controller(ControllerServicer):
                 )
                 fsm_result = ExecuteFSMCommandResponse(
                     command_name=payload.command_name,
-                    flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                    fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 )
 
                 return Response(
@@ -970,7 +970,7 @@ class Controller(ControllerServicer):
 
                 fsm_result = ExecuteFSMCommandResponse(
                     command_name=payload.command_name,
-                    flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
+                    fsm_flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
                 )
 
                 return Response(
@@ -1064,11 +1064,11 @@ class Controller(ControllerServicer):
                     response_child.data, ExecuteFSMCommandResponse
                 )
 
-                if fsm_response.flag not in [
+                if fsm_response.fsm_flag not in [
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
                     FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 ]:
-                    child_worst_fsm_flag = fsm_response.flag
+                    child_worst_fsm_flag = fsm_response.fsm_flag
 
             self.stateful_node.finish_propagating_transition_mark(transition)
 
@@ -1096,7 +1096,7 @@ class Controller(ControllerServicer):
 
             fsm_result = ExecuteFSMCommandResponse(
                 command_name=payload.command_name,
-                flag=self_response_fsm_flag,
+                fsm_flag=self_response_fsm_flag,
             )
 
             return Response(

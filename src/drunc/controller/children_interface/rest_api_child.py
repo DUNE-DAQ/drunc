@@ -515,7 +515,7 @@ class RESTAPIChildNode(ClientSideChild):
             success = r["success"]
 
             fsm_data = ExecuteFSMCommandResponse(
-                flag=(
+                fsm_flag=(
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
                     if success
                     else FSMResponseFlag.FSM_FAILED
