@@ -11,13 +11,14 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from urllib.parse import urlparse
 
 import kafka
 import pytz
 import sh
 from click import BadParameter
-from requests import delete, get, patch, post
+from requests import Response, delete, get, patch, post
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import (
@@ -347,6 +348,29 @@ def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
 
     if not ignore_errors:
         r.raise_for_status()
+    return r
+
+
+def http_get_poll(address, as_json=True) -> Optional[Response]:
+    """
+    Use an empty http get to poll if the server
+    at the supplied address is alive
+    """
+    https_or_http_present(address)
+
+    log = get_logger("utils.http_get_poll")
+
+    log.debug(f"Polling address: {address}")
+
+    try:
+        if as_json:
+            r = get(address, json=None)
+        else:
+            r = get(address, data=None)
+    except Exception as e:
+        log.debug(f"Polling exception: {e}")
+        return None
+
     return r
 
 

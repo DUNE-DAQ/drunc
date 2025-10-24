@@ -94,13 +94,17 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             **kwargs,
         ):
-            if (
-                request.process_description.metadata.name
-                not in [app.id for app in session_dal.infrastructure_applications]
-                and csc
-                and not csc.is_ready(timeout=10)
-            ):
-                raise DruncSetupException("Connectivity service is not ready in time")
+            if request.process_description.metadata.name not in [
+                app.id for app in session_dal.infrastructure_applications
+            ]:
+                raise DruncSetupException(
+                    f"Application not found: {request.process_description.metadata.name}"
+                )
+
+            if csc and not csc.is_ready(timeout=10):
+                raise DruncSetupException(
+                    "Connectivity service did not respond within timeout."
+                )
 
             this_host = next(iter(request.process_restriction.allowed_hosts))
 
