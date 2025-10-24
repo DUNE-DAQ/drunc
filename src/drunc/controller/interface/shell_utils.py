@@ -497,7 +497,7 @@ def run_one_fsm_command(
         with ThreadPoolExecutor() as executor:
             future = executor.submit(
                 obj.get_driver("controller").execute_fsm_command,
-                arguments=data,
+                command=data,
                 target=target,
                 execute_along_path=execute_along_path,
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

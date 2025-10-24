@@ -13,6 +13,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteFSMCommandRequest,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
@@ -913,23 +914,29 @@ class Controller(ControllerServicer):
     ############# FSM commands #############
     ########################################
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @in_control  # 3rd step
-    @OLD_unpack_addressed_command_to(FSMCommand)  # 4th step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
+    @in_control
     @publish_command_time
     def execute_fsm_command(
         self,
-        payload: FSMCommand,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
+        request: ExecuteFSMCommandRequest,
+        context: ServicerContext,
     ) -> Response:
+        # payload: FSMCommand,
+        # addressed_commands: dict[str, AddressedCommand],
+        # execute_on_self: bool,
+        # token: Token,
+
+        # TODO: below are temporary for this PR
+        token = None
+        payload = request.command
+        execute_on_self = False
+        addressed_commands = {}
+
         if not self.stateful_node.get_ready_state():
             self.log.warning("Controller is not ready, not executing command")
+            # TODO: set 'controller not ready' in rich error Status
             return Response(
                 name=self.name,
                 token=token,
