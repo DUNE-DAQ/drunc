@@ -14,8 +14,8 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
     ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
     FSMCommand,
-    FSMCommandResponse,
     FSMResponseFlag,
     RecomputeStatusResponse,
     StatusResponse,
@@ -445,22 +445,6 @@ class Controller(ControllerServicer):
             except Exception as e:
                 self.log.exception(f"Error while publishing periodic status: {e}")
             time.sleep(interval_s)
-
-    def construct_error_node_response(
-        self, command_name: str, token: Token, cause: FSMResponseFlag.ValueType
-    ) -> Response:
-        fsm_result = FSMCommandResponse(
-            flag=cause,
-            command_name=command_name,
-        )
-
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(fsm_result),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
-        )
 
     def advertise_control_address(self, address):
         self.uri = address
@@ -923,13 +907,12 @@ class Controller(ControllerServicer):
         request: ExecuteFSMCommandRequest,
         context: ServicerContext,
     ) -> Response:
-        # payload: FSMCommand,
-        # addressed_commands: dict[str, AddressedCommand],
-        # execute_on_self: bool,
-        # token: Token,
+        # response = ExecuteFSMCommandResponse(
+        #     token=None,
+        #     name=self.name,
+        # )
 
         # TODO: below are temporary for this PR
-        token = None
         payload = request.command
         execute_on_self = False
         addressed_commands = {}
@@ -939,7 +922,7 @@ class Controller(ControllerServicer):
             # TODO: set 'controller not ready' in rich error Status
             return Response(
                 name=self.name,
-                token=token,
+                token=None,
                 data=None,
                 flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                 children=[],
@@ -947,24 +930,30 @@ class Controller(ControllerServicer):
 
         if execute_on_self:
             if self.stateful_node.node_is_in_error():
-                return self.construct_error_node_response(
-                    payload.command_name,
-                    token,
-                    cause=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+                fsm_result = ExecuteFSMCommandResponse(
+                    command_name=payload.command_name,
+                    flag=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
+                )
+                return Response(
+                    name=self.name,
+                    token=None,
+                    data=pack_to_any(fsm_result),
+                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                    children=[],
                 )
 
             if not self.stateful_node.node_is_included():
                 self.log.error(
                     f"Node is not included, not executing command {payload.command_name}."
                 )
-                fsm_result = FSMCommandResponse(
-                    flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                fsm_result = ExecuteFSMCommandResponse(
                     command_name=payload.command_name,
+                    flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 )
 
                 return Response(
                     name=self.name,
-                    token=token,
+                    token=None,
                     data=pack_to_any(fsm_result),
                     flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                     children=[],
@@ -979,14 +968,14 @@ class Controller(ControllerServicer):
                     f'Cannot "{transition.name}" as this is an invalid command in state "{self.stateful_node.get_node_operational_state()}"'
                 )
 
-                fsm_result = FSMCommandResponse(
-                    flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
+                fsm_result = ExecuteFSMCommandResponse(
                     command_name=payload.command_name,
+                    flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
                 )
 
                 return Response(
                     name=self.name,
-                    token=token,
+                    token=None,
                     data=pack_to_any(fsm_result),
                     flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                     children=[],
@@ -1060,7 +1049,7 @@ class Controller(ControllerServicer):
             response_children = self.OLD_propagate_to_children(
                 "execute_fsm_command",
                 children_fsm_commands,
-                token,
+                None,
             )
 
             child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -1071,7 +1060,9 @@ class Controller(ControllerServicer):
                     child_worst_response_flag = response_child.flag
                     continue
 
-                fsm_response = unpack_any(response_child.data, FSMCommandResponse)
+                fsm_response = unpack_any(
+                    response_child.data, ExecuteFSMCommandResponse
+                )
 
                 if fsm_response.flag not in [
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
@@ -1103,14 +1094,14 @@ class Controller(ControllerServicer):
                     FSMResponseFlag.FSM_FAILED
                 )  ## TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
 
-            fsm_result = FSMCommandResponse(
-                flag=self_response_fsm_flag,
+            fsm_result = ExecuteFSMCommandResponse(
                 command_name=payload.command_name,
+                flag=self_response_fsm_flag,
             )
 
             return Response(
                 name=self.name,
-                token=token,
+                token=None,
                 data=pack_to_any(fsm_result),
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children=response_children,
@@ -1118,13 +1109,13 @@ class Controller(ControllerServicer):
         else:
             return Response(
                 name=self.name,
-                token=token,
+                token=None,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children=self.OLD_propagate_to_children(
                     "execute_fsm_command",
                     addressed_commands,
-                    token,
+                    None,
                 ),
             )
 

@@ -2,8 +2,8 @@ from threading import Lock
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    ExecuteFSMCommandResponse,
     FSMCommand,
-    FSMCommandResponse,
     FSMResponseFlag,
     Status,
     StatusResponse,
@@ -127,10 +127,9 @@ class ClientSideChild(ChildNode):
                 name=self.name,
                 token=token,
                 data=pack_to_any(
-                    FSMCommandResponse(
+                    ExecuteFSMCommandResponse(
                         flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                         command_name=request.command_name,
-                        data=None,
                     )
                 ),
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -196,12 +195,10 @@ class ClientSideChild(ChildNode):
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
 
-        response_data = pack_to_any(PlainText(text="successful"))
-
-        fsm_data = FSMCommandResponse(
+        fsm_data = ExecuteFSMCommandResponse(
             flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             command_name=data.command_name,
-            data=response_data,
+            data="successful",
         )
         response = Response(
             name=self.name,

@@ -6,8 +6,8 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
     ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
     FSMCommand,
-    FSMCommandResponse,
     RecomputeStatusResponse,
     StatusResponse,
 )
@@ -138,7 +138,7 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> FSMCommandResponse:
+    ) -> ExecuteFSMCommandResponse:
         request = ExecuteFSMCommandRequest(
             target=target,
             execute_along_path=execute_along_path,

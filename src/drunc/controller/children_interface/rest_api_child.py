@@ -9,7 +9,11 @@ from typing import NoReturn
 
 import requests
 import socks
-from druncschema.controller_pb2 import FSMCommand, FSMCommandResponse, FSMResponseFlag
+from druncschema.controller_pb2 import (
+    ExecuteFSMCommandResponse,
+    FSMCommand,
+    FSMResponseFlag,
+)
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -510,16 +514,14 @@ class RESTAPIChildNode(ClientSideChild):
 
             success = r["success"]
 
-            response_data = pack_to_any(PlainText(text=json.dumps(r)))
-
-            fsm_data = FSMCommandResponse(
+            fsm_data = ExecuteFSMCommandResponse(
                 flag=(
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
                     if success
                     else FSMResponseFlag.FSM_FAILED
                 ),
                 command_name=data.command_name,
-                data=response_data,
+                data=json.dumps(r),
             )
             response = Response(
                 name=self.name,
