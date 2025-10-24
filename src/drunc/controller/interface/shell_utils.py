@@ -96,9 +96,19 @@ def get_status_table(
         if status is None or description is None:
             return
 
-        # TODO: Make a dedicated function somewhere else in this script
-        #! Do we want the parser only here or saved in the description.endpoint as well?
-        def update_endpoint(endpoint):
+        def update_endpoint(endpoint: str) -> str:
+            """
+            Parses endpoint to a human readable hostname
+
+            Args:
+            endpoint: Process URI
+
+            Returns:
+            str: URI with human readable hostname
+            """
+            if not endpoint:
+                return ""
+
             ip_address = urlparse(endpoint).hostname
             if not ip_address:
                 return ""
