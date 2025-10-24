@@ -1,12 +1,14 @@
 import datetime
 import logging
 import os
+import socket
 import sys
 import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
+from urllib.parse import urlparse
 
 import click
 import grpc
@@ -94,6 +96,15 @@ def get_status_table(
         if status is None or description is None:
             return
 
+        # TODO: Make a dedicated function somewhere else in this script
+        #! Do we want the parser only here or saved in the description.endpoint as well?
+        def update_endpoint(endpoint):
+            ip_address = urlparse(endpoint).hostname
+            if not ip_address:
+                return ""
+            hostname, _, _ = socket.gethostbyaddr(ip_address)
+            return endpoint.replace(ip_address, hostname)
+
         table.add_row(
             prefix + status_response.name,
             description.info,
@@ -101,7 +112,7 @@ def get_status_table(
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            description.endpoint,
+            update_endpoint(description.endpoint),
         )
 
         children = match_children(status_response.children, describe_response.children)
