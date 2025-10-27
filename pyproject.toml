@@ -12,6 +12,7 @@ dependencies = [
     "click",
     "click-shell",
     "protobuf",
+    "daqpytools",
     "types-protobuf",
     "grpcio",
     "grpcio-status",
