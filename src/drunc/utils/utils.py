@@ -15,10 +15,12 @@ from urllib.parse import urlparse
 
 import pytz
 from click import BadParameter
-from daqpytools.logging.formatter import LoggingFormatter as new_LoggingFormatter
-from daqpytools.logging.levels import logging_log_levels as log_levels
-from daqpytools.logging.logger import get_daq_logger as new_get_daq_logger
-from daqpytools.logging.logger import setup_root_logger as new_setup_root_logger
+from daqpytools.logging.formatter import LoggingFormatter
+from daqpytools.logging.levels import (
+    logging_log_levels as log_levels,
+)  # TODO: Check if we should change very instance of log_levels in drunc
+from daqpytools.logging.logger import get_daq_logger
+from daqpytools.logging.logger import setup_root_logger as daq_setup_root_logger
 from requests import delete, get, patch, post
 from rich.console import Console
 from rich.logging import RichHandler
@@ -48,6 +50,7 @@ rich_log_format = (
 date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when the RichHandler starts supporting it in the tty. If this is desired, a custom handler can be written that looks like the rich handler
 time_zone = pytz.utc
 ############################
+
 # TODO Make a setup / make root logger
 # TODO Make another function that modifies the other loggers if necessary (?)
 
@@ -59,12 +62,12 @@ def setup_root_logger(log_level: str) -> logging.Logger:
             f"Unrecognised log level, should be one of {log_levels.keys()}"
         )
     log_level = log_levels[log_level]
-    return new_setup_root_logger("drunc", log_level)
+    return daq_setup_root_logger("drunc", log_level)
 
 
 def create_root_logger(log_level: str) -> logging.Logger:
     print("Creating up root logger")
-    root_logger: logging.Logger = new_get_daq_logger(
+    root_logger: logging.Logger = get_daq_logger(
         logger_name="drunc",
         log_level=log_level,
         use_parent_handlers=True,
@@ -91,8 +94,7 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
         return existing_logger
 
     # Otherwise, create a new one
-    # print(f"Creating new logger: {full_name}")
-    main_logger: logging.Logger = new_get_daq_logger(
+    main_logger: logging.Logger = get_daq_logger(
         logger_name=full_name,
         log_level="INFO",
         use_parent_handlers=False,
@@ -101,7 +103,6 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
         stream_stdout_handler=False,
         stream_stderr_handler=False,
     )
-    # print("done")
     return main_logger
 
 
@@ -119,7 +120,7 @@ def create_logger_handler(log_file_path: str = None, rich_handler: bool = False)
 
     if log_file_path is not None:
         fileHandler = logging.FileHandler(filename=log_file_path)
-        fileHandler.setFormatter(new_LoggingFormatter())
+        fileHandler.setFormatter(LoggingFormatter())
         drunc_logger.addHandler(fileHandler)
         function_logger.debug("Added file handler to drunc")
 
@@ -137,11 +138,11 @@ def create_logger_handler(log_file_path: str = None, rich_handler: bool = False)
             show_path=False,
             tracebacks_width=width,
         )
-        stdHandler.setFormatter(new_LoggingFormatter(log_format=rich_log_format))
+        stdHandler.setFormatter(LoggingFormatter(log_format=rich_log_format))
     else:
         function_logger.debug("Assigning a StreamHandler to drunc logger")
         stdHandler = logging.StreamHandler(sys.stdout)
-        stdHandler.setFormatter(new_LoggingFormatter())
+        stdHandler.setFormatter(LoggingFormatter())
 
     if stdHandler:
         drunc_logger.addHandler(stdHandler)
