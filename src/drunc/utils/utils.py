@@ -15,8 +15,9 @@ from urllib.parse import urlparse
 
 import pytz
 from click import BadParameter
+from daqpytools.logging.formatter import LoggingFormatter as new_LoggingFormatter
 from daqpytools.logging.levels import logging_log_levels as log_levels
-from daqpytools.logging.logger import get_daq_logger as temp_new_logger
+from daqpytools.logging.logger import get_daq_logger as new_get_daq_logger
 from daqpytools.logging.logger import setup_root_logger as new_setup_root_logger
 from requests import delete, get, patch, post
 from rich.console import Console
@@ -37,7 +38,8 @@ from drunc.exceptions import DruncException, DruncSetupException
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
 
-#! Delete this code block
+# TODO Double check with Pawel to see if these format strings can be deleted
+# I see a lot of todos here that needs to be figured out
 ############################
 full_log_format = "%(asctime)s %(levelname)s %(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
 rich_log_format = (
@@ -45,36 +47,6 @@ rich_log_format = (
 )
 date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when the RichHandler starts supporting it in the tty. If this is desired, a custom handler can be written that looks like the rich handler
 time_zone = pytz.utc
-
-
-#! this needs to go, the way you do it is by basically remaking the other loggers
-class LoggingFormatter(logging.Formatter):
-    def __init__(self, fmt=full_log_format, datefmt=date_time_format, tz=time_zone):
-        super().__init__(fmt, datefmt)
-        self.tz = tz
-        self.datefmt = datefmt
-
-    def formatTime(self, record, datefmt):
-        date_time = datetime.fromtimestamp(record.created, self.tz)
-        return date_time.strftime(self.datefmt)
-
-    def format(self, record):
-        record.asctime = self.formatTime(record, self.datefmt)
-        # TODO: for production, remove filename and lineno entries
-        component_width = 30
-        file_lineno = f"{record.filename}:{record.lineno}"
-        record.filename = file_lineno.ljust(component_width)[:component_width]
-        component_width = 45
-        name_colon = f"{record.name}:"
-        if name_colon.startswith("drunc."):
-            name_colon = name_colon.replace("drunc.", "")
-        record.name = name_colon.ljust(component_width)[:component_width]
-        component_width = 10
-        level_name = record.levelname
-        record.levelname = level_name.ljust(component_width)[:component_width]
-        return super().format(record)
-
-
 ############################
 # TODO Make a setup / make root logger
 # TODO Make another function that modifies the other loggers if necessary (?)
@@ -90,11 +62,11 @@ def setup_root_logger(log_level: str) -> logging.Logger:
     return new_setup_root_logger("drunc", log_level)
 
 
-def create_root_logger(log_level_str: str) -> logging.Logger:
+def create_root_logger(log_level: str) -> logging.Logger:
     print("Creating up root logger")
-    root_logger: logging.Logger = temp_new_logger(
+    root_logger: logging.Logger = new_get_daq_logger(
         logger_name="drunc",
-        log_level=log_level_str,  # TODO: Change the variable name
+        log_level=log_level,
         use_parent_handlers=True,
         rich_handler=True,
         file_handler_path=False,
@@ -119,8 +91,8 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
         return existing_logger
 
     # Otherwise, create a new one
-    print(f"Creating new logger: {full_name}")
-    main_logger: logging.Logger = temp_new_logger(
+    # print(f"Creating new logger: {full_name}")
+    main_logger: logging.Logger = new_get_daq_logger(
         logger_name=full_name,
         log_level="INFO",
         use_parent_handlers=False,
@@ -129,12 +101,13 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
         stream_stdout_handler=False,
         stream_stderr_handler=False,
     )
-    print("done")
+    # print("done")
     return main_logger
 
 
 # TODO This might need heavy merging with the setup_root_logger thing
 def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
+    print(f"Inside create_logger_handler, {log_file_path}, {rich_handler}")
     function_logger = get_logger("utils.get_logger")
     logger_level = logging.getLogger("drunc").level
     if not logger_level:
@@ -146,7 +119,7 @@ def create_logger_handler(log_file_path: str = None, rich_handler: bool = False)
 
     if log_file_path is not None:
         fileHandler = logging.FileHandler(filename=log_file_path)
-        fileHandler.setFormatter(LoggingFormatter())
+        fileHandler.setFormatter(new_LoggingFormatter())
         drunc_logger.addHandler(fileHandler)
         function_logger.debug("Added file handler to drunc")
 
@@ -164,11 +137,11 @@ def create_logger_handler(log_file_path: str = None, rich_handler: bool = False)
             show_path=False,
             tracebacks_width=width,
         )
-        stdHandler.setFormatter(LoggingFormatter(fmt=rich_log_format))
+        stdHandler.setFormatter(new_LoggingFormatter(log_format=rich_log_format))
     else:
         function_logger.debug("Assigning a StreamHandler to drunc logger")
         stdHandler = logging.StreamHandler(sys.stdout)
-        stdHandler.setFormatter(LoggingFormatter())
+        stdHandler.setFormatter(new_LoggingFormatter())
 
     if stdHandler:
         drunc_logger.addHandler(stdHandler)
