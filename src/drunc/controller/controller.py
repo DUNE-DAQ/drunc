@@ -918,22 +918,20 @@ class Controller(ControllerServicer):
         addressed_commands = {}
 
         if not self.stateful_node.get_ready_state():
-            self.log.error("Controller is not ready, not executing command")
-            # TODO: set 'controller not ready' in rich error Status
+            self.log.error("Command not executed: controller is not ready.")
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
             return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
             if self.stateful_node.node_is_in_error():
+                self.log.error("Command not executed: node is in error.")
                 response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
             if not self.stateful_node.node_is_included():
-                self.log.error(
-                    f"Node is not included, not executing command {command.name}."
-                )
+                self.log.error("Command not executed: node is excluded.")
                 response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
