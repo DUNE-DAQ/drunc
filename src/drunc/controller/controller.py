@@ -1064,20 +1064,31 @@ class Controller(ControllerServicer):
                 # TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
                 self_response_fsm_flag = FSMResponseFlag.FSM_FAILED
             response.fsm_flag = self_response_fsm_flag
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             response.children.extend(child_responses)
-            return response
 
         # Children nodes.
         else:
-            child_responses = self.OLD_propagate_to_children(
-                "execute_fsm_command",
-                addressed_commands,
-                None,
+
+            def child_command(
+                child: ChildNode, target: str
+            ) -> ExecuteFSMCommandResponse:
+                return child.execute_fsm_command(
+                    command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
             )
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            child_responses = self.propagate_concurrently(child_command, child_list)
             response.children.extend(child_responses)
-            return response
+
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
