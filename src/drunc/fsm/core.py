@@ -15,7 +15,7 @@ class Callback:
 import json
 import traceback
 from inspect import Parameter, signature
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
@@ -210,15 +210,15 @@ class FSM:
                 raise fsme.DuplicateTransition(t.name)
             a_set.add(t.name)
 
-    def get_all_states(self) -> List[str]:
+    def get_all_states(self) -> list[str]:
         """Grabs all the states"""
         return self.states
 
-    def get_all_transitions(self) -> List[Transition]:
+    def get_all_transitions(self) -> list[Transition]:
         """Grab all the transitions"""
         return self.transitions
 
-    def get_all_sequences(self) -> List[FSMSequence]:
+    def get_all_sequences(self) -> list[FSMSequence]:
         """Grab all the transitions"""
         return self.sequences
 
@@ -232,7 +232,7 @@ class FSM:
                 else:
                     return tr.destination
 
-    def get_executable_transitions(self, source_state) -> List[Transition]:
+    def get_executable_transitions(self, source_state) -> list[Transition]:
         valid_transitions = []
 
         for tr in self.transitions:
@@ -245,7 +245,7 @@ class FSM:
 
         return valid_transitions
 
-    def get_executable_sequences(self, source_state) -> List[FSMSequence]:
+    def get_executable_sequences(self, source_state) -> list[FSMSequence]:
         valid_sequences = []
 
         for seq in self.sequences:
@@ -262,7 +262,7 @@ class FSM:
 
         return valid_sequences
 
-    def get_transition(self, transition_name) -> bool:
+    def get_transition(self, transition_name) -> Transition:
         self.log.debug(f"Searching for transition {transition_name}")
         transition = [t for t in self.transitions if t.name == transition_name]
         self.log.debug(f"Found transition {transition}")
