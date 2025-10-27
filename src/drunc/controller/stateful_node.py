@@ -192,7 +192,7 @@ class StatefulNode(abc.ABC):
         )
 
     def decode_fsm_arguments(self, fsm_command):
-        transition = self.get_fsm_transition(fsm_command.command_name)
+        transition = self.get_fsm_transition(fsm_command.name)
         return decode_fsm_arguments(fsm_command.arguments, transition.arguments)
 
     def prepare_transition(

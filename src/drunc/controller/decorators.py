@@ -74,7 +74,7 @@ def publish_command_time(cmd):
             custom_origin = {"Command": cmd.__name__}
 
             if cmd.__name__ == "execute_fsm_command" and payload is not None:
-                custom_origin = {"Command": payload.command_name}
+                custom_origin = {"Command": payload.name}
 
             obj.controller_publisher(
                 message=CommandTime(execution_time_ns=int(cmd_exe_time * 1e9)),

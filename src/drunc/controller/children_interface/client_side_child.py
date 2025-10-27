@@ -189,15 +189,15 @@ class ClientSideChild(ChildNode):
             children=[],
         )
 
-    def propagate_fsm_command(self, data: FSMCommand, token: Token) -> Response:
+    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
         entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(data.command_name)
+        transition = self.fsm.get_transition(command.name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
 
         fsm_data = ExecuteFSMCommandResponse(
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
-            command_name=data.command_name,
+            command_name=command.name,
             data="successful",
         )
         response = Response(

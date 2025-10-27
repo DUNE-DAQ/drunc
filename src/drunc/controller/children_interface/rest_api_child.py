@@ -489,28 +489,28 @@ class RESTAPIChildNode(ClientSideChild):
 
         return response
 
-    def propagate_fsm_command(self, data: FSMCommand, token: Token) -> Response:
+    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
         entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(data.command_name)
+        transition = self.fsm.get_transition(command.name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
-        self.log.info(f"Sending '{data.command_name}' to '{self.name}'")
+        self.log.info(f"Sending '{command.name}' to '{self.name}'")
         try:
-            the_module_data = json.loads(data.data if data.data else "{}")
+            the_module_data = json.loads(command.data if command.data else "{}")
         except JSONDecodeError as e:
             self.log.error(f"Error parsing data: {e}")
             raise e
         try:
             self.commander.send_app_command(
-                cmd_id=data.command_name,
+                cmd_id=command.name,
                 module_data={"modules": [{"data": the_module_data, "match": ""}]},
                 entry_state=entry_state.upper(),
                 exit_state=exit_state.upper(),
             )
-            self.log.debug(f"Sent '{data.command_name}' to '{self.name}'")
+            self.log.debug(f"Sent '{command.name}' to '{self.name}'")
             r = self.commander.check_response(150)
 
-            self.log.debug(f"Got response from '{data.command_name}' to '{self.name}'")
+            self.log.debug(f"Got response from '{command.name}' to '{self.name}'")
 
             success = r["success"]
 
@@ -520,7 +520,7 @@ class RESTAPIChildNode(ClientSideChild):
                     if success
                     else FSMResponseFlag.FSM_FAILED
                 ),
-                command_name=data.command_name,
+                command_name=command.name,
                 data=json.dumps(r),
             )
             response = Response(
@@ -538,9 +538,7 @@ class RESTAPIChildNode(ClientSideChild):
                 return response
 
         except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
-            self.log.error(
-                f"Got error from '{data.command_name}' to '{self.name}': {e!s}"
-            )
+            self.log.error(f"Got error from '{command.name}' to '{self.name}': {e!s}")
             self.state.to_error()
             # self.log.exception(e)
             raise e
