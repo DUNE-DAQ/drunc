@@ -13,11 +13,11 @@ from datetime import datetime
 from enum import Enum
 from urllib.parse import urlparse
 
-import kafka
 import pytz
-import sh
 from click import BadParameter
+from daqpytools.logging.levels import logging_log_levels as log_levels
 from daqpytools.logging.logger import get_daq_logger as temp_new_logger
+from daqpytools.logging.logger import setup_root_logger as new_setup_root_logger
 from requests import delete, get, patch, post
 from rich.console import Console
 from rich.logging import RichHandler
@@ -37,14 +37,8 @@ from drunc.exceptions import DruncException, DruncSetupException
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
 
-log_levels = {
-    "CRITICAL": logging.CRITICAL,
-    "ERROR": logging.ERROR,
-    "WARNING": logging.WARNING,
-    "INFO": logging.INFO,
-    "DEBUG": logging.DEBUG,
-    "NOTSET": logging.NOTSET,
-}
+#! Delete this code block
+############################
 full_log_format = "%(asctime)s %(levelname)s %(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
 rich_log_format = (
     "%(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
@@ -53,6 +47,7 @@ date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when th
 time_zone = pytz.utc
 
 
+#! this needs to go, the way you do it is by basically remaking the other loggers
 class LoggingFormatter(logging.Formatter):
     def __init__(self, fmt=full_log_format, datefmt=date_time_format, tz=time_zone):
         super().__init__(fmt, datefmt)
@@ -80,6 +75,11 @@ class LoggingFormatter(logging.Formatter):
         return super().format(record)
 
 
+############################
+# TODO Make a setup / make root logger
+# TODO Make another function that modifies the other loggers if necessary (?)
+
+
 def setup_root_logger(log_level: str) -> logging.Logger:
     log_level = log_level.upper()
     if log_level not in log_levels.keys():
@@ -87,47 +87,53 @@ def setup_root_logger(log_level: str) -> logging.Logger:
             f"Unrecognised log level, should be one of {log_levels.keys()}"
         )
     log_level = log_levels[log_level]
+    return new_setup_root_logger("drunc", log_level)
 
-    root_logger = logging.getLogger("drunc")
-    root_logger.setLevel(log_level)
 
-    # And then manually tweak 'sh.command' logger. Sigh.
-    sh_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    sh_command_logger = logging.getLogger(
-        sh.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    sh_command_logger.setLevel(sh_command_level)
-    for handler in sh_command_logger.handlers:
-        handler.setLevel(sh_command_level)
-
-    # And kafka
-    kafka_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    kafka_command_logger = logging.getLogger(
-        kafka.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    kafka_command_logger.setLevel(kafka_command_level)
-    for handler in kafka_command_logger.handlers:
-        handler.setLevel(kafka_command_level)
+def create_root_logger(log_level_str: str) -> logging.Logger:
+    print("Creating up root logger")
+    root_logger: logging.Logger = temp_new_logger(
+        logger_name="drunc",
+        log_level=log_level_str,  # TODO: Change the variable name
+        use_parent_handlers=True,
+        rich_handler=True,
+        file_handler_path=False,
+        stream_stdout_handler=False,
+        stream_stderr_handler=False,
+    )
     return root_logger
 
 
-def get_logger(logger_name: str, *args, **kwargs):
-    return logging.getLogger(f"drunc.{logger_name}")
+def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
+    #! There must be a better way to do this..
+    full_name = f"drunc.{logger_name}"
 
+    # Check if drunc (root) already exists or not
+    if "drunc" not in logging.Logger.manager.loggerDict:
+        print("No drunc logger exists, creating it...")
+        create_root_logger("INFO")
 
-def get_new_logger(logger_name: str, *args, **kwargs):
+    # Check if the logger already exists
+    existing_logger = logging.Logger.manager.loggerDict.get(full_name)
+    if isinstance(existing_logger, logging.Logger):
+        return existing_logger
+
+    # Otherwise, create a new one
+    print(f"Creating new logger: {full_name}")
     main_logger: logging.Logger = temp_new_logger(
-        logger_name=logger_name,
-        log_level="DEBUG",
+        logger_name=full_name,
+        log_level="INFO",
         use_parent_handlers=False,
         rich_handler=True,
         file_handler_path=False,
         stream_stdout_handler=False,
         stream_stderr_handler=False,
     )
+    print("done")
     return main_logger
 
 
+# TODO This might need heavy merging with the setup_root_logger thing
 def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
     function_logger = get_logger("utils.get_logger")
     logger_level = logging.getLogger("drunc").level
