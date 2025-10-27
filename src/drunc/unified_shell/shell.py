@@ -51,7 +51,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot
+from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
@@ -367,6 +367,8 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
+    ctx.command.add_command(start_shell, "start-shell")
+    ctx.obj.dynamic_commands.add("start-shell")
     # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
@@ -504,3 +506,14 @@ def unified_shell(
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
+
+
+@unified_shell.result_callback()
+@click.pass_context
+def _maybe_enter_shell(ctx, results, **_):
+    # If user requested interactive mode at the end
+    if not getattr(ctx.obj, "batch_mode", True):
+        from click_shell import make_click_shell
+
+        sh = make_click_shell(ctx, prompt=ctx.command.shell.prompt)
+        sh.cmdloop()
