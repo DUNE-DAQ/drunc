@@ -907,50 +907,35 @@ class Controller(ControllerServicer):
         request: ExecuteFSMCommandRequest,
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
+        command = request.command
         response = ExecuteFSMCommandResponse(
             token=None,
             name=self.name,
+            command_name=command.name,
         )
 
-        if not self.stateful_node.get_ready_state():
-            self.log.warning("Controller is not ready, not executing command")
-            # TODO: set 'controller not ready' in rich error Status
-            Response(
-                data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                children=[],
-            )
-            return response
+        # TODO: addressed_commands temporarily empty for this PR
+        addressed_commands = {}
 
-        command = request.command
+        if not self.stateful_node.get_ready_state():
+            self.log.error("Controller is not ready, not executing command")
+            # TODO: set 'controller not ready' in rich error Status
+            response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
             if self.stateful_node.node_is_in_error():
-                fsm_result = ExecuteFSMCommandResponse(
-                    command_name=command.name,
-                    fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR,
-                )
-                Response(
-                    data=pack_to_any(fsm_result),
-                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    children=[],
-                )
+                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
             if not self.stateful_node.node_is_included():
                 self.log.error(
                     f"Node is not included, not executing command {command.name}."
                 )
-                fsm_result = ExecuteFSMCommandResponse(
-                    command_name=command.name,
-                    fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                )
-                Response(
-                    data=pack_to_any(fsm_result),
-                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    children=[],
-                )
+                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
             transition = self.stateful_node.get_fsm_transition(command.name)
@@ -961,15 +946,8 @@ class Controller(ControllerServicer):
                 self.log.error(
                     f'Cannot "{transition.name}" as this is an invalid command in state "{self.stateful_node.get_node_operational_state()}"'
                 )
-                fsm_result = ExecuteFSMCommandResponse(
-                    command_name=command.name,
-                    fsm_flag=FSMResponseFlag.FSM_INVALID_TRANSITION,
-                )
-                Response(
-                    data=pack_to_any(fsm_result),
-                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    children=[],
-                )
+                response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
             self.log.debug(f"FSM command data: {command}")
@@ -1013,9 +991,6 @@ class Controller(ControllerServicer):
 
             self.stateful_node.propagate_transition_mark(transition)
 
-            # TODO: addressed_commands temporarily empty for this PR
-            addressed_commands = {}
-
             children_fsm_commands = {}
             for child_target, child_addressed in addressed_commands.items():
                 child = next(
@@ -1044,7 +1019,7 @@ class Controller(ControllerServicer):
                     execute_on_all_subsequent_children_in_path=child_addressed.execute_on_all_subsequent_children_in_path,
                 )
 
-            response_children = self.OLD_propagate_to_children(
+            child_responses = self.OLD_propagate_to_children(
                 "execute_fsm_command",
                 children_fsm_commands,
                 None,
@@ -1053,7 +1028,7 @@ class Controller(ControllerServicer):
             child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             child_worst_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
 
-            for response_child in response_children:
+            for response_child in child_responses:
                 if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
                     child_worst_response_flag = response_child.flag
                     continue
@@ -1088,31 +1063,22 @@ class Controller(ControllerServicer):
 
             self_response_fsm_flag = child_worst_fsm_flag
             if child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                self_response_fsm_flag = (
-                    FSMResponseFlag.FSM_FAILED
-                )  ## TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
-            fsm_result = ExecuteFSMCommandResponse(
-                command_name=command.name,
-                fsm_flag=self_response_fsm_flag,
-            )
-            Response(
-                data=pack_to_any(fsm_result),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=response_children,
-            )
+                # TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
+                self_response_fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.fsm_flag = self_response_fsm_flag
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            response.children.extend(child_responses)
             return response
 
         # Children nodes.
         else:
-            Response(
-                data=None,
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.OLD_propagate_to_children(
-                    "execute_fsm_command",
-                    addressed_commands,
-                    None,
-                ),
+            child_responses = self.OLD_propagate_to_children(
+                "execute_fsm_command",
+                addressed_commands,
+                None,
             )
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            response.children.extend(child_responses)
             return response
 
     @broadcasted
