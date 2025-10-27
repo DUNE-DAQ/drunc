@@ -17,6 +17,7 @@ import kafka
 import pytz
 import sh
 from click import BadParameter
+from daqpytools.logging.logger import get_daq_logger as temp_new_logger
 from requests import delete, get, patch, post
 from rich.console import Console
 from rich.logging import RichHandler
@@ -112,6 +113,19 @@ def setup_root_logger(log_level: str) -> logging.Logger:
 
 def get_logger(logger_name: str, *args, **kwargs):
     return logging.getLogger(f"drunc.{logger_name}")
+
+
+def get_new_logger(logger_name: str, *args, **kwargs):
+    main_logger: logging.Logger = temp_new_logger(
+        logger_name=logger_name,
+        log_level="DEBUG",
+        use_parent_handlers=False,
+        rich_handler=True,
+        file_handler_path=False,
+        stream_stdout_handler=False,
+        stream_stderr_handler=False,
+    )
+    return main_logger
 
 
 def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):

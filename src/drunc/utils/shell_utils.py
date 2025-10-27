@@ -7,7 +7,7 @@ from druncschema.token_pb2 import Token
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, get_new_logger
 
 
 class InterruptedCommand(DruncShellException):
@@ -147,6 +147,16 @@ class ShellContext:
 
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
+
+        new_log = get_new_logger("test me")
+        new_log.info("Hello, World!")
+
+        new_log.debug("example debug message")
+        new_log.info("example info message")
+        new_log.warning("example warning message")
+        new_log.error("example error message")
+        new_log.critical("example critical message")
+
         status = self.get_driver("controller").status().status
         describe_fsm = self.get_driver("controller").describe_fsm().description
         current_state = status.state
