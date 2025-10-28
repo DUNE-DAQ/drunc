@@ -1095,10 +1095,9 @@ class Controller(ControllerServicer):
                     self_should_go_to_error = True
 
                 try:
-                    child_status = s.status
-                    children_states.add(child_status.state)
-                    children_sub_states.add(child_status.sub_state)
-                    if child_status.in_error:
+                    children_states.add(s.status.state)
+                    children_sub_states.add(s.status.sub_state)
+                    if s.status.in_error:
                         self_should_go_to_error = True
 
                 except UnpackingError as e:
@@ -1144,7 +1143,7 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-            def status_command(child: ChildNode, target: str) -> StatusResponse:
+            def child_status(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(
                     target,
                     request.execute_along_path,
@@ -1152,7 +1151,7 @@ class Controller(ControllerServicer):
                 )
 
             child_list = self.address_all(ignore_exclusion=True)
-            child_responses = self.propagate_concurrently(status_command, child_list)
+            child_responses = self.propagate_concurrently(child_status, child_list)
             response.children.extend(child_responses)
 
         # Child nodes.
