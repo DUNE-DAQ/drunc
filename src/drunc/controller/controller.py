@@ -15,7 +15,6 @@ from druncschema.controller_pb2 import (
     DescribeResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
-    FSMCommand,
     FSMResponseFlag,
     RecomputeStatusResponse,
     StatusResponse,
@@ -780,7 +779,7 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        # Children nodes.
+        # Child nodes.
         def child_command(child: ChildNode, target: str) -> StatusResponse:
             return child.status(
                 target,
@@ -825,7 +824,7 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        # Children nodes.
+        # Child nodes.
         def child_command(child: ChildNode, target: str) -> DescribeResponse:
             return child.describe(
                 target,
@@ -883,7 +882,7 @@ class Controller(ControllerServicer):
             description.sequences.extend(self.stateful_node.get_fsm_sequences())
             response.description.CopyFrom(description)
 
-        # Children nodes.
+        # Child nodes.
         def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
             return child.describe_fsm(
                 target,
@@ -916,7 +915,10 @@ class Controller(ControllerServicer):
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
         command = request.command
-        self.log.debug(f"FSM command data: {command}")
+        self.log.debug(f"FSM command: {command}")
+
+        transition = self.stateful_node.get_fsm_transition(command.name)
+        self.log.debug(f"FSM transition: {transition}")
 
         response = ExecuteFSMCommandResponse(
             token=None,
@@ -932,40 +934,42 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
             return response
 
+        # Check if node is in error.
+        if self.stateful_node.node_is_in_error():
+            self.log.error(f"Command '{command.name}' not executed: node is in error.")
+            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            return response
+
+        # Check if node is excluded.
+        if not self.stateful_node.node_is_included():
+            self.log.error(f"Command '{command.name}' not executed: node is excluded.")
+            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            return response
+
+        # Check if transition is possible from current state.
+        if not self.stateful_node.can_transition(transition):
+            state = self.stateful_node.get_node_operational_state()
+            self.log.error(
+                f"Command '{command.name}' not executed: not possible from state '{state}'."
+            )
+            response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            return response
+
+        # Define what to do for child nodes.
+        def child_command(child: ChildNode, target: str) -> ExecuteFSMCommandResponse:
+            return child.execute_fsm_command(
+                command,
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
         # This node.
         if request.target == self.name or request.execute_along_path:
-            # Check if node is in error.
-            if self.stateful_node.node_is_in_error():
-                self.log.error(
-                    f"Command '{command.name}' not executed: node is in error."
-                )
-                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-                return response
-
-            # Check if node is excluded.
-            if not self.stateful_node.node_is_included():
-                self.log.error(
-                    f"Command '{command.name}' not executed: node is excluded."
-                )
-                response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-                return response
-
-            transition = self.stateful_node.get_fsm_transition(command.name)
-
-            # Check if transition is possible from current state.
-            if not self.stateful_node.can_transition(transition):
-                state = self.stateful_node.get_node_operational_state()
-                self.log.error(
-                    f"Command '{command.name}' not executed: not possible from state '{state}'."
-                )
-                response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-                return response
-
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
-
             fsm_data = self.stateful_node.prepare_transition(
                 transition=transition,
                 transition_args=fsm_args,
@@ -999,71 +1003,23 @@ class Controller(ControllerServicer):
                     custom_origin=self.custom_origin,
                 )
 
+            # Begin propagating FSM transition to children.
             self.stateful_node.propagate_transition_mark(transition)
 
-            # TODO: addressed_commands temporarily empty for this PR
-            addressed_commands: dict[str, AddressedCommand] = {}
-
-            children_fsm_commands = {}
-            for child_target, child_addressed in addressed_commands.items():
-                child = next(
-                    (c for c in self.children_nodes if c.name == child_target), None
-                )
-                if child is None:
-                    self.log.error(f"Child {child_target} not found")
-                    continue
-                if not child.included:
-                    self.log.info(
-                        f"Child {child_target} is not included, not executing command {command.name}."
-                    )
-                    continue
-
-                child_fsm_command = FSMCommand()
-                child_fsm_command.CopyFrom(
-                    unpack_any(child_addressed.command_data, FSMCommand)
-                )
-                child_fsm_command.data = fsm_data
-
-                children_fsm_commands[child_target] = AddressedCommand(
-                    command_name=child_addressed.command_name,
-                    command_data=pack_to_any(child_fsm_command),
-                    target=child_target,
-                    execute_along_path=child_addressed.execute_along_path,
-                    execute_on_all_subsequent_children_in_path=child_addressed.execute_on_all_subsequent_children_in_path,
-                )
-
-            # TODO: execute_on_self case
-
-            # TODO: child node execute_fsm_command
-
-            child_responses = self.OLD_propagate_to_children(
-                "execute_fsm_command",
-                children_fsm_commands,
-                None,
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
             )
+            child_responses = self.propagate_concurrently(child_command, child_list)
+            response.children.extend(child_responses)
 
-            child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-            child_worst_fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-
-            for response_child in child_responses:
-                if response_child.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                    child_worst_response_flag = response_child.flag
-                    continue
-
-                fsm_response = unpack_any(
-                    response_child.data, ExecuteFSMCommandResponse
-                )
-
-                if fsm_response.fsm_flag not in [
-                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
-                    FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                ]:
-                    child_worst_fsm_flag = fsm_response.fsm_flag
-
+            # Finish propagating FSM transition to children.
             self.stateful_node.finish_propagating_transition_mark(transition)
 
+            # Start FSM transition on this node.
             self.stateful_node.start_transition_mark(transition)
 
+            # Finish FSM transition on this node.
             self.stateful_node.terminate_transition_mark(transition)
 
             fsm_data = self.stateful_node.finalise_transition(
@@ -1072,32 +1028,27 @@ class Controller(ControllerServicer):
                 transition_data=fsm_data,
                 ctx=self,
             )
-            if (
-                child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY
-                or child_worst_fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-            ):
+
+            # Set FSM error flag based on child responses.
+            response.fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+            bad_child_flag = False
+
+            for child_response in child_responses:
+                if child_response.flag not in [
+                    ResponseFlag.EXECUTED_SUCCESSFULLY,
+                ] or child_response.fsm_flag not in [
+                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+                    FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                ]:
+                    bad_child_flag = True
+                    break
+
+            if bad_child_flag:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
 
-            self_response_fsm_flag = child_worst_fsm_flag
-            if child_worst_response_flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                # TODO: Add a FSMResponseFlag.FSM_COMMAND_ON_CHILD_FAILED
-                self_response_fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.fsm_flag = self_response_fsm_flag
-            response.children.extend(child_responses)
-
-        # Children nodes.
+        # Child nodes.
         else:
-
-            def child_command(
-                child: ChildNode, target: str
-            ) -> ExecuteFSMCommandResponse:
-                return child.execute_fsm_command(
-                    command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                )
-
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
@@ -1204,7 +1155,7 @@ class Controller(ControllerServicer):
             child_responses = self.propagate_concurrently(child_command, child_list)
             response.children.extend(child_responses)
 
-        # Children nodes.
+        # Child nodes.
         else:
 
             def child_command(child: ChildNode, target: str) -> StatusResponse:
