@@ -6,6 +6,7 @@ from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
 
@@ -72,7 +73,7 @@ def boot(
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
-        if obj.batch_mode:
+        if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
             log.error(
                 "Unified shell: Running in batch mode, and because error state is detected, exiting."
             )
@@ -91,5 +92,5 @@ def start_shell(ctx, obj):
     """
     log = get_logger("unified_shell.start_shell")
 
-    obj.batch_mode = False
+    obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")

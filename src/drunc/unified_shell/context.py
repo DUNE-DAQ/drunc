@@ -1,8 +1,15 @@
 from collections.abc import Mapping
+from enum import Enum
 
 from druncschema.token_pb2 import Token
 
 from drunc.utils.shell_utils import ShellContext
+
+
+class UnifiedShellMode(Enum):
+    INTERACTIVE = "interactive"
+    BATCH = "batch"
+    SEMIBATCH = "semibatch"
 
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
@@ -16,6 +23,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.configuration_file = ""
         self.configuration_id = ""
         self.session_name = ""
+        self.running_mode = UnifiedShellMode.INTERACTIVE
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):
