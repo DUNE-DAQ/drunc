@@ -1,4 +1,5 @@
 import os
+from abc import ABC, abstractmethod
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
@@ -30,7 +31,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode:  # abc.ABC):
+class ChildNode(ABC):
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
@@ -44,15 +45,15 @@ class ChildNode:  # abc.ABC):
         pass
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
-    # @abc.abstractmethod
+    @abstractmethod
     def terminate(self):
         pass
 
-    # @abc.abstractmethod
+    @abstractmethod
     def get_endpoint(self) -> str | None:
         return None
 
-    # @abc.abstractmethod
+    @abstractmethod
     def propagate_command(
         self,
         command: str,
@@ -65,7 +66,7 @@ class ChildNode:  # abc.ABC):
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
-    # @abc.abstractmethod
+    @abstractmethod
     def status(
         self,
         target: str = "",
@@ -88,6 +89,7 @@ class ChildNode:  # abc.ABC):
 
         return response
 
+    @abstractmethod
     def describe(
         self,
         target: str = "",
@@ -133,6 +135,7 @@ class ChildNode:  # abc.ABC):
 
         return response
 
+    @abstractmethod
     def describe_fsm(
         self,
         target: str = "",
@@ -148,6 +151,7 @@ class ChildNode:  # abc.ABC):
 
         return response
 
+    @abstractmethod
     def execute_fsm_command(
         self,
         command: FSMCommand,
@@ -164,6 +168,7 @@ class ChildNode:  # abc.ABC):
 
         return response
 
+    @abstractmethod
     def recompute_status(
         self,
         target: str = "",
@@ -176,6 +181,7 @@ class ChildNode:  # abc.ABC):
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
 
+    # TODO: needs reimplementation
     @staticmethod
     def get_child(
         name: str,
