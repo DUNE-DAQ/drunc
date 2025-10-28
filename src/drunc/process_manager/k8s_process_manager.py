@@ -4,6 +4,8 @@ import os
 import re
 import signal
 import threading
+import urllib.error
+import urllib.request
 import uuid
 from time import sleep, time
 
@@ -461,6 +463,7 @@ class K8sProcessManager(ProcessManager):
             ),
             spec=client.V1ServiceSpec(
                 type="NodePort",
+                external_traffic_policy="Local",
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
@@ -655,6 +658,22 @@ class K8sProcessManager(ProcessManager):
 
             if podname == self.connection_server_name:
                 self._create_nodeport_service(podname, session, pod_uid)
+            elif "root-controller" in podname:
+                self.log.info(
+                    f"'{podname}' is the root controller, creating isolated NodePort service."
+                )
+                port = self._extract_port_from_cmd(boot_request)
+                if port:
+                    self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
+                    self.connection_server_port = port
+                    self.connection_server_node_port = port
+                    self._create_nodeport_service(podname, session, pod_uid)
+                else:
+                    self.log.warning(
+                        f"Could not extract port for '{podname}', falling back to headless."
+                    )
+                    self._create_headless_service(podname, session, pod_uid)
+
             else:
                 self._create_headless_service(podname, session, pod_uid)
 
@@ -682,19 +701,57 @@ class K8sProcessManager(ProcessManager):
             return None
 
     def _extract_port_from_cmd(self, boot_request) -> int | None:
-        # Find the gunicorn port argument from exec_and_args_list
+        """
+        Parses the boot request's command arguments to find a port.
+        """
+        # Check all command parts for a port argument
         for e_and_a in boot_request.process_description.executable_and_arguments:
-            if "gunicorn" in e_and_a.exec or (
-                "gunicorn" in " ".join(list(e_and_a.args))
-            ):
-                all_args = [e_and_a.exec] + list(e_and_a.args)
-                arg_str = " ".join(all_args)
+            all_args = [e_and_a.exec] + list(e_and_a.args)
+            arg_str = " ".join(all_args)
+
+            # 1. Check for gunicorn bind syntax (for local-connection-server)
+            # e.g., gunicorn --bind=0.0.0.0:30005
+            if "gunicorn" in arg_str:
                 match = re.search(r"-b\s+[\w\.]+:(\d+)", arg_str)
                 if not match:
-                    # Try to match '--bind'
                     match = re.search(r"--bind[\s=]+[\w\.]+:(\d+)", arg_str)
                 if match:
-                    return int(match.group(1))
+                    port = int(match.group(1))
+                    if port != 0:
+                        self.log.info(f"Extracted gunicorn port {port} from command.")
+                        return port
+
+            # 2. Check for drunc-controller --port syntax
+            # e.g., drunc-controller --port 12345
+            if "controller" in arg_str:
+                # Matches --port 12345 or --port=12345
+                match = re.search(r"--port[\s=]+(\d+)", arg_str)
+                if match:
+                    port = int(match.group(1))
+                    if port != 0:
+                        self.log.info(
+                            f"Extracted drunc-controller port {port} from command."
+                        )
+                        return port
+
+            # 3. NEW: Check for drunc-controller -c grpc://... syntax
+            # e.g., drunc-controller -c grpc://localhost:12345 or -c grpc://localhost:0
+            if "controller" in arg_str:
+                # Matches -c grpc://...:12345 or -c "grpc://...:12345"
+                match = re.search(r"-c\s+[\"\']?grpc:\/\/[^:]+:(\d+)[\"\']?", arg_str)
+                if match:
+                    port = int(match.group(1))
+                    if port != 0:
+                        self.log.info(
+                            f"Extracted drunc-controller gRPC port {port} from command."
+                        )
+                        return port
+                    else:
+                        self.log.warning(
+                            "Controller gRPC port is 0, cannot create NodePort."
+                        )
+
+        # If no non-zero port is found, return None
         return None
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
@@ -765,6 +822,7 @@ class K8sProcessManager(ProcessManager):
         - For the connection server: Wait for it to be ready and check the NodePort service
         - For all other pods: Boot is NON-BLOCKING.
         """
+        print(boot_request)
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
@@ -842,10 +900,15 @@ class K8sProcessManager(ProcessManager):
 
         # Special handling only for the connection server
         if podname == self.connection_server_name:
-            self.log.info(f"Waiting for '{podname}' to become ready...")
-
+            node_name = None
+            pod_ready = False
             start_time = time()
-            while time() - start_time < self.pod_ready_timeout:
+
+            # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+            self.log.info(
+                f"Stage 1: Waiting for '{podname}' pod to be Running and Ready..."
+            )
+            while not pod_ready and (time() - start_time < self.pod_ready_timeout):
                 try:
                     pod_status = self._core_v1_api.read_namespaced_pod_status(
                         podname, session
@@ -854,32 +917,81 @@ class K8sProcessManager(ProcessManager):
                         pod_status.status.phase == "Running"
                         and pod_status.status.pod_ip
                     ):
-                        self.log.info(
-                            f"'{podname}' is ready with IP {pod_status.status.pod_ip}."
-                        )
-                        self.local_connection_server_is_booted = True
+                        # Check readiness condition
+                        is_ready = False
+                        if pod_status.status.conditions:
+                            for condition in pod_status.status.conditions:
+                                if (
+                                    condition.type == "Ready"
+                                    and condition.status == "True"
+                                ):
+                                    is_ready = True
+                                    break
 
-                        # Log connection information using the NodePort service
-                        node_name = pod_status.spec.node_name
-                        self.log.info(f"Connection server '{podname}' is ready.")
-                        self.log.info(
-                            f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
-                        )
-                        self.log.info(
-                            f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
-                        )
+                        if is_ready:
+                            self.log.info(
+                                f"Stage 1: Pod '{podname}' is API Ready with IP {pod_status.status.pod_ip}."
+                            )
+                            node_name = pod_status.spec.node_name
+                            pod_ready = True  # Exit this loop and go to Stage 2
 
-                        break
                 except self._api_error_v1_api as e:
                     if e.status == 404:
-                        pass
+                        pass  # Pod not yet created/visible, keep polling
                     else:
                         raise e
                 sleep(self.pod_status_check_sleep)
-            else:
+
+            if not pod_ready:
                 raise DruncK8sException(
-                    f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
+                    f"'{podname}' pod did not become API Ready in {self.pod_ready_timeout} seconds."
                 )
+
+            # --- STAGE 2: Wait for NodePort to be externally reachable ---
+            self.log.info(
+                f"Stage 2: Waiting for NodePort {node_name}:{self.connection_server_node_port} to be reachable..."
+            )
+            nodeport_ready = False
+            url = f"http://{node_name}:{self.connection_server_node_port}"
+
+            # Use the *remaining* time for this check
+            remaining_time = self.pod_ready_timeout - (time() - start_time)
+            nodeport_start_time = time()
+
+            while not nodeport_ready and (
+                time() - nodeport_start_time < remaining_time
+            ):
+                try:
+                    # We don't care about the response, just that it doesn't error
+                    # Timeout set to 1s for a quick check
+                    urllib.request.urlopen(url, timeout=1)
+                    nodeport_ready = True
+                    self.log.info(f"Stage 2: NodePort {url} is now active.")
+                except (
+                    urllib.error.URLError,
+                    ConnectionRefusedError,
+                    TimeoutError,
+                    OSError,
+                ) as e:
+                    # Keep polling until timeout
+                    self.log.debug(f"NodePort not ready yet ({e}), retrying...")
+                    sleep(self.pod_status_check_sleep)
+
+            if not nodeport_ready:
+                raise DruncK8sException(
+                    f"NodePort {url} did not become reachable in {self.pod_ready_timeout} seconds."
+                )
+
+            # --- All clear ---
+            self.local_connection_server_is_booted = True
+
+            self.log.info(f"Connection server '{podname}' is fully ready.")
+            self.log.info(
+                f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
+            )
+            self.log.info(
+                f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
+            )
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)

@@ -25,8 +25,6 @@ from druncschema.request_response_pb2 import Request
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
@@ -35,7 +33,6 @@ from drunc.utils.grpc_utils import (
     handle_grpc_error,
 )
 from drunc.utils.utils import (
-    get_control_type_and_uri_from_connectivity_service,
     get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
@@ -50,7 +47,8 @@ class ProcessManagerDriver:
         self.log = get_logger("controller.ProcessManagerDriver")
         self.address = address
         options = [
-            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+            ("grpc.keepalive_time_ms", 60000),  # pings the server every 60 seconds
+            ("grpc.enable_retries", 1),
         ]
         self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
@@ -350,6 +348,14 @@ To debug it, close drunc and run the following command:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
+
+            if connection_server == "localhost":
+                resolved_server = resolve_localhost_to_hostname(connection_server)
+                self.log.debug(
+                    f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+                )
+                connection_server = resolved_server
+
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
             )
@@ -374,6 +380,8 @@ To debug it, close drunc and run the following command:
 
             env = {}
             collect_variables(session_dal.environment, env)
+
+            """
             if csc:
                 try:
                     timeout = (
@@ -400,23 +408,122 @@ To debug it, close drunc and run the following command:
                     return
 
                 return uri.replace("grpc://", "")
+            """
 
-            service_id = top_controller_name + "_control"
             port_number = None
             protocol = None
+            service_found = None
+            top_controller_name = None  # Initialize here
 
-            for service in session_dal.segment.controller.exposes_service:
-                if service.id == service_id:
-                    port_number = service.port
-                    protocol = service.protocol
-                    break
-            if port_number is None or protocol is None:
+            print("ARE WE HERE NOW")
+
+            try:
+                top_controller_name = session_dal.segment.controller.id
+                self.log.info(
+                    f"Top controller name from OKS config: '{top_controller_name}'"
+                )
+
+                # Check if exposes_service relationship exists and is populated
+                if (
+                    not hasattr(session_dal.segment.controller, "exposes_service")
+                    or not session_dal.segment.controller.exposes_service
+                ):
+                    self.log.error(
+                        f"Controller '{top_controller_name}' in OKS config has no 'exposes_service' relationship defined or it's empty."
+                    )
+                    return None
+
+                self.log.debug(
+                    f"Controller '{top_controller_name}' exposes services: {[s.id for s in session_dal.segment.controller.exposes_service]}"
+                )
+
+                # Get the first (and presumably only) control service linked
+                # Using next(iter(...)) provides a slightly cleaner way to get the first item or None
+                service_found = next(
+                    iter(session_dal.segment.controller.exposes_service), None
+                )
+
+                if service_found:
+                    self.log.info(
+                        f"Found linked control service object with ID: '{service_found.id}'"
+                    )
+                    # Check if the service object actually has the port and protocol attributes
+                    if (
+                        hasattr(service_found, "port")
+                        and service_found.port is not None
+                    ):
+                        port_number = service_found.port
+                        self.log.info(
+                            f"Extracted port from service '{service_found.id}': {port_number}"
+                        )
+                    else:
+                        self.log.error(
+                            f"Service object '{service_found.id}' is missing the 'port' attribute or it's null."
+                        )
+
+                    if hasattr(service_found, "protocol") and service_found.protocol:
+                        protocol = service_found.protocol
+                        self.log.info(
+                            f"Extracted protocol from service '{service_found.id}': {protocol}"
+                        )
+                    else:
+                        self.log.error(
+                            f"Service object '{service_found.id}' is missing the 'protocol' attribute or it's empty."
+                        )
+
+                else:
+                    # This case should ideally not be reached due to the check above, but good for robustness
+                    self.log.error(
+                        f"Could not retrieve the first service object from 'exposes_service' for controller '{top_controller_name}'."
+                    )
+                    return None  # Exit if service object itself couldn't be retrieved
+
+            except AttributeError as e:
+                self.log.error(
+                    f"Error accessing OKS configuration attributes: {e}. Check structure around session_dal.segment.controller."
+                )
+                return None
+            except Exception as e:
+                self.log.error(
+                    f"Unexpected error during service discovery from OKS: {e}"
+                )
                 return None
 
-            ip = resolve_localhost_and_127_ip_to_network_ip(
-                session_dal.segment.controller.runs_on.runs_on.id
+            # Check if we successfully got a port and protocol
+            if port_number is None or protocol is None:
+                self.log.error(
+                    f"Failed to extract valid port ({port_number}) or protocol ({protocol}) for service '{service_found.id if service_found else 'N/A'}'. Cannot determine controller address."
+                )
+                return None  # Exit if service definition is incomplete
+
+            # Resolve the IP address of the host where the controller runs
+            try:
+                host_id = session_dal.segment.controller.runs_on.runs_on.id
+                self.log.info(f"Controller runs on host ID: '{host_id}'")
+                ip = resolve_localhost_and_127_ip_to_network_ip(host_id)
+                self.log.info(f"Resolved host ID '{host_id}' to IP: {ip}")
+            except AttributeError as e:
+                self.log.error(
+                    f"Error accessing OKS configuration attributes for host resolution: {e}. Check structure around session_dal.segment.controller.runs_on."
+                )
+                return None
+            except Exception as e:
+                self.log.error(f"Unexpected error during host IP resolution: {e}")
+                return None
+
+            if not ip:
+                self.log.error(
+                    f"Host ID '{host_id}' resolved to an empty or invalid IP address."
+                )
+                return None
+
+            # If all checks passed, return the address
+            final_address = f"{ip}:{port_number}"
+            self.log.info(
+                f"Successfully resolved controller address from OKS config: {final_address}"
             )
-            return f"{ip}:{port_number}"
+            return final_address
+            # --- END CORRECTED LOGIC WITH ADDED LOGGING ---
 
         def keyboard_interrupt_on_sigint(signal, frame):
             self.log.warning("Interrupted")
