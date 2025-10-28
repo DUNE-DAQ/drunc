@@ -367,11 +367,11 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
-    ctx.command.add_command(start_shell, "start-shell")
-    ctx.obj.dynamic_commands.add("start-shell")
     # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
         ctx.obj.batch_mode = True
+        ctx.command.add_command(start_shell, "start-shell")
+        ctx.obj.dynamic_commands.add("start-shell")
 
     def cleanup():
         """
@@ -512,6 +512,6 @@ def unified_shell(
 @click.pass_context
 def _maybe_enter_shell(ctx, results, **_):
     # If user requested interactive mode at the end
-    if not getattr(ctx.obj, "batch_mode", True):
+    if not getattr(ctx.obj, "batch_mode", False):
         sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
         sh.cmdloop()
