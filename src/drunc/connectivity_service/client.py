@@ -23,7 +23,6 @@ class ConnectivityServiceClient:
 
     def is_ready(self, timeout: int = 10):
         start = time.time()
-        last_error = None
 
         while time.time() - start < timeout:
             try:
@@ -36,24 +35,9 @@ class ConnectivityServiceClient:
                     data=None,
                 )
                 r.raise_for_status()
-                elapsed = time.time() - start
-                if elapsed > 1:
-                    self.log.info(
-                        f"Connectivity service became ready after {elapsed:.1f}s"
-                    )
                 return True
-            except (HTTPError, ConnectionError, ReadTimeout) as e:
-                last_error = e
-                if time.time() - start < 1:
-                    self.log.debug(
-                        f"Waiting for connectivity service... ({type(e).__name__})"
-                    )
+            except (HTTPError, ConnectionError, ReadTimeout):
                 time.sleep(0.5)
-
-        self.log.error(
-            f"Connectivity service not ready after {timeout}s. "
-            f"Last error: {type(last_error).__name__}: {last_error}"
-        )
         return False
 
     def retract(self, uid, fail_quickly=False):
