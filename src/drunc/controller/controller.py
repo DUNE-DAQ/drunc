@@ -1031,8 +1031,6 @@ class Controller(ControllerServicer):
 
             # Set FSM error flag based on child responses.
             response.fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-            bad_child_flag = False
-
             for child_response in child_responses:
                 if child_response.flag not in [
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1040,12 +1038,9 @@ class Controller(ControllerServicer):
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
                     FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
                 ]:
-                    bad_child_flag = True
+                    response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                    self.stateful_node.to_error()
                     break
-
-            if bad_child_flag:
-                response.fsm_flag = FSMResponseFlag.FSM_FAILED
-                self.stateful_node.to_error()
 
         # Child nodes.
         else:
