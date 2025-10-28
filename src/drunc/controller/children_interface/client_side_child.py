@@ -106,54 +106,35 @@ class ClientSideChild(ChildNode):
             self.state.exclude()
             return Response(
                 name=self.name,
-                token=token,
                 data=pack_to_any(PlainText(text=f"'{self.name}' excluded")),
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
             )
 
-        elif command == "include":
+        if command == "include":
             self.state.include()
             return Response(
                 name=self.name,
-                token=token,
                 data=pack_to_any(PlainText(text=f"'{self.name}' included")),
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
             )
 
-        if self.state.excluded() and command == "execute_fsm_command":
-            return Response(
-                name=self.name,
-                token=token,
-                data=pack_to_any(
-                    ExecuteFSMCommandResponse(
-                        fsm_flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                        command_name=request.command_name,
-                    )
-                ),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=[],
-            )
-
-        # here lies the mother of all the problems
+        # TODO: execute_fsm_command
         if command == "execute_fsm_command":
             return self.propagate_fsm_command(
-                unpack_any(request.command_data, FSMCommand), token
+                unpack_any(request.command_data, FSMCommand), None
             )
-        elif command == "execute_expert_command":
+
+        if command == "execute_expert_command":
             return self.propagate_expert_command(
-                unpack_any(request.command_data, PlainText), token
+                unpack_any(request.command_data, PlainText), None
             )
-        else:
-            self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                children=[],
-            )
+
+        # If we get here, we don't run the command.
+        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
+        return Response(
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
 
     def status(
         self,
@@ -171,7 +152,6 @@ class ClientSideChild(ChildNode):
         )
 
         response = StatusResponse(
-            token=None,
             name=self.name,
             status=status,
             children=[],
@@ -179,15 +159,6 @@ class ClientSideChild(ChildNode):
         )
 
         return response
-
-    def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
-        return Response(
-            name=self.name,
-            token=token,
-            data=None,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-            children=[],
-        )
 
     def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
         entry_state = self.state.get_operational_state()
@@ -202,12 +173,16 @@ class ClientSideChild(ChildNode):
         )
         response = Response(
             name=self.name,
-            token=token,
             data=pack_to_any(fsm_data),
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children={},
         )
 
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
         return response
+
+    def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
+        return Response(
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
