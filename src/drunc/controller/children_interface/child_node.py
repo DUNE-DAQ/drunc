@@ -4,7 +4,8 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
-    FSMCommandsDescription,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
     Status,
     StatusResponse,
 )
@@ -59,11 +60,9 @@ class ChildNode:  # abc.ABC):
         token: Token | None,
     ) -> Response:
         return Response(
-            name=self.name,
             token=token,
-            data=None,
+            name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-            children=[],
         )
 
     # @abc.abstractmethod
@@ -84,8 +83,7 @@ class ChildNode:  # abc.ABC):
             token=None,
             name=self.name,
             status=status,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
         return response
@@ -130,7 +128,6 @@ class ChildNode:  # abc.ABC):
             token=None,
             name=self.name,
             description=description,
-            children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -143,14 +140,26 @@ class ChildNode:  # abc.ABC):
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
-        description = FSMCommandsDescription()
-
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
-            description=description,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        response = ExecuteFSMCommandResponse(
+            token=None,
+            name=self.name,
+            command_name=command.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
         return response
