@@ -91,5 +91,5 @@ def start_shell(ctx, obj):
     """
     log = get_logger("unified_shell.start_shell")
 
-    obj.batch_mode = False
+    obj.interactive_mode = True
     log.info("Switching to interactive mode...")

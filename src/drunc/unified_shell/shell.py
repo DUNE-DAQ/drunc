@@ -512,6 +512,6 @@ def unified_shell(
 @click.pass_context
 def _maybe_enter_shell(ctx, results, **_):
     # If user requested interactive mode at the end
-    if not getattr(ctx.obj, "batch_mode", True):
+    if getattr(ctx.obj, "interactive_mode", False):
         sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
         sh.cmdloop()
