@@ -85,6 +85,7 @@ class ProcessManagerDriver:
         previous_host = None
 
         # Step 5: iterate over boot requests
+        connectivity_checked = False
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
@@ -94,13 +95,23 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             **kwargs,
         ):
-            if (
-                request.process_description.metadata.name
-                not in [app.id for app in session_dal.infrastructure_applications]
-                and csc
-                and not csc.is_ready(timeout=10)
-            ):
-                raise DruncSetupException("Connectivity service is not ready in time")
+            is_non_infra_app = request.process_description.metadata.name not in [
+                app.id for app in session_dal.infrastructure_applications
+            ]
+
+            # Check connectivity service readiness before booting first non-infrastructure app
+            if is_non_infra_app and csc and not connectivity_checked:
+                self.log.info(
+                    "Waiting for connectivity service HTTP endpoint to be ready..."
+                )
+                # Add small delay to allow HTTP server to start even if pod is Running
+                sleep(2)
+                if not csc.is_ready(timeout=10):
+                    raise DruncSetupException(
+                        "Connectivity service is not ready in time"
+                    )
+                connectivity_checked = True
+                self.log.info("Connectivity service HTTP endpoint is ready")
 
             this_host = next(iter(request.process_restriction.allowed_hosts))
 

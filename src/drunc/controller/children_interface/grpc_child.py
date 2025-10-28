@@ -78,10 +78,11 @@ class gRPCChildNode(ChildNode):
                 self.channel.close()
 
             self.channel = grpc.insecure_channel(self.uri)
-            self.controller = ControllerStub(self.channel)
+            self.log.info(f"Created new gRPC channel to {self.uri}")
+            self.stub = ControllerStub(self.channel)
 
         request = AddressedCommand(
-            token=copy_token(init_token),
+            token=copy_token(self.init_token),
             command_name="describe",
             command_data=None,
             target="",
@@ -115,7 +116,7 @@ class gRPCChildNode(ChildNode):
                 self.start_listening(response.description.broadcast)
                 break
 
-    def _attempt_reconnection(self, token, command, data):
+    def _attempt_reconnection(self, token, command, request):
         """Attempt to reconnect using connectivity service and retry command"""
         if not self.connectivity_service:
             self.log.error(f"No connectivity service available for {self.name}")
@@ -136,20 +137,20 @@ class gRPCChildNode(ChildNode):
 
             if new_uri != self.uri:
                 self.log.info(
-                    f"Found new IP {new_uri} for {self.name}, reconnecting..."
+                    f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
                 )
                 self.uri = new_uri
                 self._reconnect_to_new_uri()
             else:
                 self.log.info(
-                    f"IP address for {self.name} has not changed, reconnecting to same address..."
+                    f"IP address for {self.name} has not changed ({self.uri}), reconnecting to same address..."
                 )
                 self._reconnect_to_new_uri()
 
             # Give control back to the child controller after reconnection
             self.log.info(f"Taking control of {self.name} after reconnection...")
             try:
-                self.propagate_command("take_control", None, token)
+                self.propagate_command("take_control", request, token)
                 self.log.info(f"Successfully took control of {self.name}")
             except Exception as control_error:
                 self.log.warning(
@@ -158,7 +159,7 @@ class gRPCChildNode(ChildNode):
 
             # Retry the original command
             self.log.info(f"Retrying original command {command} to {self.name}...")
-            return self.propagate_command(command, data, token)
+            return self.propagate_command(command, request, token)
 
         except ApplicationLookupUnsuccessful:
             self.log.error(f"Child {self.name} not found in connectivity service")
@@ -195,7 +196,6 @@ class gRPCChildNode(ChildNode):
         self.channel = None
         self.broadcast.stop()
 
-
     def propagate_command(
         self,
         command: str,
@@ -210,17 +210,20 @@ class gRPCChildNode(ChildNode):
         try:
             response = cmd(packed_request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
-            
-        except ServerUnreachable as e:
-            self.log.warning(
-                f"Connection to {self.name} failed, attempting to reconnect..."
-            )
-            result = self._attempt_reconnection(token, command, data)
-            if result is not None:
-                return result
-            else:
-                raise e
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable as e:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                result = self._attempt_reconnection(token, command, request)
+                if result is not None:
+                    return result
+                else:
+                    self.log.error(
+                        f"Reconnection failed for {self.name} at {self.uri}, raising ServerUnreachable"
+                    )
+                    raise e
 
         return response
 
@@ -241,7 +244,43 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.status(request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable as e:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during status check, attempting to reconnect..."
+                )
+                # For status calls, we don't have a token, so we'll just reconnect and retry
+                if self.connectivity_service:
+                    try:
+                        from drunc.utils.utils import (
+                            get_control_type_and_uri_from_connectivity_service,
+                        )
+
+                        ctype, new_uri = (
+                            get_control_type_and_uri_from_connectivity_service(
+                                self.connectivity_service, self.name, timeout=10
+                            )
+                        )
+                        if new_uri != self.uri:
+                            self.log.info(
+                                f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
+                            )
+                            self.uri = new_uri
+                            self._reconnect_to_new_uri()
+                        else:
+                            self.log.info(f"Reconnecting to same address {self.uri}...")
+                            self._reconnect_to_new_uri()
+
+                        # Retry the status call
+                        response = self.stub.status(request)
+                    except Exception as reconnect_error:
+                        self.log.error(
+                            f"Failed to reconnect to {self.name}: {reconnect_error}"
+                        )
+                        raise e
+                else:
+                    raise e
 
         return response
 
@@ -262,7 +301,43 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.describe(request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable as e:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during describe check, attempting to reconnect..."
+                )
+                # For describe calls, we don't have a token, so we'll just reconnect and retry
+                if self.connectivity_service:
+                    try:
+                        from drunc.utils.utils import (
+                            get_control_type_and_uri_from_connectivity_service,
+                        )
+
+                        ctype, new_uri = (
+                            get_control_type_and_uri_from_connectivity_service(
+                                self.connectivity_service, self.name, timeout=10
+                            )
+                        )
+                        if new_uri != self.uri:
+                            self.log.info(
+                                f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
+                            )
+                            self.uri = new_uri
+                            self._reconnect_to_new_uri()
+                        else:
+                            self.log.info(f"Reconnecting to same address {self.uri}...")
+                            self._reconnect_to_new_uri()
+
+                        # Retry the describe call
+                        response = self.stub.describe(request)
+                    except Exception as reconnect_error:
+                        self.log.error(
+                            f"Failed to reconnect to {self.name}: {reconnect_error}"
+                        )
+                        raise e
+                else:
+                    raise e
 
         return response
 
@@ -285,7 +360,43 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.describe_fsm(request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable as e:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during describe_fsm check, attempting to reconnect..."
+                )
+                # For describe_fsm calls, we don't have a token, so we'll just reconnect and retry
+                if self.connectivity_service:
+                    try:
+                        from drunc.utils.utils import (
+                            get_control_type_and_uri_from_connectivity_service,
+                        )
+
+                        ctype, new_uri = (
+                            get_control_type_and_uri_from_connectivity_service(
+                                self.connectivity_service, self.name, timeout=10
+                            )
+                        )
+                        if new_uri != self.uri:
+                            self.log.info(
+                                f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
+                            )
+                            self.uri = new_uri
+                            self._reconnect_to_new_uri()
+                        else:
+                            self.log.info(f"Reconnecting to same address {self.uri}...")
+                            self._reconnect_to_new_uri()
+
+                        # Retry the describe_fsm call
+                        response = self.stub.describe_fsm(request)
+                    except Exception as reconnect_error:
+                        self.log.error(
+                            f"Failed to reconnect to {self.name}: {reconnect_error}"
+                        )
+                        raise e
+                else:
+                    raise e
 
         return response
 
@@ -307,7 +418,43 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.recompute_status(request, timeout=timeout)
         except grpc.RpcError as e:
-            self.handle_child_grpc_error(e)
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable as server_unreachable_error:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
+                )
+                # For recompute_status calls, we don't have a token, so we'll just reconnect and retry
+                if self.connectivity_service:
+                    try:
+                        from drunc.utils.utils import (
+                            get_control_type_and_uri_from_connectivity_service,
+                        )
+
+                        ctype, new_uri = (
+                            get_control_type_and_uri_from_connectivity_service(
+                                self.connectivity_service, self.name, timeout=10
+                            )
+                        )
+                        if new_uri != self.uri:
+                            self.log.info(
+                                f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
+                            )
+                            self.uri = new_uri
+                            self._reconnect_to_new_uri()
+                        else:
+                            self.log.info(f"Reconnecting to same address {self.uri}...")
+                            self._reconnect_to_new_uri()
+
+                        # Retry the recompute_status call
+                        response = self.stub.recompute_status(request, timeout=timeout)
+                    except Exception as reconnect_error:
+                        self.log.error(
+                            f"Failed to reconnect to {self.name}: {reconnect_error}"
+                        )
+                        raise server_unreachable_error
+                else:
+                    raise server_unreachable_error
 
         return response
 
