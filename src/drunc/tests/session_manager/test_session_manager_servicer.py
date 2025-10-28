@@ -20,7 +20,6 @@ def test_describe(
     assert isinstance(response, Description)
     assert response.name == "dummy_name"
     assert response.commands == command_description_list
-    assert response.children == []
     assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
 

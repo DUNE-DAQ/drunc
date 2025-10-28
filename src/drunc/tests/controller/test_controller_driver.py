@@ -1,5 +1,5 @@
 import pytest
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from google.protobuf.json_format import MessageToDict
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -101,14 +101,14 @@ def address_command_case_deep_segments_config(
     if execute_along_path:
         response_chain = get_response_along_path(response, target_chain, [])
         for response, target_part in zip(response_chain, target_chain):
-            assert response.data is not None
+            assert response.description is not None
             assert response.name == target_part
-            compare_response_data(response.data, expected_response, target_part)
+            compare_response_data(response.description, expected_response, target_part)
 
     # response_recursive = get_response_recursive(response, target)
     # if execute_on_all_subsequent_children_in_path:
-    #     assert response_recursive.data is not None
-    #     compare_response_data(response_recursive.data, expected_response)
+    #     assert response_recursive.description is not None
+    #     compare_response_data(response_recursive.description, expected_response)
 
 
 def address_commmand_permutations_deep_segments_config(
@@ -181,7 +181,7 @@ def test_controller_driver_describe(many_controllers_running):
     address_commmand_permutations_deep_segments_config(
         controller_driver=controller_driver,
         command="describe",
-        expected_response=OldDescription(
+        expected_response=Description(
             name="<name>",
             type="controller",
             endpoint="<endpoint>",

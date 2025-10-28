@@ -39,7 +39,7 @@ def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
     else:
         log.info(f"\nCurrently available controller transitions on '{desc.name}' are:")
 
-    for c in desc.data.commands:
+    for c in desc.description.commands:
         log.info(f" - [yellow]{c.name.replace('_', '-').lower()}[/]")
 
     log.info("\nUse [yellow]help <command>[/] for more information on a command.\n")

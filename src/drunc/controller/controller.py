@@ -1,25 +1,32 @@
 import multiprocessing
+import re
 import threading
 import time
 import traceback
-from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import wraps
+from typing import Callable, List, TypeVar
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
-    Status,
+    RecomputeStatusResponse,
+    StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf.any_pb2 import Any
+from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
@@ -30,19 +37,15 @@ from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
-from drunc.controller.decorators import (
-    in_control,
-    publish_command_time,
-    unpack_addressed_command_to,
-)
-from drunc.controller.exceptions import CannotSurrenderControl
+from drunc.controller.controller_actor import ControllerActor
+from drunc.controller.decorators import in_control, publish_command_time
 from drunc.controller.stateful_node import CannotExclude, CannotInclude, StatefulNode
 from drunc.controller.utils import (
     ControllerMonitoringMetrics,
     get_detector_name,
     get_status_message,
 )
-from drunc.exceptions import DruncException
+from drunc.exceptions import DruncCommandException, DruncException
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
@@ -53,50 +56,152 @@ from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
+T = TypeVar("T")
 
-class ControllerActor:
-    def __init__(self, token: Optional[Token] = None):
-        self.log = get_logger("controller.actor")
-        self._token = Token(token="", user_name="")
-        if token is not None:
-            self._token.CopyFrom(token)
-        self._lock = threading.Lock()
 
-    def get_token(self) -> Token:
-        return self._token
+def OLD_address_command(
+    obj,
+    command_name,
+    command_data,
+    target,
+    execute_along_path,
+    execute_on_all_subsequent_children_in_path,
+):
+    log = get_logger("controller.OLD_address_command")
 
-    def get_user_name(self) -> str:
-        return self._token.user_name
+    ret = {}
+    children_names = [c.name for c in obj.children_nodes]
 
-    def _update_actor(self, token: Optional[Token] = Token()) -> None:
-        self._lock.acquire()
-        self._token.CopyFrom(token)
-        self._lock.release()
+    start_with_slash = target.startswith("/")
+    target_ = target[:]
+    if start_with_slash:
+        target_ = target[1:]
 
-    def compare_token(self, token1, token2):
-        self._lock.acquire()
-        result = (
-            token1.user_name == token2.user_name and token1.token == token2.token
-        )  #!! come on protobuf, you can compare messages
-        self._lock.release()
-        return result
+    if target_ == "":
+        if execute_on_all_subsequent_children_in_path:
+            for child in children_names:
+                ret[child] = AddressedCommand(
+                    command_name=command_name,
+                    command_data=command_data,
+                    target=child,
+                    execute_along_path=execute_along_path,
+                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+                )
+        return ret
 
-    def token_is_current_actor(self, token):
-        return self.compare_token(token, self._token)
+    target_path = target_.split("/")
+    if start_with_slash and target_path[0] != obj.name:
+        raise DruncCommandException(f"Target '{target_}' is not matching '{obj.name}'")
 
-    def surrender_control(self, token) -> None:
-        if self.compare_token(self._token, token):
-            self._update_actor(Token())
-            return
-        raise CannotSurrenderControl(
-            f"Token {token} cannot release control of {self._token}"
-        )
+    if target_path[0] == obj.name:
+        target_path.pop(0)
 
-    def take_control(self, token) -> None:
-        # if not self.compare_token(self._token, token):
-        #     raise OtherUserAlreadyInControl(f'Actor {self._token.user_name} is already in control')
-        self._update_actor(token)
-        return 0
+    if target_path == []:
+        if execute_on_all_subsequent_children_in_path:
+            for child in children_names:
+                ret[child] = AddressedCommand(
+                    command_name=command_name,
+                    command_data=command_data,
+                    target=child,
+                    execute_along_path=execute_along_path,
+                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+                )
+        return ret
+
+    target_name = target_path[0]
+
+    for child in children_names:
+        if re.match(target_name, child):
+            new_target_path = child
+            if len(target_path) > 1:
+                new_target_path = "/".join([new_target_path] + target_path[1:])
+            ret[child] = AddressedCommand(
+                command_name=command_name,
+                command_data=command_data,
+                target=new_target_path,
+                execute_along_path=execute_along_path,
+                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            )
+
+    if ret == {}:
+        log.info(f"Target '{target}' not found in children of '{obj.name}'")
+
+    return ret
+
+
+def OLD_unpack_addressed_command_to(data_type=None):
+    def decor(cmd):
+        command_name = cmd.__name__
+        logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
+
+        @wraps(cmd)
+        def wrap(obj, request, context):
+            try:
+                command = unpack_any(request.data, AddressedCommand)
+            except UnpackingError as e:
+                logger.exception(e)
+                return Response(
+                    name=obj.name,
+                    token=None,
+                    data=pack_to_any(PlainText(text=str(e))),
+                    flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                    children=[],
+                )
+
+            try:
+                addressed_commands = OLD_address_command(
+                    obj=obj,
+                    command_name=command_name,
+                    command_data=command.command_data,
+                    target=command.target,
+                    execute_along_path=command.execute_along_path,
+                    execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
+                )
+                logger.debug(f"Addressed commands: {addressed_commands}")
+            except DruncCommandException as e:
+                logger.exception(e)
+                return Response(
+                    name=obj.name,
+                    token=None,
+                    data=pack_to_any(PlainText(text=str(e))),
+                    flag=ResponseFlag.FAILED,
+                    children=[],
+                )
+
+            payload = None
+            if data_type is not None:
+                try:
+                    payload = unpack_any(command.command_data, data_type)
+                except UnpackingError as e:
+                    logger.exception(e)
+                    return Response(
+                        name=obj.name,
+                        token=None,
+                        data=pack_to_any(PlainText(text=str(e))),
+                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+                        children=[],
+                    )
+
+            execute_on_self = (
+                command.target == obj.name
+                or command.target == ""
+                or command.target == "/"
+                or command.execute_along_path
+            )
+
+            kwargs = {
+                "addressed_commands": addressed_commands,
+                "execute_on_self": execute_on_self,
+                "token": request.token,
+            }
+            if payload is not None:
+                kwargs["payload"] = payload
+
+            return cmd(obj, **kwargs)
+
+        return wrap
+
+    return decor
 
 
 class Controller(ControllerServicer):
@@ -178,7 +283,7 @@ class Controller(ControllerServicer):
 
         self.children_nodes = self.configuration.get_dummy_children()
 
-    def init_controller(self):
+    def init_controller(self) -> None:
         log_init_controller = get_logger("controller.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
         self.configuration.update_children(
@@ -204,37 +309,18 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-            children_statuses = self.propagate_to_all_children(
-                command_name="status",
-                token=self.actor.get_token(),
-            )
-            children_states = {}
-            for response in children_statuses:
-                in_error = False
-                try:
-                    status = unpack_any(response.data, Status)
-                    in_error = status.in_error
-                    children_states[response.name] = status.state
-                except UnpackingError:
-                    log_init_controller.error(
-                        f"Failed to unpack status from {response.name}:"
-                    )
-                    if response.data.Is(Stacktrace.DESCRIPTOR):
-                        stack = unpack_any(response.data, Stacktrace)
-                        for line in stack.text:
-                            log_init_controller.error(f"{response.name}: {line}")
-                    elif response.data.Is(PlainText.DESCRIPTOR):
-                        log_init_controller.error(
-                            f"{response.name}: {unpack_any(response.data, PlainText).text}"
-                        )
-                    else:
-                        log_init_controller.error(
-                            f"{response.name}: Unknown data type: {type(response.data)}"
-                        )
 
-                if in_error:
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.status(target)
+
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(child_command, child_list)
+
+            children_states = {}
+            for response in child_responses:
+                children_states[response.name] = response.status.state
+                if response.status.in_error:
                     self.stateful_node.to_error()
-                    break
 
             if any([c.lower() != "initial" for c in children_states.values()]):
                 time.sleep(0.5)
@@ -252,7 +338,15 @@ class Controller(ControllerServicer):
             if child.name in bad_children:
                 continue
             log_init_controller.info(f"Taking control of {child.name}")
-            child.propagate_command("take_control", None, self.actor.get_token())
+            request = AddressedCommand(
+                token=self.actor.get_token(),
+                command_name="take_control",
+                command_data=None,
+                target=child.name,
+                execute_along_path=True,
+                execute_on_all_subsequent_children_in_path=True,
+            )
+            child.propagate_command("take_control", request, self.actor.get_token())
 
         interval_s = getattr(self.configuration.data, "interval_s", 10.0)
 
@@ -352,7 +446,7 @@ class Controller(ControllerServicer):
             time.sleep(interval_s)
 
     def construct_error_node_response(
-        self, command_name: str, token: Token, cause: FSMResponseFlag
+        self, command_name: str, token: Token, cause: FSMResponseFlag.ValueType
     ) -> Response:
         fsm_result = FSMCommandResponse(
             flag=cause,
@@ -426,7 +520,7 @@ class Controller(ControllerServicer):
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
-            self.log.debug(f"{t.getName()} TID: {t.native_id} is_alive: {t.is_alive}")
+            self.log.debug(f"{t.name} TID: {t.native_id} is_alive: {t.is_alive}")
 
         with multiprocessing.Manager() as manager:
             self.log.debug("Multiprocess threads")
@@ -435,7 +529,7 @@ class Controller(ControllerServicer):
     def __del__(self):
         self.terminate()
 
-    def propagate_to_all_children(
+    def OLD_propagate_to_all_children(
         self,
         command_name: str,
         token: Token,
@@ -445,6 +539,7 @@ class Controller(ControllerServicer):
         children_to_execute = [
             cn.name for cn in self.children_nodes if not only_included or cn.included
         ]
+
         addressed_commands = {
             cn: AddressedCommand(
                 command_name=command_name,
@@ -456,22 +551,20 @@ class Controller(ControllerServicer):
             for cn in children_to_execute
         }
 
-        return self.propagate_addressed_command(
-            command_name=command_name,
-            addressed_commands=addressed_commands,
-            token=token,
-            override_payload=command_data,
+        return self.OLD_propagate_to_children(
+            command_name,
+            addressed_commands,
+            token,
         )
 
-    def propagate_addressed_command(
+    def OLD_propagate_to_children(
         self,
         command_name: str,
         addressed_commands: dict[str, AddressedCommand],
         token: Token,
-        override_payload: Any = None,
     ):
         self.log.debug(f"Propagating {command_name} to children")
-        response_children = []
+        response_children: list[Response] = []
         response_lock = threading.Lock()
 
         def propagate_to_child(
@@ -490,16 +583,13 @@ class Controller(ControllerServicer):
                 self.log.error(f"Child {child_name} not found")
                 return
 
+            command_data_str = str(command_data).replace("\n", " ")
+            self.log.debug(
+                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
+            )
+
             try:
-                command_data_str = str(command_data).replace("\n", " ")
-                self.log.debug(
-                    f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
-                )
-                response = child.propagate_command(
-                    command=command_name,
-                    data=command_data,
-                    token=token,
-                )
+                response = child.propagate_command(command_name, command_data, None)
                 with response_lock:
                     response_children.append(response)
 
@@ -551,7 +641,7 @@ class Controller(ControllerServicer):
                 kwargs={
                     "child_name": child,
                     "command_name": command_name,
-                    "command_data": data if not override_payload else override_payload,
+                    "command_data": data,
                     "token": token,
                     "response_lock": response_lock,
                     "response_children": response_children,
@@ -562,147 +652,274 @@ class Controller(ControllerServicer):
 
         for thread in threads:
             thread.join()
+
         return response_children
+
+    def parse_target_string(self, target: str) -> str:
+        """Parse and check a target string.
+
+        1. Set it to the current node name if it is empty.
+        2. Ensure that it starts with the current node name.
+
+        Args:
+            target: The path to the target, as a raw string.
+
+        Returns:
+            The (possibly modified) target string.
+
+        Raises:
+            ValueError: If it does not start at the current node.
+        """
+        if not target:
+            return self.name
+
+        target_path = target.split("/")
+        if target_path[0] != self.name:
+            error_str = f"Target '{target}' does not start with '{self.name}'"
+            self.log.error(error_str)
+            raise ValueError(error_str)
+
+        return target
+
+    def address_target_path(
+        self,
+        target: str,
+        execute_on_children: bool,
+    ) -> list[tuple[ChildNode, str]]:
+        """Finds the next node(s) along a given path to a target node.
+
+        Given a path from the current node to the target node, a list of node
+        and target pairs is returned. This will contain either a single child
+        node, next along the path, or all child nodes if the path is exhausted
+        and the execute_on_children flag is set.
+
+        Args:
+            target: The path to the target from the current node.
+            execute_on_children: If True, run on nodes beyond the target.
+
+        Returns:
+            A list of (child, target) for each addressed child.
+        """
+        next_target_path = target.split("/")[1:]
+
+        # Still more path to go, so find the next node along it.
+        if next_target_path:
+            targets = [
+                (child, "/".join(next_target_path))
+                for child in self.children_nodes
+                if child.name == next_target_path[0]
+            ]
+            if not targets:
+                self.log.info(
+                    f"'{next_target_path[0]}' is not a child of '{self.name}'"
+                )
+            return targets
+
+        # Handle execute_on_children only if the path is exhausted.
+        if execute_on_children:
+            return [(child, child.name) for child in self.children_nodes]
+
+        # Path is exhausted and we are NOT executing on children.
+        return []
+
+    def address_all(
+        self,
+        ignore_exclusion: bool = False,
+    ) -> list[tuple[ChildNode, str]]:
+        """Finds all child nodes, with optional node inclusion/exclusion.
+
+        Returns a list of node and target pairs for each child node. The
+        returned data is structured the same as that of address_target_path.
+
+        Args:
+            ignore_exclusion: If True, traverse ALL nodes, including those
+                marked as excluded (default: False).
+
+        Returns:
+            A list of (child, target) for each addressed child.
+        """
+        return [
+            (child, child.name)
+            for child in self.children_nodes
+            if child.included or ignore_exclusion
+        ]
+
+    @staticmethod
+    def propagate_concurrently(
+        child_command: Callable[[ChildNode, str], T],
+        child_list: list[tuple[ChildNode, str]],
+    ) -> list[T]:
+        """Propagate commands concurrently to a list of children.
+
+        Args:
+            child_command: Callable to be executed for each child, with
+                arguments (child, target).
+            child_list: List of (node, target) for each addressed child.
+
+        Returns:
+            List of responses from each child.
+        """
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(child_command, child_node, child_target)
+                for child_node, child_target in child_list
+            ]
+            return [f.result() for f in as_completed(futures)]
 
     ########################################################
     ############# Status, description commands #############
     ########################################################
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
-        self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        status = None
-        if execute_on_self:
-            status = pack_to_any(get_status_message(self))
-
-        children_statuses = self.propagate_addressed_command(
-            "status",
-            addressed_commands=addressed_commands,
-            token=token,
-        )
-
-        return Response(
+        self, request: AddressedCommand, context: ServicerContext
+    ) -> StatusResponse:
+        request.target = self.parse_target_string(request.target)
+        response = StatusResponse(
+            token=None,
             name=self.name,
-            token=token,
-            data=status,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_statuses,
         )
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            status = get_status_message(self)
+            response.status.CopyFrom(status)
+
+        # Children nodes.
+        def child_command(child: ChildNode, target: str) -> StatusResponse:
+            return child.status(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(child_command, child_list)
+        response.children.extend(child_responses)
+
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
+
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
-        self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        d = None
+        self, request: AddressedCommand, context: ServicerContext
+    ) -> DescribeResponse:
+        request.target = self.parse_target_string(request.target)
+        response = DescribeResponse(
+            token=None,
+            name=self.name,
+        )
 
-        if execute_on_self:
-            bd = self.describe_broadcast()
-            d = OldDescription(
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            description = Description(
                 type="controller",
                 name=self.name,
                 endpoint=self.uri if self.uri is not None else "unknown",
                 info=get_detector_name(self.configuration),
                 session=self.session,
-                # commands=self.commands,
+                commands=None,
             )
-            if bd:
-                d.broadcast.CopyFrom(pack_to_any(bd))
+            if broadcast_description := self.describe_broadcast():
+                description.broadcast.Pack(broadcast_description)
+            response.description.CopyFrom(description)
 
-        children_description = self.propagate_addressed_command(
-            "describe",
-            addressed_commands=addressed_commands,
-            token=token,
+        # Children nodes.
+        def child_command(child: ChildNode, target: str) -> DescribeResponse:
+            return child.describe(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
         )
+        child_responses = self.propagate_concurrently(child_command, child_list)
+        response.children.extend(child_responses)
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(d) if d else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_description,
-        )
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @unpack_addressed_command_to(PlainText)  # 4th step
+        return response
+
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
-        self,
-        payload: PlainText,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        desc = None
-        if execute_on_self:
+        self, request: AddressedCommand, context: ServicerContext
+    ) -> DescribeFSMResponse:
+        request.target = self.parse_target_string(request.target)
+        response = DescribeFSMResponse(
+            token=None,
+            name=self.name,
+        )
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            payload = unpack_any(request.command_data, PlainText)
             if payload.text == "all-transitions":
-                desc = convert_fsm_transition(
+                description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
             elif payload.text == "":
-                desc = convert_fsm_transition(self.stateful_node.get_fsm_transitions())
+                description = convert_fsm_transition(
+                    self.stateful_node.get_fsm_transitions()
+                )
             else:
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    if input.text == transition.source:
+                    if payload.text == transition.source:
                         interesting_transitions += [transition]
-                    if input.text == transition.name:
+                    if payload.text == transition.name:
                         interesting_transitions += [transition]
-                desc = convert_fsm_transition(interesting_transitions)
-            desc.type = "controller"
-            desc.name = self.name
-            desc.session = self.session
+                description = convert_fsm_transition(interesting_transitions)
 
-            for seq in self.stateful_node.get_fsm_sequences():
-                desc.sequences.append(seq)
+            description.type = "controller"
+            description.name = self.name
+            description.session = self.session
+            description.sequences.extend(self.stateful_node.get_fsm_sequences())
+            response.description.CopyFrom(description)
 
-        children_description = self.propagate_addressed_command(
-            "describe_fsm",
-            addressed_commands=addressed_commands,
-            token=token,
+        # Children nodes.
+        def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
+            return child.describe_fsm(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
         )
+        child_responses = self.propagate_concurrently(child_command, child_list)
+        response.children.extend(child_responses)
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(desc) if desc else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_description,
-        )
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     ########################################
     ############# FSM commands #############
     ########################################
+
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control  # 3rd step
-    @unpack_addressed_command_to(FSMCommand)  # 4th step
+    @OLD_unpack_addressed_command_to(FSMCommand)  # 4th step
     @publish_command_time
     def execute_fsm_command(
         self,
@@ -833,10 +1050,10 @@ class Controller(ControllerServicer):
                     execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
                 )
 
-            response_children = self.propagate_addressed_command(
+            response_children = self.OLD_propagate_to_children(
                 "execute_fsm_command",
-                addressed_commands=children_fsm_commands,
-                token=token,
+                children_fsm_commands,
+                token,
             )
 
             child_worst_response_flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -897,48 +1114,52 @@ class Controller(ControllerServicer):
                 token=token,
                 data=None,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_addressed_command(
+                children=self.OLD_propagate_to_children(
                     "execute_fsm_command",
-                    addressed_commands=addressed_commands,
-                    token=token,
+                    addressed_commands,
+                    token,
                 ),
             )
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
-    @unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def recompute_status(
-        self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        if execute_on_self:
-            statuses = self.propagate_to_all_children(
-                "recompute_status",
-                command_data=None,
-                token=token,
-                only_included=True,
-            )
+        self, request: AddressedCommand, context: ServicerContext
+    ) -> RecomputeStatusResponse:
+        request.target = self.parse_target_string(request.target)
+        response = RecomputeStatusResponse(
+            token=None,
+            name=self.name,
+        )
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(child_command, child_list)
 
             self_should_go_to_error = False
             children_states = set()
             children_sub_states = set()
 
-            for s in statuses:
+            for s in child_responses:
                 if s.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
                     self_should_go_to_error = True
 
                 try:
-                    status = unpack_any(s.data, Status)
-                    children_states.add(status.state)
-                    children_sub_states.add(status.sub_state)
-                    if status.in_error:
+                    child_status = s.status
+                    children_states.add(child_status.state)
+                    children_sub_states.add(child_status.sub_state)
+                    if child_status.in_error:
                         self_should_go_to_error = True
 
                 except UnpackingError as e:
@@ -981,34 +1202,40 @@ class Controller(ControllerServicer):
                     children_sub_state
                 )
 
-            status = get_status_message(self.stateful_node)
+            status = get_status_message(self)
+            response.status.CopyFrom(status)
 
-            post_statuses = self.propagate_to_all_children(
-                "status",
-                command_data=None,
-                token=token,
-                only_included=False,
-            )
-            return Response(
-                name=self.name,
-                token=token,
-                data=pack_to_any(status),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=post_statuses,
-            )
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
 
+            child_list = self.address_all(ignore_exclusion=True)
+            child_responses = self.propagate_concurrently(child_command, child_list)
+            response.children.extend(child_responses)
+
+        # Children nodes.
         else:
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=self.propagate_addressed_command(
-                    "recompute_status",
-                    addressed_commands=addressed_commands,
-                    token=token,
-                ),
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
             )
+            child_responses = self.propagate_concurrently(child_command, child_list)
+            response.children.extend(child_responses)
+
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
@@ -1016,7 +1243,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control  # 3rd step
-    @unpack_addressed_command_to()  # 4th step
+    @OLD_unpack_addressed_command_to()  # 4th step
     @publish_command_time
     def include(
         self,
@@ -1039,10 +1266,10 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = True
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.OLD_propagate_to_children(
             "include",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1059,7 +1286,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control
-    @unpack_addressed_command_to()  # 3rd step
+    @OLD_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def exclude(
         self,
@@ -1082,10 +1309,10 @@ class Controller(ControllerServicer):
                 if n.name == addressed_command.target:
                     n.included = False
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.OLD_propagate_to_children(
             "exclude",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1102,7 +1329,7 @@ class Controller(ControllerServicer):
         action=ActionType.EXPERT, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control
-    @unpack_addressed_command_to(PlainText)  # 3rd step
+    @OLD_unpack_addressed_command_to(PlainText)  # 3rd step
     @publish_command_time
     def execute_expert_command(
         self,
@@ -1111,10 +1338,10 @@ class Controller(ControllerServicer):
         execute_on_self: bool,
         token: Token,
     ) -> Response:
-        children_expert_command_response = self.propagate_addressed_command(
+        children_expert_command_response = self.OLD_propagate_to_children(
             "execute_expert_command",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1134,7 +1361,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+    @OLD_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def take_control(
         self,
@@ -1149,10 +1376,10 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{token.user_name} took control on {self.name}"
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.OLD_propagate_to_children(
             "take_control",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
         if any(
             cr.flag
@@ -1178,7 +1405,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control  # 3rd step
-    @unpack_addressed_command_to()  # 4th step
+    @OLD_unpack_addressed_command_to()  # 4th step
     @publish_command_time
     def surrender_control(
         self,
@@ -1194,10 +1421,10 @@ class Controller(ControllerServicer):
             else:
                 resp += f"{user} surrendered control on {self.name}"
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.OLD_propagate_to_children(
             "surrender_control",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         if any(
@@ -1223,7 +1450,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.CONTROLLER
     )  # 2nd step
-    @unpack_addressed_command_to()  # 3rd step
+    @OLD_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def who_is_in_charge(
         self,
@@ -1236,10 +1463,10 @@ class Controller(ControllerServicer):
         else:
             user = None
 
-        response_children = self.propagate_addressed_command(
+        response_children = self.OLD_propagate_to_children(
             "who_is_in_charge",
-            addressed_commands=addressed_commands,
-            token=token,
+            addressed_commands,
+            token,
         )
 
         return Response(
@@ -1260,7 +1487,7 @@ class Controller(ControllerServicer):
         action=ActionType.UPDATE, system=SystemType.CONTROLLER
     )  # 2nd step
     @in_control
-    @unpack_addressed_command_to()  # 3rd step
+    @OLD_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def to_error(
         self,
@@ -1275,10 +1502,10 @@ class Controller(ControllerServicer):
             if execute_on_self:
                 self.stateful_node.to_error()
 
-            response_children = self.propagate_addressed_command(
+            response_children = self.OLD_propagate_to_children(
                 "to_error",
-                addressed_commands=addressed_commands,
-                token=token,
+                addressed_commands,
+                token,
             )
 
             return Response(

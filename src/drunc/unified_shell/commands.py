@@ -68,7 +68,7 @@ def boot(
         log.error("Could not understand where the controller is!")
         return
 
-    if not obj.get_driver("controller").status().data.in_error:
+    if not obj.get_driver("controller").status().status.in_error:
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
@@ -77,3 +77,19 @@ def boot(
                 "Unified shell: Running in batch mode, and because error state is detected, exiting."
             )
             sys.exit(1)
+
+
+@click.command("start-shell")
+@click.pass_obj
+@click.pass_context
+def start_shell(ctx, obj):
+    """
+    Start an interactive shell session.
+
+    This command stops batch mode and enters an interactive shell state,
+    allowing you to execute commands interactively.
+    """
+    log = get_logger("unified_shell.start_shell")
+
+    obj.batch_mode = False
+    log.info("Switching to interactive mode...")

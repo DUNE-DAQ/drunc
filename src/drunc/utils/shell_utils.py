@@ -3,19 +3,10 @@ import getpass
 from collections.abc import Mapping
 
 import click
-import grpc
-from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
 from rich.console import Console
 
-from drunc.exceptions import (
-    DruncServerSideError,
-    DruncSetupException,
-    DruncShellException,
-)
-from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
+from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
 
@@ -80,126 +71,11 @@ class DecodedResponse:
         return DecodedResponse.str(self)
 
 
-class GRPCDriver:
-    def __init__(self, name: str, address: str, token: Token):
-        self.log = get_logger("utils.GRPCDriver")
-
-        if not address:
-            raise DruncSetupException(
-                f"You need to provide a valid IP address for the driver. Provided '{address}'"
-            )
-        options = [
-            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
-        ]
-        self.address = address
-        self.channel = grpc.insecure_channel(self.address, options=options)
-        self.token = Token()
-        self.token.CopyFrom(token)
-
-    def _create_request(self, payload=None) -> Request:
-        token2 = Token()
-        token2.CopyFrom(self.token)
-        data = Any()
-        if payload is not None:
-            data.Pack(payload)
-
-        if payload:
-            return Request(token=token2, data=data)
-        else:
-            return Request(token=token2)
-
-    def handle_response(self, response, command, outformat):
-        dr = DecodedResponse(
-            name=response.name,
-            token=response.token,
-            flag=response.flag,
-        )
-
-        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            if response.HasField("data") and response.data not in [None, ""]:
-                try:
-                    dr.data = unpack_any(response.data, outformat)
-                except UnpackingError as e:
-                    self.log.error(f"Error unpacking data: {e}")
-                    dr.data = response.data
-
-        else:
-
-            def text(verb="not executed", reason=""):
-                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
-
-            if not response.HasField("data"):
-                return None
-
-            error_txt = ""
-            stack_txt = None
-
-            if response.data.Is(Stacktrace.DESCRIPTOR):
-                stack = unpack_any(response.data, Stacktrace)
-                dr.data = stack
-                stack_txt = "Stacktrace on remote server!\n"
-                last_one = ""
-
-                for l in stack.text:
-                    stack_txt += l + "\n"
-                    if l != "":
-                        last_one = l
-                error_txt = last_one
-
-            elif response.data.Is(PlainText.DESCRIPTOR):
-                txt = unpack_any(response.data, PlainText)
-                error_txt = txt.text  # noqa: F841  (might need to revisit this)
-                dr.data = error_txt
-
-            if response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-            ]:
-                self.log.debug(text())
-            elif response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
-            ]:
-                self.log.warning(text())
-            else:
-                self.log.error(text("failed", error_txt))
-
-        for c_response in response.children:
-            try:
-                dr.children.append(self.handle_response(c_response, command, outformat))
-            except DruncServerSideError as e:
-                self.log.error(f"Exception thrown from child: {e}")
-
-        return dr
-
-    def send_command(
-        self,
-        command: str,
-        data=None,
-        outformat=None,
-        timeout: int | float = 60,
-    ):
-        cmd = getattr(self.stub, command)  # this throws if the command doesn't exist
-
-        request = self._create_request(data)
-
-        try:
-            response = cmd(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
-        # TODO: TEMP HACK UNTIL UNPACKING IS REMOVED
-        from druncschema.description_pb2 import Description
-
-        if isinstance(response, Description):
-            return response
-
-        return self.handle_response(response, command, outformat)
-
-
 class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
         self._token = self.create_token(**token_args)
-        self._drivers: Mapping[str, GRPCDriver] = self.create_drivers(**driver_args)
+        self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
@@ -216,7 +92,7 @@ class ShellContext:
         pass
 
     @abc.abstractmethod
-    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, object]:
         pass
 
     @abc.abstractmethod
@@ -227,12 +103,12 @@ class ShellContext:
     def terminate(self) -> None:
         pass
 
-    def set_driver(self, name: str, driver: GRPCDriver) -> None:
+    def set_driver(self, name: str, driver: object) -> None:
         if name in self._drivers:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None, quiet_fail: bool = False) -> GRPCDriver:
+    def get_driver(self, name: str = None, quiet_fail: bool = False) -> object:
         try:
             if name:
                 return self._drivers[name]
@@ -257,11 +133,9 @@ class ShellContext:
     def delete_driver(self, name: str) -> None:
         log = get_logger("utils.ShellContext")
         if name in self._drivers:
-            log.info(
-                f"You will not be able to issue command to {self._drivers[name].name} anymore."
-            )
+            log.info(f"You will not be able to issue commands to the {name} anymore.")
             del self._drivers[name]
-            log.info(f"Driver '{name}' has been deleted.")
+            log.info(f"{name.capitalize()} driver has been deleted.")
 
     def get_token(self) -> Token:
         return self._token
@@ -274,8 +148,8 @@ class ShellContext:
 
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
-        status = self.get_driver("controller").status().data
-        describe_fsm = self.get_driver("controller").describe_fsm().data
+        status = self.get_driver("controller").status().status
+        describe_fsm = self.get_driver("controller").describe_fsm().description
         current_state = status.state
         if status.in_error:
             log.error(
