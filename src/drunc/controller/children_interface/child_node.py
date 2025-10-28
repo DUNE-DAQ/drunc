@@ -1,5 +1,4 @@
 import os
-from abc import ABC, abstractmethod
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
@@ -31,7 +30,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode(ABC):
+class ChildNode:
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
@@ -45,15 +44,12 @@ class ChildNode(ABC):
         pass
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
-    @abstractmethod
     def terminate(self):
         pass
 
-    @abstractmethod
     def get_endpoint(self) -> str | None:
         return None
 
-    @abstractmethod
     def propagate_command(
         self,
         command: str,
@@ -66,7 +62,6 @@ class ChildNode(ABC):
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
-    @abstractmethod
     def status(
         self,
         target: str = "",
@@ -89,7 +84,6 @@ class ChildNode(ABC):
 
         return response
 
-    @abstractmethod
     def describe(
         self,
         target: str = "",
@@ -135,7 +129,6 @@ class ChildNode(ABC):
 
         return response
 
-    @abstractmethod
     def describe_fsm(
         self,
         target: str = "",
@@ -151,7 +144,6 @@ class ChildNode(ABC):
 
         return response
 
-    @abstractmethod
     def execute_fsm_command(
         self,
         command: FSMCommand,
@@ -168,7 +160,6 @@ class ChildNode(ABC):
 
         return response
 
-    @abstractmethod
     def recompute_status(
         self,
         target: str = "",
