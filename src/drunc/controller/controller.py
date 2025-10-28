@@ -670,6 +670,7 @@ class Controller(ControllerServicer):
         self,
         target: str,
         execute_on_children: bool,
+        ignore_exclusion: bool = False,
     ) -> list[tuple[ChildNode, str]]:
         """Finds the next node(s) along a given path to a target node.
 
@@ -681,6 +682,8 @@ class Controller(ControllerServicer):
         Args:
             target: The path to the target from the current node.
             execute_on_children: If True, run on nodes beyond the target.
+            ignore_exclusion: If True, traverse ALL nodes, including those
+                marked as excluded (default: False).
 
         Returns:
             A list of (child, target) for each addressed child.
@@ -693,16 +696,21 @@ class Controller(ControllerServicer):
                 (child, "/".join(next_target_path))
                 for child in self.children_nodes
                 if child.name == next_target_path[0]
+                and (child.included or ignore_exclusion)
             ]
             if not targets:
                 self.log.info(
                     f"'{next_target_path[0]}' is not a child of '{self.name}'"
                 )
+            if len(targets) > 1:
+                self.log.warning(
+                    f"Multiple children matched '{next_target_path[0]}' in '{self.name}'"
+                )
             return targets
 
         # Handle execute_on_children only if the path is exhausted.
         if execute_on_children:
-            return [(child, child.name) for child in self.children_nodes]
+            return self.address_all(ignore_exclusion=ignore_exclusion)
 
         # Path is exhausted and we are NOT executing on children.
         return []
@@ -711,7 +719,7 @@ class Controller(ControllerServicer):
         self,
         ignore_exclusion: bool = False,
     ) -> list[tuple[ChildNode, str]]:
-        """Finds all child nodes, with optional node inclusion/exclusion.
+        """Finds all child nodes.
 
         Returns a list of node and target pairs for each child node. The
         returned data is structured the same as that of address_target_path.
