@@ -908,47 +908,53 @@ class Controller(ControllerServicer):
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
         command = request.command
+        self.log.debug(f"FSM command data: {command}")
+
         response = ExecuteFSMCommandResponse(
             token=None,
             name=self.name,
             command_name=command.name,
         )
 
-        # TODO: addressed_commands temporarily empty for this PR
-        addressed_commands = {}
-
+        # Check controller readiness.
         if not self.stateful_node.get_ready_state():
-            self.log.error("Command not executed: controller is not ready.")
+            self.log.error(
+                f"Command '{command.name}' not executed: controller is not ready."
+            )
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
             return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
+            # Check if node is in error.
             if self.stateful_node.node_is_in_error():
-                self.log.error("Command not executed: node is in error.")
+                self.log.error(
+                    f"Command '{command.name}' not executed: node is in error."
+                )
                 response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
+            # Check if node is excluded.
             if not self.stateful_node.node_is_included():
-                self.log.error("Command not executed: node is excluded.")
+                self.log.error(
+                    f"Command '{command.name}' not executed: node is excluded."
+                )
                 response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
 
             transition = self.stateful_node.get_fsm_transition(command.name)
 
-            self.log.debug(f'The transition requested is "{str(transition)}"')
-
+            # Check if transition is possible from current state.
             if not self.stateful_node.can_transition(transition):
+                state = self.stateful_node.get_node_operational_state()
                 self.log.error(
-                    f'Cannot "{transition.name}" as this is an invalid command in state "{self.stateful_node.get_node_operational_state()}"'
+                    f"Command '{command.name}' not executed: not possible from state '{state}'."
                 )
                 response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
                 response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
                 return response
-
-            self.log.debug(f"FSM command data: {command}")
 
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
 
@@ -961,10 +967,8 @@ class Controller(ControllerServicer):
 
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
-            if "elisa-logbook" in self.fsm_config.get_actions() and command.name in [
-                "start",
-                "drain_dataflow",
-            ]:
+            using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
+            if using_elisa_logbook and command.name in ["start", "drain_dataflow"]:
                 try:
                     get_dotdrunc_json()
                 except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
@@ -988,6 +992,9 @@ class Controller(ControllerServicer):
                 )
 
             self.stateful_node.propagate_transition_mark(transition)
+
+            # TODO: addressed_commands temporarily empty for this PR
+            addressed_commands: dict[str, AddressedCommand] = {}
 
             children_fsm_commands = {}
             for child_target, child_addressed in addressed_commands.items():
@@ -1016,6 +1023,10 @@ class Controller(ControllerServicer):
                     execute_along_path=child_addressed.execute_along_path,
                     execute_on_all_subsequent_children_in_path=child_addressed.execute_on_all_subsequent_children_in_path,
                 )
+
+            # TODO: execute_on_self case
+
+            # TODO: child node execute_fsm_command
 
             child_responses = self.OLD_propagate_to_children(
                 "execute_fsm_command",
