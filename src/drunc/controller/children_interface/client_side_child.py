@@ -93,9 +93,6 @@ class ClientSideChild(ChildNode):
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
 
-    def __str__(self):
-        return f"'{self.name}' is in error state (type {self.node_type})"
-
     def propagate_command(
         self,
         command: str,
