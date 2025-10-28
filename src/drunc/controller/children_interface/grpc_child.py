@@ -116,33 +116,6 @@ class gRPCChildNode(ChildNode):
                 self.start_listening(response.description.broadcast)
                 break
 
-    def _attempt_reconnection(self, token, command, request):
-        """Attempt to reconnect using connectivity service and retry command"""
-        try:
-            # Use the helper method for the basic reconnection logic
-            def retry_command():
-                # Give control back to the child controller after reconnection
-                self.log.info(f"Taking control of {self.name} after reconnection...")
-                try:
-                    self.propagate_command("take_control", request, token)
-                    self.log.info(f"Successfully took control of {self.name}")
-                except Exception as control_error:
-                    self.log.warning(
-                        f"Failed to take control of {self.name}: {control_error}"
-                    )
-
-                # Retry the original command
-                self.log.info(f"Retrying original command {command} to {self.name}...")
-                return self.propagate_command(command, request, token)
-
-            return self._handle_unreachable_and_reconnect(
-                retry_command, f"command {command}"
-            )
-
-        except ServerUnreachable:
-            # Convert ServerUnreachable to None for backward compatibility
-            return None
-
     def _reconnect_to_new_uri(self):
         """Reconnect to the new URI for gRPC child"""
         self._setup_connection()
@@ -175,7 +148,7 @@ class gRPCChildNode(ChildNode):
 
             if new_uri != self.uri:
                 self.log.info(
-                    f"Found new IP {new_uri} for {self.name} (was {self.uri}), reconnecting..."
+                    f"Found new IP {new_uri} for {self.name}, reconnecting..."
                 )
                 self.uri = new_uri
                 self._reconnect_to_new_uri()
@@ -239,19 +212,13 @@ class gRPCChildNode(ChildNode):
         except grpc.RpcError as error:
             try:
                 self.handle_child_grpc_error(error)
-            except ServerUnreachable as e:
+            except ServerUnreachable:
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
-                result = self._attempt_reconnection(token, command, request)
-                if result is not None:
-                    return result
-                else:
-                    self.log.error(
-                        f"Reconnection failed for {self.name} at {self.uri}, raising ServerUnreachable"
-                    )
-                    raise e
-
+                response = self._handle_unreachable_and_reconnect(
+                    lambda: cmd(packed_request), f"command {command}"
+                )
         return response
 
     def status(
