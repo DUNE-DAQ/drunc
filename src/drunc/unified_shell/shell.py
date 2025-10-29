@@ -264,7 +264,7 @@ def unified_shell(
 
         if type(e) == ServerUnreachable:
             unified_shell_log.error(
-                "This can happen if you have the webproxy enabled at CERN"
+                "[red] This can happen if you have the webproxy enabled at CERN. Ensure http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
             )
 
         if internal_pm and not ctx.obj.pm_process.is_alive():
