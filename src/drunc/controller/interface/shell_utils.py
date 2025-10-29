@@ -495,8 +495,6 @@ def run_one_fsm_command(
         execute_on_root_controller = True
     elif target == controller_name:
         execute_on_root_controller = True
-    elif target == "/" + controller_name:
-        execute_on_root_controller = True
 
     if execute_on_root_controller:
         fsm_description = (

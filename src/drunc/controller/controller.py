@@ -914,10 +914,11 @@ class Controller(ControllerServicer):
         request: ExecuteFSMCommandRequest,
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
+        request.target = self.parse_target_string(request.target)
+
         command = request.command
         command_name = command.command_name
-        self.log.debug(f"FSM command: {command}")
-
+        self.log.debug(f"FSM command: {command_name}")
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
