@@ -779,7 +779,7 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        # Child nodes.
+        # Children nodes.
         def child_command(child: ChildNode, target: str) -> StatusResponse:
             return child.status(
                 target,
@@ -824,7 +824,7 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        # Child nodes.
+        # Children nodes.
         def child_command(child: ChildNode, target: str) -> DescribeResponse:
             return child.describe(
                 target,
@@ -882,7 +882,7 @@ class Controller(ControllerServicer):
             description.sequences.extend(self.stateful_node.get_fsm_sequences())
             response.description.CopyFrom(description)
 
-        # Child nodes.
+        # Children nodes.
         def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
             return child.describe_fsm(
                 target,
@@ -1043,7 +1043,7 @@ class Controller(ControllerServicer):
                     self.stateful_node.to_error()
                     break
 
-        # Child nodes.
+        # Children nodes.
         else:
             child_list = self.address_target_path(
                 request.target,
@@ -1150,7 +1150,7 @@ class Controller(ControllerServicer):
             child_responses = self.propagate_concurrently(child_status, child_list)
             response.children.extend(child_responses)
 
-        # Child nodes.
+        # Children nodes.
         else:
             child_list = self.address_target_path(
                 request.target,
