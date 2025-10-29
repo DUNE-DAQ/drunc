@@ -13,6 +13,8 @@ from druncschema.controller_pb2 import (
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
+    Status,
+    StatusResponse,
 )
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -407,6 +409,89 @@ class RESTAPIChildNode(ClientSideChild):
     def get_endpoint(self):
         return f"rest://{self.app_host}:{self.app_port}"
 
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        status = Status(
+            state=self.state.get_operational_state(),
+            sub_state=(
+                "idle" if not self.state.get_executing_command() else "executing_cmd"
+            ),
+            in_error=self.state.in_error() or not self.commander.ping(),
+            included=self.state.included(),
+        )
+
+        response = StatusResponse(
+            name=self.name,
+            status=status,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
+
+    # TODO: execute_fsm_command
+    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
+        entry_state = self.state.get_operational_state()
+        transition = self.fsm.get_transition(command.name)
+        exit_state = self.fsm.get_destination_state(entry_state, transition)
+        self.state.executing_command_mark()
+        self.log.info(f"Sending '{command.name}' to '{self.name}'")
+        try:
+            the_module_data = json.loads(command.data if command.data else "{}")
+        except JSONDecodeError as e:
+            self.log.error(f"Error parsing data: {e}")
+            raise e
+        try:
+            self.commander.send_app_command(
+                cmd_id=command.name,
+                module_data={"modules": [{"data": the_module_data, "match": ""}]},
+                entry_state=entry_state.upper(),
+                exit_state=exit_state.upper(),
+            )
+            self.log.debug(f"Sent '{command.name}' to '{self.name}'")
+            r = self.commander.check_response(150)
+
+            self.log.debug(f"Got response from '{command.name}' to '{self.name}'")
+
+            success = r["success"]
+
+            fsm_data = ExecuteFSMCommandResponse(
+                fsm_flag=(
+                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+                    if success
+                    else FSMResponseFlag.FSM_FAILED
+                ),
+                command_name=command.name,
+                data=json.dumps(r),
+            )
+            response = Response(
+                name=self.name,
+                token=token,
+                data=pack_to_any(fsm_data),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children={},
+            )
+
+            if not success:
+                self.log.error(r["result"])
+                self.state.to_error()
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
+                return response
+
+        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
+            self.log.error(f"Got error from '{command.name}' to '{self.name}': {e!s}")
+            self.state.to_error()
+            # self.log.exception(e)
+            raise e
+
+        self.state.end_command_execution_mark()
+        self.state.new_operational_state(exit_state)
+        return response
+
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
         data_dict = json.loads(data.text)
         example = json.dumps(
@@ -487,63 +572,4 @@ class RESTAPIChildNode(ClientSideChild):
             self.log.exception(e)
             raise e
 
-        return response
-
-    # TODO: execute_fsm_command
-    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
-        entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(command.name)
-        exit_state = self.fsm.get_destination_state(entry_state, transition)
-        self.state.executing_command_mark()
-        self.log.info(f"Sending '{command.name}' to '{self.name}'")
-        try:
-            the_module_data = json.loads(command.data if command.data else "{}")
-        except JSONDecodeError as e:
-            self.log.error(f"Error parsing data: {e}")
-            raise e
-        try:
-            self.commander.send_app_command(
-                cmd_id=command.name,
-                module_data={"modules": [{"data": the_module_data, "match": ""}]},
-                entry_state=entry_state.upper(),
-                exit_state=exit_state.upper(),
-            )
-            self.log.debug(f"Sent '{command.name}' to '{self.name}'")
-            r = self.commander.check_response(150)
-
-            self.log.debug(f"Got response from '{command.name}' to '{self.name}'")
-
-            success = r["success"]
-
-            fsm_data = ExecuteFSMCommandResponse(
-                fsm_flag=(
-                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
-                    if success
-                    else FSMResponseFlag.FSM_FAILED
-                ),
-                command_name=command.name,
-                data=json.dumps(r),
-            )
-            response = Response(
-                name=self.name,
-                token=token,
-                data=pack_to_any(fsm_data),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children={},
-            )
-
-            if not success:
-                self.log.error(r["result"])
-                self.state.to_error()
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
-                return response
-
-        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
-            self.log.error(f"Got error from '{command.name}' to '{self.name}': {e!s}")
-            self.state.to_error()
-            # self.log.exception(e)
-            raise e
-
-        self.state.end_command_execution_mark()
-        self.state.new_operational_state(exit_state)
         return response

@@ -1,10 +1,6 @@
 from threading import Lock
 
-from druncschema.controller_pb2 import (
-    AddressedCommand,
-    Status,
-    StatusResponse,
-)
+from druncschema.controller_pb2 import AddressedCommand
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -123,30 +119,6 @@ class ClientSideChild(ChildNode):
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
-
-    def status(
-        self,
-        target: str = "",
-        execute_along_path: bool = True,
-        execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> StatusResponse:
-        status = Status(
-            state=self.state.get_operational_state(),
-            sub_state=(
-                "idle" if not self.state.get_executing_command() else "executing_cmd"
-            ),
-            in_error=self.state.in_error() or not self.commander.ping(),
-            included=self.state.included(),
-        )
-
-        response = StatusResponse(
-            name=self.name,
-            status=status,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
-
-        return response
 
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
         return Response(
