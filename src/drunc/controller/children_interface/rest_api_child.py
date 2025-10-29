@@ -433,18 +433,25 @@ class RESTAPIChildNode(ClientSideChild):
 
         return response
 
-    # TODO: execute_fsm_command
-    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command.name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
         self.log.info(f"Sending '{command.name}' to '{self.name}'")
+
         try:
             the_module_data = json.loads(command.data if command.data else "{}")
         except JSONDecodeError as e:
             self.log.error(f"Error parsing data: {e}")
             raise e
+
         try:
             self.commander.send_app_command(
                 cmd_id=command.name,
@@ -470,7 +477,7 @@ class RESTAPIChildNode(ClientSideChild):
             )
             response = Response(
                 name=self.name,
-                token=token,
+                token=None,
                 data=pack_to_any(fsm_data),
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 children={},
@@ -490,6 +497,7 @@ class RESTAPIChildNode(ClientSideChild):
 
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
+
         return response
 
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
