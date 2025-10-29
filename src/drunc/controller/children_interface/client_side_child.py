@@ -2,9 +2,6 @@ from threading import Lock
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
-    ExecuteFSMCommandResponse,
-    FSMCommand,
-    FSMResponseFlag,
     Status,
     StatusResponse,
 )
@@ -115,12 +112,6 @@ class ClientSideChild(ChildNode):
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
 
-        # TODO: execute_fsm_command
-        if command == "execute_fsm_command":
-            return self.propagate_fsm_command(
-                unpack_any(request.command_data, FSMCommand), None
-            )
-
         if command == "execute_expert_command":
             return self.propagate_expert_command(
                 unpack_any(request.command_data, PlainText), None
@@ -155,27 +146,6 @@ class ClientSideChild(ChildNode):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        return response
-
-    def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
-        entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(command.name)
-        exit_state = self.fsm.get_destination_state(entry_state, transition)
-        self.state.executing_command_mark()
-
-        fsm_data = ExecuteFSMCommandResponse(
-            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
-            command_name=command.name,
-            data="successful",
-        )
-        response = Response(
-            name=self.name,
-            data=pack_to_any(fsm_data),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
-
-        self.state.end_command_execution_mark()
-        self.state.new_operational_state(exit_state)
         return response
 
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:

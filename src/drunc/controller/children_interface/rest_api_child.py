@@ -489,6 +489,7 @@ class RESTAPIChildNode(ClientSideChild):
 
         return response
 
+    # TODO: execute_fsm_command
     def propagate_fsm_command(self, command: FSMCommand, token: Token) -> Response:
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command.name)
