@@ -6,6 +6,14 @@ from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2
 from google.rpc import code_pb2
+from dataclasses import dataclass
+from typing import List
+from google.protobuf.descriptor import FieldDescriptor
+from google.protobuf.message import Message
+from google.rpc import error_details_pb2, status_pb2
+from grpc_status import rpc_status
+import grpc
+
 
 from drunc.exceptions import DruncCommandException, DruncException
 
@@ -124,3 +132,123 @@ def copy_token(token: Token) -> Token:
     token_copy = Token()
     token_copy.CopyFrom(token)
     return token_copy
+
+
+
+@dataclass
+class GrpcErrorDetails:
+    code: str
+    message: str
+    details: List[str]
+    
+    def __str__(self):
+        lines = [f"[{self.code}] {self.message}"]
+        for detail in self.details:
+            lines.append(f"  • {detail}")
+        return "\n".join(lines)
+
+
+def format_error_details(detail: Message) -> list[str]:
+    """
+    Format protobuf message fields into human-readable strings.
+    """
+
+    
+    results = []
+    
+    for field in detail.DESCRIPTOR.fields:
+        value = getattr(detail, field.name)
+        
+        # Skip empty values (but keep 0 and False)
+        if not value and value != 0 and value is not False:
+            continue
+        
+        # Handle nested messages
+        if field.type == FieldDescriptor.TYPE_MESSAGE:
+            if field.label == FieldDescriptor.LABEL_REPEATED:
+                # Handle repeated nested messages
+                for item in value:
+                    parts = _extract_message_parts(item)
+                    if parts:
+                        results.append(f"{field.name}: {', '.join(parts)}")
+            else:
+                # Handle single nested message
+                parts = _extract_message_parts(value)
+                if parts:
+                    results.append(f"{field.name}: {', '.join(parts)}")
+        else:
+            # Handle simple fields
+            results.append(f"{field.name}: {value}")
+    
+    return results if results else [str(detail)]
+
+
+def _extract_message_parts(message: Message) -> list[str]:
+    """Extract non-empty field=value pairs from a message."""
+    parts = []
+    for field in message.DESCRIPTOR.fields:
+        value = getattr(message, field.name)
+        if value not in (None, "", [], {}) and value != 0 and value is not False:
+            parts.append(f"{field.name}={value}")
+    return parts
+
+
+# All known Google error detail types
+_ERROR_DETAIL_TYPES = [
+    error_details_pb2.BadRequest,
+    error_details_pb2.QuotaFailure,
+    error_details_pb2.RetryInfo,
+    error_details_pb2.PreconditionFailure,
+    error_details_pb2.ErrorInfo,
+    error_details_pb2.Help,
+    error_details_pb2.DebugInfo,
+    error_details_pb2.LocalizedMessage,
+    error_details_pb2.ResourceInfo,
+    error_details_pb2.RequestInfo,
+]
+
+
+def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
+    """
+    Extract rich error details from a gRPC error using Google's error model.
+    
+    Args:
+        grpc_error: The gRPC error to parse
+        
+    Returns:
+        GrpcErrorDetails with structured error information
+    """
+    code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
+    status = rpc_status.from_call(grpc_error)
+    
+    # Fallback to simple error if no rich status
+    if not status:
+        return GrpcErrorDetails(
+            code=code,
+            message=grpc_error.details() or "No error message",
+            details=[]
+        )
+    
+    # Extract all error details
+    details = []
+    for any_detail in status.details:
+        detail_extracted = False
+        for detail_type in _ERROR_DETAIL_TYPES:
+            if detail_type == error_details_pb2.ErrorInfo:
+                # deal with ErrorInfo here
+            if any_detail.Is(detail_type.DESCRIPTOR):
+                msg = detail_type()
+                any_detail.Unpack(msg)
+                details.extend(format_error_details(msg))
+                detail_extracted = True
+                break
+        
+        # If we couldn't parse the detail, add its type name
+        if not detail_extracted:
+            details.append(f"Unknown detail type: {any_detail.type_url}")
+    
+    return GrpcErrorDetails(
+        code=code,
+        message=status.message or "No message",
+        details=details
+    )

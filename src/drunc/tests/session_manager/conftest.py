@@ -14,7 +14,8 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.token_pb2 import Token
-
+import grpc
+from google.rpc import status_pb2, error_details_pb2
 from drunc.session_manager.session_manager import SessionManager
 from drunc.session_manager.session_manager_driver import SessionManagerDriver
 
@@ -134,9 +135,20 @@ def grpc_test_server_factory(grpc_servicer):
 #    Session Manager Driver Tests Fixtures
 # -----------------------------------------------------
 
+@pytest.fixture(scope="function")
+def mock_logger_driver():
+    """
+    Mocks the logger used by the session manager.
+    """
+    with patch("drunc.session_manager.session_manager_driver.get_logger") as mock_get_logger:
+        mock_logger_instance = MagicMock()
+        mock_get_logger.return_value = mock_logger_instance
+        yield mock_logger_instance
+
+
 
 @pytest.fixture(scope="function")
-def mock_driver():
+def mock_driver(mock_logger_driver):
     """
     This fixture creates a driver instance where the underlying gRPC channel
     and stub are mocked.
@@ -160,7 +172,11 @@ def mock_driver():
         # Attach mock stub for easy access in tests
         driver._mock_stub = mock_stub
 
+        driver.log = mock_logger_driver
+
         return driver
+
+
 
 
 # -----------------------------------------------------
@@ -274,3 +290,7 @@ def expected_response(request):
     if isinstance(param, str):
         return request.getfixturevalue(param)
     return param  # Direct value like MagicMock
+
+
+
+
