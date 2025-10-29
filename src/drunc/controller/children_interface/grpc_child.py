@@ -116,19 +116,11 @@ class gRPCChildNode(ChildNode):
                 self.start_listening(response.description.broadcast)
                 break
 
-    def _reconnect_to_new_uri(self):
-        """Reconnect to the new URI for gRPC child"""
-        self._setup_connection()
-
-    def _handle_unreachable_and_reconnect(self, retry_call, operation_name):
+    def _attempt_reconnection(self, retry_call):
         """Handle ServerUnreachable errors with automatic reconnection and retry.
 
         Args:
             retry_call: A callable that retries the original operation
-            operation_name: Name of the operation for logging (e.g., "status check")
-
-        Raises:
-            ServerUnreachable: If reconnection fails or is not possible
         """
         if not self.connectivity_service:
             self.log.error(f"No connectivity service available for {self.name}")
@@ -151,10 +143,10 @@ class gRPCChildNode(ChildNode):
                     f"Found new IP {new_uri} for {self.name}, reconnecting..."
                 )
                 self.uri = new_uri
-                self._reconnect_to_new_uri()
+                self._setup_connection()
             else:
                 self.log.info(f"Reconnecting to same address {self.uri}...")
-                self._reconnect_to_new_uri()
+                self._setup_connection()
 
             # Retry the original call
             return retry_call()
@@ -165,9 +157,7 @@ class gRPCChildNode(ChildNode):
                 f"Child {self.name} not found in connectivity service"
             )
         except Exception as reconnect_error:
-            self.log.error(
-                f"Failed to reconnect to {self.name} during {operation_name}: {reconnect_error}"
-            )
+            self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
             raise ServerUnreachable(
                 f"Failed to reconnect: {reconnect_error}"
             ) from reconnect_error
@@ -216,9 +206,7 @@ class gRPCChildNode(ChildNode):
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
-                response = self._handle_unreachable_and_reconnect(
-                    lambda: cmd(packed_request), f"command {command}"
-                )
+                response = self._attempt_reconnection(lambda: cmd(packed_request))
         return response
 
     def status(
@@ -244,9 +232,7 @@ class gRPCChildNode(ChildNode):
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed during status check, attempting to reconnect..."
                 )
-                response = self._handle_unreachable_and_reconnect(
-                    lambda: self.stub.status(request), "status check"
-                )
+                response = self._attempt_reconnection(lambda: self.stub.status(request))
 
         return response
 
@@ -273,8 +259,8 @@ class gRPCChildNode(ChildNode):
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed during describe check, attempting to reconnect..."
                 )
-                response = self._handle_unreachable_and_reconnect(
-                    lambda: self.stub.describe(request), "describe check"
+                response = self._attempt_reconnection(
+                    lambda: self.stub.describe(request)
                 )
 
         return response
@@ -304,8 +290,8 @@ class gRPCChildNode(ChildNode):
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed during describe_fsm check, attempting to reconnect..."
                 )
-                response = self._handle_unreachable_and_reconnect(
-                    lambda: self.stub.describe_fsm(request), "describe_fsm check"
+                response = self._attempt_reconnection(
+                    lambda: self.stub.describe_fsm(request)
                 )
 
         return response
@@ -334,9 +320,8 @@ class gRPCChildNode(ChildNode):
                 self.log.warning(
                     f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
                 )
-                response = self._handle_unreachable_and_reconnect(
-                    lambda: self.stub.recompute_status(request, timeout=timeout),
-                    "recompute_status check",
+                response = self._attempt_reconnection(
+                    lambda: self.stub.recompute_status(request, timeout=timeout)
                 )
 
         return response
