@@ -219,36 +219,34 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
         GrpcErrorDetails with structured error information
     """
     code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
-    status = rpc_status.from_call(grpc_error)
+    try:
+        status = rpc_status.from_call(grpc_error)
+    except NotImplementedError:
+        return GrpcErrorDetails(code=code, message="No message", details=[])
     
     # Fallback to simple error if no rich status
-    if not status:
-        return GrpcErrorDetails(
-            code=code,
-            message=grpc_error.details() or "No error message",
-            details=[]
-        )
+    if status is None:
+        return GrpcErrorDetails(code=code, message="No message", details=[])
     
     # Extract all error details
-    details = []
+    error_info = None
+    error_details = []
     for any_detail in status.details:
         detail_extracted = False
         for detail_type in _ERROR_DETAIL_TYPES:
-            if detail_type == error_details_pb2.ErrorInfo:
-                # deal with ErrorInfo here
             if any_detail.Is(detail_type.DESCRIPTOR):
                 msg = detail_type()
                 any_detail.Unpack(msg)
-                details.extend(format_error_details(msg))
+                error_details.extend(format_error_details(msg))
                 detail_extracted = True
                 break
         
         # If we couldn't parse the detail, add its type name
         if not detail_extracted:
-            details.append(f"Unknown detail type: {any_detail.type_url}")
+            error_details.append(f"Unknown detail type: {any_detail.type_url}")
     
     return GrpcErrorDetails(
         code=code,
         message=status.message or "No message",
-        details=details
+        details=error_details
     )
