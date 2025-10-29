@@ -915,35 +915,36 @@ class Controller(ControllerServicer):
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
         command = request.command
+        command_name = command.command_name
         self.log.debug(f"FSM command: {command}")
 
-        transition = self.stateful_node.get_fsm_transition(command.name)
+        transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
         response = ExecuteFSMCommandResponse(
             token=None,
             name=self.name,
-            command_name=command.name,
+            command_name=command_name,
         )
 
         # Check controller readiness.
         if not self.stateful_node.get_ready_state():
             self.log.error(
-                f"Command '{command.name}' not executed: controller is not ready."
+                f"Command '{command_name}' not executed: controller is not ready."
             )
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
             return response
 
         # Check if node is in error.
         if self.stateful_node.node_is_in_error():
-            self.log.error(f"Command '{command.name}' not executed: node is in error.")
+            self.log.error(f"Command '{command_name}' not executed: node is in error.")
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
 
         # Check if node is excluded.
         if not self.stateful_node.node_is_included():
-            self.log.error(f"Command '{command.name}' not executed: node is excluded.")
+            self.log.error(f"Command '{command_name}' not executed: node is excluded.")
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
             response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
@@ -952,7 +953,7 @@ class Controller(ControllerServicer):
         if not self.stateful_node.can_transition(transition):
             state = self.stateful_node.get_node_operational_state()
             self.log.error(
-                f"Command '{command.name}' not executed: not possible from state '{state}'."
+                f"Command '{command_name}' not executed: not possible from state '{state}'."
             )
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
             response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -980,13 +981,13 @@ class Controller(ControllerServicer):
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
             using_elisa_logbook = "elisa-logbook" in self.fsm_config.get_actions()
-            if using_elisa_logbook and command.name in ["start", "drain_dataflow"]:
+            if using_elisa_logbook and command_name in ["start", "drain_dataflow"]:
                 try:
                     get_dotdrunc_json()
                 except (DotDruncJsonIncorrectFormat, DotDruncJsonNotFound) as e:
                     self.log.warning(f"ELisa Logbook entry will not be posted. {e}")
 
-            if command.name == "start":
+            if command_name == "start":
                 self.controller_publisher(
                     message=RunInfo(
                         run_type=self.runinfo.get("production_vs_test", ""),

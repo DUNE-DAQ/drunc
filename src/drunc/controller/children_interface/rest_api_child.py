@@ -440,10 +440,12 @@ class RESTAPIChildNode(ClientSideChild):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
+        command_name = command.command_name
+
         response = ExecuteFSMCommandResponse(
             token=None,
             name=self.name,
-            command_name=command.name,
+            command_name=command_name,
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
@@ -457,22 +459,22 @@ class RESTAPIChildNode(ClientSideChild):
             return response
 
         entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(command.name)
+        transition = self.fsm.get_transition(command_name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
         self.state.executing_command_mark()
-        self.log.info(f"Sending '{command.name}' to '{self.name}'")
+        self.log.info(f"Sending '{command_name}' to '{self.name}'")
 
         try:
             self.commander.send_app_command(
-                cmd_id=command.name,
+                cmd_id=command_name,
                 module_data={"modules": [{"data": module_data, "match": ""}]},
                 entry_state=entry_state.upper(),
                 exit_state=exit_state.upper(),
             )
-            self.log.debug(f"Sent '{command.name}' to '{self.name}'")
+            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
 
             r = self.commander.check_response(150)
-            self.log.debug(f"Got response from '{command.name}' to '{self.name}'")
+            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
 
             response.data = json.dumps(r)
 
@@ -484,7 +486,7 @@ class RESTAPIChildNode(ClientSideChild):
                 return response
 
         except Exception as e:
-            self.log.error(f"Got error from '{command.name}' to '{self.name}': {e!s}")
+            self.log.error(f"Got error from '{command_name}' to '{self.name}': {e!s}")
             self.state.to_error()
             response.fsm_flag = FSMResponseFlag.FSM_FAILED
             response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN

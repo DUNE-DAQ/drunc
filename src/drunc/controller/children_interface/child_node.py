@@ -154,7 +154,7 @@ class ChildNode:
         response = ExecuteFSMCommandResponse(
             token=None,
             name=self.name,
-            command_name=command.name,
+            command_name=command.command_name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
