@@ -608,7 +608,7 @@ def run_one_fsm_command(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
             (
-                bool_to_success(response.data.flag, message_type=FSMResponseFlag)
+                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
                 if executed_command
                 else "[red]NA[/]"
             ),
