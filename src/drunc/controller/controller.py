@@ -1069,16 +1069,16 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
-        # Define what to do for child nodes.
-        def child_command(child: ChildNode, target: str) -> StatusResponse:
-            return child.recompute_status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
-
         # This node.
         if request.target == self.name or request.execute_along_path:
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_list = self.address_all()
             child_responses = self.propagate_concurrently(child_command, child_list)
 
@@ -1091,9 +1091,10 @@ class Controller(ControllerServicer):
                     self_should_go_to_error = True
 
                 try:
-                    children_states.add(s.status.state)
-                    children_sub_states.add(s.status.sub_state)
-                    if s.status.in_error:
+                    child_status = s.status
+                    children_states.add(child_status.state)
+                    children_sub_states.add(child_status.sub_state)
+                    if child_status.in_error:
                         self_should_go_to_error = True
 
                 except UnpackingError as e:
@@ -1139,7 +1140,7 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-            def child_status(child: ChildNode, target: str) -> StatusResponse:
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(
                     target,
                     request.execute_along_path,
@@ -1147,11 +1148,19 @@ class Controller(ControllerServicer):
                 )
 
             child_list = self.address_all(ignore_exclusion=True)
-            child_responses = self.propagate_concurrently(child_status, child_list)
+            child_responses = self.propagate_concurrently(child_command, child_list)
             response.children.extend(child_responses)
 
         # Children nodes.
         else:
+
+            def child_command(child: ChildNode, target: str) -> StatusResponse:
+                return child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
