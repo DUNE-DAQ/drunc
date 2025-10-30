@@ -3,7 +3,7 @@ import time
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.utils.utils import get_logger, http_get_poll, http_post
+from drunc.utils.utils import get, get_logger, http_post
 
 
 class ConnectivityServiceClient:
@@ -42,35 +42,29 @@ class ConnectivityServiceClient:
             elapsed = time.time() - start
 
             self.log.debug(f"Health check attempt {attempt} at {elapsed:.2f}s elapsed")
-
-            r = http_get_poll(
-                self.address + "/",
-                as_json=True,
-            )
-
-            # Request succeeded - service is ready
-            if r is not None and r.ok:
+            self.log.debug(f"Polling address: {self.address}")
+            try:
+                r = get(self.address)
+            except Exception as e:
+                self.log.debug(f"Polling failed with exception: {e}")
+                r = None
+            # Request failed - service is NOT ready.
+            if r is None or not r.ok:
                 self.log.debug(
-                    f"Service ready after {attempt} attempts ({elapsed:.2f}s)"
+                    f"Connectivity service not ready, retrying in {delay:.2f}s"
+                )
+                time.sleep(delay)
+                # Increase delay for next time.
+                delay = min(delay * 2, max_delay)
+            # Request succeeded - service is ready.
+            else:
+                self.log.debug(
+                    f"Connectivity service ready after {attempt} attempts ({elapsed:.2f}s)"
                 )
                 return True
-            else:
-                # Request failed without a response
-                if r is None:
-                    self.log.debug(f"Attempt {attempt} failed to provide a response.")
-                    self.log.debug(f"Retrying in {delay:.2f}s")
-                # Request failed with a response
-                elif not r.ok:
-                    self.log.debug(
-                        f"Attempt {attempt} failed with status code {r.status_code} and reason: {r.reason}."
-                    )
-                    self.log.debug(f"Retrying in {delay:.2f}s")
-                time.sleep(delay)
-                # increase delay for next time
-                delay = min(delay * 2, max_delay)
 
         self.log.debug(
-            f"Service not ready after {attempt} attempts ({timeout}s timeout)"
+            f"Connectivity service not ready after {attempt} attempts. Timeout of {timeout}s reached."
         )
         return False
 
