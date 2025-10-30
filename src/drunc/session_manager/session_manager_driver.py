@@ -54,8 +54,12 @@ class SessionManagerDriver:
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
-            error_details = extract_grpc_rich_error(e)
-            self.log.debug(error_details)
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.debug(error_details)
+            except Exception:
+                pass
+
             handle_grpc_error(e)
         return response
 
@@ -73,9 +77,12 @@ class SessionManagerDriver:
         try:
             response = self.stub.list_all_sessions(request, timeout=timeout)
         except grpc.RpcError as e:
-            error_details = extract_grpc_rich_error(e)
-            self.log.debug(error_details)
-
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.debug(error_details)
+            except Exception:
+                pass
+            
             handle_grpc_error(e)
 
         return response
@@ -94,9 +101,12 @@ class SessionManagerDriver:
         try:
             response = self.stub.list_all_configs(request, timeout=timeout)
         except grpc.RpcError as e:
-            error_details = extract_grpc_rich_error(e)
-            self.log.debug(error_details)
-
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.debug(error_details)
+            except Exception:
+                pass
+            
             handle_grpc_error(e)
 
         return response
