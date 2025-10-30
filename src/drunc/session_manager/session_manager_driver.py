@@ -16,14 +16,14 @@ from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import get_logger
 
 
-class SessionManagerDriver(GRPCDriver):
+class SessionManagerDriver:
     """Provides an interface to the session manager service.
 
     This class provides the client-side methods required to interact with a remote
     session manager service, via gRPC connections.
     """
 
-    def __init__(self, address: str, token: Token, **kwargs):
+    def __init__(self, address: str, token: Token):
         """Create a new session manager driver instance.
 
         Args:
@@ -31,10 +31,14 @@ class SessionManagerDriver(GRPCDriver):
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        super().__init__(
-            name="session_manager_driver", address=address, token=token, **kwargs
-        )
+        self.log = get_logger("controller.SessionManagerDriver")
+        self.address = address
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = SessionManagerStub(self.channel)
+        self.token = copy_token(token)
         self.log = get_logger("session_manager_driver")
 
     def describe(self, timeout: int | float = 60) -> Description:

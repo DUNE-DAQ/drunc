@@ -1,0 +1,19 @@
+name: Check Links In Docs
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Lychee link checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: docs/
+          

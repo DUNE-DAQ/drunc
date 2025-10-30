@@ -22,6 +22,7 @@ from druncschema.process_manager_pb2 import (
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -29,23 +30,27 @@ from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
-from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
+    get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
 )
 
 
-class ProcessManagerDriver(GRPCDriver):
+class ProcessManagerDriver:
     controller_address = ""
 
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="process_manager_driver", address=address, token=token, **kwargs
-        )
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ProcessManagerDriver")
+        self.address = address
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
+        self.token = copy_token(token)
 
     # ----- Boot workflow -----
     def boot(
