@@ -15,6 +15,7 @@ from druncschema.controller_pb2 import (
     DescribeResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
+    FSMCommand,
     FSMResponseFlag,
     RecomputeStatusResponse,
     StatusResponse,
@@ -310,11 +311,11 @@ class Controller(ControllerServicer):
             and self.stateful_node.node_is_in_error() == False
         ):
 
-            def child_command(child: ChildNode, target: str) -> StatusResponse:
+            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(target)
 
             child_list = self.address_all()
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
 
             children_states = {}
             for response in child_responses:
@@ -738,13 +739,13 @@ class Controller(ControllerServicer):
 
     @staticmethod
     def propagate_concurrently(
-        child_command: Callable[[ChildNode, str], T],
+        child_command_fn: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
 
         Args:
-            child_command: Callable to be executed for each child, with
+            child_command_fn: Callable to be executed for each child, with
                 arguments (child, target).
             child_list: List of (node, target) for each addressed child.
 
@@ -753,7 +754,7 @@ class Controller(ControllerServicer):
         """
         with ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(child_command, child_node, child_target)
+                executor.submit(child_command_fn, child_node, child_target)
                 for child_node, child_target in child_list
             ]
             return [f.result() for f in as_completed(futures)]
@@ -780,7 +781,7 @@ class Controller(ControllerServicer):
             response.status.CopyFrom(status)
 
         # Children nodes.
-        def child_command(child: ChildNode, target: str) -> StatusResponse:
+        def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
             return child.status(
                 target,
                 request.execute_along_path,
@@ -791,7 +792,7 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command, child_list)
+        child_responses = self.propagate_concurrently(child_command_fn, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -825,7 +826,7 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        def child_command(child: ChildNode, target: str) -> DescribeResponse:
+        def child_command_fn(child: ChildNode, target: str) -> DescribeResponse:
             return child.describe(
                 target,
                 request.execute_along_path,
@@ -836,7 +837,7 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command, child_list)
+        child_responses = self.propagate_concurrently(child_command_fn, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -883,7 +884,7 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        def child_command(child: ChildNode, target: str) -> DescribeFSMResponse:
+        def child_command_fn(child: ChildNode, target: str) -> DescribeFSMResponse:
             return child.describe_fsm(
                 target,
                 request.execute_along_path,
@@ -894,7 +895,7 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command, child_list)
+        child_responses = self.propagate_concurrently(child_command_fn, child_list)
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -960,15 +961,6 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
 
-        # Define what to do for child nodes.
-        def child_command(child: ChildNode, target: str) -> ExecuteFSMCommandResponse:
-            return child.execute_fsm_command(
-                command,
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
-
         # This node.
         if request.target == self.name or request.execute_along_path:
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
@@ -1008,11 +1000,27 @@ class Controller(ControllerServicer):
             # Begin propagating FSM transition to children.
             self.stateful_node.propagate_transition_mark(transition)
 
+            # Child FSMCommands are *NOT THE SAME* as the parent one!
+            # TODO: this is quite misleading and error prone. Needs looking into.
+            child_command = FSMCommand()
+            child_command.CopyFrom(command)
+            child_command.data = fsm_data
+
+            def child_command_fn(
+                child: ChildNode, target: str
+            ) -> ExecuteFSMCommandResponse:
+                return child.execute_fsm_command(
+                    child_command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
             response.children.extend(child_responses)
 
             # Finish propagating FSM transition to children.
@@ -1046,11 +1054,22 @@ class Controller(ControllerServicer):
 
         # Children nodes.
         else:
+
+            def child_command_fn(
+                child: ChildNode, target: str
+            ) -> ExecuteFSMCommandResponse:
+                return child.execute_fsm_command(
+                    command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                )
+
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
             response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -1073,7 +1092,7 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
 
-            def child_command(child: ChildNode, target: str) -> StatusResponse:
+            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
                 return child.recompute_status(
                     target,
                     request.execute_along_path,
@@ -1081,7 +1100,7 @@ class Controller(ControllerServicer):
                 )
 
             child_list = self.address_all()
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
 
             self_should_go_to_error = False
             children_states = set()
@@ -1141,7 +1160,7 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-            def child_command(child: ChildNode, target: str) -> StatusResponse:
+            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
                 return child.status(
                     target,
                     request.execute_along_path,
@@ -1149,13 +1168,13 @@ class Controller(ControllerServicer):
                 )
 
             child_list = self.address_all(ignore_exclusion=True)
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
             response.children.extend(child_responses)
 
         # Children nodes.
         else:
 
-            def child_command(child: ChildNode, target: str) -> StatusResponse:
+            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
                 return child.recompute_status(
                     target,
                     request.execute_along_path,
@@ -1166,7 +1185,7 @@ class Controller(ControllerServicer):
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command, child_list)
+            child_responses = self.propagate_concurrently(child_command_fn, child_list)
             response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
