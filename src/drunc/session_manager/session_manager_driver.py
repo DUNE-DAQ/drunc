@@ -7,9 +7,13 @@ from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 
-from drunc.utils.grpc_utils import copy_token, handle_grpc_error, extract_grpc_rich_error
+from drunc.utils.grpc_utils import (
+    copy_token,
+    extract_grpc_rich_error,
+    handle_grpc_error,
+)
 from drunc.utils.shell_utils import GRPCDriver
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc.utils.utils import get_logger
 
 
 class SessionManagerDriver(GRPCDriver):
@@ -31,7 +35,7 @@ class SessionManagerDriver(GRPCDriver):
             name="session_manager_driver", address=address, token=token, **kwargs
         )
         self.stub = SessionManagerStub(self.channel)
-        self.log= get_logger("session_manager_driver")
+        self.log = get_logger("session_manager_driver")
 
     def describe(self, timeout: int | float = 60) -> Description:
         """Describe the session manager service.
@@ -49,7 +53,6 @@ class SessionManagerDriver(GRPCDriver):
         except grpc.RpcError as e:
             error_details = extract_grpc_rich_error(e)
             self.log.debug(error_details)
-
             handle_grpc_error(e)
         return response
 

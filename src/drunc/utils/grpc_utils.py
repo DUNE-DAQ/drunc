@@ -1,19 +1,15 @@
-from typing import NoReturn
+from dataclasses import dataclass
+from typing import List, NoReturn, Optional
 
 import grpc
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2
-from google.rpc import code_pb2
-from dataclasses import dataclass
-from typing import List
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
-from google.rpc import error_details_pb2, status_pb2
+from google.rpc import code_pb2, error_details_pb2
 from grpc_status import rpc_status
-import grpc
-
 
 from drunc.exceptions import DruncCommandException, DruncException
 
@@ -75,7 +71,16 @@ class ServerTimeout(DruncException):
         super(ServerTimeout, self).__init__(message)
 
 
-def server_is_reachable(grpc_error):
+def server_is_reachable(grpc_error: grpc.RpcError) -> bool:
+    """
+    Check if server is reachable.
+
+    Args:
+        grpc_error (grpc.RpcError): The gRPC error
+
+    Returns:
+        bool: True if the server is reachable, False if the error indicates it is unavailable
+    """
     if hasattr(grpc_error, "_state"):
         if grpc_error._state.code == grpc.StatusCode.UNAVAILABLE:
             return False
@@ -87,7 +92,16 @@ def server_is_reachable(grpc_error):
     return True
 
 
-def rethrow_if_unreachable_server(grpc_error):
+def rethrow_if_unreachable_server(grpc_error: grpc.RpcError) -> NoReturn:
+    """
+    Raise a ServerUnreachable exception if the gRPC error indicates the server is unreachable.
+
+    Args:
+        grpc_error (grpc.RpcError): The gRPC error
+
+    Raises:
+        ServerUnreachable: If the error indicates the server is unavailable
+    """
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
             raise ServerUnreachable(grpc_error._state.details) from grpc_error
@@ -95,24 +109,47 @@ def rethrow_if_unreachable_server(grpc_error):
             raise ServerUnreachable(grpc_error._details) from grpc_error
 
 
-def rethrow_if_timeout(grpc_error):
+def rethrow_if_timeout(grpc_error: grpc.RpcError) -> NoReturn:
+    """
+    Raise a ServerTimeout if timeout.
+
+    Args:
+        grpc_error (grpc.RpcError): The gRPC error
+
+    Raises:
+        ServerTimeout: If the error code is DEADLINE_EXCEEDED
+    """
     if hasattr(grpc_error, "_state"):
         if grpc_error._state.code == grpc.StatusCode.DEADLINE_EXCEEDED:
             raise ServerTimeout(grpc_error._state.details) from grpc_error
 
 
 def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
-    """Handle gRPC errors by rethrowing them with appropriate context.
+    """
+    Handle gRPC errors by rethrowing them with appropriate context.
 
     Args:
         error: The gRPC error to handle.
+    Raises:
+        A custom exception if the error matches a known category, or the original
+        gRPC error if no classification applies.
     """
     rethrow_if_unreachable_server(error)
     rethrow_if_timeout(error)
     raise error
 
 
-def interrupt_if_unreachable_server(grpc_error):
+def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
+    """
+    Interrupt if server is not reachable and return the error details.
+
+    Args:
+        grpc_error (grpc.RpcError): The gRPC error
+
+    Returns:
+        str | None: The internal error details if the server is unreachable and details are available;
+                    otherwise, returns None.
+    """
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
             return grpc_error._state.details
@@ -134,35 +171,54 @@ def copy_token(token: Token) -> Token:
     return token_copy
 
 
-
 @dataclass
 class GrpcErrorDetails:
+    """
+    A structured representation of a gRPC error, including its status code,
+    message, and any extracted rich error details.
+
+    Attributes:
+        code (str): The gRPC status code name (e.g., "NOT_FOUND")
+        message (str): The error message from the gRPC status
+        details (List[str]): A list of formatted error detail strings
+    """
+
     code: str
     message: str
     details: List[str]
-    
+
     def __str__(self):
+        """
+        Return a human-readable string representation of the error.
+        """
         lines = [f"[{self.code}] {self.message}"]
         for detail in self.details:
-            lines.append(f"  • {detail}")
+            lines.append(f"{detail}")
         return "\n".join(lines)
 
 
 def format_error_details(detail: Message) -> list[str]:
     """
     Format protobuf message fields into human-readable strings.
+
+    Args:
+        detail (Message): A protobuf message representing a gRPC error detail
+
+    Returns:
+        list[str]: A list of formatted strings describing the message's fields and values.
+                    Format: "field_name: value" for simple messages
+                    or "field_name: field1=value1, field2=value2" for nested messages
     """
 
-    
     results = []
-    
+
     for field in detail.DESCRIPTOR.fields:
         value = getattr(detail, field.name)
-        
-        # Skip empty values (but keep 0 and False)
+
+        # Skip empty values
         if not value and value != 0 and value is not False:
             continue
-        
+
         # Handle nested messages
         if field.type == FieldDescriptor.TYPE_MESSAGE:
             if field.label == FieldDescriptor.LABEL_REPEATED:
@@ -179,12 +235,20 @@ def format_error_details(detail: Message) -> list[str]:
         else:
             # Handle simple fields
             results.append(f"{field.name}: {value}")
-    
+
     return results if results else [str(detail)]
 
 
 def _extract_message_parts(message: Message) -> list[str]:
-    """Extract non-empty field=value pairs from a message."""
+    """
+    Extract field=value pairs from a message.
+
+    Args:
+        message (Message): A protobuf message instance to extract fields from
+
+    Returns:
+        list[str]: A list of strings representing non-empty field=value pairs
+    """
     parts = []
     for field in message.DESCRIPTOR.fields:
         value = getattr(message, field.name)
@@ -193,7 +257,8 @@ def _extract_message_parts(message: Message) -> list[str]:
     return parts
 
 
-# All known Google error detail types
+# All known Google error detail types.
+# More info here https://github.com/googleapis/googleapis/blob/master/google/rpc/error_details.proto
 _ERROR_DETAIL_TYPES = [
     error_details_pb2.BadRequest,
     error_details_pb2.QuotaFailure,
@@ -211,10 +276,10 @@ _ERROR_DETAIL_TYPES = [
 def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     """
     Extract rich error details from a gRPC error using Google's error model.
-    
+
     Args:
         grpc_error: The gRPC error to parse
-        
+
     Returns:
         GrpcErrorDetails with structured error information
     """
@@ -223,13 +288,12 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
         status = rpc_status.from_call(grpc_error)
     except NotImplementedError:
         return GrpcErrorDetails(code=code, message="No message", details=[])
-    
+
     # Fallback to simple error if no rich status
     if status is None:
         return GrpcErrorDetails(code=code, message="No message", details=[])
-    
+
     # Extract all error details
-    error_info = None
     error_details = []
     for any_detail in status.details:
         detail_extracted = False
@@ -240,13 +304,10 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
                 error_details.extend(format_error_details(msg))
                 detail_extracted = True
                 break
-        
-        # If we couldn't parse the detail, add its type name
+
         if not detail_extracted:
             error_details.append(f"Unknown detail type: {any_detail.type_url}")
-    
+
     return GrpcErrorDetails(
-        code=code,
-        message=status.message or "No message",
-        details=error_details
+        code=code, message=status.message or "No message", details=error_details
     )
