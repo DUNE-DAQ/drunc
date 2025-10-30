@@ -8,14 +8,14 @@ import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
 from rich.table import Table
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
     get_process_manager_configuration,
 )
 from drunc.utils.configuration import parse_conf_url
-from drunc.utils.utils import get_logger, now_str
+from drunc.utils.utils import now_str
 
 
 def generate_process_query(
@@ -163,10 +163,7 @@ def get_rte_script():
         script = os.path.join(dbt_install_dir, "daq_app_rte.sh")
 
     if not os.path.exists(script):
-        log = get_logger("utils.check_rte")
-        errmsg = f"[red] Couldn't understand where to find the rte script [/red]. Did you run [green] dbt-build [/green] and [green]dbt-workarea-env[/green]? Tentative location: {script}."
-        log.error(errmsg)
-        exit
+        raise DruncSetupException(f"Tentative RTE script: {script}")
     return script
 
 
