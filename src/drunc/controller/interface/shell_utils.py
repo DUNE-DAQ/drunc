@@ -113,7 +113,10 @@ def get_status_table(
             ip_address = urlparse(endpoint).hostname
             if not ip_address:
                 return ""
-            hostname, _, _ = socket.gethostbyaddr(ip_address)
+            try:
+                hostname, _, _ = socket.gethostbyaddr(ip_address)
+            except socket.herror:
+                return ip_address
             return endpoint.replace(ip_address, hostname)
 
         table.add_row(
