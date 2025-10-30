@@ -12,7 +12,6 @@ from drunc.utils.grpc_utils import (
     extract_grpc_rich_error,
     handle_grpc_error,
 )
-from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import get_logger
 
 
