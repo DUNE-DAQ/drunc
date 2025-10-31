@@ -17,7 +17,9 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
-from grpc import ServicerContext
+from grpc import ServicerContext, StatusCode
+from google.rpc import status_pb2, error_details_pb2
+from grpc_status import rpc_status
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.utils.utils import get_logger, pid_info_str
@@ -101,23 +103,44 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running list_all_sessions")
 
-        dummy_config = ConfigKey(
-            file="dummy_config_file",
-            session_id="dummy_config_session_id",
-        )
+        try:
+            dummy_config = ConfigKey(
+                file="dummy_config_file",
+                session_id="dummy_config_session_id",
+            )
 
-        dummy_session = ActiveSession(
-            name="dummy_session",
-            user="dummy_user",
-            config_key=dummy_config,
-        )
+            dummy_session = ActiveSession(
+                name="dummy_session",
+                user="dummy_user",
+                config_key=dummy_config,
+            )
 
-        return AllActiveSessions(
-            name=self.name,
-            token=None,
-            active_sessions=[dummy_session],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+            return AllActiveSessions(
+                name=self.name,
+                token=None,
+                active_sessions=[dummy_session],
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
+        except Exception as e:
+            self.log.error(f"Error in list_all_sessions: {e}")
+
+            # Build rich error response
+            status = status_pb2.Status(
+                code=grpc.StatusCode.INTERNAL.value[0],
+                message="Failed to retrieve active sessions",
+                details=[
+                    error_details_pb2.ErrorInfo(
+                        reason="list_all_sessions_failed",
+                        domain="drunc.session_manager",
+                        metadata={"method": "list_all_sessions"}
+                    ).SerializeToString(),
+                    error_details_pb2.DebugInfo(
+                        stack_entries=[str(e)]
+                    ).SerializeToString()
+                ]
+            )
+            context.abort_with_status(rpc_status.to_status(status))
+
 
     def list_all_configs(
         self, request: Request, context: ServicerContext
@@ -133,43 +156,55 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running list_all_configs")
 
-        # Get search paths for available configurations.
-        search_paths = getenv("DUNEDAQ_DB_PATH")
-        if search_paths is None:
-            self.log.error("DUNEDAQ_DB_PATH not set")
+        try:
+            # Get search paths for available configurations.
+            search_paths = getenv("DUNEDAQ_DB_PATH")
+            if search_paths is None:
+                self.log.error("DUNEDAQ_DB_PATH not set")
+                return AllConfigKeys(
+                    name=self.name,
+                    token=None,
+                    config_keys=[],
+                    flag=ResponseFlag.FAILED,
+                )
+
+            # Find all configuration files.
+            config_files: list[Path] = []
+            for path in search_paths.split(":"):
+                config_glob = Path(path).rglob("*.data.xml")
+                config_files.extend(config_glob)
+
+            # Parse all configuration files.
+            configs = []
+            for file in config_files:
+                try:
+                    config = Configuration(f"oksconflibs:{file}")
+                except Exception as e:
+                    self.log.error(e)
+                    continue
+
+                # Parse all session configurations in this file.
+                for session_config in config.get_dals("Session"):
+                    config_key = ConfigKey(
+                        file=file.name,
+                        session_id=session_config.id,
+                    )
+                    configs.append(config_key)
+
             return AllConfigKeys(
                 name=self.name,
                 token=None,
-                config_keys=[],
-                flag=ResponseFlag.FAILED,
+                config_keys=configs,
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
-
-        # Find all configuration files.
-        config_files: list[Path] = []
-        for path in search_paths.split(":"):
-            config_glob = Path(path).rglob("*.data.xml")
-            config_files.extend(config_glob)
-
-        # Parse all configuration files.
-        configs = []
-        for file in config_files:
-            try:
-                config = Configuration(f"oksconflibs:{file}")
-            except Exception as e:
-                self.log.error(e)
-                continue
-
-            # Parse all session configurations in this file.
-            for session_config in config.get_dals("Session"):
-                config_key = ConfigKey(
-                    file=file.name,
-                    session_id=session_config.id,
-                )
-                configs.append(config_key)
-
-        return AllConfigKeys(
-            name=self.name,
-            token=None,
-            config_keys=configs,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        except Exception as e:
+            self.log.error(f"Unhandled error in list_all_configs: {e}")
+            # Build rich error response
+            status = status_pb2.Status(
+                code=StatusCode.INTERNAL.value[0],
+                message="Failed to list configurations",
+                details=[
+                    error_details_pb2.DebugInfo(stack_entries=[str(e)]).SerializeToString()
+                ]
+            )
+            context.abort_with_status(rpc_status.to_status(status))
