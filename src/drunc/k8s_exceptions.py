@@ -17,4 +17,3 @@ class DruncK8sPodException(DruncException):
 class DruncK8sNodeException(DruncException):
     """Exception thrown for node-related errors such as unavailable or invalid nodes."""
     pass
-
