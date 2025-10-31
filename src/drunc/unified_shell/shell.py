@@ -11,6 +11,7 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
+from daqpytools.logging.levels import logging_log_levels as log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
@@ -57,13 +58,11 @@ from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
-    create_logger_handler,
+    create_root_logger,
     format_name_for_cli,
     get_logger,
     ignore_sigint_sighandler,
-    log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
 )
 
 
@@ -147,9 +146,8 @@ def unified_shell(
             connection to the process manager fails.
     """
     # Set up the drunc and unified_shell loggers
-    setup_root_logger(log_level)
+    create_root_logger(log_level, rich_handler=True)
     unified_shell_log = get_logger("unified_shell")
-    create_logger_handler(rich_handler=True)
 
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 

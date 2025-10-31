@@ -4,13 +4,13 @@ import signal
 
 import click
 import conffwk
+from daqpytools.logging.levels import logging_log_levels as log_levels
 from rich import print
 from rich.logging import RichHandler
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import log_levels
 
 kDefaultAuth = "default"
 kPublicKeyAuth = "publickey"

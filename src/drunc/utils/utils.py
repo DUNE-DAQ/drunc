@@ -15,15 +15,8 @@ from urllib.parse import urlparse
 
 import pytz
 from click import BadParameter
-from daqpytools.logging.formatter import LoggingFormatter
-from daqpytools.logging.levels import (
-    logging_log_levels as log_levels,
-)  # TODO: Check if we should change very instance of log_levels in drunc
 from daqpytools.logging.logger import get_daq_logger
-from daqpytools.logging.logger import setup_root_logger as daq_setup_root_logger
 from requests import delete, get, patch, post
-from rich.console import Console
-from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     Progress,
@@ -40,6 +33,8 @@ from drunc.exceptions import DruncException, DruncSetupException
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
 
+# TODO: Docstring everything
+
 # TODO Double check with Pawel to see if these format strings can be deleted
 # I see a lot of todos here that needs to be figured out
 ############################
@@ -55,24 +50,17 @@ time_zone = pytz.utc
 # TODO Make another function that modifies the other loggers if necessary (?)
 
 
-def setup_root_logger(log_level: str) -> logging.Logger:
-    log_level = log_level.upper()
-    if log_level not in log_levels.keys():
-        raise DruncSetupException(
-            f"Unrecognised log level, should be one of {log_levels.keys()}"
-        )
-    log_level = log_levels[log_level]
-    return daq_setup_root_logger("drunc", log_level)
+def create_root_logger(
+    log_level: str, log_file_path: str = None, rich_handler: bool = False
+) -> logging.Logger:
+    #! This should replace setup root logger + create_logger_handler
 
-
-def create_root_logger(log_level: str) -> logging.Logger:
-    print("Creating up root logger")
     root_logger: logging.Logger = get_daq_logger(
         logger_name="drunc",
         log_level=log_level,
         use_parent_handlers=True,
-        rich_handler=True,
-        file_handler_path=False,
+        rich_handler=rich_handler,
+        file_handler_path=log_file_path,
         stream_stdout_handler=False,
         stream_stderr_handler=False,
     )
@@ -80,75 +68,8 @@ def create_root_logger(log_level: str) -> logging.Logger:
 
 
 def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
-    #! There must be a better way to do this..
-    full_name = f"drunc.{logger_name}"
-
-    # Check if drunc (root) already exists or not
-    if "drunc" not in logging.Logger.manager.loggerDict:
-        print("No drunc logger exists, creating it...")
-        create_root_logger("INFO")
-
-    # Check if the logger already exists
-    existing_logger = logging.Logger.manager.loggerDict.get(full_name)
-    if isinstance(existing_logger, logging.Logger):
-        return existing_logger
-
-    # Otherwise, create a new one
-    main_logger: logging.Logger = get_daq_logger(
-        logger_name=full_name,
-        log_level="INFO",
-        use_parent_handlers=False,
-        rich_handler=True,
-        file_handler_path=False,
-        stream_stdout_handler=False,
-        stream_stderr_handler=False,
-    )
-    return main_logger
-
-
-# TODO This might need heavy merging with the setup_root_logger thing
-def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
-    print(f"Inside create_logger_handler, {log_file_path}, {rich_handler}")
-    function_logger = get_logger("utils.get_logger")
-    logger_level = logging.getLogger("drunc").level
-    if not logger_level:
-        setup_root_logger("INFO")
-        logger_level = logging.getLogger("drunc").level
-
-    drunc_logger = logging.getLogger("drunc")
-    drunc_logger.handlers = []
-
-    if log_file_path is not None:
-        fileHandler = logging.FileHandler(filename=log_file_path)
-        fileHandler.setFormatter(LoggingFormatter())
-        drunc_logger.addHandler(fileHandler)
-        function_logger.debug("Added file handler to drunc")
-
-    if rich_handler:
-        function_logger.debug("Assigning a RichHandler to drunc logger")
-        try:
-            width = os.get_terminal_size()[0]
-        except:
-            width = 150
-        stdHandler = RichHandler(
-            console=Console(width=width),
-            omit_repeated_times=False,
-            markup=True,
-            rich_tracebacks=True,
-            show_path=False,
-            tracebacks_width=width,
-        )
-        stdHandler.setFormatter(LoggingFormatter(log_format=rich_log_format))
-    else:
-        function_logger.debug("Assigning a StreamHandler to drunc logger")
-        stdHandler = logging.StreamHandler(sys.stdout)
-        stdHandler.setFormatter(LoggingFormatter())
-
-    if stdHandler:
-        drunc_logger.addHandler(stdHandler)
-        function_logger.debug("Added appropriate stream handler to drunc")
-
-    function_logger.debug("Finished setting up logger")
+    # TODO Maybe get rid of this entirely?
+    return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
 
 def setup_standard_loggers() -> None:

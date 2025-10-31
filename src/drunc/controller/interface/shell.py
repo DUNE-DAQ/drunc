@@ -3,6 +3,7 @@ import os
 
 import click
 import click_shell
+from daqpytools.logging.levels import logging_log_levels as log_levels
 
 from drunc.controller.interface.commands import (
     connect,
@@ -26,10 +27,8 @@ from drunc.controller.interface.shell_utils import (
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
-    create_logger_handler,
+    create_root_logger,
     get_logger,
-    log_levels,
-    setup_root_logger,
     validate_command_facility,
 )
 
@@ -50,10 +49,8 @@ from drunc.utils.utils import (
 @click.argument("controller-address", type=str, callback=validate_command_facility)
 @click.pass_context
 def controller_shell(ctx, controller_address: str, log_level: str) -> None:
-    setup_root_logger(log_level)
+    create_root_logger(log_level, rich_handler=True)
     controller_shell_log = get_logger("controller.shell")
-    create_logger_handler(rich_handler=True)
-
     controller_shell_log.debug("Resetting the context instance address")
     ctx.obj.reset(address=controller_address)
     ctx.call_on_close(controller_cleanup_wrapper(ctx.obj))

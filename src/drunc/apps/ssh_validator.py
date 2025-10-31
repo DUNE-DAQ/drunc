@@ -3,16 +3,16 @@ import signal
 
 import click
 import conffwk
+from daqpytools.logging.levels import logging_log_levels as log_levels
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import create_logger_handler, get_logger, log_levels
+from drunc.utils.utils import get_logger
 
 
 def validate_ssh_connection(configuration: str, session_name: str, log_level: str):
     log = get_logger("validate_ssh_connection")
-    create_logger_handler(rich_handler=True)
 
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
