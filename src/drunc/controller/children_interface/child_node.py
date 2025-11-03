@@ -41,8 +41,7 @@ class ChildNode:
         self.included = True
 
     def __str__(self):
-        pass
-        return f"'{self.name}@{self.uri}' (type {self.node_type})"
+        return f"'{self.name}' (type {self.node_type})"
 
     def terminate(self):
         pass
@@ -57,8 +56,8 @@ class ChildNode:
         token: Token | None,
     ) -> Response:
         return Response(
-            token=token,
             name=self.name,
+            token=token,
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
