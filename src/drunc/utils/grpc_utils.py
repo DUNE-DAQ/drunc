@@ -6,6 +6,8 @@ from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2
 from google.rpc import code_pb2
+from google.protobuf import json_format
+from google.protobuf.message import Message
 
 from drunc.exceptions import DruncCommandException, DruncException
 
@@ -124,3 +126,24 @@ def copy_token(token: Token) -> Token:
     token_copy = Token()
     token_copy.CopyFrom(token)
     return token_copy
+
+def grpc_proto_to_dict(proto_message: Message) -> dict:
+    """
+    Converts a gRPC Protobuf message object to a Python dictionary.
+    """
+    return json_format.MessageToDict(
+        proto_message,
+        preserving_proto_field_name=True
+        # Removed: including_default_value_fields=True
+    )
+
+def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
+    """
+    Converts a Python dictionary into an instance of a gRPC Protobuf message.
+    'proto_class_instance' should be an empty instance, e.g., Token()
+    """
+    return json_format.ParseDict(
+        data,
+        proto_class_instance,
+        ignore_unknown_fields=True
+    )
