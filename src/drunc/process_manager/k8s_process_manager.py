@@ -2,9 +2,13 @@
 import getpass
 import os
 import re
+import socket
 import threading
+import urllib.error
+import urllib.request
 import uuid
 from time import sleep, time
+from typing import Dict, List, Optional, Tuple
 
 # Local Application Imports
 from druncschema.broadcast_pb2 import BroadcastType
@@ -391,88 +395,174 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
-        """Creates a NodePort service for the connection server (external + internal access)."""
-        service_manifest = client.V1Service(
-            api_version="v1",
-            kind="Service",
-            metadata=self._meta_v1_api(
-                name=podname,
-                namespace=session,
-                labels={f"creator.{self.drunc_label}": self.__class__.__name__},
-                owner_references=[
-                    client.V1OwnerReference(
-                        api_version="v1",
-                        kind="Pod",
-                        name=podname,
-                        uid=pod_uid,
-                        controller=True,
-                        block_owner_deletion=True,
-                    )
-                ],
-            ),
-            spec=client.V1ServiceSpec(
-                type="NodePort",
-                selector={"app": podname},
-                ports=[
-                    client.V1ServicePort(
-                        protocol="TCP",
-                        port=self.connection_server_port,
-                        target_port=self.connection_server_port,
-                        node_port=self.connection_server_node_port,
-                    )
-                ],
-            ),
-        )
-        try:
-            self._core_v1_api.create_namespaced_service(
-                namespace=session, body=service_manifest
-            )
-            self.log.info(
-                f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
-                f"(NodePort: {self.connection_server_node_port} for external access)"
-            )
-        except self._api_error_v1_api as e:
-            if e.status != 409:
-                self.log.error(f"Failed to create NodePort service for {podname}: {e}")
+    def _extract_port_from_cmd(self, boot_request: BootRequest) -> Optional[int]:
+        """
+        Extracts the port number from a BootRequest.
 
-    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
-        """Constructs and creates a Kubernetes Pod manifest."""
-        pod_image = self.configuration.data.image
-        exec_and_args_list = boot_request.process_description.executable_and_arguments
+        - For LCS: Prioritizes the 'CONNECTION_PORT' environment variable.
+        - For Controllers: Parses command arguments (e.g., '--port' or '-c grpc://...').
+        """
+        log = self.log
+        app_name = boot_request.process_description.metadata.name
+        log.debug(f"Attempting to extract port for '{app_name}'...")
 
-        # This logic correctly prepends 'exec' to the C++ application command.
+        # --- PRIORITY 1: Check Environment Variables (for LCS) ---
+        if app_name == self.connection_server_name:
+            log.debug(f"'{app_name}' is LCS, checking 'CONNECTION_PORT' env var first.")
+            env_vars = boot_request.process_description.env
+            if "CONNECTION_PORT" in env_vars:
+                port_str = env_vars["CONNECTION_PORT"]
+                try:
+                    port = int(port_str)
+                    if port != 0:
+                        log.info(
+                            f"Extracted port {port} from 'CONNECTION_PORT' env var for LCS."
+                        )
+                        return port
+                except (ValueError, TypeError):
+                    log.error(
+                        f"'CONNECTION_PORT' env var '{port_str}' is not valid int for LCS."
+                    )
+            else:
+                log.debug(
+                    "'CONNECTION_PORT' not found in env vars for LCS. Falling back to command parsing."
+                )
+
+        # --- PRIORITY 2: Parse Command Arguments (for Controllers or LCS fallback) ---
+        log.debug(f"Parsing command arguments for '{app_name}'...")
+        for i, e_and_a in enumerate(
+            boot_request.process_description.executable_and_arguments
+        ):
+            all_args = [e_and_a.exec] + list(e_and_a.args)
+            arg_str = " ".join(all_args)
+            log.debug(f"Checking arg string part {i}: '{arg_str}'")
+
+            # A. Check for gunicorn bind syntax (LCS fallback)
+            if app_name == self.connection_server_name and "gunicorn" in arg_str:
+                log.debug("Attempting gunicorn regex match for numeric port...")
+                match = re.search(r"-b\s+[\w\.-]+:(\d+)", arg_str) or re.search(
+                    r"--bind[\s=]+[\w\.-]+:(\d+)", arg_str
+                )
+                if match:
+                    port = int(match.group(1))
+                    if port != 0:
+                        log.info(
+                            f"Extracted gunicorn numeric port {port} from command arguments for LCS."
+                        )
+                        return port
+
+            # B. Check for drunc-controller --port syntax (Controllers ONLY)
+            if (
+                app_name != self.connection_server_name
+                and "controller" in arg_str
+                and "drunc-controller" in e_and_a.exec
+            ):
+                log.debug("Attempting '--port' regex match for controller...")
+                match_port = re.search(r"--port[\s=]+(\d+)", arg_str)
+                if match_port:
+                    port = int(match_port.group(1))
+                    if port != 0:
+                        log.info(
+                            f"Extracted controller '--port {port}' from command args for '{app_name}'."
+                        )
+                        return port
+
+            # C. Check for drunc-controller -c grpc://... syntax (Controllers ONLY)
+            if (
+                app_name != self.connection_server_name
+                and "controller" in arg_str
+                and "drunc-controller" in e_and_a.exec
+            ):
+                log.debug("Attempting '-c grpc://' regex match for controller...")
+                match_c = re.search(r"-c\s+[\"\']?grpc:\/\/[^:]+:(\d+)[\"\']?", arg_str)
+                if match_c:
+                    port = int(match_c.group(1))
+                    if port != 0:
+                        log.info(
+                            f"Extracted controller gRPC '-c ...:{port}' from command args for '{app_name}'."
+                        )
+                        return port
+
+        log.error(f"Could not extract a valid non-zero port for '{app_name}'.")
+        return None
+
+    def _build_main_command(
+        self, exec_and_args_list: List[ProcessDescription.ExecAndArgs], podname: str
+    ) -> str:
+        """
+        Build the main command string from executable and arguments list.
+        - Prepends 'exec' for Python apps to ensure they become PID 1.
+        - Rewrites server addresses (e.g., 'grpc://localhost:port') to
+          'protocol://0.0.0.0:port' to force binding to all interfaces
+          within the container.
+        """
         command_parts = []
+
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
-            prefix = ""
-            # Only add 'exec' to the C++ apps (non-controllers)
-            if (
-                "controller" not in podname
-                and podname != self.connection_server_name
-                and is_last_command
-                and e_and_a.exec != "source"
-            ):
-                prefix = "exec "
 
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
-        main_command_str = " && ".join(command_parts)
+            # This is the "exec" fix for python apps (controllers, LCS)
+            is_py_app = (
+                e_and_a.exec != "source" and e_and_a.exec != "daq_application"
+            )  # Assumes daq_application is C++
+            prefix = "exec " if is_last_command and is_py_app else ""
 
-        # Determine the correct shutdown command for the preStop hook
+            # Check if this is an app that starts a server
+            is_server_app = (
+                "controller" in podname
+                or podname == self.connection_server_name
+                or "daq_application" in e_and_a.exec
+            )
+
+            if is_server_app:
+                modified_args = []
+                # Regex to find 'protocol://hostname:port'
+                # It allows 'localhost', IPs, or hostnames
+                addr_regex = r"(grpc|rest|http|https):\/\/(localhost|[\w\.-]+|127\.0\.0\.1):(\d+)"
+
+                for arg in e_and_a.args:
+                    # Replace 'hostname' with '0.0.0.0'
+                    new_arg, count = re.subn(addr_regex, r"\1://0.0.0.0:\3", arg)
+
+                    if count > 0:
+                        self.log.info(
+                            f"Rewriting server bind address for '{podname}': '{arg}' -> '{new_arg}'"
+                        )
+                        modified_args.append(new_arg)
+                    else:
+                        modified_args.append(arg)
+
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                # For other pods (like 'echo'), use arguments as-is
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
+
+        return " && ".join(command_parts)
+
+    def _build_main_container(
+        self,
+        podname: str,
+        pod_image: str,
+        main_command_str: str,
+        boot_request: BootRequest,
+        controller_port: Optional[int],
+    ) -> client.V1Container:
+        """Builds the V1Container spec for the main application container."""
+
+        # --- Lifecycle hook (for graceful shutdown) ---
         shutdown_command = ""
         if "controller" in podname or podname == self.connection_server_name:
-            self.log.debug(
-                f"'{podname}' identified as a Python app, using manual PID discovery with SIGINT."
-            )
+            # Python apps: send SIGINT
             shutdown_command = """
 for p in /proc/[0-9]*; do
-    if [ -f "$p/cmdline" ] && grep -a "drunc-controller" "$p/cmdline" > /dev/null; then
-        kill -SIGINT $(basename "$p");
-    fi
+  if [ -f "$p/cmdline" ] && grep -Ea "(drunc-controller|gunicorn).*:drunc.plugins.local_connectivity_server.app" "$p/cmdline" > /dev/null; then
+    kill -SIGINT $(basename "$p");
+  fi
 done
 """
-        else:  # C++ Applications
-            self.log.debug(f"'{podname}' identified as a C++ app, using SIGQUIT.")
+        else:  # C++ Applications: send SIGQUIT
             shutdown_command = "kill -QUIT 1"
 
         lifecycle_hook = client.V1Lifecycle(
@@ -481,7 +571,27 @@ done
             )
         )
 
-        main_container = client.V1Container(
+        # --- Configure HostPort if root-controller ---
+        container_ports = []
+        if "root-controller" in podname and controller_port:
+            container_ports = [
+                client.V1ContainerPort(
+                    container_port=controller_port,
+                    host_port=controller_port,  # Map node's port directly to container's port
+                    name="grpc",
+                    protocol="TCP",
+                )
+            ]
+            self.log.info(
+                f"Configuring HostPort {controller_port} TCP for '{podname}'."
+            )
+        elif "root-controller" in podname:
+            self.log.warning(
+                f"Root controller '{podname}' has no valid port; cannot configure HostPort."
+            )
+
+        # --- Assemble Container Spec ---
+        return client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/sh", "-c"],
@@ -491,7 +601,7 @@ done
                 for k, v in boot_request.process_description.env.items()
             ],
             lifecycle=lifecycle_hook,
-            ports=[],
+            ports=container_ports,  # Use the port list (empty unless root-controller)
             volume_mounts=[
                 client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
@@ -502,54 +612,59 @@ done
             ),
         )
 
-        all_containers = [main_container]
+    def _get_node_selector(
+        self, boot_request: BootRequest
+    ) -> Tuple[Dict[str, str], Optional[str]]:
+        """Determines node selector and returns the target_host if specified."""
+        if not boot_request.process_restriction.allowed_hosts:
+            return {}, None
 
-        node_selector = {}
-        if boot_request.process_restriction.allowed_hosts:
-            target_host = boot_request.process_restriction.allowed_hosts[0]
-            # Resolve localhost to actual hostname for Kubernetes node selection
-            if target_host == "localhost":
-                target_host = resolve_localhost_to_hostname(target_host)
-                self.log.info(
-                    f"Resolved localhost to '{target_host}' for node selection"
-                )
+        target_host = boot_request.process_restriction.allowed_hosts[0]
+        if target_host == "localhost":
+            target_host = resolve_localhost_to_hostname(target_host)
+            self.log.info(f"Resolved localhost to '{target_host}' for node selection")
 
-            # Verify the target host is available in the cluster before scheduling
-            self._verify_host_in_cluster(target_host)
+        self._verify_host_in_cluster(target_host)
+        node_selector = {"kubernetes.io/hostname": target_host}
+        self.log.info(f"Pod will be scheduled on node '{target_host}'")
+        return node_selector, target_host
 
-            node_selector = {"kubernetes.io/hostname": target_host}
-            self.log.info(
-                f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
-            )
-
-        host_aliases = []
+    def _get_host_aliases(self, podname: str, session: str) -> List[client.V1HostAlias]:
+        """Builds host aliases for mapping 'localhost' to the LCS ClusterIP."""
         if (
-            podname != self.connection_server_name
-            and self.local_connection_server_is_booted
+            podname == self.connection_server_name
+            or not self.local_connection_server_is_booted
         ):
-            # Wait for service to get ClusterIP
-            connection_server_ip = None
-            retry_count = 0
-            max_retries = 10
-            while not connection_server_ip and retry_count < max_retries:
-                connection_server_ip = self._get_connection_server_cluster_ip(session)
-                if not connection_server_ip:
-                    sleep(1)
-                    retry_count += 1
+            return []
 
-            if connection_server_ip:
-                host_aliases = [
-                    client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
-                ]
-                self.log.info(
-                    f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
-                )
-            else:
-                self.log.warning(
-                    f"Could not get connection server ClusterIP for pod '{podname}'"
-                )
+        connection_server_ip = self._get_connection_server_cluster_ip(session)
+        if connection_server_ip:
+            self.log.info(
+                f"Pod '{podname}' will resolve localhost to LCS ClusterIP {connection_server_ip}"
+            )
+            return [
+                client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+            ]
 
-        pod_manifest = client.V1Pod(
+        self.log.warning(f"Could not get LCS ClusterIP for pod '{podname}' hostAlias.")
+        return []
+
+    def _build_pod_manifest(
+        self, podname: str, session: str, boot_request: BootRequest, port: Optional[int]
+    ) -> client.V1Pod:
+        """Builds the complete V1Pod manifest object."""
+
+        main_command_str = self._build_main_command(
+            boot_request.process_description.executable_and_arguments, podname
+        )
+
+        main_container = self._build_main_container(
+            podname, self.configuration.data.image, main_command_str, boot_request, port
+        )
+        node_selector, _ = self._get_node_selector(boot_request)
+        host_aliases = self._get_host_aliases(podname, session)
+
+        return client.V1Pod(
             api_version="v1",
             kind="Pod",
             metadata=self._meta_v1_api(
@@ -564,7 +679,7 @@ done
                 node_selector=node_selector,
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
-                containers=all_containers,
+                containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=[
                     client.V1Volume(
@@ -578,10 +693,43 @@ done
             ),
         )
 
-        try:
-            start_time = time()
-            pod_uid = None
+    def _create_services_for_pod(
+        self, podname: str, session: str, pod_uid: str, port: Optional[int]
+    ) -> None:
+        """Creates the necessary K8s Service for a given pod."""
 
+        is_root_controller = "root-controller" in podname
+
+        if podname == self.connection_server_name:
+            if port:
+                # Class variables (self.connection_server_port) set in __boot
+                self._create_nodeport_service(podname, session, pod_uid)
+            else:
+                self.log.error(
+                    f"Cannot create NodePort service for LCS '{podname}', port is missing."
+                )
+
+        elif is_root_controller:
+            self.log.info(
+                f"Skipping Service creation for '{podname}' as HostPort is configured."
+            )
+
+        else:
+            # Create headless service for all other pods for internal DNS
+            self._create_headless_service(podname, session, pod_uid)
+
+    def _create_pod(
+        self, podname: str, session: str, boot_request: BootRequest, port: Optional[int]
+    ) -> str:
+        """
+        Orchestrates the creation of the Pod manifest, the Pod resource, and any associated Services.
+        Returns the UID of the created pod.
+        """
+
+        pod_manifest = self._build_pod_manifest(podname, session, boot_request, port)
+
+        start_time = time()
+        try:
             while True:
                 try:
                     created_pod = self._core_v1_api.create_namespaced_pod(
@@ -589,63 +737,191 @@ done
                     )
                     self.log.info(f'Creating pod "{session}.{podname}"')
                     pod_uid = created_pod.metadata.uid
-                    break
 
-                # this covers restart where we need to wait for cleanup
+                    self._create_services_for_pod(podname, session, pod_uid, port)
+
+                    return pod_uid  # Success
+
                 except self._api_error_v1_api as e:
-                    is_409_conflict = e.status == 409
-
-                    if (
-                        is_409_conflict
-                        and time() - start_time < self.restart_cleanup_time
+                    if e.status == 409 and (
+                        time() - start_time < self.restart_cleanup_time
                     ):
                         sleep(self.restart_cleanup_polling)
                         continue
-                    raise e
-
-            if podname == self.connection_server_name:
-                self._create_nodeport_service(podname, session, pod_uid)
-            else:
-                self._create_headless_service(podname, session, pod_uid)
+                    else:
+                        raise
 
         except self._api_error_v1_api as e:
-            error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
-
-            if e.status == 409 and time() - start_time >= self.restart_cleanup_time:
-                error_message = (
-                    f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod object "
-                    f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
-                )
-
+            error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}.'
+            if e.status == 409:
+                error_message = f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod '{session}/{podname}' to be deleted."
             self.log.error(error_message)
             raise DruncK8sException(error_message) from e
-
-    def _get_connection_server_cluster_ip(self, session) -> str:
-        """Gets the ClusterIP of the connection server service."""
-        try:
-            service = self._core_v1_api.read_namespaced_service(
-                name=self.connection_server_name, namespace=session
+        except Exception as e:
+            self.log.exception(
+                f"Unexpected error during pod/service creation for '{podname}': {e}"
             )
-            return service.spec.cluster_ip
-        except self._api_error_v1_api as e:
-            self.log.error(f"Failed to get connection server service IP: {e}")
-            return None
+            raise DruncK8sException(f"Unexpected error creating pod {podname}") from e
 
-    def _extract_port_from_cmd(self, boot_request) -> int | None:
-        # Find the gunicorn port argument from exec_and_args_list
-        for e_and_a in boot_request.process_description.executable_and_arguments:
-            if "gunicorn" in e_and_a.exec or (
-                "gunicorn" in " ".join(list(e_and_a.args))
-            ):
-                all_args = [e_and_a.exec] + list(e_and_a.args)
-                arg_str = " ".join(all_args)
-                match = re.search(r"-b\s+[\w\.]+:(\d+)", arg_str)
-                if not match:
-                    # Try to match '--bind'
-                    match = re.search(r"--bind[\s=]+[\w\.]+:(\d+)", arg_str)
-                if match:
-                    return int(match.group(1))
-        return None
+    def _wait_for_pod_api_ready(self, podname: str, session: str) -> str:
+        """
+        [Stage 1 Wait] Waits for a pod to be 'Running' and 'Ready' in the K8s API.
+
+        Returns:
+            str: The name of the node the pod is scheduled on.
+        """
+        self.log.info(
+            f"Stage 1: Waiting for '{podname}' pod to be Running and Ready..."
+        )
+        start_time = time()
+        pod_ready = False
+        node_name = None
+
+        while not pod_ready and (time() - start_time < self.pod_ready_timeout):
+            try:
+                pod_status = self._core_v1_api.read_namespaced_pod_status(
+                    podname, session
+                )
+
+                if pod_status.status.phase == "Failed":
+                    raise DruncK8sPodException(
+                        f"Pod '{podname}' failed to start. Check pod logs."
+                    )
+
+                if pod_status.status.phase == "Running" and pod_status.status.pod_ip:
+                    is_ready = False
+                    if pod_status.status.conditions:
+                        for condition in pod_status.status.conditions:
+                            if condition.type == "Ready" and condition.status == "True":
+                                is_ready = True
+                                break
+                    if is_ready:
+                        self.log.info(
+                            f"Stage 1: Pod '{podname}' is API Ready with IP {pod_status.status.pod_ip}."
+                        )
+                        node_name = pod_status.spec.node_name
+                        pod_ready = True
+
+            except self._api_error_v1_api as e:
+                if e.status == 404:
+                    pass  # Pod not yet visible
+                else:
+                    raise
+            except DruncK8sPodException:
+                raise  # Re-raise pod failure
+            except Exception as e:
+                self.log.warning(f"Error checking pod status for '{podname}': {e}")
+
+            sleep(self.pod_status_check_sleep)
+
+        if not pod_ready:
+            raise DruncK8sException(
+                f"'{podname}' pod did not become API Ready in {self.pod_ready_timeout} seconds."
+            )
+
+        if not node_name:
+            raise DruncK8sException(f"Could not determine node name for '{podname}'.")
+
+        return node_name
+
+    def _wait_for_http_port_ready(self, node_name: str, port: int) -> None:
+        """[Stage 2 Wait] Waits for a URL to be reachable via HTTP (for LCS)."""
+
+        self.log.info(
+            f"Stage 2: Waiting for NodePort (HTTP) http://{node_name}:{port} to be reachable..."
+        )
+        port_ready = False
+        url = f"http://{node_name}:{port}"
+
+        start_time = time()
+        http_startup_timeout = self.pod_ready_timeout
+
+        while not port_ready and (time() - start_time < http_startup_timeout):
+            try:
+                urllib.request.urlopen(url, timeout=1)
+                port_ready = True
+            except (
+                urllib.error.URLError,
+                ConnectionRefusedError,
+                TimeoutError,
+                OSError,
+            ) as e:
+                self.log.debug(f"NodePort {url} not ready yet ({e}), retrying...")
+                sleep(self.pod_status_check_sleep)
+
+        if not port_ready:
+            raise DruncK8sException(
+                f"NodePort {url} did not become reachable in {http_startup_timeout} seconds."
+            )
+
+        self.log.info(f"Stage 2: NodePort {url} is now active.")
+
+    def _wait_for_tcp_port_ready(self, node_name: str, port: int) -> None:
+        """[Stage 2 Wait] Waits for a port to be reachable via TCP (for gRPC controllers)."""
+
+        self.log.info(
+            f"Stage 2: Waiting for HostPort (TCP) {node_name}:{port} to be reachable..."
+        )
+        port_ready = False
+
+        grpc_startup_timeout = 120  # Wait up to 2 minutes
+        start_time = time()
+
+        while not port_ready and (time() - start_time < grpc_startup_timeout):
+            sock = None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(1.0)
+                result = sock.connect_ex((node_name, port))
+
+                if result == 0:
+                    port_ready = True
+                else:
+                    self.log.debug(
+                        f"HostPort {node_name}:{port} not ready yet (socket error {result}), retrying..."
+                    )
+                    sleep(self.pod_status_check_sleep)
+
+            except socket.gaierror as e:
+                self.log.warning(
+                    f"Failed to resolve hostname '{node_name}': {e}. Retrying..."
+                )
+                sleep(self.pod_status_check_sleep)
+            except Exception as e:
+                self.log.debug(
+                    f"HostPort not ready yet (Socket error: {e}), retrying..."
+                )
+                sleep(self.pod_status_check_sleep)
+            finally:
+                if sock:
+                    sock.close()
+
+        if not port_ready:
+            raise DruncK8sException(
+                f"HostPort {node_name}:{port} did not become reachable in {grpc_startup_timeout} seconds."
+            )
+
+        self.log.info(
+            f"Stage 2: HostPort {node_name}:{port} is active (TCP connect success)."
+        )
+
+    def _check_nodeport_collision(self, port: int, session: str, podname: str) -> None:
+        """Checks if the requested NodePort is already in use."""
+        self.log.debug(f"Checking for NodePort collisions on port {port}")
+        api = self._core_v1_api
+        all_services = api.list_service_for_all_namespaces()
+        for svc in all_services.items:
+            if not svc.spec.type == "NodePort":
+                continue
+            for p in svc.spec.ports:
+                if p.node_port == port and (
+                    svc.metadata.namespace != session or svc.metadata.name != podname
+                ):
+                    raise DruncK8sException(
+                        f"NodePort {port} is already in use by service "
+                        f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
+                        "Cannot start another local connection server with the same port."
+                    )
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
         """
@@ -711,17 +987,18 @@ done
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
-        Internal boot method. Handles pod creation and special logic for the connection server.
-        - For the connection server: Wait for it to be ready and check the NodePort service
-        - For all other pods: Boot is NON-BLOCKING.
+        Internal boot method. Handles pod creation and waits for critical services.
+        - Waits for LCS (NodePort) and root-controller (HostPort) to be fully ready.
+        - Non-blocking for all other pods.
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
+        self.log.debug(f"__boot called for '{podname}' (UUID {uuid})")
 
+        # Validation and Pre-checks
         if not validate_k8s_session_name(session):
             raise DruncK8sNamespaceException(
-                f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
-                "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
+                f'Invalid session/namespace name "{session}". Must match RFC1123 label.'
             )
 
         if boot_request.process_restriction.allowed_hosts:
@@ -731,106 +1008,57 @@ done
         if uuid in self.boot_request:
             raise DruncK8sPodException(f'"{session}.{podname}":{uuid} already exists!')
 
-        # Extract ports for LCS
+        port = self._extract_port_from_cmd(boot_request)
+
+        # LCS-specific Pre-boot Checks
         if podname == self.connection_server_name:
-            self.log.info(f"Waiting for '{podname}' to become ready...")
-
-            port = None
-            env_vars = boot_request.process_description.env
-
-            if "CONNECTION_PORT" in env_vars:
-                port_str = env_vars["CONNECTION_PORT"]
-                try:
-                    port = int(port_str)
-                    self.log.info(
-                        f"Using port {port} from 'CONNECTION_PORT' environment variable."
-                    )
-                except (ValueError, TypeError):
-                    raise DruncK8sException(
-                        f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
-                    )
-
-            if port is None:
-                self.log.info(
-                    "CONNECTION_PORT not found in env, falling back to parsing gunicorn command."
-                )
-                port = self._extract_port_from_cmd(boot_request)
-
-            if port:
-                self.connection_server_port = port
-                self.connection_server_node_port = port
-            else:
+            if not port:
                 raise DruncK8sException(
-                    "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
+                    f"Cannot boot LCS '{podname}', port extraction failed."
                 )
+            self.connection_server_port = port
+            self.connection_server_node_port = port
+            self._check_nodeport_collision(port, session, podname)
 
-            # Check for NodePort collision
-            api = self._core_v1_api
-            all_services = api.list_service_for_all_namespaces()
-            for svc in all_services.items:
-                if not svc.spec.type == "NodePort":
-                    continue
-                for p in svc.spec.ports:
-                    if p.node_port == self.connection_server_node_port and (
-                        svc.metadata.namespace != session
-                        or svc.metadata.name != podname
-                    ):
-                        raise DruncK8sException(
-                            f"NodePort {self.connection_server_node_port} is already in use by service "
-                            f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
-                            "Cannot start another local connection server with the same port."
-                        )
-
+        # Create K8s Resources
         self._create_namespace(session)
 
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        self._create_pod(podname, session, boot_request)
+        # Create Pod, Services, and get UID
+        self._create_pod(podname, session, boot_request, port)
+        # Add the UUID label *after* the pod is successfully created
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
-        # Special handling only for the connection server
-        if podname == self.connection_server_name:
-            self.log.info(f"Waiting for '{podname}' to become ready...")
+        # Wait for Critical Pods (LCS and root-controller)
+        try:
+            if podname == self.connection_server_name:
+                node_name = self._wait_for_pod_api_ready(podname, session)
+                self._wait_for_http_port_ready(node_name, port)
+                self.local_connection_server_is_booted = True
+                self.log.info(f"Connection server '{podname}' is fully ready.")
 
-            start_time = time()
-            while time() - start_time < self.pod_ready_timeout:
-                try:
-                    pod_status = self._core_v1_api.read_namespaced_pod_status(
-                        podname, session
-                    )
-                    if (
-                        pod_status.status.phase == "Running"
-                        and pod_status.status.pod_ip
-                    ):
-                        self.log.info(
-                            f"'{podname}' is ready with IP {pod_status.status.pod_ip}."
-                        )
-                        self.local_connection_server_is_booted = True
+            elif "root-controller" in podname:
+                node_name = self._wait_for_pod_api_ready(podname, session)
+                self._wait_for_tcp_port_ready(node_name, port)
+                self.log.info(f"Controller '{podname}' is fully ready.")
 
-                        # Log connection information using the NodePort service
-                        node_name = pod_status.spec.node_name
-                        self.log.info(f"Connection server '{podname}' is ready.")
-                        self.log.info(
-                            f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
-                        )
-                        self.log.info(
-                            f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
-                        )
-
-                        break
-                except self._api_error_v1_api as e:
-                    if e.status == 404:
-                        pass
-                    else:
-                        raise e
-                sleep(self.pod_status_check_sleep)
-            else:
-                raise DruncK8sException(
-                    f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
+        except Exception as e:
+            # If the wait fails, we need to clean up the pod we just created
+            self.log.error(
+                f"Failed to wait for pod '{podname}' to be ready: {e}. Attempting cleanup..."
+            )
+            try:
+                self._kill_pod(podname, session)  # Use the simple kill pod method
+            except Exception as kill_e:
+                self.log.error(
+                    f"Failed to cleanup pod '{podname}' after wait failure: {kill_e}"
                 )
+            raise  # Re-raise the original waiting exception
 
+        # Return ProcessInstance
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)
         pr.CopyFrom(self.boot_request[uuid].process_restriction)
