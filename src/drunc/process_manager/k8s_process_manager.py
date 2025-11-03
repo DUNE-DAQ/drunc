@@ -3,6 +3,7 @@ import getpass
 import os
 import re
 import signal
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -992,6 +993,96 @@ class K8sProcessManager(ProcessManager):
             self.log.info(
                 f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
             )
+
+        elif "root-controller" in podname:
+            self.log.info(f"Waiting for '{podname}' (HostPort) to become ready...")
+            node_name = None
+            pod_ready = False
+            controller_port = self._extract_port_from_cmd(boot_request)
+            
+            if not controller_port or controller_port == 0:
+                 raise DruncK8sException(f"Cannot wait for '{podname}', port is 0 or missing.")
+
+            # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+            self.log.info(f"Stage 1: Waiting for '{podname}' pod to be Running and Ready...")
+            start_time = time()
+            api_ready_timeout = self.pod_ready_timeout # Use standard pod timeout
+            
+            while not pod_ready and (time() - start_time < api_ready_timeout):
+                try:
+                    pod_status = self._core_v1_api.read_namespaced_pod_status(
+                        podname, session
+                    )
+                    if (
+                        pod_status.status.phase == "Running"
+                        and pod_status.status.pod_ip
+                    ):
+                        is_ready = False
+                        if pod_status.status.conditions:
+                            for condition in pod_status.status.conditions:
+                                if condition.type == "Ready" and condition.status == "True":
+                                    is_ready = True
+                                    break
+                        if is_ready:
+                            self.log.info(
+                                f"Stage 1: Pod '{podname}' is API Ready with IP {pod_status.status.pod_ip}."
+                            )
+                            node_name = pod_status.spec.node_name
+                            pod_ready = True # Exit this loop and go to Stage 2
+                
+                except self._api_error_v1_api as e:
+                    if e.status == 404: pass # Pod not yet created/visible
+                    else: raise e
+                sleep(self.pod_status_check_sleep)
+            
+            if not pod_ready:
+                raise DruncK8sException(
+                    f"'{podname}' pod did not become API Ready in {api_ready_timeout} seconds."
+                )
+
+            # --- STAGE 2: Wait for HostPort to be externally reachable (using TCP socket) ---
+            self.log.info(f"Stage 2: Waiting for HostPort {node_name}:{controller_port} to be reachable...")
+            hostport_ready = False
+            
+            grpc_startup_timeout = 120 
+            hostport_start_time = time()
+            
+            while not hostport_ready and (time() - hostport_start_time < grpc_startup_timeout):
+                # We will try to open a simple TCP socket instead of using HTTP
+                sock = None # Initialize sock to None
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(1.0) # 1 second timeout
+                    # Try to connect
+                    result = sock.connect_ex((node_name, controller_port))
+                    
+                    if result == 0:
+                        # 0 means the connection was successful
+                        hostport_ready = True
+                        self.log.info(f"Stage 2: HostPort {node_name}:{controller_port} is active (TCP connect success).")
+                    else:
+                        # Connection failed (e.g., connection refused, no route)
+                        self.log.debug(f"HostPort {node_name}:{controller_port} not ready yet (socket error {result}), retrying...")
+                        sleep(self.pod_status_check_sleep) # Wait before retrying
+                        
+                except socket.gaierror as e:
+                     # Handle DNS name resolution error (e.g., node_name not found)
+                     self.log.warning(f"Failed to resolve hostname '{node_name}': {e}. Retrying...")
+                     sleep(self.pod_status_check_sleep)
+                except Exception as e:
+                    # Catch any other socket errors
+                    self.log.debug(f"HostPort not ready yet (Socket error: {e}), retrying...")
+                    sleep(self.pod_status_check_sleep)
+                finally:
+                    if sock:
+                        sock.close() # Always close the socket
+            
+            if not hostport_ready:
+                raise DruncK8sException(
+                    f"HostPort {node_name}:{controller_port} did not become reachable in {grpc_startup_timeout} seconds."
+                )
+            
+            self.log.info(f"Controller '{podname}' is fully ready.")
 
         pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
         pd.CopyFrom(self.boot_request[uuid].process_description)

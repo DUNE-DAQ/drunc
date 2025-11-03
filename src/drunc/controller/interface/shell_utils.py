@@ -10,6 +10,13 @@ from dataclasses import dataclass
 from functools import partial
 from urllib.parse import urlparse
 
+import subprocess
+import json
+from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.controller_pb2 import AddressedCommand
+from druncschema.token_pb2 import Token
+from drunc.utils.grpc_utils import grpc_proto_to_dict, dict_to_grpc_proto
+
 import click
 import grpc
 from druncschema.controller_pb2 import (
@@ -45,6 +52,56 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import format_name_for_cli, get_logger
 
+_GRPC_HELPER_SCRIPT = """
+import grpc
+import sys
+import json
+from druncschema.controller_pb2_grpc import ControllerStub
+from druncschema.controller_pb2 import AddressedCommand
+from druncschema.token_pb2 import Token
+from druncschema.request_response_pb2 import Request
+from drunc.utils.grpc_utils import grpc_proto_to_dict, dict_to_grpc_proto
+
+# This function mimics the successful test_grpc_client.py
+def run_describe(address, token_dict):
+    try:
+        # Re-create the token object from the dictionary
+        token = dict_to_grpc_proto(token_dict, Token())
+        
+        options = [] # Use minimal, clean options, just like the test script
+        channel = grpc.insecure_channel(address, options=options)
+        stub = ControllerStub(channel)
+        
+        request = AddressedCommand(
+            token=token,
+            command_name="describe",
+            target="",
+            execute_along_path=True,
+        )
+        
+        # Use a short, reasonable timeout
+        response = stub.describe(request, timeout=10.0) 
+        
+        # Print the successful response as JSON to stdout
+        print(json.dumps(grpc_proto_to_dict(response)))
+        sys.exit(0)
+        
+    except Exception as e:
+        # Print any errors to stderr
+        print(f"gRPC helper script failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print(f"Usage: {sys.argv[0]} <address> <token_json>", file=sys.stderr)
+        sys.exit(1)
+        
+    address = sys.argv[1]
+    token_dict = json.loads(sys.argv[2])
+    run_describe(address, token_dict)
+"""
 
 @dataclass(slots=True)
 class StatusDescriptionPair:
@@ -68,8 +125,11 @@ def match_children(
 def get_status_table(
     status_response: StatusResponse, describe_response: DescribeResponse
 ):
+    print("GST 1")
     status = status_response.status
+    print("GST 2")
     description = describe_response.description
+    print("GST 3")
 
     t = Table(
         title=(
@@ -86,16 +146,23 @@ def get_status_table(
     t.add_column("Included")
     t.add_column("Endpoint")
 
+    print("GST 4")
+
     def add_status_to_table(
         table: Table,
         status_response: StatusResponse,
         describe_response: DescribeResponse,
         prefix: str,
     ):
+        print("GST 41")
         status = status_response.status
+        print("GST 42")
         description = describe_response.description
+        print("GST 43")
         if status is None or description is None:
             return
+
+        print("GST 44")
 
         def update_endpoint(endpoint: str) -> str:
             """
@@ -110,11 +177,18 @@ def get_status_table(
             if not endpoint:
                 return ""
 
+            print("GST 45")
+
             ip_address = urlparse(endpoint).hostname
+            print("GST 46")
             if not ip_address:
                 return ""
-            hostname, _, _ = socket.gethostbyaddr(ip_address)
-            return endpoint.replace(ip_address, hostname)
+            print("GST 47")
+            print(ip_address)
+            #hostname, _, _ = socket.gethostbyaddr(ip_address)
+            print("GST 48")
+            #return endpoint.replace(ip_address, hostname)
+            return endpoint              
 
         table.add_row(
             prefix + status_response.name,
@@ -126,14 +200,19 @@ def get_status_table(
             update_endpoint(description.endpoint),
         )
 
+        print("GST 49.1")
         children = match_children(status_response.children, describe_response.children)
+        print("GST 49.2")
         children_list = sorted(list(children.keys()))
+        print("GST 49.3")
 
+        
         for child in children_list:
             child_status = getattr(children[child], "status", None)
             if not child_status:
                 continue
             child_describe = children[child].description
+            print("GST 49.6")
             if child_status is None or child_describe is None:
                 raise DruncShellException(
                     f"No matching status and description for child '{child}'"
@@ -141,6 +220,8 @@ def get_status_table(
             add_status_to_table(t, child_status, child_describe, prefix + "  ")
 
     add_status_to_table(t, status_response, describe_response, "")
+
+    print("GST 5")
 
     def add_runinfo_to_table(table: Table, status: Status):
         table.add_row("Run number", str(status.run_info.run_number))
@@ -162,6 +243,8 @@ def get_status_table(
         table.add_row("Config file", status.run_info.run_config_file)
         table.add_row("Config ID", status.run_info.run_config_name)
 
+    print("GST 6")
+
     if status.HasField("run_info"):
         runinfo_table = Table(
             title="Run Info",
@@ -171,6 +254,8 @@ def get_status_table(
         runinfo_table.add_column()
         add_runinfo_to_table(runinfo_table, status)
         return Group(t, runinfo_table)
+
+    print("GST 7")
 
     return t
 
@@ -183,8 +268,11 @@ class StatusTableUpdater(Progress):
 
     def update_table(self):
         statuses = self.ctx.get_driver("controller").status()
+        print("MAYBE")
         descriptions = self.ctx.get_driver("controller").describe()
+        print("MAYBE2")
         self.table = get_status_table(statuses, descriptions)
+        print("MAYBE3")
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -223,7 +311,6 @@ def controller_cleanup_wrapper(ctx):
 
     return controller_cleanup
 
-
 def controller_setup(ctx, controller_address):
     log = logging.getLogger("controller.shell_utils")
     if not hasattr(ctx, "took_control"):
@@ -232,8 +319,7 @@ def controller_setup(ctx, controller_address):
         )
 
     desc = Description()
-
-    timeout = 60
+    timeout = 60 # Total timeout for the connection loop
 
     with Progress(
         SpinnerColumn(),
@@ -248,28 +334,66 @@ def controller_setup(ctx, controller_address):
         )
 
         stored_exception = None
+        response_json_str = None # Store the stdout from the helper
 
         start_time = time.time()
         while time.time() - start_time < timeout:
             progress.update(waiting, completed=time.time() - start_time)
 
             try:
-                desc = ctx.get_driver("controller").describe().description
-                stored_exception = None
-                break
-            except ServerUnreachable as e:
+                # --- NEW SUBPROCESS CONNECTION LOGIC ---
+                
+                python_exe = sys.executable 
+                token_dict = grpc_proto_to_dict(ctx.get_token()) # This was line 316
+                env = os.environ.copy()
+                
+                process = subprocess.Popen(
+                    [python_exe, "-c", _GRPC_HELPER_SCRIPT, controller_address, json.dumps(token_dict)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    env=env
+                )
+                
+                stdout, stderr = process.communicate(timeout=15) 
+                
+                if process.returncode == 0:
+                    response_json_str = stdout
+                    stored_exception = None
+                    log.debug("gRPC helper script connected successfully.")
+                    break 
+                else:
+                    raise ServerUnreachable(f"gRPC helper script failed (rc={process.returncode}): {stderr}")
+                
+                # --- END NEW SUBPROCESS LOGIC ---
+
+            except (ServerUnreachable, subprocess.TimeoutExpired, json.JSONDecodeError) as e:
                 stored_exception = e
-                time.sleep(1)
+                log.debug(f"Connection attempt failed: {e}. Retrying in 1s...")
+                time.sleep(1) # Wait 1s before retrying
 
             except Exception as e:
-                ctx.critical("Could not get the controller's status")
-                ctx.critical(e)
-                ctx.critical("Exiting.")
+                # --- FIX IS HERE ---
+                ctx.log.critical("Could not get the controller's status") # Use ctx.log.critical
+                ctx.log.critical(e)
+                ctx.log.critical("Exiting.")
+                # --- END FIX ---
                 ctx.terminate()
                 raise e
 
     if stored_exception is not None:
+        log.error("Failed to connect to controller after timeout.")
         raise stored_exception
+
+    try:
+        response_dict = json.loads(response_json_str)
+        if 'description' not in response_dict:
+             raise DruncSetupException(f"Invalid 'describe' response from helper script: 'description' field missing. Response: {response_json_str}")
+        desc = dict_to_grpc_proto(response_dict['description'], Description())
+    except Exception as e:
+         log.error(f"Failed to parse gRPC helper JSON response: {e}")
+         log.error(f"Response was: {response_json_str}")
+         raise DruncSetupException(f"Failed to parse gRPC response: {e}")
 
     log.info(
         f"{controller_address} is '{desc.name}.{desc.session}' (name.session), starting listening..."
@@ -279,20 +403,18 @@ def controller_setup(ctx, controller_address):
         ctx.start_listening_controller(desc.broadcast)
 
     log.debug("Connected to the controller")
-
-    # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+    
+    # --- This section remains the same, checking status and taking control ---
     timeout = 60 + 10
-
     time_start = time.time()
     state = ctx.get_driver("controller").status().status.state.lower()
     with StatusTableUpdater(ctx) as updater:
         task = updater.add_task("Waiting on tree initialisation...", total=timeout)
         while time.time() - time_start < timeout and state == "initialising":
             state = ctx.get_driver("controller").status().status.state.lower()
-            updater.update(task, completed=time.time() - time_start)
+            updater.update(task, completed=time.time() - start_time)
             updater.update_table()
             time.sleep(0.5)
-
         updater.update_table()
 
     if state == "initialising":
@@ -317,7 +439,6 @@ def controller_setup(ctx, controller_address):
         raise e
 
     return desc
-
 
 def search_fsm_command(command_name: str, command_list: list[FSMCommand]):
     for command in command_list:
