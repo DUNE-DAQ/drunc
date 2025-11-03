@@ -450,6 +450,12 @@ class RESTAPIChildNode(ClientSideChild):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
+        # Don't execute command if we are excluded.
+        if self.state.excluded():
+            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            return response
+
         try:
             module_data = json.loads(command.data if command.data else "{}")
         except JSONDecodeError as e:
