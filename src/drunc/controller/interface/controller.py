@@ -106,51 +106,14 @@ def controller_cli(
         token=token,
     )
 
-# In src/drunc/controller/interface/controller.py
-
-    def serve(listen_addr: str) -> tuple:
+    def serve(listen_addr: str) -> None:
         server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
         add_ControllerServicer_to_server(ctrlr, server)
-
-        # --- MODIFIED BINDING LOGIC ---
-        bind_addr = listen_addr # Default fallback
-        actual_port = 0
-        try:
-            # Extract port, removing potential grpc:// prefix and host part
-            port_str = listen_addr.split(':')[-1]
-            port = int(port_str)
-            
-            # We MUST bind to '[::]' (all interfaces) for HostPort to work
-            bind_addr = f'[::]:{port}' 
-            
-            log.info(f"Original listen address '{listen_addr}', binding server to '{bind_addr}'.")
-            actual_port = server.add_insecure_port(bind_addr) # Bind here
-            
-            if actual_port == 0 and port != 0: # Check if binding failed (port=0 is OK)
-                 raise RuntimeError(f"Failed to bind server to {bind_addr}, port came back as 0.")
-            elif port == 0 and actual_port != 0:
-                 log.info(f"OS assigned port {actual_port} for binding '[::]:0'")
-                 port = actual_port # Update port to the one assigned
-            elif actual_port != port:
-                 log.warning(f"Requested port {port} but bound to {actual_port}. Check for conflicts.")
-
-        except (ValueError, IndexError, RuntimeError) as e:
-            log.critical(f"CRITICAL: Failed to parse port or bind server: {e}. Attempting fallback...")
-            # Fallback: Try binding to the original address directly
-            try:
-                actual_port = server.add_insecure_port(listen_addr)
-                if actual_port == 0:
-                     raise RuntimeError(f"Fallback bind to '{listen_addr}' also failed (port 0).")
-                log.warning(f"Bound to fallback address '{listen_addr}' on port {actual_port}. HostPort might not work correctly.")
-                bind_addr = listen_addr # Update bind_addr for logging
-            except Exception as fallback_e:
-                 log.critical(f"CRITICAL: Fallback server bind failed: {fallback_e}")
-                 sys.exit(1) # Exit pod on total bind failure
-        # --- END MODIFIED BINDING LOGIC ---
+        port = server.add_insecure_port(listen_addr)
 
         server.start()
-        log.info(f"'{ctrlr.name}' gRPC server started, listening internally on '{bind_addr}' (reported port: {actual_port})")
-        return server, actual_port # Return the port it *actually* bound to
+        log.debug(f"'{ctrlr.name}' was started on '{port}'")
+        return server, port
 
     def controller_shutdown():
         log.info("Requested termination")
@@ -162,8 +125,7 @@ def controller_cli(
         l = get_logger("controller.kill_me")
         l.info("Sending SIGKILL")
         if ctrlr.top_segment_controller:
-            if hasattr(ctrlr, "connectivity_service") and ctrlr.connectivity_service:
-                ctrlr.connectivity_service.retract_partition(fail_quickly=True)
+            ctrlr.connectivity_service.retract_partition(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())
         os.killpg(pgrp, signal.SIGKILL)
 
@@ -176,27 +138,9 @@ def controller_cli(
             kill_me(sig, frame)
 
     try:
-        # Pass commandfacility (which becomes listen_addr inside serve)
-        server, actual_port_bound = serve(commandfacility)
-
-        # --- MODIFIED ADVERTISE LOGIC ---
-        # We need to advertise the EXTERNAL address, not the internal '[::]'
-        advertise_host = commandfacility
-        if advertise_host.startswith('grpc://'):
-             advertise_host = advertise_host[len('grpc://'):]
-        advertise_host = advertise_host.split(':')[0] # Get 'localhost' or IP from -c arg
-
-        # Resolve 'localhost' to the node's real, external IP for advertising
-        advertise_host_resolved = resolve_localhost_and_127_ip_to_network_ip(advertise_host)
-        
-        # Use the actual port the server bound to
-        advertise_address = f"grpc://{advertise_host_resolved}:{actual_port_bound}"
-        
-        log.info(f"Advertising controller address as: {advertise_address}")
-        # Update the controller's internal URI, which is used by describe()
-        ctrlr.advertise_control_address(advertise_address) 
-        # --- END MODIFIED ADVERTISE LOGIC ---
-
+        server, port = serve(commandfacility)
+        server_name = commandfacility.split(":")[0]
+        ctrlr.advertise_control_address(f"grpc://{server_name}:{port}")
         ctrlr.init_controller()
 
         # Add signal handling for gRPC server
@@ -223,7 +167,3 @@ def controller_cli(
 
     except Exception as e:
         log.exception(e)
-        log.critical("Controller_cli failed to start, exiting.")
-        controller_shutdown() # Try to clean up
-        sys.exit(1) # Exit with error
-

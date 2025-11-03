@@ -170,6 +170,7 @@ def copy_token(token: Token) -> Token:
     token_copy.CopyFrom(token)
     return token_copy
 
+
 @dataclass
 class GrpcErrorDetails:
     """
@@ -330,3 +331,4 @@ def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
         proto_class_instance,
         ignore_unknown_fields=True
     )
+

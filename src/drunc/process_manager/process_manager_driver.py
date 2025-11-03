@@ -25,14 +25,20 @@ from druncschema.request_response_pb2 import Request
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
+from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.process_manager.utils import get_log_path, get_rte_script
+from drunc.process_manager.utils import (
+    get_log_path,
+    get_rte_script,
+)
 from drunc.utils.grpc_utils import (
     copy_token,
     extract_grpc_rich_error,
     handle_grpc_error,
 )
 from drunc.utils.utils import (
+    get_control_type_and_uri_from_connectivity_service,
     get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
@@ -47,8 +53,7 @@ class ProcessManagerDriver:
         self.log = get_logger("controller.ProcessManagerDriver")
         self.address = address
         options = [
-            ("grpc.keepalive_time_ms", 60000),  # pings the server every 60 seconds
-            ("grpc.enable_retries", 1),
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
         self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
@@ -372,21 +377,34 @@ To debug it, close drunc and run the following command:
     ):
         """
         Attempts to discover the controller address after booting applications.
+        Tries dynamic lookup via connectivity service first, then falls back
+        to static OKS configuration.
         """
-        top_controller_name = session_dal.segment.controller.id
+        # Define controller name ONCE in the outer scope
+        try:
+            top_controller_name = session_dal.segment.controller.id
+        except AttributeError as e:
+            self.log.error(f"Could not determine controller name from OKS: {e}")
+            top_controller_name = "Unknown-Controller"  # Set a default
 
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
             env = {}
             collect_variables(session_dal.environment, env)
+            # Note: 'env' variable is not currently used in this function.
 
-            """
+            # ---
+            # Strategy 1: Try dynamic lookup via Connectivity Service (if available)
+            # ---
             if csc:
+                self.log.info(
+                    f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
+                )
                 try:
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60) + 60
-                    )  # root-controller timout to find all its children + 60s for the root controller to start itself
+                    )  # root-controller timeout to find all its children + 60s for the root controller to start itself
                     self.log.debug(
                         f"Using a timeout of {timeout}s to find the [green]{top_controller_name}[/] on the connectivity service"
                     )
@@ -398,27 +416,54 @@ To debug it, close drunc and run the following command:
                         progress_bar=True,
                         title=f"Looking for [green]{top_controller_name}[/] on the connectivity service...",
                     )
+
+                    address = uri.replace("grpc://", "")
+                    self.log.info(
+                        f"Successfully discovered controller '{top_controller_name}' via connectivity service: {address}"
+                    )
+                    return address  # SUCCESS: Return dynamically found address
+
                 except ApplicationLookupUnsuccessful:
+                    self.log.warning(
+                        f"Connectivity service lookup failed: Application '{top_controller_name}' not found."
+                    )
+                    # Log the original failure details
                     self._log_controller_lookup_failure(
                         session_name,
                         top_controller_name,
                         connection_server,
                         connection_port,
                     )
-                    return
+                    self.log.warning(
+                        "Falling back to static OKS configuration for address resolution."
+                    )
+                    # DO NOT return. Fall through to Strategy 2.
 
-                return uri.replace("grpc://", "")
-            """
+                except Exception as e:
+                    self.log.error(
+                        f"An unexpected error occurred during connectivity service lookup: {e}. "
+                        "Falling back to static OKS configuration."
+                    )
+                    # DO NOT return. Fall through to Strategy 2.
+            else:
+                self.log.info(
+                    "Connectivity service client (csc) is not available. Using static OKS configuration only."
+                )
+
+            # ---
+            # Strategy 2: Fallback to static OKS configuration
+            # ---
+            self.log.info(
+                "Attempting to resolve controller address from static OKS configuration."
+            )
 
             port_number = None
             protocol = None
             service_found = None
-            top_controller_name = None  # Initialize here
-
-            print("ARE WE HERE NOW")
+            # top_controller_name is already available from the outer scope
 
             try:
-                top_controller_name = session_dal.segment.controller.id
+                # We already have top_controller_name from outer scope
                 self.log.info(
                     f"Top controller name from OKS config: '{top_controller_name}'"
                 )
@@ -438,7 +483,6 @@ To debug it, close drunc and run the following command:
                 )
 
                 # Get the first (and presumably only) control service linked
-                # Using next(iter(...)) provides a slightly cleaner way to get the first item or None
                 service_found = next(
                     iter(session_dal.segment.controller.exposes_service), None
                 )
@@ -447,7 +491,6 @@ To debug it, close drunc and run the following command:
                     self.log.info(
                         f"Found linked control service object with ID: '{service_found.id}'"
                     )
-                    # Check if the service object actually has the port and protocol attributes
                     if (
                         hasattr(service_found, "port")
                         and service_found.port is not None
@@ -472,7 +515,6 @@ To debug it, close drunc and run the following command:
                         )
 
                 else:
-                    # This case should ideally not be reached due to the check above, but good for robustness
                     self.log.error(
                         f"Could not retrieve the first service object from 'exposes_service' for controller '{top_controller_name}'."
                     )
@@ -523,7 +565,7 @@ To debug it, close drunc and run the following command:
                 f"Successfully resolved controller address from OKS config: {final_address}"
             )
             return final_address
-            # --- END CORRECTED LOGIC WITH ADDED LOGGING ---
+            # --- END OKS FALLBACK LOGIC ---
 
         def keyboard_interrupt_on_sigint(signal, frame):
             self.log.warning("Interrupted")
@@ -538,7 +580,7 @@ To debug it, close drunc and run the following command:
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
                 self._log_controller_interrupt(
-                    self, top_controller_name, connection_server, connection_port
+                    top_controller_name, connection_server, connection_port
                 )
             else:
                 self.log.warning(

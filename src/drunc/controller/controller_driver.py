@@ -1,4 +1,3 @@
-import os
 from functools import wraps
 
 import grpc
@@ -34,9 +33,10 @@ class ControllerDriver:
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ControllerDriver")
         self.address = address
-        options = [] 
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
         target_address = f"ipv4:{self.address}"
-        self.log.info(f"Creating ControllerDriver for '{self.address}', connecting to gRPC target '{target_address}'")
         self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)
         self.token = Token()
@@ -102,36 +102,8 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        # --- NEW DIAGNOSTIC BLOCK ---
-        print("\n--- INSIDE ControllerDriver.describe() ---", flush=True)
-        print(f"Connecting to self.address: {self.address}", flush=True)
-        print(f"Request token user: {request.token.user_name}", flush=True)
-        print(f"Request target: '{request.target}'", flush=True)
-        print(f"Timeout: {timeout}s", flush=True)
-        
-        # Check environment variables *at the moment of the call*
-        print(f"ENV http_proxy: {os.environ.get('http_proxy')}", flush=True)
-        print(f"ENV https_proxy: {os.environ.get('https_proxy')}", flush=True)
-        print(f"ENV no_proxy: {os.environ.get('no_proxy')}", flush=True)
-        print(f"ENV GRPC_ENABLE_FORK_SUPPORT: {os.environ.get('GRPC_ENABLE_FORK_SUPPORT')}", flush=True)
-        print(f"gRPC Channel Target (from self.channel): {self.channel._channel.target().decode('utf-8')}", flush=True)
-        print("--- CALLING self.stub.describe() NOW (Line 102) ---", flush=True)
-        # --- END DIAGNOSTIC BLOCK ---
-
         try:
-            # This is the line that fails (line 102)
-            print("RIGHT HERE KID")
             response = self.stub.describe(request, timeout=timeout)
-            print("RIGHT AFTER")
-            print(response)            
-
-        except socket.herror as e:
-            # Also add a specific catch to be 100% sure
-            print(f"\n--- CAUGHT socket.herror AT THE SOURCE ---", flush=True)
-            print(f"ERROR: {e}", flush=True)
-            print(f"gRPC Channel Target was: {self.channel._channel.target().decode('utf-8')}", flush=True)
-            raise e # Re-raise the error
-
         except grpc.RpcError as e:
             handle_grpc_error(e)
 
