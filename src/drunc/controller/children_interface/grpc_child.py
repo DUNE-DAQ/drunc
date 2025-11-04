@@ -6,6 +6,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandRequest,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -221,6 +222,28 @@ class gRPCChildNode(ChildNode):
 
         try:
             response = self.stub.execute_fsm_command(request)
+        except grpc.RpcError as error:
+            self.handle_child_grpc_error(error)
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> Response:
+        request = ExecuteExpertCommandRequest(
+            token=None,
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.execute_expert_command(request)
         except grpc.RpcError as error:
             self.handle_child_grpc_error(error)
 
