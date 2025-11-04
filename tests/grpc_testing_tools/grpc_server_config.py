@@ -1,6 +1,6 @@
 from typing import Any, List, Tuple
 
-from tests.grpc_testing_tools.available_grpc_servers import ServerType
+from grpc_testing_tools.available_grpc_servers import ServerType
 
 
 class GrpcServerConfig:

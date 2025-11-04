@@ -16,18 +16,17 @@ from typing import Generator, List, Optional
 
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
-
-from tests.grpc_testing_tools.available_grpc_servers import ServerType
-from tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
-from tests.grpc_testing_tools.grpc_server_manager import (
+from grpc_testing_tools.available_grpc_servers import ServerType
+from grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from tests.grpc_testing_tools.multiprocessing_connection_manager import (
+from grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
-from tests.grpc_testing_tools.port_cleaner import kill_process_on_port
-from tests.grpc_testing_tools.test_services_pb2 import (
+from grpc_testing_tools.port_cleaner import kill_process_on_port
+from grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
     KillRequest,
@@ -39,7 +38,7 @@ from tests.grpc_testing_tools.test_services_pb2 import (
 )
 
 # Import gRPC generated code
-from tests.grpc_testing_tools.test_services_pb2_grpc import (
+from grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
@@ -126,7 +125,7 @@ def test_resources() -> Generator[ResourcesForTest, None, None]:
 
 
 # Long test - Run pytest with --test-grpc option to enable
-@pytest.mark.grpc
+# @pytest.mark.grpc
 def test_manager_boot_and_kill_via_grpc(test_resources):
     """
     Test that verifies Manager can boot servers via Boot RPC and kill them via Kill RPC.
@@ -144,7 +143,7 @@ def test_manager_boot_and_kill_via_grpc(test_resources):
         test_resources: Fixture providing managed test resources with guaranteed cleanup
     """
 
-    PROJECT_ROOT = Path(__file__).resolve().parents[4]
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
     ENV_SCRIPT_DIR = PROJECT_ROOT.parent.parent
 
     # Environment configuration for SSH boot
@@ -265,7 +264,7 @@ def test_manager_boot_and_kill_via_grpc(test_resources):
                             f"source {env_file}",
                             " ".join(
                                 [
-                                    f"python3 {PROJECT_ROOT}/src/drunc/tests/grpc_testing_tools/root_controller_server_cli.py",
+                                    f"python3 {PROJECT_ROOT}/tests/grpc_testing_tools/root_controller_server_cli.py",
                                     f"--port {root_controller_port}",
                                     f"--workers {max_workers}",
                                     f"--log-file {root_log}",

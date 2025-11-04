@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-import tests.grpc_testing_tools.test_services_pb2 as test__services__pb2
+import grpc_testing_tools.test_services_pb2 as test__services__pb2
 
 GRPC_GENERATED_VERSION = '1.75.0'
 GRPC_VERSION = grpc.__version__

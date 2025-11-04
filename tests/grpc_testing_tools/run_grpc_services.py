@@ -3,7 +3,7 @@ import time
 from concurrent import futures
 from typing import Any, Dict, List, Optional, Tuple
 
-from tests.grpc_testing_tools.grpc_log_util import (
+from grpc_testing_tools.grpc_log_util import (
     stderr_observer,
     stdout_observer,
 )
@@ -98,8 +98,8 @@ def run_process_manager_server(
     stop_event=None,
 ) -> None:
     """Run Manager server process with output logging."""
-    from tests.grpc_testing_tools.process_manager import ManagerServiceImpl
-    from tests.grpc_testing_tools.test_services_pb2_grpc import (
+    from grpc_testing_tools.process_manager import ManagerServiceImpl
+    from grpc_testing_tools.test_services_pb2_grpc import (
         add_ManagerServiceServicer_to_server,
     )
 
@@ -128,8 +128,8 @@ def run_root_controller_server(
     stop_event=None,
 ) -> None:
     """Run RootController server with Manager client connection."""
-    from tests.grpc_testing_tools.root_controller import RootControllerServiceImpl
-    from tests.grpc_testing_tools.test_services_pb2_grpc import (
+    from grpc_testing_tools.root_controller import RootControllerServiceImpl
+    from grpc_testing_tools.test_services_pb2_grpc import (
         add_RootControllerServiceServicer_to_server,
     )
 
@@ -163,10 +163,10 @@ def run_child_controller_server(
     stop_event=None,
 ) -> None:
     """Run ChildController server with RootController client connection."""
-    from tests.grpc_testing_tools.child_controller import (
+    from grpc_testing_tools.child_controller import (
         ChildControllerServiceImpl,
     )
-    from tests.grpc_testing_tools.test_services_pb2_grpc import (
+    from grpc_testing_tools.test_services_pb2_grpc import (
         add_ChildControllerServiceServicer_to_server,
     )
 

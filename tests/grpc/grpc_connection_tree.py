@@ -7,35 +7,36 @@ Consists of a Manager server, a root controller, and multiple child controllers.
 import time
 from typing import Dict, List, Tuple
 
-from tests.grpc.grpc_independent_root_controller_client import (
-    IndependentRootControllerClient,
-)
-from tests.grpc_testing_tools.available_grpc_servers import ServerType
-from tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
-from tests.grpc_testing_tools.grpc_log_util import (
+from grpc_testing_tools.available_grpc_servers import ServerType
+from grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from grpc_testing_tools.grpc_log_util import (
     stderr_observer,
     stdout_observer,
 )
-from tests.grpc_testing_tools.grpc_server_manager import (
+from grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from tests.grpc_testing_tools.grpc_testing_ports import (
+from grpc_testing_tools.grpc_testing_ports import (
     BASE_CHILD_PORT,
     BASE_MANAGER_PORT,
     BASE_ROOT_PORT,
     MAX_CHILDREN,
 )
-from tests.grpc_testing_tools.multiprocessing_connection_manager import (
+from grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
 
 # Import generated gRPC code
-from tests.grpc_testing_tools.test_services_pb2 import DummyRequest
-from tests.grpc_testing_tools.test_services_pb2_grpc import (
+from grpc_testing_tools.test_services_pb2 import DummyRequest
+from grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceStub,
     ManagerServiceStub,
     RootControllerServiceStub,
+)
+
+from tests.grpc.grpc_independent_root_controller_client import (
+    IndependentRootControllerClient,
 )
 
 

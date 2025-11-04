@@ -14,9 +14,7 @@ import time
 from typing import Dict
 
 from grpc import RpcError, StatusCode, insecure_channel
-
-from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
-from tests.grpc_testing_tools.test_services_pb2 import (
+from grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyResponse,
     KillRequest,
@@ -26,11 +24,13 @@ from tests.grpc_testing_tools.test_services_pb2 import (
     ProcessInstanceList,
     ResponseFlag,
 )
-from tests.grpc_testing_tools.test_services_pb2_grpc import (
+from grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceServicer,
     ManagerServiceStub,
     RootControllerServiceStub,
 )
+
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 
 class ManagerServiceImpl(ManagerServiceServicer):

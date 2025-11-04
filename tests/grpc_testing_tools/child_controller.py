@@ -10,12 +10,12 @@ import os
 import signal
 import threading
 
-from tests.grpc_testing_tools.test_services_pb2 import (
+from grpc_testing_tools.test_services_pb2 import (
     DummyResponse,
     KillRequest,
     KillResponse,
 )
-from tests.grpc_testing_tools.test_services_pb2_grpc import (
+from grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceServicer,
 )
 

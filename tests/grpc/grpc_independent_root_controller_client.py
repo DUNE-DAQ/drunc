@@ -1,9 +1,9 @@
 import time
 from typing import List, Tuple
 
-from tests.grpc_testing_tools.grpc_log_util import stderr_observer
-from tests.grpc_testing_tools.test_services_pb2 import DummyRequest, DummyResponse
-from tests.grpc_testing_tools.test_services_pb2_grpc import (
+from grpc_testing_tools.grpc_log_util import stderr_observer
+from grpc_testing_tools.test_services_pb2 import DummyRequest, DummyResponse
+from grpc_testing_tools.test_services_pb2_grpc import (
     RootControllerServiceStub,
 )
 
