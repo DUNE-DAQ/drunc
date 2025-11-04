@@ -34,7 +34,6 @@ from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
-
 from tests.grpc.grpc_independent_root_controller_client import (
     IndependentRootControllerClient,
 )
