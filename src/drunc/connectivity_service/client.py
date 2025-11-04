@@ -3,7 +3,7 @@ import time
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.utils.utils import get_logger, http_get, http_post
+from drunc.utils.utils import get, get_logger, http_post
 
 
 class ConnectivityServiceClient:
@@ -22,22 +22,50 @@ class ConnectivityServiceClient:
         )
 
     def is_ready(self, timeout: int = 10):
+        """
+        Check if the service is ready by polling the connectivity service
+        with an exponential backoff.
+
+        Args:
+            timeout: Maximum time in seconds to wait for the service to become ready
+
+        Returns:
+            True if service becomes ready within timeout, False otherwise
+        """
         start = time.time()
+        attempt = 0
+        delay = 0.1  # Initial delay in seconds
+        max_delay = 2.0  # Maximum delay between attempts
 
         while time.time() - start < timeout:
+            attempt += 1
+            elapsed = time.time() - start
+
+            self.log.debug(f"Health check attempt {attempt} at {elapsed:.2f}s elapsed")
+            self.log.debug(f"Polling address: {self.address}")
             try:
-                r = http_get(
-                    self.address + "/",
-                    headers={"Content-Type": "application/json"},
-                    as_json=True,
-                    timeout=0.5,
-                    ignore_errors=True,
-                    data=None,
+                r = get(self.address)
+            except Exception as e:
+                self.log.debug(f"Polling failed with exception: {e}")
+                r = None
+            # Request failed - service is NOT ready.
+            if r is None or not r.ok:
+                self.log.debug(
+                    f"Connectivity service not ready, retrying in {delay:.2f}s"
                 )
-                r.raise_for_status()
+                time.sleep(delay)
+                # Increase delay for next time.
+                delay = min(delay * 2, max_delay)
+            # Request succeeded - service is ready.
+            else:
+                self.log.debug(
+                    f"Connectivity service ready after {attempt} attempts ({elapsed:.2f}s)"
+                )
                 return True
-            except (HTTPError, ConnectionError, ReadTimeout):
-                time.sleep(0.5)
+
+        self.log.debug(
+            f"Connectivity service not ready after {attempt} attempts. Timeout of {timeout}s reached."
+        )
         return False
 
     def retract(self, uid, fail_quickly=False):

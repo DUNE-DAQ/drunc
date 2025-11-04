@@ -207,6 +207,7 @@ def test_prepare_exec_and_args_no_rte_script(mock_get_rte_script, mock_driver):
     session_dal = MagicMock()
     session_dal.rte_script = None
     mock_get_rte_script.return_value = None
+    mock_get_rte_script.side_effect = DruncSetupException("No RTE script found.")
 
     exe = "dummy_executable"
     args = ["--flag", "value"]
@@ -250,7 +251,10 @@ def test_boot_connectivity_service_not_ready(mock_driver, boot_test_setup):
     # Simulate connection is not ready ready
     boot_test_setup(is_ready=False)
 
-    with pytest.raises(DruncSetupException, match="Connectivity service is not ready"):
+    with pytest.raises(
+        DruncSetupException,
+        match="Connectivity service did not respond within timeout.",
+    ):
         list(
             mock_driver.boot(
                 conf_file="conf.yaml",
