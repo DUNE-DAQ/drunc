@@ -66,7 +66,7 @@ class ProcessManagerDriver:
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList]:
+    ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Step 1 - consolidate configuration
@@ -95,8 +95,8 @@ class ProcessManagerDriver:
             **kwargs,
         ):
             if not request:
-                self.log.error("No boot request was found")
-                return
+                self.log.error("[red]No boot request was generated, ending boot.[/red]")
+                return None
             if (
                 request.process_description.metadata.name
                 not in [app.id for app in session_dal.infrastructure_applications]
@@ -224,7 +224,7 @@ class ProcessManagerDriver:
                 session_dal, exe, args
             )
         except DruncSetupException:
-            raise DruncSetupException("Boot exec failed")
+            raise DruncSetupException("Generating executable and arguments failed")
 
         log_path = get_log_path(
             user=user,

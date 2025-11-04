@@ -57,6 +57,13 @@ def boot(
         log.warning("Booting interrupted")
         return
 
+    processes = obj.get_driver("process_manager").ps(
+        ProcessQuery(user=user, session=session_name)
+    )
+    if not processes.values:
+        log.debug("No processes found after boot - stopping due to previous errors")
+        return
+
     controller_address = obj.get_driver("process_manager").controller_address
     if controller_address:
         log.debug(f"Controller endpoint is '{controller_address}'")
