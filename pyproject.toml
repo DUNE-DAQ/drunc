@@ -34,7 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 prod = ["paramiko[gssapi]"]
-dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing"]
+dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
 test = ["pytest", "pytest-cov", "grpcio-testing",]
 
 [project.scripts]
