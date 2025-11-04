@@ -35,20 +35,21 @@ dependencies = [
 [project.optional-dependencies]
 prod = ["paramiko[gssapi]"]
 dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
-test = ["pytest", "pytest-cov", "grpcio-testing",]
+test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
 
 [project.scripts]
-fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
-drunc-controller = "drunc.apps.__main_controller__:main"
-drunc-controller-shell = "drunc.apps.__main_controller_shell__:main"
-drunc-process-manager = "drunc.apps.__main_pm__:main"
-drunc-process-manager-shell = "drunc.apps.__main_pm_shell__:main"
-drunc-session-manager = "drunc.apps.__main_session_manager__:main"
-drunc-unified-shell = "drunc.apps.__main_unified_shell__:main"
-drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
-application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
-drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
-drunc-setup-ssh-config = "drunc.apps.__main_ssh_configurator__:main"
+fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
+drunc-controller = "drunc.apps.controller:main"
+drunc-controller-shell = "drunc.apps.controller_shell:main"
+drunc-process-manager = "drunc.apps.pm:main"
+drunc-process-manager-shell = "drunc.apps.pm_shell:main"
+drunc-session-manager = "drunc.apps.session_manager:main"
+drunc-unified-shell = "drunc.apps.unified_shell:main"
+drunc-fsm-tests = "drunc.tests.fsm:main"
+application-registry-service = "drunc.apps.app_connectivity_server:main"
+drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
+
 
 [tool.setuptools.packages.find]
 where = ["src"]

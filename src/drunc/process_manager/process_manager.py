@@ -620,16 +620,25 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def get(conf, **kwargs):
         log = get_logger("process_manager.get")
 
-        if conf.data.type == ProcessManagerTypes.SSH:
-            from drunc.process_manager.ssh_process_manager import SSHProcessManager
+        if conf.data.type == ProcessManagerTypes.SSH_SHELL:
+            from drunc.process_manager.ssh_process_manager import (
+                SSHProcessManager,
+            )
 
-            log.debug("Starting [green]SSH process_manager[/green]")
+            log.debug("Starting [green]SSH Shell process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
         elif conf.data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
+        elif conf.data.type == ProcessManagerTypes.SSH_PARAMIKO:
+            from drunc.process_manager.ssh_process_manager_paramiko_client import (
+                SSHProcessManagerParamikoClient,
+            )
+
+            log.debug("Starting [green]SSH Paramiko process_manager[/green]")
+            return SSHProcessManagerParamikoClient(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
             raise RuntimeError(
