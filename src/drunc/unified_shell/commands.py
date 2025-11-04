@@ -6,6 +6,7 @@ from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
 
@@ -57,6 +58,13 @@ def boot(
         log.warning("Booting interrupted")
         return
 
+    processes = obj.get_driver("process_manager").ps(
+        ProcessQuery(user=user, session=session_name)
+    )
+    if not processes.values:
+        log.debug("No processes found after boot - stopping due to previous errors")
+        return
+
     controller_address = obj.get_driver("process_manager").controller_address
     if controller_address:
         log.debug(f"Controller endpoint is '{controller_address}'")
@@ -72,7 +80,7 @@ def boot(
         log.info("Booted successfully")
     else:
         log.error("Booted, but the top controller is in error")
-        if obj.batch_mode:
+        if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
             log.error(
                 "Unified shell: Running in batch mode, and because error state is detected, exiting."
             )
@@ -91,5 +99,5 @@ def start_shell(ctx, obj):
     """
     log = get_logger("unified_shell.start_shell")
 
-    obj.batch_mode = False
+    obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")

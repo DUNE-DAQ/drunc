@@ -36,6 +36,7 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
     ServerTimeout,
     ServerUnreachable,
@@ -447,18 +448,39 @@ def validate_and_format_fsm_arguments(
 
 
 def run_one_fsm_command(
-    controller_name,
-    transition_name,
-    obj,
-    target,
+    controller_name: str,
+    transition_name: str,
+    obj: UnifiedShellContext,
+    target: str,
     **kwargs,
-):
+) -> None:
+    """
+    Run one FSM command on the controller
+
+    Args:
+        controller_name (str): Name of the controller
+        transition_name (str): Name of the transition to run
+        obj (UnifiedShellContext): Unified shell context
+        target (str): Target to run the command on
+        **kwargs: Arguments to the command
+
+    Returns:
+        None
+
+    Raises:
+        ArgumentException: If there is an issue with the arguments
+        ServerTimeout: If the server times out
+    """
     log = get_logger("controller.shell_utils")
     log.info(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
 
-    if obj.batch_mode and obj.get_driver("controller").status().status.in_error:
+    # If running in batch or semibatch mode, and error is detected, exit
+    if (
+        obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]
+        and obj.get_driver("controller").status().status.in_error
+    ):
         obj.get_driver("controller").status()
         log.error(
             "Running in batch mode, and because error state is detected, exiting."
@@ -472,8 +494,6 @@ def run_one_fsm_command(
     if target == "":
         execute_on_root_controller = True
     elif target == controller_name:
-        execute_on_root_controller = True
-    elif target == "/" + controller_name:
         execute_on_root_controller = True
 
     if execute_on_root_controller:
@@ -518,7 +538,7 @@ def run_one_fsm_command(
         with ThreadPoolExecutor() as executor:
             future = executor.submit(
                 obj.get_driver("controller").execute_fsm_command,
-                arguments=data,
+                command=data,
                 target=target,
                 execute_along_path=execute_along_path,
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -586,7 +606,7 @@ def run_one_fsm_command(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
             (
-                bool_to_success(response.data.flag, message_type=FSMResponseFlag)
+                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
                 if executed_command
                 else "[red]NA[/]"
             ),

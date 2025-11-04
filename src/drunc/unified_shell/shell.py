@@ -52,6 +52,7 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
@@ -260,11 +261,12 @@ def unified_shell(
             f"[red]Could not connect to the process manager at the address[/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        unified_shell_log.error(f"Reason: {e}")
+        unified_shell_log.debug(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             unified_shell_log.error(
-                "This can happen if you have the webproxy enabled at CERN"
+                "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
+                "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
             )
 
         if internal_pm and not ctx.obj.pm_process.is_alive():
@@ -367,11 +369,15 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
-    ctx.command.add_command(start_shell, "start-shell")
-    ctx.obj.dynamic_commands.add("start-shell")
     # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
-        ctx.obj.batch_mode = True
+        ctx.obj.running_mode = UnifiedShellMode.BATCH
+        ctx.command.add_command(start_shell, "start-shell")
+        ctx.obj.dynamic_commands.add("start-shell")
+
+    # If start-shell is in the arguments, set semibatch mode
+    if "start-shell" in sys.argv:
+        ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
     def cleanup():
         """
@@ -512,6 +518,6 @@ def unified_shell(
 @click.pass_context
 def _maybe_enter_shell(ctx, results, **_):
     # If user requested interactive mode at the end
-    if not getattr(ctx.obj, "batch_mode", True):
+    if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
         sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
         sh.cmdloop()

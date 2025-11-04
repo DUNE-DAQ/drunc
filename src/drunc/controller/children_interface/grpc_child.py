@@ -7,6 +7,9 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -296,12 +299,33 @@ class gRPCChildNode(ChildNode):
 
         return response
 
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        request = ExecuteFSMCommandRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.command.CopyFrom(command)
+
+        try:
+            response = self.stub.execute_fsm_command(request)
+        except grpc.RpcError as error:
+            self.handle_child_grpc_error(error)
+
+        return response
+
     def recompute_status(
         self,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-        timeout: int | float = 60,
     ) -> StatusResponse:
         request = AddressedCommand(
             token=None,
