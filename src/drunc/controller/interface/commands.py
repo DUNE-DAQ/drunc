@@ -374,10 +374,10 @@ def expert_command(
         return
 
     result = obj.get_driver("controller").execute_expert_command(
+        json.dumps(data),
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
-        json_string=json.dumps(data),
     )
 
     def print_result(result, prefix=""):

@@ -5,6 +5,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandRequest,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -14,7 +15,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.request_response_pb2 import Request, Response, ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
@@ -53,7 +54,6 @@ class ControllerDriver:
                 self,
                 addressed_command=AddressedCommand(
                     command_name=command_name,
-                    command_data=None,
                     target=target,
                     execute_along_path=execute_along_path,
                     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -154,22 +154,28 @@ class ControllerDriver:
 
         return response
 
-    @OLD_pack_empty_addressed_command
     def execute_expert_command(
         self,
-        addressed_command: AddressedCommand,
-        json_string,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=json_string))
-        return self.OLD_send_command(
-            "execute_expert_command",
-            data=new_command,
-            outformat=PlainText,
-            timeout=timeout,
+    ) -> Response:
+        request = ExecuteExpertCommandRequest(
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.execute_expert_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def recompute_status(
         self,
