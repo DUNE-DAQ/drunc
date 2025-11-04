@@ -147,13 +147,6 @@ class ShellContext:
 
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
-        log.info("Hello, World!")
-        log.debug("example debug message")
-        log.info("example info message")
-        log.warning("example warning message")
-        log.error("example error message")
-        log.critical("example critical message")
-
         status = self.get_driver("controller").status().status
         describe_fsm = self.get_driver("controller").describe_fsm().description
         current_state = status.state
