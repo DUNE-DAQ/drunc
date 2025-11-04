@@ -857,14 +857,16 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
+        # What transitions to describe.
+        key = unpack_any(request.command_data, PlainText).text
+
         # This node.
         if request.target == self.name or request.execute_along_path:
-            payload = unpack_any(request.command_data, PlainText)
-            if payload.text == "all-transitions":
+            if key == "all-transitions":
                 description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
-            elif payload.text == "":
+            elif key == "":
                 description = convert_fsm_transition(
                     self.stateful_node.get_fsm_transitions()
                 )
@@ -872,9 +874,9 @@ class Controller(ControllerServicer):
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    if payload.text == transition.source:
+                    if key == transition.source:
                         interesting_transitions += [transition]
-                    if payload.text == transition.name:
+                    if key == transition.name:
                         interesting_transitions += [transition]
                 description = convert_fsm_transition(interesting_transitions)
 
@@ -890,6 +892,7 @@ class Controller(ControllerServicer):
                 target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
+                key,
             )
 
         child_list = self.address_target_path(
