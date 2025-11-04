@@ -1,0 +1,34 @@
+site_name: DUNE Run Control (drunc) Developer Documentation
+
+theme:
+  name: material
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/generate_ref_nav_ghpages.py
+  - literate-nav:
+      nav_file: README.md
+  - section-index
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            show_category_heading: true
+            merge_init_into_class: true
+          paths: [.]
+

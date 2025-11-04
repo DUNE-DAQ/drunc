@@ -83,7 +83,7 @@ A big renaming of the FSM interfaces to something better.
 Most of the server side exceptions should now be propagated back to the shell
 
 ## Thread pinning
-If you are using `fsm.data.xml` from `appdal`, [here](https://github.com/DUNE-DAQ/appdal/blob/develop/config/appdal/fsm.data.xml), you will now get an example of thread pinning. These happen:
+If you are using `fsm.data.xml` from `appdal`, [here](https://github.com/DUNE-DAQ/daqsystemtest/blob/develop/config/daqsystemtest/fsm.data.xml), you will now get an example of thread pinning. These happen:
 * just before `conf`
 * just after `conf`
 * just after `start`
