@@ -251,7 +251,10 @@ def test_boot_connectivity_service_not_ready(mock_driver, boot_test_setup):
     # Simulate connection is not ready ready
     boot_test_setup(is_ready=False)
 
-    with pytest.raises(DruncSetupException, match="Connectivity service is not ready"):
+    with pytest.raises(
+        DruncSetupException,
+        match="Connectivity service did not respond within timeout.",
+    ):
         list(
             mock_driver.boot(
                 conf_file="conf.yaml",

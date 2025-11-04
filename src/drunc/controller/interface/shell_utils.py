@@ -495,8 +495,6 @@ def run_one_fsm_command(
         execute_on_root_controller = True
     elif target == controller_name:
         execute_on_root_controller = True
-    elif target == "/" + controller_name:
-        execute_on_root_controller = True
 
     if execute_on_root_controller:
         fsm_description = (
@@ -540,7 +538,7 @@ def run_one_fsm_command(
         with ThreadPoolExecutor() as executor:
             future = executor.submit(
                 obj.get_driver("controller").execute_fsm_command,
-                arguments=data,
+                command=data,
                 target=target,
                 execute_along_path=execute_along_path,
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -608,7 +606,7 @@ def run_one_fsm_command(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
             (
-                bool_to_success(response.data.flag, message_type=FSMResponseFlag)
+                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
                 if executed_command
                 else "[red]NA[/]"
             ),
