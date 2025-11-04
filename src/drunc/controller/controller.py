@@ -14,6 +14,7 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
     ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -1088,18 +1089,20 @@ class Controller(ControllerServicer):
         self,
         request: ExecuteExpertCommandRequest,
         context: ServicerContext,
-    ) -> Response:
+    ) -> ExecuteExpertCommandResponse:
         request.target = self.parse_target_string(request.target)
-        response = Response(
+        response = ExecuteExpertCommandResponse(
             token=None,
             name=self.name,
         )
 
         # This node.
-        response.data.Pack(PlainText(text=f"'{self.name}' propagated expert command"))
+        response.data = f"'{self.name}' propagated expert command"
 
         # Children nodes.
-        def child_command_fn(child: ChildNode, target: str) -> Response:
+        def child_command_fn(
+            child: ChildNode, target: str
+        ) -> ExecuteExpertCommandResponse:
             return child.execute_expert_command(
                 request.json_string,
                 target,

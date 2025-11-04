@@ -380,6 +380,8 @@ def expert_command(
         execute_on_all_subsequent_children_in_path=True,
     )
 
+    # TODO: need to handle new response type
+
     def print_result(result, prefix=""):
         if not hasattr(result, "data"):
             log.info(

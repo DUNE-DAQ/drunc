@@ -6,6 +6,7 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
     ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -15,7 +16,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, Response, ResponseFlag
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
@@ -161,7 +162,7 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> Response:
+    ) -> ExecuteExpertCommandResponse:
         request = ExecuteExpertCommandRequest(
             json_string=json_string,
             target=target,
