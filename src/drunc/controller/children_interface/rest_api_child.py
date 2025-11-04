@@ -18,7 +18,6 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
@@ -433,88 +432,6 @@ class RESTAPIChildNode(ClientSideChild):
 
         return response
 
-    def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
-        data_dict = json.loads(data.text)
-        example = json.dumps(
-            {
-                "data": {"modules": [{"data": {"duration": 100}, "match": ""}]},
-                "entry_state": "RUNNING",
-                "exit_state": "RUNNING",
-                "id": "record",
-            },
-            indent=4,
-        )
-
-        if (
-            "id" not in data_dict
-            or "data" not in data_dict
-            or "entry_state" not in data_dict
-            or "exit_state" not in data_dict
-        ):
-            raise ExpertCommandException(
-                f"Invalid format for expert command: format should be: {example}, you provided {data.text}"
-            )
-
-        command_name = data_dict["id"]
-        cmd_data = data_dict["data"]
-        entry_state = data_dict["entry_state"].upper()
-        exit_state = data_dict["exit_state"].upper()
-
-        if entry_state != exit_state:
-            raise ExpertCommandException(
-                f"'entry_state' and 'exit_state' must be the same, provided entry_state='{data_dict['entry_state']}' and exit_state='{data_dict['exit_state']}'"
-            )
-
-        current_state = self.state.get_operational_state().upper()
-
-        if entry_state not in [current_state, "ANY", "ALL", "", ".*"]:
-            raise ExpertCommandException(
-                f"Invalid 'entry_state', according to the command the system should be '{data_dict['entry_state']}', application is in state '{current_state}'"
-            )
-
-        self.log.info(f"Sending '{command_name}' to '{self.name}'")
-
-        try:
-            self.commander.send_app_command(
-                cmd_id=command_name,
-                module_data=cmd_data,
-                entry_state=entry_state,
-                exit_state=exit_state,
-            )
-            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
-            r = self.commander.check_response(150)
-
-            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
-
-            success = r["success"]
-
-            response_data = PlainText(text=json.dumps(r))
-
-            response = Response(
-                name=self.name,
-                token=token,
-                data=pack_to_any(response_data),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children={},
-            )
-
-            if not success:
-                self.log.error(r["result"])
-                self.state.to_error()
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
-                return response
-
-        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
-            self.log.error(
-                f"Got error from '{command_name}' to '{self.name}': {str(e)}"
-            )
-            self.state.to_error()
-
-            self.log.exception(e)
-            raise e
-
-        return response
-
     def execute_fsm_command(
         self,
         command: FSMCommand,
@@ -582,5 +499,93 @@ class RESTAPIChildNode(ClientSideChild):
 
         self.state.end_command_execution_mark()
         self.state.new_operational_state(exit_state)
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> Response:
+        data_dict = json.loads(json_string)
+        example = json.dumps(
+            {
+                "data": {"modules": [{"data": {"duration": 100}, "match": ""}]},
+                "entry_state": "RUNNING",
+                "exit_state": "RUNNING",
+                "id": "record",
+            },
+            indent=4,
+        )
+
+        if (
+            "id" not in data_dict
+            or "data" not in data_dict
+            or "entry_state" not in data_dict
+            or "exit_state" not in data_dict
+        ):
+            raise ExpertCommandException(
+                f"Invalid format for expert command: format should be: {example}, you provided {json_string}"
+            )
+
+        command_name = data_dict["id"]
+        cmd_data = data_dict["data"]
+        entry_state = data_dict["entry_state"].upper()
+        exit_state = data_dict["exit_state"].upper()
+
+        if entry_state != exit_state:
+            raise ExpertCommandException(
+                f"'entry_state' and 'exit_state' must be the same, provided entry_state='{data_dict['entry_state']}' and exit_state='{data_dict['exit_state']}'"
+            )
+
+        current_state = self.state.get_operational_state().upper()
+
+        if entry_state not in [current_state, "ANY", "ALL", "", ".*"]:
+            raise ExpertCommandException(
+                f"Invalid 'entry_state', according to the command the system should be '{data_dict['entry_state']}', application is in state '{current_state}'"
+            )
+
+        self.log.info(f"Sending '{command_name}' to '{self.name}'")
+
+        try:
+            self.commander.send_app_command(
+                cmd_id=command_name,
+                module_data=cmd_data,
+                entry_state=entry_state,
+                exit_state=exit_state,
+            )
+            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
+            r = self.commander.check_response(150)
+
+            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
+
+            success = r["success"]
+
+            response_data = PlainText(text=json.dumps(r))
+
+            response = Response(
+                name=self.name,
+                token=None,
+                data=pack_to_any(response_data),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                children={},
+            )
+
+            if not success:
+                self.log.error(r["result"])
+                self.state.to_error()
+                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
+                return response
+
+        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
+            self.log.error(
+                f"Got error from '{command_name}' to '{self.name}': {str(e)}"
+            )
+            self.state.to_error()
+
+            self.log.exception(e)
+            raise e
 
         return response
