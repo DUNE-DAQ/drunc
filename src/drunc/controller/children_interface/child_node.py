@@ -159,6 +159,21 @@ class ChildNode:
 
         return response
 
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> Response:
+        response = Response(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
     def recompute_status(
         self,
         target: str = "",
