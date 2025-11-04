@@ -13,3 +13,4 @@ info.*.json
 .python-version
 *.xml.data
 *.hdf5
+.coverage
