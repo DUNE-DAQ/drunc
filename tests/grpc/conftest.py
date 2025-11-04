@@ -1,11 +1,11 @@
 import pytest
-from grpc_testing_tools.grpc_testing_ports import (
+from drunc.grpc_testing_tools.grpc_testing_ports import (
     BASE_CHILD_PORT,
     BASE_MANAGER_PORT,
     BASE_ROOT_PORT,
     MAX_CHILDREN,
 )
-from grpc_testing_tools.port_cleaner import kill_process_on_port
+from drunc.grpc_testing_tools.port_cleaner import kill_process_on_port
 
 
 @pytest.fixture(scope="function")

@@ -8,7 +8,7 @@ It handles argument parsing and delegates to the main server runner function.
 import argparse
 import sys
 
-from grpc_testing_tools.run_grpc_services import run_process_manager_server
+from drunc.grpc_testing_tools.run_grpc_services import run_process_manager_server
 
 
 def main():

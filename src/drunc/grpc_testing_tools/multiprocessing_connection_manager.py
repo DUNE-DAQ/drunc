@@ -10,7 +10,7 @@ import multiprocessing
 import os
 from typing import Any, Dict, Optional
 
-from grpc_testing_tools.process_connection_manager import (
+from drunc.grpc_testing_tools.process_connection_manager import (
     ProcessConnectionManager,
     RunningGrpcServer,
 )

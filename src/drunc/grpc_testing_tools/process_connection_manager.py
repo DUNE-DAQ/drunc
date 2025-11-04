@@ -7,7 +7,7 @@ This module provides abstraction over different process execution methods (multi
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
+from drunc.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
 
 
 class ProcessConnectionManager(ABC):

@@ -10,12 +10,12 @@ import os
 import signal
 import threading
 
-from grpc_testing_tools.test_services_pb2 import (
+from drunc.grpc_testing_tools.test_services_pb2 import (
     DummyResponse,
     KillRequest,
     KillResponse,
 )
-from grpc_testing_tools.test_services_pb2_grpc import (
+from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     RootControllerServiceServicer,
 )
 

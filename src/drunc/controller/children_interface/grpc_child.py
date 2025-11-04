@@ -80,7 +80,9 @@ class gRPCChildNode(ChildNode):
             if hasattr(self, "channel") and self.channel:
                 self.channel.close()
 
-            self.channel = grpc.insecure_channel(self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG)
+            self.channel = grpc.insecure_channel(
+                self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
+            )
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 

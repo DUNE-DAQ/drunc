@@ -14,7 +14,7 @@ import time
 from typing import Dict
 
 from grpc import RpcError, StatusCode, insecure_channel
-from grpc_testing_tools.test_services_pb2 import (
+from drunc.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyResponse,
     KillRequest,
@@ -24,7 +24,7 @@ from grpc_testing_tools.test_services_pb2 import (
     ProcessInstanceList,
     ResponseFlag,
 )
-from grpc_testing_tools.test_services_pb2_grpc import (
+from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceServicer,
     ManagerServiceStub,
     RootControllerServiceStub,

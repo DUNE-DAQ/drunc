@@ -16,17 +16,18 @@ from typing import Generator, List, Optional
 
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
-from grpc_testing_tools.available_grpc_servers import ServerType
-from grpc_testing_tools.grpc_log_file_manager import LogFileManager
-from grpc_testing_tools.grpc_server_manager import (
+
+from drunc.grpc_testing_tools.available_grpc_servers import ServerType
+from drunc.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from drunc.grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from grpc_testing_tools.multiprocessing_connection_manager import (
+from drunc.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
-from grpc_testing_tools.port_cleaner import kill_process_on_port
-from grpc_testing_tools.test_services_pb2 import (
+from drunc.grpc_testing_tools.port_cleaner import kill_process_on_port
+from drunc.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
     KillRequest,
@@ -38,7 +39,7 @@ from grpc_testing_tools.test_services_pb2 import (
 )
 
 # Import gRPC generated code
-from grpc_testing_tools.test_services_pb2_grpc import (
+from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
@@ -153,10 +154,18 @@ def test_manager_boot_and_kill_via_grpc(test_resources):
 
     # Verify environment setup exists
     assert os.path.exists(env_script_dir), (
-        f"Environment script directory not found: {env_script_dir}"
+        f"Environment script directory not found: {env_script_dir}. Update path as needed."
     )
     assert os.path.exists(os.path.join(env_script_dir, env_file)), (
-        f"Environment script file not found: {env_file}"
+        f"Environment script file not found: {env_file}. Update path as needed."
+    )
+
+    ROOT_CONTROLLER_SCRIPT = (
+        f"{PROJECT_ROOT}/src/drunc/grpc_testing_tools/root_controller_server_cli.py"
+    )
+
+    assert os.path.exists(ROOT_CONTROLLER_SCRIPT), (
+        f"RootController server script not found: {ROOT_CONTROLLER_SCRIPT}. Update path as needed."
     )
 
     # Test configuration
@@ -264,7 +273,7 @@ def test_manager_boot_and_kill_via_grpc(test_resources):
                             f"source {env_file}",
                             " ".join(
                                 [
-                                    f"python3 {PROJECT_ROOT}/tests/grpc_testing_tools/root_controller_server_cli.py",
+                                    f"python3 {ROOT_CONTROLLER_SCRIPT}",
                                     f"--port {root_controller_port}",
                                     f"--workers {max_workers}",
                                     f"--log-file {root_log}",
