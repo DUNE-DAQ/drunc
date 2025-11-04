@@ -4,7 +4,8 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
-    FSMCommandsDescription,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
     Status,
     StatusResponse,
 )
@@ -29,7 +30,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode:  # abc.ABC):
+class ChildNode:
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
@@ -40,18 +41,14 @@ class ChildNode:  # abc.ABC):
         self.included = True
 
     def __str__(self):
-        pass
-        return f"'{self.name}@{self.uri}' (type {self.node_type})"
+        return f"'{self.name}' (type {self.node_type})"
 
-    # @abc.abstractmethod
     def terminate(self):
         pass
 
-    # @abc.abstractmethod
     def get_endpoint(self) -> str | None:
         return None
 
-    # @abc.abstractmethod
     def propagate_command(
         self,
         command: str,
@@ -61,12 +58,9 @@ class ChildNode:  # abc.ABC):
         return Response(
             name=self.name,
             token=token,
-            data=None,
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-            children=[],
         )
 
-    # @abc.abstractmethod
     def status(
         self,
         target: str = "",
@@ -84,8 +78,7 @@ class ChildNode:  # abc.ABC):
             token=None,
             name=self.name,
             status=status,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
         return response
@@ -130,7 +123,6 @@ class ChildNode:  # abc.ABC):
             token=None,
             name=self.name,
             description=description,
-            children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -143,14 +135,26 @@ class ChildNode:  # abc.ABC):
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
-        description = FSMCommandsDescription()
-
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
-            description=description,
-            children=[],
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        response = ExecuteFSMCommandResponse(
+            token=None,
+            name=self.name,
+            command_name=command.command_name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
         return response
@@ -167,6 +171,7 @@ class ChildNode:  # abc.ABC):
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
 
+    # TODO: needs reimplementation
     @staticmethod
     def get_child(
         name: str,

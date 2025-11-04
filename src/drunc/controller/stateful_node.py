@@ -198,9 +198,9 @@ class StatefulNode(abc.ABC):
     def prepare_transition(
         self, transition, transition_data, transition_args, ctx=None
     ):
-        if self.get_node_operational_state() != self.get_node_operational_sub_state():
+        if self.get_node_operational_sub_state() != self.get_node_operational_state():
             raise InvalidSubTransition(
-                self.get_node_sub_operational_state(),
+                self.get_node_operational_sub_state(),
                 self.get_node_operational_state(),
                 "prepare_transition",
             )

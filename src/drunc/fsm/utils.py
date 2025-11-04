@@ -18,7 +18,7 @@ def convert_fsm_transition(transitions):
                 name=t.name,
                 data_type=["controller_pb2.FSMCommand"],
                 help=t.help,
-                return_type="controller_pb2.FSMCommandResponse",
+                return_type="controller_pb2.ExecuteFSMCommandResponse",
                 arguments=t.arguments,
             )
         )
