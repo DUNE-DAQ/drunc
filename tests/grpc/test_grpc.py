@@ -52,7 +52,7 @@ def test_basic_grpc_tree_communication_multiprocessing(grpc_port_cleaner, capsys
         MANAGER_SERVER_GRPC_CONFIG,
         MANAGER_SERVER_GRPC_MAX_WORKERS,
     )
-    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+    from tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
     tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
         number_of_children=2,
@@ -128,7 +128,7 @@ def test_production_grpc_settings_idle(grpc_port_cleaner, capsys):
         MANAGER_SERVER_GRPC_CONFIG,
         MANAGER_SERVER_GRPC_MAX_WORKERS,
     )
-    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+    from tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
     with capsys.disabled():
         tree_manager = GrpcProcessTreeManager.create_with_multiprocessing(
@@ -181,7 +181,7 @@ def test_production_grpc_settings_communicate_with_root_controller_after_idle(
         MANAGER_SERVER_GRPC_CONFIG,
         MANAGER_SERVER_GRPC_MAX_WORKERS,
     )
-    from drunc.tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
+    from tests.grpc.grpc_connection_tree import GrpcProcessTreeManager
 
     with capsys.disabled():
         keepalive_config = []

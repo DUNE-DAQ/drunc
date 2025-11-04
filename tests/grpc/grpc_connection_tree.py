@@ -7,32 +7,32 @@ Consists of a Manager server, a root controller, and multiple child controllers.
 import time
 from typing import Dict, List, Tuple
 
-from drunc.tests.grpc.grpc_independent_root_controller_client import (
+from tests.grpc.grpc_independent_root_controller_client import (
     IndependentRootControllerClient,
 )
-from drunc.tests.grpc_testing_tools.available_grpc_servers import ServerType
-from drunc.tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc_testing_tools.grpc_log_util import (
+from tests.grpc_testing_tools.available_grpc_servers import ServerType
+from tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from tests.grpc_testing_tools.grpc_log_util import (
     stderr_observer,
     stdout_observer,
 )
-from drunc.tests.grpc_testing_tools.grpc_server_manager import (
+from tests.grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from drunc.tests.grpc_testing_tools.grpc_testing_ports import (
+from tests.grpc_testing_tools.grpc_testing_ports import (
     BASE_CHILD_PORT,
     BASE_MANAGER_PORT,
     BASE_ROOT_PORT,
     MAX_CHILDREN,
 )
-from drunc.tests.grpc_testing_tools.multiprocessing_connection_manager import (
+from tests.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
 
 # Import generated gRPC code
-from drunc.tests.grpc_testing_tools.test_services_pb2 import DummyRequest
-from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
+from tests.grpc_testing_tools.test_services_pb2 import DummyRequest
+from tests.grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceStub,
     ManagerServiceStub,
     RootControllerServiceStub,

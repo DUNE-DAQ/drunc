@@ -1,37 +1,43 @@
 """
-RootController Service Implementation
+ChildController Service Implementation
 
-Provides the gRPC servicer implementation for the RootController service,
-which acts as an intermediate layer in the system hierarchy, coordinating
-between the Manager and ChildControllers.
+Provides the gRPC servicer implementation for ChildController services,
+which act as leaf nodes in the system hierarchy, handling specific tasks
+and reporting to the RootController.
 """
 
 import os
 import signal
 import threading
 
-from drunc.tests.grpc_testing_tools.test_services_pb2 import (
+from tests.grpc_testing_tools.test_services_pb2 import (
     DummyResponse,
     KillRequest,
     KillResponse,
 )
-from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
-    RootControllerServiceServicer,
+from tests.grpc_testing_tools.test_services_pb2_grpc import (
+    ChildControllerServiceServicer,
 )
 
 
-class RootControllerServiceImpl(RootControllerServiceServicer):
+class ChildControllerServiceImpl(ChildControllerServiceServicer):
     """
-    Implementation of RootController gRPC service.
+    Implementation of ChildController gRPC service.
 
-    The RootController service acts as an intermediate coordinator between
-    the Manager and ChildControllers. It handles connectivity testing,
-    command processing, status collection, and graceful shutdown requests.
+    ChildController services are leaf nodes that handle specific tasks
+    while maintaining connections to their RootController. Each child
+    has a unique name identifier and handles connectivity testing,
+    instruction processing, and graceful shutdown requests.
     """
 
-    def __init__(self):
-        """Initialise the RootController service implementation."""
-        pass
+    def __init__(self, name: str):
+        """
+        Initialise the ChildController service implementation.
+
+        Args:
+            name: Unique identifier for this child controller instance
+        """
+        self.name = name
 
     def MakeRequest(self, request, context):
         """
@@ -42,9 +48,9 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
             context: gRPC context object
 
         Returns:
-            DummyResponse with echoed message confirming RootController is responsive
+            DummyResponse with echoed message confirming ChildController is responsive
         """
-        return DummyResponse(reply=f"RootController server response: {request.message}")
+        return DummyResponse(reply=f"{self.name} server response: {request.message}")
 
     def Kill(self, request: KillRequest, context) -> KillResponse:
         grace_period = (

@@ -16,12 +16,12 @@ from grpc import (
     insecure_channel,
 )
 
-from drunc.tests.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
-from drunc.tests.grpc_testing_tools.grpc_server_config import GrpcServerConfig
-from drunc.tests.grpc_testing_tools.process_connection_manager import (
+from tests.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
+from tests.grpc_testing_tools.grpc_server_config import GrpcServerConfig
+from tests.grpc_testing_tools.process_connection_manager import (
     ProcessConnectionManager,
 )
-from drunc.tests.grpc_testing_tools.run_grpc_services import (
+from tests.grpc_testing_tools.run_grpc_services import (
     run_child_controller_server,
     run_process_manager_server,
     run_root_controller_server,

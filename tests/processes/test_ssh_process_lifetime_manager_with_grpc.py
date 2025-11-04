@@ -17,17 +17,17 @@ from typing import Generator, List, Optional
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
 
-from drunc.tests.grpc_testing_tools.available_grpc_servers import ServerType
-from drunc.tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
-from drunc.tests.grpc_testing_tools.grpc_server_manager import (
+from tests.grpc_testing_tools.available_grpc_servers import ServerType
+from tests.grpc_testing_tools.grpc_log_file_manager import LogFileManager
+from tests.grpc_testing_tools.grpc_server_manager import (
     GrpcServerConfig,
     GrpcServerManager,
 )
-from drunc.tests.grpc_testing_tools.multiprocessing_connection_manager import (
+from tests.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
-from drunc.tests.grpc_testing_tools.port_cleaner import kill_process_on_port
-from drunc.tests.grpc_testing_tools.test_services_pb2 import (
+from tests.grpc_testing_tools.port_cleaner import kill_process_on_port
+from tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
     KillRequest,
@@ -39,7 +39,7 @@ from drunc.tests.grpc_testing_tools.test_services_pb2 import (
 )
 
 # Import gRPC generated code
-from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
+from tests.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )

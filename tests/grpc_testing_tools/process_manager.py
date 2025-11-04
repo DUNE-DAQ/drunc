@@ -16,7 +16,7 @@ from typing import Dict
 from grpc import RpcError, StatusCode, insecure_channel
 
 from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
-from drunc.tests.grpc_testing_tools.test_services_pb2 import (
+from tests.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyResponse,
     KillRequest,
@@ -26,7 +26,7 @@ from drunc.tests.grpc_testing_tools.test_services_pb2 import (
     ProcessInstanceList,
     ResponseFlag,
 )
-from drunc.tests.grpc_testing_tools.test_services_pb2_grpc import (
+from tests.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceServicer,
     ManagerServiceStub,
     RootControllerServiceStub,

@@ -9,7 +9,7 @@ It handles argument parsing and delegates to the main server runner function.
 import argparse
 import sys
 
-from drunc.tests.grpc_testing_tools.run_grpc_services import run_child_controller_server
+from tests.grpc_testing_tools.run_grpc_services import run_child_controller_server
 
 
 def main():
