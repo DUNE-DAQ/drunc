@@ -73,20 +73,16 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
         exit(1)
 
     controller_shell_log.warning(
-        f"[green]{getpass.getuser()}[/green] connected to the [green]{ctx.obj.get_driver('controller').describe().data.name}[/green] through a [green]controller-shell[/green] via address [green]{controller_address}[/green]"
+        f"[green]{getpass.getuser()}[/green] connected to the [green]{ctx.obj.get_driver('controller').describe().description.name}[/green] through a [green]controller-shell[/green] via address [green]{controller_address}[/green]"
     )
 
     # TODO: work out how to make the following lines legit without breaking the wrapper
     # def cleanup():
-    #     ctx.call_on_close(controller_shell_log.warning(f"[green]{getpass.getuser()}[/green] disconnected from the [green]{ctx.obj.get_driver('controller').describe().data.name}[/green] through a [green]controller-shell[/green]"))
+    #     ctx.call_on_close(controller_shell_log.warning(f"[green]{getpass.getuser()}[/green] disconnected from the [green]{ctx.obj.get_driver('controller').describe().description.name}[/green] through a [green]controller-shell[/green]"))
     # ctx.call_on_close(cleanup)
 
     transitions = (
-        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").data
-    )
-
-    transitions = (
-        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").data
+        ctx.obj.get_driver("controller").describe_fsm(key="all-transitions").description
     )
 
     ctx.command.add_command(status, "status")

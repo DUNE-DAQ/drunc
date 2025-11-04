@@ -244,7 +244,7 @@ class AppCommander:
                 if i_try == n_tries - 1:
                     return False
 
-    def send_command(
+    def send_app_command(
         self, cmd_id: str, module_data: dict, entry_state="ANY", exit_state="ANY"
     ):
         # here we go again...
@@ -445,7 +445,7 @@ class RESTAPIChildNode(ClientSideChild):
         self.log.info(f"Sending '{command_name}' to '{self.name}'")
 
         try:
-            self.commander.send_command(
+            self.commander.send_app_command(
                 cmd_id=command_name,
                 module_data=cmd_data,
                 entry_state=entry_state,
@@ -497,7 +497,7 @@ class RESTAPIChildNode(ClientSideChild):
             self.log.error(f"Error parsing data: {e}")
             raise e
         try:
-            self.commander.send_command(
+            self.commander.send_app_command(
                 cmd_id=data.command_name,
                 module_data={"modules": [{"data": the_module_data, "match": ""}]},
                 entry_state=entry_state.upper(),

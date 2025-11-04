@@ -4,11 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drunc"
+description = "A flexible run control infrastructure for a distributed DAQ system"
+version = "0.19.0"
+readme = "docs/README.md"
 requires-python = ">=3.10"
-dynamic = ["version", "readme"]
 dependencies = [
-    "click==8.1.7",
-    "click-shell==2.1",
+    "click",
+    "click-shell",
     "protobuf",
     "types-protobuf",
     "grpcio==1.75.0",
@@ -62,4 +64,22 @@ where = ["src"]
 markers = [
     "grpc: marks tests for gRPC isolation (run with --test-grpc)",
 ]
+addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
 
+[tool.coverage.run]
+source = ["drunc"]
+omit = ["tests/*"]
+
+# * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # check for errors using PyFlakes
+    "I",    # best practices for import calls
+    "UP",   # suggestions for code modernization
+    "RUF",  # build in Ruff warnings
+    "R",    # refactoring suggestions
+]
+ignore = [
+    "E501", # Don't enforce line lengths within a linting context
+]

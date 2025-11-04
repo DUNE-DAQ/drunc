@@ -32,7 +32,7 @@ def load_test_config() -> None:
 
     # Determine the path to the test configurations
     cwd = Path(os.path.abspath(__file__))
-    test_configs = cwd.parent / ".." / ".." / ".." / "config" / "tests"
+    test_configs = cwd.parent / ".." / "config" / "tests"
     test_configs = test_configs.resolve()
     print(f"{test_configs=}")
 
@@ -206,8 +206,6 @@ def one_controller_running(
     processes_and_logs, session_dal, session_name = boot_session(
         configuration_name, request
     )
-    import time
-
     time.sleep(2)  # Give gunicorn time to start
     print("Started one_controller_running processes")
     print(f"{processes_and_logs=}")

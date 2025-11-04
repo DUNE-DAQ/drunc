@@ -1,25 +1,27 @@
 import os
 
-from druncschema.controller_pb2 import Status
-from druncschema.description_pb2 import OldDescription
-from druncschema.request_response_pb2 import Response
+from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
+    FSMCommandsDescription,
+    Status,
+    StatusResponse,
+)
+from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
 )
-
-from druncschema.request_response_pb2 import (  # isort: skip
-    ResponseFlag,
-)
-from druncschema.token_pb2 import Token  # isort: skip
 
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):
@@ -31,7 +33,6 @@ class ChildNode:  # abc.ABC):
     def __init__(
         self, name: str, configuration, node_type: ControlType, **kwargs
     ) -> None:
-        # super().__init__(**kwargs)
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
@@ -47,42 +48,54 @@ class ChildNode:  # abc.ABC):
         pass
 
     # @abc.abstractmethod
-    def propagate_command(self, command, data, token):
-        if command == "status":
-            return self.get_status(token)
-        elif command == "describe":
-            return self.describe(token)
-        else:
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                children=[],
-            )
+    def get_endpoint(self) -> str | None:
+        return None
 
     # @abc.abstractmethod
-    def get_status(self, token):
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
         return Response(
             name=self.name,
             token=token,
-            data=pack_to_any(
-                Status(
-                    state="unknown",
-                    sub_state="unknown",
-                    in_error=False,
-                    included=True,
-                )
-            ),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            data=None,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
             children=[],
         )
 
     # @abc.abstractmethod
-    def get_endpoint(self):
-        pass
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        status = Status(
+            state="unknown",
+            sub_state="unknown",
+            in_error=False,
+            included=True,
+        )
 
-    def describe(self, token: Token) -> Response:
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+            status=status,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
         descriptionType = None
         descriptionName = None
 
@@ -98,7 +111,7 @@ class ChildNode:  # abc.ABC):
                 descriptionType = self.configuration.data.controller.application_name
                 descriptionName = self.configuration.data.controller.id
 
-        d = OldDescription(
+        description = Description(
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),
@@ -110,16 +123,49 @@ class ChildNode:  # abc.ABC):
             session=os.getenv("DUNEDAQ_SESSION"),
             commands=None,
             broadcast=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        resp = Response(
+        response = DescribeResponse(
+            token=None,
             name=self.name,
-            token=token,
-            data=pack_to_any(d),
+            description=description,
+            children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=None,
         )
-        return resp
+
+        return response
+
+    def describe_fsm(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str = "",
+    ) -> DescribeFSMResponse:
+        description = FSMCommandsDescription()
+
+        response = DescribeFSMResponse(
+            token=None,
+            name=self.name,
+            description=description,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
+
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        return self.status(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
 
     @staticmethod
     def get_child(

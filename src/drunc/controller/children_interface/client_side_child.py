@@ -1,10 +1,12 @@
 from threading import Lock
 
 from druncschema.controller_pb2 import (
+    AddressedCommand,
     FSMCommand,
     FSMCommandResponse,
     FSMResponseFlag,
     Status,
+    StatusResponse,
 )
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -82,7 +84,7 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
-    ):  #
+    ):
         super().__init__(name=name, node_type=node_type, configuration=configuration)
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
@@ -94,30 +96,12 @@ class ClientSideChild(ChildNode):
     def __str__(self):
         return f"'{self.name}' is in error state (type {self.node_type})"
 
-    def terminate(self):
-        pass
-
-    def get_endpoint(self):
-        pass
-
-    def get_status(self, token):
-        status = Status(
-            state=self.state.get_operational_state(),
-            sub_state=(
-                "idle" if not self.state.get_executing_command() else "executing_cmd"
-            ),
-            in_error=self.state.in_error() or not self.commander.ping(),  # meh
-            included=self.state.included(),
-        )
-        return Response(
-            name=self.name,
-            token=None,
-            data=pack_to_any(status),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
-        )
-
-    def propagate_command(self, command: str, data, token: Token) -> Response:
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
         if command == "exclude":
             self.state.exclude()
             return Response(
@@ -138,12 +122,6 @@ class ClientSideChild(ChildNode):
                 children=[],
             )
 
-        elif command == "describe":
-            return self.describe(token)
-
-        elif command in ["status", "recompute_status"]:
-            return self.get_status(token)
-
         if self.state.excluded() and command == "execute_fsm_command":
             return Response(
                 name=self.name,
@@ -151,7 +129,7 @@ class ClientSideChild(ChildNode):
                 data=pack_to_any(
                     FSMCommandResponse(
                         flag=FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                        command_name=data.command_name,
+                        command_name=request.command_name,
                         data=None,
                     )
                 ),
@@ -162,14 +140,12 @@ class ClientSideChild(ChildNode):
         # here lies the mother of all the problems
         if command == "execute_fsm_command":
             return self.propagate_fsm_command(
-                unpack_any(data.command_data, FSMCommand), token
+                unpack_any(request.command_data, FSMCommand), token
             )
         elif command == "execute_expert_command":
             return self.propagate_expert_command(
-                unpack_any(data.command_data, PlainText), token
+                unpack_any(request.command_data, PlainText), token
             )
-        elif command == "describe":
-            return self.describe(token)
         else:
             self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
             return Response(
@@ -179,6 +155,31 @@ class ClientSideChild(ChildNode):
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 children=[],
             )
+
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        status = Status(
+            state=self.state.get_operational_state(),
+            sub_state=(
+                "idle" if not self.state.get_executing_command() else "executing_cmd"
+            ),
+            in_error=self.state.in_error() or not self.commander.ping(),
+            included=self.state.included(),
+        )
+
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+            status=status,
+            children=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
 
     def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
         return Response(

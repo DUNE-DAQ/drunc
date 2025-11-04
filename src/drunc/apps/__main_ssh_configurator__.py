@@ -78,14 +78,13 @@ def main(log_level: str) -> None:
         None
     """
 
-    # Set the log level
+    # Set the log level
     log.setLevel(log_levels[log_level.upper()])
 
     # Determine SSH configuration file path
     ssh_configuration_path: Path = Path("~/.ssh/config").expanduser().resolve()
     populate_ssh_template: bool = False
     ssh_config_exists: bool = False
-    ssh_config_empty: bool = False
 
     if not ssh_configuration_path.exists():
         log.warning(
@@ -121,7 +120,9 @@ def main(log_level: str) -> None:
             log.warning("No hosts configured for SSH access.")
             populate_ssh_template = True
         else:
-            log.info(f"Found SSH configurations for hosts and patterns: {configured_hosts}")
+            log.info(
+                f"Found SSH configurations for hosts and patterns: {configured_hosts}"
+            )
 
             # Check each required host against existing configurations
             for host in hosts_to_access:
@@ -155,7 +156,7 @@ def main(log_level: str) -> None:
                 "already configured in the SSH configuration file."
             )
             return
-        
+
     if not populate_ssh_template:
         log.error("Logic flaw above.")
         return

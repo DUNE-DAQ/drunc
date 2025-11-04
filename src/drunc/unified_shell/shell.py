@@ -51,7 +51,8 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot
+from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
@@ -369,7 +370,13 @@ def unified_shell(
 
     # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
-        ctx.obj.batch_mode = True
+        ctx.obj.running_mode = UnifiedShellMode.BATCH
+        ctx.command.add_command(start_shell, "start-shell")
+        ctx.obj.dynamic_commands.add("start-shell")
+
+    # If start-shell is in the arguments, set semibatch mode
+    if "start-shell" in sys.argv:
+        ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
     def cleanup():
         """
@@ -384,17 +391,17 @@ def unified_shell(
         # initial state before terminating
         if ctx.obj.get_driver("controller", quiet_fail=True):
             try:
-                if ctx.obj.get_driver("controller").status().data.in_error:
+                if ctx.obj.get_driver("controller").status().status.in_error:
                     unified_shell_log.warning(
                         "Controller is in error, cannot gracefully shutdown"
                     )
                 else:
-                    unified_shell_log.info(
-                        "Attempting graceful shutdown of the controller"
-                    )
-                    try:
-                        # Safe mode crucial for use with hardware
-                        if safe_mode:
+                    # Safe mode crucial for use with hardware
+                    if safe_mode:
+                        try:
+                            unified_shell_log.info(
+                                "Attempting graceful shutdown of the controller"
+                            )
                             stop_run_cmd = ctx.command.commands.get("stop-run")
                             scrap_cmd = ctx.command.commands.get("scrap")
                             if stop_run_cmd is not None:
@@ -412,10 +419,10 @@ def unified_shell(
                                     "shutdown step."
                                 )
                             unified_shell_log.info("Controller shutdown gracefully")
-                    except Exception as e:
-                        unified_shell_log.error(
-                            f"Could not shutdown the controller gracefully, reason: {e}"
-                        )
+                        except Exception as e:
+                            unified_shell_log.error(
+                                f"Could not shutdown the controller gracefully, reason: {e}"
+                            )
             except Exception as e:
                 unified_shell_log.error(
                     f"Could not retrieve the controller status, reason: {e}"
@@ -504,3 +511,12 @@ def unified_shell(
     unified_shell_log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
+
+
+@unified_shell.result_callback()
+@click.pass_context
+def _maybe_enter_shell(ctx, results, **_):
+    # If user requested interactive mode at the end
+    if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
+        sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
+        sh.cmdloop()

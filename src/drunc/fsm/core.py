@@ -12,17 +12,12 @@ class Callback:
         self.mandatory = mandatory
 
 
-class FSMSequence:
-    def __init__(self):
-        pass
-
-
 import json
 import traceback
 from inspect import Parameter, signature
 from typing import List, Optional, Union
 
-from druncschema.controller_pb2 import Argument
+from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 
 import drunc.fsm.exceptions as fsme

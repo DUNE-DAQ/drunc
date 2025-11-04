@@ -5,11 +5,11 @@ Validate the ability to SSH onto all of the hosts required by the configuration
 """
 
 import logging
+import sys
+from pathlib import Path
 
 import click
 import conffwk
-import sys
-from pathlib import Path
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
