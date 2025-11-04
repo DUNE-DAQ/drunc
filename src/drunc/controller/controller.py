@@ -1076,6 +1076,35 @@ class Controller(ControllerServicer):
 
         return response
 
+    # ORDER MATTERS!
+    @broadcasted  # outer most wrapper 1st step
+    @authentified_and_authorised(
+        action=ActionType.EXPERT, system=SystemType.CONTROLLER
+    )  # 2nd step
+    @in_control
+    @OLD_unpack_addressed_command_to(PlainText)  # 3rd step
+    @publish_command_time
+    def execute_expert_command(
+        self,
+        payload: PlainText,
+        addressed_commands: dict[str, AddressedCommand],
+        execute_on_self: bool,
+        token: Token,
+    ) -> Response:
+        children_expert_command_response = self.OLD_propagate_to_children(
+            "execute_expert_command",
+            addressed_commands,
+            token,
+        )
+
+        return Response(
+            name=self.name,
+            token=token,
+            data=pack_to_any(PlainText(text=f"{self.name} propagated expert command")),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            children=children_expert_command_response,
+        )
+
     @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
@@ -1276,35 +1305,6 @@ class Controller(ControllerServicer):
             data=pack_to_any(resp) if resp else None,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=response_children,
-        )
-
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.EXPERT, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @in_control
-    @OLD_unpack_addressed_command_to(PlainText)  # 3rd step
-    @publish_command_time
-    def execute_expert_command(
-        self,
-        payload: PlainText,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        children_expert_command_response = self.OLD_propagate_to_children(
-            "execute_expert_command",
-            addressed_commands,
-            token,
-        )
-
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(PlainText(text=f"{self.name} propagated expert command")),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_expert_command_response,
         )
 
     ##########################################

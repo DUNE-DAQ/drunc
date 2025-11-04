@@ -373,7 +373,7 @@ def expert_command(
         log.error(f"JSON decode error: {e}")
         return
 
-    result = obj.get_driver("controller").expert_command(
+    result = obj.get_driver("controller").execute_expert_command(
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,

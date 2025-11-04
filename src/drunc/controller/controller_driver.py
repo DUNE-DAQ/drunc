@@ -154,6 +154,23 @@ class ControllerDriver:
 
         return response
 
+    @OLD_pack_empty_addressed_command
+    def execute_expert_command(
+        self,
+        addressed_command: AddressedCommand,
+        json_string,
+        timeout: int | float = 60,
+    ) -> DecodedResponse:
+        new_command = AddressedCommand()
+        new_command.CopyFrom(addressed_command)
+        new_command.command_data.Pack(PlainText(text=json_string))
+        return self.OLD_send_command(
+            "execute_expert_command",
+            data=new_command,
+            outformat=PlainText,
+            timeout=timeout,
+        )
+
     def recompute_status(
         self,
         target: str = "",
@@ -220,23 +237,6 @@ class ControllerDriver:
     ) -> DecodedResponse:
         return self.OLD_send_command(
             "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @OLD_pack_empty_addressed_command
-    def expert_command(
-        self,
-        addressed_command: AddressedCommand,
-        json_string,
-        timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=json_string))
-        return self.OLD_send_command(
-            "execute_expert_command",
-            data=new_command,
-            outformat=PlainText,
-            timeout=timeout,
         )
 
     @OLD_pack_empty_addressed_command
