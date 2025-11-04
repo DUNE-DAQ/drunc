@@ -40,14 +40,14 @@ class ChildNode:
         self.configuration = configuration
         self.included = True
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}' (type {self.node_type})"
+
+    def get_endpoint(self) -> str:
+        return ""
 
     def terminate(self):
         pass
-
-    def get_endpoint(self) -> str | None:
-        return None
 
     def propagate_command(
         self,

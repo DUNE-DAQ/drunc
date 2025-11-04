@@ -98,10 +98,10 @@ class gRPCChildNode(ChildNode):
                 self.start_listening(response.description.broadcast)
                 break
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
-    def get_endpoint(self) -> str | None:
+    def get_endpoint(self) -> str:
         return self.uri
 
     def start_listening(self, bdesc):

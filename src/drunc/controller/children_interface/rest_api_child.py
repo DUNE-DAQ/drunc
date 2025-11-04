@@ -5,7 +5,6 @@ import socket
 import threading
 import time
 from json import JSONDecodeError
-from typing import NoReturn
 
 import requests
 import socks
@@ -52,7 +51,7 @@ class ResponseDispatcher(threading.Thread):
         self.listener = listener
         self.log = get_logger("controller.ResponseDispatcher")
 
-    def run(self) -> NoReturn:
+    def run(self) -> None:
         self.log.debug("ResponseDispatcher starting to run")
 
         while True:
@@ -70,11 +69,11 @@ class ResponseDispatcher(threading.Thread):
                 break
             self.listener.notify(r)
 
-    def stop(self) -> NoReturn:
+    def stop(self) -> None:
         self.listener.queue.put_nowait(self.STOP)
         self.join()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
 
@@ -402,10 +401,10 @@ class RESTAPIChildNode(ClientSideChild):
 
         self.response_listener.register(self.name, self.commander)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}@{self.app_host}:{self.app_port}' (type {self.node_type})"
 
-    def get_endpoint(self):
+    def get_endpoint(self) -> str:
         return f"rest://{self.app_host}:{self.app_port}"
 
     def status(
