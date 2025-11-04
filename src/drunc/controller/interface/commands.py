@@ -380,29 +380,8 @@ def expert_command(
         execute_on_all_subsequent_children_in_path=True,
     )
 
-    # TODO: need to handle new response type
-
     def print_result(result, prefix=""):
-        if not hasattr(result, "data"):
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (no data)[/red]"
-            )
-        elif result.data.DESCRIPTOR.name == "PlainText":
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data.text}[/green]"
-            )
-        elif result.data.DESCRIPTOR.name == "Stacktrace":
-            for i in reversed(range(len(result.data.text))):
-                error = result.data.text[i]
-                if error != "":
-                    break
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]ERROR: {error}[/red]"
-            )
-        else:
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (data format not understood: {result.data.DESCRIPTOR.name})[/red]"
-            )
+        log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
 
         for child in result.children:
             print_result(child, prefix + "    ")
