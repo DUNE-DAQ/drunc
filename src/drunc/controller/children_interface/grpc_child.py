@@ -7,6 +7,7 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
     ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -233,7 +234,7 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> Response:
+    ) -> ExecuteExpertCommandResponse:
         request = ExecuteExpertCommandRequest(
             token=None,
             json_string=json_string,
