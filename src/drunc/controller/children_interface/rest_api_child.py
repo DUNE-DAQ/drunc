@@ -9,14 +9,14 @@ from json import JSONDecodeError
 import requests
 import socks
 from druncschema.controller_pb2 import (
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
     Status,
     StatusResponse,
 )
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api
 
@@ -27,7 +27,6 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import ControlType, get_logger, get_new_port
 
 
@@ -462,6 +461,7 @@ class RESTAPIChildNode(ClientSideChild):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        cmd_data = {"modules": [{"data": module_data, "match": ""}]}
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command_name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
@@ -471,7 +471,7 @@ class RESTAPIChildNode(ClientSideChild):
         try:
             self.commander.send_app_command(
                 cmd_id=command_name,
-                module_data={"modules": [{"data": module_data, "match": ""}]},
+                module_data=cmd_data,
                 entry_state=entry_state.upper(),
                 exit_state=exit_state.upper(),
             )
@@ -507,8 +507,22 @@ class RESTAPIChildNode(ClientSideChild):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> Response:
-        data_dict = json.loads(json_string)
+    ) -> ExecuteExpertCommandResponse:
+        response = ExecuteExpertCommandResponse(
+            token=None,
+            name=self.name,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        try:
+            data_dict = json.loads(json_string)
+        except JSONDecodeError as e:
+            self.log.error(f"Error parsing JSON command data: {e}")
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
         example = json.dumps(
             {
                 "data": {"modules": [{"data": {"duration": 100}, "match": ""}]},
@@ -518,7 +532,6 @@ class RESTAPIChildNode(ClientSideChild):
             },
             indent=4,
         )
-
         if (
             "id" not in data_dict
             or "data" not in data_dict
@@ -556,35 +569,24 @@ class RESTAPIChildNode(ClientSideChild):
                 exit_state=exit_state,
             )
             self.log.debug(f"Sent '{command_name}' to '{self.name}'")
-            r = self.commander.check_response(150)
 
+            r = self.commander.check_response(150)
             self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
 
-            success = r["success"]
+            response.data = json.dumps(r)
 
-            response_data = PlainText(text=json.dumps(r))
-
-            response = Response(
-                name=self.name,
-                token=None,
-                data=pack_to_any(response_data),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children={},
-            )
-
-            if not success:
+            if not r["success"]:
+                # The RPC was successful, but the FSM command was not.
                 self.log.error(r["result"])
                 self.state.to_error()
-                response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY  # /!\ The command executed successfully, but the FSM command was not successful
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 return response
 
-        except Exception as e:  # OK, we catch all exceptions here, but that's because REST-API are stateless, and we so we need to put the application in error.
-            self.log.error(
-                f"Got error from '{command_name}' to '{self.name}': {str(e)}"
-            )
+        except Exception as e:
+            self.log.error(f"Got error from '{command_name}' to '{self.name}': {e!s}")
             self.state.to_error()
-
-            self.log.exception(e)
-            raise e
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+            return response
 
         return response
