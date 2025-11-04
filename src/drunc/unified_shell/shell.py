@@ -260,11 +260,12 @@ def unified_shell(
             f"[red]Could not connect to the process manager at the address[/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        unified_shell_log.error(f"Reason: {e}")
+        unified_shell_log.debug(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             unified_shell_log.error(
-                "[red] This can happen if you have the webproxy enabled at CERN. Ensure http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
+                "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
+                "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
             )
 
         if internal_pm and not ctx.obj.pm_process.is_alive():
