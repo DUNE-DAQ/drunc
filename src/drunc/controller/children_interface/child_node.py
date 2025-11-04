@@ -32,7 +32,11 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 class ChildNode:
     def __init__(
-        self, name: str, configuration, node_type: ControlType, **kwargs
+        self,
+        name: str,
+        configuration,
+        node_type: ControlType,
+        **kwargs,
     ) -> None:
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
@@ -235,6 +239,7 @@ class ChildNode:
                     init_token=init_token,
                     name=name,
                     uri=uri,
+                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
 

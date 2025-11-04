@@ -77,8 +77,12 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
-    ):
-        super().__init__(name=name, node_type=node_type, configuration=configuration)
+    ):  #
+        super().__init__(
+            name=name,
+            node_type=node_type,
+            configuration=configuration,
+        )
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
         self.fsm_configuration = fsm_configuration
