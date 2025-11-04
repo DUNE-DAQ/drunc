@@ -66,7 +66,7 @@ class ProcessManagerDriver:
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList]:
+    ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Step 1 - consolidate configuration
@@ -94,6 +94,9 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             **kwargs,
         ):
+            if not request:
+                self.log.error("[red]No boot request was generated, ending boot.[/red]")
+                return None
             if request.process_description.metadata.name in [
                 app.id for app in session_dal.infrastructure_applications
             ]:
@@ -185,9 +188,13 @@ class ProcessManagerDriver:
             )
 
         else:
-            rte_script = get_rte_script()
-            if not rte_script:
-                raise DruncSetupException("No RTE script found.")
+            try:
+                rte_script = get_rte_script()
+            except DruncSetupException as e:
+                log = get_logger("utils.check_rte")
+                errmsg = f"[red]Couldn't understand where to find the rte script [/red]. Did you run [green] dbt-build [/green] and [green]dbt-workarea-env[/green]?. {e}"
+                log.error(errmsg)
+                raise
 
             executable_and_arguments.append(
                 ProcessDescription.ExecAndArgs(exec="source", args=[rte_script])
@@ -218,7 +225,13 @@ class ProcessManagerDriver:
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
-        executable_and_arguments = self._prepare_exec_and_args(session_dal, exe, args)
+
+        try:
+            executable_and_arguments = self._prepare_exec_and_args(
+                session_dal, exe, args
+            )
+        except DruncSetupException:
+            raise DruncSetupException("Generating executable and arguments failed")
 
         log_path = get_log_path(
             user=user,
@@ -271,15 +284,20 @@ class ProcessManagerDriver:
             session_log_path = pwd
 
         for app in apps:
-            breq = self._build_boot_request(
-                app,
-                user,
-                session_name,
-                session_dal,
-                session_log_path,
-                override_logs,
-                pwd,
-            )
+            try:
+                breq = self._build_boot_request(
+                    app,
+                    user,
+                    session_name,
+                    session_dal,
+                    session_log_path,
+                    override_logs,
+                    pwd,
+                )
+            except DruncSetupException as e:
+                log = get_logger("utils.boot_req_generator")
+                log.error(f"[red]Caught exception in boot generator [/red]: {e}")
+                yield None
             yield breq
 
     def _consolidate_config(self, session_name, conf_file: str) -> str | None:

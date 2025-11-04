@@ -207,6 +207,7 @@ def test_prepare_exec_and_args_no_rte_script(mock_get_rte_script, mock_driver):
     session_dal = MagicMock()
     session_dal.rte_script = None
     mock_get_rte_script.return_value = None
+    mock_get_rte_script.side_effect = DruncSetupException("No RTE script found.")
 
     exe = "dummy_executable"
     args = ["--flag", "value"]
