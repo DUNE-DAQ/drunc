@@ -6,9 +6,7 @@ import click
 from druncschema.token_pb2 import Token
 from rich.console import Console
 
-from drunc.exceptions import (
-    DruncShellException,
-)
+from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
 

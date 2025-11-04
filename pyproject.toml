@@ -8,33 +8,38 @@ description = "A flexible run control infrastructure for a distributed DAQ syste
 version = "0.19.0"
 readme = "docs/README.md"
 requires-python = ">=3.10"
+
+[tool.setuptools.dynamic]
+version = {attr = "drunc.__version__"}
+readme = {file = ["docs/README.md"]}
+
 dependencies = [
     "click",
     "click-shell",
     "protobuf",
     "types-protobuf",
-    "grpcio==1.75.0",
-    "grpcio-status==1.75.0",
-    "grpcio-tools==1.75.0",
+    "grpcio",
+    "grpcio-status",
+    "grpcio-tools",
     "types-grpcio",
-    "gunicorn==23.0.0",
-    "kafka-python==2.0.2",
-    "nest-asyncio==1.6.0",
-    "rich==13.9.4",
-    "requests==2.32.3",
-    "Flask==3.1.0",
-    "Flask-RESTful==0.3.10",
-    "sh==2.1.0",
-    "kubernetes==31.0.0",
-    "pytz==2024.2",
-    "psutil==6.1.0",
+    "gunicorn",
+    "kafka-python",
+    "nest-asyncio",
+    "rich",
+    "requests",
+    "Flask",
+    "Flask-RESTful",
+    "sh",
+    "kubernetes",
+    "pytz",
+    "psutil",
     "paramiko"
 ]
 
 [project.optional-dependencies]
 prod = ["paramiko[gssapi]"]
-dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
-test = ["pytest", "grpcio-testing"]
+dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing"]
+test = ["pytest", "pytest-cov", "grpcio-testing",]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
@@ -48,10 +53,6 @@ drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
 application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
 drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
 drunc-setup-ssh-config = "drunc.apps.__main_ssh_configurator__:main"
-
-[tool.setuptools.dynamic]
-version = {attr = "drunc.__version__"}
-readme = {file = ["docs/README.md"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]

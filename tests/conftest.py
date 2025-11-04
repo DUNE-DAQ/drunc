@@ -207,10 +207,6 @@ def one_controller_running(
         configuration_name, request
     )
     time.sleep(2)  # Give gunicorn time to start
-    print("Started one_controller_running processes")
-    print(f"{processes_and_logs=}")
-    print(f"{session_dal=}")
-    print(f"{session_name=}")
     yield processes_and_logs, session_dal, session_name
 
     print("Cleaning up one_controller_running processes")
