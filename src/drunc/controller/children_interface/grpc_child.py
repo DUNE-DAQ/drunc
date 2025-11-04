@@ -336,7 +336,7 @@ class gRPCChildNode(ChildNode):
         )
 
         try:
-            response = self.stub.recompute_status(request, timeout=timeout)
+            response = self.stub.recompute_status(request)
         except grpc.RpcError as e:
             try:
                 self.handle_child_grpc_error(e)
@@ -345,7 +345,7 @@ class gRPCChildNode(ChildNode):
                     f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
-                    lambda: self.stub.recompute_status(request, timeout=timeout)
+                    lambda: self.stub.recompute_status(request)
                 )
 
         return response
