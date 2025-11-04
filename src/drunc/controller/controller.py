@@ -13,6 +13,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandRequest,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -1076,34 +1077,43 @@ class Controller(ControllerServicer):
 
         return response
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.EXPERT, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
-    @OLD_unpack_addressed_command_to(PlainText)  # 3rd step
     @publish_command_time
     def execute_expert_command(
         self,
-        payload: PlainText,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
+        request: ExecuteExpertCommandRequest,
+        context: ServicerContext,
     ) -> Response:
-        children_expert_command_response = self.OLD_propagate_to_children(
-            "execute_expert_command",
-            addressed_commands,
-            token,
+        request.target = self.parse_target_string(request.target)
+        response = Response(
+            token=None,
+            name=self.name,
         )
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(PlainText(text=f"{self.name} propagated expert command")),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_expert_command_response,
+        # This node.
+        response.data.Pack(PlainText(text=f"'{self.name}' propagated expert command"))
+
+        # Children nodes.
+        def child_command_fn(child: ChildNode, target: str) -> Response:
+            return child.execute_expert_command(
+                request.json_string,
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
         )
+        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        response.children.extend(child_responses)
+
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
 
     @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
