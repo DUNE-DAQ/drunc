@@ -380,7 +380,6 @@ To debug it, close drunc and run the following command:
         Tries dynamic lookup via connectivity service first, then falls back
         to static OKS configuration.
         """
-        # Define controller name ONCE in the outer scope
         try:
             top_controller_name = session_dal.segment.controller.id
         except AttributeError as e:
@@ -392,13 +391,10 @@ To debug it, close drunc and run the following command:
 
             env = {}
             collect_variables(session_dal.environment, env)
-            # Note: 'env' variable is not currently used in this function.
 
-            # ---
-            # Strategy 1: Try dynamic lookup via Connectivity Service (if available)
-            # ---
+            # 1: Try dynamic lookup via Connectivity Service
             if csc:
-                self.log.info(
+                self.log.debug(
                     f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
                 )
                 try:
@@ -418,10 +414,10 @@ To debug it, close drunc and run the following command:
                     )
 
                     address = uri.replace("grpc://", "")
-                    self.log.info(
+                    self.log.debug(
                         f"Successfully discovered controller '{top_controller_name}' via connectivity service: {address}"
                     )
-                    return address  # SUCCESS: Return dynamically found address
+                    return address
 
                 except ApplicationLookupUnsuccessful:
                     self.log.warning(
@@ -437,38 +433,32 @@ To debug it, close drunc and run the following command:
                     self.log.warning(
                         "Falling back to static OKS configuration for address resolution."
                     )
-                    # DO NOT return. Fall through to Strategy 2.
 
                 except Exception as e:
                     self.log.error(
                         f"An unexpected error occurred during connectivity service lookup: {e}. "
                         "Falling back to static OKS configuration."
                     )
-                    # DO NOT return. Fall through to Strategy 2.
+
             else:
-                self.log.info(
+                self.log.warning(
                     "Connectivity service client (csc) is not available. Using static OKS configuration only."
                 )
 
-            # ---
-            # Strategy 2: Fallback to static OKS configuration
-            # ---
-            self.log.info(
+            # 2: Fallback to static OKS configuration
+            self.log.debug(
                 "Attempting to resolve controller address from static OKS configuration."
             )
 
             port_number = None
             protocol = None
             service_found = None
-            # top_controller_name is already available from the outer scope
 
             try:
-                # We already have top_controller_name from outer scope
-                self.log.info(
+                self.log.debug(
                     f"Top controller name from OKS config: '{top_controller_name}'"
                 )
 
-                # Check if exposes_service relationship exists and is populated
                 if (
                     not hasattr(session_dal.segment.controller, "exposes_service")
                     or not session_dal.segment.controller.exposes_service
@@ -488,7 +478,7 @@ To debug it, close drunc and run the following command:
                 )
 
                 if service_found:
-                    self.log.info(
+                    self.log.debug(
                         f"Found linked control service object with ID: '{service_found.id}'"
                     )
                     if (
@@ -496,7 +486,7 @@ To debug it, close drunc and run the following command:
                         and service_found.port is not None
                     ):
                         port_number = service_found.port
-                        self.log.info(
+                        self.log.debug(
                             f"Extracted port from service '{service_found.id}': {port_number}"
                         )
                     else:
@@ -506,7 +496,7 @@ To debug it, close drunc and run the following command:
 
                     if hasattr(service_found, "protocol") and service_found.protocol:
                         protocol = service_found.protocol
-                        self.log.info(
+                        self.log.debug(
                             f"Extracted protocol from service '{service_found.id}': {protocol}"
                         )
                     else:
@@ -518,7 +508,7 @@ To debug it, close drunc and run the following command:
                     self.log.error(
                         f"Could not retrieve the first service object from 'exposes_service' for controller '{top_controller_name}'."
                     )
-                    return None  # Exit if service object itself couldn't be retrieved
+                    return None
 
             except AttributeError as e:
                 self.log.error(
@@ -536,14 +526,14 @@ To debug it, close drunc and run the following command:
                 self.log.error(
                     f"Failed to extract valid port ({port_number}) or protocol ({protocol}) for service '{service_found.id if service_found else 'N/A'}'. Cannot determine controller address."
                 )
-                return None  # Exit if service definition is incomplete
+                return None
 
             # Resolve the IP address of the host where the controller runs
             try:
                 host_id = session_dal.segment.controller.runs_on.runs_on.id
-                self.log.info(f"Controller runs on host ID: '{host_id}'")
+                self.log.debug(f"Controller runs on host ID: '{host_id}'")
                 ip = resolve_localhost_and_127_ip_to_network_ip(host_id)
-                self.log.info(f"Resolved host ID '{host_id}' to IP: {ip}")
+                self.log.debug(f"Resolved host ID '{host_id}' to IP: {ip}")
             except AttributeError as e:
                 self.log.error(
                     f"Error accessing OKS configuration attributes for host resolution: {e}. Check structure around session_dal.segment.controller.runs_on."
@@ -561,11 +551,10 @@ To debug it, close drunc and run the following command:
 
             # If all checks passed, return the address
             final_address = f"{ip}:{port_number}"
-            self.log.info(
+            self.log.debug(
                 f"Successfully resolved controller address from OKS config: {final_address}"
             )
             return final_address
-            # --- END OKS FALLBACK LOGIC ---
 
         def keyboard_interrupt_on_sigint(signal, frame):
             self.log.warning("Interrupted")

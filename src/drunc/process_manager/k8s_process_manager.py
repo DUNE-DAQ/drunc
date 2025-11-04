@@ -692,15 +692,12 @@ class K8sProcessManager(ProcessManager):
         """Calls the appropriate service creation method based on pod type."""
         if podname == self.connection_server_name:
             if lcs_port is None:
-                # Should not happen after the check in _create_pod, but for safety:
                 raise DruncK8sException(
                     "LCS service creation failed: port was not extracted."
                 )
 
             # If LCS, call nodeport service creation
-            self._create_nodeport_service(
-                podname, session, pod_uid
-            )  # Note: _create_nodeport_service must rely on self.connection_server_port, which was set in _create_pod
+            self._create_nodeport_service(podname, session, pod_uid)
 
         elif "root-controller" in podname:
             self.log.info(
@@ -726,26 +723,23 @@ class K8sProcessManager(ProcessManager):
         try:
             lcs_port = None
 
-            # A. Early Port Extraction and Class Variable Setup for LCS
+            # Early Port Extraction and Class Variable Setup for LCS
             if podname == self.connection_server_name:
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
-                    # CRITICAL FIXES: Set both port variables
                     self.connection_server_port = lcs_port
-                    self.connection_server_node_port = (
-                        lcs_port  # <--- THIS LINE WAS MISSING
-                    )
+                    self.connection_server_node_port = lcs_port
                 else:
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
                     )
 
-            # B. Build the main container manifest (Signature takes 4 args)
+            # Build the main container manifest
             main_container = self._build_pod_main_container(
                 podname, boot_request, lcs_port
             )
 
-            # C/D/E. [Unchanged code for node_selector, host_aliases, pod_manifest]
+            # Node_selector, host_aliases, pod_manifest
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
             )
@@ -758,15 +752,14 @@ class K8sProcessManager(ProcessManager):
                 host_aliases,
             )
 
-            # F. Execute the pod creation API call
+            # Execute the pod creation API call
             pod_uid = self._execute_pod_creation_api(session, podname, pod_manifest)
 
-            # G. Create associated service (Signature takes 6 args)
+            # Create associated service (Signature takes 6 args)
             self._create_associated_service(
                 podname, session, pod_uid, boot_request, lcs_port
             )
 
-        # H. Error Handling
         except self._api_error_v1_api as e:
             start_time = time()
             error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
@@ -807,9 +800,8 @@ class K8sProcessManager(ProcessManager):
             all_args = [e_and_a.exec] + list(e_and_a.args)
             arg_str = " ".join(all_args)
 
-            # 1. Check for gunicorn bind syntax (for local-connection-server)
+            # Check for gunicorn bind syntax (for local-connection-server)
             if "gunicorn" in arg_str:
-                # Regex 1: Match hardcoded port: e.g., --bind=0.0.0.0:30005
                 match_hardcoded = re.search(r"(-b|--bind)[\s=]+[\w\.]+:(\d+)", arg_str)
 
                 if match_hardcoded:
@@ -820,8 +812,7 @@ class K8sProcessManager(ProcessManager):
                         )
                         return port
 
-                # Regex 2: Match environment variable port: e.g., --bind=0.0.0.0:${CONNECTION_PORT}
-                # Group 2 captures the variable name (e.g., 'CONNECTION_PORT')
+                # Match environment variable port: e.g., --bind=0.0.0.0:${CONNECTION_PORT}
                 match_var = re.search(r"(-b|--bind)[\s=]+[\w\.]+:\$\{(\w+)\}", arg_str)
 
                 if match_var:
@@ -846,7 +837,7 @@ class K8sProcessManager(ProcessManager):
                             f"Extracted port variable '{var_name}' but it was not found in environment map."
                         )
 
-            # 2. Check for drunc-controller --port syntax (unchanged)
+            # Check for drunc-controller --port syntax (unchanged)
             if "controller" in arg_str:
                 match = re.search(r"--port[\s=]+(\d+)", arg_str)
                 if match:
@@ -857,7 +848,7 @@ class K8sProcessManager(ProcessManager):
                         )
                         return port
 
-            # 3. Check for drunc-controller -c grpc://... syntax (unchanged)
+            # Check for drunc-controller -c grpc://... syntax (unchanged)
             if "controller" in arg_str:
                 match = re.search(r"-c\s+[\"\']?grpc:\/\/[^:]+:(\d+)[\"\']?", arg_str)
                 if match:
@@ -981,7 +972,6 @@ class K8sProcessManager(ProcessManager):
                     podname, session
                 )
                 if pod_status.status.phase == "Running":
-                    # Check readiness condition
                     is_ready = False
                     if pod_status.status.conditions:
                         for condition in pod_status.status.conditions:
@@ -990,7 +980,6 @@ class K8sProcessManager(ProcessManager):
                                 break
 
                     if is_ready:
-                        # Success for Stage 1
                         pod_ready = True
                         node_name = pod_status.spec.node_name
                         self.log.info(f"Stage 1: Pod '{podname}' is API Ready.")
@@ -1013,7 +1002,6 @@ class K8sProcessManager(ProcessManager):
         self.log.info(f"Stage 2: Waiting for NodePort {url} to be reachable...")
         nodeport_ready = False
 
-        # Use the *remaining* time for this check
         remaining_time = self.pod_ready_timeout - (time() - start_time)
         nodeport_start_time = time()
 
@@ -1066,7 +1054,6 @@ class K8sProcessManager(ProcessManager):
                     podname, session
                 )
                 if pod_status.status.phase == "Running":
-                    # Check readiness condition
                     is_ready = False
                     if pod_status.status.conditions:
                         for condition in pod_status.status.conditions:
@@ -1149,10 +1136,10 @@ class K8sProcessManager(ProcessManager):
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
 
-        # A. Pre-checks (Session validation, NodePort collision)
+        # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
-        # B. Resource Creation (Namespace, Pod, Labels)
+        # Resource Creation (Namespace, Pod, Labels)
         self._create_namespace(session)
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
@@ -1161,13 +1148,13 @@ class K8sProcessManager(ProcessManager):
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
-        # C/D. Special handling and blocking wait for critical processes
+        # Special handling and blocking wait for critical processes
         if podname == self.connection_server_name:
             self._wait_for_lcs_readiness(podname, session)
         elif "root-controller" in podname:
             self._wait_for_controller_readiness(podname, session, boot_request)
 
-        # E. Post-Process (Return the ProcessInstance)
+        # Post-Process
         pd, pr, pu = (
             ProcessDescription(),
             ProcessRestriction(),

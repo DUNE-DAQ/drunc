@@ -712,8 +712,6 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     return cmd, cmd_name
 
 
-# --- Helper function to check for internal IPs ---
-# We cache this check too, though it's already very fast.
 @lru_cache(maxsize=1024)
 def is_private_ip(ip_str: str) -> bool:
     """
@@ -729,11 +727,10 @@ def is_private_ip(ip_str: str) -> bool:
         # .is_link_local = 169.254.x.x
         return ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
     except ValueError:
-        # Not a valid IP address, treat as "private" to skip lookup
+        # Not 'valid' IP address -> treat as private
         return True
 
 
-# --- HELPER 2: Checks if a string is an IP vs. a domain name ---
 @lru_cache(maxsize=1024)
 def is_valid_ip(hostname: str) -> bool:
     """Checks if a string is a valid IPv4 or IPv6 address."""
@@ -746,7 +743,6 @@ def is_valid_ip(hostname: str) -> bool:
         return False
 
 
-# --- Your new, improved function ---
 @lru_cache(maxsize=4096)
 def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
     """
@@ -756,28 +752,20 @@ def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
     3. Uses a short timeout for public IPs.
     """
 
-    # 1. The Kubernetes/Internal IP check:
-    # If it's a private IP, don't even try to resolve it.
-    # This is the optimization that fixes your K8s problem.
+    # If private IP (k8s), don't try to resolve it
     if is_private_ip(ip_address):
         return ip_address
 
-    # 2. It's a public IP, so let's try to resolve it.
-    # We must use a try/finally to ensure we reset the global timeout.
+    # If public IP, try to resolve it.
     original_timeout = socket.getdefaulttimeout()
     try:
-        # Set a short global timeout *just* for this operation
         socket.setdefaulttimeout(timeout_seconds)
 
         hostname, _, _ = socket.gethostbyaddr(ip_address)
         return hostname
 
     except (socket.herror, socket.gaierror, socket.timeout):
-        # This catches "host not found", "name or service not known",
-        # or our own 0.2-second timeout.
-        # We cache the failure by returning the IP.
         return ip_address
 
     finally:
-        # 3. CRITICAL: Always reset the global timeout
         socket.setdefaulttimeout(original_timeout)
