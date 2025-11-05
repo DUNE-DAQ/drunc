@@ -212,6 +212,7 @@ class gRPCChildNode(ChildNode):
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(lambda: cmd(packed_request))
+
         return response
 
     def status(
@@ -319,7 +320,15 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.execute_fsm_command(request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.execute_fsm_command(request)
+                )
 
         return response
 
@@ -341,7 +350,15 @@ class gRPCChildNode(ChildNode):
         try:
             response = self.stub.execute_expert_command(request)
         except grpc.RpcError as error:
-            self.handle_child_grpc_error(error)
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.execute_expert_command(request)
+                )
 
         return response
 
