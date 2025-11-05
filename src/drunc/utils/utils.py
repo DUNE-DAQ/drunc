@@ -46,14 +46,11 @@ date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when th
 time_zone = pytz.utc
 ############################
 
-# TODO Make a setup / make root logger
-# TODO Make another function that modifies the other loggers if necessary (?)
-
 
 def create_root_logger(
     log_level: str, log_file_path: str = None, rich_handler: bool = False
 ) -> logging.Logger:
-    #! This should replace setup root logger + create_logger_handler
+    """Defines the top level 'drunc' root logger."""
 
     root_logger: logging.Logger = get_daq_logger(
         logger_name="drunc",
@@ -68,7 +65,7 @@ def create_root_logger(
 
 
 def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
-    # TODO Maybe get rid of this entirely?
+    """Wrapper for daqpytools implementation. Forces it to go under drunc"""
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
 
