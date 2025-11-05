@@ -41,20 +41,18 @@ jobs:
               StrictHostKeyChecking no
               UserKnownHostsFile /dev/null
           EOF
-
-          # start sshd and verify it's running
-          chmod 600 ~/.ssh/config
+    
+          # Configure SSH daemon for container environment
+          echo "Port 22" >> /etc/ssh/sshd_config
+          echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+          echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
+          echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+          
+          # Start SSH daemon and wait
           /usr/sbin/sshd
-          for i in {1..30}; do
-              if ssh -o ConnectTimeout=5 localhost 'echo "SSH ready"' 2>/dev/null; then
-                  echo "SSH daemon started successfully"
-                  break
-              fi
-              echo "Waiting for SSH daemon... ($i/30)"
-              sleep 1
-          done
 
-          ssh localhost echo "SSH is working"
+          # Test SSH connection
+          ssh -v localhost echo "SSH is working"
 
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
@@ -77,8 +75,8 @@ jobs:
           python -m pip install --upgrade pip
           cd sourcecode
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
-          # git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
-          git clone https://github.com/DUNE-DAQ/drunc.git -b aurashk/upgrade-to-grpc-1.75
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
+          # git clone https://github.com/DUNE-DAQ/drunc.git -b aurashk/upgrade-to-grpc-1.75
           cd druncschema
           pip install .[test]
           cd -
