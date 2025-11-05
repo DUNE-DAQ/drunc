@@ -23,8 +23,8 @@ jobs:
 
       - name: Install SSH and run the daemon
         run: |
-          dnf install openssh-server
-          dnf install openssh-clients
+          dnf install -y openssh-server
+          dnf install -y openssh-clients
           systemctl start sshd
           systemctl enable sshd
           ssh localhost echo "SSH is working"
