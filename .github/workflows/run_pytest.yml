@@ -47,6 +47,7 @@ jobs:
           echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
           echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
           echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
+          echo "AddressFamily inet" >> /etc/ssh/sshd_config
           
           # Start SSH daemon and wait
           /usr/sbin/sshd
