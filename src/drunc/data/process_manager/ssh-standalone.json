@@ -16,6 +16,10 @@
         "path": "./info.json",
         "type": "file"
     },
+    "ers_uri": {
+        "path": "./info.json",
+        "type": "file"
+    },
     "opmon_conf": {
         "level": "info",
         "interval_s": 10.0
