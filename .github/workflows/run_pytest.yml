@@ -69,8 +69,7 @@ jobs:
           python -m pip install --upgrade pip
           cd sourcecode
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
-          # git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
-          git clone https://github.com/DUNE-DAQ/drunc.git -b aurashk/upgrade-to-grpc-1.75
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
           cd druncschema
           pip install .[test]
           cd -

@@ -66,7 +66,7 @@ class SSHProcessLifetimeManager:
 
     def _load_ssh_config(self, hostname: str) -> Dict[str, any]:
         """
-        Load SSH configuration from ~/.ssh/config for the given hostname.
+        Load SSH configuration for the given hostname.
 
         Reads the user's SSH config file and returns configuration options
         for the specified host, including host aliases, custom ports, identity
@@ -78,23 +78,28 @@ class SSHProcessLifetimeManager:
         Returns:
             Dictionary of SSH configuration options for the host
         """
-        ssh_config_path = os.path.expanduser("~/.ssh/config")
-        ssh_config = {}
 
-        if os.path.exists(ssh_config_path):
-            try:
-                config = paramiko.SSHConfig()
-                with open(ssh_config_path, "r") as f:
-                    config.parse(f)
-                ssh_config = config.lookup(hostname)
-                self.log.debug(
-                    f"Loaded SSH config for {hostname}: {list(ssh_config.keys())}"
-                )
-            except Exception as e:
-                self.log.warning(f"Could not parse SSH config: {e}")
+        # Possible SSH config file locations in order of preference
+        ssh_config_paths = [
+            os.path.expanduser("~/.ssh/config"), # standard location
+            "/root/.ssh/config",  # CI environments
+        ]
 
-        self.log.debug(f"SSH config identity files: {ssh_config.get('identityfile')}")
-        return ssh_config
+        for ssh_config_path in ssh_config_paths:
+            if os.path.exists(ssh_config_path):
+                try:
+                    config = paramiko.SSHConfig()
+                    with open(ssh_config_path, "r") as f:
+                        config.parse(f)
+                    ssh_config = config.lookup(hostname)
+                    self.log.debug(
+                        f"Loaded SSH config for {hostname} from {ssh_config_path}: {list(ssh_config.keys())}"
+                    )
+                    # use the first config that was found
+                    return ssh_config
+                except Exception as e:
+                    self.log.warning(f"Could not parse SSH config at {ssh_config_path}: {e}")
+                    continue
 
     def _add_identity_file(
         self, connect_kwargs: Dict[str, Any], identity_files: List[str]
@@ -114,7 +119,6 @@ class SSHProcessLifetimeManager:
             raise RuntimeError(
                 "No identity files specified for public key authentication"
             )
-        return connect_kwargs
 
     def _has_gss_api_support(self) -> bool:
         """
