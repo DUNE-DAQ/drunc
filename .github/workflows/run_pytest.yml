@@ -42,18 +42,11 @@ jobs:
               UserKnownHostsFile /dev/null
           EOF
 
-          # Configure SSH daemon for container environment
-          echo "Port 22" >> /etc/ssh/sshd_config
-          echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
-          echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
-          echo "PasswordAuthentication no" >> /etc/ssh/sshd_config
-          echo "AddressFamily inet" >> /etc/ssh/sshd_config
-          
           # Start SSH daemon
           /usr/sbin/sshd
 
           # Test SSH connection
-          ssh -v localhost echo "SSH is working"
+          ssh localhost echo "SSH is working"
 
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
@@ -76,7 +69,8 @@ jobs:
           python -m pip install --upgrade pip
           cd sourcecode
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
+          # git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
+          git clone https://github.com/DUNE-DAQ/drunc.git -b aurashk/upgrade-to-grpc-1.75
           cd druncschema
           pip install .[test]
           cd -
