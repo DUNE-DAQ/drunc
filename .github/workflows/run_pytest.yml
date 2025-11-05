@@ -25,9 +25,12 @@ jobs:
         run: |
           dnf install -y openssh-server
           dnf install -y openssh-clients
-          systemctl start sshd
-          systemctl enable sshd
-          ssh localhost echo "SSH is working"
+          ssh-keygen -A
+          ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+          cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          /usr/sbin/sshd
+          ssh -o StrictHostKeyChecking=no localhost echo "SSH is working"
 
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
@@ -49,7 +52,7 @@ jobs:
           source env.sh
           python -m pip install --upgrade pip
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }}
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
           cd druncschema
           pip install .[test]
           cd -
