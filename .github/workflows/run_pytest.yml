@@ -51,6 +51,7 @@ jobs:
           
           # Start SSH daemon and wait
           /usr/sbin/sshd
+          sleep 3
 
           # Test SSH connection
           ssh -v localhost echo "SSH is working"
