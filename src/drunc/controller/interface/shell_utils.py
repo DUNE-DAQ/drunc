@@ -731,18 +731,6 @@ def is_private_ip(ip_str: str) -> bool:
         return True
 
 
-@lru_cache(maxsize=1024)
-def is_valid_ip(hostname: str) -> bool:
-    """Checks if a string is a valid IPv4 or IPv6 address."""
-    if not hostname:
-        return False
-    try:
-        ipaddress.ip_address(hostname)
-        return True
-    except ValueError:
-        return False
-
-
 @lru_cache(maxsize=4096)
 def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
     """

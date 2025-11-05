@@ -36,6 +36,7 @@ class ControllerDriver:
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
+        # The 'ipv4:' prefix forces IPv4 resolution, which helps avoid Kubernetes hairpinning issues
         target_address = f"ipv4:{self.address}"
         self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)

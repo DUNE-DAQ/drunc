@@ -1167,7 +1167,6 @@ class K8sProcessManager(ProcessManager):
             process_description=pd,
             process_restriction=pr,
             status_code=ProcessInstance.StatusCode.RUNNING,
-            return_code=0,
             uuid=pu,
         )
 
