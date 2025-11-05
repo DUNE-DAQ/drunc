@@ -78,10 +78,10 @@ def test_grpc_error_handling(mock_driver, method_name):
             getattr(mock_driver, method_name)()
 
         mock_extract.assert_called_once_with(grpc_error)
-        mock_driver.log.debug.assert_called_once_with(error_details)
+        mock_driver.log.error.assert_called_once_with(error_details)
         mock_handler.assert_called_once_with(grpc_error)
 
-        logged = mock_driver.log.debug.call_args[0][0]
+        logged = mock_driver.log.error.call_args[0][0]
         assert logged == error_details
 
 
@@ -119,6 +119,6 @@ def test_grpc_error_fallback(mock_driver, method_name):
             getattr(mock_driver, method_name)()
 
         mock_extract.assert_called_once()
-        mock_driver.log.debug.assert_called_once()
-        logged = mock_driver.log.debug.call_args[0][0]
+        mock_driver.log.error.assert_called_once()
+        logged = mock_driver.log.error.call_args[0][0]
         assert logged == error_details

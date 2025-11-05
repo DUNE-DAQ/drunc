@@ -259,7 +259,7 @@ def _extract_message_parts(message: Message) -> list[str]:
 
 # All known Google error detail types.
 # More info here https://github.com/googleapis/googleapis/blob/master/google/rpc/error_details.proto
-_ERROR_DETAIL_TYPES = [
+_ERROR_DETAIL_TYPES = (
     error_details_pb2.BadRequest,
     error_details_pb2.QuotaFailure,
     error_details_pb2.RetryInfo,
@@ -270,7 +270,7 @@ _ERROR_DETAIL_TYPES = [
     error_details_pb2.LocalizedMessage,
     error_details_pb2.ResourceInfo,
     error_details_pb2.RequestInfo,
-]
+)
 
 
 def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:

@@ -56,11 +56,15 @@ class SessionManagerDriver:
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
-                self.log.debug(error_details)
-            except Exception:
-                pass
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
 
             handle_grpc_error(e)
+            
         return response
 
     def list_all_sessions(self, timeout: int | float = 60) -> AllActiveSessions:
@@ -79,10 +83,13 @@ class SessionManagerDriver:
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
-                self.log.debug(error_details)
-            except Exception:
-                pass
-            
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -103,10 +110,13 @@ class SessionManagerDriver:
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
-                self.log.debug(error_details)
-            except Exception:
-                pass
-            
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
