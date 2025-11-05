@@ -23,27 +23,11 @@ jobs:
 
       - name: Install SSH and run the daemon
         run: |
-          dnf install -y openssh-server openssh-clients
-          
-          # Generate host keys for SSH daemon
-          ssh-keygen -A
-          
-          # Create SSH directory for current user
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          # Generate SSH key pair for passwordless localhost access
-          ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
-          
-          # Add public key to authorized_keys for passwordless login
-          cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
-          chmod 600 ~/.ssh/authorized_keys
-
-          # Start SSH daemon
-          /usr/sbin/sshd -D &
-          
-          # Test SSH connection works
-          ssh -o StrictHostKeyChecking=no localhost echo "SSH is working"
+          dnf install openssh-server
+          dnf install openssh-clients
+          systemctl start sshd
+          systemctl enable sshd
+          ssh localhost echo "SSH is working"
 
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
