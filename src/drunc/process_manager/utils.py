@@ -163,9 +163,7 @@ def get_rte_script():
         script = os.path.join(dbt_install_dir, "daq_app_rte.sh")
 
     if not os.path.exists(script):
-        raise DruncSetupException(
-            f"Couldn't understand where to find the rte script tentative: {script}"
-        )
+        raise DruncSetupException(f"Tentative RTE script: {script}")
     return script
 
 
