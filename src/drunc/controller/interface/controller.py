@@ -116,7 +116,7 @@ def controller_cli(
         return server, port
 
     def controller_shutdown():
-        log.warning("Requested termination")
+        log.info("Requested termination")
         log.info("Calling ctrlr.terminate()")
         ctrlr.terminate()
         log.info("ctrlr.terminate() completed")
