@@ -4,6 +4,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     Status,
@@ -44,14 +45,14 @@ class ChildNode:
         self.configuration = configuration
         self.included = True
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}' (type {self.node_type})"
+
+    def get_endpoint(self) -> str:
+        return ""
 
     def terminate(self):
         pass
-
-    def get_endpoint(self) -> str | None:
-        return None
 
     def propagate_command(
         self,
@@ -158,6 +159,21 @@ class ChildNode:
             token=None,
             name=self.name,
             command_name=command.command_name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteExpertCommandResponse:
+        response = ExecuteExpertCommandResponse(
+            token=None,
+            name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
