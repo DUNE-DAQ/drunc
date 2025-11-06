@@ -775,6 +775,7 @@ class Controller(ControllerServicer):
         response = StatusResponse(
             token=None,
             name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # This node.
@@ -797,8 +798,6 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
         return response
 
     @broadcasted
@@ -811,6 +810,7 @@ class Controller(ControllerServicer):
         response = DescribeResponse(
             token=None,
             name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # This node.
@@ -842,8 +842,6 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
         return response
 
     @broadcasted
@@ -856,6 +854,7 @@ class Controller(ControllerServicer):
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # What transitions to describe.
@@ -903,8 +902,6 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
         return response
 
     ########################################
@@ -932,6 +929,8 @@ class Controller(ControllerServicer):
             token=None,
             name=self.name,
             command_name=command_name,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # Check controller readiness.
@@ -939,6 +938,7 @@ class Controller(ControllerServicer):
             self.log.error(
                 f"Command '{command_name}' not executed: controller is not ready."
             )
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
             return response
 
@@ -946,14 +946,12 @@ class Controller(ControllerServicer):
         if self.stateful_node.node_is_in_error():
             self.log.error(f"Command '{command_name}' not executed: node is in error.")
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
 
         # Check if node is excluded.
         if not self.stateful_node.node_is_included():
             self.log.error(f"Command '{command_name}' not executed: node is excluded.")
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
 
         # Check if transition is possible from current state.
@@ -963,7 +961,6 @@ class Controller(ControllerServicer):
                 f"Command '{command_name}' not executed: not possible from state '{state}'."
             )
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
             return response
 
         # This node.
@@ -1043,7 +1040,6 @@ class Controller(ControllerServicer):
             )
 
             # Set FSM error flag based on child responses.
-            response.fsm_flag = FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
             for child_response in child_responses:
                 if child_response.flag not in [
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1072,8 +1068,6 @@ class Controller(ControllerServicer):
             )
             response.children.extend(child_responses)
 
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
         return response
 
     @broadcasted
@@ -1089,6 +1083,7 @@ class Controller(ControllerServicer):
         response = ExecuteExpertCommandResponse(
             token=None,
             name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # This node.
@@ -1109,8 +1104,6 @@ class Controller(ControllerServicer):
             child_list,
         )
         response.children.extend(child_responses)
-
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
         return response
 
@@ -1225,6 +1218,7 @@ class Controller(ControllerServicer):
         response = RecomputeStatusResponse(
             token=None,
             name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
         # This node.
@@ -1323,8 +1317,6 @@ class Controller(ControllerServicer):
                 child_list,
             )
             response.children.extend(child_responses)
-
-        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
         return response
 
