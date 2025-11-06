@@ -52,6 +52,7 @@ class ChildNode:
         return ""
 
     def terminate(self):
+        self.log.info(f"Terminating {self.name}")
         pass
 
     def propagate_command(

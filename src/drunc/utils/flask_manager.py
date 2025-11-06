@@ -1,3 +1,4 @@
+import os
 import signal
 import threading
 import time
@@ -112,9 +113,25 @@ class FlaskManager(threading.Thread):
             },
         )
 
+        def run_gunicorn_with_signal_handling():
+            """Run gunicorn with SIGHUP ignored to prevent reload on shutdown.
+
+            This prevents gunicorn from reloading when the parent process receives SIGHUP.
+            We only want graceful shutdown via SIGTERM from FlaskManager.stop().
+            """
+            # Create new process group first to isolate from parent's signal propagation
+            # This prevents SIGHUP from being sent to this process when parent receives it
+            try:
+                os.setpgid(0, 0)  # Create new process group (safer than setsid)
+            except (OSError, PermissionError):
+                # May fail if already in a process group or on some systems, ignore
+                pass
+
+            self.prod_app.run()
+
         thread_name = f"{self.name}_thread"
         flask_srv = Process(  # Indeed, we've just forked this sucker
-            target=self.prod_app.run, name=thread_name, daemon=True
+            target=run_gunicorn_with_signal_handling, name=thread_name, daemon=True
         )
         flask_srv.start()
 

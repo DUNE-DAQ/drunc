@@ -217,7 +217,6 @@ class Controller(ControllerServicer):
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
-        self.stop_event = None  # Will be initialized later if needed
 
         self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
@@ -480,8 +479,9 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread.start()
 
     def terminate(self):
+        self.log.info(f"Terminating controller {self.name}")
         self.running = False
-        if self.opmon_publisher is not None and self.stop_event is not None:
+        if self.opmon_publisher is not None:
             self.stop_event.set()
             self.thread.join()
 
@@ -515,10 +515,7 @@ class Controller(ControllerServicer):
             self.log.debug(manager.list())
 
     def __del__(self):
-        try:
-            self.terminate()
-        except Exception:
-            pass
+        self.terminate()
 
     def OLD_propagate_to_all_children(
         self,
