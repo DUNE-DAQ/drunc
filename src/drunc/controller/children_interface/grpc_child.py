@@ -110,18 +110,15 @@ class gRPCChildNode(ChildNode):
                 response = self.stub.describe(request)
 
             except grpc.RpcError as error:
-                try:
-                    self.handle_child_grpc_error(error)
-                except ServerUnreachable as server_unreachable_error:
-                    if tries_remaining == 0:
-                        raise server_unreachable_error
-                    self.log.info(
-                        (
-                            f"Could not connect to the controller ({self.uri}). "
-                            f"Trying {tries_remaining} more times..."
-                        )
+                if tries_remaining == 0:
+                    raise error
+                self.log.info(
+                    (
+                        f"Could not connect to the controller ({self.uri}). "
+                        f"Trying {tries_remaining} more times..."
                     )
-                    time.sleep(5)
+                )
+                time.sleep(5)
 
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
