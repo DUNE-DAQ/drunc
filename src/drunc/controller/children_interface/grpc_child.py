@@ -208,7 +208,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(lambda: cmd(packed_request))
@@ -235,7 +235,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed during status check, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(lambda: self.stub.status(request))
@@ -262,7 +262,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed during describe check, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
@@ -293,7 +293,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed during describe_fsm check, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
@@ -323,7 +323,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
@@ -353,7 +353,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(error)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
@@ -382,7 +382,7 @@ class gRPCChildNode(ChildNode):
             try:
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
-                self.log.warning(
+                self.log.info(
                     f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
