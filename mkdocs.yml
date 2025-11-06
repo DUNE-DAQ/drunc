@@ -17,7 +17,7 @@ plugins:
   - search
   - gen-files:
       scripts:
-        - docs/generate_ref_nav_ghpages.py
+        - docs/utils/generate_ref_nav_ghpages.py
   - literate-nav:
       nav_file: README.md
   - section-index
