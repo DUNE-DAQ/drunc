@@ -1,7 +1,7 @@
 name: Run MQST
 
 on:
-  never-ever:
+  workflow_dispatch
 
 jobs:
   install_and_test:
