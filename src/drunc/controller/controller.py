@@ -19,6 +19,8 @@ from druncschema.controller_pb2 import (
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
     RecomputeStatusResponse,
     StatusResponse,
 )
@@ -312,12 +314,10 @@ class Controller(ControllerServicer):
             time.time() - time_start < timeout
             and self.stateful_node.node_is_in_error() == False
         ):
-
-            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
-                return child.status(target)
-
             child_list = self.address_all()
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.status(target), child_list
+            )
 
             children_states = {}
             for response in child_responses:
@@ -741,13 +741,13 @@ class Controller(ControllerServicer):
 
     @staticmethod
     def propagate_concurrently(
-        child_command_fn: Callable[[ChildNode, str], T],
+        child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
 
         Args:
-            child_command_fn: Callable to be executed for each child, with
+            child_callable: Callable to be executed for each child, with
                 arguments (child, target).
             child_list: List of (node, target) for each addressed child.
 
@@ -756,7 +756,7 @@ class Controller(ControllerServicer):
         """
         with ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(child_command_fn, child_node, child_target)
+                executor.submit(child_callable, child_node, child_target)
                 for child_node, child_target in child_list
             ]
             return [f.result() for f in as_completed(futures)]
@@ -783,18 +783,18 @@ class Controller(ControllerServicer):
             response.status.CopyFrom(status)
 
         # Children nodes.
-        def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
-            return child.status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
-
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.status(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -828,18 +828,18 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        def child_command_fn(child: ChildNode, target: str) -> DescribeResponse:
-            return child.describe(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
-
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.describe(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -888,19 +888,19 @@ class Controller(ControllerServicer):
             response.description.CopyFrom(description)
 
         # Children nodes.
-        def child_command_fn(child: ChildNode, target: str) -> DescribeFSMResponse:
-            return child.describe_fsm(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-                key,
-            )
-
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.describe_fsm(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+                key,
+            ),
+            child_list,
+        )
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -1011,21 +1011,19 @@ class Controller(ControllerServicer):
             child_command.CopyFrom(command)
             child_command.data = fsm_data
 
-            def child_command_fn(
-                child: ChildNode, target: str
-            ) -> ExecuteFSMCommandResponse:
-                return child.execute_fsm_command(
-                    child_command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                )
-
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.execute_fsm_command(
+                    child_command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+            )
             response.children.extend(child_responses)
 
             # Finish propagating FSM transition to children.
@@ -1059,22 +1057,19 @@ class Controller(ControllerServicer):
 
         # Children nodes.
         else:
-
-            def child_command_fn(
-                child: ChildNode, target: str
-            ) -> ExecuteFSMCommandResponse:
-                return child.execute_fsm_command(
-                    command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                )
-
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.execute_fsm_command(
+                    command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+            )
             response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
@@ -1100,24 +1095,122 @@ class Controller(ControllerServicer):
         response.data = f"'{self.name}' propagated expert command"
 
         # Children nodes.
-        def child_command_fn(
-            child: ChildNode, target: str
-        ) -> ExecuteExpertCommandResponse:
-            return child.execute_expert_command(
-                request.json_string,
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            )
-
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
-        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.execute_expert_command(
+                request.json_string,
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
         response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
+
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
+    @in_control
+    @publish_command_time
+    def include(
+        self,
+        request: IncludeExcludeRequest,
+        context: ServicerContext,
+    ) -> IncludeExcludeResponse:
+        request.target = self.parse_target_string(request.target)
+        response = IncludeExcludeResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            try:
+                self.stateful_node.include_node()
+            except CannotInclude:
+                response.text = f"{self.name} is already included"
+            else:
+                response.text = f"{self.name} included"
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            ignore_exclusion=True,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.include(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
+
+        # # TODO: DO BELOW IN THE CHILDREN NODES INSTEAD OF HERE
+        # # Now we snoop into the addressed_commands and see if we can find a target that is a children, and include it
+        # for child_name, addressed_command in addressed_commands.items():
+        #     for n in self.children_nodes:
+        #         if n.name == addressed_command.target:
+        #             n.included = True
+
+        return response
+
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
+    @in_control
+    @publish_command_time
+    def exclude(
+        self,
+        request: IncludeExcludeRequest,
+        context: ServicerContext,
+    ) -> IncludeExcludeResponse:
+        request.target = self.parse_target_string(request.target)
+        response = IncludeExcludeResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            try:
+                self.stateful_node.exclude_node()
+            except CannotExclude:
+                response.text = f"{self.name} is already excluded"
+            else:
+                response.text = f"{self.name} excluded"
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            ignore_exclusion=True,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.exclude(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
+
+        # # TODO: DO BELOW IN THE CHILDREN NODES INSTEAD OF HERE
+        # # Now we snoop into the addressed_commands and see if we can find a target that is a children, and exclude it
+        # for child_name, addressed_command in addressed_commands.items():
+        #     for n in self.children_nodes:
+        #         if n.name == addressed_command.target:
+        #             n.included = False
 
         return response
 
@@ -1136,16 +1229,15 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-
-            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
-                return child.recompute_status(
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.recompute_status(
                     target,
                     request.execute_along_path,
                     request.execute_on_all_subsequent_children_in_path,
-                )
-
-            child_list = self.address_all()
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+                ),
+                child_list,
+            )
 
             self_should_go_to_error = False
             children_states = set()
@@ -1205,123 +1297,36 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
-                return child.status(
+            child_list = self.address_all(ignore_exclusion=True)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.status(
                     target,
                     request.execute_along_path,
                     request.execute_on_all_subsequent_children_in_path,
-                )
-
-            child_list = self.address_all(ignore_exclusion=True)
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+                ),
+                child_list,
+            )
             response.children.extend(child_responses)
 
         # Children nodes.
         else:
-
-            def child_command_fn(child: ChildNode, target: str) -> StatusResponse:
-                return child.recompute_status(
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                )
-
             child_list = self.address_target_path(
                 request.target,
                 request.execute_on_all_subsequent_children_in_path,
             )
-            child_responses = self.propagate_concurrently(child_command_fn, child_list)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+            )
             response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
         return response
-
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @in_control  # 3rd step
-    @OLD_unpack_addressed_command_to()  # 4th step
-    @publish_command_time
-    def include(
-        self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> PlainText:
-        resp = None
-        if execute_on_self:
-            try:
-                self.stateful_node.include_node()
-            except CannotInclude:
-                resp = PlainText(text=f"{self.name} is already included")
-            else:
-                resp = PlainText(text=f"{self.name} included")
-
-        # Now we snoop into the addressed_commands and see if we can find a target that is a children, and include it
-        for child_name, addressed_command in addressed_commands.items():
-            for n in self.children_nodes:
-                if n.name == addressed_command.target:
-                    n.included = True
-
-        response_children = self.OLD_propagate_to_children(
-            "include",
-            addressed_commands,
-            token,
-        )
-
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(resp) if resp else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=response_children,
-        )
-
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @in_control
-    @OLD_unpack_addressed_command_to()  # 3rd step
-    @publish_command_time
-    def exclude(
-        self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> PlainText:
-        resp = None
-        if execute_on_self:
-            try:
-                self.stateful_node.exclude_node()
-            except CannotExclude:
-                resp = PlainText(text=f"{self.name} is already excluded")
-            else:
-                resp = PlainText(text=f"{self.name} excluded")
-
-        # Now we snoop into the addressed_commands and see if we can find a target that is a children, and exclude it
-        for child_name, addressed_command in addressed_commands.items():
-            for n in self.children_nodes:
-                if n.name == addressed_command.target:
-                    n.included = False
-
-        response_children = self.OLD_propagate_to_children(
-            "exclude",
-            addressed_commands,
-            token,
-        )
-
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(resp) if resp else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=response_children,
-        )
 
     ##########################################
     ############# Actor commands #############
