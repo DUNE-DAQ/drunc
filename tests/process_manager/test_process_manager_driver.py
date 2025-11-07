@@ -9,6 +9,7 @@ have changed. The tests should be checked to see if they need to be updated
 or if a bug was introduced.
 """
 
+import socket
 from unittest.mock import MagicMock, patch
 
 import grpc
@@ -485,15 +486,22 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
     mock_client_instance = MagicMock()
     mock_client_class.return_value = mock_client_instance
 
+    pytest_hostname = socket.gethostname()
+
     mock_session_dal = MagicMock()
     mock_session_dal.connectivity_service.host = "localhost"
     mock_session_dal.connectivity_service.service.port = 1234
 
-    result = mock_driver._connect_to_service(mock_session_dal, "session1")
+    result_localhost = mock_driver._connect_to_service(mock_session_dal, "session1")
+    mock_client_class.assert_called_once_with("session1", f"{pytest_hostname}:1234")
+    assert result_localhost == (mock_client_instance, pytest_hostname, 1234)
 
-    mock_client_class.assert_called_once_with("session1", "localhost:1234")
+    mock_session_dal.connectivity_service.host = pytest_hostname
+    result_pytest_hostname = mock_driver._connect_to_service(mock_session_dal, "session2")
+    mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
+    assert result_pytest_hostname == (mock_client_instance, pytest_hostname, 1234)
 
-    assert result == (mock_client_instance, "localhost", 1234)
+    mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
 
 
 def test_connect_to_service_none(mock_driver):
