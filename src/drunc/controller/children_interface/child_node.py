@@ -1,4 +1,4 @@
-import os
+from abc import ABC, abstractmethod
 
 from druncschema.controller_pb2 import (
     AddressedCommand,
@@ -7,15 +7,12 @@ from druncschema.controller_pb2 import (
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    Status,
     StatusResponse,
 )
-from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.request_response_pb2 import Response
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
-from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import (
@@ -31,7 +28,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode:
+class ChildNode(ABC):
     def __init__(
         self,
         name: str,
@@ -45,94 +42,46 @@ class ChildNode:
         self.configuration = configuration
         self.included = True
 
-    def __str__(self) -> str:
-        return f"'{self.name}' (type {self.node_type})"
-
-    def get_endpoint(self) -> str:
-        return ""
-
+    # TODO: terminate abstraction
     def terminate(self):
         pass
 
+    @abstractmethod
+    def __str__(self) -> str:
+        pass
+
+    @abstractmethod
+    def get_endpoint(self) -> str:
+        pass
+
+    @abstractmethod
     def propagate_command(
         self,
         command: str,
         request: AddressedCommand,
         token: Token | None,
     ) -> Response:
-        return Response(
-            name=self.name,
-            token=token,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-        )
+        pass
 
+    @abstractmethod
     def status(
         self,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
-        status = Status(
-            state="unknown",
-            sub_state="unknown",
-            in_error=False,
-            included=True,
-        )
+        pass
 
-        response = StatusResponse(
-            token=None,
-            name=self.name,
-            status=status,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-        )
-
-        return response
-
+    @abstractmethod
     def describe(
         self,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
-        descriptionType = None
-        descriptionName = None
+        pass
 
-        if self.configuration is not None:
-            if hasattr(
-                self.configuration.data, "application_name"
-            ):  # Get the application name and type
-                descriptionType = self.configuration.data.application_name
-                descriptionName = self.configuration.data.id
-            elif hasattr(self.configuration.data, "controller") and hasattr(
-                self.configuration.data.controller, "application_name"
-            ):  # Get the controller name and type
-                descriptionType = self.configuration.data.controller.application_name
-                descriptionName = self.configuration.data.controller.id
-
-        description = Description(
-            type=descriptionType,
-            name=descriptionName,
-            endpoint=self.get_endpoint(),
-            info=(
-                get_detector_name(self.configuration)
-                if self.configuration is not None
-                else None
-            ),
-            session=os.getenv("DUNEDAQ_SESSION"),
-            commands=None,
-            broadcast=None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
-
-        response = DescribeResponse(
-            token=None,
-            name=self.name,
-            description=description,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
-
-        return response
-
+    @abstractmethod
     def describe_fsm(
         self,
         target: str = "",
@@ -140,14 +89,9 @@ class ChildNode:
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
-        response = DescribeFSMResponse(
-            token=None,
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-        )
+        pass
 
-        return response
-
+    @abstractmethod
     def execute_fsm_command(
         self,
         command: FSMCommand,
@@ -155,15 +99,9 @@ class ChildNode:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
-        response = ExecuteFSMCommandResponse(
-            token=None,
-            name=self.name,
-            command_name=command.command_name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-        )
+        pass
 
-        return response
-
+    @abstractmethod
     def execute_expert_command(
         self,
         json_string: str,
@@ -171,25 +109,16 @@ class ChildNode:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
-        response = ExecuteExpertCommandResponse(
-            token=None,
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-        )
+        pass
 
-        return response
-
+    @abstractmethod
     def recompute_status(
         self,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
-        return self.status(
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-        )
+        pass
 
     # TODO: needs reimplementation
     @staticmethod
