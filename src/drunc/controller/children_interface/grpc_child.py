@@ -12,6 +12,8 @@ from druncschema.controller_pb2 import (
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -170,15 +172,7 @@ class gRPCChildNode(ChildNode):
     def get_endpoint(self) -> str:
         return self.uri
 
-    def start_listening(self, bdesc):
-        self.broadcast = BroadcastHandler(
-            BroadcastClientConfHandler(
-                data=bdesc,
-                type=ConfTypes.ProtobufAny,
-            )
-        )
-
-    def terminate(self):
+    def terminate(self) -> None:
         if self.channel:
             self.channel.close()
             del self.channel
@@ -187,6 +181,14 @@ class gRPCChildNode(ChildNode):
 
         self.channel = None
         self.broadcast.stop()
+
+    def start_listening(self, bdesc):
+        self.broadcast = BroadcastHandler(
+            BroadcastClientConfHandler(
+                data=bdesc,
+                type=ConfTypes.ProtobufAny,
+            )
+        )
 
     def propagate_command(
         self,
@@ -355,6 +357,64 @@ class gRPCChildNode(ChildNode):
                 )
                 response = self._attempt_reconnection(
                     lambda: self.stub.execute_expert_command(request)
+                )
+
+        return response
+
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        self.included = True
+
+        try:
+            response = self.stub.include(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during include, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.include(request)
+                )
+
+        return response
+
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        self.included = False
+
+        try:
+            response = self.stub.exclude(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during exclude, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.exclude(request)
                 )
 
         return response

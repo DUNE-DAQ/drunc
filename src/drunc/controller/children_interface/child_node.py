@@ -7,6 +7,7 @@ from druncschema.controller_pb2 import (
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.request_response_pb2 import Response
@@ -29,6 +30,7 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 
 class ChildNode(ABC):
+    # TODO: __init__ abstraction
     def __init__(
         self,
         name: str,
@@ -42,16 +44,16 @@ class ChildNode(ABC):
         self.configuration = configuration
         self.included = True
 
-    # TODO: terminate abstraction
-    def terminate(self):
-        pass
-
     @abstractmethod
     def __str__(self) -> str:
         pass
 
     @abstractmethod
     def get_endpoint(self) -> str:
+        pass
+
+    @abstractmethod
+    def terminate(self) -> None:
         pass
 
     @abstractmethod
@@ -109,6 +111,24 @@ class ChildNode(ABC):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
+        pass
+
+    @abstractmethod
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        pass
+
+    @abstractmethod
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
         pass
 
     @abstractmethod

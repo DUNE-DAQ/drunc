@@ -1128,9 +1128,9 @@ class Controller(ControllerServicer):
             try:
                 self.stateful_node.include_node()
             except CannotInclude:
-                response.text = f"{self.name} is already included"
+                response.text = f"'{self.name}' is already included"
             else:
-                response.text = f"{self.name} included"
+                response.text = f"'{self.name}' included"
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1147,13 +1147,6 @@ class Controller(ControllerServicer):
             child_list,
         )
         response.children.extend(child_responses)
-
-        # # TODO: DO BELOW IN THE CHILDREN NODES INSTEAD OF HERE
-        # # Now we snoop into the addressed_commands and see if we can find a target that is a children, and include it
-        # for child_name, addressed_command in addressed_commands.items():
-        #     for n in self.children_nodes:
-        #         if n.name == addressed_command.target:
-        #             n.included = True
 
         return response
 
@@ -1178,9 +1171,9 @@ class Controller(ControllerServicer):
             try:
                 self.stateful_node.exclude_node()
             except CannotExclude:
-                response.text = f"{self.name} is already excluded"
+                response.text = f"'{self.name}' is already excluded"
             else:
-                response.text = f"{self.name} excluded"
+                response.text = f"'{self.name}' excluded"
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1197,13 +1190,6 @@ class Controller(ControllerServicer):
             child_list,
         )
         response.children.extend(child_responses)
-
-        # # TODO: DO BELOW IN THE CHILDREN NODES INSTEAD OF HERE
-        # # Now we snoop into the addressed_commands and see if we can find a target that is a children, and exclude it
-        # for child_name, addressed_command in addressed_commands.items():
-        #     for n in self.children_nodes:
-        #         if n.name == addressed_command.target:
-        #             n.included = False
 
         return response
 
