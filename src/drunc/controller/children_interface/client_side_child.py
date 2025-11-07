@@ -1,14 +1,8 @@
 from threading import Lock
 
-from druncschema.controller_pb2 import AddressedCommand
-from druncschema.generic_pb2 import PlainText
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
-
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import ControlType, get_logger
 
 
@@ -85,32 +79,3 @@ class ClientSideChild(ChildNode):
         if fsm_configuration:
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
-
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
-        if command == "exclude":
-            self.state.exclude()
-            return Response(
-                name=self.name,
-                data=pack_to_any(PlainText(text=f"'{self.name}' excluded")),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            )
-
-        if command == "include":
-            self.state.include()
-            return Response(
-                name=self.name,
-                data=pack_to_any(PlainText(text=f"'{self.name}' included")),
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            )
-
-        # If we get here, we don't run the command.
-        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
-        return Response(
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-        )

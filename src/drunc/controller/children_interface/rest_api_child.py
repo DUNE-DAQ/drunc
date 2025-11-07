@@ -9,6 +9,7 @@ from json import JSONDecodeError
 import requests
 import socks
 from druncschema.controller_pb2 import (
+    AddressedCommand,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -16,7 +17,9 @@ from druncschema.controller_pb2 import (
     Status,
     StatusResponse,
 )
-from druncschema.request_response_pb2 import ResponseFlag
+from druncschema.generic_pb2 import PlainText
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
@@ -27,6 +30,7 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import ControlType, get_logger, get_new_port
 
 
@@ -405,6 +409,35 @@ class RESTAPIChildNode(ClientSideChild):
 
     def get_endpoint(self) -> str:
         return f"rest://{self.app_host}:{self.app_port}"
+
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
+        if command == "exclude":
+            self.state.exclude()
+            return Response(
+                name=self.name,
+                data=pack_to_any(PlainText(text=f"'{self.name}' excluded")),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
+
+        if command == "include":
+            self.state.include()
+            return Response(
+                name=self.name,
+                data=pack_to_any(PlainText(text=f"'{self.name}' included")),
+                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+            )
+
+        # If we get here, we don't run the command.
+        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
+        return Response(
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
 
     def status(
         self,
