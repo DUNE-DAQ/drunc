@@ -130,7 +130,9 @@ def get_status_table(
         children_list = sorted(list(children.keys()))
 
         for child in children_list:
-            child_status = children[child].status
+            child_status = getattr(children[child], "status", None)
+            if not child_status:
+                continue
             child_describe = children[child].description
             if child_status is None or child_describe is None:
                 raise DruncShellException(
