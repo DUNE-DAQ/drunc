@@ -216,7 +216,9 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
 
-        self.log = get_logger("controller")
+        self.log = get_logger(
+            "controller", stream_stdout_handler=True, stream_stderr_handler=True
+        )
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
