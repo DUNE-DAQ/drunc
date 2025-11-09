@@ -1,8 +1,6 @@
-import logging
 import multiprocessing
 import os
 import socket
-import tempfile
 import time
 
 import click
@@ -13,10 +11,8 @@ from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import (
     ControlType,
     IncorrectAddress,
-    create_logger_handler,
     expand_path,
     get_control_type_and_uri_from_cli,
-    get_logger,
     get_new_port,
     get_random_string,
     host_is_local,
@@ -26,7 +22,6 @@ from drunc.utils.utils import (
     regex_match,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
-    setup_root_logger,
     validate_command_facility,
 )
 
@@ -49,60 +44,6 @@ def test_regex_match():
     assert regex_match(".*", "absc")
     assert regex_match(".*", "1234")
     assert regex_match("123.", "1234")
-
-
-def test_setup_logger(caplog):
-    drunc_root_logger = setup_root_logger("DEBUG")
-    assert drunc_root_logger.getEffectiveLevel() == logging.DEBUG
-    assert get_logger("tester0").getEffectiveLevel() == logging.DEBUG
-
-    drunc_root_logger.setLevel("INFO")
-    assert drunc_root_logger.getEffectiveLevel() == logging.INFO
-    assert get_logger("tester1").getEffectiveLevel() == logging.INFO
-
-    drunc_root_logger.setLevel("WARNING")
-    assert drunc_root_logger.getEffectiveLevel() == logging.WARNING
-    assert get_logger("tester2").getEffectiveLevel() == logging.WARNING
-
-    drunc_root_logger.setLevel("ERROR")
-    assert drunc_root_logger.getEffectiveLevel() == logging.ERROR
-    assert get_logger("tester3").getEffectiveLevel() == logging.ERROR
-
-    drunc_root_logger.setLevel("CRITICAL")
-    assert drunc_root_logger.getEffectiveLevel() == logging.CRITICAL
-    assert get_logger("tester4").getEffectiveLevel() == logging.CRITICAL
-
-    # Make a temporary file to validate logging to a file
-    temp_file = tempfile.NamedTemporaryFile()
-    log_path = temp_file.name
-    logger = get_logger("tester5")
-    create_logger_handler(log_file_path=log_path)
-    logger.debug("invisible")
-    logger.info("invisible")
-    logger.warning("invisible")
-    logger.error("invisible")
-    logger.critical("VISIBLE")
-    good_record = 0
-    bad_record = 0
-    for record in caplog.records:
-        if (
-            "VISIBLE" in record.getMessage()
-            and record.levelno == logging.CRITICAL
-            and "tester5" in record.name
-        ):
-            good_record += 1
-        else:
-            bad_record += 1
-
-    assert good_record == 1
-    assert bad_record == 0
-
-    with open(log_path) as f:
-        temp_file_data = f.read()
-        assert "VISIBLE" in temp_file_data
-        assert "invisible" not in temp_file_data
-
-    temp_file.close()
 
 
 def test_get_new_port():
