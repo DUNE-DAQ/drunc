@@ -7,7 +7,6 @@ from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.shell_utils import (
-    GRPCDriver,
     ShellContext,
     create_dummy_token_from_uname,
 )
@@ -27,7 +26,7 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             driver_args={},
         )
 
-    def create_drivers(self, **kwargs) -> Mapping[str, GRPCDriver]:
+    def create_drivers(self, **kwargs) -> Mapping[str, object]:
         if not self.address:
             return {}
         return {

@@ -136,7 +136,20 @@ def grpc_test_server_factory(grpc_servicer):
 
 
 @pytest.fixture(scope="function")
-def mock_driver():
+def mock_logger_driver():
+    """
+    Mocks the logger used by the session manager driver.
+    """
+    with patch(
+        "drunc.session_manager.session_manager_driver.get_logger"
+    ) as mock_get_logger:
+        mock_logger_instance = MagicMock()
+        mock_get_logger.return_value = mock_logger_instance
+        yield mock_logger_instance
+
+
+@pytest.fixture(scope="function")
+def mock_driver(mock_logger_driver):
     """
     This fixture creates a driver instance where the underlying gRPC channel
     and stub are mocked.
@@ -159,6 +172,8 @@ def mock_driver():
 
         # Attach mock stub for easy access in tests
         driver._mock_stub = mock_stub
+
+        driver.log = mock_logger_driver
 
         return driver
 
@@ -228,7 +243,6 @@ def describe_response(command_description_list):
         type="session_manager",
         name="dummy_session",
         commands=command_description_list,
-        children=[],
         flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         token=None,
     )

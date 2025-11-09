@@ -22,6 +22,7 @@ from druncschema.process_manager_pb2 import (
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -29,23 +30,27 @@ from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import copy_token, handle_grpc_error
-from drunc.utils.shell_utils import GRPCDriver
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
+    get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
 )
 
 
-class ProcessManagerDriver(GRPCDriver):
+class ProcessManagerDriver:
     controller_address = ""
 
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="process_manager_driver", address=address, token=token, **kwargs
-        )
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ProcessManagerDriver")
+        self.address = address
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
+        self.token = copy_token(token)
 
     # ----- Boot workflow -----
     def boot(
@@ -61,7 +66,7 @@ class ProcessManagerDriver(GRPCDriver):
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList]:
+    ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Step 1 - consolidate configuration
@@ -89,13 +94,23 @@ class ProcessManagerDriver(GRPCDriver):
             override_logs=override_logs,
             **kwargs,
         ):
-            if (
-                request.process_description.metadata.name
-                not in [app.id for app in session_dal.infrastructure_applications]
-                and csc
-                and not csc.is_ready(timeout=10)
-            ):
-                raise DruncSetupException("Connectivity service is not ready in time")
+            if not request:
+                self.log.error("[red]No boot request was generated, ending boot.[/red]")
+                return None
+            if request.process_description.metadata.name in [
+                app.id for app in session_dal.infrastructure_applications
+            ]:
+                self.log.debug(
+                    f"Skipping connectivity service readiness check for application {request.process_description.metadata.name}"
+                )
+            else:
+                self.log.debug(
+                    f"Checking connectivity service readiness before booting application {request.process_description.metadata.name}"
+                )
+                if csc and not csc.is_ready(timeout=10):
+                    raise DruncSetupException(
+                        "Connectivity service did not respond within timeout."
+                    )
 
             this_host = next(iter(request.process_restriction.allowed_hosts))
 
@@ -173,9 +188,13 @@ class ProcessManagerDriver(GRPCDriver):
             )
 
         else:
-            rte_script = get_rte_script()
-            if not rte_script:
-                raise DruncSetupException("No RTE script found.")
+            try:
+                rte_script = get_rte_script()
+            except DruncSetupException as e:
+                log = get_logger("utils.check_rte")
+                errmsg = f"[red]Couldn't understand where to find the rte script [/red]. Did you run [green] dbt-build [/green] and [green]dbt-workarea-env[/green]?. {e}"
+                log.error(errmsg)
+                raise
 
             executable_and_arguments.append(
                 ProcessDescription.ExecAndArgs(exec="source", args=[rte_script])
@@ -206,7 +225,13 @@ class ProcessManagerDriver(GRPCDriver):
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
-        executable_and_arguments = self._prepare_exec_and_args(session_dal, exe, args)
+
+        try:
+            executable_and_arguments = self._prepare_exec_and_args(
+                session_dal, exe, args
+            )
+        except DruncSetupException:
+            raise DruncSetupException("Generating executable and arguments failed")
 
         log_path = get_log_path(
             user=user,
@@ -259,21 +284,26 @@ class ProcessManagerDriver(GRPCDriver):
             session_log_path = pwd
 
         for app in apps:
-            breq = self._build_boot_request(
-                app,
-                user,
-                session_name,
-                session_dal,
-                session_log_path,
-                override_logs,
-                pwd,
-            )
+            try:
+                breq = self._build_boot_request(
+                    app,
+                    user,
+                    session_name,
+                    session_dal,
+                    session_log_path,
+                    override_logs,
+                    pwd,
+                )
+            except DruncSetupException as e:
+                log = get_logger("utils.boot_req_generator")
+                log.error(f"[red]Caught exception in boot generator [/red]: {e}")
+                yield None
             yield breq
 
     def _consolidate_config(self, session_name, conf_file: str) -> str | None:
         from daqconf.consolidate import consolidate_db
 
-        self.log.info(f"Booting session [green]{session_name}[/green]")
+        self.log.debug(f"Validating {session_name} configuration")
 
         with tempfile.NamedTemporaryFile(suffix=".data.xml", delete=True) as f:
             f.flush()

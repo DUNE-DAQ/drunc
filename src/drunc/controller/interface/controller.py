@@ -116,8 +116,10 @@ def controller_cli(
         return server, port
 
     def controller_shutdown():
-        log.warning("Requested termination")
+        log.info("Requested termination")
+        log.info("Calling ctrlr.terminate()")
         ctrlr.terminate()
+        log.info("ctrlr.terminate() completed")
 
     def kill_me(sig, frame):
         l = get_logger("controller.kill_me")
@@ -128,21 +130,39 @@ def controller_cli(
         os.killpg(pgrp, signal.SIGKILL)
 
     def shutdown(sig, frame):
-        log.info("Shutting down gracefully")
+        log.info(f"Shutting down gracefully (received signal: {sig})")
         try:
             controller_shutdown()
         except Exception as e:
             log.exception(e)
             kill_me(sig, frame)
 
-    signal.signal(signal.SIGHUP, kill_me)
-    signal.signal(signal.SIGINT, shutdown)
-
     try:
         server, port = serve(commandfacility)
         server_name = commandfacility.split(":")[0]
         ctrlr.advertise_control_address(f"grpc://{server_name}:{port}")
         ctrlr.init_controller()
+
+        # Add signal handling for gRPC server
+        def signal_handler(signum, frame):
+            log.info(f"Received signal {signum}, shutting down gRPC server")
+            server.stop(grace=2.0)  # Give 2 seconds for graceful shutdown
+            log.info("gRPC server shutdown completed")
+
+            try:
+                shutdown(signum, frame)
+                log.info("shutdown() completed")
+            except Exception as e:
+                log.exception(e)
+            finally:
+                log.info("Exiting...")
+                os._exit(0)
+
+        # Register signal handlers for the server
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGQUIT, signal_handler)
+        signal.signal(signal.SIGHUP, signal_handler)
+
         server.wait_for_termination(timeout=None)
 
     except Exception as e:

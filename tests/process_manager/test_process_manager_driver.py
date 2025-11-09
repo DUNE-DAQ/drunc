@@ -28,7 +28,9 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 @pytest.fixture(scope="module")
 def mock_logger():
-    with patch("drunc.utils.shell_utils.get_logger") as mock_get_logger:
+    with patch(
+        "drunc.process_manager.process_manager_driver.get_logger"
+    ) as mock_get_logger:
         mock_logger_instance = MagicMock()
         mock_get_logger.return_value = mock_logger_instance
         yield mock_logger_instance
@@ -205,6 +207,7 @@ def test_prepare_exec_and_args_no_rte_script(mock_get_rte_script, mock_driver):
     session_dal = MagicMock()
     session_dal.rte_script = None
     mock_get_rte_script.return_value = None
+    mock_get_rte_script.side_effect = DruncSetupException("No RTE script found.")
 
     exe = "dummy_executable"
     args = ["--flag", "value"]
@@ -248,7 +251,10 @@ def test_boot_connectivity_service_not_ready(mock_driver, boot_test_setup):
     # Simulate connection is not ready ready
     boot_test_setup(is_ready=False)
 
-    with pytest.raises(DruncSetupException, match="Connectivity service is not ready"):
+    with pytest.raises(
+        DruncSetupException,
+        match="Connectivity service did not respond within timeout.",
+    ):
         list(
             mock_driver.boot(
                 conf_file="conf.yaml",
@@ -398,7 +404,7 @@ def test_consolidate_config_success(mock_tempfile, mock_consolidate_db, mock_dri
     mock_driver._consolidate_config("session1", "oksconflibs:/path/to/config.oks")
 
     # Check correct log message
-    mock_driver.log.info.assert_any_call("Booting session [green]session1[/green]")
+    mock_driver.log.debug.assert_any_call("Validating session1 configuration")
 
     mock_consolidate_db.assert_called_once_with(
         "/path/to/config.oks", "/tmp/fake.data.xml"

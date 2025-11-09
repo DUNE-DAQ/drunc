@@ -1,14 +1,23 @@
 import os
 
-from druncschema.controller_pb2 import Status
-from druncschema.description_pb2 import OldDescription
-from druncschema.request_response_pb2 import Response
+from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
+    ExecuteExpertCommandResponse,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
+    Status,
+    StatusResponse,
+)
+from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
@@ -16,73 +25,76 @@ from drunc.utils.utils import (
     get_logger,
 )
 
-from druncschema.request_response_pb2 import (  # isort: skip
-    ResponseFlag,
-)
-from druncschema.token_pb2 import Token  # isort: skip
-
 
 class ChildInterfaceTechnologyUnknown(DruncSetupException):
     def __init__(self, t, name):
         super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
-class ChildNode:  # abc.ABC):
+class ChildNode:
     def __init__(
-        self, name: str, configuration, node_type: ControlType, **kwargs
+        self,
+        name: str,
+        configuration,
+        node_type: ControlType,
+        **kwargs,
     ) -> None:
-        # super().__init__(**kwargs)
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
         self.configuration = configuration
         self.included = True
 
-    def __str__(self):
-        pass
-        return f"'{self.name}@{self.uri}' (type {self.node_type})"
+    def __str__(self) -> str:
+        return f"'{self.name}' (type {self.node_type})"
 
-    # @abc.abstractmethod
+    def get_endpoint(self) -> str:
+        return ""
+
     def terminate(self):
+        self.log.info(f"Terminating {self.name}")
         pass
 
-    # @abc.abstractmethod
-    def propagate_command(self, command, data, token):
-        if command == "status":
-            return self.get_status(token)
-        elif command == "describe":
-            return self.describe(token)
-        else:
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                children=[],
-            )
-
-    # @abc.abstractmethod
-    def get_status(self, token):
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
         return Response(
             name=self.name,
             token=token,
-            data=pack_to_any(
-                Status(
-                    state="unknown",
-                    sub_state="unknown",
-                    in_error=False,
-                    included=True,
-                )
-            ),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=[],
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
         )
 
-    # @abc.abstractmethod
-    def get_endpoint(self):
-        pass
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        status = Status(
+            state="unknown",
+            sub_state="unknown",
+            in_error=False,
+            included=True,
+        )
 
-    def describe(self, token: Token) -> Response:
+        response = StatusResponse(
+            token=None,
+            name=self.name,
+            status=status,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
         descriptionType = None
         descriptionName = None
 
@@ -98,7 +110,7 @@ class ChildNode:  # abc.ABC):
                 descriptionType = self.configuration.data.controller.application_name
                 descriptionName = self.configuration.data.controller.id
 
-        d = OldDescription(
+        description = Description(
             type=descriptionType,
             name=descriptionName,
             endpoint=self.get_endpoint(),
@@ -110,17 +122,77 @@ class ChildNode:  # abc.ABC):
             session=os.getenv("DUNEDAQ_SESSION"),
             commands=None,
             broadcast=None,
-        )
-
-        resp = Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(d),
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=None,
         )
-        return resp
 
+        response = DescribeResponse(
+            token=None,
+            name=self.name,
+            description=description,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        return response
+
+    def describe_fsm(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str = "",
+    ) -> DescribeFSMResponse:
+        response = DescribeFSMResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        response = ExecuteFSMCommandResponse(
+            token=None,
+            name=self.name,
+            command_name=command.command_name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteExpertCommandResponse:
+        response = ExecuteExpertCommandResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        return self.status(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+    # TODO: needs reimplementation
     @staticmethod
     def get_child(
         name: str,
@@ -184,6 +256,7 @@ class ChildNode:  # abc.ABC):
                     init_token=init_token,
                     name=name,
                     uri=uri,
+                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
 

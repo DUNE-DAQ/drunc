@@ -9,7 +9,7 @@ from drunc.exceptions import DruncException
 
 def test_controller_init(one_controller_running):
     controller_process = one_controller_running[0]["controller-0"]
-    time_inc = 0
+    time_inc = 0  # wait time for the controller to get ready
     timeout = 4
     found = False
 
@@ -24,8 +24,9 @@ def test_controller_init(one_controller_running):
             break
         time.sleep(0.1)
         time_inc += 0.1
-
-    assert timeout > time_inc, "Controller did not start in time"
+    assert timeout > time_inc, (
+        "Controller did not start in time"
+    )  #  if time taken to start the controller exceeds the timeout
 
 
 def test_controller_registered_on_connectivity_service(one_controller_running):
