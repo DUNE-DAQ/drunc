@@ -41,8 +41,9 @@ def run_pm(
     signal_handler: bool = None,
     generated_port: bool = None,
 ) -> None:
+    create_root_logger(log_level)
     appName = "process_manager"
-    log = get_logger(logger_name=appName)
+    log = get_logger(logger_name=appName, rich_handler=True, log_level=log_level)
 
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
@@ -175,11 +176,6 @@ def run_pm(
 def process_manager_cli(
     pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
 ) -> None:
-    create_root_logger(
-        log_level,
-        file_handler_path=log_path,
-        rich_handler=True,
-    )
     pm_conf = get_process_manager_configuration(pm_conf)
     run_pm(
         pm_conf=pm_conf,

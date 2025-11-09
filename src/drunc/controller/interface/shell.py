@@ -49,8 +49,8 @@ from drunc.utils.utils import (
 @click.argument("controller-address", type=str, callback=validate_command_facility)
 @click.pass_context
 def controller_shell(ctx, controller_address: str, log_level: str) -> None:
-    create_root_logger(log_level, rich_handler=True)
-    controller_shell_log = get_logger("controller.shell")
+    create_root_logger(log_level)
+    controller_shell_log = get_logger("controller.shell", rich_handler=True)
     controller_shell_log.debug("Resetting the context instance address")
     ctx.obj.reset(address=controller_address)
     ctx.call_on_close(controller_cleanup_wrapper(ctx.obj))

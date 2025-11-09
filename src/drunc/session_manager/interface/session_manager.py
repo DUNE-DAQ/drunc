@@ -51,8 +51,8 @@ def session_manager_cli():
     app_name = "session_manager"
     log_level = "DEBUG"
 
-    create_root_logger(log_level, rich_handler=True)
-    logger = get_logger(app_name)
+    create_root_logger(log_level)
+    logger = get_logger(app_name, rich_handler=True)
 
     # Load the configuration for the session manager.
     config = SessionManagerConfHandler()
