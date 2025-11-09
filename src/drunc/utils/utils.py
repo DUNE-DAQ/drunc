@@ -14,7 +14,6 @@ from enum import Enum
 from urllib.parse import urlparse
 
 import kafka
-import pytz
 import sh
 from click import BadParameter
 from daqpytools.logging.logger import get_daq_logger
@@ -27,26 +26,12 @@ from rich.progress import (
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
-from rich.theme import Theme
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncException, DruncSetupException
 
+# Define click context defaults
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
-CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
-
-# TODO: Docstring everything
-
-# TODO Double check with Pawel to see if these format strings can be deleted
-# I see a lot of todos here that needs to be figured out
-############################
-full_log_format = "%(asctime)s %(levelname)s %(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
-rich_log_format = (
-    "%(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
-)
-date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when the RichHandler starts supporting it in the tty. If this is desired, a custom handler can be written that looks like the rich handler
-time_zone = pytz.utc
-############################
 
 
 def create_root_logger(
