@@ -9,7 +9,6 @@ import click
 import grpc
 from daqpytools.logging.handlers import add_file_handler
 from daqpytools.logging.levels import logging_log_levels
-from daqpytools.logging.logger import get_daq_logger
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
@@ -24,6 +23,7 @@ from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
     create_root_logger,
     get_logger,
+    get_root_logger,
     parent_death_pact,
     resolve_localhost_and_127_ip_to_network_ip,
 )
@@ -70,7 +70,7 @@ def run_pm(
         app_log_path=log_path,
     )
 
-    add_file_handler(get_daq_logger("drunc"), True, log_path)
+    add_file_handler(get_root_logger(), True, log_path)
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
 
@@ -177,7 +177,7 @@ def process_manager_cli(
 ) -> None:
     create_root_logger(
         log_level,
-        log_file_path=log_path,
+        file_handler_path=log_path,
         rich_handler=True,
     )
     pm_conf = get_process_manager_configuration(pm_conf)

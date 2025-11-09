@@ -56,7 +56,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     ):
         super().__init__()
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager"
+            f"process_manager.{configuration.get_data_type_name()}_process_manager",
+            rich_handler=True,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")

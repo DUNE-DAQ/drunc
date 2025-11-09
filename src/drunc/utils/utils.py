@@ -14,7 +14,7 @@ from enum import Enum
 from urllib.parse import urlparse
 
 from click import BadParameter
-from daqpytools.logging.logger import get_daq_logger
+from daqpytools.logging.logger import get_daq_logger, setup_root_logger
 from requests import delete, get, patch, post
 from rich.progress import (
     BarColumn,
@@ -32,26 +32,26 @@ from drunc.exceptions import DruncException, DruncSetupException
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
-def create_root_logger(
-    log_level: str, log_file_path: str = None, rich_handler: bool = False
-) -> logging.Logger:
+def create_root_logger(log_level: str) -> logging.Logger:
     """Defines the top level 'drunc' root logger."""
 
-    root_logger: logging.Logger = get_daq_logger(
-        logger_name="drunc",
-        log_level=log_level,
-        use_parent_handlers=True,
-        rich_handler=rich_handler,
-        file_handler_path=log_file_path,
-        stream_stdout_handler=False,
-        stream_stderr_handler=False,
-    )
+    root_logger: logging.Logger = setup_root_logger(name="drunc", level=log_level)
 
     return root_logger
 
 
+def get_root_logger() -> logging.Logger:
+    """Gets the top level 'drunc' root logger."""
+    return get_daq_logger(logger_name="drunc")  # type: ignore
+
+
 def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
     """Wrapper for daqpytools implementation. Forces it to go under drunc"""
+
+    # Check if the root logger has been created; if not, create a default one.
+    if "drunc" not in logging.root.manager.loggerDict:
+        create_root_logger(log_level="INFO")
+
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
 

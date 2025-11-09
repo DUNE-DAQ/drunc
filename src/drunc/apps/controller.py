@@ -6,8 +6,8 @@ def main():
     try:
         controller_cli()
     except Exception as e:
-        create_root_logger("INFO", rich_handler=False)
-        log = get_logger("controller")
+        create_root_logger("INFO")
+        log = get_logger("controller", rich_handler=False)
         log.error("Exception thrown!")
         log.exception(e)
         exit(1)

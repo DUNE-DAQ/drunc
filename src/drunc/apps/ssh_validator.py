@@ -12,7 +12,7 @@ from drunc.utils.utils import get_logger
 
 
 def validate_ssh_connection(configuration: str, session_name: str, log_level: str):
-    log = get_logger("validate_ssh_connection")
+    log = get_logger("validate_ssh_connection", rich_handler=True)
 
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)

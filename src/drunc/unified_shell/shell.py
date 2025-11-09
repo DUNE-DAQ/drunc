@@ -146,8 +146,8 @@ def unified_shell(
             connection to the process manager fails.
     """
     # Set up the drunc and unified_shell loggers
-    create_root_logger(log_level, rich_handler=True)
-    unified_shell_log = get_logger("unified_shell")
+    create_root_logger(log_level)
+    unified_shell_log = get_logger("unified_shell", rich_handler=True)
 
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 

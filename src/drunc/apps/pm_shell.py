@@ -8,8 +8,8 @@ def main():
     try:
         process_manager_shell(obj=context)
     except Exception as e:
-        create_root_logger("INFO", rich_handler=True)
-        log = get_logger("process_manager")
+        create_root_logger("INFO")
+        log = get_logger("process_manager", rich_handler=True)
         log.error("[red bold]:fire::fire: Exception thrown :fire::fire:")
         log.exception(e)
         exit(1)

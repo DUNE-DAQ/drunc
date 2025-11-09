@@ -72,7 +72,7 @@ def controller_cli(
     log_level: str,
 ):
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
-    create_root_logger(log_level, log_file_path=None, rich_handler=False)
+    create_root_logger(log_level)
     log = get_logger("controller.controller_cli")
 
     token = Token(

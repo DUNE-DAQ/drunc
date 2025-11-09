@@ -7,7 +7,7 @@ from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
-logger_params = {"logger_name": "controller.interface"}
+logger_params = {"logger_name": "controller.interface", "rich_handler": True}
 
 
 @click.command("list-transitions")
@@ -22,6 +22,8 @@ logger_params = {"logger_name": "controller.interface"}
 @click.pass_obj
 def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
     log = get_logger(**logger_params)
+    print("Logging")
+    log.critical(f"Have logger with handlers: {log.handlers}")
     desc = obj.get_driver("controller").describe_fsm(
         target=target,
         execute_along_path=False,

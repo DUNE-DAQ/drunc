@@ -22,7 +22,7 @@ from drunc.utils.utils import (
 )
 
 __version__ = "1.0.0"
-create_root_logger("INFO")
+create_root_logger(log_level="INFO")
 setup_standard_loggers()
 
 
