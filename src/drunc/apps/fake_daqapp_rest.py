@@ -14,15 +14,15 @@ from flask_restful import Api, Resource
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
+    create_root_logger,
     get_logger,
     get_new_port,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
     setup_standard_loggers,
 )
 
 __version__ = "1.0.0"
-setup_root_logger(log_level="info")
+create_root_logger(log_level="INFO")
 setup_standard_loggers()
 
 

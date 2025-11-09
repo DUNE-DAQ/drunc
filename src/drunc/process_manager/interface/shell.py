@@ -3,6 +3,7 @@ import os
 
 import click
 import click_shell
+from daqpytools.logging.levels import logging_log_levels
 
 from drunc.process_manager.interface.commands import (
     boot,
@@ -17,10 +18,8 @@ from drunc.process_manager.interface.commands import (
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
-    create_logger_handler,
+    create_root_logger,
     get_logger,
-    log_levels,
-    setup_root_logger,
     validate_command_facility,
 )
 
@@ -34,16 +33,15 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
 @click.argument("process-manager-address", type=str, callback=validate_command_facility)
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
-    setup_root_logger(log_level)
-    process_manager_shell_log = get_logger("process_manager.shell")
-    create_logger_handler(rich_handler=True)
+    create_root_logger(log_level)
+    process_manager_shell_log = get_logger("process_manager.shell", rich_handler=True)
 
     ctx.obj.reset(address=process_manager_address)
 
@@ -62,7 +60,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     process_manager_log = get_logger(
         logger_name="process_manager",
-        log_file_path=desc.info,
+        file_handler_path=desc.info,
         override_log_file=False,
         rich_handler=True,
     )
