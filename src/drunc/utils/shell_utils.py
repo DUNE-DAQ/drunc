@@ -7,7 +7,7 @@ from druncschema.token_pb2 import Token
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, setup_standard_loggers
 
 
 class InterruptedCommand(DruncShellException):
@@ -78,6 +78,7 @@ class ShellContext:
         self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
+        setup_standard_loggers()
         log = get_logger("utils.ShellContext")
         self.dynamic_commands = set()
         try:

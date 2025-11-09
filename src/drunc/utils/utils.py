@@ -34,10 +34,7 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 def create_root_logger(log_level: str) -> logging.Logger:
     """Defines the top level 'drunc' root logger."""
-
-    root_logger: logging.Logger = setup_root_logger(name="drunc", level=log_level)
-
-    return root_logger
+    return setup_root_logger(name="drunc", level=log_level)
 
 
 def get_root_logger() -> logging.Logger:
@@ -48,9 +45,31 @@ def get_root_logger() -> logging.Logger:
 def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
     """Wrapper for daqpytools implementation. Forces it to go under drunc"""
 
+    # Make sure the correct logger creator is used
+    if logger_name == "drunc":
+        raise DruncSetupException(
+            "Use create_root_logger to create or get the drunc root logger"
+        )
+
+    # Make sure the logger name is not prefixed with drunc. The prefix is handled by
+    # this function.
+    if logger_name.startswith("drunc."):
+        raise DruncSetupException(
+            "Do not prefix logger_name with drunc., it is handled by get_logger"
+        )
+
     # Check if the root logger has been created; if not, create a default one.
     if "drunc" not in logging.root.manager.loggerDict:
         create_root_logger(log_level="INFO")
+
+    # Create parents if necessary
+    existing_loggers = logging.root.manager.loggerDict
+    logger_parent = "drunc"
+    logger_parent_list: list(str) = logger_name.split(".")
+    for part in logger_parent_list[:-1]:
+        logger_parent += f".{part}"
+        if logger_parent not in existing_loggers:
+            get_daq_logger(logger_name=logger_parent)
 
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
