@@ -8,7 +8,7 @@ import types
 import click
 import grpc
 from daqpytools.logging.handlers import add_file_handler
-from daqpytools.logging.levels import logging_log_levels as log_levels
+from daqpytools.logging.levels import logging_log_levels
 from daqpytools.logging.logger import get_daq_logger
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
@@ -154,7 +154,7 @@ def run_pm(
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )

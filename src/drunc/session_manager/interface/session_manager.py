@@ -31,7 +31,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
 @click.command()
 # @click.option(
 #     '--log-level',
-#     type=click.Choice(list(log_levels.keys()), case_sensitive=False),
+#     type=click.Choice(list(logging_log_levels.keys()), case_sensitive=False),
 #     default="INFO",
 #     help="Verbosity of the session manager logger.",
 # )

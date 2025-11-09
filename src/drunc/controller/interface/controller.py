@@ -4,7 +4,7 @@ import signal
 
 import click
 import grpc
-from daqpytools.logging.levels import logging_log_levels as log_levels
+from daqpytools.logging.levels import logging_log_levels
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
@@ -59,7 +59,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )

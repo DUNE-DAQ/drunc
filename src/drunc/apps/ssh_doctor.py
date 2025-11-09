@@ -4,7 +4,7 @@ import signal
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels as log_levels
+from daqpytools.logging.levels import logging_log_levels
 from rich import print
 from rich.logging import RichHandler
 from sh import Command
@@ -91,7 +91,7 @@ def test_session_ssh_connections(
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="WARNING",
     help="Set the log level",
 )
