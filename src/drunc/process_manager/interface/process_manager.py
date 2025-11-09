@@ -23,7 +23,6 @@ from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
     create_root_logger,
     get_logger,
-    get_root_logger,
     parent_death_pact,
     resolve_localhost_and_127_ip_to_network_ip,
 )
@@ -43,19 +42,19 @@ def run_pm(
 ) -> None:
     create_root_logger(log_level)
     appName = "process_manager"
-    log = get_logger(logger_name=appName, rich_handler=True, log_level=log_level)
+    pm_log = get_logger(logger_name=appName, rich_handler=True, log_level=log_level)
 
-    log.debug("Running [green]run_pm[/green]")
+    pm_log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
         signal_handler()
 
     parent_death_pact()  # If the parent dies (for example unified shell), we die too
 
-    log.debug(f"Validating process_manager configuration: {pm_conf}")
+    pm_log.debug(f"Validating process_manager configuration: {pm_conf}")
     if not validate_pm_config(pm_conf):
-        log.error("Process manager configuration validation failed. Exiting.")
+        pm_log.error("Process manager configuration validation failed. Exiting.")
         sys.exit(1)
-    log.debug("Process manager configuration is valid.")
+    pm_log.debug("Process manager configuration is valid.")
 
     conf_path, conf_type = parse_conf_url(pm_conf)
 
@@ -71,18 +70,18 @@ def run_pm(
         app_log_path=log_path,
     )
 
-    add_file_handler(get_root_logger(), True, log_path)
+    add_file_handler(pm_log, True, log_path)
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
 
     pm = ProcessManager.get(pmch, name="process_manager")
-    log.debug("Setup up ProcessManager")
+    pm_log.debug("Setup up ProcessManager")
 
     server: grpc.Server | None = None
 
     def serve(address: str) -> None:
         address = resolve_localhost_and_127_ip_to_network_ip(address)
-        log.debug("serve called")
+        pm_log.debug("serve called")
         if not address:
             raise DruncSetupException(
                 "The address on which to expect commands/send status wasn't specified"
@@ -96,7 +95,7 @@ def run_pm(
 
         server.start()
         host = address.split(":")[0]
-        log.info(
+        pm_log.info(
             f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
         )  # bold as part of the address was already formatting, couldn't figure out why
 
@@ -116,7 +115,7 @@ def run_pm(
 
         nonlocal server
         if server:
-            log.info("Shutting down the process manager server")
+            pm_log.info("Shutting down the process manager server")
             server.stop(1)
             server = None
         return
@@ -130,7 +129,7 @@ def run_pm(
             frame: The current stack frame (not used).
         """
 
-        log.debug("SIGTERM received, shutting down server...")
+        pm_log.debug("SIGTERM received, shutting down server...")
         server_shutdown()
         return
 
@@ -138,11 +137,11 @@ def run_pm(
     signal.signal(signal.SIGTERM, handle_sigterm)
 
     try:
-        log.debug("Serving process_manager")
+        pm_log.debug("Serving process_manager")
         serve(pm_address)
     except Exception as e:
-        log.error("Serving the ProcessManager received an Exception")
-        log.exception(e)
+        pm_log.error("Serving the ProcessManager received an Exception")
+        pm_log.exception(e)
     finally:
         if _cleanup_coroutines:
             for coroutine in _cleanup_coroutines:

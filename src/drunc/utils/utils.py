@@ -62,14 +62,19 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
     if "drunc" not in logging.root.manager.loggerDict:
         create_root_logger(log_level="INFO")
 
-    # Create parents if necessary
+    # If the logger already exists, return it directly
     existing_loggers = logging.root.manager.loggerDict
+    if f"drunc.{logger_name}" in existing_loggers:
+        # TODO: Check that the existing logger has the same handlers as requested
+        return logging.getLogger(f"drunc.{logger_name}")
+
+    # Create parents if necessary
     logger_parent = "drunc"
     logger_parent_list: list(str) = logger_name.split(".")
     for part in logger_parent_list[:-1]:
         logger_parent += f".{part}"
         if logger_parent not in existing_loggers:
-            get_daq_logger(logger_name=logger_parent)
+            get_daq_logger(logger_name=f"drunc.{logger_parent}")
 
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
