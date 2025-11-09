@@ -13,8 +13,6 @@ from datetime import datetime
 from enum import Enum
 from urllib.parse import urlparse
 
-import kafka
-import sh
 from click import BadParameter
 from daqpytools.logging.logger import get_daq_logger
 from requests import delete, get, patch, post
@@ -48,24 +46,6 @@ def create_root_logger(
         stream_stdout_handler=False,
         stream_stderr_handler=False,
     )
-
-    # And then manually tweak 'sh.command' logger. Sigh.
-    sh_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    sh_command_logger = logging.getLogger(
-        sh.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    sh_command_logger.setLevel(sh_command_level)
-    for handler in sh_command_logger.handlers:
-        handler.setLevel(sh_command_level)
-
-    # And kafka
-    kafka_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    kafka_command_logger = logging.getLogger(
-        kafka.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    kafka_command_logger.setLevel(kafka_command_level)
-    for handler in kafka_command_logger.handlers:
-        handler.setLevel(kafka_command_level)
 
     return root_logger
 
