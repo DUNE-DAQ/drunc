@@ -1,8 +1,0 @@
-exclude = ["tests/*"]
-
-[lint]
-ignore = ["ALL"]
-select = [
-    "F",   # PyFlakes
-    "I"   # Isort
-]
