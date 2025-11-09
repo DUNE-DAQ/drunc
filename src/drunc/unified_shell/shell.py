@@ -256,7 +256,7 @@ def unified_shell(
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
         unified_shell_log.error(
-            f"[red]Could not connect to the process manager at the address[/red]"
+            f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
         unified_shell_log.debug(f"Reason: {e}")

@@ -4,6 +4,7 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     Status,
@@ -32,7 +33,11 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 class ChildNode:
     def __init__(
-        self, name: str, configuration, node_type: ControlType, **kwargs
+        self,
+        name: str,
+        configuration,
+        node_type: ControlType,
+        **kwargs,
     ) -> None:
         self.node_type = node_type
         self.log = get_logger(f"controller.{name}-child-node")
@@ -40,14 +45,15 @@ class ChildNode:
         self.configuration = configuration
         self.included = True
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"'{self.name}' (type {self.node_type})"
 
-    def terminate(self):
-        pass
+    def get_endpoint(self) -> str:
+        return ""
 
-    def get_endpoint(self) -> str | None:
-        return None
+    def terminate(self):
+        self.log.info(f"Terminating {self.name}")
+        pass
 
     def propagate_command(
         self,
@@ -159,6 +165,21 @@ class ChildNode:
 
         return response
 
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteExpertCommandResponse:
+        response = ExecuteExpertCommandResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+        )
+
+        return response
+
     def recompute_status(
         self,
         target: str = "",
@@ -235,6 +256,7 @@ class ChildNode:
                     init_token=init_token,
                     name=name,
                     uri=uri,
+                    connectivity_service=connectivity_service,
                     **kwargs,
                 )
 
