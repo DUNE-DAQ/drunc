@@ -53,7 +53,7 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
 
     # Make sure the logger name is not prefixed with drunc. The prefix is handled by
     # this function.
-    if logger_name.startswith("drunc."):
+    if logger_name.startswith("drunc"):
         raise DruncSetupException(
             "Do not prefix logger_name with drunc., it is handled by get_logger"
         )
