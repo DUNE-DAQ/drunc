@@ -46,6 +46,7 @@ drunc-fsm-tests = "drunc.tests.fsm:main"
 application-registry-service = "drunc.apps.app_connectivity_server:main"
 drunc-ssh-validator = "drunc.apps.ssh_validator:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-process-wrapper = "drunc.apps.process_wrapper:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
