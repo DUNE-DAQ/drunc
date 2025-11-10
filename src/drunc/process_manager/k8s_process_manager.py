@@ -1053,21 +1053,21 @@ class K8sProcessManager(ProcessManager):
         start_time = time()
 
         while time() - start_time < timeout:
-            sock = None
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(self.socket_retry_timeout)
-                result = sock.connect_ex((node_name, port))
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(self.socket_retry_timeout)
+                    result = sock.connect_ex((node_name, port))
 
-                if result == 0:
-                    self.log.info(
-                        f"Stage 2: NodePort {node_name}:{port} is active (TCP connect success)."
-                    )
-                    return  # Success!
-                else:
-                    self.log.debug(
-                        f"NodePort {node_name}:{port} not ready yet (socket error {result}), retrying..."
-                    )
+                    if result == 0:
+                        self.log.info(
+                            f"Stage 2: NodePort {node_name}:{port} is active (TCP connect success)."
+                        )
+                        return
+                    else:
+                        self.log.debug(
+                            f"NodePort {node_name}:{port} not ready yet (socket error {result}), retrying..."
+                        )
+
             except socket.gaierror as e:
                 self.log.warning(
                     f"Failed to resolve hostname '{node_name}': {e}. Retrying..."
@@ -1076,9 +1076,6 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug(
                     f"NodePort not ready yet (Socket error: {e}), retrying..."
                 )
-            finally:
-                if sock:
-                    sock.close()
 
             sleep(self.pod_status_check_sleep)
 
