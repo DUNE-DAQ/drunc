@@ -24,6 +24,7 @@ from druncschema.token_pb2 import Token
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
 @pytest.fixture(scope="module")
@@ -274,9 +275,22 @@ def test_boot_handles_grpc_exception(mock_driver, boot_test_setup):
     grpc_error = grpc.RpcError("Connection failed")
     boot_test_setup(grpc_error=grpc_error)
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
+    error_details = GrpcErrorDetails(
+        code="INVALID_ARGUMENT",
+        message="Invalid request parameters",
+        details=["field_violations: field=token, description=Invalid token format"],
+    )
+
+    with (
+        patch(
+            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+        ) as mock_extract,
+        patch(
+            "drunc.process_manager.process_manager_driver.handle_grpc_error"
+        ) as mock_handler,
+        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
+    ):
+        mock_extract.return_value = error_details
         mock_handler.side_effect = grpc_error
 
         # Expect the exception to be raised after error handling
@@ -290,7 +304,13 @@ def test_boot_handles_grpc_exception(mock_driver, boot_test_setup):
                     log_level="INFO",
                 )
             )
+
+        mock_extract.assert_called_once_with(grpc_error)
+        mock_driver.log.error.assert_called_with(error_details)
         mock_handler.assert_called_once_with(grpc_error)
+
+        logged = mock_driver.log.error.call_args[0][0]
+        assert logged == error_details
 
 
 @patch("drunc.process_manager.process_manager_driver.get_log_path")
@@ -654,13 +674,24 @@ def test_dummy_boot_grpc_error_handling(mock_getcwd, mock_copy_token, mock_drive
         return_value=[{"exec": "binary", "args": ["--arg1"]}]
     )
     mock_driver._build_boot_request_dummy_boot = MagicMock()
-
-    # Simulate gRPC error raised by stub.boot
     grpc_error = grpc.RpcError()
-    mock_driver.stub.boot = MagicMock(side_effect=grpc_error)
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
+    mock_driver.stub.boot.side_effect = grpc_error
+
+    error_details = GrpcErrorDetails(
+        code="INVALID_ARGUMENT",
+        message="Invalid request parameters",
+        details=["field_violations: field=token, description=Invalid token format"],
+    )
+    with (
+        patch(
+            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+        ) as mock_extract,
+        patch(
+            "drunc.process_manager.process_manager_driver.handle_grpc_error"
+        ) as mock_handler,
+        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
+    ):
+        mock_extract.return_value = error_details
         mock_handler.side_effect = grpc_error
         with pytest.raises(grpc.RpcError):
             list(
@@ -674,7 +705,12 @@ def test_dummy_boot_grpc_error_handling(mock_getcwd, mock_copy_token, mock_drive
                 )
             )
 
+        mock_extract.assert_called_once_with(grpc_error)
+        mock_driver.log.error.assert_called_with(error_details)
         mock_handler.assert_called_once_with(grpc_error)
+
+        logged = mock_driver.log.error.call_args[0][0]
+        assert logged == error_details
 
 
 def test_prepare_exec_and_args_dummy_boot(mock_driver):

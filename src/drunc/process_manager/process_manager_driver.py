@@ -29,7 +29,11 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc.utils.grpc_utils import copy_token, handle_grpc_error
+from drunc.utils.grpc_utils import (
+    copy_token,
+    extract_grpc_rich_error,
+    handle_grpc_error,
+)
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
@@ -127,9 +131,18 @@ class ProcessManagerDriver:
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
+                yield response
+
             except grpc.RpcError as e:
+                try:
+                    error_details = extract_grpc_rich_error(e)
+                    self.log.error(error_details)
+                except Exception as extraction_error:
+                    self.log.debug(
+                        f"Could not extract rich error details from gRPC error: {extraction_error}",
+                        exc_info=True,
+                    )
                 handle_grpc_error(e)
-            yield response
 
         # Step 6: discover controller
         self._discover_controller(
@@ -456,10 +469,18 @@ To debug it, close drunc and run the following command:
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
-            except grpc.RpcError as e:
-                handle_grpc_error(e)
+                yield response
 
-            yield response
+            except grpc.RpcError as e:
+                try:
+                    error_details = extract_grpc_rich_error(e)
+                    self.log.error(error_details)
+                except Exception as extraction_error:
+                    self.log.debug(
+                        f"Could not extract rich error details from gRPC error: {extraction_error}",
+                        exc_info=True,
+                    )
+                handle_grpc_error(e)
 
     def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
         args = [
@@ -505,6 +526,14 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.terminate(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
             handle_grpc_error(e)
 
         return response
@@ -517,6 +546,14 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.kill(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
             handle_grpc_error(e)
 
         return response
@@ -527,6 +564,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.logs(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -539,6 +585,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.ps(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -551,6 +606,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.flush(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -563,6 +627,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.restart(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -573,6 +646,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response

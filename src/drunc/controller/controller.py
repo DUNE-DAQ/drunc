@@ -444,7 +444,9 @@ class Controller(ControllerServicer):
                 )
             except Exception as e:
                 self.log.exception(f"Error while publishing periodic status: {e}")
-            time.sleep(interval_s)
+
+            if self.stop_event.wait(timeout=interval_s):
+                break
 
     def advertise_control_address(self, address):
         self.uri = address
@@ -477,16 +479,14 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread.start()
 
     def terminate(self):
+        self.log.info(f"Terminating controller {self.name}")
         self.running = False
-        if self.opmon_publisher is not None:
-            self.stop_event.set()
-            self.thread.join()
 
         if hasattr(self, "connectivity_service") and self.connectivity_service:
             if self.connectivity_service_thread:
                 self.connectivity_service_thread.join()
             self.log.info("Unregistering from the connectivity service")
-            self.connectivity_service.retract(self.name + "_control")
+            self.connectivity_service.retract(self.name + "_control", fail_quickly=True)
 
         if self.can_broadcast():
             self.broadcast(
@@ -502,6 +502,17 @@ class Controller(ControllerServicer):
 
         if ResponseListener.exists():
             ResponseListener.get().terminate()
+
+        if self.opmon_publisher is not None:
+            self.log.debug("Stopping opmon publisher")
+            self.stop_event.set()
+            self.thread.join(timeout=1.0)
+            if self.thread.is_alive():
+                self.log.warning(
+                    "OpMon publisher thread did not stop within timeout, continuing shutdown"
+                )
+            else:
+                self.log.debug("opmon publisher stopped")
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
