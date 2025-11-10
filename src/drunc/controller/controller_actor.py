@@ -1,5 +1,4 @@
 import threading
-from typing import Optional
 
 from druncschema.token_pb2 import Token
 
@@ -8,7 +7,7 @@ from drunc.utils.utils import get_logger
 
 
 class ControllerActor:
-    def __init__(self, token: Optional[Token] = None):
+    def __init__(self, token: Token | None = None):
         self.log = get_logger("controller.actor")
         self._token = Token(token="", user_name="")
         if token is not None:
@@ -21,7 +20,7 @@ class ControllerActor:
     def get_user_name(self) -> str:
         return self._token.user_name
 
-    def _update_actor(self, token: Optional[Token] = None) -> None:
+    def _update_actor(self, token: Token | None = None) -> None:
         self._lock.acquire()
         self._token = Token(token="", user_name="")
         if token is not None:

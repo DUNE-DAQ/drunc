@@ -6,10 +6,7 @@ from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.shell_utils import (
-    ShellContext,
-    create_dummy_token_from_uname,
-)
+from drunc.utils.shell_utils import ShellContext, create_dummy_token_from_uname
 from drunc.utils.utils import resolve_localhost_to_hostname
 
 

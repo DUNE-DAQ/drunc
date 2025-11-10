@@ -333,10 +333,9 @@ class K8sProcessManager(ProcessManager):
             if cached:
                 self.log.debug(f"Host '{target_host}' cached (valid)")
                 return True
-            else:
-                raise DruncK8sNodeException(
-                    f"Host '{target_host}' was previously verified as unavailable"
-                )
+            raise DruncK8sNodeException(
+                f"Host '{target_host}' was previously verified as unavailable"
+            )
 
         try:
             target_node = self._core_v1_api.read_node(name=target_host)
@@ -365,7 +364,7 @@ class K8sProcessManager(ProcessManager):
                 raise DruncK8sNodeException(
                     f"Target host '{target_host}' is not part of the Kubernetes cluster"
                 )
-            elif e.status in [401, 403]:
+            if e.status in [401, 403]:
                 raise DruncK8sException(
                     f"Permission denied accessing cluster to verify '{target_host}': {e}"
                 )

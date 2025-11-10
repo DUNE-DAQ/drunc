@@ -6,13 +6,9 @@ import grpc_testing
 import pytest
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.request_response_pb2 import Request, ResponseFlag
-from druncschema.session_manager_pb2 import (
-    DESCRIPTOR,
-    ActiveSession,
-    AllActiveSessions,
-    AllConfigKeys,
-    ConfigKey,
-)
+from druncschema.session_manager_pb2 import (DESCRIPTOR, ActiveSession,
+                                             AllActiveSessions, AllConfigKeys,
+                                             ConfigKey)
 from druncschema.token_pb2 import Token
 
 from drunc.session_manager.session_manager import SessionManager

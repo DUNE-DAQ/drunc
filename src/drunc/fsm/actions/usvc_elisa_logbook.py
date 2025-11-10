@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Optional
 
 import requests
 
@@ -83,10 +82,10 @@ class ElisaLogbook(FSMAction):
         self.timeout = 5
 
     def post_start(
-        self, _input_data: dict, _context, elisa_post: Optional[str] = None, **kwargs
+        self, _input_data: dict, _context, elisa_post: str | None = None, **kwargs
     ):
         if self.elisa_hardware in self.no_publish_hardware:
-            return
+            return None
         text = ""
         self.thread_id = None  # Clear this value here, so that if it fails stop can't reply to an old message
 
@@ -142,10 +141,10 @@ class ElisaLogbook(FSMAction):
         return _input_data
 
     def post_drain_dataflow(
-        self, _input_data, _context, elisa_post: Optional[str] = None, **kwargs
+        self, _input_data, _context, elisa_post: str | None = None, **kwargs
     ):
         if self.elisa_hardware in self.no_publish_hardware:
-            return
+            return None
         text = ""
         if elisa_post is not None:
             self.log.info(

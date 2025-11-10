@@ -1,5 +1,3 @@
-from typing import Optional
-
 from drunc.fsm.core import FSMAction
 from drunc.utils.utils import now_str
 
@@ -11,7 +9,7 @@ class FileLogbook(FSMAction):
         self.file = self.conf_dict["file_name"]
 
     def post_start(
-        self, _input_data, _context, file_logbook_post: Optional[str] = None, **kwargs
+        self, _input_data, _context, file_logbook_post: str | None = None, **kwargs
     ):
         with open(self.file, "a") as f:
             f.write(

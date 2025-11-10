@@ -6,20 +6,12 @@ base class, allowing for testing serialisation/deserialisation. The request-hand
 
 """
 
-from typing import Optional
 from unittest.mock import Mock
 
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogLines,
-    LogRequest,
-    ProcessInstanceList,
-    ProcessQuery,
-)
+from druncschema.process_manager_pb2 import (BootRequest, LogLines, LogRequest,
+                                             ProcessInstanceList, ProcessQuery)
 
-from drunc.process_manager.configuration import (
-    ProcessManagerConfHandler,
-)
+from drunc.process_manager.configuration import ProcessManagerConfHandler
 from drunc.process_manager.process_manager import ProcessManager, ResponseFlag
 
 
@@ -32,7 +24,7 @@ class ConcreteProcessManager(ProcessManager):
         self,
         configuration: ProcessManagerConfHandler = Mock(),
         name: str = "process_manager_no_impl",
-        session: Optional[str] = None,
+        session: str | None = None,
         **kwargs,
     ):
         """

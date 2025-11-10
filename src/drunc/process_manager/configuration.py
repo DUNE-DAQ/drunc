@@ -3,7 +3,7 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import Any, Dict, Union
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -23,6 +23,7 @@ class ProcessManagerTypes(Enum):
     Unknown = 0
     SSH = 1
     K8s = 2
+    SubProcess = 3
 
 
 class ProcessManagerConfData:
@@ -58,6 +59,9 @@ class ProcessManagerConfHandler(ConfHandler):
         match data["type"].lower():
             case "ssh":
                 new_data.type = ProcessManagerTypes.SSH
+                new_data.kill_timeout = data.get("kill_timeout", 0.5)
+            case "subprocess":
+                new_data.type = ProcessManagerTypes.SubProcess
                 new_data.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
                 new_data.type = ProcessManagerTypes.K8s
@@ -168,7 +172,7 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-def _load_pm_schema_from_package() -> Dict[str, Any]:
+def _load_pm_schema_from_package() -> dict[str, Any]:
     """Load JSON Schema from packaged file; raise if missing or unreadable."""
     try:
         # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
@@ -188,7 +192,7 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
         )
 
 
-def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+def _load_config_from_source(source: str | dict[str, Any]) -> dict[str, Any]:
     """
     Accepts:
       - file URLs (file:///...),
@@ -207,7 +211,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
             u = urlparse(source)
             if u.scheme == "file":
                 path = unquote(u.path)
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     return json.load(f)
             raise FileNotFoundError(f"Unsupported URL scheme: {u.scheme}")
 
@@ -215,7 +219,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
         resolved_url = get_process_manager_configuration(source)
         u = urlparse(resolved_url)
         path = unquote(u.path)
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
 
     # Already a dict
@@ -225,7 +229,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
     raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
 
 
-def validate_pm_config(config_or_source: Union[str, Dict[str, Any]]) -> bool:
+def validate_pm_config(config_or_source: str | dict[str, Any]) -> bool:
     try:
         pm_conf = _load_config_from_source(config_or_source)
         schema = _load_pm_schema_from_package()

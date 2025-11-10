@@ -60,8 +60,7 @@ class BroadcastSender:
     def describe_broadcast(self):
         if self.implementation:
             return self.implementation.describe_broadcast()
-        else:
-            return None
+        return None
 
     def can_broadcast(self):
         if not self.implementation:

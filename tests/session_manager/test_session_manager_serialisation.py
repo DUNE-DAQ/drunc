@@ -11,9 +11,7 @@ from unittest.mock import MagicMock, patch
 import grpc
 import pytest
 from druncschema.session_manager_pb2_grpc import (
-    SessionManagerStub,
-    add_SessionManagerServicer_to_server,
-)
+    SessionManagerStub, add_SessionManagerServicer_to_server)
 from grpc._channel import _InactiveRpcError
 
 from drunc.session_manager.session_manager import SessionManager

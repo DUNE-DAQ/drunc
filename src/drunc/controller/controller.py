@@ -3,9 +3,10 @@ import re
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
-from typing import Callable, List, TypeVar
+from typing import TypeVar
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -51,10 +52,7 @@ from drunc.controller.utils import (
 from drunc.exceptions import DruncCommandException, DruncException
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.exceptions import (
-    DotDruncJsonIncorrectFormat,
-    DotDruncJsonNotFound,
-)
+from drunc.fsm.exceptions import DotDruncJsonIncorrectFormat, DotDruncJsonNotFound
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
@@ -208,7 +206,7 @@ def OLD_unpack_addressed_command_to(data_type=None):
 
 
 class Controller(ControllerServicer):
-    children_nodes: List[ChildNode] = []
+    children_nodes: list[ChildNode] = []
 
     def __init__(self, configuration, name: str, session: str, token: Token):
         super().__init__()
@@ -629,7 +627,7 @@ class Controller(ControllerServicer):
                     )
 
                 self.log.error(
-                    f"Failed to propagate {command_name} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}"
+                    f"Failed to propagate {command_name} to {child.name} ({child.name}) EXCEPTION THROWN: {e!s}"
                 )
 
         threads = []

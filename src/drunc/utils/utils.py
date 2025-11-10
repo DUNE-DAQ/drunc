@@ -102,8 +102,7 @@ def get_new_port():
 def now_str(posix_friendly=False):
     if not posix_friendly:
         return datetime.now().strftime("%m/%d/%Y,%H:%M:%S")
-    else:
-        return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 
 def expand_path(path, turn_to_abs_path=False):
@@ -248,7 +247,7 @@ def parent_death_pact(signal=signal.SIGHUP):
     # last three args are unused for PR_SET_PDEATHSIG
     retcode = libc.prctl(PR_SET_PDEATHSIG, signal, 0, 0, 0)
     if retcode != 0:
-        raise Exception("prctl() returned nonzero retcode %d" % retcode)
+        raise Exception(f"prctl() returned nonzero retcode {retcode:d}")
 
 
 class IncorrectAddress(DruncException):
@@ -330,7 +329,7 @@ def get_control_type_and_uri_from_cli(CLAs: list[str]) -> ControlType:
             return ControlType.REST_API, resolve_localhost_and_127_ip_to_network_ip(
                 CLA.replace("rest://", "")
             )
-        elif CLA.startswith("grpc://"):
+        if CLA.startswith("grpc://"):
             return ControlType.gRPC, resolve_localhost_and_127_ip_to_network_ip(
                 CLA.replace("grpc://", "")
             )
@@ -345,7 +344,7 @@ def get_control_type_and_uri_from_connectivity_service(
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds
     progress_bar: bool = False,
-    title: str = None,
+    title: str | None = None,
 ) -> tuple[ControlType, str]:
     uris = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
@@ -374,8 +373,7 @@ def get_control_type_and_uri_from_connectivity_service(
                     )
                     if len(uris) == 0:
                         raise ApplicationLookupUnsuccessful
-                    else:
-                        break
+                    break
 
                 except ApplicationLookupUnsuccessful:
                     elapsed = time.time() - start
@@ -394,8 +392,7 @@ def get_control_type_and_uri_from_connectivity_service(
                 )
                 if len(uris) == 0:
                     raise ApplicationLookupUnsuccessful
-                else:
-                    break
+                break
 
             except ApplicationLookupUnsuccessful:
                 elapsed = time.time() - start

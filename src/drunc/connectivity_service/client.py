@@ -194,11 +194,10 @@ class ConnectivityServiceClient:
                 content = response.json()
                 if content:
                     return content
-                else:
-                    self.log.debug(
-                        f"Could not find the address of '{uid_regex}' on the application registry"
-                    )
-                    time.sleep(0.2)
+                self.log.debug(
+                    f"Could not find the address of '{uid_regex}' on the application registry"
+                )
+                time.sleep(0.2)
 
             except (HTTPError, ConnectionError, ReadTimeout) as e:
                 self.log.debug(e)

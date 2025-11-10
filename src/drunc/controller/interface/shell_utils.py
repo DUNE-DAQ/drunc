@@ -297,7 +297,7 @@ def controller_setup(ctx, controller_address):
 
     if state == "initialising":
         log.error("Controller did not initialise in time")
-        return
+        return None
 
     log.debug(f"Taking control of the controller as {ctx.get_token()}")
     try:
@@ -375,12 +375,11 @@ def tree_prefix(i, n):
     last = "└── "
     if i == 0 and n == 1:
         return first_one
-    elif i == 0:
+    if i == 0:
         return first_many
-    elif i == n - 1:
+    if i == n - 1:
         return last
-    else:
-        return next
+    return next
 
 
 def validate_and_format_fsm_arguments(

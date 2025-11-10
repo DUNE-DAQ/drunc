@@ -22,9 +22,7 @@ from grpc_status import rpc_status
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-from drunc.connectivity_service.exceptions import (
-    ApplicationLookupUnsuccessful,
-)
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfHandler, ConfTypes
@@ -116,10 +114,8 @@ class gRPCChildNode(ChildNode):
                     if tries_remaining == 0:
                         raise server_unreachable_error
                     self.log.info(
-                        (
-                            f"Could not connect to the controller ({self.uri}). "
-                            f"Trying {tries_remaining} more times..."
-                        )
+                        f"Could not connect to the controller ({self.uri}). "
+                        f"Trying {tries_remaining} more times..."
                     )
                     time.sleep(5)
 

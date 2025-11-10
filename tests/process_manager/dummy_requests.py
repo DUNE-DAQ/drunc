@@ -3,15 +3,10 @@ Dummy request objects for Process Manager endpoints.
 """
 
 import google.protobuf.any_pb2
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogRequest,
-    ProcessDescription,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
-)
+from druncschema.process_manager_pb2 import (BootRequest, LogRequest,
+                                             ProcessDescription,
+                                             ProcessMetadata, ProcessQuery,
+                                             ProcessRestriction, ProcessUUID)
 from druncschema.request_response_pb2 import Request
 from druncschema.token_pb2 import Token
 

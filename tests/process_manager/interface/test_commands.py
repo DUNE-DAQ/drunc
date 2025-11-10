@@ -7,17 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from drunc.process_manager.interface.commands import (
-    InterruptedCommand,
-    boot,
-    dummy_boot,
-    flush,
-    kill,
-    logs,
-    ps,
-    restart,
-    terminate,
-)
+from drunc.process_manager.interface.commands import (InterruptedCommand, boot,
+                                                      dummy_boot, flush, kill,
+                                                      logs, ps, restart,
+                                                      terminate)
 
 
 @pytest.fixture

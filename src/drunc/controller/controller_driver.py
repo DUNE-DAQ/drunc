@@ -20,11 +20,7 @@ from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
-from drunc.utils.grpc_utils import (
-    UnpackingError,
-    handle_grpc_error,
-    unpack_any,
-)
+from drunc.utils.grpc_utils import UnpackingError, handle_grpc_error, unpack_any
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
@@ -297,7 +293,7 @@ class ControllerDriver:
 
             elif response.data.Is(PlainText.DESCRIPTOR):
                 txt = unpack_any(response.data, PlainText)
-                error_txt = txt.text  # noqa: F841  (might need to revisit this)
+                error_txt = txt.text
                 dr.data = error_txt
 
             if response.flag in [

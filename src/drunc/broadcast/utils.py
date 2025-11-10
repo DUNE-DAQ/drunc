@@ -26,5 +26,4 @@ def get_broadcast_level_from_broadcast_type(
     bt = BroadcastType.Name(btype)
     if bt not in levels:
         return logger.info
-    else:
-        return getattr(logger, levels[bt].lower())
+    return getattr(logger, levels[bt].lower())

@@ -229,8 +229,7 @@ class FSM:
             if self.can_execute_transition(source_state, transition):
                 if tr.destination == "":
                     return source_state
-                else:
-                    return tr.destination
+                return tr.destination
 
     def get_executable_transitions(self, source_state) -> list[Transition]:
         valid_transitions = []

@@ -54,6 +54,7 @@ drunc-fsm-tests = "drunc.tests.fsm:main"
 application-registry-service = "drunc.apps.app_connectivity_server:main"
 drunc-ssh-validator = "drunc.apps.ssh_validator:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-process-wrapper = "drunc.apps.process_wrapper:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -68,6 +69,10 @@ addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
 [tool.coverage.run]
 source = ["drunc"]
 omit = ["tests/*"]
+
+[tool.ruff]
+exclude = ["tests/"]
+
 
 # * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
 [tool.ruff.lint]

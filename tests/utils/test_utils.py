@@ -8,22 +8,14 @@ import psutil
 import pytest
 
 from drunc.exceptions import DruncSetupException
-from drunc.utils.utils import (
-    ControlType,
-    IncorrectAddress,
-    expand_path,
-    get_control_type_and_uri_from_cli,
-    get_new_port,
-    get_random_string,
-    host_is_local,
-    https_or_http_present,
-    now_str,
-    parent_death_pact,
-    regex_match,
-    resolve_localhost_and_127_ip_to_network_ip,
-    resolve_localhost_to_hostname,
-    validate_command_facility,
-)
+from drunc.utils.utils import (ControlType, IncorrectAddress, expand_path,
+                               get_control_type_and_uri_from_cli, get_new_port,
+                               get_random_string, host_is_local,
+                               https_or_http_present, now_str,
+                               parent_death_pact, regex_match,
+                               resolve_localhost_and_127_ip_to_network_ip,
+                               resolve_localhost_to_hostname,
+                               validate_command_facility)
 
 
 def test_get_random_string():

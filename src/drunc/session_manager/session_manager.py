@@ -6,10 +6,7 @@ from pathlib import Path
 
 from conffwk import Configuration
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.request_response_pb2 import (
-    Request,
-    ResponseFlag,
-)
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.session_manager_pb2 import (
     ActiveSession,
     AllActiveSessions,

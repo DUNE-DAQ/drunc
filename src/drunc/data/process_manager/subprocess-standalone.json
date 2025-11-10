@@ -1,0 +1,19 @@
+{
+    "type": "subprocess",
+    "name": "SubProcessProcessManager",
+    "kill_timeout": 0.5,
+    "authoriser": {
+        "type": "dummy"
+    },
+    "environment": {
+        "GRPC_ENABLE_FORK_SUPPORT": "false"
+    },
+    "opmon_uri": {
+        "path": "./info.json",
+        "type": "file"
+    },
+    "opmon_conf": {
+        "level": "info",
+        "interval_s": 10.0
+    }
+}

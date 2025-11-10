@@ -362,7 +362,7 @@ def expert_command(
         if string:
             data = json.loads(command)
         else:
-            with open(command, "r") as f:
+            with open(command) as f:
                 data = json.load(f)
 
     except FileNotFoundError:

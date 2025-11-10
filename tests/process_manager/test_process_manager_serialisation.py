@@ -19,9 +19,7 @@ from unittest.mock import MagicMock
 import grpc
 import pytest
 from druncschema.process_manager_pb2_grpc import (
-    ProcessManagerStub,
-    add_ProcessManagerServicer_to_server,
-)
+    ProcessManagerStub, add_ProcessManagerServicer_to_server)
 
 
 class ProcessManagerSerialisationTestSuite:
