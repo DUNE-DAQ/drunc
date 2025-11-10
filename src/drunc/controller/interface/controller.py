@@ -4,7 +4,6 @@ import signal
 
 import click
 import grpc
-from daqpytools.logging.levels import logging_log_levels
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
@@ -12,9 +11,11 @@ from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.controller import Controller
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.utils import (
-    create_root_logger,
+    create_logger_handler,
     get_logger,
+    log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
+    setup_root_logger,
     validate_command_facility,
 )
 
@@ -59,7 +60,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -72,8 +73,12 @@ def controller_cli(
     log_level: str,
 ):
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
-    create_root_logger(log_level)
+    setup_root_logger(log_level)
     log = get_logger("controller.controller_cli")
+    create_logger_handler(
+        log_file_path=None,
+        rich_handler=False,
+    )
 
     token = Token(
         user_name="controller_init_token",

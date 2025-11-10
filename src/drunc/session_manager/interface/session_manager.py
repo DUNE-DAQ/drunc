@@ -9,7 +9,7 @@ from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_s
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.utils import create_root_logger, get_logger
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def serve(session_manager: SessionManager, address: str) -> None:
@@ -31,7 +31,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
 @click.command()
 # @click.option(
 #     '--log-level',
-#     type=click.Choice(list(logging_log_levels.keys()), case_sensitive=False),
+#     type=click.Choice(list(log_levels.keys()), case_sensitive=False),
 #     default="INFO",
 #     help="Verbosity of the session manager logger.",
 # )
@@ -51,8 +51,9 @@ def session_manager_cli():
     app_name = "session_manager"
     log_level = "DEBUG"
 
-    create_root_logger(log_level)
-    logger = get_logger(app_name, rich_handler=True)
+    setup_root_logger(log_level)
+    logger = get_logger(app_name)
+    create_logger_handler(rich_handler=True)
 
     # Load the configuration for the session manager.
     config = SessionManagerConfHandler()
