@@ -4,13 +4,13 @@ import signal
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
-from daqpytools.logging.logger import get_logger
 from rich import print
+from rich.logging import RichHandler
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager import on_parent_exit
+from drunc.utils.utils import log_levels
 
 kDefaultAuth = "default"
 kPublicKeyAuth = "publickey"
@@ -91,13 +91,16 @@ def test_session_ssh_connections(
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="WARNING",
     help="Set the log level",
 )
 def main(log_level: str):
-    log = get_logger("ssh_doctor", log_level=log_level, rich_handler=True)
-    log.critical("Pawel has not finished reimplementing this correctly yet.")
+    FORMAT = "%(message)s"
+    logging.basicConfig(
+        level=logging.WARNING, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+    )
+    logging.getLogger("sh").setLevel(log_level)
 
 
 @main.command()
