@@ -70,6 +70,10 @@ addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
 source = ["drunc"]
 omit = ["tests/*"]
 
+[tool.ruff]
+exclude = ["tests/"]
+
+
 # * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
 [tool.ruff.lint]
 select = [

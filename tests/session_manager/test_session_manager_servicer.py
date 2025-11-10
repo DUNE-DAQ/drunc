@@ -3,12 +3,8 @@ from unittest.mock import MagicMock, patch
 
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import ResponseFlag
-from druncschema.session_manager_pb2 import (
-    ActiveSession,
-    AllActiveSessions,
-    AllConfigKeys,
-    ConfigKey,
-)
+from druncschema.session_manager_pb2 import (ActiveSession, AllActiveSessions,
+                                             AllConfigKeys, ConfigKey)
 
 
 def test_describe(

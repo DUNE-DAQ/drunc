@@ -19,10 +19,7 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
-from druncschema.request_response_pb2 import (
-    Request,
-    ResponseFlag,
-)
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from google.rpc import code_pb2
 from grpc import ServicerContext
 
@@ -487,7 +484,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     ) -> str:
         if uuids == []:
             raise BadQuery("The process corresponding to the query doesn't exist")
-        elif len(uuids) > 1:
+        if len(uuids) > 1:
             raise BadQuery("There are more than 1 processes corresponding to the query")
 
         if in_boot_request:
@@ -567,20 +564,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             log.debug("Starting [green]SSH process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.SubProcess:
+        if conf.data.type == ProcessManagerTypes.SubProcess:
             from drunc.process_manager.subprocess_process_manager import (
                 SubProcessProcessManager,
             )
 
             log.info("Starting [green]SubProcess process_manager[/green]")
             return SubProcessProcessManager(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.K8s:
+        if conf.data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
-        else:
-            log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
-            raise RuntimeError(
-                f"ProcessManager type {conf.get('type')} is unsupported!"
-            )
+        log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
+        raise RuntimeError(f"ProcessManager type {conf.get('type')} is unsupported!")

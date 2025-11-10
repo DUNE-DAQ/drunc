@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
@@ -32,9 +33,7 @@ class Observed:
             self.stateful_node.log.info(f"{self._name} changed to {value}")
             self.stateful_node.publish_state()
 
-    def __init__(
-        self, name: str, stateful_node=None, initial_value: Optional[str] = None
-    ):
+    def __init__(self, name: str, stateful_node=None, initial_value: str | None = None):
         self._name = name
         self.stateful_node = stateful_node
         self._value = initial_value
@@ -89,7 +88,7 @@ class StatefulNode(abc.ABC):
     def __init__(
         self,
         fsm_configuration,
-        publisher: Optional[Callable[[Any], None]] = None,
+        publisher: Callable[[Any], None] | None = None,
         init_state: str = "",
         session: str = "",
         name: str = "",

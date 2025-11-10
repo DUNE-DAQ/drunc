@@ -10,18 +10,12 @@ to be back in line with druncschema definitions.
 import google.protobuf.any_pb2
 import pytest
 from druncschema.description_pb2 import Description
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    LogLines,
-    LogRequest,
-    ProcessDescription,
-    ProcessInstance,
-    ProcessInstanceList,
-    ProcessMetadata,
-    ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
-)
+from druncschema.process_manager_pb2 import (BootRequest, LogLines, LogRequest,
+                                             ProcessDescription,
+                                             ProcessInstance,
+                                             ProcessInstanceList,
+                                             ProcessMetadata, ProcessQuery,
+                                             ProcessRestriction, ProcessUUID)
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 

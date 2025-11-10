@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 from drunc.fsm.actions.utils import validate_run_type
 from drunc.fsm.core import FSMAction
@@ -14,9 +13,9 @@ class UserProvidedRunNumber(FSMAction):
         _input_data: dict,
         _context,
         run_number: int,
-        run_type: Optional[str] = "TEST",
+        run_type: str | None = "TEST",
         disable_data_storage: bool = False,
-        trigger_rate: Optional[float] = None,
+        trigger_rate: float | None = None,
         **kwargs,
     ):
         run_type = validate_run_type(run_type.upper())

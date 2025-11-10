@@ -123,8 +123,8 @@ class SubProcessProcessManager(ProcessManager):
             # Kill the process if it is still running
             if process.poll() is None:
                 sequence: list[signal.Signals] = [
-                    signal.SIGINT,
                     signal.SIGQUIT,
+                    signal.SIGTERM,
                     signal.SIGKILL,  # Kept as nuclear option
                 ]
                 for sig in sequence:
@@ -184,9 +184,8 @@ class SubProcessProcessManager(ProcessManager):
                 query=ProcessQuery(names=[".*"]), order_by="leaf_first"
             )
             return self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+        self.log.info("No known process to kill before exiting")
+        return ProcessInstanceList()
 
     async def _logs_impl(self, log_request: LogRequest) -> LogLines:
         """
@@ -324,11 +323,6 @@ class SubProcessProcessManager(ProcessManager):
             ProcessInstance: The instance of the booted process.
         """
 
-        self.log.error(
-            f"PP: {self.name} booting '{boot_request.process_description.metadata.name}' "
-            f"from session '{boot_request.process_description.metadata.session}'"
-        )
-
         # Validate the boot request
         meta: ProcessMetadata = boot_request.process_description.metadata
         if len(boot_request.process_restriction.allowed_hosts) < 1:
@@ -387,14 +381,14 @@ class SubProcessProcessManager(ProcessManager):
                 wrapped_cmd_fmt_for_logging = wrapped_cmd.replace(";", ";\n").replace(
                     ":", ":\n"
                 )
-                self.log.debug(f"PP: Running command:\n{wrapped_cmd_fmt_for_logging}")
+                self.log.debug(f"Running command:\n{wrapped_cmd_fmt_for_logging}")
 
                 process: Popen = Popen(
                     wrapped_cmd,
                     shell=True,
                     preexec_fn=on_parent_exit(signal.SIGTERM),
                 )
-                self.log.error(f"PP: Started process with PID {process.pid}")
+                self.log.debug(f"Started process with PID {process.pid}")
                 self.process_store[str(process.pid)] = process
                 pid: str = str(process.pid)
 
@@ -404,7 +398,7 @@ class SubProcessProcessManager(ProcessManager):
                     session=meta.session,
                     process=self.process_store[pid],
                 )
-                self.log.error("PP: Watcher started")
+                self.log.debug("Watcher started")
                 break
 
             except Exception as e:
@@ -522,7 +516,7 @@ class SubProcessProcessManager(ProcessManager):
             ProcessInstance: The instance of the booted process.
         """
 
-        self.log.error(f"PP: {self.name} running _boot_impl")
+        self.log.debug(f"{self.name} running _boot_impl")
         try:
             pi: ProcessInstance = self.__boot(boot_request)
             return ProcessInstanceList(
@@ -597,6 +591,5 @@ class SubProcessProcessManager(ProcessManager):
         if self.process_store:
             uuids = self._get_process_uid(query, order_by="leaf_first")
             return self.kill_processes(uuids)
-        else:
-            self.log.info("No known process to kill before exiting")
-            return ProcessInstanceList()
+        self.log.info("No known process to kill before exiting")
+        return ProcessInstanceList()

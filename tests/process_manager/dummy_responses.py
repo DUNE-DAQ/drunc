@@ -3,12 +3,8 @@ Dummy response objects for Process Manager endpoints
 """
 
 from druncschema.description_pb2 import Description
-from druncschema.process_manager_pb2 import (
-    LogLines,
-    ProcessInstance,
-    ProcessInstanceList,
-    ProcessUUID,
-)
+from druncschema.process_manager_pb2 import (LogLines, ProcessInstance,
+                                             ProcessInstanceList, ProcessUUID)
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 

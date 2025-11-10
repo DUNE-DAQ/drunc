@@ -223,11 +223,8 @@ def test_process_description_field_init():
     """
     Test ProcessDescription fields properly populated
     """
-    from druncschema.process_manager_pb2 import (
-        ProcessDescription,
-        ProcessMetadata,
-        ProcessUUID,
-    )
+    from druncschema.process_manager_pb2 import (ProcessDescription,
+                                                 ProcessMetadata, ProcessUUID)
 
     metadata = ProcessMetadata(
         uuid=ProcessUUID(uuid="test-uuid"),
@@ -261,12 +258,10 @@ def test_process_instance_field_init():
     """
     Test ProcessInstance fields properly populated
     """
-    from druncschema.process_manager_pb2 import (
-        ProcessDescription,
-        ProcessInstance,
-        ProcessRestriction,
-        ProcessUUID,
-    )
+    from druncschema.process_manager_pb2 import (ProcessDescription,
+                                                 ProcessInstance,
+                                                 ProcessRestriction,
+                                                 ProcessUUID)
 
     process_description = ProcessDescription()
     process_restriction = ProcessRestriction()
@@ -293,7 +288,8 @@ def test_process_instance_list_field_init():
     """
     Test ProcessInstanceList fields properly populated
     """
-    from druncschema.process_manager_pb2 import ProcessInstance, ProcessInstanceList
+    from druncschema.process_manager_pb2 import (ProcessInstance,
+                                                 ProcessInstanceList)
     from druncschema.request_response_pb2 import ResponseFlag
     from druncschema.token_pb2 import Token
 
@@ -316,11 +312,9 @@ def test_boot_request_field_init():
     """
     Test BootRequest fields properly populated
     """
-    from druncschema.process_manager_pb2 import (
-        BootRequest,
-        ProcessDescription,
-        ProcessRestriction,
-    )
+    from druncschema.process_manager_pb2 import (BootRequest,
+                                                 ProcessDescription,
+                                                 ProcessRestriction)
     from druncschema.token_pb2 import Token
 
     token = Token()

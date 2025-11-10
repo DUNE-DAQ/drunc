@@ -108,11 +108,11 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None, quiet_fail: bool = False) -> object:
+    def get_driver(self, name: str | None = None, quiet_fail: bool = False) -> object:
         try:
             if name:
                 return self._drivers[name]
-            elif len(self._drivers) > 1:
+            if len(self._drivers) > 1:
                 raise DruncShellException("More than one driver in this context")
             return list(self._drivers.values())[0]
         except KeyError:

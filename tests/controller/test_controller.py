@@ -15,7 +15,7 @@ def test_controller_init(one_controller_running):
 
     while time_inc < timeout:
         if os.path.exists(controller_process[1]):
-            with open(controller_process[1], "r") as f:
+            with open(controller_process[1]) as f:
                 for line in f.readlines():
                     if "Controller ready" in line:
                         found = True

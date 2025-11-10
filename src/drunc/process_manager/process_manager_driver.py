@@ -6,7 +6,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from time import sleep
-from typing import Any, Dict, List
+from typing import Any
 
 import grpc
 from druncschema.description_pb2 import Description
@@ -142,7 +142,7 @@ class ProcessManagerDriver:
         session_dal,
         db,
         session_name: str,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
 
         env = {
@@ -172,8 +172,8 @@ class ProcessManagerDriver:
         return apps
 
     def _prepare_exec_and_args(
-        self, session_dal, exe: str, args: List[str]
-    ) -> List[ProcessDescription.ExecAndArgs]:
+        self, session_dal, exe: str, args: list[str]
+    ) -> list[ProcessDescription.ExecAndArgs]:
         """
         Prepare
         """
@@ -207,7 +207,7 @@ class ProcessManagerDriver:
 
     def _build_boot_request(
         self,
-        app: Dict,
+        app: dict,
         user: str,
         session_name: str,
         session_dal,
@@ -384,7 +384,7 @@ To debug it, close drunc and run the following command:
                         connection_server,
                         connection_port,
                     )
-                    return
+                    return None
 
                 return uri.replace("grpc://", "")
 

@@ -1,5 +1,4 @@
 import time
-from typing import Optional
 
 import requests
 
@@ -31,7 +30,7 @@ class UsvcProvidedRunNumber(FSMAction):
         _context,
         run_type: str,
         disable_data_storage: bool = False,
-        trigger_rate: Optional[float] = None,
+        trigger_rate: float | None = None,
         **kwargs,
     ):
         run_type = validate_run_type(run_type.upper())

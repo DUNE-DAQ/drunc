@@ -1,6 +1,7 @@
 {
     "type": "subprocess",
     "name": "SubProcessProcessManager",
+    "kill_timeout": 0.5,
     "authoriser": {
         "type": "dummy"
     },

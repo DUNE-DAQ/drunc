@@ -6,9 +6,7 @@ using descriptors, bypassing the full gRPC transport layer.
 
 import grpc
 import pytest
-from druncschema.session_manager_pb2 import (
-    DESCRIPTOR,
-)
+from druncschema.session_manager_pb2 import DESCRIPTOR
 
 
 @pytest.mark.parametrize(

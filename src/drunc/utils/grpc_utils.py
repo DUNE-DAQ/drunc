@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, NoReturn, Optional
+from typing import NoReturn
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -105,7 +105,7 @@ def rethrow_if_unreachable_server(grpc_error: grpc.RpcError) -> NoReturn:
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
             raise ServerUnreachable(grpc_error._state.details) from grpc_error
-        elif hasattr(grpc_error, "_details"):
+        if hasattr(grpc_error, "_details"):
             raise ServerUnreachable(grpc_error._details) from grpc_error
 
 
@@ -139,7 +139,7 @@ def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
     raise error
 
 
-def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
+def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> str | None:
     """
     Interrupt if server is not reachable and return the error details.
 
@@ -153,7 +153,7 @@ def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
             return grpc_error._state.details
-        elif hasattr(grpc_error, "_details"):
+        if hasattr(grpc_error, "_details"):
             return grpc_error._details
 
 
@@ -185,7 +185,7 @@ class GrpcErrorDetails:
 
     code: str
     message: str
-    details: List[str]
+    details: list[str]
 
     def __str__(self):
         """

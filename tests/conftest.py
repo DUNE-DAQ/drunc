@@ -28,7 +28,8 @@ def load_test_config():
 
 
 def boot_session(configuration_name, request):
-    from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
+    from drunc.process_manager.oks_parser import (collect_apps,
+                                                  collect_infra_apps)
 
     req_name = request.node.name
     configuration_file = f"{configuration_name}.data.xml"
@@ -36,7 +37,8 @@ def boot_session(configuration_name, request):
     from daqconf.consolidate import consolidate_db
 
     consolidate_db(configuration_file, configuration_consolidated_file)
-    from daqconf.set_connectivity_service_port import set_connectivity_service_port
+    from daqconf.set_connectivity_service_port import \
+        set_connectivity_service_port
 
     set_connectivity_service_port(configuration_consolidated_file, configuration_name)
     session_name = f"{req_name}-{configuration_name}"
@@ -91,7 +93,7 @@ def boot_session(configuration_name, request):
 
     for _ in range(10):
         if os.path.exists(processes["local-connection-server"][1]):
-            with open(processes["local-connection-server"][1], "r") as f:
+            with open(processes["local-connection-server"][1]) as f:
                 if "[INFO] Starting gunicorn" in f.readline():
                     break
         time.sleep(0.1)

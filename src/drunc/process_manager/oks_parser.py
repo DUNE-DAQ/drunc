@@ -1,5 +1,4 @@
 import os
-from typing import Dict, List
 
 import confmodel_dal
 
@@ -8,7 +7,7 @@ from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import get_logger
 
 
-def collect_variables(variables, env_dict: Dict[str, str]) -> None:
+def collect_variables(variables, env_dict: dict[str, str]) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
     @param variables  A Variable/VariableSet object
@@ -34,11 +33,11 @@ def collect_apps(
     db,
     session_obj,
     segment_obj,
-    env: Dict[str, str],
+    env: dict[str, str],
     tree_prefix=[
         0,
     ],
-) -> List[Dict]:
+) -> list[dict]:
     """! Recustively collect (daq) application belonging to segment and its subsegments
 
     @param session_obj  The session the segment belongs to
@@ -168,7 +167,7 @@ def collect_apps(
     return apps
 
 
-def collect_infra_apps(session, env: Dict[str, str], tree_prefix) -> List[Dict]:
+def collect_infra_apps(session, env: dict[str, str], tree_prefix) -> list[dict]:
     """! Collect infrastructure applications
 
     @param session  The session

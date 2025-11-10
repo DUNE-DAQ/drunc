@@ -13,12 +13,9 @@ from unittest.mock import MagicMock, patch
 
 import grpc
 import pytest
-from druncschema.process_manager_pb2 import (
-    BootRequest,
-    ProcessDescription,
-    ProcessMetadata,
-    ProcessRestriction,
-)
+from druncschema.process_manager_pb2 import (BootRequest, ProcessDescription,
+                                             ProcessMetadata,
+                                             ProcessRestriction)
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful

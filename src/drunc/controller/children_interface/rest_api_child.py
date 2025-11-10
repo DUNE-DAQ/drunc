@@ -294,8 +294,7 @@ class AppCommander:
                     raise CouldnotSendCommand(
                         f"Connection error to {self.app_url}"
                     ) from e
-                else:
-                    self.log.error("Trying again...")
+                self.log.error("Trying again...")
 
         self.log.debug(f"Ack to {self.app}: {ack.status_code}")
         self.sent_cmd = cmd_id
@@ -326,13 +325,12 @@ class AppCommander:
                 raise NoResponse(
                     f"No response available from {self.app} for command {self.sent_cmd}"
                 )
-            else:
-                self.log.error(
-                    f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
-                )
-                raise ResponseTimeout(
-                    f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
-                )
+            self.log.error(
+                f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
+            )
+            raise ResponseTimeout(
+                f"Timeout while waiting for a reply from {self.app} for command {self.sent_cmd}"
+            )
         return r
 
 

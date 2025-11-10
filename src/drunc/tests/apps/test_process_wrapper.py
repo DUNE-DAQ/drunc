@@ -4,7 +4,7 @@ import tempfile
 import pytest
 from click.exceptions import MissingParameter
 
-from drunc.apps.__main_process_wrapper__ import main as process_wrapper_main
+from drunc.apps.process_wrapper import main as process_wrapper_main
 
 
 @pytest.fixture(scope="function")
@@ -27,7 +27,7 @@ def test_process_wrapper_success(tmp_path):
         args=["--log", str(log_file), cmd], standalone_mode=False
     )
     assert result == 0
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         log_content = f.read()
     assert "Test Success" in log_content
 
@@ -46,7 +46,7 @@ def test_process_wrapper_failure(tmp_path):
         args=["--log", str(log_file), cmd], standalone_mode=False
     )
     assert result == 42
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         log_content = f.read()
     assert log_content == "" or log_content.isspace()
 
@@ -76,7 +76,7 @@ def test_process_wrapper_invalid_command(tmp_path):
         args=["--log", str(log_file), cmd], standalone_mode=False
     )
     assert result != 0
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         log_content = f.read()
     assert (
         "not found" in log_content
@@ -99,7 +99,7 @@ def test_process_wrapper_logs_stderr(tmp_path):
         args=["--log", str(log_file), cmd], standalone_mode=False
     )
     assert result == 0
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         log_content = f.read()
     assert "error" in log_content
 
@@ -118,7 +118,7 @@ def test_process_wrapper_multiple_commands(tmp_path):
         args=["--log", str(log_file), cmd], standalone_mode=False
     )
     assert result == 0
-    with open(log_file, "r") as f:
+    with open(log_file) as f:
         log_content = f.read()
     assert "first" in log_content
     assert "second" in log_content
