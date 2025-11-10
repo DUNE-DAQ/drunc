@@ -21,7 +21,6 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     IncludeExcludeRequest,
     IncludeExcludeResponse,
-    RecomputeStatusResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
@@ -1199,9 +1198,9 @@ class Controller(ControllerServicer):
     @publish_command_time
     def recompute_status(
         self, request: AddressedCommand, context: ServicerContext
-    ) -> RecomputeStatusResponse:
+    ) -> StatusResponse:
         request.target = self.parse_target_string(request.target)
-        response = RecomputeStatusResponse(
+        response = StatusResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
