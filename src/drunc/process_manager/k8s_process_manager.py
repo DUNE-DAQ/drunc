@@ -193,6 +193,7 @@ class K8sProcessManager(ProcessManager):
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_cache_expiry", 300)
         self.grpc_startup_timeout = checking.get("grpc_startup_timeout", 30)
+        self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
@@ -956,18 +957,21 @@ class K8sProcessManager(ProcessManager):
                             "Cannot start another local connection server with the same port."
                         )
 
-    def _wait_for_lcs_readiness(self, podname: str, session: str) -> None:
-        """Blocking two-stage wait for the Local Connection Server (NodePort) to be fully ready."""
-        node_name = None
-        pod_ready = False
-        start_time = time()
-        api_ready_timeout = self.pod_ready_timeout
-
-        # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+    def _wait_for_pod_api_ready(
+        self, podname: str, session: str, timeout: float
+    ) -> str:
+        """
+        [HELPER] Blocking wait for a pod to be 'Running' and 'Ready'
+        in the K8s API.
+        Returns the node_name on success.
+        Raises DruncK8sException on timeout.
+        """
         self.log.info(
             f"Stage 1: Waiting for '{podname}' pod to be Running and Ready..."
         )
-        while not pod_ready and (time() - start_time < api_ready_timeout):
+        start_time = time()
+
+        while time() - start_time < timeout:
             try:
                 pod_status = self._core_v1_api.read_namespaced_pod_status(
                     podname, session
@@ -981,36 +985,40 @@ class K8sProcessManager(ProcessManager):
                                 break
 
                     if is_ready:
-                        pod_ready = True
                         node_name = pod_status.spec.node_name
-                        self.log.info(f"Stage 1: Pod '{podname}' is API Ready.")
+                        self.log.info(
+                            f"Stage 1: Pod '{podname}' is API Ready on node {node_name}."
+                        )
+                        return node_name  # Success!
 
             except self._api_error_v1_api as e:
                 if e.status == 404:
+                    # Pod not created yet, this is expected, continue loop
                     pass
                 else:
+                    # Re-raise other K8s API errors
                     raise e
 
             sleep(self.pod_status_check_sleep)
 
-        if not pod_ready:
-            raise DruncK8sException(
-                f"'{podname}' pod did not become API Ready in {api_ready_timeout} seconds."
-            )
+        # If we exit the loop, it's a timeout
+        raise DruncK8sException(
+            f"'{podname}' pod did not become API Ready in {timeout} seconds."
+        )
 
-        # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
-        url = f"http://{node_name}:{self.connection_server_node_port}"
+    def _wait_for_nodeport_http_ready(self, url: str, timeout: float) -> None:
+        """
+        [HELPER] Blocking wait for a NodePort URL to be reachable via HTTP.
+        Raises DruncK8sException on timeout.
+        """
         self.log.info(f"Stage 2: Waiting for NodePort {url} to be reachable...")
-        nodeport_ready = False
+        start_time = time()
 
-        remaining_time = self.pod_ready_timeout - (time() - start_time)
-        nodeport_start_time = time()
-
-        while not nodeport_ready and (time() - nodeport_start_time < remaining_time):
+        while time() - start_time < timeout:
             try:
                 urllib.request.urlopen(url, timeout=1)
-                nodeport_ready = True
                 self.log.info(f"Stage 2: NodePort {url} is now active.")
+                return  # Success!
             except (
                 urllib.error.URLError,
                 ConnectionRefusedError,
@@ -1020,113 +1028,105 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug(f"NodePort not ready yet ({e}), retrying...")
                 sleep(self.pod_status_check_sleep)
 
-        if not nodeport_ready:
+        raise DruncK8sException(
+            f"NodePort {url} did not become reachable in {timeout} seconds."
+        )
+
+    def _wait_for_nodeport_tcp_ready(
+        self, node_name: str, port: int, timeout: float
+    ) -> None:
+        """
+        [HELPER] Blocking wait for a NodePort to be reachable via TCP socket.
+        Raises DruncK8sException on timeout.
+        """
+        self.log.info(
+            f"Stage 2: Waiting for NodePort {node_name}:{port} to be reachable..."
+        )
+        start_time = time()
+
+        while time() - start_time < timeout:
+            sock = None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(self.socket_retry_timeout)
+                result = sock.connect_ex((node_name, port))
+
+                if result == 0:
+                    self.log.info(
+                        f"Stage 2: NodePort {node_name}:{port} is active (TCP connect success)."
+                    )
+                    return  # Success!
+                else:
+                    self.log.debug(
+                        f"NodePort {node_name}:{port} not ready yet (socket error {result}), retrying..."
+                    )
+            except socket.gaierror as e:
+                self.log.warning(
+                    f"Failed to resolve hostname '{node_name}': {e}. Retrying..."
+                )
+            except Exception as e:
+                self.log.debug(
+                    f"NodePort not ready yet (Socket error: {e}), retrying..."
+                )
+            finally:
+                if sock:
+                    sock.close()
+
+            sleep(self.pod_status_check_sleep)
+
+        raise DruncK8sException(
+            f"NodePort {node_name}:{port} did not become reachable in {timeout} seconds."
+        )
+
+    def _wait_for_lcs_readiness(self, podname: str, session: str) -> None:
+        """Blocking two-stage wait for the Local Connection Server (NodePort) to be fully ready."""
+        self.log.info(f"Waiting for LCS '{podname}' to be fully ready...")
+        start_time = time()
+        total_timeout = self.pod_ready_timeout
+
+        # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+        node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
+
+        # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
+        url = f"http://{node_name}:{self.connection_server_node_port}"
+
+        # Calculate remaining time for stage 2, preserving original logic
+        elapsed_stage1 = time() - start_time
+        remaining_time = total_timeout - elapsed_stage1
+
+        if remaining_time <= 0:
             raise DruncK8sException(
-                f"NodePort {url} did not become reachable in {self.pod_ready_timeout} seconds."
+                f"NodePort {url} check failed: No time left after API readiness."
             )
 
-        self.local_connection_server_is_booted = True
+        self._wait_for_nodeport_http_ready(url, remaining_time)
 
+        self.local_connection_server_is_booted = True
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
         self, podname: str, session: str, boot_request: BootRequest
     ) -> None:
-        """Blocking two-stage wait for Drunc Controller (HostPort) to be fully ready."""
+        """Blocking two-stage wait for Drunc Controller (NodePort) to be fully ready."""
+        self.log.info(
+            f"Waiting for controller '{podname}' (NodePort) to become ready..."
+        )
 
-        self.log.info(f"Waiting for '{podname}' (HostPort) to become ready...")
-        node_name = None
-        pod_ready = False
         controller_port = self._extract_port_from_cmd(boot_request)
-        start_time = time()
-        api_ready_timeout = self.pod_ready_timeout
-        grpc_startup_timeout = self.grpc_startup_timeout
-
         if not controller_port or controller_port == 0:
             raise DruncK8sException(
                 f"Cannot wait for '{podname}', port is 0 or missing."
             )
 
         # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
-        self.log.info("Stage 1: Waiting for K8s API Readiness...")
-        while not pod_ready and (time() - start_time < api_ready_timeout):
-            try:
-                pod_status = self._core_v1_api.read_namespaced_pod_status(
-                    podname, session
-                )
-                if pod_status.status.phase == "Running":
-                    is_ready = False
-                    if pod_status.status.conditions:
-                        for condition in pod_status.status.conditions:
-                            if condition.type == "Ready" and condition.status == "True":
-                                is_ready = True
-                                break
-
-                    if is_ready:
-                        pod_ready = True
-                        node_name = pod_status.spec.node_name
-                        self.log.info(
-                            f"Stage 1: Pod '{podname}' is API Ready on node {node_name}."
-                        )
-                        break
-
-            except self._api_error_v1_api as e:
-                if e.status == 404:
-                    pass
-                else:
-                    raise e
-            sleep(self.pod_status_check_sleep)
-
-        if not pod_ready:
-            raise DruncK8sException(
-                f"'{podname}' pod did not become API Ready in {api_ready_timeout} seconds."
-            )
-
-        # --- STAGE 2: Wait for HostPort to be externally reachable (using TCP socket) ---
-        self.log.info(
-            f"Stage 2: Waiting for HostPort {node_name}:{controller_port} to be reachable..."
+        node_name = self._wait_for_pod_api_ready(
+            podname, session, self.pod_ready_timeout
         )
-        hostport_ready = False
-        hostport_start_time = time()
 
-        while not hostport_ready and (
-            time() - hostport_start_time < grpc_startup_timeout
-        ):
-            sock = None
-            try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1.0)
-                result = sock.connect_ex((node_name, controller_port))
-
-                if result == 0:
-                    hostport_ready = True
-                    self.log.info(
-                        f"Stage 2: HostPort {node_name}:{controller_port} is active (TCP connect success)."
-                    )
-                else:
-                    self.log.debug(
-                        f"HostPort {node_name}:{controller_port} not ready yet (socket error {result}), retrying..."
-                    )
-                    sleep(self.pod_status_check_sleep)
-
-            except socket.gaierror as e:
-                self.log.warning(
-                    f"Failed to resolve hostname '{node_name}': {e}. Retrying..."
-                )
-                sleep(self.pod_status_check_sleep)
-            except Exception as e:
-                self.log.debug(
-                    f"HostPort not ready yet (Socket error: {e}), retrying..."
-                )
-                sleep(self.pod_status_check_sleep)
-            finally:
-                if sock:
-                    sock.close()
-
-        if not hostport_ready:
-            raise DruncK8sException(
-                f"HostPort {node_name}:{controller_port} did not become reachable in {grpc_startup_timeout} seconds."
-            )
+        # --- STAGE 2: Wait for NodePort to be externally reachable (using TCP socket) ---
+        self._wait_for_nodeport_tcp_ready(
+            node_name, controller_port, self.grpc_startup_timeout
+        )
 
         self.log.info(f"Drunc controller '{podname}' is fully ready.")
 
