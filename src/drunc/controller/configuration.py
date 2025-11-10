@@ -1,6 +1,7 @@
 import socket
 import threading
 
+from druncschema.token_pb2 import Token
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
@@ -133,19 +134,19 @@ class ControllerConfHandler(ConfHandler):
 
     def update_children(
         self,
-        children,
-        init_token,
-        without_excluded=False,
+        children: list[ChildNode],
+        init_token: Token,
+        without_excluded: bool = False,
         connectivity_service=None,
         session_name=None,
-    ):
+    ) -> list[ChildNode]:
         enabled_only = not without_excluded
         timeout = 60  # 60s for each application to start and show up on the connectivity service
 
         self.log.debug(f"get_children: connectivity service lookup timeout={timeout}")
 
         session = None
-        self.children = []
+        self.children: list[ChildNode] = []
 
         try:
             session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
@@ -189,6 +190,7 @@ class ControllerConfHandler(ConfHandler):
                         got_child = True
                         break
                 if not got_child:
+                    # TODO: is this *EVER* hit?
                     self.children.append(new_node)
 
         def process_application(app):
@@ -221,6 +223,7 @@ class ControllerConfHandler(ConfHandler):
                         got_child = True
                         break
                 if not got_child:
+                    # TODO: is this *EVER* hit?
                     self.children.append(new_node)
 
         # threading the children look up
