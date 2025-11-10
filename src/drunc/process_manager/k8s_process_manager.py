@@ -192,6 +192,7 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_cache_expiry", 300)
+        self.grpc_startup_timeout = checking.get("grpc_startup_timeout", 30)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
@@ -1039,7 +1040,7 @@ class K8sProcessManager(ProcessManager):
         controller_port = self._extract_port_from_cmd(boot_request)
         start_time = time()
         api_ready_timeout = self.pod_ready_timeout
-        grpc_startup_timeout = 120
+        grpc_startup_timeout = self.grpc_startup_timeout
 
         if not controller_port or controller_port == 0:
             raise DruncK8sException(
