@@ -663,7 +663,6 @@ class K8sProcessManager(ProcessManager):
     ) -> str:
         """Executes the API call to create the pod, handling 409 conflict during restarts."""
         start_time = time()
-        pod_uid = None
 
         while True:
             try:
@@ -671,17 +670,25 @@ class K8sProcessManager(ProcessManager):
                     session, pod_manifest
                 )
                 self.log.info(f'Creating pod "{session}.{podname}"')
-                pod_uid = created_pod.metadata.uid
-                break
+                return created_pod.metadata.uid
 
             except self._api_error_v1_api as e:
                 is_409_conflict = e.status == 409
+                elapsed_time = time() - start_time
 
-                if is_409_conflict and time() - start_time < self.restart_cleanup_time:
+                if is_409_conflict and elapsed_time < self.restart_cleanup_time:
                     sleep(self.restart_cleanup_polling)
                     continue
+
+                if is_409_conflict:
+                    error_message = (
+                        f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod object "
+                        f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
+                    )
+                    self.log.error(error_message)
+                    raise DruncK8sException(error_message) from e
+
                 raise e
-        return pod_uid
 
     def _create_associated_service(
         self,
@@ -757,26 +764,23 @@ class K8sProcessManager(ProcessManager):
             # Execute the pod creation API call
             pod_uid = self._execute_pod_creation_api(session, podname, pod_manifest)
 
-            # Create associated service (Signature takes 6 args)
+            # Create associated service
             self._create_associated_service(
                 podname, session, pod_uid, boot_request, lcs_port
             )
 
         except self._api_error_v1_api as e:
-            start_time = time()
+            # *other* K8s errors (e.g., 400, 403, 500)
             error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
-
-            if e.status == 409 and time() - start_time >= self.restart_cleanup_time:
-                error_message = (
-                    f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod object "
-                    f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
-                )
-
             self.log.error(error_message)
             raise DruncK8sException(error_message) from e
+
         except DruncK8sException:
+            # any other DruncK8sException
             raise
+
         except Exception as e:
+            # generic catch-all
             raise DruncK8sException(
                 f"Failed to create pod '{session}.{podname}': {e}"
             ) from e
