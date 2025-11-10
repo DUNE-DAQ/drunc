@@ -537,6 +537,12 @@ class K8sProcessManager(ProcessManager):
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
+        container_ports = []
+        if podname == self.connection_server_name and lcs_port is not None:
+            container_ports.append(
+                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+            )
+
         # Only add preStop hook for C++ applications (non-controllers)
         lifecycle_hook = None
         if "controller" not in podname and podname != self.connection_server_name:
@@ -556,12 +562,6 @@ class K8sProcessManager(ProcessManager):
                 f"'{podname}' identified as a Python app, no preStop hook needed."
             )
 
-        container_ports = []
-        if podname == self.connection_server_name and lcs_port is not None:
-            container_ports.append(
-                client.V1ContainerPort(container_port=lcs_port, name="http-port")
-            )
-
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
@@ -577,15 +577,10 @@ class K8sProcessManager(ProcessManager):
                 client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
             ],
-            "working_dir": boot_request.process_description.process_execution_directory,
-            "security_context": client.V1SecurityContext(
+            working_dir=boot_request.process_description.process_execution_directory,
+            security_context=client.V1SecurityContext(
                 run_as_user=os.getuid(), run_as_group=os.getgid()
             ),
-
-        if lifecycle_hook is not None:
-            container_kwargs["lifecycle"] = lifecycle_hook
-
-        main_container = client.V1Container(**container_kwargs)
         )
         return main_container
 

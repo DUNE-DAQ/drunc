@@ -310,6 +310,8 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
 
     return GrpcErrorDetails(
         code=code, message=status.message or "No message", details=error_details
+    )
+
 
 def grpc_proto_to_dict(proto_message: Message) -> dict:
     """
@@ -317,18 +319,14 @@ def grpc_proto_to_dict(proto_message: Message) -> dict:
     """
     return json_format.MessageToDict(
         proto_message,
-        preserving_proto_field_name=True
+        preserving_proto_field_name=True,
         # Removed: including_default_value_fields=True
     )
+
 
 def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
     """
     Converts a Python dictionary into an instance of a gRPC Protobuf message.
     'proto_class_instance' should be an empty instance, e.g., Token()
     """
-    return json_format.ParseDict(
-        data,
-        proto_class_instance,
-        ignore_unknown_fields=True
-    )
-
+    return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
