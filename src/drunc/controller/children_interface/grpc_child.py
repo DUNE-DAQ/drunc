@@ -57,10 +57,10 @@ class gRPCChildNode(ChildNode):
     def __init__(
         self,
         name,
-        configuration: gRCPChildConfHandler,
-        init_token,
         uri,
-        connectivity_service=None,
+        configuration: gRCPChildConfHandler,
+        connectivity_service,
+        init_token,
     ):
         super().__init__(
             name=name,

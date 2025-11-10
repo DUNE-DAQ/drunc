@@ -364,9 +364,9 @@ class RESTAPIChildNode(ClientSideChild):
     def __init__(
         self,
         name,
+        uri,
         configuration: RESTAPIChildNodeConfHandler,
         fsm_configuration: FSMConfHandler,
-        uri,
     ):
         super().__init__(
             name=name,
@@ -472,7 +472,8 @@ class RESTAPIChildNode(ClientSideChild):
         )
 
         if self.configuration is not None:
-            description.info = get_detector_name(self.configuration)
+            if detector_name := get_detector_name(self.configuration):
+                description.info = detector_name
             if hasattr(
                 self.configuration.data, "application_name"
             ):  # Application nodes.

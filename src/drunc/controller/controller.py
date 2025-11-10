@@ -285,17 +285,16 @@ class Controller(ControllerServicer):
                 address=f"{connection_server}:{connection_port}",
             )
 
-        self.children_nodes = self.configuration.get_dummy_children()
-
     def init_controller(self) -> None:
         log_init_controller = get_logger("controller.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
-        self.configuration.update_children(
-            self.children_nodes,
+
+        self.children_nodes = self.configuration.init_children(
+            session_name=self.session,
             init_token=self.actor.get_token(),
             connectivity_service=self.connectivity_service,
-            session_name=self.session,
         )
+
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
         # We now wait for each application to get from "initialising" to "ready"
