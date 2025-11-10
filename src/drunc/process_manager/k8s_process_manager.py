@@ -486,9 +486,31 @@ class K8sProcessManager(ProcessManager):
                 f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
                 f"(NodePort: {self.connection_server_node_port} for external access)"
             )
+
         except self._api_error_v1_api as e:
-            if e.status != 409:
-                self.log.error(f"Failed to create NodePort service for {podname}: {e}")
+            is_port_conflict = False
+
+            # Check for 422="Unprocessable Entity" or 409="Conflict" status
+            if e.status == 422 or e.status == 409:
+                if e.body and (
+                    "provided nodeport is already allocated" in e.body.lower()
+                    or "port is already in use" in e.body.lower()
+                ):
+                    is_port_conflict = True
+
+            if is_port_conflict:
+                port = self.connection_server_node_port
+                error_message = (
+                    f"NodePort {port} is already in use by another service. "
+                    f"Cannot start '{podname}'."
+                )
+                self.log.error(error_message)
+                raise DruncK8sException(error_message) from e
+            else:
+                # other K8s API error
+                error_message = f"Failed to create NodePort service for {podname}: {e.reason} ({e.status})"
+                self.log.error(error_message)
+                raise DruncK8sException(error_message) from e
 
     def _build_pod_main_container(
         self, podname: str, boot_request: BootRequest, lcs_port: int | None
@@ -936,30 +958,12 @@ class K8sProcessManager(ProcessManager):
     def _run_pre_boot_checks(
         self, session: str, podname: str, boot_request: BootRequest
     ) -> None:
-        """Performs initial validation and checks for NodePort collision."""
+        """Performs initial validation."""
         if not validate_k8s_session_name(session):
             raise DruncK8sNamespaceException(
                 f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
                 "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
             )
-
-        # Check for NodePort collision (only necessary if connection server is being started)
-        if podname == self.connection_server_name and self.connection_server_node_port:
-            api = self._core_v1_api
-            all_services = api.list_service_for_all_namespaces()
-            for svc in all_services.items:
-                if not svc.spec.type == "NodePort":
-                    continue
-                for p in svc.spec.ports:
-                    if p.node_port == self.connection_server_node_port and (
-                        svc.metadata.namespace != session
-                        or svc.metadata.name != podname
-                    ):
-                        raise DruncK8sException(
-                            f"NodePort {self.connection_server_node_port} is already in use by service "
-                            f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
-                            "Cannot start another local connection server with the same port."
-                        )
 
     def _wait_for_pod_api_ready(
         self, podname: str, session: str, timeout: float
