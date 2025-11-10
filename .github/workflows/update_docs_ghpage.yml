@@ -1,0 +1,26 @@
+name: Update GitHub Pages Docs
+on:
+  workflow_call:
+  schedule:
+    - cron: "0 0 * * 6" # midnight every Saturday
+jobs:
+  docs:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
+          cache: pip
+          cache-dependency-path: |
+              pyproject.toml
+              docs/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs/requirements.txt
+          pip install .
+      - name: Deploy Docs
+        run: mkdocs gh-deploy --force
+        

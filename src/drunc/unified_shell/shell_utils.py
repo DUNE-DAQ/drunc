@@ -48,7 +48,8 @@ def run_fsm_sequence(
         if controller_driver:
             accepted_command_raw = controller_driver.describe_fsm()
             accepted_command += [
-                format_name_for_cli(c.name) for c in accepted_command_raw.data.commands
+                format_name_for_cli(c.name)
+                for c in accepted_command_raw.description.commands
             ]
         logger.debug(f"Accepted commands: {accepted_command}")
 

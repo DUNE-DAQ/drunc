@@ -18,7 +18,7 @@ import grpc_testing
 import pytest
 from druncschema.process_manager_pb2 import DESCRIPTOR
 
-from drunc.tests.process_manager.process_manager_mock_impls import (
+from tests.process_manager.process_manager_mock_impls import (
     ConcreteProcessManager,
 )
 
