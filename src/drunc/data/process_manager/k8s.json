@@ -45,6 +45,18 @@
             "host_cache_expiry": 300,
             "grpc_startup_timeout": 30,
             "socket_retry_timeout": 1.0
-        }
+        },
+        "volumes": [
+            {
+                "name": "nfs",
+                "mount_path": "/nfs",
+                "host_path": "/nfs"
+            },
+            {
+                "name": "cvmfs",
+                "mount_path": "/cvmfs",
+                "host_path": "/cvmfs"
+            }
+        ]
     }
 }

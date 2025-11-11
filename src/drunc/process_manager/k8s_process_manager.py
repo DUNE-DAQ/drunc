@@ -182,6 +182,9 @@ class K8sProcessManager(ProcessManager):
         self.kill_timeout = pod_management.get("kill_timeout", 20)
         self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
 
+        # Volume mounts
+        self.volume_configs = settings.get("volumes", [])
+
         # Cleanup
         cleanup = settings.get("cleanup", {})
         self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
@@ -562,6 +565,12 @@ class K8sProcessManager(ProcessManager):
                 f"'{podname}' identified as a Python app, no preStop hook needed."
             )
 
+        # Prepare mounts
+        container_volume_mounts = [
+            client.V1VolumeMount(name=vc["name"], mount_path=vc["mount_path"])
+            for vc in self.volume_configs
+        ]
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
@@ -573,10 +582,7 @@ class K8sProcessManager(ProcessManager):
             ],
             lifecycle=lifecycle_hook,
             ports=container_ports,
-            volume_mounts=[
-                client.V1VolumeMount(name="nfs", mount_path="/nfs"),
-                client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
-            ],
+            volume_mounts=container_volume_mounts,
             working_dir=boot_request.process_description.process_execution_directory,
             security_context=client.V1SecurityContext(
                 run_as_user=os.getuid(), run_as_group=os.getgid()
@@ -646,6 +652,16 @@ class K8sProcessManager(ProcessManager):
         host_aliases: list[client.V1HostAlias] | None,
     ) -> client.V1Pod:
         """Assembles the final V1Pod object."""
+
+        # Prepare mounts
+        pod_volumes = [
+            client.V1Volume(
+                name=vc["name"],
+                host_path=client.V1HostPathVolumeSource(path=vc["host_path"]),
+            )
+            for vc in self.volume_configs
+        ]
+
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
@@ -663,15 +679,7 @@ class K8sProcessManager(ProcessManager):
                 restart_policy="Never",
                 containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
-                volumes=[
-                    client.V1Volume(
-                        name="nfs", host_path=client.V1HostPathVolumeSource(path="/nfs")
-                    ),
-                    client.V1Volume(
-                        name="cvmfs",
-                        host_path=client.V1HostPathVolumeSource(path="/cvmfs"),
-                    ),
-                ],
+                volumes=pod_volumes,
             ),
         )
 
