@@ -505,16 +505,24 @@ class Controller(ControllerServicer):
         if ResponseListener.exists():
             ResponseListener.get().terminate()
 
-        if self.opmon_publisher is not None:
+        if (
+            self.opmon_publisher is not None
+            and hasattr(self, "stop_event")
+            and self.stop_event is not None
+        ):
             self.log.debug("Stopping opmon publisher")
-            self.stop_event.set()
-            self.thread.join(timeout=1.0)
-            if self.thread.is_alive():
-                self.log.warning(
-                    "OpMon publisher thread did not stop within timeout, continuing shutdown"
-                )
-            else:
-                self.log.debug("opmon publisher stopped")
+            try:
+                self.stop_event.set()
+                if hasattr(self, "thread") and self.thread is not None:
+                    self.thread.join(timeout=1.0)
+                    if self.thread.is_alive():
+                        self.log.debug(
+                            "OpMon publisher thread did not stop within timeout, continuing shutdown"
+                        )
+                    else:
+                        self.log.debug("opmon publisher stopped")
+            except Exception as e:
+                self.log.warning(f"Error stopping opmon publisher: {e}")
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
@@ -525,7 +533,12 @@ class Controller(ControllerServicer):
             self.log.debug(manager.list())
 
     def __del__(self):
-        self.terminate()
+        try:
+            if hasattr(self, "running") and self.running:
+                self.terminate()
+        except Exception:
+            # Ignore exceptions during garbage collection
+            pass
 
     def OLD_propagate_to_all_children(
         self,
