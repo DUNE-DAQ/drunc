@@ -42,7 +42,9 @@
         "checking": {
             "watcher_retry_sleep": 5,
             "pod_status_check_sleep": 1,
-            "host_cache_expiry": 300
+            "host_cache_expiry": 300,
+            "grpc_startup_timeout": 30,
+            "socket_retry_timeout": 1.0
         }
     }
 }
