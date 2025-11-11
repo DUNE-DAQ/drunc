@@ -1,0 +1,5 @@
+BASE_MANAGER_PORT = 50070
+BASE_ROOT_PORT = 50071
+# note: each child will use BASE_CHILD_PORT + child_index
+BASE_CHILD_PORT = 50072
+MAX_CHILDREN = 10

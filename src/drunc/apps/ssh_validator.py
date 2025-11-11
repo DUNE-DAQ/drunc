@@ -6,7 +6,7 @@ import conffwk
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.process_manager.ssh_process_manager import on_parent_exit
+from drunc.process_manager.ssh_process_manager_paramiko_client import on_parent_exit
 from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
 
