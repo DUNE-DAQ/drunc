@@ -533,12 +533,8 @@ class Controller(ControllerServicer):
             self.log.debug(manager.list())
 
     def __del__(self):
-        try:
-            if hasattr(self, "running") and self.running:
-                self.terminate()
-        except Exception:
-            # Ignore exceptions during garbage collection
-            pass
+        self.terminate()
+    
 
     def OLD_propagate_to_all_children(
         self,
