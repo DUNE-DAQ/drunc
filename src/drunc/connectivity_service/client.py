@@ -92,7 +92,7 @@ class ConnectivityServiceClient:
                     ignore_errors=True,
                 )
                 if r.status_code == 404:
-                    self.log.warning(
+                    self.log.debug(
                         f"Connection '{uid}' not found on the connectivity service"
                     )
                     break

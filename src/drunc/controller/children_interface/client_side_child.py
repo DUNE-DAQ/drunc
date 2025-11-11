@@ -8,7 +8,7 @@ from druncschema.token_pb2 import Token
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
-from drunc.utils.grpc_utils import pack_to_any, unpack_any
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import ControlType, get_logger
 
 
@@ -77,12 +77,8 @@ class ClientSideChild(ChildNode):
         node_type: ControlType = ControlType.Direct,
         fsm_configuration: FSMConfHandler = None,
         configuration=None,
-    ):  #
-        super().__init__(
-            name=name,
-            node_type=node_type,
-            configuration=configuration,
-        )
+    ):
+        super().__init__(name=name, node_type=node_type, configuration=configuration)
         self.log = get_logger(f"controller.{name}-client-side")
         self.state = ClientSideState()
         self.fsm_configuration = fsm_configuration
@@ -112,19 +108,8 @@ class ClientSideChild(ChildNode):
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
 
-        if command == "execute_expert_command":
-            return self.propagate_expert_command(
-                unpack_any(request.command_data, PlainText), None
-            )
-
         # If we get here, we don't run the command.
         self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
-        return Response(
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-        )
-
-    def propagate_expert_command(self, data: PlainText, token: Token) -> Response:
         return Response(
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,

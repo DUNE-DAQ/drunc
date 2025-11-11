@@ -13,6 +13,8 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -444,7 +446,9 @@ class Controller(ControllerServicer):
                 )
             except Exception as e:
                 self.log.exception(f"Error while publishing periodic status: {e}")
-            time.sleep(interval_s)
+
+            if self.stop_event.wait(timeout=interval_s):
+                break
 
     def advertise_control_address(self, address):
         self.uri = address
@@ -477,16 +481,14 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread.start()
 
     def terminate(self):
+        self.log.info(f"Terminating controller {self.name}")
         self.running = False
-        if self.opmon_publisher is not None:
-            self.stop_event.set()
-            self.thread.join()
 
         if hasattr(self, "connectivity_service") and self.connectivity_service:
             if self.connectivity_service_thread:
                 self.connectivity_service_thread.join()
             self.log.info("Unregistering from the connectivity service")
-            self.connectivity_service.retract(self.name + "_control")
+            self.connectivity_service.retract(self.name + "_control", fail_quickly=True)
 
         if self.can_broadcast():
             self.broadcast(
@@ -502,6 +504,17 @@ class Controller(ControllerServicer):
 
         if ResponseListener.exists():
             ResponseListener.get().terminate()
+
+        if self.opmon_publisher is not None:
+            self.log.debug("Stopping opmon publisher")
+            self.stop_event.set()
+            self.thread.join(timeout=1.0)
+            if self.thread.is_alive():
+                self.log.warning(
+                    "OpMon publisher thread did not stop within timeout, continuing shutdown"
+                )
+            else:
+                self.log.debug("opmon publisher stopped")
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
@@ -856,14 +869,16 @@ class Controller(ControllerServicer):
             name=self.name,
         )
 
+        # What transitions to describe.
+        key = unpack_any(request.command_data, PlainText).text
+
         # This node.
         if request.target == self.name or request.execute_along_path:
-            payload = unpack_any(request.command_data, PlainText)
-            if payload.text == "all-transitions":
+            if key == "all-transitions":
                 description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
-            elif payload.text == "":
+            elif key == "":
                 description = convert_fsm_transition(
                     self.stateful_node.get_fsm_transitions()
                 )
@@ -871,9 +886,9 @@ class Controller(ControllerServicer):
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    if payload.text == transition.source:
+                    if key == transition.source:
                         interesting_transitions += [transition]
-                    if payload.text == transition.name:
+                    if key == transition.name:
                         interesting_transitions += [transition]
                 description = convert_fsm_transition(interesting_transitions)
 
@@ -889,6 +904,7 @@ class Controller(ControllerServicer):
                 target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
+                key,
             )
 
         child_list = self.address_target_path(
@@ -1071,6 +1087,46 @@ class Controller(ControllerServicer):
             )
             child_responses = self.propagate_concurrently(child_command_fn, child_list)
             response.children.extend(child_responses)
+
+        response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+
+        return response
+
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
+    @in_control
+    @publish_command_time
+    def execute_expert_command(
+        self,
+        request: ExecuteExpertCommandRequest,
+        context: ServicerContext,
+    ) -> ExecuteExpertCommandResponse:
+        request.target = self.parse_target_string(request.target)
+        response = ExecuteExpertCommandResponse(
+            token=None,
+            name=self.name,
+        )
+
+        # This node.
+        response.data = f"'{self.name}' propagated expert command"
+
+        # Children nodes.
+        def child_command_fn(
+            child: ChildNode, target: str
+        ) -> ExecuteExpertCommandResponse:
+            return child.execute_expert_command(
+                request.json_string,
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(child_command_fn, child_list)
+        response.children.extend(child_responses)
 
         response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
 
@@ -1276,35 +1332,6 @@ class Controller(ControllerServicer):
             data=pack_to_any(resp) if resp else None,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             children=response_children,
-        )
-
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.EXPERT, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @in_control
-    @OLD_unpack_addressed_command_to(PlainText)  # 3rd step
-    @publish_command_time
-    def execute_expert_command(
-        self,
-        payload: PlainText,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        children_expert_command_response = self.OLD_propagate_to_children(
-            "execute_expert_command",
-            addressed_commands,
-            token,
-        )
-
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(PlainText(text=f"{self.name} propagated expert command")),
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=children_expert_command_response,
         )
 
     ##########################################

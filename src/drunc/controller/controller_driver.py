@@ -5,6 +5,8 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
@@ -34,7 +36,9 @@ class ControllerDriver:
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        self.channel = grpc.insecure_channel(self.address, options=options)
+        # The 'ipv4:' prefix forces IPv4 resolution, which helps avoid Kubernetes hairpinning issues
+        target_address = f"ipv4:{self.address}"
+        self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
@@ -53,7 +57,6 @@ class ControllerDriver:
                 self,
                 addressed_command=AddressedCommand(
                     command_name=command_name,
-                    command_data=None,
                     target=target,
                     execute_along_path=execute_along_path,
                     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -154,6 +157,29 @@ class ControllerDriver:
 
         return response
 
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExecuteExpertCommandResponse:
+        request = ExecuteExpertCommandRequest(
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.execute_expert_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
     def recompute_status(
         self,
         target: str = "",
@@ -220,23 +246,6 @@ class ControllerDriver:
     ) -> DecodedResponse:
         return self.OLD_send_command(
             "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @OLD_pack_empty_addressed_command
-    def expert_command(
-        self,
-        addressed_command: AddressedCommand,
-        json_string,
-        timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=json_string))
-        return self.OLD_send_command(
-            "execute_expert_command",
-            data=new_command,
-            outformat=PlainText,
-            timeout=timeout,
         )
 
     @OLD_pack_empty_addressed_command
