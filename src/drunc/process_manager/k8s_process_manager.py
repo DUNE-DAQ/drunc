@@ -179,8 +179,9 @@ class K8sProcessManager(ProcessManager):
 
         # Pod management
         pod_management = settings.get("pod_management", {})
-        self.kill_timeout = pod_management.get("kill_timeout", 20)
+        self.kill_timeout = pod_management.get("kill_timeout", 30)
         self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
+        self.total_shutdown_timeout = pod_management.get("total_shutdown_timeout", 60)
 
         # Volume mounts
         self.volume_configs = settings.get("volumes", [])
@@ -567,7 +568,11 @@ class K8sProcessManager(ProcessManager):
 
         # Prepare mounts
         container_volume_mounts = [
-            client.V1VolumeMount(name=vc["name"], mount_path=vc["mount_path"])
+            client.V1VolumeMount(
+                name=vc["name"],
+                mount_path=vc["mount_path"],
+                read_only=vc.get("read_only", True),
+            )
             for vc in self.volume_configs
         ]
 
@@ -657,7 +662,9 @@ class K8sProcessManager(ProcessManager):
         pod_volumes = [
             client.V1Volume(
                 name=vc["name"],
-                host_path=client.V1HostPathVolumeSource(path=vc["host_path"]),
+                host_path=client.V1HostPathVolumeSource(
+                    path=vc["host_path"], type="Directory"
+                ),
             )
             for vc in self.volume_configs
         ]

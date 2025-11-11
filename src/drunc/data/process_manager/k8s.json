@@ -32,7 +32,8 @@
             "name": "local-connection-server"
         },
         "pod_management": {
-            "kill_timeout": 20,
+            "kill_timeout": 60,
+            "total_shutdown_timeout": 120,
             "pod_ready_timeout": 60
         },
         "cleanup": {
@@ -50,12 +51,14 @@
             {
                 "name": "nfs",
                 "mount_path": "/nfs",
-                "host_path": "/nfs"
+                "host_path": "/nfs",
+                "read_only": false
             },
             {
                 "name": "cvmfs",
                 "mount_path": "/cvmfs",
-                "host_path": "/cvmfs"
+                "host_path": "/cvmfs",
+                "read_only": true
             }
         ]
     }
