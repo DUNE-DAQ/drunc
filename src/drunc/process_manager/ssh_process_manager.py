@@ -77,6 +77,7 @@ class SSHProcessManager(ProcessManager):
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
+
             if process.is_alive():
                 sequence = [
                     # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
@@ -90,10 +91,17 @@ class SSHProcessManager(ProcessManager):
                     self.log.debug(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
                     )
-                    process.signal_group(sig)  # TODO grab this from the inputs
+                    try:
+                        process.signal_group(sig)  # TODO grab this from the inputs
+                    except ProcessLookupError:
+                        self.log.debug(
+                            f"Process '{app_name}' (UUID {proc_uuid}) already dead, cannot send {sig.name}"
+                        )
+                        break
                     if not process.is_alive():
                         break
                     sleep(self.configuration.data.kill_timeout)
+
             pd = ProcessDescription()
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr = ProcessRestriction()
@@ -101,9 +109,9 @@ class SSHProcessManager(ProcessManager):
             pu = ProcessUUID(uuid=proc_uuid)
 
             return_code = None
-            if not self.process_store[proc_uuid].is_alive():
+            if not process.is_alive():
                 try:
-                    return_code = self.process_store[proc_uuid].exit_code
+                    return_code = process.exit_code
                 except Exception:
                     pass
 
@@ -442,7 +450,7 @@ class SSHProcessManager(ProcessManager):
         uuids = self._get_process_uid(query, in_boot_request=True)
         if not uuids:
             raise ProcessManager.BadQuery("No processes found matching the query.")
-    
+
         br_by_uuid = {}
         for u in uuids:
             br = BootRequest()
@@ -455,8 +463,10 @@ class SSHProcessManager(ProcessManager):
             try:
                 if u in self.process_store:
                     try:
-                        self.log.info(f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}")
-                        self.kill_processes([u])  
+                        self.log.info(
+                            f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}"
+                        )
+                        self.kill_processes([u])
                     except Exception as e:
                         self.log.warning(f"Failed to kill process {u} cleanly: {e!s}")
 
@@ -501,7 +511,6 @@ class SSHProcessManager(ProcessManager):
             values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
- 
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
