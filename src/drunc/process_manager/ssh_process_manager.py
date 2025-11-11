@@ -77,6 +77,7 @@ class SSHProcessManager(ProcessManager):
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
+            was_alive = process.is_alive()
             if process.is_alive():
                 sequence = [
                     # signal.SIGINT, # In appfwk/daq_application, SIGQUIT makes the run marker false and quits the loop, killing the application. SIGINT not needed.
@@ -101,7 +102,9 @@ class SSHProcessManager(ProcessManager):
             pu = ProcessUUID(uuid=proc_uuid)
 
             return_code = None
-            if not self.process_store[proc_uuid].is_alive():
+            self.log.debug(f"was_alive: {was_alive}")
+            self.log.debug(f"is_alive: {self.process_store[proc_uuid].is_alive()}")
+            if not was_alive:
                 try:
                     return_code = self.process_store[proc_uuid].exit_code
                 except Exception:
@@ -442,7 +445,7 @@ class SSHProcessManager(ProcessManager):
         uuids = self._get_process_uid(query, in_boot_request=True)
         if not uuids:
             raise ProcessManager.BadQuery("No processes found matching the query.")
-    
+
         br_by_uuid = {}
         for u in uuids:
             br = BootRequest()
@@ -455,8 +458,10 @@ class SSHProcessManager(ProcessManager):
             try:
                 if u in self.process_store:
                     try:
-                        self.log.info(f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}")
-                        self.kill_processes([u])  
+                        self.log.info(
+                            f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}"
+                        )
+                        self.kill_processes([u])
                     except Exception as e:
                         self.log.warning(f"Failed to kill process {u} cleanly: {e!s}")
 
@@ -501,7 +506,6 @@ class SSHProcessManager(ProcessManager):
             values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
- 
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
