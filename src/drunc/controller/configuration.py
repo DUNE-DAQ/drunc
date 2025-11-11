@@ -7,6 +7,7 @@ from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
+from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.grpc_child import (
@@ -117,9 +118,9 @@ class ControllerConfHandler(ConfHandler):
 
     def init_children(
         self,
-        session_name,
+        session_name: str,
         init_token: Token,
-        connectivity_service=None,
+        connectivity_service: ConnectivityServiceClient | None = None,
         enabled_only: bool = True,
     ) -> list[ChildNode]:
         child_nodes: list[ChildNode] = []
@@ -144,7 +145,7 @@ class ControllerConfHandler(ConfHandler):
             ):
                 return  # Ignore disabled segments.
 
-            commandline_parameters = get_commandline_parameters(
+            cmd_args = get_commandline_parameters(
                 db=self.db,
                 config_filename=self.initial_data,
                 session_id=session.id,
@@ -152,7 +153,7 @@ class ControllerConfHandler(ConfHandler):
                 obj=segment.controller,
             )
             node = self.child_node_factory(
-                cli=commandline_parameters,
+                cmd_args=cmd_args,
                 init_token=init_token,
                 name=segment.controller.id,
                 configuration=segment,
@@ -167,7 +168,7 @@ class ControllerConfHandler(ConfHandler):
             ):
                 return  # Ignore disabled applications.
 
-            commandline_parameters = get_commandline_parameters(
+            cmd_args = get_commandline_parameters(
                 db=self.db,
                 config_filename=self.initial_data,
                 session_id=session.id,
@@ -175,10 +176,9 @@ class ControllerConfHandler(ConfHandler):
                 obj=app,
             )
             node = self.child_node_factory(
-                cli=commandline_parameters,
+                cmd_args=cmd_args,
                 name=app.id,
                 configuration=app,
-                fsm_configuration=self.data.controller.fsm,
                 connectivity_service=connectivity_service,
                 timeout=timeout,
             )
@@ -204,19 +204,18 @@ class ControllerConfHandler(ConfHandler):
 
         return child_nodes
 
-    @staticmethod
     def child_node_factory(
+        self,
         name: str,
-        cli,
+        cmd_args: list[str],
         configuration,
-        init_token=None,
-        connectivity_service=None,
-        timeout=60,
-        **kwargs,
-    ):
-        log = get_logger("controller.child_node")
+        init_token: Token | None = None,
+        connectivity_service: ConnectivityServiceClient | None = None,
+        timeout: int = 60,
+    ) -> ChildNode:
+        log = get_logger("controller.child_node_factory")
 
-        if connectivity_service:
+        if connectivity_service is not None:
             try:
                 # Query the connectivity service.
                 ctype, uri = get_control_type_and_uri_from_connectivity_service(
@@ -227,8 +226,8 @@ class ControllerConfHandler(ConfHandler):
                 raise e
         else:
             try:
-                # Fall back to the CLI arguments.
-                ctype, uri = get_control_type_and_uri_from_cli(cli)
+                # Fall back to the command line arguments.
+                ctype, uri = get_control_type_and_uri_from_cli(cmd_args)
             except DruncSetupException as e:
                 log.error(f"Could not get '{name}' protocol from CLI: {e}")
                 raise e
@@ -239,14 +238,16 @@ class ControllerConfHandler(ConfHandler):
             case ControlType.gRPC:
                 conf_handler = gRCPChildConfHandler(configuration, ConfTypes.PyObject)
                 return gRPCChildNode(
-                    name, uri, conf_handler, connectivity_service, init_token, **kwargs
+                    name, conf_handler, uri, connectivity_service, init_token
                 )
 
             case ControlType.REST_API:
                 conf_handler = RESTAPIChildNodeConfHandler(
                     configuration, ConfTypes.PyObject
                 )
-                return RESTAPIChildNode(name, uri, conf_handler, **kwargs)
+                return RESTAPIChildNode(
+                    name, conf_handler, uri, self.data.controller.fsm
+                )
 
             case _:
                 error_message = f"Unknown protocol '{ctype}' for child '{name}'"

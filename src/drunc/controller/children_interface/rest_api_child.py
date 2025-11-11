@@ -363,20 +363,14 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
 class RESTAPIChildNode(ClientSideChild):
     def __init__(
         self,
-        name,
-        uri,
+        name: str,
         configuration: RESTAPIChildNodeConfHandler,
+        uri: str,
         fsm_configuration: FSMConfHandler,
     ):
-        super().__init__(
-            name=name,
-            node_type=ControlType.REST_API,
-            configuration=configuration,
-            fsm_configuration=fsm_configuration,
-        )
+        super().__init__(name, ControlType.REST_API, fsm_configuration)
 
-        self.log = get_logger(f"controller.{name}_rest_api_child")
-
+        self.configuration = configuration
         self.response_listener = ResponseListener.get()
 
         if fsm_configuration:

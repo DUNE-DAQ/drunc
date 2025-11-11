@@ -26,18 +26,10 @@ class ChildInterfaceTechnologyUnknown(DruncSetupException):
 
 
 class ChildNode(ABC):
-    # TODO: __init__ abstraction
-    def __init__(
-        self,
-        name: str,
-        configuration,
-        node_type: ControlType,
-        **kwargs,
-    ) -> None:
-        self.node_type = node_type
+    def __init__(self, name: str, node_type: ControlType):
         self.log = get_logger(f"controller.{name}-child-node")
         self.name = name
-        self.configuration = configuration
+        self.node_type = node_type
         self.included = True
 
     @abstractmethod

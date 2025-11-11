@@ -32,14 +32,12 @@ from drunc.exceptions import DruncSetupException
 from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
-    copy_token,
     rethrow_if_unreachable_server,
     unpack_any,
 )
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_connectivity_service,
-    get_logger,
 )
 
 
@@ -56,19 +54,15 @@ class gRCPChildConfHandler(ConfHandler):
 class gRPCChildNode(ChildNode):
     def __init__(
         self,
-        name,
-        uri,
+        name: str,
         configuration: gRCPChildConfHandler,
+        uri: str,
         connectivity_service,
-        init_token,
+        init_token: Token | None = None,
     ):
-        super().__init__(
-            name=name,
-            node_type=ControlType.gRPC,
-            configuration=configuration,
-        )
+        super().__init__(name, ControlType.gRPC)
 
-        self.log = get_logger(f"controller.{self.name}-grpc-child")
+        self.configuration = configuration
         self.connectivity_service = connectivity_service
         self._lock = threading.Lock()
         self.init_token = init_token
@@ -96,7 +90,7 @@ class gRPCChildNode(ChildNode):
             self.stub = ControllerStub(self.channel)
 
         request = AddressedCommand(
-            token=copy_token(self.init_token),
+            token=None,
             command_name="describe",
             command_data=None,
             target="",

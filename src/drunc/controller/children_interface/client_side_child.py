@@ -3,7 +3,7 @@ from threading import Lock
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
-from drunc.utils.utils import ControlType, get_logger
+from drunc.utils.utils import ControlType
 
 
 class ClientSideState:
@@ -67,13 +67,12 @@ class ClientSideState:
 class ClientSideChild(ChildNode):
     def __init__(
         self,
-        name,
-        node_type: ControlType = ControlType.Direct,
-        fsm_configuration: FSMConfHandler = None,
-        configuration=None,
+        name: str,
+        node_type: ControlType,
+        fsm_configuration: FSMConfHandler,
     ):
-        super().__init__(name=name, node_type=node_type, configuration=configuration)
-        self.log = get_logger(f"controller.{name}-client-side")
+        super().__init__(name, node_type)
+
         self.state = ClientSideState()
         self.fsm_configuration = fsm_configuration
         if fsm_configuration:
