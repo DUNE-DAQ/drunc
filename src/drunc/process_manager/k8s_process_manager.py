@@ -1209,6 +1209,7 @@ class K8sProcessManager(ProcessManager):
                         return_code = pod.status.container_statuses[
                             0
                         ].state.terminated.exit_code
+
             pd, pr, pu = (
                 ProcessDescription(),
                 ProcessRestriction(),
@@ -1216,6 +1217,12 @@ class K8sProcessManager(ProcessManager):
             )
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
+
+            if pod.spec and pod.spec.node_selector:
+                pd.metadata.hostname = pod.spec.node_selector.get(
+                    "kubernetes.io/hostname"
+                )
+
             ret.append(
                 ProcessInstance(
                     process_description=pd,
