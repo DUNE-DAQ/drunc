@@ -1,4 +1,5 @@
 import datetime
+import ipaddress
 import logging
 import os
 import socket
@@ -7,7 +8,7 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from functools import partial
+from functools import lru_cache, partial
 from urllib.parse import urlparse
 
 import click
@@ -113,8 +114,8 @@ def get_status_table(
             ip_address = urlparse(endpoint).hostname
             if not ip_address:
                 return ""
-            hostname, _, _ = socket.gethostbyaddr(ip_address)
-            return endpoint.replace(ip_address, hostname)
+            resolved_host = get_hostname_smart(ip_address)
+            return endpoint.replace(ip_address, resolved_host)
 
         table.add_row(
             prefix + status_response.name,
@@ -709,3 +710,50 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     )(cmd)
 
     return cmd, cmd_name
+
+
+@lru_cache(maxsize=1024)
+def is_private_ip(ip_str: str) -> bool:
+    """
+    Checks if an IP address is private (RFC 1918), loopback, or link-local.
+    These IPs will almost never have a public reverse DNS record.
+    """
+    if not ip_str:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(ip_str)
+        # .is_private = 10.x, 172.16-31.x, 192.168.x
+        # .is_loopback = 127.x.x.x
+        # .is_link_local = 169.254.x.x
+        return ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+    except ValueError:
+        # Not 'valid' IP address -> treat as private
+        return True
+
+
+@lru_cache(maxsize=4096)
+def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
+    """
+    Resolves an IP to a hostname, with optimizations:
+    1. Caches all results.
+    2. Immediately skips private/internal IPs (like K8s).
+    3. Uses a short timeout for public IPs.
+    """
+
+    # If private IP (k8s), don't try to resolve it
+    if is_private_ip(ip_address):
+        return ip_address
+
+    # If public IP, try to resolve it.
+    original_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(timeout_seconds)
+
+        hostname, _, _ = socket.gethostbyaddr(ip_address)
+        return hostname
+
+    except (socket.herror, socket.gaierror, socket.timeout):
+        return ip_address
+
+    finally:
+        socket.setdefaulttimeout(original_timeout)

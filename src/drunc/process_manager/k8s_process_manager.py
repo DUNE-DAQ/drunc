@@ -3,7 +3,10 @@ import getpass
 import os
 import re
 import signal
+import socket
 import threading
+import urllib.error
+import urllib.request
 import uuid
 from time import sleep, time
 
@@ -189,6 +192,8 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_cache_expiry", 300)
+        self.grpc_startup_timeout = checking.get("grpc_startup_timeout", 30)
+        self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
 
         self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
 
@@ -461,6 +466,7 @@ class K8sProcessManager(ProcessManager):
             ),
             spec=client.V1ServiceSpec(
                 type="NodePort",
+                external_traffic_policy="Local",
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
@@ -480,12 +486,37 @@ class K8sProcessManager(ProcessManager):
                 f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
                 f"(NodePort: {self.connection_server_node_port} for external access)"
             )
-        except self._api_error_v1_api as e:
-            if e.status != 409:
-                self.log.error(f"Failed to create NodePort service for {podname}: {e}")
 
-    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
-        """Constructs and creates a Kubernetes Pod manifest."""
+        except self._api_error_v1_api as e:
+            is_port_conflict = False
+
+            # Check for 422="Unprocessable Entity" or 409="Conflict" status
+            if e.status == 422 or e.status == 409:
+                if e.body and (
+                    "provided nodeport is already allocated" in e.body.lower()
+                    or "port is already in use" in e.body.lower()
+                ):
+                    is_port_conflict = True
+
+            if is_port_conflict:
+                port = self.connection_server_node_port
+                error_message = (
+                    f"NodePort {port} is already in use by another service. "
+                    f"Cannot start '{podname}'."
+                )
+                self.log.error(error_message)
+                raise DruncK8sException(error_message) from e
+            else:
+                # other K8s API error
+                error_message = f"Failed to create NodePort service for {podname}: {e.reason} ({e.status})"
+                self.log.error(error_message)
+                raise DruncK8sException(error_message) from e
+
+    def _build_pod_main_container(
+        self, podname: str, boot_request: BootRequest, lcs_port: int | None
+    ) -> client.V1Container:
+        """Builds the primary V1Container manifest, including command and preStop hook."""
+
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
@@ -506,6 +537,12 @@ class K8sProcessManager(ProcessManager):
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_str = " && ".join(command_parts)
 
+        container_ports = []
+        if podname == self.connection_server_name and lcs_port is not None:
+            container_ports.append(
+                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+            )
+
         # Only add preStop hook for C++ applications (non-controllers)
         lifecycle_hook = None
         if "controller" not in podname and podname != self.connection_server_name:
@@ -525,59 +562,59 @@ class K8sProcessManager(ProcessManager):
                 f"'{podname}' identified as a Python app, no preStop hook needed."
             )
 
-        # Create container with conditional lifecycle hook
-        container_kwargs = {
-            "name": podname,
-            "image": pod_image,
-            "command": ["/bin/sh", "-c"],
-            "args": [main_command_str],
-            "env": [
+        main_container = client.V1Container(
+            name=podname,
+            image=pod_image,
+            command=["/bin/sh", "-c"],
+            args=[main_command_str],
+            env=[
                 client.V1EnvVar(name=k, value=v)
                 for k, v in boot_request.process_description.env.items()
             ],
-            "ports": [],
-            "volume_mounts": [
+            lifecycle=lifecycle_hook,
+            ports=container_ports,
+            volume_mounts=[
                 client.V1VolumeMount(name="nfs", mount_path="/nfs"),
                 client.V1VolumeMount(name="cvmfs", mount_path="/cvmfs"),
             ],
-            "working_dir": boot_request.process_description.process_execution_directory,
-            "security_context": client.V1SecurityContext(
+            working_dir=boot_request.process_description.process_execution_directory,
+            security_context=client.V1SecurityContext(
                 run_as_user=os.getuid(), run_as_group=os.getgid()
             ),
-        }
+        )
+        return main_container
 
-        # Only add lifecycle hook for C++ applications
-        if lifecycle_hook is not None:
-            container_kwargs["lifecycle"] = lifecycle_hook
-
-        main_container = client.V1Container(**container_kwargs)
-
-        all_containers = [main_container]
-
+    def _get_pod_node_selector(
+        self, podname: str, restriction: ProcessRestriction
+    ) -> dict:
+        """Verifies the target host and returns the Kubernetes node selector."""
         node_selector = {}
-        if boot_request.process_restriction.allowed_hosts:
-            target_host = boot_request.process_restriction.allowed_hosts[0]
-            # Resolve localhost to actual hostname for Kubernetes node selection
+        if restriction.allowed_hosts:
+            target_host = restriction.allowed_hosts[0]
+
             if target_host == "localhost":
                 target_host = resolve_localhost_to_hostname(target_host)
                 self.log.info(
                     f"Resolved localhost to '{target_host}' for node selection"
                 )
 
-            # Verify the target host is available in the cluster before scheduling
             self._verify_host_in_cluster(target_host)
 
             node_selector = {"kubernetes.io/hostname": target_host}
             self.log.info(
                 f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
             )
+        return node_selector
 
-        host_aliases = []
+    def _get_pod_host_aliases(
+        self, podname: str, session: str
+    ) -> list[client.V1HostAlias] | None:
+        """Gets the ClusterIP of the connection server and prepares host aliases."""
+        host_aliases = None
         if (
             podname != self.connection_server_name
             and self.local_connection_server_is_booted
         ):
-            # Wait for service to get ClusterIP
             connection_server_ip = None
             retry_count = 0
             max_retries = 10
@@ -598,8 +635,18 @@ class K8sProcessManager(ProcessManager):
                 self.log.warning(
                     f"Could not get connection server ClusterIP for pod '{podname}'"
                 )
+        return host_aliases
 
-        pod_manifest = client.V1Pod(
+    def _build_pod_manifest(
+        self,
+        podname: str,
+        session: str,
+        main_container: client.V1Container,
+        node_selector: dict,
+        host_aliases: list[client.V1HostAlias] | None,
+    ) -> client.V1Pod:
+        """Assembles the final V1Pod object."""
+        return client.V1Pod(
             api_version="v1",
             kind="Pod",
             metadata=self._meta_v1_api(
@@ -614,7 +661,7 @@ class K8sProcessManager(ProcessManager):
                 node_selector=node_selector,
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
-                containers=all_containers,
+                containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=[
                     client.V1Volume(
@@ -628,47 +675,132 @@ class K8sProcessManager(ProcessManager):
             ),
         )
 
-        try:
-            start_time = time()
-            pod_uid = None
+    def _execute_pod_creation_api(
+        self, session: str, podname: str, pod_manifest: client.V1Pod
+    ) -> str:
+        """Executes the API call to create the pod, handling 409 conflict during restarts."""
+        start_time = time()
 
-            while True:
-                try:
-                    created_pod = self._core_v1_api.create_namespaced_pod(
-                        session, pod_manifest
+        while True:
+            try:
+                created_pod = self._core_v1_api.create_namespaced_pod(
+                    session, pod_manifest
+                )
+                self.log.info(f'Creating pod "{session}.{podname}"')
+                return created_pod.metadata.uid
+
+            except self._api_error_v1_api as e:
+                is_409_conflict = e.status == 409
+                elapsed_time = time() - start_time
+
+                if is_409_conflict and elapsed_time < self.restart_cleanup_time:
+                    sleep(self.restart_cleanup_polling)
+                    continue
+
+                if is_409_conflict:
+                    error_message = (
+                        f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod object "
+                        f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
                     )
-                    self.log.info(f'Creating pod "{session}.{podname}"')
-                    pod_uid = created_pod.metadata.uid
-                    break
+                    self.log.error(error_message)
+                    raise DruncK8sException(error_message) from e
 
-                # this covers restart where we need to wait for cleanup
-                except self._api_error_v1_api as e:
-                    is_409_conflict = e.status == 409
+                raise e
 
-                    if (
-                        is_409_conflict
-                        and time() - start_time < self.restart_cleanup_time
-                    ):
-                        sleep(self.restart_cleanup_polling)
-                        continue
-                    raise e
-
-            if podname == self.connection_server_name:
-                self._create_nodeport_service(podname, session, pod_uid)
-            else:
-                self._create_headless_service(podname, session, pod_uid)
-
-        except self._api_error_v1_api as e:
-            error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
-
-            if e.status == 409 and time() - start_time >= self.restart_cleanup_time:
-                error_message = (
-                    f"Timeout (>{self.restart_cleanup_time}s) waiting for old pod object "
-                    f'"{session}/{podname}" to be fully deleted. Could not restart pod.'
+    def _create_associated_service(
+        self,
+        podname: str,
+        session: str,
+        pod_uid: str,
+        boot_request: BootRequest,
+        lcs_port: int | None,
+    ) -> None:
+        """Calls the appropriate service creation method based on pod type."""
+        if podname == self.connection_server_name:
+            if lcs_port is None:
+                raise DruncK8sException(
+                    "LCS service creation failed: port was not extracted."
                 )
 
+            # If LCS, call nodeport service creation
+            self._create_nodeport_service(podname, session, pod_uid)
+
+        elif "root-controller" in podname:
+            self.log.info(
+                f"'{podname}' is the root controller, checking for NodePort service."
+            )
+            port = self._extract_port_from_cmd(boot_request)
+            if port:
+                self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
+                self.connection_server_port = port
+                self.connection_server_node_port = port
+                self._create_nodeport_service(podname, session, pod_uid)
+            else:
+                self.log.warning(
+                    f"Could not extract port for '{podname}', falling back to headless."
+                )
+                self._create_headless_service(podname, session, pod_uid)
+
+        else:
+            self._create_headless_service(podname, session, pod_uid)
+
+    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
+        """Constructs and creates a Kubernetes Pod manifest and its associated service."""
+        try:
+            lcs_port = None
+
+            # Early Port Extraction and Class Variable Setup for LCS
+            if podname == self.connection_server_name:
+                lcs_port = self._extract_port_from_cmd(boot_request)
+                if lcs_port:
+                    self.connection_server_port = lcs_port
+                    self.connection_server_node_port = lcs_port
+                else:
+                    raise DruncK8sException(
+                        f"Could not extract port for LCS '{podname}'."
+                    )
+
+            # Build the main container manifest
+            main_container = self._build_pod_main_container(
+                podname, boot_request, lcs_port
+            )
+
+            # Node_selector, host_aliases, pod_manifest
+            node_selector = self._get_pod_node_selector(
+                podname, boot_request.process_restriction
+            )
+            host_aliases = self._get_pod_host_aliases(podname, session)
+            pod_manifest = self._build_pod_manifest(
+                podname,
+                session,
+                main_container,
+                node_selector,
+                host_aliases,
+            )
+
+            # Execute the pod creation API call
+            pod_uid = self._execute_pod_creation_api(session, podname, pod_manifest)
+
+            # Create associated service
+            self._create_associated_service(
+                podname, session, pod_uid, boot_request, lcs_port
+            )
+
+        except self._api_error_v1_api as e:
+            # *other* K8s errors (e.g., 400, 403, 500)
+            error_message = f'Couldn\'t create resources for pod "{session}.{podname}". Reason: {e.reason}. Kubernetes API Error: ({e.status})'
             self.log.error(error_message)
             raise DruncK8sException(error_message) from e
+
+        except DruncK8sException:
+            # any other DruncK8sException
+            raise
+
+        except Exception as e:
+            # generic catch-all
+            raise DruncK8sException(
+                f"Failed to create pod '{session}.{podname}': {e}"
+            ) from e
 
     def _get_connection_server_cluster_ip(self, session) -> str:
         """Gets the ClusterIP of the connection server service."""
@@ -682,19 +814,78 @@ class K8sProcessManager(ProcessManager):
             return None
 
     def _extract_port_from_cmd(self, boot_request) -> int | None:
-        # Find the gunicorn port argument from exec_and_args_list
+        """
+        Parses the boot request's command arguments to find a port.
+        It must cover Gunicorn (hardcoded and env var) and drunc-controller.
+        """
+        # Check all command parts for a port argument
         for e_and_a in boot_request.process_description.executable_and_arguments:
-            if "gunicorn" in e_and_a.exec or (
-                "gunicorn" in " ".join(list(e_and_a.args))
-            ):
-                all_args = [e_and_a.exec] + list(e_and_a.args)
-                arg_str = " ".join(all_args)
-                match = re.search(r"-b\s+[\w\.]+:(\d+)", arg_str)
-                if not match:
-                    # Try to match '--bind'
-                    match = re.search(r"--bind[\s=]+[\w\.]+:(\d+)", arg_str)
+            all_args = [e_and_a.exec] + list(e_and_a.args)
+            arg_str = " ".join(all_args)
+
+            # Check for gunicorn bind syntax (for local-connection-server)
+            if "gunicorn" in arg_str:
+                match_hardcoded = re.search(r"(-b|--bind)[\s=]+[\w\.]+:(\d+)", arg_str)
+
+                if match_hardcoded:
+                    port = int(match_hardcoded.group(2))
+                    if port != 0:
+                        self.log.info(
+                            f"Extracted hardcoded gunicorn port {port} from command."
+                        )
+                        return port
+
+                # Match environment variable port: e.g., --bind=0.0.0.0:${CONNECTION_PORT}
+                match_var = re.search(r"(-b|--bind)[\s=]+[\w\.]+:\$\{(\w+)\}", arg_str)
+
+                if match_var:
+                    var_name = match_var.group(2)
+                    # Look up the value in the environment variables
+                    port_val = boot_request.process_description.env.get(var_name)
+
+                    if port_val is not None:
+                        try:
+                            port = int(port_val)
+                            if port != 0:
+                                self.log.info(
+                                    f"Extracted gunicorn port {port} from environment variable '{var_name}'."
+                                )
+                                return port
+                        except ValueError:
+                            self.log.error(
+                                f"Environment variable '{var_name}' ('{port_val}') is not an integer port."
+                            )
+                    else:
+                        self.log.warning(
+                            f"Extracted port variable '{var_name}' but it was not found in environment map."
+                        )
+
+            # Check for drunc-controller --port syntax (unchanged)
+            if "controller" in arg_str:
+                match = re.search(r"--port[\s=]+(\d+)", arg_str)
                 if match:
-                    return int(match.group(1))
+                    port = int(match.group(1))
+                    if port != 0:
+                        self.log.info(
+                            f"Extracted drunc-controller port {port} from command."
+                        )
+                        return port
+
+            # Check for drunc-controller -c grpc://... syntax (unchanged)
+            if "controller" in arg_str:
+                match = re.search(r"-c\s+[\"\']?grpc:\/\/[^:]+:(\d+)[\"\']?", arg_str)
+                if match:
+                    port = int(match.group(1))
+                    if port != 0:
+                        self.log.info(
+                            f"Extracted drunc-controller gRPC port {port} from command."
+                        )
+                        return port
+                    else:
+                        self.log.warning(
+                            "Controller gRPC port is 0, cannot create NodePort."
+                        )
+
         return None
 
     def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
@@ -759,80 +950,198 @@ class K8sProcessManager(ProcessManager):
         process = self.__boot(boot_request, this_uuid)
         return ProcessInstanceList(values=[process])
 
-    def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
-        """
-        Internal boot method. Handles pod creation and special logic for the connection server.
-        - For the connection server: Wait for it to be ready and check the NodePort service
-        - For all other pods: Boot is NON-BLOCKING.
-        """
-        session = boot_request.process_description.metadata.session
-        podname = boot_request.process_description.metadata.name
-
+    def _run_pre_boot_checks(
+        self, session: str, podname: str, boot_request: BootRequest
+    ) -> None:
+        """Performs initial validation."""
         if not validate_k8s_session_name(session):
             raise DruncK8sNamespaceException(
                 f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
                 "lowercase alphanumeric or '-', start/end with alphanumeric, max 63 chars."
             )
 
-        if boot_request.process_restriction.allowed_hosts:
-            hostname = boot_request.process_restriction.allowed_hosts[0]
-            boot_request.process_description.metadata.hostname = hostname
+    def _wait_for_pod_api_ready(
+        self, podname: str, session: str, timeout: float
+    ) -> str:
+        """
+        [HELPER] Blocking wait for a pod to be 'Running' and 'Ready'
+        in the K8s API.
+        Returns the node_name on success.
+        Raises DruncK8sException on timeout.
+        """
+        self.log.info(
+            f"Stage 1: Waiting for '{podname}' pod to be Running and Ready..."
+        )
+        start_time = time()
 
-        if uuid in self.boot_request:
-            raise DruncK8sPodException(f'"{session}.{podname}":{uuid} already exists!')
-
-        # Extract ports for LCS
-        if podname == self.connection_server_name:
-            self.log.info(f"Waiting for '{podname}' to become ready...")
-
-            port = None
-            env_vars = boot_request.process_description.env
-
-            if "CONNECTION_PORT" in env_vars:
-                port_str = env_vars["CONNECTION_PORT"]
-                try:
-                    port = int(port_str)
-                    self.log.info(
-                        f"Using port {port} from 'CONNECTION_PORT' environment variable."
-                    )
-                except (ValueError, TypeError):
-                    raise DruncK8sException(
-                        f"The provided CONNECTION_PORT '{port_str}' is not a valid integer."
-                    )
-
-            if port is None:
-                self.log.info(
-                    "CONNECTION_PORT not found in env, falling back to parsing gunicorn command."
+        while time() - start_time < timeout:
+            try:
+                pod_status = self._core_v1_api.read_namespaced_pod_status(
+                    podname, session
                 )
-                port = self._extract_port_from_cmd(boot_request)
+                if pod_status.status.phase == "Running":
+                    is_ready = False
+                    if pod_status.status.conditions:
+                        for condition in pod_status.status.conditions:
+                            if condition.type == "Ready" and condition.status == "True":
+                                is_ready = True
+                                break
 
-            if port:
-                self.connection_server_port = port
-                self.connection_server_node_port = port
-            else:
-                raise DruncK8sException(
-                    "Could not determine connection server port from 'CONNECTION_PORT' env var or gunicorn command."
-                )
+                    if is_ready:
+                        node_name = pod_status.spec.node_name
+                        self.log.info(
+                            f"Stage 1: Pod '{podname}' is API Ready on node {node_name}."
+                        )
+                        return node_name  # Success!
 
-            # Check for NodePort collision
-            api = self._core_v1_api
-            all_services = api.list_service_for_all_namespaces()
-            for svc in all_services.items:
-                if not svc.spec.type == "NodePort":
-                    continue
-                for p in svc.spec.ports:
-                    if p.node_port == self.connection_server_node_port and (
-                        svc.metadata.namespace != session
-                        or svc.metadata.name != podname
-                    ):
-                        raise DruncK8sException(
-                            f"NodePort {self.connection_server_node_port} is already in use by service "
-                            f"{svc.metadata.name} in namespace {svc.metadata.namespace}. "
-                            "Cannot start another local connection server with the same port."
+            except self._api_error_v1_api as e:
+                if e.status == 404:
+                    # Pod not created yet, this is expected, continue loop
+                    pass
+                else:
+                    # Re-raise other K8s API errors
+                    raise e
+
+            sleep(self.pod_status_check_sleep)
+
+        # If we exit the loop, it's a timeout
+        raise DruncK8sException(
+            f"'{podname}' pod did not become API Ready in {timeout} seconds."
+        )
+
+    def _wait_for_nodeport_http_ready(self, url: str, timeout: float) -> None:
+        """
+        [HELPER] Blocking wait for a NodePort URL to be reachable via HTTP.
+        Raises DruncK8sException on timeout.
+        """
+        self.log.info(f"Stage 2: Waiting for NodePort {url} to be reachable...")
+        start_time = time()
+
+        while time() - start_time < timeout:
+            try:
+                urllib.request.urlopen(url, timeout=1)
+                self.log.info(f"Stage 2: NodePort {url} is now active.")
+                return  # Success!
+            except (
+                urllib.error.URLError,
+                ConnectionRefusedError,
+                TimeoutError,
+                OSError,
+            ) as e:
+                self.log.debug(f"NodePort not ready yet ({e}), retrying...")
+                sleep(self.pod_status_check_sleep)
+
+        raise DruncK8sException(
+            f"NodePort {url} did not become reachable in {timeout} seconds."
+        )
+
+    def _wait_for_nodeport_tcp_ready(
+        self, node_name: str, port: int, timeout: float
+    ) -> None:
+        """
+        [HELPER] Blocking wait for a NodePort to be reachable via TCP socket.
+        Raises DruncK8sException on timeout.
+        """
+        self.log.info(
+            f"Stage 2: Waiting for NodePort {node_name}:{port} to be reachable..."
+        )
+        start_time = time()
+
+        while time() - start_time < timeout:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    sock.settimeout(self.socket_retry_timeout)
+                    result = sock.connect_ex((node_name, port))
+
+                    if result == 0:
+                        self.log.info(
+                            f"Stage 2: NodePort {node_name}:{port} is active (TCP connect success)."
+                        )
+                        return
+                    else:
+                        self.log.debug(
+                            f"NodePort {node_name}:{port} not ready yet (socket error {result}), retrying..."
                         )
 
-        self._create_namespace(session)
+            except socket.gaierror as e:
+                self.log.warning(
+                    f"Failed to resolve hostname '{node_name}': {e}. Retrying..."
+                )
+            except Exception as e:
+                self.log.debug(
+                    f"NodePort not ready yet (Socket error: {e}), retrying..."
+                )
 
+            sleep(self.pod_status_check_sleep)
+
+        raise DruncK8sException(
+            f"NodePort {node_name}:{port} did not become reachable in {timeout} seconds."
+        )
+
+    def _wait_for_lcs_readiness(self, podname: str, session: str) -> None:
+        """Blocking two-stage wait for the Local Connection Server (NodePort) to be fully ready."""
+        self.log.info(f"Waiting for LCS '{podname}' to be fully ready...")
+        start_time = time()
+        total_timeout = self.pod_ready_timeout
+
+        # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+        node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
+
+        # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
+        url = f"http://{node_name}:{self.connection_server_node_port}"
+
+        # Calculate remaining time for stage 2, preserving original logic
+        elapsed_stage1 = time() - start_time
+        remaining_time = total_timeout - elapsed_stage1
+
+        if remaining_time <= 0:
+            raise DruncK8sException(
+                f"NodePort {url} check failed: No time left after API readiness."
+            )
+
+        self._wait_for_nodeport_http_ready(url, remaining_time)
+
+        self.local_connection_server_is_booted = True
+        self.log.info(f"Connection server '{podname}' is fully ready.")
+
+    def _wait_for_controller_readiness(
+        self, podname: str, session: str, boot_request: BootRequest
+    ) -> None:
+        """Blocking two-stage wait for Drunc Controller (NodePort) to be fully ready."""
+        self.log.info(
+            f"Waiting for controller '{podname}' (NodePort) to become ready..."
+        )
+
+        controller_port = self._extract_port_from_cmd(boot_request)
+        if not controller_port or controller_port == 0:
+            raise DruncK8sException(
+                f"Cannot wait for '{podname}', port is 0 or missing."
+            )
+
+        # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
+        node_name = self._wait_for_pod_api_ready(
+            podname, session, self.pod_ready_timeout
+        )
+
+        # --- STAGE 2: Wait for NodePort to be externally reachable (using TCP socket) ---
+        self._wait_for_nodeport_tcp_ready(
+            node_name, controller_port, self.grpc_startup_timeout
+        )
+
+        self.log.info(f"Drunc controller '{podname}' is fully ready.")
+
+    def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
+        """
+        Internal boot method. Handles pre-checks, pod creation, and blocking wait for critical services.
+        """
+        session = boot_request.process_description.metadata.session
+        podname = boot_request.process_description.metadata.name
+
+        # Pre-checks (Session validation, NodePort collision)
+        self._run_pre_boot_checks(session, podname, boot_request)
+
+        # Resource Creation (Namespace, Pod, Labels)
+        self._create_namespace(session)
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
@@ -840,50 +1149,20 @@ class K8sProcessManager(ProcessManager):
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
-        # Special handling only for the connection server
+        # Special handling and blocking wait for critical processes
         if podname == self.connection_server_name:
-            self.log.info(f"Waiting for '{podname}' to become ready...")
+            self._wait_for_lcs_readiness(podname, session)
+        elif "root-controller" in podname:
+            self._wait_for_controller_readiness(podname, session, boot_request)
 
-            start_time = time()
-            while time() - start_time < self.pod_ready_timeout:
-                try:
-                    pod_status = self._core_v1_api.read_namespaced_pod_status(
-                        podname, session
-                    )
-                    if (
-                        pod_status.status.phase == "Running"
-                        and pod_status.status.pod_ip
-                    ):
-                        self.log.info(
-                            f"'{podname}' is ready with IP {pod_status.status.pod_ip}."
-                        )
-                        self.local_connection_server_is_booted = True
-
-                        # Log connection information using the NodePort service
-                        node_name = pod_status.spec.node_name
-                        self.log.info(f"Connection server '{podname}' is ready.")
-                        self.log.info(
-                            f" -> For internal cluster access: 'http://localhost:{self.connection_server_port}'"
-                        )
-                        self.log.info(
-                            f" -> For external access, use NodePort {self.connection_server_node_port} on any cluster node IP (e.g., http://{node_name}:{self.connection_server_node_port})"
-                        )
-
-                        break
-                except self._api_error_v1_api as e:
-                    if e.status == 404:
-                        pass
-                    else:
-                        raise e
-                sleep(self.pod_status_check_sleep)
-            else:
-                raise DruncK8sException(
-                    f"'{podname}' did not become ready in {self.pod_ready_timeout} seconds."
-                )
-
-        pd, pr, pu = ProcessDescription(), ProcessRestriction(), ProcessUUID(uuid=uuid)
-        pd.CopyFrom(self.boot_request[uuid].process_description)
-        pr.CopyFrom(self.boot_request[uuid].process_restriction)
+        # Post-Process
+        pd, pr, pu = (
+            ProcessDescription(),
+            ProcessRestriction(),
+            ProcessUUID(uuid=uuid),
+        )
+        pd.CopyFrom(boot_request.process_description)
+        pr.CopyFrom(boot_request.process_restriction)
 
         return ProcessInstance(
             process_description=pd,

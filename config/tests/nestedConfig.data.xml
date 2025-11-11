@@ -209,6 +209,7 @@
   <ref class="Variable" id="local-env-ers-warning"/>
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
