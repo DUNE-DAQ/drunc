@@ -637,6 +637,17 @@ class K8sProcessManager(ProcessManager):
                 )
         return host_aliases
 
+    def _will_create_nodeport_service(
+        self, podname: str, boot_request: BootRequest
+    ) -> bool:
+        """Determines if a NodePort service will be created for this pod."""
+        if podname == self.connection_server_name:
+            return True
+        elif "root-controller" in podname:
+            port = self._extract_port_from_cmd(boot_request)
+            return port is not None and port != 0
+        return False
+
     def _build_pod_manifest(
         self,
         podname: str,
@@ -644,6 +655,7 @@ class K8sProcessManager(ProcessManager):
         main_container: client.V1Container,
         node_selector: dict,
         host_aliases: list[client.V1HostAlias] | None,
+        use_host_network: bool = True,
     ) -> client.V1Pod:
         """Assembles the final V1Pod object."""
         return client.V1Pod(
@@ -659,6 +671,7 @@ class K8sProcessManager(ProcessManager):
             ),
             spec=self._pod_spec_v1_api(
                 node_selector=node_selector,
+                host_network=use_host_network,
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
                 containers=[main_container],
@@ -765,6 +778,19 @@ class K8sProcessManager(ProcessManager):
                 podname, boot_request, lcs_port
             )
 
+            # Determine if NodePort service will be created (affects hostNetwork usage)
+            will_create_nodeport = self._will_create_nodeport_service(
+                podname, boot_request
+            )
+            # Disable hostNetwork for pods with NodePort services to avoid port conflicts
+            # When hostNetwork=true and NodePort with external_traffic_policy=Local are both used,
+            # Kubernetes iptables rules and the pod both try to bind to the same port, causing conflicts
+            use_host_network = not will_create_nodeport
+            if will_create_nodeport:
+                self.log.info(
+                    f"Disabling hostNetwork for '{podname}' to avoid port conflicts with NodePort service"
+                )
+
             # Node_selector, host_aliases, pod_manifest
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
@@ -776,6 +802,7 @@ class K8sProcessManager(ProcessManager):
                 main_container,
                 node_selector,
                 host_aliases,
+                use_host_network=use_host_network,
             )
 
             # Execute the pod creation API call
