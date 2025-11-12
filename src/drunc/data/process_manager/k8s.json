@@ -32,8 +32,8 @@
             "name": "local-connection-server"
         },
         "pod_management": {
-            "kill_timeout": 60,
-            "total_shutdown_timeout": 120,
+            "kill_timeout": 30,
+            "total_shutdown_timeout": 60,
             "pod_ready_timeout": 60
         },
         "cleanup": {
