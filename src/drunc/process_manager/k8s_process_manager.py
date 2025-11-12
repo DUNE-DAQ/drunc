@@ -27,6 +27,7 @@ from druncschema.process_manager_pb2 import (
 # Third-Party Imports
 from kubernetes import client, config, watch
 from kubernetes.client.rest import ApiException
+from kubernetes.config.config_exception import ConfigException
 
 from drunc.k8s_exceptions import (
     DruncK8sException,
@@ -141,7 +142,16 @@ class K8sProcessManager(ProcessManager):
         super().__init__(configuration=configuration, session=self.session, **kwargs)
         self.log = get_logger("process_manager.k8s-process-manager")
 
-        config.load_kube_config()
+        try:
+            config.load_kube_config()
+        except ConfigException as e:
+            self.log.critical("--- 🚨 KUBERNETES CONFIGURATION ERROR ---")
+            self.log.critical(f"Failed to load kube-config: {e}")
+            self.log.critical(
+                "Please ensure 'kubectl' is configured correctly or the KUBECONFIG environment variable is set."
+            )
+            self.log.critical("----------------------------------------------")
+            raise
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
