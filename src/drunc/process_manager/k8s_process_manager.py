@@ -512,6 +512,54 @@ class K8sProcessManager(ProcessManager):
                 self.log.error(error_message)
                 raise DruncK8sException(error_message) from e
 
+    def _modify_urls(self, args: list[str], podname: str) -> list[str]:
+        """
+        Modifies command facility URLs in controller arguments to bind to 0.0.0.0.
+
+        This ensures controllers bind to all interfaces within the pod, allowing
+        external access via NodePort services.
+
+        Args:
+            args: List of command arguments that may contain URLs
+            podname: Name of the pod for logging purposes
+
+        Returns:
+            Modified list of arguments with URLs updated to use 0.0.0.0
+        """
+        modified_args = []
+        for arg in args:
+            # Check if argument looks like a URL with a protocol
+            if "://" not in arg:
+                modified_args.append(arg)
+                continue
+
+            try:
+                protocol, rest = arg.split("://", 1)
+                # Check if there's a hostname:port pattern
+                if ":" not in rest:
+                    modified_args.append(arg)
+                    continue
+
+                # Split hostname and port
+                hostname, port = rest.rsplit(":", 1)
+                # Replace hostname with 0.0.0.0 to bind to all interfaces
+                new_address = f"{protocol}://0.0.0.0:{port}"
+                modified_args.append(new_address)
+
+                if hostname != "0.0.0.0":
+                    self.log.debug(
+                        f"Modified command facility for '{podname}': "
+                        f"{arg} -> {new_address} (binds to all interfaces)"
+                    )
+            except ValueError:
+                # If parsing fails, keep original argument
+                modified_args.append(arg)
+                self.log.debug(
+                    f"Could not parse URL in argument '{arg}' for '{podname}', keeping original"
+                )
+
+        return modified_args
+
     def _build_pod_main_container(
         self, podname: str, boot_request: BootRequest, lcs_port: int | None
     ) -> client.V1Container:
@@ -534,7 +582,16 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+            # For controllers, modify command facility URLs to use 0.0.0.0 binding
+            if "controller" in podname:
+                modified_args = self._modify_urls(e_and_a.args, podname)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                # For other pods, use arguments as-is
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
+
         main_command_str = " && ".join(command_parts)
 
         container_ports = []
