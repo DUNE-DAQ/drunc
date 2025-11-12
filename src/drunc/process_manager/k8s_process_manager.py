@@ -516,8 +516,109 @@ class K8sProcessManager(ProcessManager):
                 self.log.error(error_message)
                 raise DruncK8sException(error_message) from e
 
+    def _get_pod_volumes_and_mounts(
+        self, boot_request: BootRequest
+    ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
+        """
+        Prepares all pod volumes and container mounts, including static
+        configs and the dynamic data_mount.
+        """
+        pod_volumes = []
+        container_volume_mounts = []
+
+        # Volumes from json configuration
+        for vc in self.volume_configs:
+            pod_volumes.append(
+                client.V1Volume(
+                    name=vc["name"],
+                    host_path=client.V1HostPathVolumeSource(
+                        path=vc["host_path"], type="Directory"
+                    ),
+                )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(
+                    name=vc["name"],
+                    mount_path=vc["mount_path"],
+                    read_only=vc.get("read_only", True),
+                )
+            )
+
+        # Add log_mount from process_logs_path
+        log_dir = None
+        log_file_path = boot_request.process_description.process_logs_path
+        if log_file_path:
+            log_dir = os.path.dirname(log_file_path)
+            self.log.info(f"Adding 'log-mount' for directory: '{log_dir}'")
+
+            pod_volumes.append(
+                client.V1Volume(
+                    name="log-mount",
+                    host_path=client.V1HostPathVolumeSource(
+                        path=log_dir,
+                        type="DirectoryOrCreate",
+                    ),
+                )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(
+                    name="log-mount",
+                    mount_path=log_dir,
+                    read_only=False,
+                )
+            )
+
+        # Add dynamic data_mount if present in the boot request
+        data_mount_path = None
+        if boot_request.process_restriction.data_mount:
+            self.log.info(
+                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
+            )
+            if boot_request.process_restriction.data_mount == ".":
+                data_mount_path = (
+                    boot_request.process_description.process_execution_directory
+                )
+                self.log.info(
+                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                )
+            else:
+                data_mount_path = boot_request.process_restriction.data_mount
+                self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
+
+            if data_mount_path:
+                if data_mount_path == log_dir:
+                    self.log.info(
+                        f"Skipping 'data-mount' as its path '{data_mount_path}' is already covered by 'log-mount'."
+                    )
+                else:
+                    self.log.info(
+                        f"Adding 'data-mount' for directory: '{data_mount_path}'"
+                    )
+                    pod_volumes.append(
+                        client.V1Volume(
+                            name="data-mount",
+                            host_path=client.V1HostPathVolumeSource(
+                                path=data_mount_path,
+                                type="Directory",
+                            ),
+                        )
+                    )
+                    container_volume_mounts.append(
+                        client.V1VolumeMount(
+                            name="data-mount",
+                            mount_path=data_mount_path,
+                            read_only=False,
+                        )
+                    )
+
+        return pod_volumes, container_volume_mounts
+
     def _build_pod_main_container(
-        self, podname: str, boot_request: BootRequest, lcs_port: int | None
+        self,
+        podname: str,
+        boot_request: BootRequest,
+        lcs_port: int | None,
+        container_volume_mounts: list[client.V1VolumeMount],
     ) -> client.V1Container:
         """Builds the primary V1Container manifest, including command and preStop hook."""
 
@@ -539,7 +640,7 @@ class K8sProcessManager(ProcessManager):
                 prefix = "exec "
 
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
-        main_command_str = " && ".join(command_parts)
+        main_command_chain = " && ".join(command_parts)
 
         container_ports = []
         if podname == self.connection_server_name and lcs_port is not None:
@@ -547,40 +648,32 @@ class K8sProcessManager(ProcessManager):
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
 
-        # Only add preStop hook for C++ applications (non-controllers)
-        lifecycle_hook = None
-        if "controller" not in podname and podname != self.connection_server_name:
-            self.log.debug(
-                f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
+        # Add preStop hook
+        self.log.debug(
+            f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
+        )
+        shutdown_command = "kill -QUIT 1"
+        lifecycle_hook = client.V1Lifecycle(
+            pre_stop=client.V1LifecycleHandler(
+                _exec=client.V1ExecAction(command=["/bin/sh", "-c", shutdown_command])
             )
-            shutdown_command = "kill -QUIT 1"
-            lifecycle_hook = client.V1Lifecycle(
-                pre_stop=client.V1LifecycleHandler(
-                    _exec=client.V1ExecAction(
-                        command=["/bin/sh", "-c", shutdown_command]
-                    )
-                )
-            )
-        else:
-            self.log.debug(
-                f"'{podname}' identified as a Python app, no preStop hook needed."
-            )
+        )
 
-        # Prepare mounts
-        container_volume_mounts = [
-            client.V1VolumeMount(
-                name=vc["name"],
-                mount_path=vc["mount_path"],
-                read_only=vc.get("read_only", True),
-            )
-            for vc in self.volume_configs
-        ]
+        # Redirect logs
+        log_file_path = boot_request.process_description.process_logs_path
+        final_command_args: str
+
+        if log_file_path:
+            self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
+            final_command_args = f"exec > {log_file_path} 2>&1; {main_command_chain}"
+        else:
+            final_command_args = main_command_chain
 
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/sh", "-c"],
-            args=[main_command_str],
+            args=[final_command_args],
             env=[
                 client.V1EnvVar(name=k, value=v)
                 for k, v in boot_request.process_description.env.items()
@@ -655,19 +748,9 @@ class K8sProcessManager(ProcessManager):
         main_container: client.V1Container,
         node_selector: dict,
         host_aliases: list[client.V1HostAlias] | None,
+        pod_volumes: list[client.V1Volume],
     ) -> client.V1Pod:
         """Assembles the final V1Pod object."""
-
-        # Prepare mounts
-        pod_volumes = [
-            client.V1Volume(
-                name=vc["name"],
-                host_path=client.V1HostPathVolumeSource(
-                    path=vc["host_path"], type="Directory"
-                ),
-            )
-            for vc in self.volume_configs
-        ]
 
         return client.V1Pod(
             api_version="v1",
@@ -775,9 +858,18 @@ class K8sProcessManager(ProcessManager):
                         f"Could not extract port for LCS '{podname}'."
                     )
 
+            # Prepare volume mounts
+            (
+                pod_volumes,
+                container_volume_mounts,
+            ) = self._get_pod_volumes_and_mounts(boot_request)
+
             # Build the main container manifest
             main_container = self._build_pod_main_container(
-                podname, boot_request, lcs_port
+                podname,
+                boot_request,
+                lcs_port,
+                container_volume_mounts,
             )
 
             # Node_selector, host_aliases, pod_manifest
@@ -791,6 +883,7 @@ class K8sProcessManager(ProcessManager):
                 main_container,
                 node_selector,
                 host_aliases,
+                pod_volumes,
             )
 
             # Execute the pod creation API call
