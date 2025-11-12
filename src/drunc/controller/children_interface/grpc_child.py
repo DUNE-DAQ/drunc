@@ -27,6 +27,7 @@ from drunc.connectivity_service.exceptions import (
 )
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
+from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
 from drunc.utils.configuration import ConfHandler, ConfTypes
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
@@ -80,7 +81,6 @@ class gRPCChildNode(ChildNode):
             )
 
         self.uri = f"{host}:{port}"
-
         self._setup_connection()
 
     def _setup_connection(self):
@@ -89,7 +89,9 @@ class gRPCChildNode(ChildNode):
             if hasattr(self, "channel") and self.channel:
                 self.channel.close()
 
-            self.channel = grpc.insecure_channel(self.uri)
+            self.channel = grpc.insecure_channel(
+                self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
+            )
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 

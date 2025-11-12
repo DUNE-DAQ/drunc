@@ -7,6 +7,10 @@ import click
 import grpc
 from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_server
 
+from drunc.grpc_settings import (
+    MANAGER_SERVER_GRPC_CONFIG,
+    MANAGER_SERVER_GRPC_MAX_WORKERS,
+)
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
 from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
@@ -20,7 +24,10 @@ def serve(session_manager: SessionManager, address: str) -> None:
         address: The address to bind the server to.
     """
     logger = getLogger("drunc.session_manager")
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=1))
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS),
+        options=MANAGER_SERVER_GRPC_CONFIG,
+    )
     add_SessionManagerServicer_to_server(session_manager, server)
     port = server.add_insecure_port(address)
     server.start()

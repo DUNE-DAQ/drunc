@@ -8,6 +8,7 @@ description = "A flexible run control infrastructure for a distributed DAQ syste
 version = "0.19.0"
 readme = "docs/README.md"
 requires-python = ">=3.10"
+
 dependencies = [
     "click",
     "click-shell",
@@ -28,11 +29,13 @@ dependencies = [
     "kubernetes",
     "pytz",
     "psutil",
+    "paramiko"
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.68.0"]
-test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.68.0"]
+prod = ["paramiko[gssapi]"]
+dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
+test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
@@ -44,8 +47,9 @@ drunc-session-manager = "drunc.apps.session_manager:main"
 drunc-unified-shell = "drunc.apps.unified_shell:main"
 drunc-fsm-tests = "drunc.tests.fsm:main"
 application-registry-service = "drunc.apps.app_connectivity_server:main"
-drunc-ssh-validator = "drunc.apps.ssh_validator:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -55,6 +59,9 @@ where = ["src"]
 "drunc.data.process_manager.schema" = ["*.json"]
 
 [tool.pytest.ini_options]
+markers = [
+    "grpc: marks tests for gRPC isolation (run with --test-grpc)",
+]
 addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
 
 [tool.coverage.run]

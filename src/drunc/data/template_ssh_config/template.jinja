@@ -1,0 +1,12 @@
+Host np0* localhost
+  User {{ USERNAME }}
+  PreferredAuthentications gssapi-with-mic,publickey
+  PasswordAuthentication no
+  ChallengeResponseAuthentication no
+  GSSAPIAuthentication yes
+  GSSAPIDelegateCredentials yes
+  GSSAPIKeyExchange yes
+  GSSAPITrustDns no
+  KbdInteractiveAuthentication no
+  ForwardAgent yes
+  IdentityFile ~/.ssh/id_ed25519_cern
