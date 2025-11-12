@@ -21,6 +21,33 @@ jobs:
           echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git
           echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git
 
+      - name: Install SSH and run the daemon
+        run: |
+          dnf install -y openssh-server
+          dnf install -y openssh-clients
+          ssh-keygen -A
+          mkdir -p /root/.ssh
+          ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
+          cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
+          chmod 600 /root/.ssh/authorized_keys
+          chmod 600 /root/.ssh/id_rsa
+          
+          # Create SSH config file in the correct location
+          cat > /root/.ssh/config << 'EOF'
+          Host localhost
+              HostName 127.0.0.1
+              User root
+              IdentityFile /root/.ssh/id_rsa
+              StrictHostKeyChecking no
+              UserKnownHostsFile /dev/null
+          EOF
+
+          # Start SSH daemon
+          /usr/sbin/sshd
+
+          # Test SSH connection
+          ssh localhost echo "SSH is working"
+
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
         run: |
@@ -40,8 +67,9 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           python -m pip install --upgrade pip
+          cd sourcecode
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} ||  git clone https://github.com/DUNE-DAQ/druncschema.git
-          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }}
+          git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/drunc.git
           cd druncschema
           pip install .[test]
           cd -
@@ -54,7 +82,7 @@ jobs:
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
-          cd drunc || true
+          cd sourcecode/drunc || true
           pip install pytest pytest-cov
           pytest --junitxml=junit/test-results.xml --cov=drunc --cov-report=html
 

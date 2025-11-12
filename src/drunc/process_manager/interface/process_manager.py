@@ -10,6 +10,10 @@ import grpc
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
+from drunc.grpc_settings import (
+    MANAGER_SERVER_GRPC_CONFIG,
+    MANAGER_SERVER_GRPC_MAX_WORKERS,
+)
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     get_process_manager_configuration,
@@ -89,7 +93,12 @@ def run_pm(
                 "The address on which to expect commands/send status wasn't specified"
             )
         nonlocal server
-        server = grpc.server(concurrent.futures.ThreadPoolExecutor(max_workers=10))
+        server = grpc.server(
+            concurrent.futures.ThreadPoolExecutor(
+                max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS
+            ),
+            options=MANAGER_SERVER_GRPC_CONFIG,
+        )
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)
         if generated_port is not None:
