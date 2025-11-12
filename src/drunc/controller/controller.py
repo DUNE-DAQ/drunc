@@ -780,12 +780,18 @@ class Controller(ControllerServicer):
     def status(
         self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
-        request.target = self.parse_target_string(request.target)
         response = StatusResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
@@ -815,12 +821,18 @@ class Controller(ControllerServicer):
     def describe(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
-        request.target = self.parse_target_string(request.target)
         response = DescribeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
@@ -859,12 +871,18 @@ class Controller(ControllerServicer):
     def describe_fsm(
         self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeFSMResponse:
-        request.target = self.parse_target_string(request.target)
         response = DescribeFSMResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # What transitions to describe.
         key = unpack_any(request.command_data, PlainText).text
@@ -926,21 +944,26 @@ class Controller(ControllerServicer):
         request: ExecuteFSMCommandRequest,
         context: ServicerContext,
     ) -> ExecuteFSMCommandResponse:
-        request.target = self.parse_target_string(request.target)
+        response = ExecuteFSMCommandResponse(
+            token=None,
+            name=self.name,
+            command_name=request.command.command_name,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         command = request.command
         command_name = command.command_name
         self.log.debug(f"FSM command: {command_name}")
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
-
-        response = ExecuteFSMCommandResponse(
-            token=None,
-            name=self.name,
-            command_name=command_name,
-            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
 
         # Check controller readiness.
         if not self.stateful_node.get_ready_state():
@@ -1088,12 +1111,19 @@ class Controller(ControllerServicer):
         request: ExecuteExpertCommandRequest,
         context: ServicerContext,
     ) -> ExecuteExpertCommandResponse:
-        request.target = self.parse_target_string(request.target)
         response = ExecuteExpertCommandResponse(
             token=None,
             name=self.name,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         response.data = f"'{self.name}' propagated expert command"
@@ -1125,12 +1155,18 @@ class Controller(ControllerServicer):
         request: IncludeExcludeRequest,
         context: ServicerContext,
     ) -> IncludeExcludeResponse:
-        request.target = self.parse_target_string(request.target)
         response = IncludeExcludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
@@ -1168,12 +1204,18 @@ class Controller(ControllerServicer):
         request: IncludeExcludeRequest,
         context: ServicerContext,
     ) -> IncludeExcludeResponse:
-        request.target = self.parse_target_string(request.target)
         response = IncludeExcludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
@@ -1209,12 +1251,18 @@ class Controller(ControllerServicer):
     def recompute_status(
         self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
-        request.target = self.parse_target_string(request.target)
         response = StatusResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
         # This node.
         if request.target == self.name or request.execute_along_path:
