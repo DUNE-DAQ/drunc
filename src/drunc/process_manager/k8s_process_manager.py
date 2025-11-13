@@ -799,6 +799,28 @@ class K8sProcessManager(ProcessManager):
                 )
         return host_aliases
 
+    def _determine_service_type(self, podname: str, boot_request: BootRequest) -> str:
+        """
+        Determines the correct K8s service type for a pod ("NodePort" or "Headless").
+        This logic is centralized here to be used by both pod creation (for hostNetwork)
+        and service creation.
+        """
+        if podname == self.connection_server_name:
+            return "NodePort"
+
+        if "root-controller" in podname:
+            port = self._extract_port_from_cmd(boot_request)
+            if port is not None and port != 0:
+                return "NodePort"
+            else:
+                self.log.warning(
+                    f"Root-controller '{podname}' has no port or port is 0; "
+                    "falling back to Headless service."
+                )
+                return "Headless"
+
+        return "Headless"
+
     def _build_pod_manifest(
         self,
         podname: str,
@@ -808,6 +830,7 @@ class K8sProcessManager(ProcessManager):
         host_aliases: list[client.V1HostAlias] | None,
         pod_volumes: list[client.V1Volume],
         extra_labels: dict[str, str] | None = None,
+        use_host_network: bool = True,
     ) -> client.V1Pod:
         """Assembles the final V1Pod object."""
 
@@ -829,6 +852,7 @@ class K8sProcessManager(ProcessManager):
             ),
             spec=self._pod_spec_v1_api(
                 node_selector=node_selector,
+                host_network=use_host_network,
                 termination_grace_period_seconds=self.kill_timeout,
                 restart_policy="Never",
                 containers=[main_container],
@@ -876,34 +900,39 @@ class K8sProcessManager(ProcessManager):
         pod_uid: str,
         boot_request: BootRequest,
         lcs_port: int | None,
+        service_type: str,
     ) -> None:
         """Calls the appropriate service creation method based on pod type."""
-        if podname == self.connection_server_name:
-            if lcs_port is None:
-                raise DruncK8sException(
-                    "LCS service creation failed: port was not extracted."
-                )
-
-            # If LCS, call nodeport service creation
-            self._create_nodeport_service(podname, session, pod_uid)
-
-        elif "root-controller" in podname:
-            self.log.info(
-                f"'{podname}' is the root controller, checking for NodePort service."
-            )
-            port = self._extract_port_from_cmd(boot_request)
-            if port:
-                self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
-                self.connection_server_port = port
-                self.connection_server_node_port = port
+        if service_type == "NodePort":
+            if podname == self.connection_server_name:
+                if lcs_port is None:
+                    raise DruncK8sException(
+                        "LCS service creation failed: port was not extracted."
+                    )
+                # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
-            else:
-                self.log.warning(
-                    f"Could not extract port for '{podname}', falling back to headless."
-                )
-                self._create_headless_service(podname, session, pod_uid)
 
-        else:
+            elif "root-controller" in podname:
+                self.log.info(
+                    f"'{podname}' is the root controller, checking for NodePort service."
+                )
+                # This call also relies on class variables, so we must set them
+                # here, just as the original logic did.
+                port = self._extract_port_from_cmd(boot_request)
+                if port:
+                    self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
+                    self.connection_server_port = port
+                    self.connection_server_node_port = port
+                    self._create_nodeport_service(podname, session, pod_uid)
+                else:
+                    # This case should be caught by _determine_service_type,
+                    # but we handle it just in case.
+                    self.log.warning(
+                        f"Could not extract port for '{podname}', falling back to headless."
+                    )
+                    self._create_headless_service(podname, session, pod_uid)
+
+        else:  # service_type == "Headless"
             self._create_headless_service(podname, session, pod_uid)
 
     def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
@@ -940,6 +969,15 @@ class K8sProcessManager(ProcessManager):
                 container_volume_mounts,
             )
 
+            # Determine service type and hostNetwork requirement
+            service_type = self._determine_service_type(podname, boot_request)
+            use_host_network = service_type != "NodePort"
+
+            if not use_host_network:
+                self.log.info(
+                    f"Disabling hostNetwork for '{podname}' to avoid port conflicts with NodePort service"
+                )
+
             # Node_selector, host_aliases, pod_manifest
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
@@ -953,6 +991,7 @@ class K8sProcessManager(ProcessManager):
                 host_aliases,
                 pod_volumes,
                 extra_labels=tree_labels,
+                use_host_network=use_host_network,
             )
 
             # Execute the pod creation API call
@@ -960,7 +999,7 @@ class K8sProcessManager(ProcessManager):
 
             # Create associated service
             self._create_associated_service(
-                podname, session, pod_uid, boot_request, lcs_port
+                podname, session, pod_uid, boot_request, lcs_port, service_type
             )
 
         except self._api_error_v1_api as e:
@@ -1386,6 +1425,7 @@ class K8sProcessManager(ProcessManager):
                         return_code = pod.status.container_statuses[
                             0
                         ].state.terminated.exit_code
+
             pd, pr, pu = (
                 ProcessDescription(),
                 ProcessRestriction(),
@@ -1393,6 +1433,12 @@ class K8sProcessManager(ProcessManager):
             )
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
+
+            if pod and pod.spec and pod.spec.node_selector:
+                pd.metadata.hostname = pod.spec.node_selector.get(
+                    "kubernetes.io/hostname"
+                )
+
             ret.append(
                 ProcessInstance(
                     process_description=pd,
