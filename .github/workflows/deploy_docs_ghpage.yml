@@ -1,5 +1,8 @@
 name: Deploy Docs and Wiki to Pages 
-on: 
+on:
+  push:
+    branches:
+      - miruuna/add-wiki-to-gh-pages
   workflow_dispatch: # enable manual triger. Only works in 'develop' branch 
   workflow_call:
   schedule:
@@ -37,7 +40,7 @@ jobs:
         env:
           GITHUB_PAGES_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
-          python docs/utils/convert_wiki_links.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
+          python docs/utils/process_wiki.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
           cd ~ 
             
       - name: Install dependencies
