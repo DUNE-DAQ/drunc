@@ -236,6 +236,8 @@ class Controller(ControllerServicer):
             "oksconflibs:"
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
+        self.stop_event: threading.Event | None = None
+        self.thread: threading.Thread | None = None
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
         )
@@ -505,15 +507,11 @@ class Controller(ControllerServicer):
         if ResponseListener.exists():
             ResponseListener.get().terminate()
 
-        if (
-            self.opmon_publisher is not None
-            and hasattr(self, "stop_event")
-            and self.stop_event is not None
-        ):
+        if self.opmon_publisher and self.stop_event:
             self.log.debug("Stopping opmon publisher")
             try:
                 self.stop_event.set()
-                if hasattr(self, "thread") and self.thread is not None:
+                if self.thread:
                     self.thread.join(timeout=1.0)
                     if self.thread.is_alive():
                         self.log.debug(
