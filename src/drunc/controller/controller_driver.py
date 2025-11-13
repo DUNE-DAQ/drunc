@@ -10,7 +10,8 @@ from druncschema.controller_pb2 import (
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    RecomputeStatusResponse,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -180,13 +181,55 @@ class ControllerDriver:
 
         return response
 
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.include(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.exclude(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
     def recompute_status(
         self,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> RecomputeStatusResponse:
+    ) -> StatusResponse:
         request = AddressedCommand(
             command_name="recompute_status",
             target=target,
@@ -230,22 +273,6 @@ class ControllerDriver:
             data=addressed_command,
             outformat=PlainText,
             timeout=timeout,
-        )
-
-    @OLD_pack_empty_addressed_command
-    def include(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "include", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @OLD_pack_empty_addressed_command
-    def exclude(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
     @OLD_pack_empty_addressed_command

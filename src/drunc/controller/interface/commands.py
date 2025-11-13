@@ -302,16 +302,12 @@ def include(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = (
-        obj.get_driver("controller")
-        .include(
-            target=target,
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=True,
-        )
-        .data
+    result = obj.get_driver("controller").include(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
     )
-    if not result:
+    if not result or not result.text:
         return
     log = get_logger(**logger_params)
     log.info(result.text)
@@ -324,16 +320,12 @@ def exclude(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = (
-        obj.get_driver("controller")
-        .exclude(
-            target=target,
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=True,
-        )
-        .data
+    result = obj.get_driver("controller").exclude(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
     )
-    if not result:
+    if not result or not result.text:
         return
     log = get_logger(**logger_params)
     log.info(result.text)

@@ -1,5 +1,6 @@
 import json
 import multiprocessing
+import os
 import queue
 import socket
 import threading
@@ -9,19 +10,26 @@ from json import JSONDecodeError
 import requests
 import socks
 from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
+    IncludeExcludeResponse,
     Status,
     StatusResponse,
 )
-from druncschema.request_response_pb2 import ResponseFlag
+from druncschema.description_pb2 import Description
+from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
 from drunc.controller.children_interface.client_side_child import ClientSideChild
 from drunc.controller.exceptions import ChildError, ExpertCommandException
+from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM
@@ -355,20 +363,14 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
 class RESTAPIChildNode(ClientSideChild):
     def __init__(
         self,
-        name,
+        name: str,
         configuration: RESTAPIChildNodeConfHandler,
+        uri: str,
         fsm_configuration: FSMConfHandler,
-        uri,
     ):
-        super().__init__(
-            name=name,
-            node_type=ControlType.REST_API,
-            configuration=configuration,
-            fsm_configuration=fsm_configuration,
-        )
+        super().__init__(name, ControlType.REST_API, fsm_configuration)
 
-        self.log = get_logger(f"controller.{name}_rest_api_child")
-
+        self.configuration = configuration
         self.response_listener = ResponseListener.get()
 
         if fsm_configuration:
@@ -406,6 +408,21 @@ class RESTAPIChildNode(ClientSideChild):
     def get_endpoint(self) -> str:
         return f"rest://{self.app_host}:{self.app_port}"
 
+    def terminate(self) -> None:
+        pass
+
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
+        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
+        return Response(
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
     def status(
         self,
         target: str = "",
@@ -427,6 +444,125 @@ class RESTAPIChildNode(ClientSideChild):
             children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
+        response = DescribeResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        description = Description(
+            endpoint=self.get_endpoint(),
+            session=os.getenv("DUNEDAQ_SESSION"),
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        if self.configuration is not None:
+            if detector_name := get_detector_name(self.configuration):
+                description.info = detector_name
+            if hasattr(
+                self.configuration.data, "application_name"
+            ):  # Application nodes.
+                description.type = self.configuration.data.application_name
+                description.name = self.configuration.data.id
+            elif hasattr(self.configuration.data, "controller") and hasattr(
+                self.configuration.data.controller, "application_name"
+            ):  # Controller nodes.
+                description.type = self.configuration.data.controller.application_name
+                description.name = self.configuration.data.controller.id
+
+        response.description.CopyFrom(description)
+
+        return response
+
+    def describe_fsm(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str = "",
+    ) -> DescribeFSMResponse:
+        return DescribeFSMResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        command_name = command.command_name
+        response = ExecuteFSMCommandResponse(
+            token=None,
+            name=self.name,
+            command_name=command_name,
+            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        # Don't execute command if we are excluded.
+        if self.state.excluded():
+            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
+            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
+            return response
+
+        try:
+            module_data = json.loads(command.data if command.data else "{}")
+        except JSONDecodeError as e:
+            self.log.error(f"Error parsing JSON command data: {e}")
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        cmd_data = {"modules": [{"data": module_data, "match": ""}]}
+        entry_state = self.state.get_operational_state()
+        transition = self.fsm.get_transition(command_name)
+        exit_state = self.fsm.get_destination_state(entry_state, transition)
+        self.state.executing_command_mark()
+        self.log.info(f"Sending '{command_name}' to '{self.name}'")
+
+        try:
+            self.commander.send_app_command(
+                cmd_id=command_name,
+                module_data=cmd_data,
+                entry_state=entry_state.upper(),
+                exit_state=exit_state.upper(),
+            )
+            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
+
+            r = self.commander.check_response(150)
+            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
+
+            response.data = json.dumps(r)
+
+            if not r["success"]:
+                # The RPC was successful, but the FSM command was not.
+                self.log.error(r["result"])
+                self.state.to_error()
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                return response
+
+        except Exception as e:
+            self.log.error(f"Got error from '{command_name}' to '{self.name}': {e!s}")
+            self.state.to_error()
+            response.fsm_flag = FSMResponseFlag.FSM_FAILED
+            response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+            return response
+
+        self.state.end_command_execution_mark()
+        self.state.new_operational_state(exit_state)
 
         return response
 
@@ -520,73 +656,44 @@ class RESTAPIChildNode(ClientSideChild):
 
         return response
 
-    def execute_fsm_command(
+    def include(
         self,
-        command: FSMCommand,
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> ExecuteFSMCommandResponse:
-        command_name = command.command_name
-
-        response = ExecuteFSMCommandResponse(
+    ) -> IncludeExcludeResponse:
+        self.state.include()
+        self.included = True
+        return IncludeExcludeResponse(
             token=None,
             name=self.name,
-            command_name=command_name,
-            fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
+            text=f"'{self.name}' included",
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        # Don't execute command if we are excluded.
-        if self.state.excluded():
-            response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED
-            response.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-            return response
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        self.state.exclude()
+        self.included = False
+        return IncludeExcludeResponse(
+            token=None,
+            name=self.name,
+            text=f"'{self.name}' excluded",
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-        try:
-            module_data = json.loads(command.data if command.data else "{}")
-        except JSONDecodeError as e:
-            self.log.error(f"Error parsing JSON command data: {e}")
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
-            return response
-
-        cmd_data = {"modules": [{"data": module_data, "match": ""}]}
-        entry_state = self.state.get_operational_state()
-        transition = self.fsm.get_transition(command_name)
-        exit_state = self.fsm.get_destination_state(entry_state, transition)
-        self.state.executing_command_mark()
-        self.log.info(f"Sending '{command_name}' to '{self.name}'")
-
-        try:
-            self.commander.send_app_command(
-                cmd_id=command_name,
-                module_data=cmd_data,
-                entry_state=entry_state.upper(),
-                exit_state=exit_state.upper(),
-            )
-            self.log.debug(f"Sent '{command_name}' to '{self.name}'")
-
-            r = self.commander.check_response(150)
-            self.log.debug(f"Got response from '{command_name}' to '{self.name}'")
-
-            response.data = json.dumps(r)
-
-            if not r["success"]:
-                # The RPC was successful, but the FSM command was not.
-                self.log.error(r["result"])
-                self.state.to_error()
-                response.fsm_flag = FSMResponseFlag.FSM_FAILED
-                return response
-
-        except Exception as e:
-            self.log.error(f"Got error from '{command_name}' to '{self.name}': {e!s}")
-            self.state.to_error()
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.flag = ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-            return response
-
-        self.state.end_command_execution_mark()
-        self.state.new_operational_state(exit_state)
-
-        return response
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        return self.status(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
