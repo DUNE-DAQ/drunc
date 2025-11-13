@@ -57,13 +57,12 @@ from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
-    create_logger_handler,
     format_name_for_cli,
     get_logger,
     ignore_sigint_sighandler,
     log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
+    get_root_logger,
 )
 
 
@@ -147,10 +146,8 @@ def unified_shell(
             connection to the process manager fails.
     """
     # Set up the drunc and unified_shell loggers
-    setup_root_logger(log_level)
-    unified_shell_log = get_logger("unified_shell")
-    create_logger_handler(rich_handler=True)
-
+    get_root_logger(log_level)
+    unified_shell_log = get_logger("unified_shell", rich_handler=True)
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address

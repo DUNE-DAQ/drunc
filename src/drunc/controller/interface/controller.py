@@ -15,11 +15,10 @@ from drunc.grpc_settings import (
 )
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.utils import (
-    create_logger_handler,
     get_logger,
     log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
+    get_root_logger,
     validate_command_facility,
 )
 
@@ -77,12 +76,9 @@ def controller_cli(
     log_level: str,
 ):
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
-    setup_root_logger(log_level)
-    log = get_logger("controller.controller_cli")
-    create_logger_handler(
-        log_file_path=None,
-        rich_handler=False,
-    )
+    get_root_logger(log_level)
+    log = get_logger("controller.controller_cli", file_handler_path=None,
+        rich_handler=False)
 
     token = Token(
         user_name="controller_init_token",

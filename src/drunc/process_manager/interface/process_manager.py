@@ -23,13 +23,13 @@ from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
-    create_logger_handler,
     get_logger,
     log_levels,
     parent_death_pact,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
+    get_root_logger,
 )
+from daqpytools.logging.handlers import add_rich_handler, add_file_handler
 
 _cleanup_coroutines = []
 
@@ -72,10 +72,10 @@ def run_pm(
         override_logs=override_logs,
         app_log_path=log_path,
     )
-    create_logger_handler(
-        log_file_path=log_path,
-        rich_handler=True,
-    )
+
+    #TODO: Temporary fix. Just add these things manually for now
+    add_rich_handler(log, use_parent_handlers = True)
+    add_file_handler(log, use_parent_handlers = True, path= log_path)
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
@@ -186,7 +186,7 @@ def run_pm(
 def process_manager_cli(
     pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
 ) -> None:
-    setup_root_logger(log_level)
+    get_root_logger(log_level)
     pm_conf = get_process_manager_configuration(pm_conf)
     run_pm(
         pm_conf=pm_conf,
