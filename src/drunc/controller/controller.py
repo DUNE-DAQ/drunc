@@ -798,10 +798,11 @@ class Controller(ControllerServicer):
             status = get_status_message(self)
             response.status.CopyFrom(status)
 
-        # Children nodes.
+        # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.status(
@@ -848,10 +849,11 @@ class Controller(ControllerServicer):
                 description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
-        # Children nodes.
+        # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe(
@@ -913,10 +915,11 @@ class Controller(ControllerServicer):
             description.sequences.extend(self.stateful_node.get_fsm_sequences())
             response.description.CopyFrom(description)
 
-        # Children nodes.
+        # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe_fsm(
