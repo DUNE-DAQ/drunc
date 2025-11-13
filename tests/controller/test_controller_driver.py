@@ -1,3 +1,6 @@
+import json
+import pprint
+
 import pytest
 from druncschema.description_pb2 import Description
 from google.protobuf.json_format import MessageToDict
@@ -6,8 +9,6 @@ from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncException
 from drunc.utils.shell_utils import create_dummy_token_from_uname
-import json
-import pprint
 
 
 def setup_controller_driver(processes_and_logs, dal, session_name) -> ControllerDriver:
