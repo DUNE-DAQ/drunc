@@ -59,10 +59,10 @@ from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
     get_logger,
+    get_root_logger,
     ignore_sigint_sighandler,
     log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
-    get_root_logger,
 )
 
 

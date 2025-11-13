@@ -27,8 +27,8 @@ from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
     get_logger,
-    log_levels,
     get_root_logger,
+    log_levels,
     validate_command_facility,
 )
 

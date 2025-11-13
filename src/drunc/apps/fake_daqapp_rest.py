@@ -16,13 +16,13 @@ from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
     get_logger,
     get_new_port,
-    resolve_localhost_and_127_ip_to_network_ip,
     get_root_logger,
+    resolve_localhost_and_127_ip_to_network_ip,
     setup_standard_loggers,
 )
 
 __version__ = "1.0.0"
-get_root_logger('info')
+get_root_logger("info")
 setup_standard_loggers()
 
 
