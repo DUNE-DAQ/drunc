@@ -237,6 +237,8 @@ class Controller(ControllerServicer):
             "oksconflibs:"
         )
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
+        self.stop_event: threading.Event | None = None
+        self.thread: threading.Thread | None = None
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
         )
@@ -503,16 +505,20 @@ class Controller(ControllerServicer):
         if ResponseListener.exists():
             ResponseListener.get().terminate()
 
-        if self.opmon_publisher is not None:
+        if self.opmon_publisher and self.stop_event:
             self.log.debug("Stopping opmon publisher")
-            self.stop_event.set()
-            self.thread.join(timeout=1.0)
-            if self.thread.is_alive():
-                self.log.warning(
-                    "OpMon publisher thread did not stop within timeout, continuing shutdown"
-                )
-            else:
-                self.log.debug("opmon publisher stopped")
+            try:
+                self.stop_event.set()
+                if self.thread:
+                    self.thread.join(timeout=1.0)
+                    if self.thread.is_alive():
+                        self.log.debug(
+                            "OpMon publisher thread did not stop within timeout, continuing shutdown"
+                        )
+                    else:
+                        self.log.debug("opmon publisher stopped")
+            except Exception as e:
+                self.log.warning(f"Error stopping opmon publisher: {e}")
 
         self.log.debug("Threading threads")
         for t in threading.enumerate():
@@ -524,6 +530,7 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
+    
 
     def OLD_propagate_to_all_children(
         self,
