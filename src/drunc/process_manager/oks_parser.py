@@ -47,7 +47,7 @@ def collect_apps(
     @return The list of dictionaries holding application attributs
 
     """
-    log = get_logger("process_manager.collect_apps")
+    log = get_logger("process_manager.collect_apps", rich_handler=True) #! why tho? it should have inhereted properly..
     # Get default environment from Session
     defenv = env.copy()
 

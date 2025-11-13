@@ -89,6 +89,7 @@ time_zone = pytz.utc
 def get_root_logger(log_level: str):
     """We want this to define the top level drunc root logger. It should by default have no handlers or the like"""    
     # print("settingup root logger")
+    setup_standard_loggers() #! I dont really like this being here
     return daqpytools_setup_root_logger('drunc', log_level)
 
 def get_logger(logger_name: str, *args, **kwargs):
