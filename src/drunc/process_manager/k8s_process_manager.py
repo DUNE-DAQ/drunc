@@ -817,9 +817,9 @@ class K8sProcessManager(ProcessManager):
         main_container: client.V1Container,
         node_selector: dict,
         host_aliases: list[client.V1HostAlias] | None,
-        use_host_network: bool = True,
         pod_volumes: list[client.V1Volume],
         extra_labels: dict[str, str] | None = None,
+        use_host_network: bool = True,
     ) -> client.V1Pod:
         """Assembles the final V1Pod object."""
 
@@ -977,9 +977,9 @@ class K8sProcessManager(ProcessManager):
                 main_container,
                 node_selector,
                 host_aliases,
-                use_host_network=use_host_network,
                 pod_volumes,
                 extra_labels=tree_labels,
+                use_host_network=use_host_network,
             )
 
             # Execute the pod creation API call
