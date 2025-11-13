@@ -17,10 +17,9 @@ from drunc.process_manager.interface.commands import (
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
-    create_logger_handler,
+    get_root_logger,
     get_logger,
     log_levels,
-    setup_root_logger,
     validate_command_facility,
 )
 
@@ -41,9 +40,8 @@ from drunc.utils.utils import (
 @click.argument("process-manager-address", type=str, callback=validate_command_facility)
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
-    setup_root_logger(log_level)
-    process_manager_shell_log = get_logger("process_manager.shell")
-    create_logger_handler(rich_handler=True)
+    get_root_logger(log_level)
+    process_manager_shell_log = get_logger("process_manager.shell", rich_handler=True)
 
     ctx.obj.reset(address=process_manager_address)
 

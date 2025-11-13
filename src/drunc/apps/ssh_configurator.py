@@ -15,10 +15,9 @@ import paramiko
 from jinja2 import Template
 
 import drunc as _drunc
-from drunc.utils.utils import create_logger_handler, get_logger, log_levels
+from drunc.utils.utils import get_logger, log_levels
 
-log = get_logger("ssh_configurator")
-create_logger_handler(rich_handler=True)
+log = get_logger("ssh_configurator", rich_handler=True)
 
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"

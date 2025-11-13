@@ -22,7 +22,7 @@ from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"
 authentication_methods: list[str] = [kPublicKeyAuth, kKerberosAuth]
-log = get_logger("ssh_doctor")
+log = get_logger("ssh_doctor", rich_handler=True)
 
 
 def test_host_connection(host: str, test_auth: str) -> bool:
@@ -137,7 +137,6 @@ def main(log_level: str):
     Set the log level to error to see only failed connections.\n
     """
     log.setLevel(log_levels[log_level.upper()])
-    create_logger_handler(rich_handler=True)
 
 
 @main.command()

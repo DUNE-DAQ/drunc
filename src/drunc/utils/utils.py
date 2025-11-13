@@ -8,6 +8,10 @@ import socket
 import string
 import sys
 import time
+
+from daqpytools.logging.logger import get_daq_logger as daqpytools_get_daq_logger
+from daqpytools.logging.logger import setup_root_logger as daqpytools_setup_root_logger
+
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
@@ -52,109 +56,129 @@ date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when th
 time_zone = pytz.utc
 
 
-class LoggingFormatter(logging.Formatter):
-    def __init__(self, fmt=full_log_format, datefmt=date_time_format, tz=time_zone):
-        super().__init__(fmt, datefmt)
-        self.tz = tz
-        self.datefmt = datefmt
+###! Delete this
+# class LoggingFormatter(logging.Formatter):
+#     def __init__(self, fmt=full_log_format, datefmt=date_time_format, tz=time_zone):
+#         super().__init__(fmt, datefmt)
+#         self.tz = tz
+#         self.datefmt = datefmt
 
-    def formatTime(self, record, datefmt):
-        date_time = datetime.fromtimestamp(record.created, self.tz)
-        return date_time.strftime(self.datefmt)
+#     def formatTime(self, record, datefmt):
+#         date_time = datetime.fromtimestamp(record.created, self.tz)
+#         return date_time.strftime(self.datefmt)
 
-    def format(self, record):
-        record.asctime = self.formatTime(record, self.datefmt)
-        # TODO: for production, remove filename and lineno entries
-        component_width = 30
-        file_lineno = f"{record.filename}:{record.lineno}"
-        record.filename = file_lineno.ljust(component_width)[:component_width]
-        component_width = 45
-        name_colon = f"{record.name}:"
-        if name_colon.startswith("drunc."):
-            name_colon = name_colon.replace("drunc.", "")
-        record.name = name_colon.ljust(component_width)[:component_width]
-        component_width = 10
-        level_name = record.levelname
-        record.levelname = level_name.ljust(component_width)[:component_width]
-        return super().format(record)
+#     def format(self, record):
+#         record.asctime = self.formatTime(record, self.datefmt)
+#         # TODO: for production, remove filename and lineno entries
+#         component_width = 30
+#         file_lineno = f"{record.filename}:{record.lineno}"
+#         record.filename = file_lineno.ljust(component_width)[:component_width]
+#         component_width = 45
+#         name_colon = f"{record.name}:"
+#         if name_colon.startswith("drunc."):
+#             name_colon = name_colon.replace("drunc.", "")
+#         record.name = name_colon.ljust(component_width)[:component_width]
+#         component_width = 10
+#         level_name = record.levelname
+#         record.levelname = level_name.ljust(component_width)[:component_width]
+#         return super().format(record)
 
+###
+    
 
-def setup_root_logger(log_level: str) -> logging.Logger:
-    log_level = log_level.upper()
-    if log_level not in log_levels.keys():
-        raise DruncSetupException(
-            f"Unrecognised log level, should be one of {log_levels.keys()}"
-        )
-    log_level = log_levels[log_level]
-
-    root_logger = logging.getLogger("drunc")
-    root_logger.setLevel(log_level)
-
-    # And then manually tweak 'sh.command' logger. Sigh.
-    sh_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    sh_command_logger = logging.getLogger(
-        sh.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    sh_command_logger.setLevel(sh_command_level)
-    for handler in sh_command_logger.handlers:
-        handler.setLevel(sh_command_level)
-
-    # And kafka
-    kafka_command_level = log_level if log_level > logging.INFO else (log_level + 10)
-    kafka_command_logger = logging.getLogger(
-        kafka.__name__
-    )  # Not get_logger as the root logger is initially "UNSET" at context declaration
-    kafka_command_logger.setLevel(kafka_command_level)
-    for handler in kafka_command_logger.handlers:
-        handler.setLevel(kafka_command_level)
-    return root_logger
-
+def get_root_logger(log_level: str):
+    """We want this to define the top level drunc root logger. It should by default have no handlers or the like"""    
+    # print("settingup root logger")
+    return daqpytools_setup_root_logger('drunc', log_level)
 
 def get_logger(logger_name: str, *args, **kwargs):
-    return logging.getLogger(f"drunc.{logger_name}")
+    """ This is a wrapper to the get_daq_logger in daqpytools """
+    # print(f"getting {logger_name}")
+    # if logger_name == "unified_shell":
+    #     raise ValueError("some message")
+    return daqpytools_get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+
+# def setup_root_logger():
+#     """There are certain instances when the root logger wants to be modified. This is what does it"""
 
 
-def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
-    function_logger = get_logger("utils.get_logger")
-    logger_level = logging.getLogger("drunc").level
-    if not logger_level:
-        setup_root_logger("INFO")
-        logger_level = logging.getLogger("drunc").level
 
-    drunc_logger = logging.getLogger("drunc")
-    drunc_logger.handlers = []
+# def setup_root_logger(log_level: str) -> logging.Logger:
+#     log_level = log_level.upper()
+#     if log_level not in log_levels.keys():
+#         raise DruncSetupException(
+#             f"Unrecognised log level, should be one of {log_levels.keys()}"
+#         )
+#     log_level = log_levels[log_level]
 
-    if log_file_path is not None:
-        fileHandler = logging.FileHandler(filename=log_file_path)
-        fileHandler.setFormatter(LoggingFormatter())
-        drunc_logger.addHandler(fileHandler)
-        function_logger.debug("Added file handler to drunc")
+#     root_logger = logging.getLogger("drunc")
+#     root_logger.setLevel(log_level)
 
-    if rich_handler:
-        function_logger.debug("Assigning a RichHandler to drunc logger")
-        try:
-            width = os.get_terminal_size()[0]
-        except:
-            width = 150
-        stdHandler = RichHandler(
-            console=Console(width=width),
-            omit_repeated_times=False,
-            markup=True,
-            rich_tracebacks=True,
-            show_path=False,
-            tracebacks_width=width,
-        )
-        stdHandler.setFormatter(LoggingFormatter(fmt=rich_log_format))
-    else:
-        function_logger.debug("Assigning a StreamHandler to drunc logger")
-        stdHandler = logging.StreamHandler(sys.stdout)
-        stdHandler.setFormatter(LoggingFormatter())
+#     # And then manually tweak 'sh.command' logger. Sigh.
+#     sh_command_level = log_level if log_level > logging.INFO else (log_level + 10)
+#     sh_command_logger = logging.getLogger(
+#         sh.__name__
+#     )  # Not get_logger as the root logger is initially "UNSET" at context declaration
+#     sh_command_logger.setLevel(sh_command_level)
+#     for handler in sh_command_logger.handlers:
+#         handler.setLevel(sh_command_level)
 
-    if stdHandler:
-        drunc_logger.addHandler(stdHandler)
-        function_logger.debug("Added appropriate stream handler to drunc")
+#     # And kafka
+#     kafka_command_level = log_level if log_level > logging.INFO else (log_level + 10)
+#     kafka_command_logger = logging.getLogger(
+#         kafka.__name__
+#     )  # Not get_logger as the root logger is initially "UNSET" at context declaration
+#     kafka_command_logger.setLevel(kafka_command_level)
+#     for handler in kafka_command_logger.handlers:
+#         handler.setLevel(kafka_command_level)
+#     return root_logger
 
-    function_logger.debug("Finished setting up logger")
+
+# def get_logger(logger_name: str, *args, **kwargs):
+#     return logging.getLogger(f"drunc.{logger_name}", *args, **kwargs)
+
+
+# def create_logger_handler(log_file_path: str = None, rich_handler: bool = False):
+#     function_logger = get_logger("utils.get_logger")
+#     logger_level = logging.getLogger("drunc").level
+#     if not logger_level:
+#         setup_root_logger("INFO")
+#         logger_level = logging.getLogger("drunc").level
+
+#     drunc_logger = logging.getLogger("drunc")
+#     drunc_logger.handlers = []
+
+#     if log_file_path is not None:
+#         fileHandler = logging.FileHandler(filename=log_file_path)
+#         fileHandler.setFormatter(LoggingFormatter())
+#         drunc_logger.addHandler(fileHandler)
+#         function_logger.debug("Added file handler to drunc")
+
+#     if rich_handler:
+#         function_logger.debug("Assigning a RichHandler to drunc logger")
+#         try:
+#             width = os.get_terminal_size()[0]
+#         except:
+#             width = 150
+#         stdHandler = RichHandler(
+#             console=Console(width=width),
+#             omit_repeated_times=False,
+#             markup=True,
+#             rich_tracebacks=True,
+#             show_path=False,
+#             tracebacks_width=width,
+#         )
+#         stdHandler.setFormatter(LoggingFormatter(fmt=rich_log_format))
+#     else:
+#         function_logger.debug("Assigning a StreamHandler to drunc logger")
+#         stdHandler = logging.StreamHandler(sys.stdout)
+#         stdHandler.setFormatter(LoggingFormatter())
+
+#     if stdHandler:
+#         drunc_logger.addHandler(stdHandler)
+#         function_logger.debug("Added appropriate stream handler to drunc")
+
+#     function_logger.debug("Finished setting up logger")
 
 
 def setup_standard_loggers() -> None:

@@ -7,7 +7,7 @@ from druncschema.token_pb2 import Token
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, setup_standard_loggers
 
 
 class InterruptedCommand(DruncShellException):
@@ -146,10 +146,31 @@ class ShellContext:
         self._console.rule(*args, **kwargs)
 
     def print_status_summary(self) -> None:
+        #! Apparently these need to be put in various places but was not..
+        setup_standard_loggers()
+        
+        #TODO: This needs more work
+
+        
+        
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().status
         describe_fsm = self.get_driver("controller").describe_fsm().description
         current_state = status.state
+
+        newlog = get_logger("utils.ShellContextNew" ) #! I think this is just adding a handler everytime. we need to be careful with this.
+
+        #! I think the solution really is in daqpytools so we haev to be careful with this
+        newlog.error("we're in business")
+        somenewlog = get_logger("utils.shellcontextnohandlers")
+        somenewlog.error("this is sus now")
+
+        other_log = get_logger("unified_shell", rich_handler = True)
+
+        other_log.error("testing unified shell")
+
+        # getEffectiveLevel()
+        
         if status.in_error:
             log.error(
                 f"[red] FSM is in error ({status})[/red], not currently accepting new commands."

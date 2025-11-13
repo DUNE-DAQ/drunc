@@ -1,14 +1,13 @@
 from drunc.process_manager.interface.process_manager import process_manager_cli
-from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
+from drunc.utils.utils import get_logger, get_root_logger
 
 
 def main():
     try:
         process_manager_cli()
     except Exception as e:
-        setup_root_logger("INFO")
-        log = get_logger("process_manager")
-        create_logger_handler(rich_handler=False)
+        get_root_logger("INFO")
+        log = get_logger("process_manager", rich_handler=False)
         log.error("Exception thrown!")
         log.exception(e)
         exit(1)
