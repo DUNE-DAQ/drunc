@@ -57,6 +57,7 @@ def ssh_manager():
     manager.cleanup_all()
 
 
+@pytest.mark.paramiko
 def test_ssh_multi_process_lifecycle(ssh_manager):
     """
     Test lifecycle of 10 concurrent SSH processes.
