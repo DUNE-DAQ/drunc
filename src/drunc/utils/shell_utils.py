@@ -158,16 +158,16 @@ class ShellContext:
         describe_fsm = self.get_driver("controller").describe_fsm().description
         current_state = status.state
 
-        newlog = get_logger("utils.ShellContextNew" ) #! I think this is just adding a handler everytime. we need to be careful with this.
+        # newlog = get_logger("utils.ShellContextNew" ) #! I think this is just adding a handler everytime. we need to be careful with this.
 
-        #! I think the solution really is in daqpytools so we haev to be careful with this
-        newlog.error("we're in business")
-        somenewlog = get_logger("utils.shellcontextnohandlers")
-        somenewlog.error("this is sus now")
+        # #! I think the solution really is in daqpytools so we haev to be careful with this
+        # newlog.error("we're in business")
+        # somenewlog = get_logger("utils.shellcontextnohandlers")
+        # somenewlog.error("this is sus now")
 
-        other_log = get_logger("unified_shell", rich_handler = True)
+        # other_log = get_logger("unified_shell.newthang", rich_handler = True, log_level = "DEBUG")
 
-        other_log.error("testing unified shell")
+        # other_log.error("testing unified shell")
 
         # getEffectiveLevel()
         

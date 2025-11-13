@@ -45,7 +45,7 @@ def run_pm(
     generated_port: bool = None,
 ) -> None:
     appName = "process_manager"
-    log = get_logger(logger_name=appName)
+    log = get_logger(logger_name=appName, rich_handler=True)
 
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
@@ -74,7 +74,7 @@ def run_pm(
     )
 
     #TODO: Temporary fix. Just add these things manually for now
-    add_rich_handler(log, use_parent_handlers = True)
+    log.error("Doing some stuff again")
     add_file_handler(log, use_parent_handlers = True, path= log_path)
 
     for key, value in pmch.data.environment.items():
