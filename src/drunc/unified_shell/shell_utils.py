@@ -8,7 +8,6 @@ from drunc.exceptions import DruncException, DruncSetupException
 from drunc.utils.utils import format_name_for_cli, get_logger
 
 
-
 def run_fsm_sequence(
     sequence_commands: list[str],
     sequence_command_opts_and_args: dict[str, list[str]],

@@ -7,6 +7,7 @@ import types
 
 import click
 import grpc
+from daqpytools.logging.handlers import add_file_handler
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
@@ -24,12 +25,11 @@ from drunc.process_manager.utils import get_log_path
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
     get_logger,
+    get_root_logger,
     log_levels,
     parent_death_pact,
     resolve_localhost_and_127_ip_to_network_ip,
-    get_root_logger,
 )
-from daqpytools.logging.handlers import add_rich_handler, add_file_handler
 
 _cleanup_coroutines = []
 
@@ -73,9 +73,8 @@ def run_pm(
         app_log_path=log_path,
     )
 
-    #TODO: Temporary fix. Just add these things manually for now
-    log.error("Doing some stuff again")
-    add_file_handler(log, use_parent_handlers = True, path= log_path)
+    # TODO: Temporary fix. Just add these things manually for now
+    add_file_handler(log, use_parent_handlers=True, path=log_path)
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value

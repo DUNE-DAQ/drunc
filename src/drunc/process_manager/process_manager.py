@@ -618,13 +618,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     @staticmethod
     def get(conf, **kwargs):
-        log = get_logger("process_manager.get") #! sussy
-
-        test_log = get_logger("process_manager.mygetter")
-        # test_log.error("Testing this")
-
-        # just_pm = get_logger("process_manager", rich_handler=True)
-        # just_pm.error("logging me")
+        log = get_logger("process_manager.get")
 
         if conf.data.type == ProcessManagerTypes.SSH_SHELL:
             from drunc.process_manager.ssh_process_manager import (
