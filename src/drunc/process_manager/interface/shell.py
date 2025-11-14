@@ -3,6 +3,7 @@ import os
 
 import click
 import click_shell
+from daqpytools.logging.levels import logging_log_levels
 
 from drunc.process_manager.interface.commands import (
     boot,
@@ -19,7 +20,6 @@ from drunc.utils.utils import (
     CONTEXT_SETTINGS,
     get_logger,
     get_root_logger,
-    log_levels,
     validate_command_facility,
 )
 
@@ -33,7 +33,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )

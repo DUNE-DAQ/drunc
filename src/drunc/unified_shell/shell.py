@@ -11,6 +11,7 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
+from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
@@ -61,7 +62,6 @@ from drunc.utils.utils import (
     get_logger,
     get_root_logger,
     ignore_sigint_sighandler,
-    log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
 )
 
@@ -74,7 +74,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
