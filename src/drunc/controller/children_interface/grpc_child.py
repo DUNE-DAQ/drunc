@@ -16,6 +16,7 @@ from druncschema.controller_pb2 import (
     IncludeExcludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
+    StatusRequest,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -218,9 +219,8 @@ class gRPCChildNode(ChildNode):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
-        request = AddressedCommand(
+        request = StatusRequest(
             token=None,
-            command_name="status",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
