@@ -32,15 +32,6 @@ from drunc.exceptions import DruncException, DruncSetupException
 CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bold red"})
 
-log_levels = {
-    "CRITICAL": logging.CRITICAL,
-    "ERROR": logging.ERROR,
-    "WARNING": logging.WARNING,
-    "INFO": logging.INFO,
-    "DEBUG": logging.DEBUG,
-    "NOTSET": logging.NOTSET,
-}  #! Delete me
-
 
 def get_root_logger(log_level: str) -> logging.Logger:
     """
