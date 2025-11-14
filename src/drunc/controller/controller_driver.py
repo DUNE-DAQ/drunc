@@ -5,6 +5,7 @@ from functools import wraps
 import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
     DescribeResponse,
@@ -163,14 +164,13 @@ class ControllerDriver:
         key: str = "",
         timeout: int | float = 60,
     ) -> DescribeFSMResponse:
-        request = AddressedCommand(
-            command_name="describe_fsm",
+        request = DescribeFSMRequest(
+            key=key,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        request.command_data.Pack(PlainText(text=key))
 
         try:
             response = self.stub.describe_fsm(request, timeout=timeout)

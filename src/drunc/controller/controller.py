@@ -11,6 +11,7 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
     DescribeResponse,
@@ -881,7 +882,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
-        self, request: AddressedCommand, context: ServicerContext
+        self, request: DescribeFSMRequest, context: ServicerContext
     ) -> DescribeFSMResponse:
         response = DescribeFSMResponse(
             token=None,
@@ -896,16 +897,13 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # What transitions to describe.
-        key = unpack_any(request.command_data, PlainText).text
-
         # This node.
         if request.target == self.name or request.execute_along_path:
-            if key == "all-transitions":
+            if request.key == "all-transitions":
                 description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
-            elif key == "":
+            elif request.key == "":
                 description = convert_fsm_transition(
                     self.stateful_node.get_fsm_transitions()
                 )
@@ -913,9 +911,9 @@ class Controller(ControllerServicer):
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    if key == transition.source:
+                    if request.key == transition.source:
                         interesting_transitions += [transition]
-                    if key == transition.name:
+                    if request.key == transition.name:
                         interesting_transitions += [transition]
                 description = convert_fsm_transition(interesting_transitions)
 
@@ -936,7 +934,7 @@ class Controller(ControllerServicer):
                 target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
-                key,
+                request.key,
             ),
             child_list,
         )
