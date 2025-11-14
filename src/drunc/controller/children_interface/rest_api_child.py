@@ -13,11 +13,12 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExcludeResponse,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
-    IncludeExcludeResponse,
+    IncludeResponse,
     RecomputeStatusResponse,
     Status,
     StatusResponse,
@@ -663,10 +664,10 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
+    ) -> IncludeResponse:
         self.state.include()
         self.included = True
-        return IncludeExcludeResponse(
+        return IncludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' included",
@@ -678,10 +679,10 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
+    ) -> ExcludeResponse:
         self.state.exclude()
         self.included = False
-        return IncludeExcludeResponse(
+        return ExcludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' excluded",
