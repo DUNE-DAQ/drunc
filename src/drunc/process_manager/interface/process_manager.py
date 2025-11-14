@@ -73,7 +73,9 @@ def run_pm(
         app_log_path=log_path,
     )
 
-    # TODO: Temporary fix. Just add these things manually for now
+    # Manually add in file handler to the logger, as we want the logger to first
+    # log the validation of the PM Config which is necessary to generate the
+    # log path.
     add_file_handler(log, use_parent_handlers=True, path=log_path)
 
     for key, value in pmch.data.environment.items():

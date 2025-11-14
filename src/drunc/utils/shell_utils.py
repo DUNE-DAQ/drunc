@@ -146,8 +146,7 @@ class ShellContext:
         self._console.rule(*args, **kwargs)
 
     def print_status_summary(self) -> None:
-        setup_standard_loggers()
-        # TODO: This needs more work
+        setup_standard_loggers()  # Calling this to initialise the utils logger. See #691
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().status
         describe_fsm = self.get_driver("controller").describe_fsm().description
