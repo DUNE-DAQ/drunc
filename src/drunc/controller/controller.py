@@ -15,14 +15,16 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeRequest,
     DescribeResponse,
+    ExcludeRequest,
+    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
-    IncludeExcludeRequest,
-    IncludeExcludeResponse,
+    IncludeRequest,
+    IncludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -1163,10 +1165,10 @@ class Controller(ControllerServicer):
     @publish_command_time
     def include(
         self,
-        request: IncludeExcludeRequest,
+        request: IncludeRequest,
         context: ServicerContext,
-    ) -> IncludeExcludeResponse:
-        response = IncludeExcludeResponse(
+    ) -> IncludeResponse:
+        response = IncludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1212,10 +1214,10 @@ class Controller(ControllerServicer):
     @publish_command_time
     def exclude(
         self,
-        request: IncludeExcludeRequest,
+        request: ExcludeRequest,
         context: ServicerContext,
-    ) -> IncludeExcludeResponse:
-        response = IncludeExcludeResponse(
+    ) -> ExcludeResponse:
+        response = ExcludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,

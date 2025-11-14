@@ -9,13 +9,15 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeRequest,
     DescribeResponse,
+    ExcludeRequest,
+    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    IncludeExcludeRequest,
-    IncludeExcludeResponse,
+    IncludeRequest,
+    IncludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -364,8 +366,8 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> IncludeResponse:
+        request = IncludeRequest(
             token=None,
             target=target,
             execute_along_path=execute_along_path,
@@ -393,8 +395,8 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> ExcludeResponse:
+        request = ExcludeRequest(
             token=None,
             target=target,
             execute_along_path=execute_along_path,

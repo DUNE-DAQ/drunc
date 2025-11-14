@@ -7,13 +7,15 @@ from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeRequest,
     DescribeResponse,
+    ExcludeRequest,
+    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    IncludeExcludeRequest,
-    IncludeExcludeResponse,
+    IncludeRequest,
+    IncludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -189,8 +191,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> IncludeResponse:
+        request = IncludeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -210,8 +212,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> ExcludeResponse:
+        request = ExcludeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
