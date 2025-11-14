@@ -98,10 +98,8 @@ class gRPCChildNode(ChildNode):
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 
-        request = AddressedCommand(
+        request = DescribeRequest(
             token=None,
-            command_name="describe",
-            command_data=None,
             target="",
             execute_along_path=False,
             execute_on_all_subsequent_children_in_path=False,
