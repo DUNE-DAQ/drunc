@@ -21,6 +21,8 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     IncludeExcludeRequest,
     IncludeExcludeResponse,
+    RecomputeStatusRequest,
+    RecomputeStatusResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
@@ -1258,9 +1260,9 @@ class Controller(ControllerServicer):
     @in_control
     @publish_command_time
     def recompute_status(
-        self, request: AddressedCommand, context: ServicerContext
-    ) -> StatusResponse:
-        response = StatusResponse(
+        self, request: RecomputeStatusRequest, context: ServicerContext
+    ) -> RecomputeStatusResponse:
+        response = RecomputeStatusResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1273,102 +1275,85 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # Children nodes.
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.recompute_status(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
+
         # This node.
         if request.target == self.name or request.execute_along_path:
-            child_list = self.address_all()
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.recompute_status(
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-            )
-
-            self_should_go_to_error = False
-            children_states = set()
-            children_sub_states = set()
-
-            for s in child_responses:
-                if s.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                    self_should_go_to_error = True
-
-                try:
-                    child_status = s.status
-                    children_states.add(child_status.state)
-                    children_sub_states.add(child_status.sub_state)
-                    if child_status.in_error:
-                        self_should_go_to_error = True
-
-                except UnpackingError as e:
-                    self.log.error(
-                        f"Failed to decode status for {s.name}: {e}, assuming it is excluded"
-                    )
-                    self_should_go_to_error = True
-                    continue
-
-            children_in_inconsistent_state = len(children_states) > 1
-            children_in_inconsistent_sub_state = len(children_sub_states) > 1
-
-            if (
-                children_in_inconsistent_state
-                or children_in_inconsistent_sub_state
-                or self_should_go_to_error
-            ) and not self.stateful_node.node_is_in_error():
-                self.log.warning(
-                    f"Children states: {children_states=}, {children_sub_states=}, the state is inconsistent or one node is in error, going to error"
-                )
-                self.stateful_node.to_error()
-
-            if (
-                not children_in_inconsistent_state
-                and not children_in_inconsistent_sub_state
-                and not self_should_go_to_error
-            ):
-                children_state = children_states.pop()
-                children_sub_state = children_sub_states.pop()
-                self.log.info(
-                    f"Children state: {children_state}, children sub state: {children_sub_state}"
-                )
-
-                if children_sub_state == "idle":
-                    children_sub_state = children_state
-
-                self.stateful_node.resolve_error()
-                self.stateful_node.force_set_node_operational_state(children_state)
-                self.stateful_node.force_set_node_operational_sub_state(
-                    children_sub_state
-                )
-
-            status = get_status_message(self)
-            response.status.CopyFrom(status)
-
-            child_list = self.address_all(ignore_exclusion=True)
-            child_responses = self.propagate_concurrently(
+            # Query status of immediate children only (respecting exclusion).
+            child_status_list = self.address_all()
+            child_status_responses = self.propagate_concurrently(
                 lambda child, target: child.status(
                     target,
                     request.execute_along_path,
                     request.execute_on_all_subsequent_children_in_path,
                 ),
-                child_list,
+                child_status_list,
             )
-            response.children.extend(child_responses)
 
-        # Children nodes.
-        else:
-            child_list = self.address_target_path(
-                request.target,
-                request.execute_on_all_subsequent_children_in_path,
+            children_states = set()
+            children_sub_states = set()
+            children_error = False
+
+            for s in child_status_responses:
+                if s.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
+                    children_error = True
+
+                child_status = s.status
+                children_states.add(child_status.state)
+                children_sub_states.add(child_status.sub_state)
+                if child_status.in_error:
+                    children_error = True
+
+            children_mixed_state = len(children_states) > 1
+            children_mixed_substate = len(children_sub_states) > 1
+            children_in_bad_state = (
+                children_mixed_state or children_mixed_substate or children_error
             )
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.recompute_status(
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-            )
-            response.children.extend(child_responses)
+
+            if children_in_bad_state and not self.stateful_node.node_is_in_error():
+                self.log.warning(
+                    (
+                        f"Children states: {children_states=}, {children_sub_states=}, "
+                        "the state is inconsistent or one node is in error, going to error"
+                    )
+                )
+
+                # Bad times...
+                self.stateful_node.to_error()
+
+            else:
+                children_state = children_states.pop()
+                children_sub_state = children_sub_states.pop()
+
+                self.log.info(
+                    (
+                        f"Children state: {children_state}, children sub state: "
+                        f"{children_sub_state}"
+                    )
+                )
+
+                if children_sub_state == "idle":
+                    children_sub_state = children_state
+
+                # All is well, so let's fix our state.
+                self.stateful_node.resolve_error()
+                self.stateful_node.force_set_node_operational_state(children_state)
+                self.stateful_node.force_set_node_operational_sub_state(
+                    children_sub_state
+                )
 
         return response
 

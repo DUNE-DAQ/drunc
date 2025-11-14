@@ -14,6 +14,8 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     IncludeExcludeRequest,
     IncludeExcludeResponse,
+    RecomputeStatusRequest,
+    RecomputeStatusResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -271,9 +273,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> StatusResponse:
-        request = AddressedCommand(
-            command_name="recompute_status",
+    ) -> RecomputeStatusResponse:
+        request = RecomputeStatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
