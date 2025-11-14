@@ -6,6 +6,7 @@ import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
+    DescribeRequest,
     DescribeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
@@ -245,9 +246,8 @@ class gRPCChildNode(ChildNode):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
-        request = AddressedCommand(
+        request = DescribeRequest(
             token=None,
-            command_name="describe",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
