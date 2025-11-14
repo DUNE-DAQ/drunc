@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 from functools import wraps
 
 import grpc
@@ -31,14 +33,54 @@ from drunc.utils.utils import get_logger
 
 
 class ControllerDriver:
+    @staticmethod
+    def _resolve_address_to_ipv4(address: str) -> str:
+        """
+        Resolves a 'host:port' or 'ip:port' string to a strict 'ipv4:port' string.
+
+        Raises:
+            ValueError: If the address is in an invalid format or cannot be
+                        resolved to a valid IPv4 address.
+        """
+        host_or_ip = ""
+
+        try:
+            parts = address.rsplit(":", 1)
+            if len(parts) != 2:
+                raise ValueError(
+                    f"Address '{address}' must be in 'host:port' or 'ip:port' format."
+                )
+
+            host_or_ip, port = parts[0], parts[1]
+
+            if not host_or_ip or not port:
+                raise ValueError("Address string is missing hostname/IP or port.")
+
+            resolved_ip = socket.gethostbyname(host_or_ip)
+            ipaddress.IPv4Address(resolved_ip)
+            return f"{resolved_ip}:{port}"
+
+        except (socket.gaierror, ValueError) as e:
+            raise ValueError(
+                f"Address '{host_or_ip or address}' could not be resolved to a valid IPv4:port. Error: {e}"
+            ) from e
+
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ControllerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        # The 'ipv4:' prefix forces IPv4 resolution, which helps avoid Kubernetes hairpinning issues
-        target_address = f"ipv4:{self.address}"
+
+        try:
+            resolved_address = self._resolve_address_to_ipv4(address)
+        except ValueError as e:
+            self.log.error(
+                f"Failed to initialize ControllerDriver. Invalid address '{self.address}': {e}"
+            )
+            raise e
+
+        target_address = f"ipv4:{resolved_address}"
         self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)
         self.token = Token()
