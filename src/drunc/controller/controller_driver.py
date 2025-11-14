@@ -14,6 +14,7 @@ from druncschema.controller_pb2 import (
     IncludeExcludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
+    StatusRequest,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -76,8 +77,7 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> StatusResponse:
-        request = AddressedCommand(
-            command_name="status",
+        request = StatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

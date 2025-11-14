@@ -23,6 +23,7 @@ from druncschema.controller_pb2 import (
     IncludeExcludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
+    StatusRequest,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
@@ -786,7 +787,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
-        self, request: AddressedCommand, context: ServicerContext
+        self, request: StatusRequest, context: ServicerContext
     ) -> StatusResponse:
         response = StatusResponse(
             token=None,
