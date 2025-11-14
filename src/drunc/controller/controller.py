@@ -12,6 +12,7 @@ from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
+    DescribeRequest,
     DescribeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
@@ -829,7 +830,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
-        self, request: AddressedCommand, context: ServicerContext
+        self, request: DescribeRequest, context: ServicerContext
     ) -> DescribeResponse:
         response = DescribeResponse(
             token=None,
