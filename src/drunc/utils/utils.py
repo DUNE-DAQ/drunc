@@ -13,10 +13,8 @@ from datetime import datetime
 from enum import Enum
 from urllib.parse import urlparse
 
-import pytz
 from click import BadParameter
-from daqpytools.logging.logger import get_daq_logger as daqpytools_get_daq_logger
-from daqpytools.logging.logger import setup_root_logger as daqpytools_setup_root_logger
+from daqpytools.logging.logger import get_daq_logger, setup_root_logger
 from requests import delete, get, patch, post
 from rich.progress import (
     BarColumn,
@@ -41,24 +39,39 @@ log_levels = {
     "INFO": logging.INFO,
     "DEBUG": logging.DEBUG,
     "NOTSET": logging.NOTSET,
-}
-full_log_format = "%(asctime)s %(levelname)s %(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
-rich_log_format = (
-    "%(filename)s %(name)s %(message)s"  # TODO: for production, remove the filename
-)
-date_time_format = "[%Y/%m/%d %H:%M:%S]"  # TODO: include timezone as %Z when the RichHandler starts supporting it in the tty. If this is desired, a custom handler can be written that looks like the rich handler
-time_zone = pytz.utc
+}  #! Delete me
 
 
-def get_root_logger(log_level: str):
-    """We want this to define the top level drunc root logger. It should by default have no handlers or the like"""
-    setup_standard_loggers()  #! I dont really like this being here
-    return daqpytools_setup_root_logger("drunc", log_level)
+def get_root_logger(log_level: str) -> logging.Logger:
+    """
+    Set up the base logger which all other loggers will inherit.
+    This base logger is named the 'drunc' logger, and functions similarly to the root
+    logger. It should have no handlers attached to it.
+
+    Args:
+        log_level (str): Log level for the root logger.
+
+    Returns:
+        logging.Logger: Configured drunc root logger instance.
+
+    """
+    # This sets up the utils handler as well, which is used in many cases
+    # Works for now, but preferrably this should not be here
+    # See #691
+    setup_standard_loggers()
+    return setup_root_logger("drunc", log_level)
 
 
 def get_logger(logger_name: str, *args, **kwargs):
-    """This is a wrapper to the get_daq_logger in daqpytools"""
-    return daqpytools_get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+    """Returns / constructs default logging instances. Prepends all loggers with 'drunc'
+    to inherit from the root 'drunc' logger.
+    Wraps to the daqpytools implementation, see for more details
+
+    Args:
+        logger_name (str): Name of the logger
+        args, kwargs: Passed without modification to the daqpytools implementation
+    """
+    return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
 
 def setup_standard_loggers() -> None:
