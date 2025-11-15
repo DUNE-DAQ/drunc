@@ -1325,7 +1325,7 @@ class Controller(ControllerServicer):
                 children_mixed_state or children_mixed_substate or children_error
             )
 
-            if children_in_bad_state and not self.stateful_node.node_is_in_error():
+            if children_in_bad_state:
                 self.log.warning(
                     (
                         f"Children states: {children_states=}, {children_sub_states=}, "
