@@ -1333,7 +1333,7 @@ class Controller(ControllerServicer):
                     )
                 )
 
-                # Bad times...
+                # Children are in bad state, so set our state to error.
                 self.stateful_node.to_error()
 
             else:
@@ -1350,7 +1350,7 @@ class Controller(ControllerServicer):
                 if children_sub_state == "idle":
                     children_sub_state = children_state
 
-                # All is well, so let's fix our state.
+                # All is well, so fix our state.
                 self.stateful_node.resolve_error()
                 self.stateful_node.force_set_node_operational_state(children_state)
                 self.stateful_node.force_set_node_operational_sub_state(
