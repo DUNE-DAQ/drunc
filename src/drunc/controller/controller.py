@@ -694,7 +694,7 @@ class Controller(ControllerServicer):
         self,
         target: str,
         execute_on_children: bool,
-        ignore_exclusion: bool = False,
+        include_excluded_nodes: bool = False,
     ) -> list[tuple[ChildNode, str]]:
         """Finds the next node(s) along a given path to a target node.
 
@@ -706,8 +706,8 @@ class Controller(ControllerServicer):
         Args:
             target: The path to the target from the current node.
             execute_on_children: If True, run on nodes beyond the target.
-            ignore_exclusion: If True, traverse ALL nodes, including those
-                marked as excluded (default: False).
+            include_excluded_nodes: If True, traverse ALL nodes, including
+                those marked as excluded (default: False).
 
         Returns:
             A list of (child, target) for each addressed child.
@@ -720,7 +720,7 @@ class Controller(ControllerServicer):
                 (child, "/".join(next_target_path))
                 for child in self.children_nodes
                 if child.name == next_target_path[0]
-                and (child.included or ignore_exclusion)
+                and (child.included or include_excluded_nodes)
             ]
             if not targets:
                 self.log.info(
@@ -734,14 +734,14 @@ class Controller(ControllerServicer):
 
         # Handle execute_on_children only if the path is exhausted.
         if execute_on_children:
-            return self.address_all(ignore_exclusion=ignore_exclusion)
+            return self.address_all(include_excluded_nodes=include_excluded_nodes)
 
         # Path is exhausted and we are NOT executing on children.
         return []
 
     def address_all(
         self,
-        ignore_exclusion: bool = False,
+        include_excluded_nodes: bool = False,
     ) -> list[tuple[ChildNode, str]]:
         """Finds all child nodes.
 
@@ -749,8 +749,8 @@ class Controller(ControllerServicer):
         returned data is structured the same as that of address_target_path.
 
         Args:
-            ignore_exclusion: If True, traverse ALL nodes, including those
-                marked as excluded (default: False).
+            include_excluded_nodes: If True, traverse ALL nodes, including
+                those marked as excluded (default: False).
 
         Returns:
             A list of (child, target) for each addressed child.
@@ -758,7 +758,7 @@ class Controller(ControllerServicer):
         return [
             (child, child.name)
             for child in self.children_nodes
-            if child.included or ignore_exclusion
+            if child.included or include_excluded_nodes
         ]
 
     @staticmethod
@@ -815,7 +815,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            ignore_exclusion=True,
+            include_excluded_nodes=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.status(
@@ -866,7 +866,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            ignore_exclusion=True,
+            include_excluded_nodes=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe(
@@ -929,7 +929,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            ignore_exclusion=True,
+            include_excluded_nodes=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe_fsm(
@@ -1194,7 +1194,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            ignore_exclusion=True,
+            include_excluded_nodes=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.include(
@@ -1243,7 +1243,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            ignore_exclusion=True,
+            include_excluded_nodes=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.exclude(
@@ -1294,7 +1294,7 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-            # Query status of immediate children only (respecting exclusion).
+            # Query status of immediate children only (except excluded).
             child_status_list = self.address_all()
             child_status_responses = self.propagate_concurrently(
                 lambda child, target: child.status(
@@ -1307,30 +1307,27 @@ class Controller(ControllerServicer):
 
             children_states = set()
             children_sub_states = set()
-            children_error = False
+            children_in_error = False
 
             for s in child_status_responses:
                 if s.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                    children_error = True
-
+                    children_in_error = True
                 child_status = s.status
                 children_states.add(child_status.state)
                 children_sub_states.add(child_status.sub_state)
                 if child_status.in_error:
-                    children_error = True
+                    children_in_error = True
 
-            children_mixed_state = len(children_states) > 1
-            children_mixed_substate = len(children_sub_states) > 1
             children_in_bad_state = (
-                children_mixed_state or children_mixed_substate or children_error
+                children_in_error
+                or len(children_states) > 1
+                or len(children_sub_states) > 1
             )
 
             if children_in_bad_state:
+                self.log.debug(f"{children_states=}, {children_sub_states=}")
                 self.log.warning(
-                    (
-                        f"Children states: {children_states=}, {children_sub_states=}, "
-                        "the state is inconsistent or one node is in error, going to error"
-                    )
+                    "Child nodes are in error or inconsistent state. Going to error."
                 )
 
                 # Children are in bad state, so set our state to error.
@@ -1339,13 +1336,7 @@ class Controller(ControllerServicer):
             else:
                 children_state = children_states.pop()
                 children_sub_state = children_sub_states.pop()
-
-                self.log.info(
-                    (
-                        f"Children state: {children_state}, children sub state: "
-                        f"{children_sub_state}"
-                    )
-                )
+                self.log.debug(f"{children_state=}, {children_sub_state=}")
 
                 if children_sub_state == "idle":
                     children_sub_state = children_state
