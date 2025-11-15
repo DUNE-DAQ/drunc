@@ -1334,19 +1334,17 @@ class Controller(ControllerServicer):
                 self.stateful_node.to_error()
 
             else:
-                children_state = children_states.pop()
-                children_sub_state = children_sub_states.pop()
-                self.log.debug(f"{children_state=}, {children_sub_state=}")
+                state = children_states.pop()
+                sub_state = children_sub_states.pop()
+                self.log.debug(f"{state=}, {sub_state=}")
 
-                if children_sub_state == "idle":
-                    children_sub_state = children_state
+                if sub_state == "idle":
+                    sub_state = state
 
                 # All is well, so fix our state.
                 self.stateful_node.resolve_error()
-                self.stateful_node.force_set_node_operational_state(children_state)
-                self.stateful_node.force_set_node_operational_sub_state(
-                    children_sub_state
-                )
+                self.stateful_node.force_set_node_operational_state(state)
+                self.stateful_node.force_set_node_operational_sub_state(sub_state)
 
         return response
 
