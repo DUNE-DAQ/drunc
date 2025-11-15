@@ -1297,11 +1297,7 @@ class Controller(ControllerServicer):
             # Query status of immediate children only (except excluded).
             child_status_list = self.address_all()
             child_status_responses = self.propagate_concurrently(
-                lambda child, target: child.status(
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
+                lambda child, target: child.status(target, False, False),
                 child_status_list,
             )
 
