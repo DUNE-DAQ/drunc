@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="14" oks-format="data" oks-version="862f2957270" created-by="asztuc" created-on="np04-srv-019.cern.ch" creation-time="20231212T171111" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241023T204410"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="schema/appmodel/application.schema.xml"/>
+ <file path="schema/appmodel/trigger.schema.xml"/>
+ <file path="config/daqsystemtest/connections.data.xml"/>
+ <file path="config/daqsystemtest/moduleconfs.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240208T095451" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="reformat"/>
+ <comment creation-time="20240208T144137" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="s"/>
+ <comment creation-time="20240208T150252" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="Build FakeHSI application"/>
+ <comment creation-time="20240312T202936" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="Add hsi-01 source id"/>
+ <comment creation-time="20240312T203031" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="Apply source_id..."/>
+ <comment creation-time="20240325T124934" created-by="glehmann" created-on="np04-srv-019.cern.ch" author="Unknown" text="adjusted to name changes in connections"/>
+ <comment creation-time="20240628T062322" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="removing broadcasters from control apps"/>
+</comments>
+
+
+<obj class="DataHandlerConf" id="hsi-fake-handler">
+ <attr name="template_for" type="class" val="HSIDataHandlerModule"/>
+ <attr name="input_data_type" type="string" val="HSIFrame"/>
+ <attr name="generate_timesync" type="bool" val="0"/>
+ <rel name="request_handler" class="RequestHandler" id="hsi-fake-requesthandler"/>
+ <rel name="latency_buffer" class="LatencyBuffer" id="hsi-fake-latencybuffer"/>
+ <rel name="data_processor" class="HSIFrameProcessor" id="hsi-fake-processor"/>
+</obj>
+
+<obj class="FakeHSIApplication" id="hsi-fake-01">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="source_id" class="SourceIDConf" id="hsi-fake-srcid-01"/>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="hsi-dlh-data-requests-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="hsi-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-hsi-net-rule"/>
+  <ref class="NetworkConnectionRule" id="ts-hsi-net-rule"/>
+ </rel>
+ <rel name="link_handler" class="DataHandlerConf" id="hsi-fake-handler"/>
+ <rel name="generator" class="FakeHSIEventGeneratorConf" id="fakehsi"/>
+</obj>
+
+<obj class="FakeHSIEventGeneratorConf" id="fakehsi">
+ <attr name="trigger_rate" type="double" val="3"/>
+ <attr name="hsi_device_id" type="u32" val="1"/>
+ <attr name="mean_signal_multiplicity" type="u32" val="1"/>
+ <attr name="enabled_signals" type="u32" val="1"/>
+</obj>
+
+<obj class="HSIEventToTCApplication" id="hsi-fake-to-tc-app">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="dataRequests"/>
+  <ref class="Service" id="HSIEvents"/>
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="source_id" class="SourceIDConf" id="hsi-fake-tc-srcid-1"/>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="hsi-rule"/>
+  <ref class="NetworkConnectionRule" id="tc-net-rule"/>
+ </rel>
+ <rel name="hsevent_to_tc_conf" class="HSI2TCTranslatorConf" id="hsi-to-tc-conf"/>
+</obj>
+
+<obj class="HSIFrameProcessor" id="hsi-fake-processor">
+ <attr name="queue_sizes" type="u32" val="10000"/>
+ <attr name="thread_names_prefix" type="string" val="hsip"/>
+ <attr name="latency_monitoring" type="bool" val="1"/>
+</obj>
+
+<obj class="LatencyBuffer" id="hsi-fake-latencybuffer">
+ <attr name="size" type="u32" val="100000"/>
+ <attr name="numa_aware" type="bool" val="0"/>
+ <attr name="intrinsic_allocator" type="bool" val="0"/>
+ <attr name="preallocation" type="bool" val="0"/>
+</obj>
+
+<obj class="RCApplication" id="hsi-fake-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
+
+<obj class="RequestHandler" id="hsi-fake-requesthandler">
+ <attr name="handler_threads" type="u16" val="4"/>
+ <attr name="request_timeout" type="u32" val="0"/>
+ <attr name="pop_limit_pct" type="float" val="0.8"/>
+ <attr name="pop_size_pct" type="float" val="0.1"/>
+ <attr name="warn_on_timeout" type="bool" val="0"/>
+ <attr name="warn_on_empty_buffer" type="bool" val="0"/>
+</obj>
+
+<obj class="Segment" id="hsi-fake-segment">
+ <rel name="applications">
+  <ref class="FakeHSIApplication" id="hsi-fake-01"/>
+  <ref class="HSIEventToTCApplication" id="hsi-fake-to-tc-app"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="hsi-fake-controller"/>
+</obj>
+
+<obj class="SourceIDConf" id="hsi-fake-srcid-01">
+ <attr name="sid" type="u32" val="1"/>
+ <attr name="subsystem" type="enum" val="HW_Signals_Interface"/>
+</obj>
+
+<obj class="SourceIDConf" id="hsi-fake-tc-srcid-1">
+ <attr name="sid" type="u32" val="2"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+</oks-data>

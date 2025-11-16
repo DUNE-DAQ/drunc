@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="22" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T110859" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241023T204410"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="schema/appmodel/application.schema.xml"/>
+ <file path="schema/appmodel/trigger.schema.xml"/>
+ <file path="config/daqsystemtest/fsm.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+ <file path="config/daqsystemtest/connections.data.xml"/>
+ <file path="config/daqsystemtest/moduleconfs.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240208T094131" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="reformat"/>
+ <comment creation-time="20240909T081245" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+</comments>
+
+<obj class="DFHWConf" id="dfhw-01">
+ <rel name="uses">
+  <ref class="StorageDevice" id="storage-01"/>
+ </rel>
+</obj>
+
+<obj class="DataHandlerConf" id="def-hsi-handler">
+ <attr name="template_for" type="class" val="HSIDataHandlerModule"/>
+ <attr name="input_data_type" type="string" val="HSIFrame"/>
+ <attr name="generate_timesync" type="bool" val="0"/>
+ <rel name="request_handler" class="RequestHandler" id="hsi-requesthandler-generic"/>
+ <rel name="latency_buffer" class="LatencyBuffer" id="hsilatencybuffer-generic"/>
+ <rel name="data_processor" class="HSIFrameProcessor" id="def-hsi-processor"/>
+</obj>
+
+<obj class="DetectorConfig" id="dummy-detector">
+ <attr name="tpg_channel_map" type="string" val="PD2HDTPCChannelMap"/>
+ <attr name="clock_speed_hz" type="u32" val="62500000"/>
+ <attr name="op_env" type="string" val="test"/>
+ <attr name="offline_data_stream" type="string" val="cosmics"/>
+</obj>
+
+<obj class="FakeHSIEventGeneratorConf" id="fakehsi">
+ <attr name="trigger_rate" type="double" val="3"/>
+ <attr name="hsi_device_id" type="u32" val="1"/>
+ <attr name="mean_signal_multiplicity" type="u32" val="1"/>
+ <attr name="enabled_signals" type="u32" val="1"/>
+</obj>
+
+<obj class="HSIFrameProcessor" id="def-hsi-processor">
+ <attr name="queue_sizes" type="u32" val="10000"/>
+ <attr name="thread_names_prefix" type="string" val="hsip"/>
+ <attr name="latency_monitoring" type="bool" val="1"/>
+</obj>
+
+<obj class="LatencyBuffer" id="hsilatencybuffer-generic">
+ <attr name="size" type="u32" val="100000"/>
+ <attr name="numa_aware" type="bool" val="0"/>
+ <attr name="intrinsic_allocator" type="bool" val="0"/>
+ <attr name="preallocation" type="bool" val="0"/>
+</obj>
+
+<obj class="RequestHandler" id="hsi-requesthandler-generic">
+ <attr name="handler_threads" type="u16" val="1"/>
+ <attr name="request_timeout" type="u32" val="0"/>
+ <attr name="pop_limit_pct" type="float" val="0.8"/>
+ <attr name="pop_size_pct" type="float" val="0.1"/>
+ <attr name="warn_on_timeout" type="bool" val="0"/>
+ <attr name="warn_on_empty_buffer" type="bool" val="0"/>
+</obj>
+
+<obj class="Service" id="dfo-01_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="hsi-01_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="hsi-controller_control">
+ <attr name="protocol" type="string" val="grpc"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="hsi-to-tc-app_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="mlt_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="tc-maker-1_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="tp-stream-writer_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="SourceIDConf" id="hsi-srcid-01">
+ <attr name="sid" type="u32" val="1"/>
+ <attr name="subsystem" type="enum" val="HW_Signals_Interface"/>
+</obj>
+
+<obj class="SourceIDConf" id="hsi-tc-srcid-1">
+ <attr name="sid" type="u32" val="2"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="srcid-tp-stream-writer">
+ <attr name="sid" type="u32" val="1"/>
+ <attr name="subsystem" type="enum" val="TR_Builder"/>
+</obj>
+
+<obj class="SourceIDConf" id="ta-srcid-1">
+ <attr name="sid" type="u32" val="1100"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tc-srcid-1">
+ <attr name="sid" type="u32" val="10000"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="StorageDevice" id="storage-01">
+ <attr name="storage" type="u32" val="1000"/>
+</obj>
+
+<obj class="TPStreamWriterConf" id="tp-stream-writer-conf">
+ <attr name="tp_accumulation_interval" type="u64" val="62500000"/>
+ <attr name="tp_accumulation_inactivity_time_before_write_sec" type="float" val="1"/>
+ <attr name="warn_user_when_tardy_tps_are_discarded" type="bool" val="1"/>
+ <rel name="data_store_params" class="DataStoreConf" id="default_tp_store_conf"/>
+</obj>
+
+</oks-data>

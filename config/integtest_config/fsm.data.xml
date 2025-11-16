@@ -1,0 +1,445 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="43" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T110859" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241023T204410"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240208T094131" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="reformat"/>
+</comments>
+
+
+<obj class="FSMCommand" id="conf">
+ <attr name="cmd" type="string" val="conf"/>
+ <attr name="optional" type="bool" val="1"/>
+</obj>
+
+<obj class="FSMCommand" id="disable_triggers">
+ <attr name="cmd" type="string" val="disable_triggers"/>
+ <attr name="optional" type="bool" val="1"/>
+</obj>
+
+<obj class="FSMCommand" id="drain_dataflow">
+ <attr name="cmd" type="string" val="drain_dataflow"/>
+ <attr name="optional" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMCommand" id="enable_triggers">
+ <attr name="cmd" type="string" val="enable_triggers"/>
+ <attr name="optional" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMCommand" id="scrap">
+ <attr name="cmd" type="string" val="scrap"/>
+ <attr name="optional" type="bool" val="1"/>
+</obj>
+
+<obj class="FSMCommand" id="start">
+ <attr name="cmd" type="string" val="start"/>
+ <attr name="optional" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMCommand" id="stop">
+ <attr name="cmd" type="string" val="stop"/>
+ <attr name="optional" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMCommand" id="stop_trigger_sources">
+ <attr name="cmd" type="string" val="stop_trigger_sources"/>
+ <attr name="optional" type="bool" val="0"/>
+</obj>
+
+<obj class="FSMaction" id="db-run-registry">
+ <attr name="name" type="string" val="db-run-registry"/>
+</obj>
+
+<obj class="FSMaction" id="elisa-logbook">
+ <attr name="name" type="string" val="elisa-logbook"/>
+ <rel name="parameters">
+  <ref class="Variable" id="which-elisa-logbook"/>
+ </rel>
+</obj>
+
+<obj class="FSMaction" id="file-logbook">
+ <attr name="name" type="string" val="file-logbook"/>
+ <rel name="parameters">
+  <ref class="Variable" id="file-logbook-file-name"/>
+ </rel>
+</obj>
+
+<obj class="FSMaction" id="file-run-registry">
+ <attr name="name" type="string" val="file-run-registry"/>
+</obj>
+
+<obj class="FSMaction" id="thread-pinning">
+ <attr name="name" type="string" val="thread-pinning"/>
+ <rel name="parameters">
+  <ref class="Variable" id="thread-pinning-file-pre-conf"/>
+  <ref class="Variable" id="thread-pinning-file-post-conf"/>
+  <ref class="Variable" id="thread-pinning-file-post-start-prod"/>
+  <ref class="Variable" id="thread-pinning-file-post-start-test"/>
+ </rel>
+</obj>
+
+<obj class="FSMaction" id="trigger-rate-specifier">
+ <attr name="name" type="string" val="trigger-rate-specifier"/>
+</obj>
+
+<obj class="FSMaction" id="user-provided-run-number">
+ <attr name="name" type="string" val="user-provided-run-number"/>
+</obj>
+
+<obj class="FSMaction" id="usvc-provided-run-number">
+ <attr name="name" type="string" val="usvc-provided-run-number"/>
+</obj>
+
+<obj class="FSMconfiguration" id="FSMconfiguration_noAction">
+ <attr name="states" type="string">
+  <data val="initial"/>
+  <data val="configured"/>
+  <data val="ready"/>
+  <data val="running"/>
+  <data val="paused"/>
+  <data val="dataflow_drained"/>
+  <data val="trigger_sources_stopped"/>
+  <data val="error"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf"/>
+  <ref class="FSMtransition" id="start"/>
+  <ref class="FSMtransition" id="enable_triggers"/>
+  <ref class="FSMtransition" id="disable_triggers"/>
+  <ref class="FSMtransition" id="drain_dataflow"/>
+  <ref class="FSMtransition" id="stop_trigger_sources"/>
+  <ref class="FSMtransition" id="stop"/>
+  <ref class="FSMtransition" id="scrap"/>
+  <ref class="FSMtransition" id="change_rate"/>
+ </rel>
+ <rel name="command_sequences">
+  <ref class="FSMsequence" id="shutdown"/>
+  <ref class="FSMsequence" id="start_run"/>
+  <ref class="FSMsequence" id="stop_run"/>
+ </rel>
+</obj>
+
+<obj class="FSMconfiguration" id="fsmConf-prod">
+ <attr name="states" type="string">
+  <data val="initial"/>
+  <data val="configured"/>
+  <data val="ready"/>
+  <data val="running"/>
+  <data val="paused"/>
+  <data val="dataflow_drained"/>
+  <data val="trigger_sources_stopped"/>
+  <data val="error"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf"/>
+  <ref class="FSMtransition" id="start"/>
+  <ref class="FSMtransition" id="enable_triggers"/>
+  <ref class="FSMtransition" id="disable_triggers"/>
+  <ref class="FSMtransition" id="drain_dataflow"/>
+  <ref class="FSMtransition" id="stop_trigger_sources"/>
+  <ref class="FSMtransition" id="stop"/>
+  <ref class="FSMtransition" id="scrap"/>
+  <ref class="FSMtransition" id="change_rate"/>
+ </rel>
+ <rel name="command_sequences">
+  <ref class="FSMsequence" id="shutdown"/>
+  <ref class="FSMsequence" id="start_run"/>
+  <ref class="FSMsequence" id="stop_run"/>
+ </rel>
+ <rel name="pre_transitions">
+  <ref class="FSMxTransition" id="pre_change_rate"/>
+  <ref class="FSMxTransition" id="pre_start_prod"/>
+ </rel>
+ <rel name="post_transitions">
+  <ref class="FSMxTransition" id="post_start_prod"/>
+  <ref class="FSMxTransition" id="post_drain_dataflow_prod"/>
+ </rel>
+ <rel name="actions">
+  <ref class="FSMaction" id="usvc-provided-run-number"/>
+  <ref class="FSMaction" id="trigger-rate-specifier"/>
+  <ref class="FSMaction" id="elisa-logbook"/>
+  <ref class="FSMaction" id="db-run-registry"/>
+ </rel>
+</obj>
+
+<obj class="FSMconfiguration" id="fsmConf-test">
+ <attr name="states" type="string">
+  <data val="initial"/>
+  <data val="configured"/>
+  <data val="ready"/>
+  <data val="running"/>
+  <data val="paused"/>
+  <data val="dataflow_drained"/>
+  <data val="trigger_sources_stopped"/>
+  <data val="error"/>
+ </attr>
+ <attr name="initial_state" type="string" val="initial"/>
+ <rel name="transitions">
+  <ref class="FSMtransition" id="conf"/>
+  <ref class="FSMtransition" id="start"/>
+  <ref class="FSMtransition" id="enable_triggers"/>
+  <ref class="FSMtransition" id="disable_triggers"/>
+  <ref class="FSMtransition" id="drain_dataflow"/>
+  <ref class="FSMtransition" id="stop_trigger_sources"/>
+  <ref class="FSMtransition" id="stop"/>
+  <ref class="FSMtransition" id="scrap"/>
+  <ref class="FSMtransition" id="change_rate"/>
+ </rel>
+ <rel name="command_sequences">
+  <ref class="FSMsequence" id="shutdown"/>
+  <ref class="FSMsequence" id="start_run"/>
+  <ref class="FSMsequence" id="stop_run"/>
+ </rel>
+ <rel name="pre_transitions">
+  <ref class="FSMxTransition" id="pre_change_rate"/>
+  <ref class="FSMxTransition" id="pre_start_test"/>
+ </rel>
+ <rel name="post_transitions">
+  <ref class="FSMxTransition" id="post_start_test"/>
+  <ref class="FSMxTransition" id="post_drain_dataflow_test"/>
+ </rel>
+ <rel name="actions">
+  <ref class="FSMaction" id="user-provided-run-number"/>
+  <ref class="FSMaction" id="trigger-rate-specifier"/>
+  <ref class="FSMaction" id="file-logbook"/>
+  <ref class="FSMaction" id="file-run-registry"/>
+ </rel>
+</obj>
+
+<obj class="FSMsequence" id="shutdown">
+ <rel name="sequence">
+  <ref class="FSMCommand" id="disable_triggers"/>
+  <ref class="FSMCommand" id="drain_dataflow"/>
+  <ref class="FSMCommand" id="stop_trigger_sources"/>
+  <ref class="FSMCommand" id="stop"/>
+  <ref class="FSMCommand" id="scrap"/>
+ </rel>
+</obj>
+
+<obj class="FSMsequence" id="start_run">
+ <rel name="sequence">
+  <ref class="FSMCommand" id="conf"/>
+  <ref class="FSMCommand" id="start"/>
+  <ref class="FSMCommand" id="enable_triggers"/>
+ </rel>
+</obj>
+
+<obj class="FSMsequence" id="stop_run">
+ <rel name="sequence">
+  <ref class="FSMCommand" id="disable_triggers"/>
+  <ref class="FSMCommand" id="drain_dataflow"/>
+  <ref class="FSMCommand" id="stop_trigger_sources"/>
+  <ref class="FSMCommand" id="stop"/>
+ </rel>
+</obj>
+
+<obj class="FSMtransition" id="change_rate">
+ <attr name="source" type="string" val="ready|running"/>
+</obj>
+
+<obj class="FSMtransition" id="conf">
+ <attr name="source" type="string" val="initial"/>
+ <attr name="dest" type="string" val="configured"/>
+</obj>
+
+<obj class="FSMtransition" id="disable_triggers">
+ <attr name="source" type="string" val="running"/>
+ <attr name="dest" type="string" val="ready"/>
+</obj>
+
+<obj class="FSMtransition" id="drain_dataflow">
+ <attr name="source" type="string" val="ready"/>
+ <attr name="dest" type="string" val="dataflow_drained"/>
+</obj>
+
+<obj class="FSMtransition" id="enable_triggers">
+ <attr name="source" type="string" val="ready"/>
+ <attr name="dest" type="string" val="running"/>
+</obj>
+
+<obj class="FSMtransition" id="scrap">
+ <attr name="source" type="string" val="configured"/>
+ <attr name="dest" type="string" val="initial"/>
+</obj>
+
+<obj class="FSMtransition" id="start">
+ <attr name="source" type="string" val="configured"/>
+ <attr name="dest" type="string" val="ready"/>
+</obj>
+
+<obj class="FSMtransition" id="stop">
+ <attr name="source" type="string" val="trigger_sources_stopped"/>
+ <attr name="dest" type="string" val="configured"/>
+</obj>
+
+<obj class="FSMtransition" id="stop_trigger_sources">
+ <attr name="source" type="string" val="dataflow_drained"/>
+ <attr name="dest" type="string" val="trigger_sources_stopped"/>
+</obj>
+
+<obj class="FSMxTransition" id="post_drain_dataflow_prod">
+ <attr name="transition" type="string" val="drain_dataflow"/>
+ <attr name="order" type="string">
+  <data val="db-run-registry"/>
+  <data val="elisa-logbook"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="post_drain_dataflow_test">
+ <attr name="transition" type="string" val="drain_dataflow"/>
+ <attr name="order" type="string">
+  <data val="file-logbook"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="post_start_prod">
+ <attr name="transition" type="string" val="start"/>
+ <attr name="order" type="string">
+  <data val="elisa-logbook"/>
+ </attr>
+ <attr name="mandatory" type="string">
+  <data val="elisa-logbook"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="post_start_test">
+ <attr name="transition" type="string" val="start"/>
+ <attr name="order" type="string">
+  <data val="file-logbook"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="pre_change_rate">
+ <attr name="transition" type="string" val="change_rate"/>
+ <attr name="order" type="string">
+  <data val="trigger-rate-specifier"/>
+ </attr>
+ <attr name="mandatory" type="string">
+  <data val="trigger-rate-specifier"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="pre_start_prod">
+ <attr name="transition" type="string" val="start"/>
+ <attr name="order" type="string">
+  <data val="usvc-provided-run-number"/>
+  <data val="db-run-registry"/>
+ </attr>
+ <attr name="mandatory" type="string">
+  <data val="usvc-provided-run-number"/>
+  <data val="db-run-registry"/>
+ </attr>
+</obj>
+
+<obj class="FSMxTransition" id="pre_start_test">
+ <attr name="transition" type="string" val="start"/>
+ <attr name="order" type="string">
+  <data val="user-provided-run-number"/>
+  <data val="file-run-registry"/>
+ </attr>
+ <attr name="mandatory" type="string">
+  <data val="user-provided-run-number"/>
+ </attr>
+</obj>
+
+<obj class="Variable" id="file-logbook-file-name">
+ <attr name="name" type="string" val="file_name"/>
+ <attr name="value" type="string" val="logbook.txt"/>
+</obj>
+
+<obj class="Variable" id="thread-pinning-file-post-conf">
+ <attr name="name" type="string" val="post_conf"/>
+ <attr name="value" type="string" val="/cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9-x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.json"/>
+</obj>
+
+<obj class="Variable" id="thread-pinning-file-post-start-prod">
+ <attr name="name" type="string" val="post_start"/>
+ <attr name="value" type="string" val="/cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9-x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.json"/>
+</obj>
+
+<obj class="Variable" id="thread-pinning-file-post-start-test">
+ <attr name="name" type="string" val="post_start"/>
+ <attr name="value" type="string" val="/cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9-x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.json"/>
+</obj>
+
+<obj class="Variable" id="thread-pinning-file-pre-conf">
+ <attr name="name" type="string" val="pre_conf"/>
+ <attr name="value" type="string" val="/cvmfs/dunedaq.opensciencegrid.org/spack/releases/coredaq-v5.0.0-a9-1/spack-0.20.0/opt/spack/linux-almalinux9-x86_64/gcc-12.1.0/readoutlibs-v2.1.0-kkwlcckeyl7ltarpbd5bn6fn2nczjqmp/share/config/cpupins/cpupin-example.json"/>
+</obj>
+
+<obj class="Variable" id="which-elisa-logbook">
+ <attr name="name" type="string" val="elisa-hardware"/>
+ <attr name="value" type="string" val="pdsp"/>
+</obj>
+
+</oks-data>

@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="10" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T105549" last-modified-by="mrigan" last-modified-on="np04-srv-016.cern.ch" last-modification-time="20251003T122227"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="config/daqsystemtest/ru-segment.data.xml"/>
+ <file path="config/daqsystemtest/df-segment.data.xml"/>
+ <file path="config/daqsystemtest/hsi-fake-segment.data.xml"/>
+ <file path="config/daqsystemtest/trigger-segment.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240826T084126" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="Correct cern stream"/>
+ <comment creation-time="20240909T081245" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240909T082108" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240918T124331" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="change local session opmon URI"/>
+ <comment creation-time="20250214T120354" created-by="dergonul" created-on="np04-srv-015.cern.ch" author="dergonul" text="Added new Session with SocketReaderModule"/>
+ <comment creation-time="20250325T160832" created-by="dergonul" created-on="np04-srv-015.cern.ch" author="dergonul" text="Disabled TP"/>
+ <comment creation-time="20250522T090325" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="mod-ing replay sessions"/>
+ <comment creation-time="20250522T091047" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="modifying replay sessions"/>
+ <comment creation-time="20250522T092014" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="udpate replay"/>
+ <comment creation-time="20250526T125621" created-by="dergonul" created-on="np04-srv-031.cern.ch" author="dergonul" text="Added new session for CRTBernFrame and CRTGrenobleFrame"/>
+ <comment creation-time="20250805T092423" created-by="dergonul" created-on="np04-srv-028.cern.ch" author="dergonul" text="Emu CRT configs"/>
+ <comment creation-time="20251003T122227" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="actually using local vars variableset"/>
+</comments>
+
+
+<obj class="DetectorConfig" id="dummy-detector">
+ <attr name="tpg_channel_map" type="string" val="PD2HDTPCChannelMap"/>
+ <attr name="clock_speed_hz" type="u32" val="62500000"/>
+ <attr name="op_env" type="string" val="test"/>
+ <attr name="offline_data_stream" type="string" val="cosmics"/>
+</obj>
+
+<obj class="Segment" id="root-segment">
+ <rel name="segments">
+  <ref class="Segment" id="ru-segment"/>
+  <ref class="Segment" id="df-segment"/>
+  <ref class="Segment" id="trg-segment"/>
+  <ref class="Segment" id="hsi-fake-segment"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="root-controller"/>
+</obj>
+
+<obj class="Segment" id="socket-root-segment">
+ <rel name="segments">
+  <ref class="Segment" id="socket-ru-segment"/>
+  <ref class="Segment" id="df-segment"/>
+  <ref class="Segment" id="trg-segment"/>
+  <ref class="Segment" id="hsi-fake-segment"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="socket-root-controller"/>
+</obj>
+
+<obj class="Session" id="ehn1-local-1x1-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <attr name="log_path" type="string" val="/log"/>
+ <rel name="disabled">
+  <ref class="DFApplication" id="df-02"/>
+  <ref class="DFApplication" id="df-03"/>
+  <ref class="ReadoutApplication" id="ru-02"/>
+ </rel>
+ <rel name="connectivity_service" class="ConnectivityService" id="ehn1-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="ehn1-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="root-segment"/>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="cern-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="ehn1-local-2x3-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <attr name="log_path" type="string" val="/log"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="ehn1-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="ehn1-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="root-segment"/>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="cern-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="ehn1-tpreplay-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="disabled">
+  <ref class="DFApplication" id="df-02"/>
+  <ref class="DFApplication" id="df-03"/>
+  <ref class="TPStreamWriterApplication" id="tp-stream-writer"/>
+ </rel>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="ehn1-variables"/>
+  <ref class="Variable" id="local-env-ers-debug-level"/>
+ </rel>
+ <rel name="segment" class="Segment" id="tpreplay-root-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="cern-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="local-1x1-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="disabled">
+  <ref class="DFApplication" id="df-02"/>
+  <ref class="DFApplication" id="df-03"/>
+  <ref class="ReadoutApplication" id="ru-02"/>
+ </rel>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="local-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="root-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="local-2x3-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="local-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="root-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="local-socket-1x1-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="disabled">
+  <ref class="DFApplication" id="df-02"/>
+  <ref class="DFApplication" id="df-03"/>
+  <ref class="TPStreamWriterApplication" id="tp-stream-writer"/>
+  <ref class="TriggerApplication" id="tc-maker-1"/>
+ </rel>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="local-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="socket-root-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="local-tpreplay-config">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="disabled">
+  <ref class="DFApplication" id="df-02"/>
+  <ref class="DFApplication" id="df-03"/>
+  <ref class="TPStreamWriterApplication" id="tp-stream-writer"/>
+ </rel>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="VariableSet" id="local-variables"/>
+ </rel>
+ <rel name="segment" class="Segment" id="tpreplay-root-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+</oks-data>

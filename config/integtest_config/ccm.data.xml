@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="29" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T110859" last-modified-by="biery" last-modified-on="daq.fnal.gov" last-modification-time="20250903T173857"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="config/daqsystemtest/fsm.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240208T094131" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="reformat"/>
+ <comment creation-time="20240909T081245" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240918T094920" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="add local file"/>
+ <comment creation-time="20250214T095127" created-by="dergonul" created-on="np04-srv-015.cern.ch" author="dergonul" text="Added new Session with SocketReaderModule"/>
+ <comment creation-time="20250312T102000" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text=" "/>
+ <comment creation-time="20250526T125621" created-by="dergonul" created-on="np04-srv-031.cern.ch" author="dergonul" text="Added new sessions for CRTBernFrame and CRTGrenobleFrame"/>
+ <comment creation-time="20250805T092423" created-by="dergonul" created-on="np04-srv-028.cern.ch" author="dergonul" text="Emu CRT configs"/>
+</comments>
+
+
+<obj class="ConnectionService" id="local-connection-server">
+ <attr name="application_name" type="string" val="echo"/>
+ <attr name="commandline_parameters" type="string">
+  <data val="Process PID $$;"/>
+  <data val="trap &apos;pkill -QUIT -P $$&apos; EXIT;"/>
+  <data val="setsid gunicorn -b 0.0.0.0:${CONNECTION_PORT} --workers=1 --worker-class=gthread --threads=2 --timeout 5000000000 --log-level=info connectivityserver.connectionflask:app"/>
+ </attr>
+ <attr name="threads" type="u16" val="1"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="local-connectivity-service"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+</obj>
+
+<obj class="ConnectivityService" id="ehn1-connectivity-service-config">
+ <attr name="interval_ms" type="u32" val="2000"/>
+ <attr name="host" type="string" val="np04-srv-017"/>
+ <rel name="service" class="Service" id="ehn1-connectivity-service"/>
+</obj>
+
+<obj class="ConnectivityService" id="local-connectivity-service-config">
+ <attr name="interval_ms" type="u32" val="2000"/>
+ <attr name="host" type="string" val="localhost"/>
+ <rel name="service" class="Service" id="local-connectivity-service"/>
+</obj>
+
+<obj class="OpMonConf" id="fast-all-monitoring">
+ <attr name="level" type="u32" val="4294967295"/>
+ <attr name="interval_s" type="u32" val="2"/>
+</obj>
+
+<obj class="OpMonConf" id="slow-all-monitoring">
+ <attr name="level" type="u32" val="4294967295"/>
+ <attr name="interval_s" type="u32" val="10"/>
+</obj>
+
+<obj class="OpMonURI" id="cern-opmon-uri">
+ <attr name="path" type="string" val="monkafka.cern.ch:30092/opmon_stream"/>
+ <attr name="type" type="enum" val="stream"/>
+</obj>
+
+<obj class="OpMonURI" id="local-opmon-uri">
+ <attr name="path" type="string" val="./info.json"/>
+ <attr name="type" type="enum" val="file"/>
+</obj>
+
+<obj class="RCApplication" id="root-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vh-np04-srv-019"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="root-rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
+</obj>
+
+<obj class="RCApplication" id="socket-root-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="root-rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
+</obj>
+
+<obj class="Service" id="daqapp_control">
+ <attr name="protocol" type="string" val="rest"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="ehn1-connectivity-service">
+ <attr name="protocol" type="string" val="http"/>
+ <attr name="port" type="u16" val="30005"/>
+</obj>
+
+<obj class="Service" id="local-connectivity-service">
+ <attr name="protocol" type="string" val="http"/>
+ <attr name="port" type="u16" val="30005"/>
+</obj>
+
+<obj class="Service" id="rccontroller_control">
+ <attr name="protocol" type="string" val="grpc"/>
+ <attr name="port" type="u16" val="0"/>
+</obj>
+
+<obj class="Service" id="root-rccontroller_control">
+ <attr name="protocol" type="string" val="grpc"/>
+ <attr name="port" type="u16" val="30006"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-connectivity-port">
+ <attr name="name" type="string" val="CONNECTION_PORT"/>
+ <attr name="value" type="string" val="30005"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-connectivity-server">
+ <attr name="name" type="string" val="CONNECTION_SERVER"/>
+ <attr name="value" type="string" val="np04-srv-017"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-error">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_ERROR"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-fatal">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_FATAL"/>
+ <attr name="value" type="string" val="erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-info">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_INFO"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-stream-libs">
+ <attr name="description" type="string" val="List of extra ERS streaming libs"/>
+ <attr name="name" type="string" val="DUNEDAQ_ERS_STREAM_LIBS"/>
+ <attr name="value" type="string" val="erskafka"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-verb">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_VERBOSITY_LEVEL"/>
+ <attr name="value" type="string" val="1"/>
+</obj>
+
+<obj class="Variable" id="ehn1-env-ers-warning">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_WARNING"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-debug-level">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_DEBUG_LEVEL"/>
+ <attr name="value" type="string" val="-1"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-error">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_ERROR"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-fatal">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_FATAL"/>
+ <attr name="value" type="string" val="erstrace,lstdout"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-info">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_INFO"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-verb">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_VERBOSITY_LEVEL"/>
+ <attr name="value" type="string" val="1"/>
+</obj>
+
+<obj class="Variable" id="local-env-ers-warning">
+ <attr name="name" type="string" val="DUNEDAQ_ERS_WARNING"/>
+ <attr name="value" type="string" val="erstrace,throttle,lstdout"/>
+</obj>
+
+<obj class="Variable" id="local-env-connectivity-port">
+ <attr name="name" type="string" val="CONNECTION_PORT"/>
+ <attr name="value" type="string" val="30005"/>
+</obj>
+
+<obj class="VariableSet" id="ehn1-variables">
+ <rel name="contains">
+  <ref class="Variable" id="ehn1-env-ers-error"/>
+  <ref class="Variable" id="ehn1-env-ers-fatal"/>
+  <ref class="Variable" id="ehn1-env-ers-info"/>
+  <ref class="Variable" id="ehn1-env-ers-stream-libs"/>
+  <ref class="Variable" id="ehn1-env-ers-verb"/>
+  <ref class="Variable" id="ehn1-env-ers-warning"/>
+  <ref class="Variable" id="ehn1-env-connectivity-port"/>
+  <ref class="Variable" id="ehn1-env-connectivity-server"/>
+ </rel>
+</obj>
+
+<obj class="VariableSet" id="local-variables">
+ <rel name="contains">
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-debug-level"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+ </rel>
+</obj>
+
+</oks-data>

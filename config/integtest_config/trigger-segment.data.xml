@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="12" oks-format="data" oks-version="862f2957270" created-by="asztuc" created-on="np04-srv-019.cern.ch" creation-time="20231212T171111" last-modified-by="mrigan" last-modified-on="np04-srv-016.cern.ch" last-modification-time="20250522T092014"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="schema/appmodel/application.schema.xml"/>
+ <file path="schema/appmodel/trigger.schema.xml"/>
+ <file path="config/daqsystemtest/connections.data.xml"/>
+ <file path="config/daqsystemtest/moduleconfs.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="config/daqsystemtest/fsm.data.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+ <file path="config/daqsystemtest/df-segment.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20240208T095451" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="reformat"/>
+ <comment creation-time="20241216T215140" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="trigger replay changes"/>
+ <comment creation-time="20250522T085900" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="tpreplay segment"/>
+ <comment creation-time="20250522T090154" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="tpreplay root segment"/>
+ <comment creation-time="20250522T091047" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="modifying replay sessions"/>
+ <comment creation-time="20250522T092014" created-by="mrigan" created-on="np04-srv-016.cern.ch" author="mrigan" text="udpate replay"/>
+</comments>
+
+
+<obj class="MLTApplication" id="mlt">
+ <attr name="tx_generation_disabled" type="bool" val="0"/>
+ <attr name="application_name" type="string" val="daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="triggerCandidates"/>
+  <ref class="Service" id="triggerInhibits"/>
+  <ref class="Service" id="dataRequests"/>
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="source_id" class="SourceIDConf" id="tc-srcid-1"/>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="tc-queue-rule"/>
+  <ref class="QueueConnectionRule" id="td-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="tc-net-rule"/>
+  <ref class="NetworkConnectionRule" id="ti-net-rule"/>
+  <ref class="NetworkConnectionRule" id="td-dfo-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-trig-net-rule"/>
+  <ref class="NetworkConnectionRule" id="ts-net-rule"/>
+ </rel>
+ <rel name="data_subscriber" class="DataReaderConf" id="tc-subscriber-1"/>
+ <rel name="trigger_inputs_handler" class="DataHandlerConf" id="def-tc-handler"/>
+ <rel name="mlt_conf" class="MLTConf" id="def-mlt-conf"/>
+ <rel name="standalone_candidate_maker_confs">
+  <ref class="RandomTCMakerConf" id="random-tc-generator"/>
+ </rel>
+</obj>
+
+<obj class="RCApplication" id="tpreplay-controller">
+ <attr name="commandline_parameters" type="string">
+  <data val=""/>
+ </attr>
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
+
+<obj class="RCApplication" id="tpreplay-root-controller">
+ <attr name="commandline_parameters" type="string">
+  <data val=""/>
+ </attr>
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="root-rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
+</obj>
+
+<obj class="RCApplication" id="trg-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
+
+<obj class="Segment" id="tpreplay-root-segment">
+ <rel name="segments">
+  <ref class="Segment" id="df-segment"/>
+  <ref class="Segment" id="trg-segment"/>
+  <ref class="Segment" id="tpreplay-segment"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="tpreplay-root-controller"/>
+</obj>
+
+<obj class="Segment" id="tpreplay-segment">
+ <rel name="applications">
+  <ref class="TPReplayApplication" id="tpreplay"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="tpreplay-controller"/>
+</obj>
+
+<obj class="Segment" id="trg-segment">
+ <rel name="applications">
+  <ref class="TriggerApplication" id="tc-maker-1"/>
+  <ref class="MLTApplication" id="mlt"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="trg-controller"/>
+</obj>
+
+<obj class="SourceIDConf" id="ta-srcid-1">
+ <attr name="sid" type="u32" val="1100"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tc-srcid-1">
+ <attr name="sid" type="u32" val="10000"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tpreplay-tp-srcid-100000">
+ <attr name="sid" type="u32" val="100000"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="TPReplayApplication" id="tpreplay">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+  <ref class="Service" id="dataRequests"/>
+  <ref class="Service" id="triggerPrimitives"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="tpreplay-tp-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="tpreplay-ta-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-trig-net-rule"/>
+ </rel>
+ <rel name="tp_source_ids">
+  <ref class="SourceIDConf" id="tpreplay-tp-srcid-100000"/>
+ </rel>
+ <rel name="tprm_conf" class="TPReplayModuleConf" id="tpreplay-tp-maker"/>
+ <rel name="tp_handler" class="DataHandlerConf" id="tpreplay-tp-handler"/>
+</obj>
+
+<obj class="TriggerApplication" id="tc-maker-1">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <attr name="tx_generation_disabled" type="bool" val="0"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+  <ref class="Service" id="triggerActivities"/>
+  <ref class="Service" id="dataRequests"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="source_id" class="SourceIDConf" id="ta-srcid-1"/>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="ta-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="ta-net-rule"/>
+  <ref class="NetworkConnectionRule" id="tc-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-trig-net-rule"/>
+ </rel>
+ <rel name="action_plans">
+  <ref class="ActionPlan" id="tc-maker-start"/>
+ </rel>
+ <rel name="data_subscriber" class="DataReaderConf" id="ta-subscriber-1"/>
+ <rel name="trigger_inputs_handler" class="DataHandlerConf" id="def-ta-handler"/>
+</obj>
+
+</oks-data>

@@ -1,0 +1,558 @@
+<?xml version="1.0" encoding="ASCII"?>
+
+<!-- oks-data version 2.2 -->
+
+
+<!DOCTYPE oks-data [
+  <!ELEMENT oks-data (info, (include)?, (comments)?, (obj)+)>
+  <!ELEMENT info EMPTY>
+  <!ATTLIST info
+      name CDATA #IMPLIED
+      type CDATA #IMPLIED
+      num-of-items CDATA #REQUIRED
+      oks-format CDATA #FIXED "data"
+      oks-version CDATA #REQUIRED
+      created-by CDATA #IMPLIED
+      created-on CDATA #IMPLIED
+      creation-time CDATA #IMPLIED
+      last-modified-by CDATA #IMPLIED
+      last-modified-on CDATA #IMPLIED
+      last-modification-time CDATA #IMPLIED
+  >
+  <!ELEMENT include (file)*>
+  <!ELEMENT file EMPTY>
+  <!ATTLIST file
+      path CDATA #REQUIRED
+  >
+  <!ELEMENT comments (comment)*>
+  <!ELEMENT comment EMPTY>
+  <!ATTLIST comment
+      creation-time CDATA #REQUIRED
+      created-by CDATA #REQUIRED
+      created-on CDATA #REQUIRED
+      author CDATA #REQUIRED
+      text CDATA #REQUIRED
+  >
+  <!ELEMENT obj (attr | rel)*>
+  <!ATTLIST obj
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+  <!ELEMENT attr (data)*>
+  <!ATTLIST attr
+      name CDATA #REQUIRED
+      type (bool|s8|u8|s16|u16|s32|u32|s64|u64|float|double|date|time|string|uid|enum|class|-) "-"
+      val CDATA ""
+  >
+  <!ELEMENT data EMPTY>
+  <!ATTLIST data
+      val CDATA #REQUIRED
+  >
+  <!ELEMENT rel (ref)*>
+  <!ATTLIST rel
+      name CDATA #REQUIRED
+      class CDATA ""
+      id CDATA ""
+  >
+  <!ELEMENT ref EMPTY>
+  <!ATTLIST ref
+      class CDATA #REQUIRED
+      id CDATA #REQUIRED
+  >
+]>
+
+<oks-data>
+
+<info name="" type="" num-of-items="49" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T105615" last-modified-by="eflumerf" last-modified-on="ironvirt9.mshome.net" last-modification-time="20251105T144619"/>
+
+<include>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="schema/appmodel/application.schema.xml"/>
+ <file path="schema/appmodel/fdmodules.schema.xml"/>
+ <file path="schema/appmodel/wiec.schema.xml"/>
+ <file path="config/daqsystemtest/connections.data.xml"/>
+ <file path="config/daqsystemtest/moduleconfs.data.xml"/>
+ <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="config/daqsystemtest/ccm.data.xml"/>
+</include>
+
+<comments>
+ <comment creation-time="20231207T111607" created-by="gjc" created-on="thinkpad" author="gjc" text="u"/>
+ <comment creation-time="20240117T144543" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240117T175424" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240117T183308" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
+ <comment creation-time="20240207T131311" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="d"/>
+ <comment creation-time="20240207T131321" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="d"/>
+ <comment creation-time="20240208T092918" created-by="eflumerf" created-on="ironvirt9.mshome.net" author="eflumerf" text="a"/>
+ <comment creation-time="20240218T161506" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="Unknown" text="added queue of TAs between subsciber and handler"/>
+ <comment creation-time="20240220T094213" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="Unknown" text="updated configuration to use a dedicated app for TA making"/>
+ <comment creation-time="20240301T164311" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="Unknown" text="activate TA"/>
+ <comment creation-time="20240312T122552" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="Unknown" text="added information about services exposed by app; used to infer whether an app responds to data reuqests."/>
+ <comment creation-time="20240325T124934" created-by="glehmann" created-on="np04-srv-019.cern.ch" author="Unknown" text="adjusted to name changes in connections"/>
+ <comment creation-time="20240603T150525" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text="updated test session to new readout schema"/>
+ <comment creation-time="20240611T141410" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="readoutapp"/>
+ <comment creation-time="20240611T172304" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="nic data reader"/>
+ <comment creation-time="20240612T151554" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="tp source id updated"/>
+ <comment creation-time="20240612T203623" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="adding dummy connections to ru-02"/>
+ <comment creation-time="20240620T161416" created-by="gjc" created-on="latitude" author="gjc" text="l"/>
+ <comment creation-time="20240628T062322" created-by="thea" created-on="np04-srv-031.cern.ch" author="thea" text="removing broadcasters from control apps"/>
+ <comment creation-time="20240822T070558" created-by="aoranday" created-on="np04-srv-031.cern.ch" author="aoranday" text="Add TPG SimpleThreshold."/>
+ <comment creation-time="20240828T140226" created-by="aoranday" created-on="np04-srv-031.cern.ch" author="aoranday" text="Change AbsRS config."/>
+ <comment creation-time="20240829T102857" created-by="aoranday" created-on="np04-srv-031.cern.ch" author="aoranday" text="Add AbsRS processor."/>
+ <comment creation-time="20250214T120354" created-by="dergonul" created-on="np04-srv-015.cern.ch" author="dergonul" text="Added socket communication classes"/>
+ <comment creation-time="20250325T145413" created-by="dergonul" created-on="np04-srv-015.cern.ch" author="dergonul" text="Disabled TP"/>
+ <comment creation-time="20250526T125136" created-by="dergonul" created-on="np04-srv-031.cern.ch" author="dergonul" text="Added crt-bern and crt-grenoble"/>
+ <comment creation-time="20250805T092423" created-by="dergonul" created-on="np04-srv-028.cern.ch" author="dergonul" text="Emu CRT configs"/>
+</comments>
+
+
+<obj class="CRTReaderApplication" id="crt-data-source-01">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="action_plans">
+  <ref class="ActionPlan" id="crt-readout-start"/>
+  <ref class="ActionPlan" id="crt-readout-stop"/>
+ </rel>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="crt-bern-raw-data-rule"/>
+ </rel>
+ <rel name="data_writers">
+  <ref class="SocketWriterConf" id="def-socket-writer-conf"/>
+ </rel>
+ <rel name="data_reader" class="CRTReaderConf" id="def-emu-crt-receiver-conf"/>
+ <rel name="detector_connections">
+  <ref class="NetworkDetectorToDaqConnection" id="socket_crt"/>
+ </rel>
+</obj>
+
+<obj class="DPDKPortConfiguration" id="dpdk_e810_conf">
+ <attr name="flow_control" type="bool" val="1"/>
+ <attr name="mtu" type="u32" val="9000"/>
+ <attr name="rx_ring_size" type="u32" val="4096"/>
+ <attr name="tx_ring_size" type="u32" val="1024"/>
+ <attr name="num_bufs" type="u32" val="16384"/>
+ <attr name="burst_size" type="u32" val="2048"/>
+ <attr name="lcore_sleep_us" type="u32" val="10"/>
+ <attr name="source_to_rx_queue_multiplexing" type="s16" val="1"/>
+ <rel name="used_lcores">
+  <ref class="ProcessingResource" id="localhost_cpus"/>
+ </rel>
+</obj>
+
+<obj class="DPDKReceiver" id="ru-1-rcv">
+ <rel name="uses" class="NetworkDevice" id="ru_1_readout"/>
+ <rel name="configuration" class="DPDKPortConfiguration" id="dpdk_e810_conf"/>
+</obj>
+
+<obj class="DPDKReceiver" id="ru-2-rcv">
+ <rel name="uses" class="NetworkDevice" id="ru_2_readout"/>
+ <rel name="configuration" class="DPDKPortConfiguration" id="dpdk_e810_conf"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_100">
+ <attr name="source_id" type="u32" val="100"/>
+ <rel name="geo_id" class="GeoId" id="g_3_1_1_0"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_1007">
+ <attr name="source_id" type="u32" val="1007"/>
+ <rel name="geo_id" class="GeoId" id="g_13_1_1_0"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_101">
+ <attr name="source_id" type="u32" val="101"/>
+ <rel name="geo_id" class="GeoId" id="g_3_1_1_1"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_102">
+ <attr name="source_id" type="u32" val="102"/>
+ <rel name="geo_id" class="GeoId" id="g_3_1_1_2"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_103">
+ <attr name="source_id" type="u32" val="103"/>
+ <rel name="geo_id" class="GeoId" id="g_3_1_1_3"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_104">
+ <attr name="source_id" type="u32" val="104"/>
+ <rel name="geo_id" class="GeoId" id="g_3_2_1_0"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_105">
+ <attr name="source_id" type="u32" val="105"/>
+ <rel name="geo_id" class="GeoId" id="g_3_2_1_1"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_106">
+ <attr name="source_id" type="u32" val="106"/>
+ <rel name="geo_id" class="GeoId" id="g_3_2_1_2"/>
+</obj>
+
+<obj class="DetectorStream" id="stream_107">
+ <attr name="source_id" type="u32" val="107"/>
+ <rel name="geo_id" class="GeoId" id="g_3_2_1_3"/>
+</obj>
+
+<obj class="GeoId" id="g_12_1_1_0">
+ <attr name="detector_id" type="u32" val="12"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_13_1_1_0">
+ <attr name="detector_id" type="u32" val="13"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_3_1_1_0">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_3_1_1_1">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_3_1_1_2">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="2"/>
+</obj>
+
+<obj class="GeoId" id="g_3_1_1_3">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="1"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="3"/>
+</obj>
+
+<obj class="GeoId" id="g_3_2_1_0">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="2"/>
+ <attr name="slot_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_3_2_1_1">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="2"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="1"/>
+</obj>
+
+<obj class="GeoId" id="g_3_2_1_2">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="2"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="2"/>
+</obj>
+
+<obj class="GeoId" id="g_3_2_1_3">
+ <attr name="detector_id" type="u32" val="3"/>
+ <attr name="crate_id" type="u32" val="2"/>
+ <attr name="slot_id" type="u32" val="1"/>
+ <attr name="stream_id" type="u32" val="3"/>
+</obj>
+
+<obj class="HermesDataSender" id="wib_101_link0">
+ <attr name="port" type="u32" val="17476"/>
+ <attr name="control_host" type="string" val="localhost"/>
+ <rel name="streams">
+  <ref class="DetectorStream" id="stream_100"/>
+  <ref class="DetectorStream" id="stream_101"/>
+  <ref class="DetectorStream" id="stream_102"/>
+  <ref class="DetectorStream" id="stream_103"/>
+ </rel>
+ <rel name="uses" class="NetworkInterface" id="wib_101_hermes0"/>
+</obj>
+
+<obj class="HermesDataSender" id="wib_201_link0">
+ <attr name="port" type="u32" val="17476"/>
+ <attr name="control_host" type="string" val="localhost"/>
+ <rel name="streams">
+  <ref class="DetectorStream" id="stream_104"/>
+  <ref class="DetectorStream" id="stream_105"/>
+  <ref class="DetectorStream" id="stream_106"/>
+  <ref class="DetectorStream" id="stream_107"/>
+ </rel>
+ <rel name="uses" class="NetworkInterface" id="wib_201_hermes0"/>
+</obj>
+
+<obj class="NetworkDetectorToDaqConnection" id="conn_apa1">
+ <rel name="net_senders">
+  <ref class="HermesDataSender" id="wib_101_link0"/>
+ </rel>
+ <rel name="net_receiver" class="DPDKReceiver" id="ru-1-rcv"/>
+</obj>
+
+<obj class="NetworkDetectorToDaqConnection" id="conn_apa2">
+ <rel name="net_senders">
+  <ref class="HermesDataSender" id="wib_201_link0"/>
+ </rel>
+ <rel name="net_receiver" class="DPDKReceiver" id="ru-2-rcv"/>
+</obj>
+
+<obj class="NetworkDetectorToDaqConnection" id="socket_crt">
+ <rel name="net_senders">
+  <ref class="SocketDataSender" id="socket_sender_crt"/>
+ </rel>
+ <rel name="net_receiver" class="SocketReceiver" id="socket-ru-1-rcv"/>
+</obj>
+
+<obj class="NetworkDevice" id="ru_1_readout">
+ <attr name="mac_address" type="string" val="00:00:00:00:00:00"/>
+ <attr name="ip_address" type="string">
+  <data val="123.456.101.501"/>
+ </attr>
+ <attr name="interface_name" type="string" val="data0"/>
+ <attr name="network_name" type="enum" val="Control"/>
+ <attr name="pcie_addr" type="string" val="0"/>
+</obj>
+
+<obj class="NetworkDevice" id="ru_2_readout">
+ <attr name="mac_address" type="string" val="00:00:00:00:00:00"/>
+ <attr name="ip_address" type="string">
+  <data val="123.456.201.501"/>
+ </attr>
+ <attr name="interface_name" type="string" val="data0"/>
+ <attr name="network_name" type="enum" val="Control"/>
+ <attr name="pcie_addr" type="string" val="0"/>
+</obj>
+
+<obj class="NetworkInterface" id="crt_101_asio0">
+ <attr name="mac_address" type="string" val="00:00:00:00:00:00"/>
+ <attr name="ip_address" type="string">
+  <data val="123.456.101.000"/>
+ </attr>
+ <attr name="interface_name" type="string" val="asio0"/>
+ <attr name="network_name" type="enum" val="Control"/>
+</obj>
+
+<obj class="NetworkInterface" id="wib_101_hermes0">
+ <attr name="mac_address" type="string" val="00:00:00:00:00:00"/>
+ <attr name="ip_address" type="string">
+  <data val="123.456.101.000"/>
+ </attr>
+ <attr name="interface_name" type="string" val="hermes0"/>
+ <attr name="network_name" type="enum" val="Control"/>
+</obj>
+
+<obj class="NetworkInterface" id="wib_201_hermes0">
+ <attr name="mac_address" type="string" val="00:00:00:00:00:00"/>
+ <attr name="ip_address" type="string">
+  <data val="123.456.101.001"/>
+ </attr>
+ <attr name="interface_name" type="string" val="hermes0"/>
+ <attr name="network_name" type="enum" val="Control"/>
+</obj>
+
+<obj class="RCApplication" id="ru-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
+
+<obj class="RCApplication" id="socket-ru-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
+
+<obj class="ReadoutApplication" id="ru-01">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <attr name="tp_generation_enabled" type="bool" val="1"/>
+ <attr name="ta_generation_enabled" type="bool" val="1"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+  <ref class="Service" id="dataRequests"/>
+  <ref class="Service" id="timeSyncs"/>
+  <ref class="Service" id="triggerActivities"/>
+  <ref class="Service" id="triggerPrimitives"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="action_plans">
+  <ref class="ActionPlan" id="readout-start"/>
+  <ref class="ActionPlan" id="readout-stop"/>
+ </rel>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="fa-queue-rule"/>
+  <ref class="QueueConnectionRule" id="tp-queue-rule"/>
+  <ref class="QueueConnectionRule" id="wib-eth-raw-data-rule"/>
+  <ref class="QueueConnectionRule" id="fd-dlh-data-requests-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="ts-net-rule"/>
+  <ref class="NetworkConnectionRule" id="ta-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-readout-net-rule"/>
+  <ref class="NetworkConnectionRule" id="tpset-net-rule"/>
+ </rel>
+ <rel name="tp_source_ids">
+  <ref class="SourceIDConf" id="tp-srcid-1000"/>
+  <ref class="SourceIDConf" id="tp-srcid-1001"/>
+  <ref class="SourceIDConf" id="tp-srcid-1002"/>
+ </rel>
+ <rel name="uses" class="RoHwConfig" id="rohw-1"/>
+ <rel name="link_handler" class="DataHandlerConf" id="def-link-handler"/>
+ <rel name="tp_handler" class="DataHandlerConf" id="def-tp-handler"/>
+ <rel name="data_reader" class="DPDKReaderConf" id="def-emu-nic-receiver-conf"/>
+ <rel name="fragment_aggregator" class="FragmentAggregatorConf" id="frag-agg-01"/>
+ <rel name="detector_connections">
+  <ref class="NetworkDetectorToDaqConnection" id="conn_apa1"/>
+ </rel>
+</obj>
+
+<obj class="ReadoutApplication" id="ru-02">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <attr name="tp_generation_enabled" type="bool" val="1"/>
+ <attr name="ta_generation_enabled" type="bool" val="1"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="action_plans">
+  <ref class="ActionPlan" id="readout-start"/>
+  <ref class="ActionPlan" id="readout-stop"/>
+ </rel>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="fa-queue-rule"/>
+  <ref class="QueueConnectionRule" id="tp-queue-rule"/>
+  <ref class="QueueConnectionRule" id="wib-eth-raw-data-rule"/>
+  <ref class="QueueConnectionRule" id="fd-dlh-data-requests-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="ts-net-rule"/>
+  <ref class="NetworkConnectionRule" id="ta-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-readout-net-rule"/>
+  <ref class="NetworkConnectionRule" id="tpset-net-rule"/>
+ </rel>
+ <rel name="tp_source_ids">
+  <ref class="SourceIDConf" id="tp-srcid-2000"/>
+  <ref class="SourceIDConf" id="tp-srcid-2001"/>
+  <ref class="SourceIDConf" id="tp-srcid-2002"/>
+ </rel>
+ <rel name="uses" class="RoHwConfig" id="rohw-1"/>
+ <rel name="link_handler" class="DataHandlerConf" id="def-link-handler"/>
+ <rel name="tp_handler" class="DataHandlerConf" id="def-tp-handler"/>
+ <rel name="data_reader" class="DPDKReaderConf" id="def-emu-nic-receiver-conf"/>
+ <rel name="fragment_aggregator" class="FragmentAggregatorConf" id="frag-agg-01"/>
+ <rel name="detector_connections">
+  <ref class="NetworkDetectorToDaqConnection" id="conn_apa2"/>
+ </rel>
+</obj>
+
+<obj class="ReadoutApplication" id="socket-ru-01">
+ <attr name="application_name" type="string" val="daq_application"/>
+ <attr name="tp_generation_enabled" type="bool" val="0"/>
+ <attr name="ta_generation_enabled" type="bool" val="0"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+  <ref class="Service" id="dataRequests"/>
+  <ref class="Service" id="timeSyncs"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="action_plans">
+  <ref class="ActionPlan" id="socket-readout-start"/>
+  <ref class="ActionPlan" id="socket-readout-stop"/>
+ </rel>
+ <rel name="queue_rules">
+  <ref class="QueueConnectionRule" id="fa-queue-rule"/>
+  <ref class="QueueConnectionRule" id="crt-bern-callback-raw-data-rule"/>
+  <ref class="QueueConnectionRule" id="fd-dlh-data-requests-queue-rule"/>
+ </rel>
+ <rel name="network_rules">
+  <ref class="NetworkConnectionRule" id="ts-net-rule"/>
+  <ref class="NetworkConnectionRule" id="data-req-readout-net-rule"/>
+ </rel>
+ <rel name="uses" class="RoHwConfig" id="rohw-1"/>
+ <rel name="link_handler" class="DataHandlerConf" id="def-crt-bern-link-handler"/>
+ <rel name="data_reader" class="SocketReaderConf" id="def-socket-reader-conf"/>
+ <rel name="fragment_aggregator" class="FragmentAggregatorConf" id="frag-agg-01"/>
+ <rel name="detector_connections">
+  <ref class="NetworkDetectorToDaqConnection" id="socket_crt"/>
+ </rel>
+</obj>
+
+<obj class="RoHwConfig" id="rohw-1">
+</obj>
+
+<obj class="Segment" id="ru-segment">
+ <rel name="applications">
+  <ref class="ReadoutApplication" id="ru-01"/>
+  <ref class="ReadoutApplication" id="ru-02"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="ru-controller"/>
+</obj>
+
+<obj class="Segment" id="socket-ru-segment">
+ <rel name="applications">
+  <ref class="CRTReaderApplication" id="crt-data-source-01"/>
+  <ref class="ReadoutApplication" id="socket-ru-01"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="socket-ru-controller"/>
+</obj>
+
+<obj class="SocketDataSender" id="socket_sender_crt">
+ <attr name="port" type="u32" val="1234"/>
+ <attr name="control_host" type="string" val="localhost"/>
+ <rel name="streams">
+  <ref class="DetectorStream" id="stream_1007"/>
+ </rel>
+ <rel name="uses" class="NetworkInterface" id="crt_101_asio0"/>
+</obj>
+
+<obj class="SocketReceiver" id="socket-ru-1-rcv">
+ <rel name="uses" class="NetworkDevice" id="ru_1_readout"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-1000">
+ <attr name="sid" type="u32" val="1000"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-1001">
+ <attr name="sid" type="u32" val="1001"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-1002">
+ <attr name="sid" type="u32" val="1002"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-2000">
+ <attr name="sid" type="u32" val="2000"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-2001">
+ <attr name="sid" type="u32" val="2001"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+<obj class="SourceIDConf" id="tp-srcid-2002">
+ <attr name="sid" type="u32" val="2002"/>
+ <attr name="subsystem" type="enum" val="Trigger"/>
+</obj>
+
+</oks-data>
