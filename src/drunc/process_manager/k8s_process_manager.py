@@ -708,10 +708,14 @@ class K8sProcessManager(ProcessManager):
         # Redirect logs
         log_file_path = boot_request.process_description.process_logs_path
         final_command_args: str
+        shell_command = ["/bin/sh", "-c"]
 
         if log_file_path:
-            self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
-            log_redirect_cmd = f"exec > {log_file_path} 2>&1;"
+            self.log.debug(
+                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
+            )
+            shell_command = ["/bin/bash", "-c"]
+            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
         else:
             log_redirect_cmd = ""
 
@@ -730,7 +734,7 @@ class K8sProcessManager(ProcessManager):
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
-            command=["/bin/sh", "-c"],
+            command=shell_command,
             args=[final_command_args],
             env=[
                 client.V1EnvVar(name=k, value=v)
