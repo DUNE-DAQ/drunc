@@ -1,20 +1,32 @@
 import socket
 import threading
 
+import confmodel_dal
+from druncschema.token_pb2 import Token
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
+from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.grpc_child import (
+    gRCPChildConfHandler,
+    gRPCChildNode,
+)
 from drunc.controller.children_interface.rest_api_child import (
+    RESTAPIChildNode,
     RESTAPIChildNodeConfHandler,
 )
 from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.configuration import ConfHandler, ConfTypes
-from drunc.utils.utils import ControlType
-
-import confmodel_dal  # isort: skip
+from drunc.utils.utils import (
+    ControlType,
+    get_control_type_and_uri_from_cli,
+    get_control_type_and_uri_from_connectivity_service,
+    get_logger,
+)
 
 
 class ControllerConfData:  # the bastardised OKS
@@ -56,7 +68,6 @@ class ControllerConfHandler(ConfHandler):
 
     def _post_process_oks(self, *args, **kwargs):
         self.authoriser = None
-        self.children = []
         self.data = self._grab_segment_conf_from_controller(self.data)
 
         self.this_host = self.data.controller.runs_on.runs_on.id
@@ -105,123 +116,73 @@ class ControllerConfHandler(ConfHandler):
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
         return
 
-    def get_dummy_children(self):
-        ret = []
-        session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
-
-        for seg in self.data.segments:
-            if confmodel_dal.component_disabled(self.db._obj, session.id, seg.id):
-                continue
-            ret.append(
-                ChildNode(
-                    name=seg.controller.id,
-                    configuration=RESTAPIChildNodeConfHandler(seg, ConfTypes.PyObject),
-                    node_type=ControlType.Unknown,
-                )
-            )
-        for app in self.data.applications:
-            if confmodel_dal.component_disabled(self.db._obj, session.id, app.id):
-                continue
-            ret.append(
-                ChildNode(
-                    name=app.id,
-                    configuration=RESTAPIChildNodeConfHandler(app, ConfTypes.PyObject),
-                    node_type=ControlType.Unknown,
-                )
-            )
-        return ret
-
-    def update_children(
+    def init_children(
         self,
-        children,
-        init_token,
-        without_excluded=False,
-        connectivity_service=None,
-        session_name=None,
-    ):
-        enabled_only = not without_excluded
-        timeout = 60  # 60s for each application to start and show up on the connectivity service
+        session_name: str,
+        init_token: Token,
+        connectivity_service: ConnectivityServiceClient | None = None,
+        enabled_only: bool = True,
+    ) -> list[ChildNode]:
+        child_nodes: list[ChildNode] = []
 
-        self.log.debug(f"get_children: connectivity service lookup timeout={timeout}")
-
-        session = None
-        self.children = []
+        # 60s for applications to show on the connectivity service.
+        timeout = 60
+        self.log.debug(f"init_children: connectivity service timeout: {timeout}")
 
         try:
             session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
-
         except ImportError:
+            session = None
             if enabled_only:
                 self.log.error(
                     "OKS was not set up, so configuration does not know about include/exclude. All the children nodes will be returned"
                 )
-                enabled_only = True
-
-        self.log.debug(f"looping over children\n{self.data.segments}")
+                enabled_only = False
 
         def process_segment(segment):
-            if enabled_only:
-                if confmodel_dal.component_disabled(
-                    self.db._obj, session.id, segment.id
-                ):
-                    return
+            if enabled_only and confmodel_dal.component_disabled(
+                self.db._obj, session.id, segment.id
+            ):
+                return  # Ignore disabled segments.
 
-            new_node = ChildNode.get_child(
-                cli=get_commandline_parameters(
-                    db=self.db,
-                    config_filename=self.initial_data,
-                    session_id=session.id,
-                    session_name=session_name,
-                    obj=segment.controller,
-                ),
+            cmd_args = get_commandline_parameters(
+                db=self.db,
+                config_filename=self.initial_data,
+                session_id=session.id,
+                session_name=session_name,
+                obj=segment.controller,
+            )
+            node = self.child_node_factory(
+                cmd_args=cmd_args,
                 init_token=init_token,
                 name=segment.controller.id,
                 configuration=segment,
                 connectivity_service=connectivity_service,
                 timeout=timeout,
             )
-            if new_node:
-                got_child = False
-
-                for idx, child in enumerate(children):
-                    if child.name == new_node.name:
-                        children[idx] = new_node
-                        got_child = True
-                        break
-                if not got_child:
-                    self.children.append(new_node)
+            child_nodes.append(node)
 
         def process_application(app):
-            if enabled_only:
-                if confmodel_dal.component_disabled(self.db._obj, session.id, app.id):
-                    return
+            if enabled_only and confmodel_dal.component_disabled(
+                self.db._obj, session.id, app.id
+            ):
+                return  # Ignore disabled applications.
 
-            commandline_parameters = get_commandline_parameters(
+            cmd_args = get_commandline_parameters(
                 db=self.db,
                 config_filename=self.initial_data,
                 session_id=session.id,
                 session_name=session_name,
                 obj=app,
             )
-
-            new_node = ChildNode.get_child(
-                cli=commandline_parameters,
+            node = self.child_node_factory(
+                cmd_args=cmd_args,
                 name=app.id,
                 configuration=app,
-                fsm_configuration=self.data.controller.fsm,
                 connectivity_service=connectivity_service,
-                timeout=60,
+                timeout=timeout,
             )
-            if new_node:
-                got_child = False
-
-                for idx, child in enumerate(children):
-                    if child.name == new_node.name:
-                        children[idx] = new_node
-                        got_child = True
-                        break
-                if not got_child:
-                    self.children.append(new_node)
+            child_nodes.append(node)
 
         # threading the children look up
         threads = []
@@ -241,4 +202,54 @@ class ControllerConfHandler(ConfHandler):
         for t in threads:
             t.join()
 
-        return self.children
+        return child_nodes
+
+    def child_node_factory(
+        self,
+        name: str,
+        cmd_args: list[str],
+        configuration,
+        init_token: Token | None = None,
+        connectivity_service: ConnectivityServiceClient | None = None,
+        timeout: int = 60,
+    ) -> ChildNode:
+        log = get_logger("controller.child_node_factory")
+
+        if connectivity_service is not None:
+            try:
+                # Query the connectivity service.
+                ctype, uri = get_control_type_and_uri_from_connectivity_service(
+                    connectivity_service, name, timeout=timeout
+                )
+            except ApplicationLookupUnsuccessful as e:
+                log.error(f"Could not find '{name}' in the connectivity service: {e}")
+                raise e
+        else:
+            try:
+                # Fall back to the command line arguments.
+                ctype, uri = get_control_type_and_uri_from_cli(cmd_args)
+            except DruncSetupException as e:
+                log.error(f"Could not get '{name}' protocol from CLI: {e}")
+                raise e
+
+        log.info(f"Child '{name}' is of type '{ctype}' and has the URI '{uri}'")
+
+        match ctype:
+            case ControlType.gRPC:
+                conf_handler = gRCPChildConfHandler(configuration, ConfTypes.PyObject)
+                return gRPCChildNode(
+                    name, conf_handler, uri, connectivity_service, init_token
+                )
+
+            case ControlType.REST_API:
+                conf_handler = RESTAPIChildNodeConfHandler(
+                    configuration, ConfTypes.PyObject
+                )
+                return RESTAPIChildNode(
+                    name, conf_handler, uri, self.data.controller.fsm
+                )
+
+            case _:
+                error_message = f"Unknown protocol '{ctype}' for child '{name}'"
+                log.error(error_message)
+                raise DruncSetupException(error_message)

@@ -222,12 +222,31 @@ def unified_shell(
         unified_shell_log.debug("[green]Process manager[/green] started")
 
         # Check if the process manager started correctly
-        for _ in range(100):
+        process_started = False
+        for _ in range(100):  # 10s timeout
             if ready_event.is_set():
+                process_started = True
                 break
+
+            if not ctx.obj.pm_process.is_alive():
+                exit_code = ctx.obj.pm_process.exitcode
+                unified_shell_log.error(
+                    f"[red]Process manager process died unexpectedly with exit code {exit_code}."
+                )
+                unified_shell_log.error(
+                    "[red]This is likely a configuration error (e.g., bad kube-config)."
+                )
+                unified_shell_log.error(
+                    "[red]Please check the full traceback in the terminal above this message.[/red]"
+                )
+                sys.exit(exit_code if exit_code else 1)
             sleep(0.1)
-        if not ready_event.is_set():
-            raise DruncSetupException("[red]Process manager didn't start in time[/red]")
+
+        if not process_started:
+            # This message will only show if the process is *alive* but never sent the "ready" signal
+            raise DruncSetupException(
+                "[red]Process manager timed out starting. Check logs for details.[/red]"
+            )
 
         # Setup the process manager address
         process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
