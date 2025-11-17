@@ -1,13 +1,3 @@
-"""
-Test for Manager Boot and Kill functionality.
-
-This test verifies that:
-1. Manager server can boot remote RootController servers via SSH using Boot RPC
-2. Booted servers become operational and respond to requests
-3. Manager Kill RPC terminates all booted servers before shutting down
-4. All processes are properly cleaned up
-"""
-
 import os
 import time
 import uuid

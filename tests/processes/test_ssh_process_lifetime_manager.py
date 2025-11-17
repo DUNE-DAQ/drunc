@@ -1,5 +1,3 @@
-"""Test SSH process lifecycle using Paramiko implementation."""
-
 import os
 import tempfile
 import uuid
