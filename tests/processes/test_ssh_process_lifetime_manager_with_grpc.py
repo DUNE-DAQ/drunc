@@ -125,8 +125,6 @@ def test_resources() -> Generator[ResourcesForTest, None, None]:
                 print(f"Warning: Error during log cleanup: {e}")
 
 
-# Long test - Run pytest with --test-grpc option to enable
-# @pytest.mark.grpc
 @pytest.mark.paramiko
 def test_manager_boot_and_kill_via_grpc(test_resources):
     """
