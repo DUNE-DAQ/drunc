@@ -48,7 +48,9 @@ class GrpcServerManager:
         self.connection_manager = connection_manager
         self.server_handles: Dict[str, RunningGrpcServer] = {}
 
-    def start_manager_server(self, config: GrpcServerConfig) -> RunningGrpcServer:
+    def start_manager_server(
+        self, config: GrpcServerConfig, lifetime_manager_type: str = "paramiko"
+    ) -> RunningGrpcServer:
         """
         Start a Manager gRPC server.
 
@@ -73,6 +75,7 @@ class GrpcServerManager:
                 config.port,
                 config.log_file,
                 config.server_options,
+                lifetime_manager_type=lifetime_manager_type,
             )
 
             # Set server information for tracking and connectivity checking

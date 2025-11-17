@@ -30,7 +30,12 @@ from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
-from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager_paramiko import (
+    SSHProcessLifetimeManagerParamiko,
+)
+from drunc.processes.ssh_process_lifetime_manager_shell import (
+    SSHProcessLifetimeManagerShell,
+)
 
 
 class ManagerServiceImpl(ManagerServiceServicer):
@@ -41,13 +46,22 @@ class ManagerServiceImpl(ManagerServiceServicer):
     SSHProcessLifetimeManager for SSH-based process execution.
     """
 
-    def __init__(self):
+    def __init__(self, lifetime_manager_type="paramiko"):
         """Initialise the Manager service implementation."""
-        self.ssh_manager = SSHProcessLifetimeManager(
-            disable_host_key_check=True,
-            disable_localhost_host_key_check=True,
-            logger=logging.getLogger(__name__),
-        )
+        if lifetime_manager_type == "paramiko":
+            self.ssh_manager = SSHProcessLifetimeManagerParamiko(
+                disable_host_key_check=True,
+                disable_localhost_host_key_check=True,
+                logger=logging.getLogger(__name__),
+            )
+        elif lifetime_manager_type == "shell":
+            self.ssh_manager = SSHProcessLifetimeManagerShell(
+                disable_host_key_check=True,
+                disable_localhost_host_key_check=True,
+                logger=logging.getLogger(__name__),
+            )
+        else:
+            raise ValueError(f"Unknown lifetime_manager_type: {lifetime_manager_type}")
 
         # Track booted processes
         self.booted_servers: Dict[str, Dict] = {}

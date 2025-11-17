@@ -18,7 +18,9 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager_paramiko import (
+    SSHProcessLifetimeManagerParamiko,
+)
 
 
 class SSHProcessManagerParamikoClient(ProcessManager):
@@ -44,7 +46,7 @@ class SSHProcessManagerParamikoClient(ProcessManager):
         # self.children_logs_depth = 1000
         # self.children_logs = {}
 
-        self.ssh_lifetime_manager = SSHProcessLifetimeManager(
+        self.ssh_lifetime_manager = SSHProcessLifetimeManagerParamiko(
             disable_host_key_check=self.disable_host_key_check,
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,

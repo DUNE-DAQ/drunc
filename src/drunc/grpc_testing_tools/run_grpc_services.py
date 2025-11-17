@@ -96,6 +96,7 @@ def run_process_manager_server(
     server_options: Optional[List[Tuple[str, Any]]] = None,
     ready_event=None,
     stop_event=None,
+    lifetime_manager_type: str = "paramiko",
 ) -> None:
     """Run Manager server process with output logging."""
     from drunc.grpc_testing_tools.process_manager import ManagerServiceImpl
@@ -105,7 +106,9 @@ def run_process_manager_server(
 
     run_grpc_server(
         server_name="Manager",
-        servicer_instance=ManagerServiceImpl(),
+        servicer_instance=ManagerServiceImpl(
+            lifetime_manager_type=lifetime_manager_type
+        ),
         add_servicer_func=add_ManagerServiceServicer_to_server,
         max_workers=manager_max_workers,
         server_port=server_port,
