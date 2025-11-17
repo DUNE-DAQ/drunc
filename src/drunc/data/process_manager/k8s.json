@@ -32,7 +32,8 @@
             "name": "local-connection-server"
         },
         "pod_management": {
-            "kill_timeout": 20,
+            "kill_timeout": 30,
+            "total_shutdown_timeout": 60,
             "pod_ready_timeout": 60
         },
         "cleanup": {
@@ -42,7 +43,23 @@
         "checking": {
             "watcher_retry_sleep": 5,
             "pod_status_check_sleep": 1,
-            "host_cache_expiry": 300
-        }
+            "host_cache_expiry": 300,
+            "grpc_startup_timeout": 30,
+            "socket_retry_timeout": 1.0
+        },
+        "volumes": [
+            {
+                "name": "nfs",
+                "mount_path": "/nfs",
+                "host_path": "/nfs",
+                "read_only": false
+            },
+            {
+                "name": "cvmfs",
+                "mount_path": "/cvmfs",
+                "host_path": "/cvmfs",
+                "read_only": true
+            }
+        ]
     }
 }

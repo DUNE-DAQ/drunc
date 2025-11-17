@@ -39,7 +39,7 @@ def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
     else:
         log.info(f"\nCurrently available controller transitions on '{desc.name}' are:")
 
-    for c in desc.data.commands:
+    for c in desc.description.commands:
         log.info(f" - [yellow]{c.name.replace('_', '-').lower()}[/]")
 
     log.info("\nUse [yellow]help <command>[/] for more information on a command.\n")
@@ -302,16 +302,12 @@ def include(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = (
-        obj.get_driver("controller")
-        .include(
-            target=target,
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=True,
-        )
-        .data
+    result = obj.get_driver("controller").include(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
     )
-    if not result:
+    if not result or not result.text:
         return
     log = get_logger(**logger_params)
     log.info(result.text)
@@ -324,16 +320,12 @@ def exclude(
     obj: ControllerContext,
     target: str,
 ) -> None:
-    result = (
-        obj.get_driver("controller")
-        .exclude(
-            target=target,
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=True,
-        )
-        .data
+    result = obj.get_driver("controller").exclude(
+        target=target,
+        execute_along_path=False,
+        execute_on_all_subsequent_children_in_path=True,
     )
-    if not result:
+    if not result or not result.text:
         return
     log = get_logger(**logger_params)
     log.info(result.text)
@@ -373,34 +365,15 @@ def expert_command(
         log.error(f"JSON decode error: {e}")
         return
 
-    result = obj.get_driver("controller").expert_command(
+    result = obj.get_driver("controller").execute_expert_command(
+        json.dumps(data),
         target=target,
         execute_along_path=False,
         execute_on_all_subsequent_children_in_path=True,
-        json_string=json.dumps(data),
     )
 
     def print_result(result, prefix=""):
-        if not hasattr(result, "data"):
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (no data)[/red]"
-            )
-        elif result.data.DESCRIPTOR.name == "PlainText":
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data.text}[/green]"
-            )
-        elif result.data.DESCRIPTOR.name == "Stacktrace":
-            for i in reversed(range(len(result.data.text))):
-                error = result.data.text[i]
-                if error != "":
-                    break
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]ERROR: {error}[/red]"
-            )
-        else:
-            log.info(
-                f"{prefix}[yellow]{result.name}[/yellow] [red]NO RESPONSE (data format not understood: {result.data.DESCRIPTOR.name})[/red]"
-            )
+        log.info(f"{prefix}[yellow]{result.name}[/yellow] [green]{result.data}[/green]")
 
         for child in result.children:
             print_result(child, prefix + "    ")

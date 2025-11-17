@@ -22,30 +22,42 @@ from druncschema.process_manager_pb2 import (
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
-from drunc.process_manager.utils import get_log_path, get_rte_script
-from drunc.utils.grpc_utils import copy_token, handle_grpc_error
-from drunc.utils.shell_utils import GRPCDriver
+from drunc.process_manager.utils import (
+    get_log_path,
+    get_rte_script,
+)
+from drunc.utils.grpc_utils import (
+    copy_token,
+    extract_grpc_rich_error,
+    handle_grpc_error,
+)
 from drunc.utils.utils import (
     get_control_type_and_uri_from_connectivity_service,
+    get_logger,
     host_is_local,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
 )
 
 
-class ProcessManagerDriver(GRPCDriver):
+class ProcessManagerDriver:
     controller_address = ""
 
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="process_manager_driver", address=address, token=token, **kwargs
-        )
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ProcessManagerDriver")
+        self.address = address
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+        self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
+        self.token = copy_token(token)
 
     # ----- Boot workflow -----
     def boot(
@@ -61,7 +73,7 @@ class ProcessManagerDriver(GRPCDriver):
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList]:
+    ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Step 1 - consolidate configuration
@@ -89,13 +101,23 @@ class ProcessManagerDriver(GRPCDriver):
             override_logs=override_logs,
             **kwargs,
         ):
-            if (
-                request.process_description.metadata.name
-                not in [app.id for app in session_dal.infrastructure_applications]
-                and csc
-                and not csc.is_ready(timeout=10)
-            ):
-                raise DruncSetupException("Connectivity service is not ready in time")
+            if not request:
+                self.log.error("[red]No boot request was generated, ending boot.[/red]")
+                return None
+            if request.process_description.metadata.name in [
+                app.id for app in session_dal.infrastructure_applications
+            ]:
+                self.log.debug(
+                    f"Skipping connectivity service readiness check for application {request.process_description.metadata.name}"
+                )
+            else:
+                self.log.debug(
+                    f"Checking connectivity service readiness before booting application {request.process_description.metadata.name}"
+                )
+                if csc and not csc.is_ready(timeout=10):
+                    raise DruncSetupException(
+                        "Connectivity service did not respond within timeout."
+                    )
 
             this_host = next(iter(request.process_restriction.allowed_hosts))
 
@@ -112,9 +134,18 @@ class ProcessManagerDriver(GRPCDriver):
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
+                yield response
+
             except grpc.RpcError as e:
+                try:
+                    error_details = extract_grpc_rich_error(e)
+                    self.log.error(error_details)
+                except Exception as extraction_error:
+                    self.log.debug(
+                        f"Could not extract rich error details from gRPC error: {extraction_error}",
+                        exc_info=True,
+                    )
                 handle_grpc_error(e)
-            yield response
 
         # Step 6: discover controller
         self._discover_controller(
@@ -173,9 +204,13 @@ class ProcessManagerDriver(GRPCDriver):
             )
 
         else:
-            rte_script = get_rte_script()
-            if not rte_script:
-                raise DruncSetupException("No RTE script found.")
+            try:
+                rte_script = get_rte_script()
+            except DruncSetupException as e:
+                log = get_logger("utils.check_rte")
+                errmsg = f"[red]Couldn't understand where to find the rte script [/red]. Did you run [green] dbt-build [/green] and [green]dbt-workarea-env[/green]?. {e}"
+                log.error(errmsg)
+                raise
 
             executable_and_arguments.append(
                 ProcessDescription.ExecAndArgs(exec="source", args=[rte_script])
@@ -202,11 +237,18 @@ class ProcessManagerDriver(GRPCDriver):
         args = app["args"]
         env = app["env"]
         app_log_path = app["log_path"]
+        data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
-        executable_and_arguments = self._prepare_exec_and_args(session_dal, exe, args)
+
+        try:
+            executable_and_arguments = self._prepare_exec_and_args(
+                session_dal, exe, args
+            )
+        except DruncSetupException:
+            raise DruncSetupException("Generating executable and arguments failed")
 
         log_path = get_log_path(
             user=user,
@@ -219,6 +261,13 @@ class ProcessManagerDriver(GRPCDriver):
 
         if host_is_local(host) and not os.path.exists(os.path.dirname(log_path)):
             raise DruncShellException(f"Log path {log_path} does not exist.")
+
+        process_restriction = ProcessRestriction(allowed_hosts=[host])
+        if data_path:
+            self.log.debug(
+                f"Attaching data_path '{data_path}' to the boot request for '{name}'"
+            )
+            process_restriction.data_mount = data_path
 
         self.log.debug(f"{name}'s env:\n{env}")
         breq = BootRequest(
@@ -236,7 +285,7 @@ class ProcessManagerDriver(GRPCDriver):
                 process_execution_directory=pwd,
                 process_logs_path=log_path,
             ),
-            process_restriction=ProcessRestriction(allowed_hosts=[host]),
+            process_restriction=process_restriction,
         )
         self.log.debug(f"{breq=}\n\n")
         return breq
@@ -259,21 +308,26 @@ class ProcessManagerDriver(GRPCDriver):
             session_log_path = pwd
 
         for app in apps:
-            breq = self._build_boot_request(
-                app,
-                user,
-                session_name,
-                session_dal,
-                session_log_path,
-                override_logs,
-                pwd,
-            )
+            try:
+                breq = self._build_boot_request(
+                    app,
+                    user,
+                    session_name,
+                    session_dal,
+                    session_log_path,
+                    override_logs,
+                    pwd,
+                )
+            except DruncSetupException as e:
+                log = get_logger("utils.boot_req_generator")
+                log.error(f"[red]Caught exception in boot generator [/red]: {e}")
+                yield None
             yield breq
 
     def _consolidate_config(self, session_name, conf_file: str) -> str | None:
         from daqconf.consolidate import consolidate_db
 
-        self.log.info(f"Booting session [green]{session_name}[/green]")
+        self.log.debug(f"Validating {session_name} configuration")
 
         with tempfile.NamedTemporaryFile(suffix=".data.xml", delete=True) as f:
             f.flush()
@@ -307,6 +361,14 @@ To debug it, close drunc and run the following command:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
+
+            if connection_server == "localhost":
+                resolved_server = resolve_localhost_to_hostname(connection_server)
+                self.log.debug(
+                    f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+                )
+                connection_server = resolved_server
+
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
             )
@@ -323,19 +385,30 @@ To debug it, close drunc and run the following command:
     ):
         """
         Attempts to discover the controller address after booting applications.
+        Tries dynamic lookup via connectivity service first, then falls back
+        to static OKS configuration.
         """
-        top_controller_name = session_dal.segment.controller.id
+        try:
+            top_controller_name = session_dal.segment.controller.id
+        except AttributeError as e:
+            self.log.error(f"Could not determine controller name from OKS: {e}")
+            top_controller_name = "Unknown-Controller"  # Set a default
 
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
             env = {}
             collect_variables(session_dal.environment, env)
+
+            # 1: Try dynamic lookup via Connectivity Service
             if csc:
+                self.log.debug(
+                    f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
+                )
                 try:
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60) + 60
-                    )  # root-controller timout to find all its children + 60s for the root controller to start itself
+                    )  # root-controller timeout to find all its children + 60s for the root controller to start itself
                     self.log.debug(
                         f"Using a timeout of {timeout}s to find the [green]{top_controller_name}[/] on the connectivity service"
                     )
@@ -347,33 +420,149 @@ To debug it, close drunc and run the following command:
                         progress_bar=True,
                         title=f"Looking for [green]{top_controller_name}[/] on the connectivity service...",
                     )
+
+                    address = uri.replace("grpc://", "")
+                    self.log.debug(
+                        f"Successfully discovered controller '{top_controller_name}' via connectivity service: {address}"
+                    )
+                    return address
+
                 except ApplicationLookupUnsuccessful:
+                    self.log.warning(
+                        f"Connectivity service lookup failed: Application '{top_controller_name}' not found."
+                    )
+                    # Log the original failure details
                     self._log_controller_lookup_failure(
                         session_name,
                         top_controller_name,
                         connection_server,
                         connection_port,
                     )
-                    return
+                    self.log.warning(
+                        "Falling back to static OKS configuration for address resolution."
+                    )
 
-                return uri.replace("grpc://", "")
+                except Exception as e:
+                    self.log.error(
+                        f"An unexpected error occurred during connectivity service lookup: {e}. "
+                        "Falling back to static OKS configuration."
+                    )
 
-            service_id = top_controller_name + "_control"
+            else:
+                self.log.warning(
+                    "Connectivity service client (csc) is not available. Using static OKS configuration only."
+                )
+
+            # 2: Fallback to static OKS configuration
+            self.log.debug(
+                "Attempting to resolve controller address from static OKS configuration."
+            )
+
             port_number = None
             protocol = None
+            service_found = None
 
-            for service in session_dal.segment.controller.exposes_service:
-                if service.id == service_id:
-                    port_number = service.port
-                    protocol = service.protocol
-                    break
-            if port_number is None or protocol is None:
+            try:
+                self.log.debug(
+                    f"Top controller name from OKS config: '{top_controller_name}'"
+                )
+
+                if (
+                    not hasattr(session_dal.segment.controller, "exposes_service")
+                    or not session_dal.segment.controller.exposes_service
+                ):
+                    self.log.error(
+                        f"Controller '{top_controller_name}' in OKS config has no 'exposes_service' relationship defined or it's empty."
+                    )
+                    return None
+
+                self.log.debug(
+                    f"Controller '{top_controller_name}' exposes services: {[s.id for s in session_dal.segment.controller.exposes_service]}"
+                )
+
+                # Get the first (and presumably only) control service linked
+                service_found = next(
+                    iter(session_dal.segment.controller.exposes_service), None
+                )
+
+                if service_found:
+                    self.log.debug(
+                        f"Found linked control service object with ID: '{service_found.id}'"
+                    )
+                    if (
+                        hasattr(service_found, "port")
+                        and service_found.port is not None
+                    ):
+                        port_number = service_found.port
+                        self.log.debug(
+                            f"Extracted port from service '{service_found.id}': {port_number}"
+                        )
+                    else:
+                        self.log.error(
+                            f"Service object '{service_found.id}' is missing the 'port' attribute or it's null."
+                        )
+
+                    if hasattr(service_found, "protocol") and service_found.protocol:
+                        protocol = service_found.protocol
+                        self.log.debug(
+                            f"Extracted protocol from service '{service_found.id}': {protocol}"
+                        )
+                    else:
+                        self.log.error(
+                            f"Service object '{service_found.id}' is missing the 'protocol' attribute or it's empty."
+                        )
+
+                else:
+                    self.log.error(
+                        f"Could not retrieve the first service object from 'exposes_service' for controller '{top_controller_name}'."
+                    )
+                    return None
+
+            except AttributeError as e:
+                self.log.error(
+                    f"Error accessing OKS configuration attributes: {e}. Check structure around session_dal.segment.controller."
+                )
+                return None
+            except Exception as e:
+                self.log.error(
+                    f"Unexpected error during service discovery from OKS: {e}"
+                )
                 return None
 
-            ip = resolve_localhost_and_127_ip_to_network_ip(
-                session_dal.segment.controller.runs_on.runs_on.id
+            # Check if we successfully got a port and protocol
+            if port_number is None or protocol is None:
+                self.log.error(
+                    f"Failed to extract valid port ({port_number}) or protocol ({protocol}) for service '{service_found.id if service_found else 'N/A'}'. Cannot determine controller address."
+                )
+                return None
+
+            # Resolve the IP address of the host where the controller runs
+            try:
+                host_id = session_dal.segment.controller.runs_on.runs_on.id
+                self.log.debug(f"Controller runs on host ID: '{host_id}'")
+                ip = resolve_localhost_and_127_ip_to_network_ip(host_id)
+                self.log.debug(f"Resolved host ID '{host_id}' to IP: {ip}")
+            except AttributeError as e:
+                self.log.error(
+                    f"Error accessing OKS configuration attributes for host resolution: {e}. Check structure around session_dal.segment.controller.runs_on."
+                )
+                return None
+            except Exception as e:
+                self.log.error(f"Unexpected error during host IP resolution: {e}")
+                return None
+
+            if not ip:
+                self.log.error(
+                    f"Host ID '{host_id}' resolved to an empty or invalid IP address."
+                )
+                return None
+
+            # If all checks passed, return the address
+            final_address = f"{ip}:{port_number}"
+            self.log.debug(
+                f"Successfully resolved controller address from OKS config: {final_address}"
             )
-            return f"{ip}:{port_number}"
+            return final_address
 
         def keyboard_interrupt_on_sigint(signal, frame):
             self.log.warning("Interrupted")
@@ -388,7 +577,7 @@ To debug it, close drunc and run the following command:
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
                 self._log_controller_interrupt(
-                    self, top_controller_name, connection_server, connection_port
+                    top_controller_name, connection_server, connection_port
                 )
             else:
                 self.log.warning(
@@ -426,10 +615,18 @@ To debug it, close drunc and run the following command:
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
-            except grpc.RpcError as e:
-                handle_grpc_error(e)
+                yield response
 
-            yield response
+            except grpc.RpcError as e:
+                try:
+                    error_details = extract_grpc_rich_error(e)
+                    self.log.error(error_details)
+                except Exception as extraction_error:
+                    self.log.debug(
+                        f"Could not extract rich error details from gRPC error: {extraction_error}",
+                        exc_info=True,
+                    )
+                handle_grpc_error(e)
 
     def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
         args = [
@@ -475,6 +672,14 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.terminate(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
             handle_grpc_error(e)
 
         return response
@@ -487,6 +692,14 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.kill(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
             handle_grpc_error(e)
 
         return response
@@ -497,6 +710,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.logs(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -509,6 +731,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.ps(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -521,6 +752,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.flush(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -533,6 +773,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.restart(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response
@@ -543,6 +792,15 @@ To debug it, close drunc and run the following command:
         try:
             response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+
             handle_grpc_error(e)
 
         return response

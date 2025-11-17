@@ -1,1 +1,3 @@
-__version__ = "0.19.0"
+import os
+
+os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "false"

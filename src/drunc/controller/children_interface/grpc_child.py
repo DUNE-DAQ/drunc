@@ -1,18 +1,45 @@
+import threading
 import time
+from typing import NoReturn, cast
 
 import grpc
+from druncschema.controller_pb2 import (
+    AddressedCommand,
+    DescribeFSMResponse,
+    DescribeResponse,
+    ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
+    ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
+    StatusResponse,
+)
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import OldDescription
-from druncschema.request_response_pb2 import Response
+from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.request_response_pb2 import Request, Response
+from druncschema.token_pb2 import Token
+from grpc_status import rpc_status
 
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+from drunc.connectivity_service.exceptions import (
+    ApplicationLookupUnsuccessful,
+)
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.utils import send_command
 from drunc.exceptions import DruncSetupException
+from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
 from drunc.utils.configuration import ConfHandler, ConfTypes
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import ControlType, get_logger
+from drunc.utils.grpc_utils import (
+    ServerUnreachable,
+    rethrow_if_unreachable_server,
+    unpack_any,
+)
+from drunc.utils.utils import (
+    ControlType,
+    get_control_type_and_uri_from_connectivity_service,
+)
 
 
 class gRCPChildConfHandler(ConfHandler):
@@ -26,12 +53,20 @@ class gRCPChildConfHandler(ConfHandler):
 
 
 class gRPCChildNode(ChildNode):
-    def __init__(self, name, configuration: gRCPChildConfHandler, init_token, uri):
-        super().__init__(
-            name=name, node_type=ControlType.gRPC, configuration=configuration
-        )
+    def __init__(
+        self,
+        name: str,
+        configuration: gRCPChildConfHandler,
+        uri: str,
+        connectivity_service,
+        init_token: Token | None = None,
+    ):
+        super().__init__(name, ControlType.gRPC)
 
-        self.log = get_logger(f"controller.{self.name}-grpc-child")
+        self.configuration = configuration
+        self.connectivity_service = connectivity_service
+        self._lock = threading.Lock()
+        self.init_token = init_token
 
         host, port = uri.split(":")
         port = int(port)
@@ -42,42 +77,106 @@ class gRPCChildNode(ChildNode):
             )
 
         self.uri = f"{host}:{port}"
+        self._setup_connection()
 
-        self.channel = grpc.insecure_channel(self.uri)
-        self.controller = ControllerStub(self.channel)
+    def _setup_connection(self):
+        """Setup the gRPC connection to the child controller"""
+        with self._lock:
+            if hasattr(self, "channel") and self.channel:
+                self.channel.close()
 
-        desc = OldDescription()
-        ntries = 20
+            self.channel = grpc.insecure_channel(
+                self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
+            )
+            self.log.info(f"Created new gRPC channel to {self.uri}")
+            self.stub = ControllerStub(self.channel)
 
-        for itry in range(ntries):
+        request = AddressedCommand(
+            token=None,
+            command_name="describe",
+            command_data=None,
+            target="",
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=False,
+        )
+
+        tries_remaining = 20
+        while True:
+            tries_remaining -= 1
+
             try:
-                response = send_command(
-                    controller=self.controller,
-                    token=init_token,
-                    command="describe",
-                    rethrow=True,
-                )
-                response.data.Unpack(desc)
-            except ServerUnreachable as e:
-                if itry + 1 == ntries:
-                    raise e
-                else:
-                    self.log.info(
-                        f"Could not connect to the controller ({self.uri}), trial {itry + 1} of {ntries}"
+                response = self.stub.describe(request)
+
+            except grpc.RpcError as error:
+                if tries_remaining == 0:
+                    raise error
+                self.log.info(
+                    (
+                        f"Could not connect to the controller ({self.uri}). "
+                        f"Trying {tries_remaining} more times..."
                     )
-                    time.sleep(5)
-                    continue
+                )
+                time.sleep(5)
 
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
+                self.start_listening(response.description.broadcast)
                 break
-        self.start_listening(desc.broadcast)
 
-    def __str__(self):
+    def _attempt_reconnection(self, retry_call):
+        """Handle ServerUnreachable errors with automatic reconnection and retry.
+
+        Args:
+            retry_call: A callable that retries the original operation
+        """
+        if not self.connectivity_service:
+            self.log.error(f"No connectivity service available for {self.name}")
+            raise ServerUnreachable("No connectivity service available")
+
+        try:
+            ctype, new_uri = get_control_type_and_uri_from_connectivity_service(
+                self.connectivity_service, self.name, timeout=10
+            )
+
+            if new_uri != self.uri:
+                self.log.info(
+                    f"Found new IP {new_uri} for {self.name}, reconnecting..."
+                )
+                self.uri = new_uri
+                self._setup_connection()
+            else:
+                self.log.info(f"Reconnecting to same address {self.uri}...")
+                self._setup_connection()
+
+            # Retry the original call
+            return retry_call()
+
+        except ApplicationLookupUnsuccessful:
+            self.log.error(f"Child {self.name} not found in connectivity service")
+            raise ServerUnreachable(
+                f"Child {self.name} not found in connectivity service"
+            )
+        except Exception as reconnect_error:
+            self.log.error(f"Failed to reconnect to {self.name}: {reconnect_error}")
+            raise ServerUnreachable(
+                f"Failed to reconnect: {reconnect_error}"
+            ) from reconnect_error
+
+    def __str__(self) -> str:
         return f"'{self.name}@{self.uri}' (type {self.node_type})"
 
-    def get_endpoint(self):
+    def get_endpoint(self) -> str:
         return self.uri
+
+    def terminate(self) -> None:
+        if self.channel:
+            self.channel.close()
+            del self.channel
+        if self.stub:
+            del self.stub
+
+        self.channel = None
+        self.broadcast.stop()
 
     def start_listening(self, bdesc):
         self.broadcast = BroadcastHandler(
@@ -87,22 +186,292 @@ class gRPCChildNode(ChildNode):
             )
         )
 
-    def terminate(self):
-        if self.channel:
-            self.channel.close()
-            del self.channel
-        if self.controller:
-            del self.controller
+    def propagate_command(
+        self,
+        command: str,
+        request: AddressedCommand,
+        token: Token | None,
+    ) -> Response:
+        packed_request = Request(token=token)
+        packed_request.data.Pack(request)
 
-        self.controller = None
-        self.channel = None
-        self.broadcast.stop()
+        cmd = getattr(self.stub, command)
 
-    def propagate_command(self, command, data, token) -> Response:
-        return send_command(
-            controller=self.controller,
-            token=token,
-            command=command,
-            rethrow=True,
-            data=data,
+        try:
+            response = cmd(packed_request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(lambda: cmd(packed_request))
+
+        return response
+
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+
+        try:
+            response = self.stub.status(request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during status check, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(lambda: self.stub.status(request))
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> DescribeResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="describe",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.describe(request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during describe check, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.describe(request)
+                )
+
+        return response
+
+    def describe_fsm(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str = "",
+    ) -> DescribeFSMResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="describe_fsm",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.command_data.Pack(PlainText(text=key))
+
+        try:
+            response = self.stub.describe_fsm(request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during describe_fsm check, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.describe_fsm(request)
+                )
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteFSMCommandResponse:
+        request = ExecuteFSMCommandRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.command.CopyFrom(command)
+
+        try:
+            response = self.stub.execute_fsm_command(request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.execute_fsm_command(request)
+                )
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ExecuteExpertCommandResponse:
+        request = ExecuteExpertCommandRequest(
+            token=None,
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.execute_expert_command(request)
+        except grpc.RpcError as error:
+            try:
+                self.handle_child_grpc_error(error)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.execute_expert_command(request)
+                )
+
+        return response
+
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        self.included = True
+
+        try:
+            response = self.stub.include(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during include, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.include(request)
+                )
+
+        return response
+
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        self.included = False
+
+        try:
+            response = self.stub.exclude(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.warning(
+                    f"Connection to {self.name} at {self.uri} failed during exclude, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.exclude(request)
+                )
+
+        return response
+
+    def recompute_status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            token=None,
+            command_name="recompute_status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.recompute_status(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.recompute_status(request)
+                )
+
+        return response
+
+    def handle_child_grpc_error(self, error: grpc.RpcError) -> NoReturn:
+        """Handle gRPC errors from sending commands to the child controller.
+
+        Args:
+            error: The gRPC error to handle.
+        """
+        rethrow_if_unreachable_server(error)
+
+        # RpcError is also a subclass of Call, and can be used in from_call.
+        # The type stubs in types-grpcio do not reflect this, so we must cast.
+        # See https://github.com/grpc/grpc/issues/10885.
+        status = rpc_status.from_call(cast(grpc.Call, error))
+
+        self.log.error(f"Error sending command to child node {self.name} at {self.uri}")
+
+        if hasattr(status, "message"):
+            self.log.error(status.message)
+
+        if hasattr(status, "details"):
+            for detail in status.details:
+                if detail.Is(Stacktrace.DESCRIPTOR):
+                    text = "Stacktrace on remote server!\n"
+                    stack = unpack_any(detail, Stacktrace)
+                    for l in stack.text:
+                        text += l + "\n"
+                    self.log.error(text)
+                elif detail.Is(PlainText.DESCRIPTOR):
+                    text = unpack_any(detail, PlainText)
+                    self.log.error(text)
+
+        raise error

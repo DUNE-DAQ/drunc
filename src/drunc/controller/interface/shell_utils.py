@@ -1,22 +1,28 @@
 import datetime
+import ipaddress
 import logging
 import os
+import socket
 import sys
 import time
-from collections import defaultdict
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from dataclasses import dataclass
+from functools import lru_cache, partial
+from urllib.parse import urlparse
 
 import click
 import grpc
 from druncschema.controller_pb2 import (
     Argument,
+    DescribeResponse,
     FSMCommand,
     FSMCommandDescription,
     FSMResponseFlag,
     Status,
+    StatusResponse,
 )
-from druncschema.description_pb2 import OldDescription
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from rich.console import ConsoleRenderable, Group, RichCast
@@ -31,68 +37,45 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
     ServerTimeout,
     ServerUnreachable,
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.shell_utils import DecodedResponse
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import format_name_for_cli, get_logger
 
 
-def generate_none_status() -> Status:
-    return Status(
-        state="none",
-        sub_state="none",
-        in_error=False,
-        included=False,
-    )
+@dataclass(slots=True)
+class StatusDescriptionPair:
+    status: StatusResponse | None = None
+    description: DescribeResponse | None = None
 
 
-def generate_none_description() -> OldDescription:
-    return OldDescription(
-        type="none",
-        name="none",
-        endpoint="none",
-        commands=[],
-        broadcast=None,
-    )
-
-
-def check_message_type(message, expected_type: str) -> None:
-    if message is None:
-        return False
-
-    if message.data is None:
-        return False
-
-    if message.data.DESCRIPTOR.name != expected_type:
-        return False
-    return True
-
-
-def match_children(statuses: list, descriptions: list) -> defaultdict:
-    children = defaultdict(dict)
+def match_children(
+    statuses: Sequence[StatusResponse], descriptions: Sequence[DescribeResponse]
+) -> dict[str, StatusDescriptionPair]:
+    children: dict[str, StatusDescriptionPair] = {}
     for status in statuses:
-        children[status.name].update({"status": status})
-
+        pair = children.setdefault(status.name, StatusDescriptionPair())
+        pair.status = status
     for description in descriptions:
-        children[description.name].update({"description": description})
-
-    for child in children.values():
-        if "status" not in child:
-            child["status"] = None
-        if "description" not in child:
-            child["description"] = None
+        pair = children.setdefault(description.name, StatusDescriptionPair())
+        pair.description = description
     return children
 
 
-def get_status_table(status: DecodedResponse, description: DecodedResponse):
+def get_status_table(
+    status_response: StatusResponse, describe_response: DescribeResponse
+):
+    status = status_response.status
+    description = describe_response.description
+
     t = Table(
         title=(
-            f"[dark_green]{description.data.session}[/dark_green] status"
-            if description.data
+            f"[dark_green]{description.session}[/dark_green] status"
+            if description is not None
             else "[dark_green]status[/dark_green]"
         )
     )
@@ -104,61 +87,83 @@ def get_status_table(status: DecodedResponse, description: DecodedResponse):
     t.add_column("Included")
     t.add_column("Endpoint")
 
-    def add_status_to_table(table, status, description, prefix):
-        valid_description = check_message_type(description, "OldDescription")
-        valid_status = check_message_type(status, "Status")
-
-        if not valid_description or not valid_status:
+    def add_status_to_table(
+        table: Table,
+        status_response: StatusResponse,
+        describe_response: DescribeResponse,
+        prefix: str,
+    ):
+        status = status_response.status
+        description = describe_response.description
+        if status is None or description is None:
             return
 
-        NA = "[red]NA[/]"
+        def update_endpoint(endpoint: str) -> str:
+            """
+            Parses endpoint to a human readable hostname
+
+            Args:
+            endpoint: Process URI
+
+            Returns:
+            str: URI with human readable hostname
+            """
+            if not endpoint:
+                return ""
+
+            ip_address = urlparse(endpoint).hostname
+            if not ip_address:
+                return ""
+            resolved_host = get_hostname_smart(ip_address)
+            return endpoint.replace(ip_address, resolved_host)
+
         table.add_row(
-            prefix + status.name if valid_status else NA,
-            description.data.info if valid_description else NA,
-            status.data.state if valid_status else NA,
-            status.data.sub_state if valid_status else NA,
-            (
-                format_bool(status.data.in_error, false_is_good=True)
-                if valid_status
-                else NA
-            ),
-            format_bool(status.data.included) if valid_status else NA,
-            description.data.endpoint if valid_description else NA,
+            prefix + status_response.name,
+            description.info,
+            status.state,
+            status.sub_state,
+            format_bool(status.in_error, false_is_good=True),
+            format_bool(status.included),
+            update_endpoint(description.endpoint),
         )
 
-        children = match_children(status.children, description.children)
+        children = match_children(status_response.children, describe_response.children)
         children_list = sorted(list(children.keys()))
-        for child in children_list:
-            add_status_to_table(
-                t,
-                children[child]["status"],
-                children[child]["description"],
-                prefix=prefix + "  ",
-            )
 
-    def add_runinfo_to_table(table, status):
-        table.add_row("Run number", str(status.data.run_info.run_number))
-        table.add_row("Run type", status.data.run_info.run_type)
+        for child in children_list:
+            child_status = getattr(children[child], "status", None)
+            if not child_status:
+                continue
+            child_describe = children[child].description
+            if child_status is None or child_describe is None:
+                raise DruncShellException(
+                    f"No matching status and description for child '{child}'"
+                )
+            add_status_to_table(t, child_status, child_describe, prefix + "  ")
+
+    add_status_to_table(t, status_response, describe_response, "")
+
+    def add_runinfo_to_table(table: Table, status: Status):
+        table.add_row("Run number", str(status.run_info.run_number))
+        table.add_row("Run type", status.run_info.run_type)
         table.add_row(
             "Start time",
-            datetime.datetime.fromtimestamp(
-                status.data.run_info.run_time_at_start
-            ).strftime("%Y-%m-%d %H:%M:%S"),
+            datetime.datetime.fromtimestamp(status.run_info.run_time_at_start).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
         )
         table.add_row(
             "Duration",
-            str(datetime.timedelta(seconds=status.data.run_info.run_time_since_start)),
+            str(datetime.timedelta(seconds=status.run_info.run_time_since_start)),
         )
-        table.add_row("Trigger rate", f"{status.data.run_info.trigger_rate:.4f} Hz")
+        table.add_row("Trigger rate", f"{status.run_info.trigger_rate:.4f} Hz")
         table.add_row(
-            "Data storage disabled", str(status.data.run_info.disable_data_storage)
+            "Data storage disabled", str(status.run_info.disable_data_storage)
         )
-        table.add_row("Config file", status.data.run_info.run_config_file)
-        table.add_row("Config ID", status.data.run_info.run_config_name)
+        table.add_row("Config file", status.run_info.run_config_file)
+        table.add_row("Config ID", status.run_info.run_config_name)
 
-    add_status_to_table(t, status, description, prefix="")
-
-    if status.data.HasField("run_info"):
+    if status.HasField("run_info"):
         runinfo_table = Table(
             title="Run Info",
             show_header=False,
@@ -178,10 +183,9 @@ class StatusTableUpdater(Progress):
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
-        self.table = get_status_table(
-            self.ctx.get_driver("controller").status(),
-            self.ctx.get_driver("controller").describe(),
-        )
+        statuses = self.ctx.get_driver("controller").status()
+        descriptions = self.ctx.get_driver("controller").describe()
+        self.table = get_status_table(statuses, descriptions)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -193,12 +197,10 @@ def controller_cleanup_wrapper(ctx):
         log = logging.getLogger("controller.shell_utils")
         # remove the shell from the controller broadcast list
         dead = False
-
         who = ""
 
         try:
             who = ctx.get_driver("controller").who_is_in_charge().data
-
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
@@ -230,7 +232,7 @@ def controller_setup(ctx, controller_address):
             "This context is not compatible with a controller, you need to add a 'took_control' bool member"
         )
 
-    desc = OldDescription()
+    desc = Description()
 
     timeout = 60
 
@@ -253,7 +255,7 @@ def controller_setup(ctx, controller_address):
             progress.update(waiting, completed=time.time() - start_time)
 
             try:
-                desc = ctx.get_driver("controller").describe().data
+                desc = ctx.get_driver("controller").describe().description
                 stored_exception = None
                 break
             except ServerUnreachable as e:
@@ -279,25 +281,22 @@ def controller_setup(ctx, controller_address):
 
     log.debug("Connected to the controller")
 
-    timeout = (
-        60 + 10
-    )  # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+    # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+    timeout = 60 + 10
 
     time_start = time.time()
-    controller_status = ctx.get_driver("controller").status().data.state.lower()
+    state = ctx.get_driver("controller").status().status.state.lower()
     with StatusTableUpdater(ctx) as updater:
         task = updater.add_task("Waiting on tree initialisation...", total=timeout)
-        while (
-            time.time() - time_start < timeout and controller_status == "initialising"
-        ):
-            controller_status = ctx.get_driver("controller").status().data.state.lower()
+        while time.time() - time_start < timeout and state == "initialising":
+            state = ctx.get_driver("controller").status().status.state.lower()
             updater.update(task, completed=time.time() - time_start)
             updater.update_table()
             time.sleep(0.5)
 
         updater.update_table()
 
-    if controller_status == "initialising":
+    if state == "initialising":
         log.error("Controller did not initialise in time")
         return
 
@@ -452,18 +451,39 @@ def validate_and_format_fsm_arguments(
 
 
 def run_one_fsm_command(
-    controller_name,
-    transition_name,
-    obj,
-    target,
+    controller_name: str,
+    transition_name: str,
+    obj: UnifiedShellContext,
+    target: str,
     **kwargs,
-):
+) -> None:
+    """
+    Run one FSM command on the controller
+
+    Args:
+        controller_name (str): Name of the controller
+        transition_name (str): Name of the transition to run
+        obj (UnifiedShellContext): Unified shell context
+        target (str): Target to run the command on
+        **kwargs: Arguments to the command
+
+    Returns:
+        None
+
+    Raises:
+        ArgumentException: If there is an issue with the arguments
+        ServerTimeout: If the server times out
+    """
     log = get_logger("controller.shell_utils")
     log.info(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
 
-    if obj.batch_mode and obj.get_driver("controller").status().data.in_error:
+    # If running in batch or semibatch mode, and error is detected, exit
+    if (
+        obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]
+        and obj.get_driver("controller").status().status.in_error
+    ):
         obj.get_driver("controller").status()
         log.error(
             "Running in batch mode, and because error state is detected, exiting."
@@ -478,8 +498,6 @@ def run_one_fsm_command(
         execute_on_root_controller = True
     elif target == controller_name:
         execute_on_root_controller = True
-    elif target == "/" + controller_name:
-        execute_on_root_controller = True
 
     if execute_on_root_controller:
         fsm_description = (
@@ -489,7 +507,7 @@ def run_one_fsm_command(
                 execute_along_path=True,
                 execute_on_all_subsequent_children_in_path=False,
             )
-            .data
+            .description
         )
 
         command_desc = search_fsm_command(transition_name, fsm_description.commands)
@@ -523,7 +541,7 @@ def run_one_fsm_command(
         with ThreadPoolExecutor() as executor:
             future = executor.submit(
                 obj.get_driver("controller").execute_fsm_command,
-                arguments=data,
+                command=data,
                 target=target,
                 execute_along_path=execute_along_path,
                 execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -591,7 +609,7 @@ def run_one_fsm_command(
             prefix + response.name,
             bool_to_success(response.flag, message_type=ResponseFlag),
             (
-                bool_to_success(response.data.flag, message_type=FSMResponseFlag)
+                bool_to_success(response.fsm_flag, message_type=FSMResponseFlag)
                 if executed_command
                 else "[red]NA[/]"
             ),
@@ -684,9 +702,58 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             help=argument.help,
         )(cmd)
 
+    cmd_name = format_name_for_cli(transition.name)
+
     cmd = click.command(
-        name=transition.name.replace("_", "-").lower(),
+        name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
     )(cmd)
 
-    return cmd, transition.name.replace("_", "-").lower()
+    return cmd, cmd_name
+
+
+@lru_cache(maxsize=1024)
+def is_private_ip(ip_str: str) -> bool:
+    """
+    Checks if an IP address is private (RFC 1918), loopback, or link-local.
+    These IPs will almost never have a public reverse DNS record.
+    """
+    if not ip_str:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(ip_str)
+        # .is_private = 10.x, 172.16-31.x, 192.168.x
+        # .is_loopback = 127.x.x.x
+        # .is_link_local = 169.254.x.x
+        return ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
+    except ValueError:
+        # Not 'valid' IP address -> treat as private
+        return True
+
+
+@lru_cache(maxsize=4096)
+def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
+    """
+    Resolves an IP to a hostname, with optimizations:
+    1. Caches all results.
+    2. Immediately skips private/internal IPs (like K8s).
+    3. Uses a short timeout for public IPs.
+    """
+
+    # If private IP (k8s), don't try to resolve it
+    if is_private_ip(ip_address):
+        return ip_address
+
+    # If public IP, try to resolve it.
+    original_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(timeout_seconds)
+
+        hostname, _, _ = socket.gethostbyaddr(ip_address)
+        return hostname
+
+    except (socket.herror, socket.gaierror, socket.timeout):
+        return ip_address
+
+    finally:
+        socket.setdefaulttimeout(original_timeout)

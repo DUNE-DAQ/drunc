@@ -1,26 +1,92 @@
+import ipaddress
+import socket
 from functools import wraps
 
+import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
-    FSMCommandResponse,
-    FSMCommandsDescription,
-    Status,
+    DescribeFSMResponse,
+    DescribeResponse,
+    ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
+    ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
+    StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import OldDescription
-from druncschema.generic_pb2 import PlainText
+from druncschema.description_pb2 import Description
+from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.token_pb2 import Token
 
-from drunc.utils.shell_utils import DecodedResponse, GRPCDriver
+from drunc.exceptions import DruncServerSideError
+from drunc.utils.grpc_utils import (
+    UnpackingError,
+    handle_grpc_error,
+    unpack_any,
+)
+from drunc.utils.shell_utils import DecodedResponse
+from drunc.utils.utils import get_logger
 
 
-class ControllerDriver(GRPCDriver):
-    def __init__(self, address: str, token, **kwargs):
-        super().__init__(
-            name="controller_driver", address=address, token=token, **kwargs
-        )
+class ControllerDriver:
+    @staticmethod
+    def _resolve_address_to_ipv4(address: str) -> str:
+        """
+        Resolves a 'host:port' or 'ip:port' string to a strict 'ipv4:port' string.
+
+        Raises:
+            ValueError: If the address is in an invalid format or cannot be
+                        resolved to a valid IPv4 address.
+        """
+        host_or_ip = ""
+
+        try:
+            parts = address.rsplit(":", 1)
+            if len(parts) != 2:
+                raise ValueError(
+                    f"Address '{address}' must be in 'host:port' or 'ip:port' format."
+                )
+
+            host_or_ip, port = parts[0], parts[1]
+
+            if not host_or_ip or not port:
+                raise ValueError("Address string is missing hostname/IP or port.")
+
+            resolved_ip = socket.gethostbyname(host_or_ip)
+            ipaddress.IPv4Address(resolved_ip)
+            return f"{resolved_ip}:{port}"
+
+        except (socket.gaierror, ValueError) as e:
+            raise ValueError(
+                f"Address '{host_or_ip or address}' could not be resolved to a valid IPv4:port. Error: {e}"
+            ) from e
+
+    def __init__(self, address: str, token: Token):
+        self.log = get_logger("controller.ControllerDriver")
+        self.address = address
+        options = [
+            ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
+        ]
+
+        try:
+            resolved_address = self._resolve_address_to_ipv4(address)
+        except ValueError as e:
+            self.log.error(
+                f"Failed to initialize ControllerDriver. Invalid address '{self.address}': {e}"
+            )
+            raise e
+
+        target_address = f"ipv4:{resolved_address}"
+        self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)
+        self.token = Token()
+        self.token.CopyFrom(token)
 
-    def pack_empty_addressed_command(cmd):
+    def OLD_pack_empty_addressed_command(cmd):
         @wraps(cmd)
         def wrapper(
             self,
@@ -34,7 +100,6 @@ class ControllerDriver(GRPCDriver):
                 self,
                 addressed_command=AddressedCommand(
                     command_name=command_name,
-                    command_data=None,
                     target=target,
                     execute_along_path=execute_along_path,
                     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -44,137 +109,303 @@ class ControllerDriver(GRPCDriver):
 
         return wrapper
 
-    @pack_empty_addressed_command
-    def describe(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "describe",
-            data=addressed_command,
-            outformat=OldDescription,
-            timeout=timeout,
+    def status(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            command_name="status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
-    @pack_empty_addressed_command
+        try:
+            response = self.stub.status(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def describe(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> DescribeResponse:
+        request = AddressedCommand(
+            command_name="describe",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.describe(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
     def describe_fsm(
         self,
-        addressed_command: AddressedCommand,
-        key: str = None,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        key: str = "",
         timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=key))
-        return self.send_command(
-            "describe_fsm",
-            data=new_command,
-            outformat=FSMCommandsDescription,
-            timeout=timeout,
+    ) -> DescribeFSMResponse:
+        request = AddressedCommand(
+            command_name="describe_fsm",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+        request.command_data.Pack(PlainText(text=key))
 
-    @pack_empty_addressed_command
-    def status(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "status", data=addressed_command, outformat=Status, timeout=timeout
+        try:
+            response = self.stub.describe_fsm(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExecuteFSMCommandResponse:
+        request = ExecuteFSMCommandRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+        request.command.CopyFrom(command)
 
-    @pack_empty_addressed_command
+        try:
+            response = self.stub.execute_fsm_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExecuteExpertCommandResponse:
+        request = ExecuteExpertCommandRequest(
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.execute_expert_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.include(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.exclude(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
     def recompute_status(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "recompute_status",
-            data=addressed_command,
-            outformat=Status,
-            timeout=timeout,
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> StatusResponse:
+        request = AddressedCommand(
+            command_name="recompute_status",
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
-    @pack_empty_addressed_command
+        try:
+            response = self.stub.recompute_status(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    @OLD_pack_empty_addressed_command
     def take_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "take_control", data=addressed_command, outformat=PlainText, timeout=timeout
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def who_is_in_charge(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "who_is_in_charge",
             data=addressed_command,
             outformat=PlainText,
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def surrender_control(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "surrender_control",
             data=addressed_command,
             outformat=PlainText,
             timeout=timeout,
         )
 
-    @pack_empty_addressed_command
-    def execute_fsm_command(
-        self, addressed_command: AddressedCommand, arguments, timeout: int | float = 60
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(arguments)
-        return self.send_command(
-            "execute_fsm_command",
-            data=new_command,
-            outformat=FSMCommandResponse,
-            timeout=timeout,
-        )
-
-    @pack_empty_addressed_command
-    def include(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "include", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @pack_empty_addressed_command
-    def exclude(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.send_command(
-            "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @pack_empty_addressed_command
-    def expert_command(
-        self,
-        addressed_command: AddressedCommand,
-        json_string,
-        timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=json_string))
-        return self.send_command(
-            "execute_expert_command",
-            data=new_command,
-            outformat=PlainText,
-            timeout=timeout,
-        )
-
-    @pack_empty_addressed_command
+    @OLD_pack_empty_addressed_command
     def to_error(
         self, addressed_command: AddressedCommand, timeout: int | float = 60
     ) -> DecodedResponse:
-        return self.send_command(
+        return self.OLD_send_command(
             "to_error",
             data=addressed_command,
-            outformat=OldDescription,
+            outformat=Description,
             timeout=timeout,
         )
+
+    def handle_response(self, response, command, outformat):
+        dr = DecodedResponse(
+            name=response.name,
+            token=response.token,
+            flag=response.flag,
+        )
+
+        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+            if response.HasField("data") and response.data not in [None, ""]:
+                try:
+                    dr.data = unpack_any(response.data, outformat)
+                except UnpackingError as e:
+                    self.log.error(f"Error unpacking data: {e}")
+                    dr.data = response.data
+
+        else:
+
+            def text(verb="not executed", reason=""):
+                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
+
+            if not response.HasField("data"):
+                return None
+
+            error_txt = ""
+            stack_txt = None
+
+            if response.data.Is(Stacktrace.DESCRIPTOR):
+                stack = unpack_any(response.data, Stacktrace)
+                dr.data = stack
+                stack_txt = "Stacktrace on remote server!\n"
+                last_one = ""
+
+                for l in stack.text:
+                    stack_txt += l + "\n"
+                    if l != "":
+                        last_one = l
+                error_txt = last_one
+
+            elif response.data.Is(PlainText.DESCRIPTOR):
+                txt = unpack_any(response.data, PlainText)
+                error_txt = txt.text  # noqa: F841  (might need to revisit this)
+                dr.data = error_txt
+
+            if response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            ]:
+                self.log.debug(text())
+            elif response.flag in [
+                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
+            ]:
+                self.log.warning(text())
+            else:
+                self.log.error(text("failed", error_txt))
+
+        for c_response in response.children:
+            try:
+                dr.children.append(self.handle_response(c_response, command, outformat))
+            except DruncServerSideError as e:
+                self.log.error(f"Exception thrown from child: {e}")
+
+        return dr
+
+    def OLD_send_command(
+        self,
+        command: str,
+        data=None,
+        outformat=None,
+        timeout: int | float = 60,
+    ):
+        request = Request()
+        request.token.CopyFrom(self.token)
+        if data is not None:
+            request.data.Pack(data)
+
+        try:
+            cmd = getattr(self.stub, command)
+            response = cmd(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return self.handle_response(response, command, outformat)

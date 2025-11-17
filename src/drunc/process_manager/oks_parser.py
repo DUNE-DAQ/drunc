@@ -92,7 +92,9 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if confmodel_dal.component_disabled(db._obj, session_obj.id, sub_segment_obj.id):
+        if confmodel_dal.component_disabled(
+            db._obj, session_obj.id, sub_segment_obj.id
+        ):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -119,7 +121,9 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not confmodel_dal.component_disabled(db._obj, session_obj.id, app.id)
+            enabled = not confmodel_dal.component_disabled(
+                db._obj, session_obj.id, app.id
+            )
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
@@ -147,6 +151,17 @@ def collect_apps(
         )
         log.debug(f"Collecting app {app.id} with args {args}")
 
+        data_path = None
+        if "DFApplication" in app.oksTypes():
+            try:
+                # DFApplication -> data_writers -> data_store_params -> directory_path
+                data_path = app.data_writers[0].data_store_params.directory_path
+            except (AttributeError, IndexError):
+                log.debug(
+                    f"DFApplication {app.id} is missing its data path configuration."
+                )
+                pass
+
         apps.append(
             {
                 "name": app.id,
@@ -157,6 +172,7 @@ def collect_apps(
                 "env": app_env,
                 "tree_id": app_tree_id_str,
                 "log_path": app.log_path,
+                "data_path": data_path,
             }
         )
         app_index += 1

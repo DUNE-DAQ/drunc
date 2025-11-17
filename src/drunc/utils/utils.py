@@ -215,52 +215,80 @@ def validate_command_facility(ctx, param, value):
             )
 
 
-def resolve_localhost_to_hostname(address):
+def address_regex(address: str, hostname_or_ip: str) -> str:
+    """
+    Replace 127.x.x.x and 0.x.x.x IPs with the provided hostname
+
+    This is useful when a service binds to localhost or 127.x.x.x, but we
+    want to access it using the hostname or network IP.
+
+    Args:
+        address (str): The address to resolve.
+        hostname_or_ip (str): The hostname or IP to replace 127.x.x.x or 0.x.x.x with.
+
+    Returns:
+        str: The address with 127.x.x.x and 0.x.x.x replaced by the hostname or IP.
+    """
+
+    ip_match: re.Match = re.search(
+        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
+        address,
+    )
+
+    if not ip_match:
+        return address
+
+    if ip_match.group(0).startswith("127."):
+        address = address.replace(ip_match.group(0), hostname_or_ip)
+
+    if ip_match.group(0).startswith("0."):
+        address = address.replace(ip_match.group(0), hostname_or_ip)
+
+    return address
+
+
+def resolve_localhost_to_hostname(address: str) -> str:
+    """
+    Replace localhost with the actual hostname of this host.
+
+    This is useful when a service binds to localhost, but we want to access it using the
+    hostname.
+
+    Args:
+        address (str): The address to resolve.
+
+    Returns:
+        str: The address with localhost replaced by the hostname.
+    """
+
     if not address:
-        return None
-    hostname = socket.gethostname()
+        return ""
+    hostname: str = socket.gethostname()
     if "localhost" in address:
         address = address.replace("localhost", hostname)
 
-    ip_match = re.search(
-        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
-        address,
-    )
-    # https://stackoverflow.com/a/25969006
-
-    if not ip_match:
-        return address
-
-    if ip_match.group(0).startswith("127."):
-        address = address.replace(ip_match.group(0), hostname)
-
-    if ip_match.group(0).startswith("0."):
-        address = address.replace(ip_match.group(0), hostname)
-
-    return address
+    return address_regex(address, hostname)
 
 
-def resolve_localhost_and_127_ip_to_network_ip(address):
-    this_ip = socket.gethostbyname(socket.gethostname())
+def resolve_localhost_and_127_ip_to_network_ip(address: str) -> str:
+    """
+    Replace localhost and 127.x.x.x IPs with the actual network IP of this host.
+
+    This is useful when a service binds to localhost or 127.x.x.x, but we
+    want to access it from another machine on the network.
+
+    Args:
+        address (str): The address to resolve.
+
+    Returns:
+        str: The address with localhost and 127.x.x.x replaced by the network IP
+    """
+
+    this_ip: str = socket.gethostbyname(socket.gethostname())
     if "localhost" in address:
         address = address.replace("localhost", this_ip)
 
-    ip_match = re.search(
-        r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
-        address,
-    )
-    # https://stackoverflow.com/a/25969006
-
-    if not ip_match:
-        return address
-
-    if ip_match.group(0).startswith("127."):
-        address = address.replace(ip_match.group(0), this_ip)
-
-    if ip_match.group(0).startswith("0."):
-        address = address.replace(ip_match.group(0), this_ip)
-
-    return address
+    return address_regex(address, this_ip)
 
 
 def host_is_local(host):
@@ -374,19 +402,17 @@ class ControlType(Enum):
     Direct = 3
 
 
-def get_control_type_and_uri_from_cli(CLAs: list[str]) -> ControlType:
-    for CLA in CLAs:
-        if CLA.startswith("rest://"):
-            return ControlType.REST_API, resolve_localhost_and_127_ip_to_network_ip(
-                CLA.replace("rest://", "")
-            )
-        elif CLA.startswith("grpc://"):
-            return ControlType.gRPC, resolve_localhost_and_127_ip_to_network_ip(
-                CLA.replace("grpc://", "")
-            )
-    raise DruncSetupException(
-        "Could not find if the child was controlled by gRPC or a REST API"
-    )
+def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType, str]:
+    for arg in cli_args:
+        if arg.startswith("rest://"):
+            uri = arg.replace("rest://", "")
+            uri = resolve_localhost_and_127_ip_to_network_ip(uri)
+            return ControlType.REST_API, uri
+        elif arg.startswith("grpc://"):
+            uri = arg.replace("grpc://", "")
+            uri = resolve_localhost_and_127_ip_to_network_ip(uri)
+            return ControlType.gRPC, uri
+    raise DruncSetupException("Protocol must be 'grpc://' or 'rest://'")
 
 
 def get_control_type_and_uri_from_connectivity_service(
@@ -468,3 +494,17 @@ def print_with_timestamp(message):
     now = datetime.now()
     now_str = now.isoformat()
     print(f"{now_str}: {message}")
+
+
+def format_name_for_cli(name: str) -> str:
+    """
+    Format a command name or argument name to be CLI-friendly by replacing underscores
+    with hyphens and converting to lowercase.
+
+    Args:
+        name (str): The original command name.
+
+    Returns:
+        str: The formatted command name suitable for CLI usage.
+    """
+    return name.replace("_", "-").lower()

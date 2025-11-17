@@ -38,9 +38,6 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
 )
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.grpc_utils import (
-    pack_to_any,
-)
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -436,21 +433,20 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def describe(self, request: Request, context: ServicerContext) -> Description:
         self.log.debug(f"{self.name} running describe")
 
-        description = Description(
+        response = Description(
             type="process_manager",
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
             commands=self.commands,
-            children=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             token=None,
         )
 
         if broadcast_description := self.describe_broadcast():
-            description.broadcast.CopyFrom(pack_to_any(broadcast_description))
+            response.broadcast.Pack(broadcast_description)
 
-        return description
+        return response
 
     @abc.abstractmethod
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
@@ -506,76 +502,143 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 )
         return uuids[0]
 
-    def _get_process_uid(
-        self,
+    @staticmethod
+    def _match_processes_against_query(
         query: ProcessQuery,
-        in_boot_request: bool = False,
+        available_uuids: list[str],
+        boot_request_dict: dict,
         order_by: str = "random",
     ) -> list[str]:
+        """
+        Static method to match process UUIDs against query criteria.
+
+        Filters the provided UUIDs based on query parameters and returns matching
+        processes in the specified order. This method is stateless and can be used
+        by any process manager implementation.
+
+        Args:
+            query: ProcessQuery containing selection criteria (names, users, sessions, UUIDs)
+            available_uuids: List of process UUIDs to search through
+            boot_request_dict: Dictionary mapping UUIDs to boot requests (must contain process_description.metadata)
+            order_by: Sort order - "random", "leaf_first", or "root_first"
+
+        Returns:
+            List of process UUIDs matching the query criteria
+
+        Raises:
+            DruncCommandException: If order_by parameter is invalid
+        """
         order_by = order_by.lower()
         if order_by not in ["random", "leaf_first", "root_first"]:
             raise DruncCommandException(f"Order by '{order_by}' is not supported")
 
-        uuid_selector = []
+        # Extract query selectors
+        uuid_selector = [uid.uuid for uid in query.uuids]
         name_selector = query.names
         user_selector = query.user
         session_selector = query.session
         # relevent reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
 
-        for uid in query.uuids:
-            uuid_selector += [uid.uuid]
-
+        # Filter processes based on query criteria
         processes = []
-        all_the_uuids = (
-            self.process_store.keys()
-            if not in_boot_request
-            else self.boot_request.keys()
-        )
-
-        for uuid in all_the_uuids:
+        for uuid in available_uuids:
             accepted = False
-            meta = self.boot_request[uuid].process_description.metadata
+            meta = boot_request_dict[uuid].process_description.metadata
 
+            # Check UUID match
             if uuid in uuid_selector:
                 accepted = True
 
+            # Check name pattern match (regex)
             for name_reg in name_selector:
                 if re.search(name_reg, meta.name):
                     accepted = True
 
+            # Check session match
             if session_selector == meta.session:
                 accepted = True
 
+            # Check user match
             if user_selector == meta.user:
                 accepted = True
 
             if accepted:
                 processes.append(uuid)
 
+        # Apply ordering if requested
         if order_by != "random":
+            # Sort by tree depth (number of dots in tree_id)
             process_tree_position = [
-                self.boot_request[x].process_description.metadata.tree_id.count(".")
+                boot_request_dict[x].process_description.metadata.tree_id.count(".")
                 for x in processes
             ]
             processes = [x for _, x in sorted(zip(process_tree_position, processes))]
+
+            # Reverse for leaf-first ordering
             if order_by == "leaf_first":
                 processes.reverse()
+
         return processes
+
+    def _get_process_uid(
+        self,
+        query: ProcessQuery,
+        in_boot_request: bool = False,
+        order_by: str = "random",
+    ) -> list[str]:
+        """
+        Find process UUIDs matching the query criteria.
+
+        Searches through registered processes and returns UUIDs that match
+        the specified query parameters (names, users, sessions, UUIDs).
+
+        Args:
+            query: ProcessQuery containing selection criteria
+            in_boot_request: If True, search boot_request keys; if False, search process_store keys
+            order_by: Sort order - "random", "leaf_first", or "root_first"
+
+        Returns:
+            List of process UUIDs matching the query criteria
+        """
+        # Determine which UUID collection to search
+        all_the_uuids = (
+            list(self.process_store.keys())
+            if not in_boot_request
+            else list(self.boot_request.keys())
+        )
+
+        # Use static method to perform matching
+        matched_processes = self._match_processes_against_query(
+            query=query,
+            available_uuids=all_the_uuids,
+            boot_request_dict=self.boot_request,
+            order_by=order_by,
+        )
+        return matched_processes
 
     @staticmethod
     def get(conf, **kwargs):
         log = get_logger("process_manager.get")
 
-        if conf.data.type == ProcessManagerTypes.SSH:
-            from drunc.process_manager.ssh_process_manager import SSHProcessManager
+        if conf.data.type == ProcessManagerTypes.SSH_SHELL:
+            from drunc.process_manager.ssh_process_manager import (
+                SSHProcessManager,
+            )
 
-            log.debug("Starting [green]SSH process_manager[/green]")
+            log.debug("Starting [green]SSH Shell process_manager[/green]")
             return SSHProcessManager(conf, **kwargs)
         elif conf.data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
+        elif conf.data.type == ProcessManagerTypes.SSH_PARAMIKO:
+            from drunc.process_manager.ssh_process_manager_paramiko_client import (
+                SSHProcessManagerParamikoClient,
+            )
+
+            log.debug("Starting [green]SSH Paramiko process_manager[/green]")
+            return SSHProcessManagerParamikoClient(conf, **kwargs)
         else:
             log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
             raise RuntimeError(

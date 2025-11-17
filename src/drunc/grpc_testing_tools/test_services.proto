@@ -1,0 +1,183 @@
+syntax = "proto3";
+package test_services;
+
+// Service for Manager component
+service ManagerService {
+    // Basic method for connectivity testing
+    rpc MakeRequest(DummyRequest) returns (DummyResponse);
+    
+    // Boot other processes via the manager 
+    rpc boot(BootRequest) returns (ProcessInstanceList);
+    
+    // Method for graceful shutdown of the Manager service
+    rpc Kill(KillRequest) returns (KillResponse);
+    
+    // Method for receiving updates from RootController
+    rpc ReceiveUpdate(UpdateRequest) returns (UpdateResponse);
+}
+
+// Service for RootController component (for testing connectivity to booted servers)
+service RootControllerService {
+    // Basic method for connectivity testing
+    rpc MakeRequest(DummyRequest) returns (DummyResponse);
+    
+    // Method for graceful shutdown
+    rpc Kill(KillRequest) returns (KillResponse);
+    
+    // Method for receiving commands from Manager
+    rpc ReceiveCommand(CommandRequest) returns (CommandResponse);
+    
+    // Method for receiving status from ChildControllers
+    rpc ReceiveStatus(StatusRequest) returns (StatusResponse);
+}
+
+// Service for ChildController components
+service ChildControllerService {
+    // Basic method for connectivity testing
+    rpc MakeRequest(DummyRequest) returns (DummyResponse);
+    
+    // Method for graceful shutdown of the ChildController service
+    rpc Kill(KillRequest) returns (KillResponse);
+}
+
+// Basic request/response for connectivity testing
+message DummyRequest {
+    string message = 1;
+    int64 timestamp = 2;
+}
+
+message DummyResponse {
+    string reply = 1;
+    int64 timestamp = 2;
+}
+
+// Token message 
+message Token {
+    string token = 1;
+}
+
+// Response flag 
+message ResponseFlag {
+    bool success = 1;
+    string message = 2;
+}
+
+// Process UUID 
+message ProcessUUID {
+    string uuid = 1;
+}
+
+// Process metadata 
+message ProcessMetadata {
+    ProcessUUID uuid = 1;
+    string user = 2;
+    optional string session = 3;
+    string name = 4;
+    string hostname = 5;
+    optional string tree_id = 6;
+}
+
+// Process restriction 
+message ProcessRestriction {
+    repeated string allowed_hosts = 1;
+    repeated string allowed_host_types = 2;
+}
+
+// Process description 
+message ProcessDescription {
+    message StringList {
+        repeated string values = 1;
+    }
+    
+    message ExecAndArgs {
+        string exec = 1;
+        repeated string args = 2;
+    }
+    
+    ProcessMetadata metadata = 1;
+    map<string,string> env = 2;
+    repeated ExecAndArgs executable_and_arguments = 3;
+    string process_execution_directory = 4;
+    string process_logs_path = 5;
+}
+
+// Process instance 
+message ProcessInstance {
+    ProcessDescription process_description = 1;
+    ProcessRestriction process_restriction = 2;
+    
+    enum StatusCode {
+        RUNNING = 0;
+        DEAD = 1;
+    }
+    
+    StatusCode status_code = 3;
+    int32 return_code = 4;
+    ProcessUUID uuid = 5;
+}
+
+// Process instance list 
+message ProcessInstanceList {
+    string name = 1;
+    Token token = 2;
+    repeated ProcessInstance values = 3;
+    ResponseFlag flag = 4;
+}
+
+// Boot request 
+message BootRequest {
+    Token token = 1;
+    ProcessDescription process_description = 2;
+    ProcessRestriction process_restriction = 3;
+}
+
+// Manager-RootController communication messages
+message UpdateRequest {
+    string update_type = 1;
+    string content = 2;
+    int64 sequence_number = 3;
+}
+
+message UpdateResponse {
+    bool acknowledged = 1;
+    string response_message = 2;
+}
+
+message CommandRequest {
+    string command_type = 1;
+    string parameters = 2;
+    int64 command_id = 3;
+}
+
+message CommandResponse {
+    bool success = 1;
+    string result = 2;
+    string error_message = 3;
+}
+
+// RootController-ChildController communication messages
+message StatusRequest {
+    string controller_id = 1;
+    string status = 2;
+    map<string, string> metrics = 3;
+}
+
+message StatusResponse {
+    bool received = 1;
+    string acknowledgement = 2;
+}
+
+// Shutdown/kill functionality messages (custom for test simplicity)
+message KillRequest {
+    // Reason for shutdown (for logging purposes)
+    string reason = 1;
+    // Grace period in seconds before force shutdown
+    int32 grace_period_seconds = 2;
+}
+
+message KillResponse {
+    // Indicates if the shutdown request was accepted
+    bool shutdown_initiated = 1;
+    // Message describing the shutdown status
+    string message = 2;
+}
