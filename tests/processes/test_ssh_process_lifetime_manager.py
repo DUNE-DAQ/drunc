@@ -81,11 +81,7 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
         )
         print(f"✓ All {num_processes} processes confirmed alive")
 
-        print("\n=== Checking log output ===")
-        for i, process_uuid in enumerate(process_uuids):
-            process_name = process_names[i]
-            log_file = str(log_dir / f"{process_name}.log")
-
+        def check_log_lines():
             log_lines = ssh_manager.read_log_file(
                 hostname="localhost",
                 user=os.getenv("USER"),
@@ -93,15 +89,28 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
                 num_lines=100,
             )
 
-            assert len(log_lines) > 0, f"No logs found for {process_name}"
+            if not len(log_lines) > 0:
+                return False
 
             log_text = "".join(log_lines)
-            assert "Process started" in log_text, (
-                f"Missing start message in {process_name}"
-            )
-            assert "Heartbeat" in log_text, f"Missing heartbeat in {process_name}"
+            if "Process started" not in log_text:
+                return False
+            if "Heartbeat" not in log_text:
+                return False
 
             print(f"✓ {process_name} logs verified ({len(log_lines)} lines)")
+            return True
+
+        print("\n=== Checking log output ===")
+        for i, process_uuid in enumerate(process_uuids):
+            process_name = process_names[i]
+            log_file = str(log_dir / f"{process_name}.log")
+            log_lines_correct = wait_for(
+                check_log_lines, True, timeout=10.0, poll_interval=1.0
+            )
+            assert log_lines_correct, (
+                f"Log lines verification failed for {process_name}"
+            )
 
         print("\n=== Terminating all processes via SIGHUP ===")
         for process_uuid in process_uuids:
@@ -121,6 +130,7 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
                 lambda: ssh_manager.get_exit_code(process_uuid),
                 expected_value=lambda x: x is not None,
                 timeout=5.0,
+                poll_interval=0.5,
             )
             assert exit_code is not None, (
                 f"No exit code for {process_uuid} after 5s timeout"
