@@ -541,7 +541,11 @@ def wait_for(
     last_value = None
 
     while time.time() - start_time < timeout:
-        last_value = condition()
+        try:
+            last_value = condition()
+        except Exception:
+            time.sleep(poll_interval)
+            continue
 
         # Handle callable expected_value (predicate function)
         if callable(expected_value):
