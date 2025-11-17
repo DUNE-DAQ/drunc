@@ -621,7 +621,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         log = get_logger("process_manager.get")
 
         if conf.data.type == ProcessManagerTypes.SSH_SHELL:
-            from drunc.process_manager.ssh_process_manager import (
+            from drunc.process_manager.ssh_process_manager_shell import (
                 SSHProcessManager,
             )
 

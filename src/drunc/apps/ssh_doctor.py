@@ -12,7 +12,9 @@ import click
 import conffwk
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager_paramiko import (
+    SSHProcessLifetimeManagerParamiko,
+)
 
 # from drunc.process_manager.ssh_process_manager import on_parent_exit
 from drunc.utils.utils import create_logger_handler, get_logger, log_levels
@@ -36,7 +38,7 @@ def test_host_connection(host: str, test_auth: str) -> bool:
         bool: True if the SSH connection is successful, False otherwise.
     """
 
-    ssh_manager = SSHProcessLifetimeManager(disable_host_key_check=True)
+    ssh_manager = SSHProcessLifetimeManagerParamiko(disable_host_key_check=True)
 
     try:
         ssh_manager.validate_host_connection(host=host, auth_method=test_auth)
