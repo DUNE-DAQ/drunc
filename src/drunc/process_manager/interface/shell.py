@@ -60,8 +60,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     process_manager_log = get_logger(
         logger_name="process_manager",
-        log_file_path=desc.info,
-        override_log_file=False,
+        file_handler_path=desc.info,
         rich_handler=True,
     )
 
