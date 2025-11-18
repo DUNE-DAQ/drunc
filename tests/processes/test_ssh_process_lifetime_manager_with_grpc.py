@@ -364,8 +364,6 @@ def test_manager_boot_and_kill_via_grpc_paramiko(
     )
 
 
-#
-@pytest.mark.skip
 def test_manager_boot_and_kill_via_grpc_shell(grpc_process_manager_service_resources):
     """
     Test Manager boot and kill functionality using shell SSH implementation.
