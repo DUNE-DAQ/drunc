@@ -105,6 +105,9 @@ class DBRunRegistry(FSMAction):
                 self.log.critical(line.rstrip())
 
         jsonify_xml_data(xml_name, json_name)
+        timestamped_json_path = f"/tmp/DEBUGGING_{timestamp}.data.json"
+        copy2(json_name, timestamped_json_path)
+        self.log.critical(f"Created timestamped XML copy at {timestamped_json_path}")
 
         # Create a temporary file for the entry point file
         # (only contains the session key)
