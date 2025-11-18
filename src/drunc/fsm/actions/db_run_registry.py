@@ -16,7 +16,6 @@ from drunc.fsm.exceptions import (
 )
 from drunc.utils.utils import get_logger
 
-
 class DBRunRegistry(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="db-run-registry")
@@ -35,32 +34,64 @@ class DBRunRegistry(FSMAction):
         self.timeout = 2
 
     def pre_start(self, _input_data: dict, _context, **kwargs):
+        """
+        Publish the configuration as both an XML and JSON file to the Run Registry prior
+        to starting the run.
+
+        Args:
+            _input_data (dict): Input data dictionary containing run information.
+            _context: Context object providing access to configuration and database.
+        
+        Returns:
+            dict: The input data dictionary, unchanged.
+
+        Raises:
+            CannotGetSoftwareVersion: If the software version cannot be determined.
+            CannotInsertRunNumber: If there is an error inserting the run number into
+                the Run Registry
+        """
+
+        # Seems like run_number isn't in _input_data in post_drain_dataflow so need to
+        # initialise it here
         self.run_number = _input_data[
             "run"
-        ]  # Seems like run_number isn't in _input_data in post_drain_dataflow so need to initialise it here
+        ]
 
-        run_type = _input_data.get("production_vs_test", "TEST")
-        det_id = _context.configuration.db.get_dal(
-            class_name="Session", uid=_context.configuration.oks_key.session
-        ).detector_configuration.id
+        # Get the environment variables that need to be published
         software_version = os.getenv("DUNE_DAQ_BASE_RELEASE")
         if software_version == None:
             raise CannotGetSoftwareVersion()
 
+        # Get the metadata from the input data
+        run_type = _input_data.get("production_vs_test", "TEST")
+
+        # Get the detector configuration ID from the configuration file
+        controller_config = _context.configuration
+        det_id = controller_config.db.get_dal(
+            class_name="Session", uid=_context.configuration.oks_key.session
+        ).detector_configuration.id
+
+        # Create a temporary file for the XML configuration file
         f_xml = tempfile.NamedTemporaryFile(suffix=".data.xml", delete=True)
+        xml_name = f_xml.name
+        session_file_path = controller_config.initial_data.replace("oksconflibs:", "")
+        consolidate_db(session_file_path, xml_name)
+
+        # Create a temporary file for the JSON configuration file
         f_json = tempfile.NamedTemporaryFile(suffix=".data.json", delete=True)
         f_entry_point = tempfile.NamedTemporaryFile(
             suffix="_entry_point.txt", delete=True
         )
-        xml_name = f_xml.name
         json_name = f_json.name
-        entry_point_name = f_entry_point.name
-
-        consolidate_db(_context.configuration.initial_data.split(":")[1], xml_name)
         jsonify_xml_data(xml_name, json_name)
+
+        # Create a temporary file for the entry point file
+        # (only contains the session key)
+        entry_point_name = f_entry_point.name
         with open(entry_point_name, "w") as f:
             f.write(_context.configuration.oks_key.session)
 
+        # Create a tar.gz file containing the XML, JSON, and entry point files
         f_tar = tempfile.NamedTemporaryFile(
             suffix=".tar.gz",
             delete=False,  # delete when f_tar gets out of scope
@@ -70,12 +101,14 @@ class DBRunRegistry(FSMAction):
         )
         tar_name = f_tar.name
 
+        # Write the files to the tar.gz archive
         with tarfile.open(fileobj=f_tar, mode="w:gz") as tar:
             tar.add(xml_name, arcname=os.path.basename(xml_name))
             tar.add(json_name, arcname=os.path.basename(json_name))
             tar.add(entry_point_name, arcname=os.path.basename(entry_point_name))
         f_tar.close()
 
+        # Post the tar.gz file to the Run Registry API
         with open(tar_name, "rb") as f:
             files = {"file": f}
             post_data = {
@@ -107,8 +140,20 @@ class DBRunRegistry(FSMAction):
                 self.log.error(error)
                 raise CannotInsertRunNumber(error) from exc
 
-        # can be removed if we use delete_on_close=False in f_tar
+        # Can be removed if we use delete_on_close=False in f_tar
         os.remove(tar_name)
+
+        # Clean up temporary files  
+        f_xml.close()
+        f_json.close()
+        f_entry_point.close()
+
+        # Validate that the files were cleaned up
+        for temp_file in [xml_name, json_name, entry_point_name]:
+            if os.path.exists(temp_file):
+                err_msg = f"Temporary file {temp_file} was not deleted."
+                raise OSError(err_msg)
+
         return _input_data
 
     def post_drain_dataflow(self, _input_data, _context, **kwargs):
