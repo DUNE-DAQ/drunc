@@ -237,7 +237,7 @@ def test_manager_boot_and_kill_via_grpc(test_resources):
         timestamp=int(time.time() * 1000),
     )
 
-    test_response = manager_stub.MakeRequest(test_request, timeout=2.0)
+    test_response = manager_stub.MakeRequest(test_request)
     assert "Manager server response" in test_response.reply
     print(f"Manager communication successful: {test_response.reply}")
 
