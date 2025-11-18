@@ -101,37 +101,37 @@ class DBRunRegistry(FSMAction):
         # f_tar.close()
 
         
+        # Publish to the run registry
+        with open(tar_name, "rb") as f:
+            files = {"file": f}
+            post_data = {
+                "run_num": self.run_number,
+                "det_id": det_id,
+                "run_type": run_type,
+                "software_version": software_version,
+            }
 
-        # with open(tar_name, "rb") as f:
-        #     files = {"file": f}
-        #     post_data = {
-        #         "run_num": self.run_number,
-        #         "det_id": det_id,
-        #         "run_type": run_type,
-        #         "software_version": software_version,
-        #     }
-
-        #     try:
-        #         r = requests.post(
-        #             self.API_SOCKET + "/runregistry/insertRun/",
-        #             files=files,
-        #             data=post_data,
-        #             auth=(self.API_USER, self.API_PSWD),
-        #             timeout=self.timeout,
-        #         )
-        #         r.raise_for_status()
-        #     except requests.HTTPError as exc:
-        #         error = f"of HTTP Error (maybe failed auth, maybe ill-formed post message, ...) using {__name__}"
-        #         self.log.error(error)
-        #         raise CannotInsertRunNumber(error) from exc
-        #     except requests.ConnectionError as exc:
-        #         error = f"connection to {self.API_SOCKET} wasn't successful using {__name__}"
-        #         self.log.error(error)
-        #         raise CannotInsertRunNumber(error) from exc
-        #     except requests.Timeout as exc:
-        #         error = f"connection to {self.API_SOCKET} timed out using {__name__}"
-        #         self.log.error(error)
-        #         raise CannotInsertRunNumber(error) from exc
+            try:
+                r = requests.post(
+                    self.API_SOCKET + "/runregistry/insertRun/",
+                    files=files,
+                    data=post_data,
+                    auth=(self.API_USER, self.API_PSWD),
+                    timeout=self.timeout,
+                )
+                r.raise_for_status()
+            except requests.HTTPError as exc:
+                error = f"of HTTP Error (maybe failed auth, maybe ill-formed post message, ...) using {__name__}"
+                self.log.error(error)
+                raise CannotInsertRunNumber(error) from exc
+            except requests.ConnectionError as exc:
+                error = f"connection to {self.API_SOCKET} wasn't successful using {__name__}"
+                self.log.error(error)
+                raise CannotInsertRunNumber(error) from exc
+            except requests.Timeout as exc:
+                error = f"connection to {self.API_SOCKET} timed out using {__name__}"
+                self.log.error(error)
+                raise CannotInsertRunNumber(error) from exc
 
         # Clean up
         for file in [xml_filename, json_filename, entry_point_filename, tarball_name]:
