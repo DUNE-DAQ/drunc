@@ -81,7 +81,7 @@ class DBRunRegistry(FSMAction):
         # Create a JSON configuration file
         json_file = tempfile.NamedTemporaryFile(suffix=".data.json", delete=False)
         json_filename = json_file.name
-        jsonify_xml_data(xml_name, json_filename)
+        jsonify_xml_data(xml_filename, json_filename)
 
         # Create a entry point file (contains the session key)
         entry_point_file = tempfile.NamedTemporaryFile(
