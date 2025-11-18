@@ -1,4 +1,4 @@
-import os
+import getpass
 import tempfile
 import uuid
 from pathlib import Path
@@ -51,7 +51,7 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
                     metadata=ProcessMetadata(
                         name=process_name,
                         session="test_session",
-                        user=os.getenv("USER"),
+                        user=getpass.getuser(),
                         hostname="localhost",
                     ),
                     process_execution_directory="/",
@@ -82,7 +82,7 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
         def check_log_lines():
             log_lines = ssh_manager.read_log_file(
                 hostname="localhost",
-                user=os.getenv("USER"),
+                user=getpass.getuser(),
                 log_file=log_file,
                 num_lines=100,
             )
