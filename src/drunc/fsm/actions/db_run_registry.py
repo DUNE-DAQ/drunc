@@ -12,6 +12,7 @@ from drunc.fsm.exceptions import (
     CannotGetSoftwareVersion,
     CannotInsertRunNumber,
     CannotUpdateStopTime,
+    DBRunRegistryConfigurationError,
     DotDruncJsonIncorrectFormat,
 )
 from drunc.utils.utils import get_logger
@@ -76,12 +77,22 @@ class DBRunRegistry(FSMAction):
         # Create a consolidated XML configuration file
         xml_file = tempfile.NamedTemporaryFile(suffix=".data.xml", delete=False)
         xml_filename = xml_file.name
-        consolidate_db(_context.configuration.initial_data.split(":")[1], xml_filename)
+        try:
+            consolidate_db(_context.configuration.initial_data.split(":")[1], xml_filename)
+        except RuntimeError as exc:
+            error = "while consolidating the configuration database to XML format using consolidate_db"
+            self.log.error(error)
+            raise DBRunRegistryConfigurationError(error) from exc
 
         # Create a JSON configuration file
         json_file = tempfile.NamedTemporaryFile(suffix=".data.json", delete=False)
         json_filename = json_file.name
-        jsonify_xml_data(xml_filename, json_filename)
+        try:
+            jsonify_xml_data(xml_filename, json_filename)
+        except RuntimeError as exc:
+            error = "while converting XML configuration to JSON format using jsonify_xml_data"
+            self.log.error(error)
+            raise DBRunRegistryConfigurationError(error) from exc
 
         # Create a entry point file (contains the session key)
         entry_point_file = tempfile.NamedTemporaryFile(
