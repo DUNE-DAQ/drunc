@@ -14,12 +14,21 @@ from drunc.fsm.exceptions import (
     CannotUpdateStopTime,
     DotDruncJsonIncorrectFormat,
 )
-from drunc.utils.utils import get_logger
+# from drunc.utils.utils import get_logger
+
+import logging
+from datetime import datetime
+from shutil import copy2
 
 class DBRunRegistry(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="db-run-registry")
-        self.log = get_logger("controller.usvc_db_run_registry")
+        self.log = logging.getLogger("drunc.controller.usvc_db_run_registry")
+
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.DEBUG)
+        self.log.addHandler(handler)
+        self.log.setLevel(logging.DEBUG)
 
         dotdrunc = get_dotdrunc_json()
         try:
@@ -75,7 +84,14 @@ class DBRunRegistry(FSMAction):
         f_xml = tempfile.NamedTemporaryFile(suffix=".data.xml", delete=True)
         xml_name = f_xml.name
         session_file_path = controller_config.initial_data.replace("oksconflibs:", "")
+        self.log.critical(f"PP: Consolidating DB with {session_file_path=} and {xml_name=}")
         consolidate_db(session_file_path, xml_name)
+
+        # Create a timestamped copy of the XML file in /tmp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamped_xml_path = f"/tmp/DEBUGGING_{timestamp}.data.xml"
+        copy2(xml_name, timestamped_xml_path)
+        self.log.critical(f"Created timestamped XML copy at {timestamped_xml_path}")
 
         # Create a temporary file for the JSON configuration file
         f_json = tempfile.NamedTemporaryFile(suffix=".data.json", delete=True)
@@ -83,6 +99,11 @@ class DBRunRegistry(FSMAction):
             suffix="_entry_point.txt", delete=True
         )
         json_name = f_json.name
+
+        with open(xml_name, "r") as xml_file:
+            for line in xml_file:
+                self.log.critical(line.rstrip())
+
         jsonify_xml_data(xml_name, json_name)
 
         # Create a temporary file for the entry point file
@@ -109,36 +130,36 @@ class DBRunRegistry(FSMAction):
         f_tar.close()
 
         # Post the tar.gz file to the Run Registry API
-        with open(tar_name, "rb") as f:
-            files = {"file": f}
-            post_data = {
-                "run_num": self.run_number,
-                "det_id": det_id,
-                "run_type": run_type,
-                "software_version": software_version,
-            }
+        # with open(tar_name, "rb") as f:
+        #     files = {"file": f}
+        #     post_data = {
+        #         "run_num": self.run_number,
+        #         "det_id": det_id,
+        #         "run_type": run_type,
+        #         "software_version": software_version,
+        #     }
 
-            try:
-                r = requests.post(
-                    self.API_SOCKET + "/runregistry/insertRun/",
-                    files=files,
-                    data=post_data,
-                    auth=(self.API_USER, self.API_PSWD),
-                    timeout=self.timeout,
-                )
-                r.raise_for_status()
-            except requests.HTTPError as exc:
-                error = f"of HTTP Error (maybe failed auth, maybe ill-formed post message, ...) using {__name__}"
-                self.log.error(error)
-                raise CannotInsertRunNumber(error) from exc
-            except requests.ConnectionError as exc:
-                error = f"connection to {self.API_SOCKET} wasn't successful using {__name__}"
-                self.log.error(error)
-                raise CannotInsertRunNumber(error) from exc
-            except requests.Timeout as exc:
-                error = f"connection to {self.API_SOCKET} timed out using {__name__}"
-                self.log.error(error)
-                raise CannotInsertRunNumber(error) from exc
+        #     try:
+        #         r = requests.post(
+        #             self.API_SOCKET + "/runregistry/insertRun/",
+        #             files=files,
+        #             data=post_data,
+        #             auth=(self.API_USER, self.API_PSWD),
+        #             timeout=self.timeout,
+        #         )
+        #         r.raise_for_status()
+        #     except requests.HTTPError as exc:
+        #         error = f"of HTTP Error (maybe failed auth, maybe ill-formed post message, ...) using {__name__}"
+        #         self.log.error(error)
+        #         raise CannotInsertRunNumber(error) from exc
+        #     except requests.ConnectionError as exc:
+        #         error = f"connection to {self.API_SOCKET} wasn't successful using {__name__}"
+        #         self.log.error(error)
+        #         raise CannotInsertRunNumber(error) from exc
+        #     except requests.Timeout as exc:
+        #         error = f"connection to {self.API_SOCKET} timed out using {__name__}"
+        #         self.log.error(error)
+        #         raise CannotInsertRunNumber(error) from exc
 
         # Can be removed if we use delete_on_close=False in f_tar
         os.remove(tar_name)
