@@ -102,7 +102,7 @@ class DBRunRegistry(FSMAction):
 
         
         # Publish to the run registry
-        with open(tar_name, "rb") as f:
+        with open(tarball_name, "rb") as f:
             files = {"file": f}
             post_data = {
                 "run_num": self.run_number,
