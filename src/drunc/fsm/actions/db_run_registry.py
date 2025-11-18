@@ -134,7 +134,7 @@ class DBRunRegistry(FSMAction):
         #         raise CannotInsertRunNumber(error) from exc
 
         # Clean up
-        for file in [xml_filename, json_filename, entry_point_filename, tar_filename]:
+        for file in [xml_filename, json_filename, entry_point_filename, tarball_name]:
             os.remove(file)
 
         return _input_data
