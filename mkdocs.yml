@@ -1,7 +1,23 @@
 site_name: DUNE Run Control (drunc) Developer Documentation
 
+repo_name: dune-daq/drunc
+repo_url: https://github.com/DUNE-DAQ/drunc
+
 theme:
   name: material
+  palette: 
+    # Palette toggle for light/dark mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/git-alt
+
 
 markdown_extensions:
   - admonition
@@ -15,6 +31,9 @@ markdown_extensions:
 
 plugins:
   - search
+  - exclude:
+      glob:
+        - Developer-Wiki/*
   - gen-files:
       scripts:
         - docs/utils/generate_ref_nav_ghpages.py
@@ -31,4 +50,3 @@ plugins:
             show_category_heading: true
             merge_init_into_class: true
           paths: [.]
-
