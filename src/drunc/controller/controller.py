@@ -1013,7 +1013,6 @@ class Controller(ControllerServicer):
                 transition_data=command.data,
                 ctx=self,
             )
-            self.log.critical(f"PP: {fsm_data=}")
 
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
