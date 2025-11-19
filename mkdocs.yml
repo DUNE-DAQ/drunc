@@ -9,11 +9,11 @@ theme:
     # Palette toggle for light/dark mode
     - scheme: default
       toggle:
-        icon: material/brightness-7 
+        icon: material/lightbulb
         name: Switch to dark mode
     - scheme: slate
       toggle:
-        icon: material/brightness-4
+        icon: material/lightbulb-outline
         name: Switch to light mode
   icon:
     repo: fontawesome/brands/git-alt
