@@ -1,5 +1,6 @@
 from pathlib import Path
 
+
 def on_nav(env, config, files):
     for file in files:
         if file.page:
