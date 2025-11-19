@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 15 
     runs-on: ubuntu-latest 
     env: 
-      WIKI_SUBFOLDER: developer-wiki
+      WIKI_SUBFOLDER: Developer-Wiki
     steps:
       - name: Checkout Main Repository
         uses: actions/checkout@v5
@@ -41,8 +41,7 @@ jobs:
           GITHUB_PAGES_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
           python docs/utils/process_wiki.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
-          cd ~ 
-            
+          cd ~   
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
