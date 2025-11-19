@@ -50,3 +50,6 @@ plugins:
             show_category_heading: true
             merge_init_into_class: true
           paths: [.]
+
+hooks:
+- docs/utils/mkdocs_hooks.py
