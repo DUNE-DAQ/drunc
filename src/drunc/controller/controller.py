@@ -530,7 +530,6 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
-    
 
     def OLD_propagate_to_all_children(
         self,
