@@ -530,7 +530,6 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
-    
 
     def OLD_propagate_to_all_children(
         self,
@@ -1014,6 +1013,7 @@ class Controller(ControllerServicer):
                 transition_data=command.data,
                 ctx=self,
             )
+            self.log.critical(f"PP: {fsm_data=}")
 
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
             # is present and well formatted
