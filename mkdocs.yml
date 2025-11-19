@@ -36,7 +36,7 @@ plugins:
         - Developer-Wiki/*
   - gen-files:
       scripts:
-        - docs/utils/generate_ref_nav_ghpages.py
+        - docs/utils/generate_ghpages_docstrings.py
   - literate-nav:
       nav_file: README.md
   - section-index
