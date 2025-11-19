@@ -677,6 +677,27 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
+            if "root-controller" in podname:
+                modified_args = []
+                for arg in e_and_a.args:
+                    if "://" in arg and ":" in arg.split("://")[1]:
+                        protocol, address = arg.split("://", 1)
+                        if ":" in address:
+                            hostname, port = address.split(":", 1)
+                            new_address = f"{protocol}://0.0.0.0:{port}"
+                            modified_args.append(new_address)
+                            self.log.debug(
+                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces within the pod)"
+                            )
+                        else:
+                            modified_args.append(arg)
+                    else:
+                        modified_args.append(arg)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
             command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_chain = " && ".join(command_parts)
 
@@ -730,6 +751,24 @@ class K8sProcessManager(ProcessManager):
             )
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
+
+        env_vars = boot_request.process_description.env
+        try:
+            host_username = getpass.getuser()
+        except KeyError:
+            try:
+                import pwd
+
+                host_username = pwd.getpwuid(os.getuid()).pw_name
+            except KeyError:
+                host_username = str(os.getuid())
+
+        env_vars["USER"] = host_username
+        self.log.debug(f"Setting USER environment variable to: {host_username}")
+
+        if "DOTDRUNC" not in env_vars:
+            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            env_vars["DOTDRUNC"] = dotdrunc_path
 
         main_container = client.V1Container(
             name=podname,
