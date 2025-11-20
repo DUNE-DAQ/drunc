@@ -99,6 +99,15 @@ def process_wiki_content(
     content = re.sub(r"([^\n])(```)", r"\1\n\2", content)
     content = re.sub(r"(```)([^\n])", r"\1\n\2", content)
 
+    # Remove checbokex in lists
+    content = re.sub(r"- \[(?: |x|X)\]", "- ", content)
+
+    # Fix leading spaces before list markers
+    content = re.sub(r"^\s+-", "-", content, flags=re.MULTILINE)
+
+    # Make sure a blank line exists before list items
+    content = re.sub(r"([^\n])\n(?=\s*[-*+]\s)", r"\1\n\n", content)
+
     # The folder where the new files will be written and will be the base for the GH Pages wiki docs
     new_wiki_dir = Path("..") / GH_pages_folder_name
 
@@ -109,7 +118,7 @@ def process_wiki_content(
     with open(
         os.path.join(new_wiki_dir / folder_base, "index.md"), "a", encoding="utf-8"
     ) as f:
-        print(f"* [{filename.strip('.md')}]({filename}) \n", file=f)
+        print(f"* [{clean_filename(filename)}]({filename}) \n", file=f)
 
     # Write converted content to new file in the developer-documentation folder to be displayed on GH Pages
     new_file_name = os.path.join(new_wiki_dir / folder_base, filename)
