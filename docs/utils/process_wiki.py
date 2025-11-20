@@ -222,3 +222,21 @@ index_dict = generate_index_dict(sidebar_nav)
 
 # Process files and generate GH pages
 generate_gh_pages(sidebar_nav, index_dict)
+
+# Write top-level index file for Developer Documentation
+gh_wiki_dir = Path("..") / GH_pages_folder_name
+for folder_base, subdirs, files in os.walk(gh_wiki_dir):
+
+    index_path = os.path.join(folder_base, "index.md")
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(f"# Developer documentation \n\n")
+
+         # Add subfolders and their files as nested lists
+        for subdir in sorted(subdirs):
+            f.write(f"* [{subdir}]({subdir}/index.md)\n")
+
+            sub_path = os.path.join(folder_base, subdir)
+            for subfile in os.listdir(sub_path):
+                if subfile != "index.md" and subfile.endswith(".md"):
+                    display_name = subfile.removesuffix(".md").replace("-", " ")
+                    f.write(f"    - [{display_name}]({subdir}/{subfile})\n")
