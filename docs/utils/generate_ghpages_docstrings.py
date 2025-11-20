@@ -11,7 +11,7 @@ import mkdocs_gen_files
 nav = mkdocs_gen_files.Nav()
 
 root_folder = Path("src/drunc")
-excluded_folders = {"__pycache__", "data", "tests", "Sidebar"}
+excluded_folders = {"__pycache__", "data", "tests"}
 
 for path in root_folder.rglob("*.py"):
     if any(part in excluded_folders for part in path.parts):
