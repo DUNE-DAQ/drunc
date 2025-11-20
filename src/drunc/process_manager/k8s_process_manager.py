@@ -698,7 +698,6 @@ class K8sProcessManager(ProcessManager):
                 command_parts.append(
                     prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
                 )
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
         main_command_chain = " && ".join(command_parts)
 
         container_ports = []
