@@ -97,7 +97,7 @@ class DBRunRegistry(FSMAction):
 
         # Validate that the consolidated XML is sound
         try:
-            validate_session(xml_filenam, entry_point)
+            validate_session(xml_filename, entry_point)
         except RuntimeError as exc:
             error = "Validating the consolidated XML configuration file failed"
             self.log.error(error)
