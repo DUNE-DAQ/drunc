@@ -1,6 +1,6 @@
 site_name: DUNE Run Control (drunc) Developer Documentation
 
-repo_name: dune-daq/drunc
+repo_name: DUNE-DAQ/drunc
 repo_url: https://github.com/DUNE-DAQ/drunc
 
 theme:
