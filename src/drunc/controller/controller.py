@@ -219,7 +219,7 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
 
-        self.log = get_logger("controller", rich_handler=True)
+        self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
@@ -530,7 +530,6 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
-    
 
     def OLD_propagate_to_all_children(
         self,
