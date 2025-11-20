@@ -5,6 +5,7 @@ import tempfile
 import requests
 from daqconf.consolidate import consolidate_db
 from daqconf.jsonify import jsonify_xml_data
+from daqconf.validate import validate_session
 
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.core import FSMAction
@@ -91,6 +92,14 @@ class DBRunRegistry(FSMAction):
             consolidate_db(conf_path, xml_filename, entry_point)
         except RuntimeError as exc:
             error = "while consolidating the configuration database to XML format using consolidate_db"
+            self.log.error(error)
+            raise DBRunRegistryConfigurationError(error) from exc
+
+        # Validate that the consolidated XML is sound
+        try:
+            validate_session(xml_filename)
+        except RuntimeError as exc:
+            error = "Validating the consolidated XML configuration file failed"
             self.log.error(error)
             raise DBRunRegistryConfigurationError(error) from exc
 
