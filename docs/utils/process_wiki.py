@@ -118,7 +118,10 @@ def process_wiki_content(
     with open(
         os.path.join(new_wiki_dir / folder_base, "index.md"), "a", encoding="utf-8"
     ) as f:
-        print(f"* [{clean_filename(filename)}]({filename}) \n", file=f)
+        print(
+            f"* [{filename.removesuffix('.md').replace('-', ' ')}]({filename}) \n",
+            file=f,
+        )
 
     # Write converted content to new file in the developer-documentation folder to be displayed on GH Pages
     new_file_name = os.path.join(new_wiki_dir / folder_base, filename)
@@ -225,12 +228,12 @@ generate_gh_pages(sidebar_nav, index_dict)
 
 # Write top-level index file for Developer Documentation
 gh_wiki_dir = Path("..") / GH_pages_folder_name
-for folder_base, subdirs, files in os.walk(gh_wiki_dir):
-    index_path = os.path.join(folder_base, "index.md")
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write("# Developer documentation \n\n")
+index_path = os.path.join(gh_wiki_dir, "index.md")
 
-        # Add subfolders and their files as nested lists
+with open(index_path, "w", encoding="utf-8") as f:
+    f.write("# Developer documentation \n\n")
+    # Add subfolders and their files as nested lists
+    for folder_base, subdirs, files in os.walk(gh_wiki_dir):
         for subdir in sorted(subdirs):
             f.write(f"* [{subdir}]({subdir}/index.md)\n")
 
