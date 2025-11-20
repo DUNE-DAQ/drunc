@@ -74,11 +74,20 @@ class DBRunRegistry(FSMAction):
             class_name="Session", uid=_context.configuration.oks_key.session
         ).detector_configuration.id
 
+        # Create a entry point file (contains the session key)
+        entry_point_file = tempfile.NamedTemporaryFile(
+            suffix="_entry_point.txt", delete=False
+        )
+        entry_point_filename = entry_point_file.name
+        entry_point = conf.oks_key.session
+        with open(entry_point_filename, "w") as f:
+            f.write(entry_point)
+
         # Create a consolidated XML configuration file
         xml_file = tempfile.NamedTemporaryFile(suffix=".data.xml", delete=False)
         xml_filename = xml_file.name
         try:
-            consolidate_db(_context.configuration.initial_data.split(":")[1], xml_filename)
+            consolidate_db(_context.configuration.initial_data.split(":")[1], xml_filename, entry_point)
         except RuntimeError as exc:
             error = "while consolidating the configuration database to XML format using consolidate_db"
             self.log.error(error)
@@ -93,14 +102,6 @@ class DBRunRegistry(FSMAction):
             error = "while converting XML configuration to JSON format using jsonify_xml_data"
             self.log.error(error)
             raise DBRunRegistryConfigurationError(error) from exc
-
-        # Create a entry point file (contains the session key)
-        entry_point_file = tempfile.NamedTemporaryFile(
-            suffix="_entry_point.txt", delete=False
-        )
-        entry_point_filename = entry_point_file.name
-        with open(entry_point_filename, "w") as f:
-            f.write(conf.oks_key.session)
 
         tarball = tempfile.NamedTemporaryFile(suffix=".tar.gz", delete=False)
         tarball_name = tarball.name
