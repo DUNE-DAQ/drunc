@@ -1,12 +1,10 @@
 name: Deploy Docs and Wiki to Pages 
 on:
-  push:
-    branches:
-      - miruuna/add-wiki-to-gh-pages
   workflow_dispatch: # enable manual triger. Only works in 'develop' branch 
   workflow_call:
   schedule:
     - cron: "0 0 * * 6" # midnight every Saturday
+  gollum:
 
 jobs: 
   docs: 
