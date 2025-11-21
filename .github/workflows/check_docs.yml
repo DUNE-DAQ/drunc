@@ -8,7 +8,6 @@ on:
     workflow_call:
     schedule:
       - cron: "0 0 * * 6" # midnight every Saturday
-  gollum:
   
 jobs:
   check-links:

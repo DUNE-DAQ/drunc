@@ -48,3 +48,9 @@ jobs:
 
       - name: Deploy Docs
         run: mkdocs gh-deploy --force
+
+      - name: Run Lychee link checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: docs/
+          
