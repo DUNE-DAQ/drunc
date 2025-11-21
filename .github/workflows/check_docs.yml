@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+    workflow_dispatch: 
+    workflow_call:
+    schedule:
+      - cron: "0 0 * * 6" # midnight every Saturday
 
 jobs:
   check-links:

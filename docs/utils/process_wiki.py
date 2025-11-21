@@ -46,7 +46,7 @@ def parse_markdown_nav(file_path: Path) -> List[tuple[list[str], str]]:
                 title, url = link_match.groups()
                 stack.append(title)
                 entries.append((tuple(stack), url))
-                stack.pop()  # remove the leaf so siblings at same level work
+                stack.pop()  # remove the curent file path, go back to root folder
             else:
                 # section header without link
                 stack.append(content)
