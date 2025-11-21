@@ -73,6 +73,58 @@ class SSHProcessManager(ProcessManager):
         self.ssh = sh.Command("/usr/bin/ssh")
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
+        """
+        Kill processes by their UUIDs.
+
+        Args:
+            uuids (list): List of process UUIDs to kill.
+
+        Returns:
+            ProcessInstanceList: List of process instances that were killed.
+
+        Raises:
+            DruncCommandException: If any error occurs during the killing process.
+        """
+
+        # Define the shutdown order
+        # shutdown_order = {
+        #     "unknown": [],
+        #     "application": [],
+        #     "segment-controller": [],
+        #     "root-controller": [],
+        #     "infrastructure-applications": [],
+        # }
+
+        def _get_tree_labels(self, tree_id: str, podname: str) -> dict[str, str]:
+            """
+            Determines the role of a pod based on its tree_id,
+            and returns a dictionary of labels to be applied.
+            """
+            role = "unknown"
+
+            labels = {f"tree-id.{self.drunc_label}": tree_id}
+
+            if not tree_id:
+                role = "unknown"
+            elif tree_id == "0":
+                role = "root-controller"
+            elif tree_id == "1":
+                role = "local-connection-server"
+            else:
+                # Count the depth
+                depth = tree_id.count(".")
+                if depth == 1:
+                    role = "segment-controller"
+                elif depth == 2:
+                    role = "application"
+
+            labels[f"role.{self.drunc_label}"] = role
+            self.log.info(
+                f"Assigning labels for '{podname}': role={role}, tree-id={tree_id}"
+            )
+
+        # def send_kill_signal
+
         ret = []
         for proc_uuid in uuids:
             process = self.process_store[proc_uuid]
@@ -86,6 +138,8 @@ class SSHProcessManager(ProcessManager):
                 for sig in sequence:
                     if not process.is_alive():
                         self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
+                        self.log.info(f"{self.boot_request[proc_uuid]=}")
+                        self.log.info(f"{self.boot_request[proc_uuid]=}")
                         break
                     self.log.debug(
                         f"Sending signal '{str(sig).split('.')[-1]}' to '{app_name}' with UUID {proc_uuid}"
