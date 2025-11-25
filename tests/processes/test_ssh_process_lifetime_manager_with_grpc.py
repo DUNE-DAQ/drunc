@@ -32,6 +32,7 @@ from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
+from drunc.process_manager.configuration import ProcessManagerTypes
 
 
 def execute_manager_boot_and_kill_test(
@@ -50,7 +51,7 @@ def execute_manager_boot_and_kill_test(
     Args:
         grpc_process_manager_service_resources: Fixture providing process manager serving via gRPC
         resources that need to be started/ cleaned up.
-        lifetime_manager_type: Type of SSH manager to use ("paramiko" or "shell")
+        lifetime_manager_type: Type of process lifetime manager to use
     """
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     ENV_SCRIPT_DIR = PROJECT_ROOT.parent.parent
@@ -360,7 +361,7 @@ def test_manager_boot_and_kill_via_grpc_paramiko(
         grpc_process_manager_service_resources: Fixture providing managed gRPC test resources
     """
     execute_manager_boot_and_kill_test(
-        grpc_process_manager_service_resources, "paramiko"
+        grpc_process_manager_service_resources, ProcessManagerTypes.SSH_PARAMIKO
     )
 
 
@@ -377,4 +378,6 @@ def test_manager_boot_and_kill_via_grpc_shell(grpc_process_manager_service_resou
     Args:
         grpc_process_manager_service_resources: Fixture providing managed gRPC test resources
     """
-    execute_manager_boot_and_kill_test(grpc_process_manager_service_resources, "shell")
+    execute_manager_boot_and_kill_test(
+        grpc_process_manager_service_resources, ProcessManagerTypes.SSH_SHELL
+    )
