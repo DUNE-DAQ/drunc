@@ -26,6 +26,9 @@ from drunc.grpc_testing_tools.run_grpc_services import (
     run_process_manager_server,
     run_root_controller_server,
 )
+from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
+)
 
 
 class GrpcServerManager:
@@ -49,7 +52,9 @@ class GrpcServerManager:
         self.server_handles: Dict[str, RunningGrpcServer] = {}
 
     def start_manager_server(
-        self, config: GrpcServerConfig, lifetime_manager_type: str = "paramiko"
+        self,
+        config: GrpcServerConfig,
+        lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_PARAMIKO,
     ) -> RunningGrpcServer:
         """
         Start a Manager gRPC server.

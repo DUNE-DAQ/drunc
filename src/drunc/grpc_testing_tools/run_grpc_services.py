@@ -7,6 +7,7 @@ from drunc.grpc_testing_tools.grpc_log_util import (
     stderr_observer,
     stdout_observer,
 )
+from drunc.process_manager.configuration import ProcessManagerTypes
 
 SERVER_GRACE_PERIOD = 2
 
@@ -96,7 +97,7 @@ def run_process_manager_server(
     server_options: Optional[List[Tuple[str, Any]]] = None,
     ready_event=None,
     stop_event=None,
-    lifetime_manager_type: str = "paramiko",
+    lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_PARAMIKO,
 ) -> None:
     """Run Manager server process with output logging."""
     from drunc.grpc_testing_tools.process_manager import ManagerServiceImpl

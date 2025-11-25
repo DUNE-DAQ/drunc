@@ -30,6 +30,9 @@ from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
+from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
+)
 from drunc.processes.ssh_process_lifetime_manager_paramiko import (
     SSHProcessLifetimeManagerParamiko,
 )
@@ -46,15 +49,15 @@ class ManagerServiceImpl(ManagerServiceServicer):
     SSHProcessLifetimeManager for SSH-based process execution.
     """
 
-    def __init__(self, lifetime_manager_type="paramiko"):
+    def __init__(self, lifetime_manager_type=ProcessManagerTypes.SSH_PARAMIKO):
         """Initialise the Manager service implementation."""
-        if lifetime_manager_type == "paramiko":
+        if lifetime_manager_type == ProcessManagerTypes.SSH_PARAMIKO:
             self.ssh_manager = SSHProcessLifetimeManagerParamiko(
                 disable_host_key_check=True,
                 disable_localhost_host_key_check=True,
                 logger=logging.getLogger(__name__),
             )
-        elif lifetime_manager_type == "shell":
+        elif lifetime_manager_type == ProcessManagerTypes.SSH_SHELL:
             self.ssh_manager = SSHProcessLifetimeManagerShell(
                 disable_host_key_check=True,
                 disable_localhost_host_key_check=True,
