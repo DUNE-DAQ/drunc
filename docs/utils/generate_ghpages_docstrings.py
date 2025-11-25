@@ -33,6 +33,8 @@ for path in root_folder.rglob("*.py"):
         continue
     elif parts[-1][0] == "_":
         continue
+    elif "Sidebar" in parts[-1]:
+        continue
     if not parts:
         continue
 
