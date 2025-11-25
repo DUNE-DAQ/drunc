@@ -1,0 +1,56 @@
+name: Deploy Docs and Wiki to Pages 
+on:
+  workflow_dispatch: # enable manual triger. Only works in 'develop' branch 
+  workflow_call:
+  schedule:
+    - cron: "0 0 * * 6" # midnight every Saturday
+  gollum:
+
+jobs: 
+  docs: 
+    timeout-minutes: 15 
+    runs-on: ubuntu-latest 
+    env: 
+      WIKI_SUBFOLDER: Developer-Wiki
+    steps:
+      - name: Checkout Main Repository
+        uses: actions/checkout@v5
+
+      # Clone the Wiki content  
+      - name: Checkout Wiki Content 
+        uses: actions/checkout@v5 
+        with: 
+          repository: ${{ github.repository }}.wiki 
+          ref: master # Wiki default branch 
+          # Create temporary wiki subfolder
+          path: docs/${{ env.WIKI_SUBFOLDER }}
+
+      - name: Setup Python Environment
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.11
+          cache: pip
+          cache-dependency-path: |
+              pyproject.toml
+              docs/requirements.txt
+
+      - name: Convert WikiLinks to Markdown Links
+        env:
+          GITHUB_PAGES_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: |
+          python docs/utils/process_wiki.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
+          cd ~   
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r docs/requirements.txt
+          pip install .
+
+      - name: Deploy Docs
+        run: mkdocs gh-deploy --force
+
+      - name: Run Lychee link checker
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: docs/
+          
