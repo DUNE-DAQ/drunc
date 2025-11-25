@@ -10,7 +10,7 @@ from druncschema.process_manager_pb2 import (
     ProcessMetadata,
 )
 
-from drunc.utils.utils import wait_for
+from drunc.grpc_testing_tools.connection_utils import wait_for
 
 
 def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
