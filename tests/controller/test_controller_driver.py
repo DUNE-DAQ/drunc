@@ -1,3 +1,6 @@
+import json
+import pprint
+
 import pytest
 from druncschema.description_pb2 import Description
 from google.protobuf.json_format import MessageToDict
@@ -10,6 +13,12 @@ from drunc.utils.shell_utils import create_dummy_token_from_uname
 
 def setup_controller_driver(processes_and_logs, dal, session_name) -> ControllerDriver:
     connectivity_service_port = dal.connectivity_service.service.port
+    try:
+        print(json.dumps(processes_and_logs, indent=2, sort_keys=True, default=str))
+    except Exception:
+        pprint.pprint(processes_and_logs, width=120, sort_dicts=True)
+    print(f"{dal=}")
+    print(f"{session_name=}")
 
     csc = ConnectivityServiceClient(
         session_name,

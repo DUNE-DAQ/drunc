@@ -4,50 +4,52 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "drunc"
+description = "A flexible run control infrastructure for a distributed DAQ system"
+version = "1.0.0"
+readme = "docs/README.md"
 requires-python = ">=3.10"
-dynamic = ["version", "readme"]
+
 dependencies = [
-    "click==8.1.7",
-    "click-shell==2.1",
+    "click",
+    "click-shell",
     "protobuf",
     "types-protobuf",
-    "grpcio==1.68.0",
-    "grpcio-status==1.68.0",
-    "grpcio-tools==1.68.0",
+    "grpcio",
+    "grpcio-status",
+    "grpcio-tools",
     "types-grpcio",
-    "gunicorn==23.0.0",
-    "kafka-python==2.0.2",
-    "nest-asyncio==1.6.0",
-    "rich==13.9.4",
-    "requests==2.32.3",
-    "Flask==3.1.0",
-    "Flask-RESTful==0.3.10",
-    "sh==2.1.0",
-    "kubernetes==31.0.0",
-    "pytz==2024.2",
-    "psutil==6.1.0",
+    "gunicorn",
+    "kafka-python",
+    "nest-asyncio",
+    "rich",
+    "requests",
+    "Flask",
+    "Flask-RESTful",
+    "sh",
+    "kubernetes",
+    "pytz",
+    "psutil",
+    "paramiko"
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest", "grpcio-testing"]
-test = ["pytest", "grpcio-testing"]
+prod = ["paramiko[gssapi]"]
+dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
+test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
 
 [project.scripts]
-fake_daq_application = "drunc.apps.__main_fake_daqapp_rest__:main"
-drunc-controller = "drunc.apps.__main_controller__:main"
-drunc-controller-shell = "drunc.apps.__main_controller_shell__:main"
-drunc-process-manager = "drunc.apps.__main_pm__:main"
-drunc-process-manager-shell = "drunc.apps.__main_pm_shell__:main"
-drunc-session-manager = "drunc.apps.__main_session_manager__:main"
-drunc-unified-shell = "drunc.apps.__main_unified_shell__:main"
-drunc-fsm-tests = "drunc.tests.__main_fsm__:main"
-application-registry-service = "drunc.apps.__main_app_connectivity_server__:main"
-drunc-ssh-validator = "drunc.apps.__main_ssh_validator__:main"
-drunc-ssh-doctor = "drunc.apps.__main_ssh_doctor__:main"
+fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
+drunc-controller = "drunc.apps.controller:main"
+drunc-controller-shell = "drunc.apps.controller_shell:main"
+drunc-process-manager = "drunc.apps.pm:main"
+drunc-process-manager-shell = "drunc.apps.pm_shell:main"
+drunc-session-manager = "drunc.apps.session_manager:main"
+drunc-unified-shell = "drunc.apps.unified_shell:main"
+drunc-fsm-tests = "drunc.tests.fsm:main"
+application-registry-service = "drunc.apps.app_connectivity_server:main"
+drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
 
-[tool.setuptools.dynamic]
-version = {attr = "drunc.__version__"}
-readme = {file = ["docs/README.md"]}
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -55,3 +57,28 @@ where = ["src"]
 [tool.setuptools.package-data]
 "drunc.data.process_manager" = ["*.json"]
 "drunc.data.process_manager.schema" = ["*.json"]
+
+[tool.pytest.ini_options]
+markers = [
+    "grpc: marks tests for gRPC isolation (run with --test-grpc)",
+    "paramiko: marks tests for paramiko isolation (run with --test-paramiko)",
+]
+addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
+
+[tool.coverage.run]
+source = ["drunc"]
+omit = ["tests/*"]
+
+# * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # check for errors using PyFlakes
+    "I",    # best practices for import calls
+    "UP",   # suggestions for code modernization
+    "RUF",  # build in Ruff warnings
+    "R",    # refactoring suggestions
+]
+ignore = [
+    "E501", # Don't enforce line lengths within a linting context
+]

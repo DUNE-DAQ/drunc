@@ -439,27 +439,63 @@ class SSHProcessManager(ProcessManager):
         )
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        self.log.info(f"{self.name} restarting {query.names} in session {self.session}")
         uuids = self._get_process_uid(query, in_boot_request=True)
-        uuid = self._ensure_one_process(uuids, in_boot_request=True)
+        if not uuids:
+            raise ProcessManager.BadQuery("No processes found matching the query.")
 
-        same_uuid_br = BootRequest()
-        same_uuid_br.CopyFrom(self.boot_request[uuid])
-        same_uuid = uuid
+        br_by_uuid = {}
+        for u in uuids:
+            br = BootRequest()
+            br.CopyFrom(self.boot_request[u])
+            br_by_uuid[u] = br
 
-        if uuid in self.process_store:
-            process = self.process_store[uuid]
-            if process.is_alive():
-                process.terminate()
+        ret = []
 
-        del self.process_store[uuid]
-        del self.boot_request[uuid]
-        del uuid
+        for u in uuids:
+            try:
+                if u in self.process_store:
+                    try:
+                        self.log.info(
+                            f"{self.name} restarting {self.boot_request[u].process_description.metadata.name} in session {self.session}"
+                        )
+                        self.kill_processes([u])
+                    except Exception as e:
+                        self.log.warning(f"Failed to kill process {u} cleanly: {e!s}")
 
-        ret = [self.__boot(same_uuid_br, same_uuid)]
+                if u in self.process_store:
+                    try:
+                        del self.process_store[u]
+                    except Exception:
+                        pass
+                if u in self.boot_request:
+                    try:
+                        del self.boot_request[u]
+                    except Exception:
+                        pass
 
-        del same_uuid_br
-        del same_uuid
+                pi = self.__boot(br_by_uuid[u], u)
+                ret.append(pi)
+
+            except Exception as e:
+                self.log.error(f"Restart failed for UUID {u}: {e!s}")
+
+                pd = ProcessDescription()
+                pr = ProcessRestriction()
+                try:
+                    pd.CopyFrom(br_by_uuid[u].process_description)
+                    pr.CopyFrom(br_by_uuid[u].process_restriction)
+                except Exception:
+                    pass
+
+                ret.append(
+                    ProcessInstance(
+                        process_description=pd,
+                        process_restriction=pr,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        return_code=None,
+                        uuid=ProcessUUID(uuid=u),
+                    )
+                )
 
         return ProcessInstanceList(
             name=self.name,

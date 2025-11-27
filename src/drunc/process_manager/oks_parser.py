@@ -151,6 +151,17 @@ def collect_apps(
         )
         log.debug(f"Collecting app {app.id} with args {args}")
 
+        data_path = None
+        if "DFApplication" in app.oksTypes():
+            try:
+                # DFApplication -> data_writers -> data_store_params -> directory_path
+                data_path = app.data_writers[0].data_store_params.directory_path
+            except (AttributeError, IndexError):
+                log.debug(
+                    f"DFApplication {app.id} is missing its data path configuration."
+                )
+                pass
+
         apps.append(
             {
                 "name": app.id,
@@ -161,6 +172,7 @@ def collect_apps(
                 "env": app_env,
                 "tree_id": app_tree_id_str,
                 "log_path": app.log_path,
+                "data_path": data_path,
             }
         )
         app_index += 1

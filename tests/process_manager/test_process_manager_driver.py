@@ -9,6 +9,7 @@ have changed. The tests should be checked to see if they need to be updated
 or if a bug was introduced.
 """
 
+import socket
 from unittest.mock import MagicMock, patch
 
 import grpc
@@ -24,6 +25,7 @@ from druncschema.token_pb2 import Token
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
 @pytest.fixture(scope="module")
@@ -207,6 +209,7 @@ def test_prepare_exec_and_args_no_rte_script(mock_get_rte_script, mock_driver):
     session_dal = MagicMock()
     session_dal.rte_script = None
     mock_get_rte_script.return_value = None
+    mock_get_rte_script.side_effect = DruncSetupException("No RTE script found.")
 
     exe = "dummy_executable"
     args = ["--flag", "value"]
@@ -250,7 +253,10 @@ def test_boot_connectivity_service_not_ready(mock_driver, boot_test_setup):
     # Simulate connection is not ready ready
     boot_test_setup(is_ready=False)
 
-    with pytest.raises(DruncSetupException, match="Connectivity service is not ready"):
+    with pytest.raises(
+        DruncSetupException,
+        match="Connectivity service did not respond within timeout.",
+    ):
         list(
             mock_driver.boot(
                 conf_file="conf.yaml",
@@ -270,9 +276,22 @@ def test_boot_handles_grpc_exception(mock_driver, boot_test_setup):
     grpc_error = grpc.RpcError("Connection failed")
     boot_test_setup(grpc_error=grpc_error)
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
+    error_details = GrpcErrorDetails(
+        code="INVALID_ARGUMENT",
+        message="Invalid request parameters",
+        details=["field_violations: field=token, description=Invalid token format"],
+    )
+
+    with (
+        patch(
+            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+        ) as mock_extract,
+        patch(
+            "drunc.process_manager.process_manager_driver.handle_grpc_error"
+        ) as mock_handler,
+        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
+    ):
+        mock_extract.return_value = error_details
         mock_handler.side_effect = grpc_error
 
         # Expect the exception to be raised after error handling
@@ -286,7 +305,13 @@ def test_boot_handles_grpc_exception(mock_driver, boot_test_setup):
                     log_level="INFO",
                 )
             )
+
+        mock_extract.assert_called_once_with(grpc_error)
+        mock_driver.log.error.assert_called_with(error_details)
         mock_handler.assert_called_once_with(grpc_error)
+
+        logged = mock_driver.log.error.call_args[0][0]
+        assert logged == error_details
 
 
 @patch("drunc.process_manager.process_manager_driver.get_log_path")
@@ -461,15 +486,22 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
     mock_client_instance = MagicMock()
     mock_client_class.return_value = mock_client_instance
 
+    pytest_hostname = socket.gethostname()
+
     mock_session_dal = MagicMock()
     mock_session_dal.connectivity_service.host = "localhost"
     mock_session_dal.connectivity_service.service.port = 1234
 
-    result = mock_driver._connect_to_service(mock_session_dal, "session1")
+    result_localhost = mock_driver._connect_to_service(mock_session_dal, "session1")
+    mock_client_class.assert_called_once_with("session1", f"{pytest_hostname}:1234")
+    assert result_localhost == (mock_client_instance, pytest_hostname, 1234)
 
-    mock_client_class.assert_called_once_with("session1", "localhost:1234")
+    mock_session_dal.connectivity_service.host = pytest_hostname
+    result_pytest_hostname = mock_driver._connect_to_service(mock_session_dal, "session2")
+    mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
+    assert result_pytest_hostname == (mock_client_instance, pytest_hostname, 1234)
 
-    assert result == (mock_client_instance, "localhost", 1234)
+    mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
 
 
 def test_connect_to_service_none(mock_driver):
@@ -650,13 +682,24 @@ def test_dummy_boot_grpc_error_handling(mock_getcwd, mock_copy_token, mock_drive
         return_value=[{"exec": "binary", "args": ["--arg1"]}]
     )
     mock_driver._build_boot_request_dummy_boot = MagicMock()
-
-    # Simulate gRPC error raised by stub.boot
     grpc_error = grpc.RpcError()
-    mock_driver.stub.boot = MagicMock(side_effect=grpc_error)
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
+    mock_driver.stub.boot.side_effect = grpc_error
+
+    error_details = GrpcErrorDetails(
+        code="INVALID_ARGUMENT",
+        message="Invalid request parameters",
+        details=["field_violations: field=token, description=Invalid token format"],
+    )
+    with (
+        patch(
+            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+        ) as mock_extract,
+        patch(
+            "drunc.process_manager.process_manager_driver.handle_grpc_error"
+        ) as mock_handler,
+        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
+    ):
+        mock_extract.return_value = error_details
         mock_handler.side_effect = grpc_error
         with pytest.raises(grpc.RpcError):
             list(
@@ -670,7 +713,12 @@ def test_dummy_boot_grpc_error_handling(mock_getcwd, mock_copy_token, mock_drive
                 )
             )
 
+        mock_extract.assert_called_once_with(grpc_error)
+        mock_driver.log.error.assert_called_with(error_details)
         mock_handler.assert_called_once_with(grpc_error)
+
+        logged = mock_driver.log.error.call_args[0][0]
+        assert logged == error_details
 
 
 def test_prepare_exec_and_args_dummy_boot(mock_driver):

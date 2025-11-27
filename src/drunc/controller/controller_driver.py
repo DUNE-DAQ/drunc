@@ -1,12 +1,26 @@
+import ipaddress
+import socket
 from functools import wraps
 
 import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMRequest,
     DescribeFSMResponse,
+    DescribeRequest,
     DescribeResponse,
-    FSMCommandResponse,
+    ExcludeRequest,
+    ExcludeResponse,
+    ExecuteExpertCommandRequest,
+    ExecuteExpertCommandResponse,
+    ExecuteFSMCommandRequest,
+    ExecuteFSMCommandResponse,
+    FSMCommand,
+    IncludeRequest,
+    IncludeResponse,
+    RecomputeStatusRequest,
     RecomputeStatusResponse,
+    StatusRequest,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -18,7 +32,6 @@ from druncschema.token_pb2 import Token
 from drunc.exceptions import DruncServerSideError
 from drunc.utils.grpc_utils import (
     UnpackingError,
-    copy_token,
     handle_grpc_error,
     unpack_any,
 )
@@ -27,15 +40,58 @@ from drunc.utils.utils import get_logger
 
 
 class ControllerDriver:
+    @staticmethod
+    def _resolve_address_to_ipv4(address: str) -> str:
+        """
+        Resolves a 'host:port' or 'ip:port' string to a strict 'ipv4:port' string.
+
+        Raises:
+            ValueError: If the address is in an invalid format or cannot be
+                        resolved to a valid IPv4 address.
+        """
+        host_or_ip = ""
+
+        try:
+            parts = address.rsplit(":", 1)
+            if len(parts) != 2:
+                raise ValueError(
+                    f"Address '{address}' must be in 'host:port' or 'ip:port' format."
+                )
+
+            host_or_ip, port = parts[0], parts[1]
+
+            if not host_or_ip or not port:
+                raise ValueError("Address string is missing hostname/IP or port.")
+
+            resolved_ip = socket.gethostbyname(host_or_ip)
+            ipaddress.IPv4Address(resolved_ip)
+            return f"{resolved_ip}:{port}"
+
+        except (socket.gaierror, ValueError) as e:
+            raise ValueError(
+                f"Address '{host_or_ip or address}' could not be resolved to a valid IPv4:port. Error: {e}"
+            ) from e
+
     def __init__(self, address: str, token: Token):
         self.log = get_logger("controller.ControllerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        self.channel = grpc.insecure_channel(self.address, options=options)
+
+        try:
+            resolved_address = self._resolve_address_to_ipv4(address)
+        except ValueError as e:
+            self.log.error(
+                f"Failed to initialize ControllerDriver. Invalid address '{self.address}': {e}"
+            )
+            raise e
+
+        target_address = f"ipv4:{resolved_address}"
+        self.channel = grpc.insecure_channel(target_address, options=options)
         self.stub = ControllerStub(self.channel)
-        self.token = copy_token(token)
+        self.token = Token()
+        self.token.CopyFrom(token)
 
     def OLD_pack_empty_addressed_command(cmd):
         @wraps(cmd)
@@ -51,7 +107,6 @@ class ControllerDriver:
                 self,
                 addressed_command=AddressedCommand(
                     command_name=command_name,
-                    command_data=None,
                     target=target,
                     execute_along_path=execute_along_path,
                     execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -68,13 +123,12 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> StatusResponse:
-        request = AddressedCommand(
-            token=copy_token(self.token),
-            command_name="status",
+        request = StatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
         try:
             response = self.stub.status(request, timeout=timeout)
@@ -90,13 +144,12 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> DescribeResponse:
-        request = AddressedCommand(
-            token=copy_token(self.token),
-            command_name="describe",
+        request = DescribeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
         try:
             response = self.stub.describe(request, timeout=timeout)
@@ -113,17 +166,104 @@ class ControllerDriver:
         key: str = "",
         timeout: int | float = 60,
     ) -> DescribeFSMResponse:
-        request = AddressedCommand(
-            token=copy_token(self.token),
-            command_name="describe_fsm",
+        request = DescribeFSMRequest(
+            key=key,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
-        request.command_data.Pack(PlainText(text=key))
+        request.token.CopyFrom(self.token)
 
         try:
             response = self.stub.describe_fsm(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def execute_fsm_command(
+        self,
+        command: FSMCommand,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExecuteFSMCommandResponse:
+        request = ExecuteFSMCommandRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+        request.command.CopyFrom(command)
+
+        try:
+            response = self.stub.execute_fsm_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def execute_expert_command(
+        self,
+        json_string: str,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExecuteExpertCommandResponse:
+        request = ExecuteExpertCommandRequest(
+            json_string=json_string,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.execute_expert_command(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def include(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> IncludeResponse:
+        request = IncludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.include(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def exclude(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ExcludeResponse:
+        request = ExcludeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.exclude(request, timeout=timeout)
         except grpc.RpcError as e:
             handle_grpc_error(e)
 
@@ -136,13 +276,12 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> RecomputeStatusResponse:
-        request = AddressedCommand(
-            token=copy_token(self.token),
-            command_name="recompute_status",
+        request = RecomputeStatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
         try:
             response = self.stub.recompute_status(request, timeout=timeout)
@@ -177,53 +316,6 @@ class ControllerDriver:
         return self.OLD_send_command(
             "surrender_control",
             data=addressed_command,
-            outformat=PlainText,
-            timeout=timeout,
-        )
-
-    @OLD_pack_empty_addressed_command
-    def execute_fsm_command(
-        self, addressed_command: AddressedCommand, arguments, timeout: int | float = 60
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(arguments)
-        return self.OLD_send_command(
-            "execute_fsm_command",
-            data=new_command,
-            outformat=FSMCommandResponse,
-            timeout=timeout,
-        )
-
-    @OLD_pack_empty_addressed_command
-    def include(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "include", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @OLD_pack_empty_addressed_command
-    def exclude(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "exclude", data=addressed_command, outformat=PlainText, timeout=timeout
-        )
-
-    @OLD_pack_empty_addressed_command
-    def expert_command(
-        self,
-        addressed_command: AddressedCommand,
-        json_string,
-        timeout: int | float = 60,
-    ) -> DecodedResponse:
-        new_command = AddressedCommand()
-        new_command.CopyFrom(addressed_command)
-        new_command.command_data.Pack(PlainText(text=json_string))
-        return self.OLD_send_command(
-            "execute_expert_command",
-            data=new_command,
             outformat=PlainText,
             timeout=timeout,
         )
@@ -308,7 +400,8 @@ class ControllerDriver:
         outformat=None,
         timeout: int | float = 60,
     ):
-        request = Request(token=copy_token(self.token))
+        request = Request()
+        request.token.CopyFrom(self.token)
         if data is not None:
             request.data.Pack(data)
 
