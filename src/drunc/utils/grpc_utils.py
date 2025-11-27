@@ -8,10 +8,40 @@ from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2, json_format
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
-from google.rpc import code_pb2, error_details_pb2
+from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
 from drunc.exceptions import DruncCommandException, DruncException
+
+
+def create_internal_rich_error_status(domain: str, message: str, error_details: str):
+    """
+    Construct a `google.rpc.status_pb2.Status` object representing an INTERNAL gRPC rich error.
+
+    Args:
+        domain (str): domain or subsystem where the error occurred. This will be
+            prefixed with "drunc.". Examples: session_manager, process_manager.
+        message (str): Wuick description of the rror. Used fot both `Status.message` and as the `ErrorInfo.reason`.
+        error_details (str): Additional error context.
+    Returns:
+        status_pb2.Status: A gRPC rich error status object.
+
+    """
+    # Build ErrorInfo
+    error_info = error_details_pb2.ErrorInfo(
+        reason=message,
+        domain=f"drunc.{domain}",
+        metadata={"error": error_details},
+    )
+    detail_any = any_pb2.Any()
+    detail_any.Pack(error_info)
+
+    # Build Status
+    return status_pb2.Status(
+        code=code_pb2.INTERNAL,
+        message=message,
+        details=[detail_any],
+    )
 
 
 class UnpackingError(DruncCommandException):

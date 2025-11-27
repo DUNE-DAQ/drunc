@@ -17,11 +17,11 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
-from grpc import ServicerContext, StatusCode
-from google.rpc import status_pb2, error_details_pb2
+from grpc import ServicerContext
 from grpc_status import rpc_status
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
+from drunc.utils.grpc_utils import create_internal_rich_error_status
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -33,7 +33,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
     """
 
     def __init__(self, name: str, configuration: SessionManagerConfHandler):
-        """Cerate a new session manager instance.
+        """Create a new session manager instance.
 
         Args:
             name: The name of the session manager.
@@ -103,44 +103,23 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running list_all_sessions")
 
-        try:
-            dummy_config = ConfigKey(
-                file="dummy_config_file",
-                session_id="dummy_config_session_id",
-            )
+        dummy_config = ConfigKey(
+            file="dummy_config_file",
+            session_id="dummy_config_session_id",
+        )
 
-            dummy_session = ActiveSession(
-                name="dummy_session",
-                user="dummy_user",
-                config_key=dummy_config,
-            )
+        dummy_session = ActiveSession(
+            name="dummy_session",
+            user="dummy_user",
+            config_key=dummy_config,
+        )
 
-            return AllActiveSessions(
-                name=self.name,
-                token=None,
-                active_sessions=[dummy_session],
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            )
-        except Exception as e:
-            self.log.error(f"Error in list_all_sessions: {e}")
-
-            # Build rich error response
-            status = status_pb2.Status(
-                code=grpc.StatusCode.INTERNAL.value[0],
-                message="Failed to retrieve active sessions",
-                details=[
-                    error_details_pb2.ErrorInfo(
-                        reason="list_all_sessions_failed",
-                        domain="drunc.session_manager",
-                        metadata={"method": "list_all_sessions"}
-                    ).SerializeToString(),
-                    error_details_pb2.DebugInfo(
-                        stack_entries=[str(e)]
-                    ).SerializeToString()
-                ]
-            )
-            context.abort_with_status(rpc_status.to_status(status))
-
+        return AllActiveSessions(
+            name=self.name,
+            token=None,
+            active_sessions=[dummy_session],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
     def list_all_configs(
         self, request: Request, context: ServicerContext
@@ -199,12 +178,10 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             )
         except Exception as e:
             self.log.error(f"Unhandled error in list_all_configs: {e}")
-            # Build rich error response
-            status = status_pb2.Status(
-                code=StatusCode.INTERNAL.value[0],
-                message="Failed to list configurations",
-                details=[
-                    error_details_pb2.DebugInfo(stack_entries=[str(e)]).SerializeToString()
-                ]
+
+            rich_status = create_internal_rich_error_status(
+                domain="session_manager",
+                message="Unhandled error in list_all_configs",
+                error_details=f"{str(e)}",
             )
-            context.abort_with_status(rpc_status.to_status(status))
+            context.abort_with_status(rpc_status.to_status(rich_status))
