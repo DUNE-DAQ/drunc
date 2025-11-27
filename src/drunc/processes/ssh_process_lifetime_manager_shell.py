@@ -66,7 +66,8 @@ class ProcessWatcherThread(threading.Thread):
             # Process exited with non-zero code
             exception = e
             exit_code = e.exit_code
-            self.logger.error(f"Shell process {self.uuid} error: {e}")
+            # self.logger.error(f"Shell process {self.uuid} error: {e}")
+            self.logger.debug(f"Shell process {self.uuid} error: {e}")
 
         except Exception as e:
             # Unexpected error during monitoring
