@@ -8,6 +8,6 @@ class SSHProcessManagerShell(SSHProcessManager):
     def __init__(self, configuration, **kwargs):
         super().__init__(
             configuration=configuration,
-            class_lifetime_manager=SSHProcessLifetimeManagerShell,
+            LifetimeManagerClass=SSHProcessLifetimeManagerShell,
             **kwargs,
         )

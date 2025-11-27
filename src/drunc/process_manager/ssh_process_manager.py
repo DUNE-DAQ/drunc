@@ -18,11 +18,14 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 
 class SSHProcessManager(ProcessManager):
-    def __init__(self, configuration, class_lifetime_manager, **kwargs):
-        self.ssh_lifetime_manager = class_lifetime_manager
+    def __init__(
+        self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
+    ):
+        self.ssh_lifetime_manager = None
         self.session = getpass.getuser()  # unfortunate
 
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -43,7 +46,7 @@ class SSHProcessManager(ProcessManager):
         # self.children_logs_depth = 1000
         # self.children_logs = {}
 
-        self.ssh_lifetime_manager = class_lifetime_manager(
+        self.ssh_lifetime_manager = LifetimeManagerClass(
             disable_host_key_check=self.disable_host_key_check,
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
