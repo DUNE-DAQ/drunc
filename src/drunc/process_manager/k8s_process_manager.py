@@ -677,7 +677,27 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+            if "root-controller" in podname:
+                modified_args = []
+                for arg in e_and_a.args:
+                    if "://" in arg and ":" in arg.split("://")[1]:
+                        protocol, address = arg.split("://", 1)
+                        if ":" in address:
+                            hostname, port = address.split(":", 1)
+                            new_address = f"{protocol}://0.0.0.0:{port}"
+                            modified_args.append(new_address)
+                            self.log.debug(
+                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces within the pod)"
+                            )
+                        else:
+                            modified_args.append(arg)
+                    else:
+                        modified_args.append(arg)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
         main_command_chain = " && ".join(command_parts)
 
         container_ports = []
