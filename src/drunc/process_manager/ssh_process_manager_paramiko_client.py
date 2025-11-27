@@ -8,6 +8,6 @@ class SSHProcessManagerParamikoClient(SSHProcessManager):
     def __init__(self, configuration, **kwargs):
         super().__init__(
             configuration=configuration,
-            class_lifetime_manager=SSHProcessLifetimeManagerParamiko,
+            LifetimeManagerClass=SSHProcessLifetimeManagerParamiko,
             **kwargs,
         )
