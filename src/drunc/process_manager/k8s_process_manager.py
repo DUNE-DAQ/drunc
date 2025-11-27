@@ -392,6 +392,40 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
+    def _create_namespace_inner(self, session: str) -> None:
+        self.log.info(f'Creating "{session}" namespace.')
+        namespace_manifest = client.V1Namespace(
+            api_version="v1",
+            kind="Namespace",
+            metadata=self._meta_v1_api(
+                name=session,
+                labels={"pod-security.kubernetes.io/enforce": "privileged"},
+            ),
+        )
+        self._core_v1_api.create_namespace(body=namespace_manifest)
+
+        # Wait until namespace is Active
+        start = time()
+        timeout = getattr(self, "namespace_ready_timeout", 10)
+        while time() - start < timeout:
+            try:
+                ns = self._core_v1_api.read_namespace(name=session)
+                phase = getattr(ns.status, "phase", None)
+                if phase == "Active":
+                    self.log.info(f"Namespace '{session}' is Active and ready.")
+                    break
+            except self._api_error_v1_api as e:
+                if e.status != 404:
+                    raise DruncK8sException(f"Error reading namespace '{session}': {e}")
+            sleep(0.5)
+        else:
+            raise DruncK8sNamespaceException(
+                f"Namespace '{session}' not ready after {timeout} seconds."
+            )
+
+        self._add_creator_label(session, "namespace")
+        self.managed_sessions.add(session)
+
     def _create_namespace(self, session) -> None:
         """Creates a Kubernetes namespace if it doesn't already exist."""
         if session in self.sessions_pending_deletion:
@@ -401,25 +435,45 @@ class K8sProcessManager(ProcessManager):
             return
 
         try:
-            self._core_v1_api.read_namespace(name=session)
-            raise DruncK8sNamespaceException(
-                f"Namespace '{session}' already exists. Please use a different session name."
-            )
+            namespace = self._core_v1_api.read_namespace(name=session)
+            # Check if namespace is in Terminating state
+            if namespace.metadata.deletion_timestamp is not None:
+                self.log.info(
+                    f"Namespace '{session}' is in Terminating state. Waiting for deletion to complete..."
+                )
+                # Wait for namespace to be fully deleted
+                start_time = time()
+                while time() - start_time < self.restart_cleanup_time:
+                    try:
+                        self._core_v1_api.read_namespace(name=session)
+                        # Namespace still exists, continue waiting
+                        sleep(self.restart_cleanup_polling)
+                    except self._api_error_v1_api as e:
+                        if e.status == 404:
+                            # Namespace is now deleted, break and create new one
+                            self.log.info(
+                                f"Namespace '{session}' has been fully deleted. Proceeding with creation."
+                            )
+                            self._create_namespace_inner(session)
+                            return
+                        else:
+                            raise DruncK8sException(
+                                f"Error while waiting for namespace '{session}' deletion: {e}"
+                            )
+                    # Timeout reached
+                raise DruncK8sNamespaceException(
+                    f"Timeout waiting for namespace '{session}' to be deleted. "
+                    f"Please wait and try again, or use a different session name."
+                )
+            else:
+                # Namespace exists and is not terminating
+                raise DruncK8sNamespaceException(
+                    f"Namespace '{session}' already exists. Please use a different session name."
+                )
 
         except self._api_error_v1_api as e:
             if e.status == 404:
-                self.log.info(f'Creating "{session}" namespace.')
-                namespace_manifest = client.V1Namespace(
-                    api_version="v1",
-                    kind="Namespace",
-                    metadata=self._meta_v1_api(
-                        name=session,
-                        labels={"pod-security.kubernetes.io/enforce": "privileged"},
-                    ),
-                )
-                self._core_v1_api.create_namespace(body=namespace_manifest)
-                self._add_creator_label(session, "namespace")
-                self.managed_sessions.add(session)
+                self._create_namespace_inner(session)
             else:
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
