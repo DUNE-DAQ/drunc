@@ -708,10 +708,14 @@ class K8sProcessManager(ProcessManager):
         # Redirect logs
         log_file_path = boot_request.process_description.process_logs_path
         final_command_args: str
+        shell_command = ["/bin/sh", "-c"]
 
         if log_file_path:
-            self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
-            log_redirect_cmd = f"exec > {log_file_path} 2>&1;"
+            self.log.debug(
+                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
+            )
+            shell_command = ["/bin/bash", "-c"]
+            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
         else:
             log_redirect_cmd = ""
 
@@ -727,15 +731,30 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
+        env_vars = boot_request.process_description.env
+        try:
+            host_username = getpass.getuser()
+        except KeyError:
+            try:
+                import pwd
+
+                host_username = pwd.getpwuid(os.getuid()).pw_name
+            except KeyError:
+                host_username = str(os.getuid())
+
+        env_vars["USER"] = host_username
+        self.log.debug(f"Setting USER environment variable to: {host_username}")
+
+        if "DOTDRUNC" not in env_vars:
+            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            env_vars["DOTDRUNC"] = dotdrunc_path
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
-            command=["/bin/sh", "-c"],
+            command=shell_command,
             args=[final_command_args],
-            env=[
-                client.V1EnvVar(name=k, value=v)
-                for k, v in boot_request.process_description.env.items()
-            ],
+            env=[client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()],
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
