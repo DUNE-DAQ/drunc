@@ -901,26 +901,18 @@ class K8sProcessManager(ProcessManager):
                 )
         return host_aliases
 
-    def _determine_service_type(self, podname: str, boot_request: BootRequest) -> str:
+    def _determine_service_type(
+        self, podname: str, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> str:
         """
         Determines the correct K8s service type for a pod ("NodePort" or "Headless").
         This logic is centralized here to be used by both pod creation (for hostNetwork)
         and service creation.
         """
-        if (
-            self.connection_server_name
-            in self._get_tree_labels(
-                boot_request.process_description.metadata.tree_id, podname
-            )["role." + self.drunc_label]
-        ):
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             return "NodePort"
 
-        if (
-            "root-controller"
-            in self._get_tree_labels(
-                boot_request.process_description.metadata.tree_id, podname
-            )["role." + self.drunc_label]
-        ):
+        if "root-controller" in tree_labels["role." + self.drunc_label]:
             port = self._extract_port_from_cmd(boot_request)
             if port is not None and port != 0:
                 return "NodePort"
@@ -1013,15 +1005,11 @@ class K8sProcessManager(ProcessManager):
         boot_request: BootRequest,
         lcs_port: int | None,
         service_type: str,
+        tree_labels: dict[str, str],
     ) -> None:
         """Calls the appropriate service creation method based on pod type."""
         if service_type == "NodePort":
-            if (
-                self.connection_server_name
-                in self._get_tree_labels(
-                    boot_request.process_description.metadata.tree_id, podname
-                )["role." + self.drunc_label]
-            ):
+            if self.connection_server_name in tree_labels["role." + self.drunc_label]:
                 if lcs_port is None:
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
@@ -1029,12 +1017,7 @@ class K8sProcessManager(ProcessManager):
                 # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
 
-            elif (
-                "root-controller"
-                in self._get_tree_labels(
-                    boot_request.process_description.metadata.tree_id, podname
-                )["role." + self.drunc_label]
-            ):
+            elif "root-controller" in tree_labels["role." + self.drunc_label]:
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
@@ -1090,7 +1073,9 @@ class K8sProcessManager(ProcessManager):
             )
 
             # Determine service type and hostNetwork requirement
-            service_type = self._determine_service_type(podname, boot_request)
+            service_type = self._determine_service_type(
+                podname, boot_request, tree_labels
+            )
             use_host_network = service_type != "NodePort"
 
             if not use_host_network:
@@ -1119,7 +1104,13 @@ class K8sProcessManager(ProcessManager):
 
             # Create associated service
             self._create_associated_service(
-                podname, session, pod_uid, boot_request, lcs_port, service_type
+                podname,
+                session,
+                pod_uid,
+                boot_request,
+                lcs_port,
+                service_type,
+                tree_labels,
             )
 
         except self._api_error_v1_api as e:
