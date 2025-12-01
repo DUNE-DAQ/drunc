@@ -46,9 +46,6 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import format_name_for_cli, get_logger
 
-# Placed here to initialise the top 'controller' handler
-# so the following children don't need to have their own handlers
-# Can be further optimised, see #691
 root_logger = get_logger("controller", rich_handler=True)
 log = get_logger("controller.shell_utils")
 

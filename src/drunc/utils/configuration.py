@@ -7,6 +7,8 @@ import conffwk
 from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import expand_path, get_logger
 
+get_logger(logger_name="utils", rich_handler=True)
+
 
 class ConfTypes(Enum):
     Unknown = 0

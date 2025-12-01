@@ -5,6 +5,8 @@ from druncschema.request_response_pb2 import Response, ResponseFlag
 
 from drunc.utils.utils import get_logger
 
+get_logger(logger_name="utils", rich_handler=True)
+
 
 def authentified_and_authorised(action, system):
     def decor(cmd):

@@ -45,6 +45,8 @@ from drunc.utils.utils import (
     resolve_localhost_to_hostname,
 )
 
+get_logger(logger_name="utils", rich_handler=True)
+
 
 class ProcessManagerDriver:
     controller_address = ""

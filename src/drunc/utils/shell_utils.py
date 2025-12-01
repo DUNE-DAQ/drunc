@@ -7,7 +7,10 @@ from druncschema.token_pb2 import Token
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
-from drunc.utils.utils import get_logger, setup_standard_loggers
+from drunc.utils.utils import get_logger
+
+# Initialise Utils logger
+get_logger(logger_name="utils", rich_handler=True)
 
 
 class InterruptedCommand(DruncShellException):
@@ -146,7 +149,6 @@ class ShellContext:
         self._console.rule(*args, **kwargs)
 
     def print_status_summary(self) -> None:
-        setup_standard_loggers()  # Calling this to initialise the utils logger. See #691
         log = get_logger("utils.ShellContext")
         status = self.get_driver("controller").status().status
         describe_fsm = self.get_driver("controller").describe_fsm().description
