@@ -22,7 +22,7 @@ from drunc.utils.utils import (
 
 __version__ = "1.0.0"
 get_root_logger("info")
-get_logger(logger_name="utils", rich_handler=True)
+log = get_logger("fake_daqapp_rest", rich_handler=True)
 
 
 class AppState:
@@ -235,7 +235,6 @@ def main():
     print(f"Name: {name}")
     app_state = AppState(name)
 
-    log = get_logger("fake_daqapp_rest", rich_handler=True)
     conf = conffwk.Configuration(args.configurationService)
     session = conf.get_dal(
         class_name="Session",
