@@ -717,6 +717,9 @@ class K8sProcessManager(ProcessManager):
 
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
+        tree_labels = self._get_tree_labels(
+            boot_request.process_description.metadata.tree_id, podname
+        )
 
         # This logic correctly prepends 'exec' to the C++ application command.
         command_parts = []
@@ -727,16 +730,12 @@ class K8sProcessManager(ProcessManager):
             if (
                 is_last_command
                 and e_and_a.exec != "source"
-                and podname != self.connection_server_name
+                and self.connection_server_name
+                not in tree_labels["role." + self.drunc_label]
             ):
                 prefix = "exec "
 
-            if (
-                "root-controller"
-                in self._get_tree_labels(
-                    boot_request.process_description.metadata.tree_id, podname
-                )["role." + self.drunc_label]
-            ):
+            if "root-controller" in tree_labels["role." + self.drunc_label]:
                 modified_args = []
                 for arg in e_and_a.args:
                     if "://" in arg and ":" in arg.split("://")[1]:
@@ -760,14 +759,21 @@ class K8sProcessManager(ProcessManager):
         main_command_chain = " && ".join(command_parts)
 
         container_ports = []
-        if podname == self.connection_server_name and lcs_port is not None:
+        if (
+            self.connection_server_name in tree_labels["role." + self.drunc_label]
+            and lcs_port is not None
+        ):
             container_ports.append(
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
 
         # Only add preStop hook for C++ applications (non-controllers)
         lifecycle_hook = None
-        if "controller" not in podname and podname != self.connection_server_name:
+        if (
+            "controller" not in tree_labels["role." + self.drunc_label]
+            and self.connection_server_name
+            not in tree_labels["role." + self.drunc_label]
+        ):
             self.log.debug(
                 f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
             )
@@ -798,7 +804,7 @@ class K8sProcessManager(ProcessManager):
         else:
             log_redirect_cmd = ""
 
-        if podname == self.connection_server_name:
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
@@ -867,12 +873,12 @@ class K8sProcessManager(ProcessManager):
         return node_selector
 
     def _get_pod_host_aliases(
-        self, podname: str, session: str
+        self, podname: str, session: str, tree_labels: dict[str, str]
     ) -> list[client.V1HostAlias] | None:
         """Gets the ClusterIP of the connection server and prepares host aliases."""
         host_aliases = None
         if (
-            podname != self.connection_server_name
+            self.connection_server_name not in tree_labels["role." + self.drunc_label]
             and self.local_connection_server_is_booted
         ):
             connection_server_ip = None
@@ -1058,9 +1064,10 @@ class K8sProcessManager(ProcessManager):
         try:
             lcs_port = None
             tree_id = boot_request.process_description.metadata.tree_id
+            tree_labels = self._get_tree_labels(tree_id, podname)
 
             # Early Port Extraction and Class Variable Setup for LCS
-            if podname == self.connection_server_name:
+            if self.connection_server_name in tree_labels["role." + self.drunc_label]:
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
                     self.connection_server_port = lcs_port
@@ -1069,9 +1076,6 @@ class K8sProcessManager(ProcessManager):
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
                     )
-
-            # Get correct label using tree_id
-            tree_labels = self._get_tree_labels(tree_id, podname)
 
             # Prepare volume mounts
             (
@@ -1100,7 +1104,7 @@ class K8sProcessManager(ProcessManager):
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
             )
-            host_aliases = self._get_pod_host_aliases(podname, session)
+            host_aliases = self._get_pod_host_aliases(podname, session, tree_labels)
             pod_manifest = self._build_pod_manifest(
                 podname,
                 session,
@@ -1470,7 +1474,9 @@ class K8sProcessManager(ProcessManager):
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
-
+        tree_labels = self._get_tree_labels(
+            boot_request.process_description.metadata.tree_id, podname
+        )
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
@@ -1484,19 +1490,9 @@ class K8sProcessManager(ProcessManager):
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
         # Special handling and blocking wait for critical processes
-        if (
-            self.connection_server_name
-            in self._get_tree_labels(
-                boot_request.process_description.metadata.tree_id, podname
-            )["role." + self.drunc_label]
-        ):
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             self._wait_for_lcs_readiness(podname, session)
-        elif (
-            "root-controller"
-            in self._get_tree_labels(
-                boot_request.process_description.metadata.tree_id, podname
-            )["role." + self.drunc_label]
-        ):
+        elif "root-controller" in tree_labels["role." + self.drunc_label]:
             self._wait_for_controller_readiness(podname, session, boot_request)
 
         # Post-Process
