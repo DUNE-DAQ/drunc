@@ -1,6 +1,6 @@
 # Description
-
 Addresses issue # 
+
 _This issue should contain the full description of what the PR is intended to deliver._
 
 ## Type of change
@@ -12,15 +12,17 @@ _This issue should contain the full description of what the PR is intended to de
 - [ ] Documentation (non-breaking change that adds or improves the documentation)
 
 ## Requires
-
 If applicable, list all the related PRs required to implement and test this change.
 
 ## Change log
 
 _Include a high level overview of the changes introduced by this PR._
 
-## Testing checklist, complete prior to marking this as "Ready for Review"
+## Suggested manual testing checklist 
 
+_If applicable, include a description of what should be run to demonstrate the changes that are being made._
+
+## Testing checklist, complete prior to marking this as "Ready for Review"
 Testing was ran on: _include the host name here_
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
@@ -28,10 +30,6 @@ Testing was ran on: _include the host name here_
 - [ ] Minimal system quick test passes (`pytest -s minimal_system_quick_test.py`)
 - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO.
 - [ ] Testing skipped as there are no core code changes in this PR
-
-## Suggested manual testing checklist 
-
-_If applicable, include a description of what should be run to demonstrate the changes that are being made._
 
 
 ## Further checks
@@ -41,9 +39,10 @@ _If applicable, include a description of what should be run to demonstrate the c
   (Indicate issue here: # (issue))
 
 _The option below is awaiting discussion with SWIT regarding global linting and styling, and separate templates for the different repo types_
-- [ ] Code style is correct (`dbt-build --lint`, and/or see https://dune-daq-sw.readthedocs.io/en/latest/packages/styleguide/)
+- [ ] Code style is correct (`dbt-build --lint`, see [the documentation](https://dune-daq-sw.readthedocs.io/en/latest/packages/styleguide/))
 
 # Reviewer checklist
+_Note - if a reveiwer requests changes and those changes are implemented, it is expected that the below block is re-ran._
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
 - [ ] Unit tests pass (`pytest`)
