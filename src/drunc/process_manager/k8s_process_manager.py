@@ -392,7 +392,8 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
-    def _create_namespace_inner(self, session: str) -> None:
+    def _create_namespace_and_wait_for_active(self, session: str) -> None:
+        """Creates a namespace manifest, calls the API to create it, and waits for it to become Active."""
         self.log.info(f'Creating "{session}" namespace.')
         namespace_manifest = client.V1Namespace(
             api_version="v1",
@@ -406,8 +407,7 @@ class K8sProcessManager(ProcessManager):
 
         # Wait until namespace is Active
         start = time()
-        timeout = getattr(self, "namespace_ready_timeout", 10)
-        while time() - start < timeout:
+        while time() - start < self.restart_cleanup_time:
             try:
                 ns = self._core_v1_api.read_namespace(name=session)
                 phase = getattr(ns.status, "phase", None)
@@ -417,17 +417,17 @@ class K8sProcessManager(ProcessManager):
             except self._api_error_v1_api as e:
                 if e.status != 404:
                     raise DruncK8sException(f"Error reading namespace '{session}': {e}")
-            sleep(0.5)
+            sleep(self.restart_cleanup_polling)
         else:
             raise DruncK8sNamespaceException(
-                f"Namespace '{session}' not ready after {timeout} seconds."
+                f"Namespace '{session}' not ready after {self.restart_cleanup_time} seconds."
             )
 
         self._add_creator_label(session, "namespace")
         self.managed_sessions.add(session)
 
-    def _create_namespace(self, session) -> None:
-        """Creates a Kubernetes namespace if it doesn't already exist."""
+    def _ensure_namespace_exists(self, session) -> None:
+        """Ensures a Kubernetes namespace exists, handling edge cases like terminating namespaces."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
 
@@ -454,7 +454,7 @@ class K8sProcessManager(ProcessManager):
                             self.log.info(
                                 f"Namespace '{session}' has been fully deleted. Proceeding with creation."
                             )
-                            self._create_namespace_inner(session)
+                            self._create_namespace_and_wait_for_active(session)
                             return
                         else:
                             raise DruncK8sException(
@@ -473,7 +473,7 @@ class K8sProcessManager(ProcessManager):
 
         except self._api_error_v1_api as e:
             if e.status == 404:
-                self._create_namespace_inner(session)
+                self._create_namespace_and_wait_for_active(session)
             else:
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
@@ -1481,7 +1481,7 @@ class K8sProcessManager(ProcessManager):
         self._run_pre_boot_checks(session, podname, boot_request)
 
         # Resource Creation (Namespace, Pod, Labels)
-        self._create_namespace(session)
+        self._ensure_namespace_exists(session)
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
