@@ -731,7 +731,12 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            if "root-controller" in podname:
+            if (
+                "root-controller"
+                in self._get_tree_labels(
+                    boot_request.process_description.metadata.tree_id, podname
+                )["role." + self.drunc_label]
+            ):
                 modified_args = []
                 for arg in e_and_a.args:
                     if "://" in arg and ":" in arg.split("://")[1]:
