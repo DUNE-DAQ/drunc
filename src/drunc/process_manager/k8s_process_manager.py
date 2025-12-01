@@ -903,10 +903,20 @@ class K8sProcessManager(ProcessManager):
         This logic is centralized here to be used by both pod creation (for hostNetwork)
         and service creation.
         """
-        if podname == self.connection_server_name:
+        if (
+            self.connection_server_name
+            in self._get_tree_labels(
+                boot_request.process_description.metadata.tree_id, podname
+            )["role." + self.drunc_label]
+        ):
             return "NodePort"
 
-        if "root-controller" in podname:
+        if (
+            "root-controller"
+            in self._get_tree_labels(
+                boot_request.process_description.metadata.tree_id, podname
+            )["role." + self.drunc_label]
+        ):
             port = self._extract_port_from_cmd(boot_request)
             if port is not None and port != 0:
                 return "NodePort"
@@ -1002,7 +1012,12 @@ class K8sProcessManager(ProcessManager):
     ) -> None:
         """Calls the appropriate service creation method based on pod type."""
         if service_type == "NodePort":
-            if podname == self.connection_server_name:
+            if (
+                self.connection_server_name
+                in self._get_tree_labels(
+                    boot_request.process_description.metadata.tree_id, podname
+                )["role." + self.drunc_label]
+            ):
                 if lcs_port is None:
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
@@ -1010,7 +1025,12 @@ class K8sProcessManager(ProcessManager):
                 # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
 
-            elif "root-controller" in podname:
+            elif (
+                "root-controller"
+                in self._get_tree_labels(
+                    boot_request.process_description.metadata.tree_id, podname
+                )["role." + self.drunc_label]
+            ):
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
@@ -1464,9 +1484,19 @@ class K8sProcessManager(ProcessManager):
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
         # Special handling and blocking wait for critical processes
-        if podname == self.connection_server_name:
+        if (
+            self.connection_server_name
+            in self._get_tree_labels(
+                boot_request.process_description.metadata.tree_id, podname
+            )["role." + self.drunc_label]
+        ):
             self._wait_for_lcs_readiness(podname, session)
-        elif "root-controller" in podname:
+        elif (
+            "root-controller"
+            in self._get_tree_labels(
+                boot_request.process_description.metadata.tree_id, podname
+            )["role." + self.drunc_label]
+        ):
             self._wait_for_controller_readiness(podname, session, boot_request)
 
         # Post-Process
