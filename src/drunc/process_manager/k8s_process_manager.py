@@ -736,21 +736,19 @@ class K8sProcessManager(ProcessManager):
                 prefix = "exec "
 
             if "root-controller" in tree_labels["role." + self.drunc_label]:
+                # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
+                # POD_IP will be injected via Kubernetes Downward API
                 modified_args = []
                 for arg in e_and_a.args:
-                    if "://" in arg and ":" in arg.split("://")[1]:
-                        protocol, address = arg.split("://", 1)
-                        if ":" in address:
-                            hostname, port = address.split(":", 1)
-                            new_address = f"{protocol}://0.0.0.0:{port}"
-                            modified_args.append(new_address)
-                            self.log.debug(
-                                f"Modified command facility for '{podname}' from {arg} to {new_address} (will bind to all interfaces within the pod)"
-                            )
-                        else:
-                            modified_args.append(arg)
-                    else:
-                        modified_args.append(arg)
+                    modified_arg = re.sub(
+                        r"([a-zA-Z]+://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
+                    )
+                    if modified_arg != arg:
+                        self.log.debug(
+                            f"Modified command facility for '{podname}' from {arg} to {modified_arg} "
+                            "(will use pod IP)"
+                        )
+                    modified_args.append(modified_arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
                 command_parts.append(
@@ -832,12 +830,28 @@ class K8sProcessManager(ProcessManager):
             dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
             env_vars["DOTDRUNC"] = dotdrunc_path
 
+        # Build environment variable list
+        container_env = [client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
+
+        # Add POD_IP environment variable via Downward API for root-controller
+        if "root-controller" in tree_labels["role." + self.drunc_label]:
+            pod_ip_env = client.V1EnvVar(
+                name="POD_IP",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
+                ),
+            )
+            container_env.append(pod_ip_env)
+            self.log.debug(
+                f"Added POD_IP environment variable via Downward API for '{podname}'"
+            )
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/sh", "-c"],
             args=[final_command_args],
-            env=[client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()],
+            env=container_env,
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
