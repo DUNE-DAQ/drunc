@@ -187,6 +187,10 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_port = None
         self.connection_server_node_port = None
 
+        # Service
+        service = settings.get("service", {})
+        self.service_port = service.get("port", 80)
+
         # Pod management
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 30)
@@ -500,7 +504,11 @@ class K8sProcessManager(ProcessManager):
             spec=client.V1ServiceSpec(
                 cluster_ip="None",
                 selector={"app": podname},
-                ports=[client.V1ServicePort(port=80, target_port=80)],
+                ports=[
+                    client.V1ServicePort(
+                        port=self.service_port, target_port=self.service_port
+                    )
+                ],
             ),
         )
         try:
