@@ -5,8 +5,6 @@ from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.utils.utils import get, get_logger, http_post
 
-get_logger(logger_name="utils", rich_handler=True)
-
 
 class ConnectivityServiceClient:
     def __init__(self, session: str, address: str):

@@ -4,8 +4,6 @@ from druncschema.token_pb2 import Token
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.utils.utils import get_logger
 
-get_logger(logger_name="utils", rich_handler=True)
-
 
 # TODO: Should be communicating over network
 # The Rolls Royce of the authoriser systems

@@ -48,7 +48,7 @@ def collect_apps(
 
     """
 
-    #! process manager should have the rich handler
+    #! process manager should have the rich handler (This works)!
     # see #691
     #! Oh yeah this needs work, whats going on here
     log = get_logger("process_manager.collect_apps")

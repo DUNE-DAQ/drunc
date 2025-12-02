@@ -10,7 +10,6 @@ from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
 # Initialise Utils logger
-get_logger(logger_name="utils", rich_handler=True)
 
 
 class InterruptedCommand(DruncShellException):
