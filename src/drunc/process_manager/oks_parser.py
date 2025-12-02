@@ -50,7 +50,8 @@ def collect_apps(
 
     #! process manager should have the rich handler
     # see #691
-    log = get_logger("process_manager.collect_apps", rich_handler=True)
+    #! Oh yeah this needs work, whats going on here
+    log = get_logger("process_manager.collect_apps")
     # Get default environment from Session
     defenv = env.copy()
 
@@ -94,7 +95,7 @@ def collect_apps(
 
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
-        log.debug(f"Considering segment {sub_segment_obj.id}")
+        log.critical(f"Considering segment {sub_segment_obj.id}")
         if confmodel_dal.component_disabled(
             db._obj, session_obj.id, sub_segment_obj.id
         ):

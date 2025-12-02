@@ -97,7 +97,7 @@ def start_shell(ctx, obj):
     This command stops batch mode and enters an interactive shell state,
     allowing you to execute commands interactively.
     """
-    log = get_logger("unified_shell.start_shell", rich_handler=True)
+    log = get_logger("unified_shell.start_shell")
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")

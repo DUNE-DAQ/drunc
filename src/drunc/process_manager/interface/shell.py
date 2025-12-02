@@ -3,6 +3,7 @@ import os
 
 import click
 import click_shell
+from daqpytools.logging.handlers import add_file_handler
 from daqpytools.logging.levels import logging_log_levels
 
 from drunc.process_manager.interface.commands import (
@@ -41,16 +42,19 @@ from drunc.utils.utils import (
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
     get_root_logger(log_level)
-    process_manager_shell_log = get_logger("process_manager.shell", rich_handler=True)
+
+    process_manager_log = get_logger(
+        logger_name="process_manager",
+        rich_handler=True,
+    )
+
+    process_manager_shell_log = get_logger("process_manager.shell")
 
     ctx.obj.reset(address=process_manager_address)
 
     try:
         desc = ctx.obj.get_driver("process_manager").describe()
     except ServerUnreachable as e:
-        process_manager_shell_log = get_logger(
-            logger_name="process_manager.shell", rich_handler=True
-        )
         process_manager_shell_log.critical("Could not connect to the process manager")
         process_manager_shell_log.exception(
             e
@@ -58,11 +62,12 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         # process_manager_shell_log.error(e.message) # TODO: Keep this for production branch, remove this from dev branch
         exit(1)
 
-    process_manager_log = get_logger(
-        logger_name="process_manager",
-        file_handler_path=desc.info,
-        rich_handler=True,
-    )
+    # Add file path after the file path has been initialised
+
+    #! Note for review, this is emptyy when running locally. Is this intended?
+    # Should also discuss, given that this is adding a file handler to the process manager. Need more information on exactly what we want in the file here..
+    if desc.info:
+        add_file_handler(process_manager_log, use_parent_handlers=True, path=desc.info)
 
     process_manager_log.info(
         f"[green]{getpass.getuser()}[/green] connected to the process manager through a [green]drunc-process-manager-shell[/green] via address [green]{process_manager_address}[/green]"
