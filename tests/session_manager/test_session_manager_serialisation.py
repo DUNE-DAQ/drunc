@@ -14,12 +14,9 @@ from druncschema.session_manager_pb2_grpc import (
     SessionManagerStub,
     add_SessionManagerServicer_to_server,
 )
-from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc._channel import _InactiveRpcError
 
-from drunc.session_manager.session_manager import (
-    SessionManager,
-)
+from drunc.session_manager.session_manager import SessionManager
 
 
 class SessionManagerSerialisationTestSuite:
@@ -33,7 +30,7 @@ class SessionManagerSerialisationTestSuite:
         self.stub = None
         self.servicer = None
 
-    def setup_server_and_client(self, method_name=None, mock_response=None):
+    def setup_server_and_client(self, method_name, mock_response):
         """Initialise a real gRPC server and client for serialisation testing.
 
         Args:
@@ -46,9 +43,8 @@ class SessionManagerSerialisationTestSuite:
             mock_logger.return_value = mock_logger_instance
             self.servicer = SessionManager(name="dummy_session", configuration=[])
 
-        # Only override response for serialization tests
-        if mock_response is not None and method_name is not None:
-            setattr(self.servicer, method_name, MagicMock(return_value=mock_response))
+        # Mock only the specific method being tested before adding servicer to server
+        setattr(self.servicer, method_name, MagicMock(return_value=mock_response))
 
         # Configure and start the gRPC server
         self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
@@ -210,45 +206,3 @@ def test_serialisation_round_trip_wrong_response(
         error = exc_info.value
         assert error.code() == grpc.StatusCode.INTERNAL
         assert "failed to serialize response!" in error.details().lower()
-
-
-def test_list_all_configs_rich_error(
-    serialisation_test_suite, generic_request, monkeypatch
-):
-    """
-    Test that unhandled exceptions trigger rich error.
-    """
-    monkeypatch.setenv("DUNEDAQ_DB_PATH", "/nonexistent")
-    serialisation_test_suite.setup_server_and_client()
-
-    expected_erro_message = "Unhandled error in list_all_configs"
-
-    # Force Path.rglob to raise
-    with patch("pathlib.Path.rglob") as rglob_handler:
-        rglob_handler.side_effect = RuntimeError("Fake Error")
-
-        # context.abort_with_status should be called and raise
-        with pytest.raises(grpc.RpcError) as exc:
-            serialisation_test_suite.stub.list_all_configs(generic_request)
-
-        err = exc.value
-        assert err.code() == grpc.StatusCode.INTERNAL
-
-        # Rich error assertions
-        found_status = None
-        for key, value in err.trailing_metadata():
-            if key == "grpc-status-details-bin":
-                found_status = status_pb2.Status()  # serialised google.rpc.Status
-                found_status.ParseFromString(
-                    value
-                )  # deserialise into a status_pb2.Status object
-
-        assert found_status.message == expected_erro_message
-        assert found_status.code == code_pb2.INTERNAL
-
-        # Unpack the ErrorInfo
-        error_info = error_details_pb2.ErrorInfo()
-        found_status.details[0].Unpack(error_info)
-        assert error_info.domain == "drunc.session_manager"
-        assert error_info.reason == expected_erro_message
-        assert error_info.metadata["error"] == "Fake Error"

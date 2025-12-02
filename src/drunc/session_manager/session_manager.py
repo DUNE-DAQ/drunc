@@ -18,10 +18,9 @@ from druncschema.session_manager_pb2 import (
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from grpc import ServicerContext
-from grpc_status import rpc_status
 
 from drunc.session_manager.configuration import SessionManagerConfHandler
-from drunc.utils.grpc_utils import create_internal_rich_error_status
+from drunc.utils.grpc_utils import respond_with_rich_error_status
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -179,9 +178,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         except Exception as e:
             self.log.error(f"Unhandled error in list_all_configs: {e}")
 
-            rich_status = create_internal_rich_error_status(
+            respond_with_rich_error_status(
+                context,
                 domain="session_manager",
                 message="Unhandled error in list_all_configs",
                 error_details=f"{str(e)}",
             )
-            context.abort_with_status(rpc_status.to_status(rich_status))
