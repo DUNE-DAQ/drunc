@@ -81,8 +81,14 @@ def run_pm(
     # Note from #690: previously, this logger was directly added to the 'drunc' logger.
     # We want to move away from this and ensure that the handlers are instead in the
     # drunc.[first_child] loggers. See #691
+    #! We need to change this!!!
+
     drunc_log = logging.getLogger("drunc")
+    print(f"Log path: {log_path}")
     add_file_handler(drunc_log, use_parent_handlers=True, path=log_path)
+
+    #! Well we should check what we want coming out of this, as having a full log of the output might come in handy? not entirely sure.
+    # chat with pawel about this
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value

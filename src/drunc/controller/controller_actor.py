@@ -10,7 +10,7 @@ from drunc.utils.utils import get_logger
 # actor is a descriptoin of who is running the current session
 class ControllerActor:
     def __init__(self, token: Optional[Token] = None):
-        self.log = get_logger("controller.actor")
+        self.log = get_logger("controller.core.actor")
         self._token = Token(token="", user_name="")
         if token is not None:
             self._token.CopyFrom(token)
