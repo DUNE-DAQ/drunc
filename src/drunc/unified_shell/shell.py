@@ -204,6 +204,8 @@ def unified_shell(
         port = mp.Value("i", 0)
 
         unified_shell_log.debug("[green]Process manager[/green] starting")
+        #!  This is a multiprocessing process
+        # when we start the processes, its done on a per process manager basis
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
             kwargs={
