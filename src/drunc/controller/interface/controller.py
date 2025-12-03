@@ -78,7 +78,7 @@ def controller_cli(
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
     get_root_logger(log_level)
     log = get_logger(
-        "controller.controller_cli", file_handler_path=None, rich_handler=False
+        "controller.core.controller_cli", file_handler_path=None, rich_handler=False
     )
 
     token = Token(
@@ -128,7 +128,7 @@ def controller_cli(
         log.info("ctrlr.terminate() completed")
 
     def kill_me(sig, frame):
-        l = get_logger("controller.kill_me")
+        l = get_logger("controller.interface.kill_me")
         l.info("Sending SIGKILL")
         if ctrlr.top_segment_controller:
             ctrlr.connectivity_service.retract_partition(fail_quickly=True)

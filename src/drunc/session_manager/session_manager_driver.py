@@ -30,7 +30,7 @@ class SessionManagerDriver:
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        self.log = get_logger("controller.SessionManagerDriver")
+        self.log = get_logger("controller.interface.SessionManagerDriver")  # guess
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds

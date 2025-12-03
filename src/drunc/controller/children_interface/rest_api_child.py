@@ -220,7 +220,7 @@ class AppCommander:
         self.proxy_port = proxy_port
 
         self.app = app_name
-        self.log = get_logger(f"controller.{self.app}-commander")
+        self.log = get_logger(f"controller.core.{self.app}-commander")
         self.app_url = f"http://{self.app_host}:{self.app_port}/command"
 
         self.response_queue = queue.Queue()

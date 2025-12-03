@@ -11,7 +11,7 @@ from drunc.utils.utils import get_logger
 
 class UsvcProvidedRunNumber(FSMAction):
     def __init__(self, configuration):
-        self.log = get_logger("controller.usvc_run_number")
+        self.log = get_logger("controller.interface.usvc_run_number")  # guess
         super().__init__(name="usvc-provided-run-number")
         dotdrunc = get_dotdrunc_json()
         try:

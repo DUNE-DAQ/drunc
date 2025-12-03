@@ -38,7 +38,9 @@ class PreOrPostTransitionSequence:
         self.prefix = pre_or_post
 
         self.sequence = []
-        self.log = get_logger("controller.PreOrPostTransitionSequence")
+        self.log = get_logger(
+            "controller.interface.PreOrPostTransitionSequence"
+        )  # guess
 
     def add_callback(self, action, mandatory=True):
         method = getattr(action, f"{self.prefix}_{self.transition.name}")
@@ -180,7 +182,8 @@ class PreOrPostTransitionSequence:
 
 class FSM:
     def __init__(self, conf):
-        self.log = get_logger("controller.FSM")
+        #! This is a guess, as it was in the original logs
+        self.log = get_logger("controller.interface.FSM")
         self.configuration = conf
 
         self.initial_state = self.configuration.get_initial_state()
