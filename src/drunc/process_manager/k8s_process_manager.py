@@ -199,6 +199,9 @@ class K8sProcessManager(ProcessManager):
         # Volume mounts
         self.volume_configs = settings.get("volumes", [])
 
+        # Home path configuration
+        self.home_path_base = settings.get("home_path_base", None)
+
         # Cleanup
         cleanup = settings.get("cleanup", {})
         self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
@@ -714,6 +717,59 @@ class K8sProcessManager(ProcessManager):
         )
         return labels
 
+    def _build_container_env(
+        self, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> list[client.V1EnvVar]:
+        """Builds the list of environment variables for the container."""
+        env_vars = boot_request.process_description.env
+
+        # Get host username for HOME if needed, but only set USER if not already present
+        host_username = None
+        if "USER" not in env_vars or self.home_path_base:
+            try:
+                host_username = getpass.getuser()
+            except KeyError:
+                try:
+                    import pwd
+
+                    host_username = pwd.getpwuid(os.getuid()).pw_name
+                except KeyError:
+                    host_username = str(os.getuid())
+
+        # Only set USER if not already present in environment
+        if "USER" not in env_vars and host_username:
+            env_vars["USER"] = host_username
+            self.log.debug(f"Setting USER environment variable to: {host_username}")
+
+        # Set HOME if home_path_base is configured
+        if self.home_path_base and host_username:
+            env_vars["HOME"] = f"{self.home_path_base}/{host_username}"
+            self.log.debug(
+                f"Setting HOME environment variable to: {self.home_path_base}/{host_username}"
+            )
+
+        if "DOTDRUNC" not in env_vars:
+            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            env_vars["DOTDRUNC"] = dotdrunc_path
+
+        # Build environment variable list
+        container_env = [client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
+
+        # Add POD_IP environment variable via Downward API for root-controller
+        if "root-controller" in tree_labels["role." + self.drunc_label]:
+            pod_ip_env = client.V1EnvVar(
+                name="POD_IP",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
+                ),
+            )
+            container_env.append(pod_ip_env)
+            self.log.debug(
+                "Added POD_IP environment variable via Downward API for root-controller"
+            )
+
+        return container_env
+
     def _build_pod_main_container(
         self,
         podname: str,
@@ -818,39 +874,8 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        env_vars = boot_request.process_description.env
-        try:
-            host_username = getpass.getuser()
-        except KeyError:
-            try:
-                import pwd
-
-                host_username = pwd.getpwuid(os.getuid()).pw_name
-            except KeyError:
-                host_username = str(os.getuid())
-
-        env_vars["USER"] = host_username
-        self.log.debug(f"Setting USER environment variable to: {host_username}")
-
-        if "DOTDRUNC" not in env_vars:
-            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
-            env_vars["DOTDRUNC"] = dotdrunc_path
-
-        # Build environment variable list
-        container_env = [client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
-
-        # Add POD_IP environment variable via Downward API for root-controller
-        if "root-controller" in tree_labels["role." + self.drunc_label]:
-            pod_ip_env = client.V1EnvVar(
-                name="POD_IP",
-                value_from=client.V1EnvVarSource(
-                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
-                ),
-            )
-            container_env.append(pod_ip_env)
-            self.log.debug(
-                f"Added POD_IP environment variable via Downward API for '{podname}'"
-            )
+        # Build container environment variables
+        container_env = self._build_container_env(boot_request, tree_labels)
 
         main_container = client.V1Container(
             name=podname,

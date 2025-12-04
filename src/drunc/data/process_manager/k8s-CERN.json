@@ -28,6 +28,7 @@
         "labels": {
             "drunc_label": "drunc.daq"
         },
+        "home_path_base": "/nfs/home",
         "connection_server": {
             "name": "local-connection-server"
         },
