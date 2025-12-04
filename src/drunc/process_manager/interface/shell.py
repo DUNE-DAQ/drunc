@@ -62,10 +62,9 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         # process_manager_shell_log.error(e.message) # TODO: Keep this for production branch, remove this from dev branch
         exit(1)
 
-    # Add file path after the file path has been initialised
-
-    #! Note for review, this is emptyy when running locally. Is this intended?
-    # Should also discuss, given that this is adding a file handler to the process manager. Need more information on exactly what we want in the file here..
+    # Manually add file handler to process manager log
+    # Not possible to initialise logger immediately as it requires
+    # knowledge of the log path
     if desc.info:
         add_file_handler(process_manager_log, use_parent_handlers=True, path=desc.info)
 

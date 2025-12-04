@@ -38,8 +38,6 @@ from drunc.utils.grpc_utils import (
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
-# this is a layer betqween gerpc server and click commands
-
 
 class ControllerDriver:
     @staticmethod

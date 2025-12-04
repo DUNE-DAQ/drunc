@@ -9,7 +9,9 @@ from drunc.utils.utils import get_logger
 
 class FSMConfHandler(ConfHandler):
     def _fill_pre_post_transition_sequence_oks(self, prefix, transition, data):
-        self.log = get_logger("controller.core.FSMConfHandler")  # guess
+        self.log = get_logger(
+            "controller.core.FSMConfHandler"
+        )  # TODO: Verify core/interface choice
         seq = PreOrPostTransitionSequence(
             transition,
             prefix,

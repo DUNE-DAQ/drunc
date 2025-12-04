@@ -9,8 +9,6 @@ from rich.console import Console
 from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
-# Initialise Utils logger
-
 
 class InterruptedCommand(DruncShellException):
     """This exception gets thrown if we don't want to have a full stack, but still want to interrupt a **shell** command"""
