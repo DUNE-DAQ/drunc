@@ -8,7 +8,7 @@ from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2, json_format
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
-from google.rpc import code_pb2, error_details_pb2
+from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
 from drunc.exceptions import DruncCommandException, DruncException
@@ -330,3 +330,35 @@ def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
     'proto_class_instance' should be an empty instance, e.g., Token()
     """
     return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+
+
+def respond_with_rich_error_status(
+    context, domain: str, message: str, error_details: str
+):
+    """
+    Abort the RPC with INTERNAL error containing ErrorInfo.
+
+    Args:
+        domain (str): domain or subsystem where the error occurred. This will be
+            prefixed with "drunc.". Examples: session_manager, process_manager.
+        message (str): Quick description of the error. Used for both `Status.message`
+            and as the `ErrorInfo.reason`.
+        error_details (str): Additional error context.
+    Returns:
+        status_pb2.Status: A gRPC rich error status object.
+    """
+    error_info = error_details_pb2.ErrorInfo(
+        reason=message,
+        domain=f"drunc.{domain}",
+        metadata={"error": error_details},
+    )
+    detail_any = any_pb2.Any()
+    detail_any.Pack(error_info)
+
+    rich_status = status_pb2.Status(
+        code=code_pb2.INTERNAL,
+        message=message,
+        details=[detail_any],
+    )
+
+    context.abort_with_status(rpc_status.to_status(rich_status))

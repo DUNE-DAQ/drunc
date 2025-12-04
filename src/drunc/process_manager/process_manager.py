@@ -39,7 +39,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import get_logger, pid_info_str
-
+from drunc.utils.grpc_utils import respond_with_rich_error_status
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -257,7 +257,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
-
+        except Exception as e:
+            self.log.exception("Unhandled exception in boot")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.boot",
+                reason="Unhandled Exception in boot",
+                message=str(e),
+            )
         return response
 
     @abc.abstractmethod
@@ -282,6 +289,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 token=None,
                 values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            )
+        except Exception as e:
+            self.log.exception("Unhandled exception in terminate")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.terminate",
+                reason="Unhandled Exception in terminate",
+                message=str(e),
             )
 
         return response
@@ -309,6 +324,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
+        except Exception as e:
+            self.log.exception("Unhandled exception in restart")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.restart",
+                reason="Unhandled Exception in restart",
+                message=str(e),
+            )
 
         return response
 
@@ -335,6 +358,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
+        except Exception as e:
+            self.log.exception("Unhandled exception in kill")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.kill",
+                reason="Unhandled Exception in kill",
+                message=str(e),
+            )
 
         return response
 
@@ -360,6 +391,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 token=None,
                 values=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            )
+        except Exception as e:
+            self.log.exception("Unhandled exception in ps")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.ps",
+                reason="Unhandled Exception in ps",
+                message=str(e),
             )
 
         return response
@@ -478,6 +517,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 uuid=None,
                 lines=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            )
+        except Exception as e:
+            self.log.exception("Unhandled exception in log")
+            respond_with_rich_error_status(
+                context,
+                domain="ProcessManager.log",
+                reason="Unhandled Exception in log",
+                message=str(e),
             )
 
         return response
