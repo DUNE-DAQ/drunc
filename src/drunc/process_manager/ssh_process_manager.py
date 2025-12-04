@@ -52,6 +52,8 @@ class SSHProcessManager(ProcessManager):
             logger=self.log,
             on_process_exit=self._on_ssh_process_exit,
         )
+        # stores the exit codes for all dead processes by uuid
+        self.archived_exit_codes: dict[str, int] = {}
 
     def _on_ssh_process_exit(
         self, uuid: str, exit_code: Optional[int], exception: Optional[Exception]
@@ -110,13 +112,11 @@ class SSHProcessManager(ProcessManager):
         for proc_uuid in uuids:
             app_name = self.boot_request[proc_uuid].process_description.metadata.name
 
-            # Terminate process if still alive
-            if self.ssh_lifetime_manager.is_process_alive(proc_uuid):
-                self.log.debug(f"Killing '{app_name}' with UUID {proc_uuid}")
-                self.ssh_lifetime_manager.terminate_process(
-                    proc_uuid, timeout=self.configuration.data.kill_timeout
-                )
-                self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
+            self.log.debug(f"Killing '{app_name}' with UUID {proc_uuid}")
+            return_code = self.ssh_lifetime_manager.kill_process(
+                proc_uuid, timeout=self.configuration.data.kill_timeout
+            )
+            self.log.info(f"Killed '{app_name}' with UUID {proc_uuid}")
 
             # Build process instance for response
             pd = ProcessDescription()
@@ -125,8 +125,9 @@ class SSHProcessManager(ProcessManager):
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
             pu = ProcessUUID(uuid=proc_uuid)
 
-            # Get final exit code
-            return_code = self.ssh_lifetime_manager.get_exit_code(proc_uuid)
+            # Store the final exit code
+            if return_code is not None:
+                self.archived_exit_codes[proc_uuid] = return_code
 
             ret += [
                 ProcessInstance(
@@ -137,9 +138,6 @@ class SSHProcessManager(ProcessManager):
                     uuid=pu,
                 )
             ]
-
-            # Clean up SSH resources
-            self.ssh_lifetime_manager.cleanup_process(proc_uuid)
 
         return ProcessInstanceList(
             name=self.name,
@@ -185,14 +183,16 @@ class SSHProcessManager(ProcessManager):
             result = self.kill_processes(uuids)
 
             # Clean up all SSH manager resources
-            self.ssh_lifetime_manager.cleanup_all()
+            killed_exit_codes = self.ssh_lifetime_manager.kill_all_processes()
+            self.archived_exit_codes.update(killed_exit_codes)
 
             return result
 
         self.log.info("No known process to kill before exiting")
 
         # Still clean up SSH manager even if no processes
-        self.ssh_lifetime_manager.cleanup_all()
+        killed_exit_codes = self.ssh_lifetime_manager.kill_all_processes()
+        self.archived_exit_codes.update(killed_exit_codes)
 
         return ProcessInstanceList(
             name=self.name,
@@ -352,7 +352,10 @@ class SSHProcessManager(ProcessManager):
 
         # Query current process status
         alive = self.ssh_lifetime_manager.is_process_alive(uuid)
-        return_code = self.ssh_lifetime_manager.get_exit_code(uuid)
+        return_code = self.ssh_lifetime_manager.pop_early_exit_code(uuid)
+        if return_code is not None:
+            self.log.debug(f"Process {uuid} exited early with exit code: {return_code}")
+            self.archived_exit_codes[uuid] = return_code
         status_code = (
             ProcessInstance.StatusCode.RUNNING
             if alive
@@ -417,9 +420,7 @@ class SSHProcessManager(ProcessManager):
             alive = self.ssh_lifetime_manager.is_process_alive(proc_uuid)
 
             return_code = (
-                self.ssh_lifetime_manager.get_exit_code(proc_uuid)
-                if not alive
-                else None
+                self.archived_exit_codes.get(proc_uuid, None) if not alive else None
             )
             if not alive:
                 self.log.debug(
@@ -473,10 +474,10 @@ class SSHProcessManager(ProcessManager):
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
 
-        if self.ssh_lifetime_manager.is_process_alive(uuid):
-            self.ssh_lifetime_manager.terminate_process(uuid)
+        self.archived_exit_codes[uuid] = self.ssh_lifetime_manager.kill_process(
+            uuid, self.configuration.data.kill_timeout
+        )
 
-        self.ssh_lifetime_manager.cleanup_process(uuid)
         del self.boot_request[uuid]
         del uuid
 

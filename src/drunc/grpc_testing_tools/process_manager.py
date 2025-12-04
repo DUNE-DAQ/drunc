@@ -313,9 +313,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
                             print(
                                 f"Server {process_uuid} still alive, terminating SSH connection"
                             )
-                            self.ssh_manager.terminate_process(
-                                process_uuid, timeout=grace_period
-                            )
+                            exit_code = self.ssh_manager.kill_process(process_uuid)
 
                             # Wait again for process termination after SSH kill
                             start_time = time.time()
@@ -332,10 +330,9 @@ class ManagerServiceImpl(ManagerServiceServicer):
                                 f"{process_uuid} (process still alive after timeout)"
                             )
                         else:
-                            print(f"Successfully stopped booted server: {process_uuid}")
-
-                        # Cleanup process
-                        self.ssh_manager.cleanup_process(process_uuid)
+                            print(
+                                f"Successfully stopped booted server: {process_uuid}. Exit code: {exit_code}"
+                            )
 
                     except Exception as e:
                         error_msg = f"{process_uuid} ({str(e)})"

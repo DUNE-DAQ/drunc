@@ -5,11 +5,12 @@ Defines the common interface for managing remote process lifecycles,
 including process startup, monitoring, termination, and output capture.
 """
 
-import logging
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional
+from typing import Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
+
+from drunc.processes.connection_utils import wait_for
 
 
 class ProcessLifetimeManager(ABC):
@@ -21,26 +22,35 @@ class ProcessLifetimeManager(ABC):
     different underlying SSH libraries (e.g., Paramiko, sh library).
     """
 
-    @abstractmethod
-    def __init__(
+    # The maximum amount of time to wait for a process to die after kill is called
+    # before it is considered an error.
+    DEFAULT_TIMEOUT_FOR_KILLING_PROCESS = 10.0  # seconds
+    # Interval to wait between checking if a process is dead after kill is called.
+    KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
+    # Interval to wait before concluding metadata file writing failed on remote host.
+    DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
+
+    def wait_for_process_to_die(
         self,
-        disable_host_key_check: bool = False,
-        disable_localhost_host_key_check: bool = False,
-        logger: Optional[logging.Logger] = None,
-        on_process_exit: Optional[
-            Callable[[str, Optional[int], Optional[Exception]], None]
-        ] = None,
-    ):
+        uuid: str,
+        timeout: float,
+    ) -> bool:
         """
-        Initialise process lifetime manager.
+        Wait for a process to terminate within a timeout period.
 
         Args:
-            disable_host_key_check: Disable SSH host key verification for all hosts
-            disable_localhost_host_key_check: Disable SSH host key verification for localhost
-            logger: Logger instance for real-time output logging
-            on_process_exit: Optional callback function(uuid, exit_code, exception) invoked when process exits
+            uuid: Process UUID to monitor
+
+        Returns:
+            True if process terminated within timeout, False otherwise
         """
-        pass
+        result = wait_for(
+            condition=lambda: self.is_process_alive(uuid),
+            expected_value=False,
+            timeout=timeout,
+            poll_interval=self.KILLING_PROCESS_POLL_INTERVAL,
+        )
+        return result == False
 
     @abstractmethod
     def get_active_process_keys(self) -> List[str]:
@@ -84,26 +94,50 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def get_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
         """
-        Get process exit code.
+        If a process was killed before kill_process was called. This method
+        retrieves and removes the exit code from internal storage. Otherwise
+        it will return None.
 
         Args:
             uuid: Process UUID
 
         Returns:
-            Exit code if process has terminated, None if still running or not found
+            Exit code if process is dead, None if still running or not found
         """
         pass
 
     @abstractmethod
-    def terminate_process(self, uuid: str, timeout: float = 10.0) -> None:
+    def kill_process(
+        self, uuid: str, timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
+    ) -> Optional[int]:
         """
-        Terminate process gracefully with optional timeout.
+        Kill a remote process and clean up associated resources upon successful termination.
+        Sends termination signals to the remote process and waits for it to die.
+        Safe to call multiple times - subsequent calls will have no effect if
+        resources have already been cleaned up.
 
         Args:
             uuid: Process UUID to terminate
             timeout: Timeout for graceful termination in seconds
+
+        Returns:
+          the exit code of the process if it was able to be determined (None otherwise).
+
+        """
+        pass
+
+    @abstractmethod
+    def kill_all_processes(self) -> Dict[str, Optional[int]]:
+        """
+        Kill all managed processes and clean up resources.
+
+        Iterates through all active processes, terminates them, and cleans up
+        associated resources.
+
+        Returns:
+            Dictionary mapping process UUIDs to their exit codes (None if not determined)
         """
         pass
 
@@ -130,27 +164,6 @@ class ProcessLifetimeManager(ABC):
 
         Returns:
             Accumulated stderr content as string, None if not found
-        """
-        pass
-
-    @abstractmethod
-    def cleanup_process(self, uuid: str) -> None:
-        """
-        Clean up process resources.
-
-        Terminates the process (if still running) and releases all associated resources.
-
-        Args:
-            uuid: Process UUID to clean up
-        """
-        pass
-
-    @abstractmethod
-    def cleanup_all(self) -> None:
-        """
-        Clean up all processes and resources.
-
-        Terminates all managed processes and releases all associated resources.
         """
         pass
 

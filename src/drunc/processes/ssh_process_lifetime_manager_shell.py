@@ -11,13 +11,14 @@ import os
 import signal
 import tempfile
 import threading
-from time import sleep
 from typing import Callable, Dict, List, Optional
 
 import sh
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.process_manager.utils import on_parent_exit
+from drunc.processes.connection_utils import wait_for
+from drunc.processes.process_metadata import ProcessMetadata
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 from drunc.utils.utils import get_logger
 
@@ -128,6 +129,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # Thread-safe lock for process store modifications
         self.lock = threading.Lock()
 
+        # metadata for each process
+        self.metadata: Dict[str, ProcessMetadata] = {}
+
+    @staticmethod
+    def get_metadata_file_path(uuid: str) -> str:
+        """Generate metadata file path for a given process UUID."""
+        return (
+            f"${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc/metadata_{uuid}.json"
+        )
+
     def get_active_process_keys(self) -> List[str]:
         """
         Get list of active process UUIDs.
@@ -188,108 +199,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             env_vars=env_vars,
         )
 
-    def _execute_ssh_command(
-        self,
-        uuid: str,
-        boot_request: BootRequest,
-        hostname: str,
-        user: str,
-        command: str,
-        log_file: str,
-        env_vars: Dict[str, str] = None,
-    ) -> None:
-        """
-        Execute SSH command using sh library.
-
-        Args:
-            uuid: Unique identifier for this process
-            boot_request: Original boot request
-            hostname: Target hostname
-            user: SSH username
-            command: Remote command to execute
-            log_file: Path to log file for output (on remote host)
-            env_vars: Environment variables to export
-
-        Raises:
-            RuntimeError: If SSH connection or execution fails
-        """
-        try:
-            # Determine platform for platform-specific options
-            platform = os.uname().sysname.lower()
-            is_macos = "darwin" in platform
-
-            # Build user@host string
-            user_host = f"{user}@{hostname}"
-
-            # Determine host key checking policy
-            disable_host_key_check = self.disable_host_key_check or (
-                self.disable_localhost_host_key_check
-                and hostname in ("localhost", "127.0.0.1", "::1")
-            )
-
-            # Build remote command with environment setup and output redirection
-            remote_cmd = (
-                'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
-            )
-
-            # Add environment variables
-            if env_vars:
-                cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_vars.items()])
-                remote_cmd += cmd_env + ";"
-
-            # Add working directory change if specified
-            if hasattr(boot_request.process_description, "process_execution_directory"):
-                remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
-
-            # Add the actual command with output redirection
-            remote_cmd += f"{{ {command} ; }} &> {log_file}"
-
-            # Build SSH arguments
-            arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
-
-            # Add host key check bypass options if configured
-            if disable_host_key_check:
-                arguments.extend(
-                    [
-                        "-o",
-                        "LogLevel=error",
-                        "-o",
-                        "GlobalKnownHostsFile=/dev/null",
-                        "-o",
-                        "UserKnownHostsFile=/dev/null",
-                    ]
-                )
-
-            # Add the remote command
-            arguments.append(remote_cmd)
-
-            # Execute SSH command in background
-            process = self.ssh(
-                *arguments,
-                _out=self.log.debug,
-                _err=self.log.error,
-                _bg=True,
-                _bg_exc=False,
-                _new_session=True,
-                _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
-            )
-
-            # Store process for lifecycle management
-            with self.lock:
-                self.process_store[uuid] = process
-
-            # Start monitoring thread for exit detection
-            self._start_process_watcher(uuid, process)
-
-            self.log.debug(f"SSH command started for {uuid}: {command}")
-
-        except Exception as e:
-            # Clean up on failure
-            with self.lock:
-                if uuid in self.process_store:
-                    del self.process_store[uuid]
-            raise RuntimeError(f"Failed to execute SSH command for {uuid}: {e}")
-
     def _start_process_watcher(self, uuid: str, process: sh.RunningCommand) -> None:
         """
         Start a monitoring thread for a process.
@@ -323,74 +232,59 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         if uuid not in self.process_store:
             return False
 
-        process = self.process_store[uuid]
-        return process.is_alive()
+        process = self.process_store[uuid]["process"]
+        metadata: ProcessMetadata = self.metadata.get(uuid, None)
+        if metadata is None or metadata.pid is None:
+            self.log.debug(
+                f"No metadata or PID found for {uuid}, relying on SSH client process status"
+            )
+            return process.is_alive()
 
-    def get_exit_code(self, uuid: str) -> Optional[int]:
+        remote_process_alive = self._is_remote_process_alive(
+            self.process_store[uuid]["hostname"],
+            self.process_store[uuid]["user"],
+            metadata.pid,
+        )
+        return process.is_alive() and remote_process_alive
+
+    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
         """
-        Get process exit code.
+        Get process exit code if process exited early without being killed.
+
+        This method checks if a process has terminated unexpectedly (without
+        kill_process being called). If an exit code is found, the process
+        resources are cleaned up automatically.
 
         Args:
             uuid: Process UUID
 
         Returns:
-            Exit code if process has terminated, None if still running or not found
+            Exit code if process has terminated early, None if still running or not found
         """
         if uuid not in self.process_store:
+            self.log.debug(f"Process {uuid} not found in store for exit code retrieval")
             return None
 
-        process = self.process_store[uuid]
+        process = self.process_store[uuid]["process"]
         if process.is_alive():
             return None
 
         try:
-            return process.exit_code
-        except Exception:
+            early_exit_code = process.exit_code
+        except Exception as e:
+            self.log.debug(f"Exception thrown getting exit code for {uuid}: {e}")
             return None
 
-    def terminate_process(self, uuid: str, timeout: float = 10.0) -> None:
-        """
-        Terminate process by sending signals.
+        if early_exit_code is not None:
+            self.log.warning(
+                f"Process {uuid} exited early without being killed. Exit code {early_exit_code}"
+            )
+            self.log.debug(
+                f"Cleaning up resources for process {uuid} with exit code {early_exit_code}"
+            )
+            self._cleanup_process_resources(uuid)
 
-        Sends SIGQUIT followed by SIGKILL if necessary, with the configured
-        timeout between signals.
-
-        Args:
-            uuid: Process UUID to terminate
-            timeout: Timeout between signals in seconds
-        """
-        if uuid not in self.process_store:
-            return
-
-        process = self.process_store[uuid]
-
-        if not process.is_alive():
-            return  # Already terminated
-
-        try:
-            # Signal sequence: SIGQUIT (graceful) then SIGKILL (forceful)
-            signal_sequence = [
-                signal.SIGQUIT,
-                signal.SIGKILL,
-            ]
-
-            for sig in signal_sequence:
-                if not process.is_alive():
-                    self.log.info(f"Process {uuid} terminated")
-                    break
-
-                self.log.debug(
-                    f"Sending signal '{str(sig).split('.')[-1]}' to process {uuid}"
-                )
-                process.signal_group(sig)
-
-                if not process.is_alive():
-                    break
-
-                sleep(timeout)
-
-        except Exception as e:
-            self.log.warning(f"Error terminating process {uuid}: {e}")
+        return early_exit_code
 
     def get_process_stdout(self, uuid: str) -> Optional[str]:
         """
@@ -406,7 +300,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return None
 
         try:
-            process = self.process_store[uuid]
+            process = self.process_store[uuid]["process"]
             if hasattr(process, "stdout"):
                 stdout_data = process.stdout
                 if stdout_data:
@@ -430,7 +324,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return None
 
         try:
-            process = self.process_store[uuid]
+            process = self.process_store[uuid]["process"]
             if hasattr(process, "stderr"):
                 stderr_data = process.stderr
                 if stderr_data:
@@ -440,41 +334,30 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return None
 
-    def cleanup_process(self, uuid: str) -> None:
-        """
-        Clean up process resources.
-
-        Terminates the process (if still running) and releases all associated resources.
-
-        Args:
-            uuid: Process UUID to clean up
-        """
-        # Terminate if still running
-        if uuid in self.process_store:
-            process = self.process_store[uuid]
-            if process.is_alive():
-                self.terminate_process(uuid)
-
-        # Remove from process store
-        with self.lock:
-            if uuid in self.process_store:
-                del self.process_store[uuid]
-
-    def cleanup_all(self) -> None:
+    def kill_all_processes(self) -> Dict[str, Optional[int]]:
         """
         Clean up all processes and resources.
 
         Terminates all managed processes and releases all associated resources.
+        Safe to call multiple times.
         """
         # Get list of UUIDs to terminate
         with self.lock:
             uuids = list(self.process_store.keys())
 
-        # Terminate all processes
-        for uuid in uuids:
-            self.cleanup_process(uuid)
+        killed_exit_codes: Dict[str, Optional[int]] = {}
 
-        # Wait for watcher threads
+        # Terminate all processes (each kill_process call auto-cleans up)
+        for uuid in uuids:
+            try:
+                killed_exit_codes[uuid] = self.kill_process(
+                    uuid,
+                    timeout=ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+                )
+            except Exception as e:
+                self.log.error(f"Error during cleanup of process {uuid}: {e}")
+
+        # Wait for watcher threads to complete
         for watcher in self.watchers:
             try:
                 watcher.join(timeout=2.0)
@@ -482,25 +365,44 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 pass
 
         self.watchers.clear()
+        return killed_exit_codes
+
+    def _build_ssh_arguments(self, hostname: str, user_host: str) -> List[str]:
+        """
+        Build standard SSH arguments with host key checking policy.
+
+        Args:
+            hostname: Target hostname for policy determination
+            user_host: User@hostname string for SSH connection
+
+        Returns:
+            List of SSH command arguments
+        """
+        disable_host_key_check = self.disable_host_key_check or (
+            self.disable_localhost_host_key_check
+            and hostname in ("localhost", "127.0.0.1", "::1")
+        )
+
+        arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
+
+        if disable_host_key_check:
+            arguments.extend(
+                [
+                    "-o",
+                    "LogLevel=error",
+                    "-o",
+                    "GlobalKnownHostsFile=/dev/null",
+                    "-o",
+                    "UserKnownHostsFile=/dev/null",
+                ]
+            )
+
+        return arguments
 
     def read_log_file(
         self, hostname: str, user: str, log_file: str, num_lines: int = 100
     ) -> List[str]:
-        """
-        Read remote log file via SSH.
-
-        Creates a temporary SSH connection to read the log file and returns
-        the last N lines using the tail command.
-
-        Args:
-            hostname: Target hostname
-            user: SSH username
-            log_file: Remote log file path
-            num_lines: Number of lines to read from end of file
-
-        Returns:
-            List of log lines
-        """
+        """Read remote log file via SSH."""
         # Create temporary file for output
         temp_file = tempfile.NamedTemporaryFile(delete=False)
         temp_file.close()
@@ -509,29 +411,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             # Build user@host string
             user_host = f"{user}@{hostname}"
 
-            # Determine host key checking policy
-            disable_host_key_check = self.disable_host_key_check or (
-                self.disable_localhost_host_key_check
-                and hostname in ("localhost", "127.0.0.1", "::1")
-            )
-
-            # Build SSH arguments
-            arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
-
-            # Add host key check bypass options if configured
-            if disable_host_key_check:
-                arguments.extend(
-                    [
-                        "-o",
-                        "LogLevel=error",
-                        "-o",
-                        "GlobalKnownHostsFile=/dev/null",
-                        "-o",
-                        "UserKnownHostsFile=/dev/null",
-                    ]
-                )
-
-            # Add tail command
+            # Build SSH arguments using helper method
+            arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.extend(["tail", f"-{num_lines}", log_file])
 
             # Execute SSH command with output redirection
@@ -568,50 +449,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         auth_method: str,
         user: str = getpass.getuser(),
     ) -> None:
-        """
-        Validate SSH connection to the specified host.
-
-        Attempts to establish an SSH connection to the host and execute a
-        simple echo command to verify connectivity.
-
-        Args:
-            host: Target hostname
-            auth_method: Authentication method (not used in sh implementation)
-            user: SSH username (default: current user)
-
-        Raises:
-            RuntimeError: If SSH connection or command execution fails
-        """
+        """Validate SSH connection to the specified host."""
         try:
             # Build user@host string
             user_host = f"{user}@{host}"
 
-            # Determine host key checking policy
-            disable_host_key_check = self.disable_host_key_check or (
-                self.disable_localhost_host_key_check
-                and host in ("localhost", "127.0.0.1", "::1")
-            )
-
             # Build remote command
             remote_cmd = f'echo "{user} established SSH successfully";'
 
-            # Build SSH arguments
-            arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
-
-            # Add host key check bypass options if configured
-            if disable_host_key_check:
-                arguments.extend(
-                    [
-                        "-o",
-                        "LogLevel=error",
-                        "-o",
-                        "GlobalKnownHostsFile=/dev/null",
-                        "-o",
-                        "UserKnownHostsFile=/dev/null",
-                    ]
-                )
-
-            # Add the remote command
+            # Build SSH arguments using helper method
+            arguments = self._build_ssh_arguments(host, user_host)
             arguments.append(remote_cmd)
 
             # Execute SSH command and wait for completion
@@ -622,3 +469,363 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         except Exception as e:
             self.log.error(f"SSH validation failed for {user}@{host}: {e}")
             raise RuntimeError(f"SSH connection validation failed: {e}")
+
+    def write_process_metadata(
+        self, uuid: str, metadata: ProcessMetadata, metadata_file: str
+    ) -> None:
+        """
+        Write process metadata to remote JSON file.
+
+        Args:
+            uuid: Process UUID
+            metadata: ProcessMetadata instance to write
+            metadata_file: Remote path for metadata file
+        """
+        try:
+            hostname = metadata.hostname
+            user = metadata.user
+
+            if not hostname or not user:
+                self.log.warning(
+                    f"Cannot write metadata for {uuid}: missing hostname or user"
+                )
+                return
+
+            # Serialise metadata to JSON
+            json_content = metadata.to_json()
+
+            # Escape JSON content for shell command
+            json_escaped = json_content.replace("'", "'\\''")
+
+            # Build user@host string
+            user_host = f"{user}@{hostname}"
+
+            # Build SSH arguments
+            arguments = self._build_ssh_arguments(hostname, user_host)
+
+            # Write JSON content to remote file using echo
+            remote_cmd = f"echo '{json_escaped}' > {metadata_file}"
+            arguments.append(remote_cmd)
+
+            # Execute SSH command
+            self.ssh(*arguments)
+
+            self.log.debug(f"Wrote metadata for {uuid} to {metadata_file}")
+
+        except Exception as e:
+            self.log.error(f"Failed to write metadata for {uuid}: {e}")
+
+    def read_process_metadata(
+        self,
+        uuid: str,
+        metadata_file: str,
+        hostname: str,
+        user: str,
+        timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_READING_METADATA,
+    ) -> Optional[ProcessMetadata]:
+        """
+        Read process metadata from remote JSON file with retry logic.
+
+        Args:
+            uuid: Process UUID
+            metadata_file: Remote path to metadata file
+            hostname: Target hostname
+            user: SSH username
+            timeout: Maximum time to wait for metadata file in seconds
+
+        Returns:
+            ProcessMetadata instance if file exists and is valid, None otherwise
+        """
+
+        def attempt_read():
+            try:
+                # Build user@host string
+                user_host = f"{user}@{hostname}"
+
+                # Build SSH arguments
+                arguments = self._build_ssh_arguments(hostname, user_host)
+                arguments.extend(["cat", metadata_file])
+
+                # Execute SSH command to read file
+                result = self.ssh(*arguments)
+                json_content = str(result).strip()
+
+                # Parse JSON and create metadata object
+                metadata = ProcessMetadata.from_json(json_content)
+
+                self.log.debug(f"Read metadata for {uuid} from {metadata_file}")
+                return metadata
+
+            except Exception as e:
+                self.log.debug(f"Failed to read metadata for {uuid}: {e}")
+                return None
+
+        # Use wait_for to retry reading metadata until timeout
+        return wait_for(
+            attempt_read,
+            expected_value=lambda x: x is not None,
+            timeout=timeout,
+            poll_interval=0.5,
+        )
+
+    def _execute_ssh_command(
+        self,
+        uuid: str,
+        boot_request: BootRequest,
+        hostname: str,
+        user: str,
+        command: str,
+        log_file: str,
+        env_vars: Dict[str, str] = None,
+    ) -> None:
+        """Execute SSH command using sh library."""
+        try:
+            platform = os.uname().sysname.lower()
+            is_macos = "darwin" in platform
+            user_host = f"{user}@{hostname}"
+
+            # Build remote command with metadata file writing
+            remote_cmd = (
+                'echo "SSHPM: Starting process $$ on host $HOSTNAME as user $USER";'
+            )
+
+            if env_vars:
+                cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_vars.items()])
+                remote_cmd += cmd_env + ";"
+
+            if hasattr(boot_request.process_description, "process_execution_directory"):
+                remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
+
+            metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
+            remote_cmd += (
+                f"mkdir -p ${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc ; "
+                f"{{ {command} ; }} &> {log_file} & PID=$! ; "
+                f'echo \'{{"pid": \'$PID\', "hostname": "{hostname}", "user": "{user}", "started_at": \'$(date +%s)\'}}\'  > {metadata_file} ; '
+                f"wait $PID"
+            )
+
+            arguments = self._build_ssh_arguments(hostname, user_host)
+            arguments.append(remote_cmd)
+
+            process = self.ssh(
+                *arguments,
+                _out=self.log.debug,
+                _err=self.log.error,
+                _bg=True,
+                _bg_exc=False,
+                _new_session=True,
+                _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
+            )
+
+            # Store process info
+            with self.lock:
+                self.process_store[uuid] = {
+                    "process": process,
+                    "hostname": hostname,
+                    "user": user,
+                }
+                self.metadata[uuid] = self.read_process_metadata(
+                    uuid, metadata_file, hostname, user
+                )
+                if self.metadata[uuid] is None:
+                    # if we don't have metadata we won't be able to send signals directly to the remote process
+                    self.log.warning(
+                        f"Failed to read metadata for process {uuid} within timeout. Lifecycle management will be limited."
+                    )
+
+            self._start_process_watcher(uuid, process)
+            self.log.debug(f"SSH command started for {uuid}")
+        except Exception as e:
+            with self.lock:
+                if uuid in self.process_store:
+                    del self.process_store[uuid]
+
+            # Check for XDG_RUNTIME_DIR error
+            error_msg = str(e)
+            if (
+                "XDG_RUNTIME_DIR not set" in error_msg
+                or "XDG_RUNTIME_DIR: parameter not set" in error_msg
+            ):
+                raise RuntimeError(
+                    f"Failed to execute SSH command for {uuid}: XDG_RUNTIME_DIR environment variable is not set on {hostname}. "
+                    f"Ensure the remote session has XDG_RUNTIME_DIR configured, or run processes as a logged-in user."
+                )
+
+            raise RuntimeError(f"Failed to execute SSH command for {uuid}: {e}")
+
+    def _kill_client_process(self, process_info: Dict) -> None:
+        """
+        Kill a local SSH client process.
+        This should send SIGHUP to the remote process but not as reliably
+        as killing directly.
+        """
+        try:
+            process_info["process"].signal_group(signal.SIGKILL)
+        except Exception as e:
+            self.log.debug(
+                f"Exception was raised when terminating SSH client process: {e}"
+            )
+
+    def _wait_for_process_exit_code(self, uuid: str, timeout: float) -> Optional[int]:
+        """
+        Wait for specified timeout to see if a process exit code is available.
+
+        Args:
+            uuid: Process UUID to wait for
+            timeout: Maximum time to wait in seconds
+
+        Returns:
+            Exit code if process has terminated, None if still running or not found
+        """
+        # Get process reference under lock to avoid race condition
+        with self.lock:
+            if uuid not in self.process_store:
+                return None
+            process = self.process_store[uuid]["process"]
+
+        def check_exit_status():
+            return not process.is_alive()
+
+        # Wait for process to exit
+        got_exit = wait_for(check_exit_status, expected_value=True, timeout=timeout)
+
+        if got_exit:
+            try:
+                return process.exit_code
+            except Exception as e:
+                self.log.debug(f"Exception getting exit code for {uuid}: {e}")
+                return None
+        else:
+            self.log.debug(f"Timeout waiting for exit code of process {uuid}")
+            return None
+
+    def kill_process(
+        self,
+        uuid: str,
+        timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[int]:
+        """
+        Kill a remote process and clean up all associated resources.
+
+        Sends termination signals to the remote process, waits for it to die,
+        cleans up remote metadata files, terminates the SSH client, and removes
+        the process from internal tracking. Safe to call multiple times.
+
+        Args:
+            uuid: Process UUID to terminate
+            timeout: Timeout for graceful termination in seconds
+
+        Returns:
+            Exit code of the terminated process, or None if not found or still running
+        """
+        if uuid not in self.process_store:
+            return None
+
+        process_info = self.process_store[uuid]
+
+        hostname = process_info["hostname"]
+        user = process_info["user"]
+        metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
+
+        # Read metadata to get remote PID
+        metadata = self.metadata.get(uuid, None)
+        if metadata is None or metadata.pid is None:
+            self.log.warning(
+                f"No remote PID for {uuid}, terminating SSH client. Cannot guarantee remote process termination."
+            )
+            self._kill_client_process(process_info)
+            exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+            self._cleanup_process_resources(uuid)
+            return exit_code
+
+        remote_pid = metadata.pid
+        process_dead = False
+
+        try:
+            if not self.is_process_alive(uuid):
+                self.log.info(
+                    f"Skipping killing remote process {uuid} (PID {remote_pid}). It is already dead."
+                )
+                process_dead = True
+
+            if not process_dead:
+                self.log.debug(f"Sending SIGTERM to remote PID {remote_pid}")
+                self._send_remote_signal(hostname, user, remote_pid, "TERM")
+                process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
+                if process_dead:
+                    self.log.info(
+                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGTERM signal."
+                    )
+                else:
+                    self.log.debug(
+                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGTERM signal."
+                    )
+
+            if not process_dead:
+                self.log.debug(f"Sending SIGKILL to remote PID {remote_pid}")
+                self._send_remote_signal(hostname, user, remote_pid, "KILL")
+                process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
+
+                if process_dead:
+                    self.log.info(
+                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGKILL signal."
+                    )
+                else:
+                    self.log.debug(
+                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGKILL signal."
+                    )
+
+            if not process_dead:
+                self.log.error(
+                    f"Remote process {uuid} (PID {remote_pid}) still did not terminate after SIGKILL signal."
+                )
+            else:
+                exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+                self._cleanup_remote_file(hostname, user, metadata_file)
+                self._cleanup_process_resources(uuid)
+                return exit_code
+
+        except Exception as e:
+            self.log.error(f"Error terminating remote process {uuid}: {e}")
+            return None
+
+    def _cleanup_process_resources(self, uuid: str) -> None:
+        """Remove all resources associated with a process UUID."""
+        with self.lock:
+            if uuid in self.process_store:
+                del self.process_store[uuid]
+            if uuid in self.metadata:
+                del self.metadata[uuid]
+
+    def _send_remote_signal(
+        self, hostname: str, user: str, pid: int, signal_name: str
+    ) -> None:
+        """Send signal to remote process via SSH."""
+        try:
+            user_host = f"{user}@{hostname}"
+            arguments = self._build_ssh_arguments(hostname, user_host)
+            arguments.extend(["kill", f"-{signal_name}", str(pid)])
+            self.ssh(*arguments)
+        except Exception as e:
+            self.log.debug(f"Failed to send {signal_name} to PID {pid}: {e}")
+
+    def _is_remote_process_alive(self, hostname: str, user: str, pid: int) -> bool:
+        """Check if remote process exists using kill -0."""
+        try:
+            user_host = f"{user}@{hostname}"
+            arguments = self._build_ssh_arguments(hostname, user_host)
+            arguments.extend(["kill", "-0", str(pid)])
+            self.ssh(*arguments)
+            return True
+        except Exception:
+            return False
+
+    def _cleanup_remote_file(self, hostname: str, user: str, remote_file: str) -> None:
+        """Remove remote file via SSH."""
+        try:
+            user_host = f"{user}@{hostname}"
+            arguments = self._build_ssh_arguments(hostname, user_host)
+            arguments.extend(["rm", "-f", remote_file])
+            self.ssh(*arguments)
+        except Exception:
+            pass

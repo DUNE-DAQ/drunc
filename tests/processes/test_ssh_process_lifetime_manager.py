@@ -104,15 +104,19 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
             process_name = process_names[i]
             log_file = str(log_dir / f"{process_name}.log")
             log_lines_correct = wait_for(
-                check_log_lines, True, timeout=10.0, poll_interval=1.0
+                check_log_lines, True, timeout=10.0, poll_interval=0.5
             )
             assert log_lines_correct, (
                 f"Log lines verification failed for {process_name}"
             )
 
-        print("\n=== Terminating all processes via SIGHUP ===")
+        exit_codes = {}
+
+        print("\n=== Terminating all processes ===")
         for process_uuid in process_uuids:
-            ssh_manager.terminate_process(process_uuid, timeout=10.0)
+            exit_codes[process_uuid] = ssh_manager.kill_process(
+                process_uuid, timeout=10.0
+            )
 
         dead_count = sum(
             1 for uuid in process_uuids if not ssh_manager.is_process_alive(uuid)
@@ -124,20 +128,15 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
 
         print("\n=== Verifying exit codes ===")
         for process_uuid in process_uuids:
-            exit_code = wait_for(
-                lambda: ssh_manager.get_exit_code(process_uuid),
-                expected_value=lambda x: x is not None,
-                timeout=5.0,
-                poll_interval=0.5,
-            )
+            exit_code = exit_codes[process_uuid]
             assert exit_code is not None, (
                 f"No exit code for {process_uuid} after 5s timeout"
             )
+            # 143 is the standard unhandled SIGTERM exit code
+            assert exit_code == 143, (
+                f"Unexpected exit code {exit_code} for {process_uuid}"
+            )
             print(f"Process {process_uuid}: exit code {exit_code}")
-
-        print("\n=== Cleaning up resources ===")
-        for process_uuid in process_uuids:
-            ssh_manager.cleanup_process(process_uuid)
 
         active_keys = ssh_manager.get_active_process_keys()
         assert len(active_keys) == 0, (
@@ -155,7 +154,7 @@ def test_ssh_multi_process_lifecycle_paramiko(ssh_manager_paramiko):
     Test lifecycle of 3 concurrent SSH processes using Paramiko.
 
     Executes 3 processes via SSH, verifies log output, terminates all
-    processes via SIGHUP, and confirms complete cleanup.
+    processes, and confirms complete cleanup.
     """
     execute_multi_process_lifecycle_test(ssh_manager_paramiko, Path(__file__))
 
@@ -165,6 +164,6 @@ def test_ssh_multi_process_lifecycle_shell(ssh_manager_shell):
     Test lifecycle of 3 concurrent SSH processes using shell.
 
     Executes 3 processes via SSH, verifies log output, terminates all
-    processes via SIGHUP, and confirms complete cleanup.
+    processes, and confirms complete cleanup.
     """
     execute_multi_process_lifecycle_test(ssh_manager_shell, Path(__file__))
