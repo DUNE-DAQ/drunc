@@ -45,6 +45,7 @@ class SessionManagerRichErrorTestSuite:
                 message=rich_error_details.get("message"),
                 error_details=rich_error_details.get("details"),
             )
+
         setattr(self.servicer, method_name, _stub)
 
         # Configure and start the gRPC server
@@ -79,19 +80,16 @@ def session_manager_rich_error_test_suite():
 
 
 def test_list_all_configs_rich_error(
-        session_manager_rich_error_test_suite, 
-        generic_request
-        ):
-    
+    session_manager_rich_error_test_suite, generic_request
+):
     rich_error_details = {
-            "domain": "session_manager",
-            "details": "Fake Error",
-            "message": "Unhandled error in list_all_configs",
-        }
-    
+        "domain": "SessionManager",
+        "details": "Fake Error",
+        "message": "Unhandled error in list_all_configs",
+    }
+
     session_manager_rich_error_test_suite.setup_server_and_client(
-        method_name="list_all_configs",
-        rich_error_details= rich_error_details
+        method_name="list_all_configs", rich_error_details=rich_error_details
     )
 
     with pytest.raises(grpc.RpcError) as exc:
@@ -116,7 +114,6 @@ def test_list_all_configs_rich_error(
     # Unpack the ErrorInfo
     error_info = error_details_pb2.ErrorInfo()
     found_status.details[0].Unpack(error_info)
-    assert error_info.domain == "drunc.session_manager"
+    assert error_info.domain == "drunc.SessionManager"
     assert error_info.reason == rich_error_details["message"]
     assert error_info.metadata["error"] == rich_error_details["details"]
-

@@ -180,7 +180,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
 
             respond_with_rich_error_status(
                 context,
-                domain="session_manager",
+                domain="SessionManager",
                 message="Unhandled error in list_all_configs",
-                error_details=f"{str(e)}",
+                error_details=str(e),
             )

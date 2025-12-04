@@ -14,38 +14,6 @@ from grpc_status import rpc_status
 from drunc.exceptions import DruncCommandException, DruncException
 
 
-def respond_with_rich_error_status(
-    context, domain: str, message: str, error_details: str
-):
-    """
-    Abort the RPC with INTERNAL error containing ErrorInfo.
-
-    Args:
-        domain (str): domain or subsystem where the error occurred. This will be
-            prefixed with "drunc.". Examples: session_manager, process_manager.
-        message (str): Quick description of the error. Used for both `Status.message`
-            and as the `ErrorInfo.reason`.
-        error_details (str): Additional error context.
-    Returns:
-        status_pb2.Status: A gRPC rich error status object.
-    """
-    error_info = error_details_pb2.ErrorInfo(
-        reason=message,
-        domain=f"drunc.{domain}",
-        metadata={"error": error_details},
-    )
-    detail_any = any_pb2.Any()
-    detail_any.Pack(error_info)
-
-    rich_status = status_pb2.Status(
-        code=code_pb2.INTERNAL,
-        message=message,
-        details=[detail_any],
-    )
-
-    context.abort_with_status(rpc_status.to_status(rich_status))
-
-
 class UnpackingError(DruncCommandException):
     def __init__(self, data, format):
         self.data = data
@@ -345,15 +313,36 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     )
 
 
-def grpc_proto_to_dict(proto_message: Message) -> dict:
+def respond_with_rich_error_status(
+    context, domain: str, message: str, error_details: str
+):
     """
-    Converts a gRPC Protobuf message object to a Python dictionary.
+    Abort the RPC with INTERNAL error containing ErrorInfo.
+
+    Args:
+        domain (str): domain or subsystem where the error occurred. This will be
+            prefixed with "drunc.". Examples: SessionManager, ProcessManager.
+        message (str): Quick description of the error. Used for both `Status.message`
+            and as the `ErrorInfo.reason`.
+        error_details (str): Additional error context.
+    Returns:
+        status_pb2.Status: A gRPC rich error status object.
     """
-    return json_format.MessageToDict(
-        proto_message,
-        preserving_proto_field_name=True,
-        # Removed: including_default_value_fields=True
+    error_info = error_details_pb2.ErrorInfo(
+        reason=message,
+        domain=f"drunc.{domain}",
+        metadata={"error": error_details},
     )
+    detail_any = any_pb2.Any()
+    detail_any.Pack(error_info)
+
+    rich_status = status_pb2.Status(
+        code=code_pb2.INTERNAL,
+        message=message,
+        details=[detail_any],
+    )
+
+    context.abort_with_status(rpc_status.to_status(rich_status))
 
 
 def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:

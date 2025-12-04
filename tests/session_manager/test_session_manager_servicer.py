@@ -9,6 +9,7 @@ from druncschema.session_manager_pb2 import (
     AllConfigKeys,
     ConfigKey,
 )
+from grpc import StatusCode
 
 
 def test_describe(
@@ -134,3 +135,26 @@ def test_list_all_configs_files_parsed(
             assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
             assert len(response.config_keys) == 6
             assert response.config_keys == expected_config_keys
+
+
+def test_list_all_configs_rich_status(
+    session_manager, mock_request, mock_context, mock_logger, monkeypatch
+):
+    """
+    Test when an exception occurs while listing all configs to check rich status handling.
+    """
+    monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
+
+    with patch("pathlib.Path.rglob", side_effect=Exception("Fake Error")):
+        session_manager.list_all_configs(mock_request, mock_context)
+
+        mock_context.abort_with_status.assert_called()
+
+        # Check the rich status passed to abort_with_status
+        call_args = mock_context.abort_with_status.call_args[0]
+        rich_status = call_args[0]
+
+        # Check that the status code and message are what you expect
+        assert rich_status.code == StatusCode.INTERNAL
+        # Check that the details contain the expected error message
+        assert "Unhandled error in list_all_configs" in rich_status.details
