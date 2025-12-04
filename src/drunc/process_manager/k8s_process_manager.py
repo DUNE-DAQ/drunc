@@ -189,8 +189,7 @@ class K8sProcessManager(ProcessManager):
 
         # Service
         service = settings.get("service", {})
-        self.service_port = service.get("port", 80)
-
+        self.headless_discovery_port = service.get("headless_discovery_port", 80)
         # Pod management
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 30)
@@ -506,7 +505,7 @@ class K8sProcessManager(ProcessManager):
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
-                        port=self.service_port, target_port=self.service_port
+                        port=self.headless_discovery_port, target_port=self.headless_discovery_port
                     )
                 ],
             ),

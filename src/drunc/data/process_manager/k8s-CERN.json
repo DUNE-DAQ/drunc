@@ -32,7 +32,7 @@
             "name": "local-connection-server"
         },
         "service": {
-            "port": 80
+            "headless_discovery_port": 80
         },
         "pod_management": {
             "kill_timeout": 30,
