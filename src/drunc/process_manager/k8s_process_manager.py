@@ -857,7 +857,7 @@ class K8sProcessManager(ProcessManager):
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
-            command=["/bin/sh", "-c"],
+            command=["/bin/bash", "-c"],
             args=[final_command_args],
             env=container_env,
             lifecycle=lifecycle_hook,
