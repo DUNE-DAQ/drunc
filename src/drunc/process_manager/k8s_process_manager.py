@@ -429,7 +429,7 @@ class K8sProcessManager(ProcessManager):
         self._add_creator_label(session, "namespace")
         self.managed_sessions.add(session)
 
-    def _ensure_namespace_exists(self, session) -> None:
+    def _prepare_namespace(self, session) -> None:
         """Ensures a Kubernetes namespace exists, handling edge cases like terminating namespaces."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
@@ -1490,7 +1490,7 @@ class K8sProcessManager(ProcessManager):
         self._run_pre_boot_checks(session, podname, boot_request)
 
         # Resource Creation (Namespace, Pod, Labels)
-        self._ensure_namespace_exists(session)
+        self._prepare_namespace(session)
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
