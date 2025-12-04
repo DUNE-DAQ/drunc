@@ -505,7 +505,8 @@ class K8sProcessManager(ProcessManager):
                 selector={"app": podname},
                 ports=[
                     client.V1ServicePort(
-                        port=self.headless_discovery_port, target_port=self.headless_discovery_port
+                        port=self.headless_discovery_port,
+                        target_port=self.headless_discovery_port,
                     )
                 ],
             ),
@@ -719,14 +720,12 @@ class K8sProcessManager(ProcessManager):
         boot_request: BootRequest,
         lcs_port: int | None,
         container_volume_mounts: list[client.V1VolumeMount],
+        tree_labels: dict[str, str],
     ) -> client.V1Container:
         """Builds the primary V1Container manifest, including command and preStop hook."""
 
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
-        tree_labels = self._get_tree_labels(
-            boot_request.process_description.metadata.tree_id, podname
-        )
 
         # This logic correctly prepends 'exec' to the C++ application command.
         command_parts = []
@@ -1061,13 +1060,12 @@ class K8sProcessManager(ProcessManager):
         else:  # service_type == "Headless"
             self._create_headless_service(podname, session, pod_uid)
 
-    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
+    def _create_pod(
+        self, podname, session, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> None:
         """Constructs and creates a Kubernetes Pod manifest and its associated service."""
         try:
             lcs_port = None
-            tree_id = boot_request.process_description.metadata.tree_id
-            tree_labels = self._get_tree_labels(tree_id, podname)
-
             # Early Port Extraction and Class Variable Setup for LCS
             if self.connection_server_name in tree_labels["role." + self.drunc_label]:
                 lcs_port = self._extract_port_from_cmd(boot_request)
@@ -1091,6 +1089,7 @@ class K8sProcessManager(ProcessManager):
                 boot_request,
                 lcs_port,
                 container_volume_mounts,
+                tree_labels,
             )
 
             # Determine service type and hostNetwork requirement
@@ -1495,7 +1494,7 @@ class K8sProcessManager(ProcessManager):
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        self._create_pod(podname, session, boot_request)
+        self._create_pod(podname, session, boot_request, tree_labels)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
