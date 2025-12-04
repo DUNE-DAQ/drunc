@@ -749,7 +749,7 @@ class K8sProcessManager(ProcessManager):
                 modified_args = []
                 for arg in e_and_a.args:
                     modified_arg = re.sub(
-                        r"([a-zA-Z]+://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
+                        r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
                     )
                     if modified_arg != arg:
                         self.log.debug(
