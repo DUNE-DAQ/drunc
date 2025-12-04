@@ -1,6 +1,5 @@
 import concurrent
 import getpass
-import logging
 import os
 import signal
 import sys
@@ -74,21 +73,8 @@ def run_pm(
         app_log_path=log_path,
     )
 
-    # Manually add in file handler to the logger, as we want the logger to first
-    # log the validation of the PM Config which is necessary to generate the
-    # log path.
-
-    # Note from #690: previously, this logger was directly added to the 'drunc' logger.
-    # We want to move away from this and ensure that the handlers are instead in the
-    # drunc.[first_child] loggers. See #691
-    #! We need to change this!!!
-
-    drunc_log = logging.getLogger("drunc")
-    print(f"Log path: {log_path}")
-    add_file_handler(drunc_log, use_parent_handlers=True, path=log_path)
-
-    #! Well we should check what we want coming out of this, as having a full log of the output might come in handy? not entirely sure.
-    # chat with pawel about this
+    # Logger has been added to process_manager, so everything will be logged
+    add_file_handler(log, use_parent_handlers=True, path=log_path)
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
