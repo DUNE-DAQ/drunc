@@ -92,8 +92,7 @@ def collect_apps(
 
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
-        # TODO: Revert this before merge
-        log.critical(f"Considering segment {sub_segment_obj.id}")
+        log.debug(f"Considering segment {sub_segment_obj.id}")
         if confmodel_dal.component_disabled(
             db._obj, session_obj.id, sub_segment_obj.id
         ):

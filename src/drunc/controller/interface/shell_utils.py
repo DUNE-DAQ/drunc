@@ -46,7 +46,6 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import format_name_for_cli, get_logger
 
-# root_logger = get_logger("controller") #! This needs heavy changing (had rich handler before)
 log = get_logger("controller.interface.shell_utils")
 
 

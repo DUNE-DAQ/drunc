@@ -12,20 +12,6 @@ from drunc.utils.shell_utils import (
 )
 from drunc.utils.utils import resolve_localhost_to_hostname
 
-# what is this?
-# when you have click shell, you have a context which is a storage area where you can contain things like variables, passing things between shells, etc
-
-# in drunc, 2 kinds of context
-# click, operatioaln
-# this is interface to application context
-
-# pm, controller which defines everything that we use
-
-# click context is ctx
-# class based context is obj
-
-# controller.py is interface between the two
-
 
 class ControllerContext(ShellContext):  # boilerplatefest
     def __init__(self):
