@@ -32,6 +32,10 @@ class ProcessWatcherThread(threading.Thread):
         self,
         uuid: str,
         process: sh.RunningCommand,
+        manager: "SSHProcessLifetimeManagerShell",
+        hostname: str,
+        user: str,
+        metadata_file: str,
         on_exit: Optional[Callable[[str, Optional[int], Optional[Exception]], None]],
         logger: logging.Logger,
     ):
@@ -41,19 +45,53 @@ class ProcessWatcherThread(threading.Thread):
         Args:
             uuid: Process UUID to monitor
             process: sh.RunningCommand instance to monitor
+            manager: Parent manager instance for metadata updates
+            hostname: Remote hostname for metadata retrieval
+            user: Remote user for metadata retrieval
+            metadata_file: Path to metadata file on remote host
             on_exit: Callback function invoked on process exit
             logger: Logger instance for output
         """
         super().__init__(name=f"ShellWatcher-{uuid}", daemon=True)
         self.uuid = uuid
         self.process = process
+        self.manager = manager
+        self.hostname = hostname
+        self.user = user
+        self.metadata_file = metadata_file
         self.on_exit = on_exit
         self.logger = logger
 
     def run(self):
         """
-        Monitor process and invoke callback on exit.
+        Monitor process, read metadata asynchronously, and invoke callback on exit.
         """
+        # Attempt to read metadata without blocking startup
+        try:
+            metadata = self.manager.read_process_metadata(
+                self.uuid,
+                self.metadata_file,
+                self.hostname,
+                self.user,
+            )
+            if metadata:
+                with self.manager.lock:
+                    self.manager.metadata[self.uuid] = metadata
+                self.logger.debug(f"Metadata retrieved for process {self.uuid}")
+            else:
+                # if metadata could not be read, we won't be able to kill remote processes
+                # directly
+                self.logger.warning(
+                    f"Failed to retrieve metadata for process {self.uuid}. "
+                    f"Lifecycle management will be limited."
+                )
+        except Exception as e:
+            self.logger.warning(
+                f"Exception reading metadata for process {self.uuid}: {e}. "
+                f"Lifecycle management will be limited."
+            )
+
+        # Continue with process monitoring
         exception = None
         exit_code = None
 
@@ -67,7 +105,6 @@ class ProcessWatcherThread(threading.Thread):
             # Process exited with non-zero code
             exception = e
             exit_code = e.exit_code
-            # self.logger.error(f"Shell process {self.uuid} error: {e}")
             self.logger.debug(f"Shell process {self.uuid} error: {e}")
 
         except Exception as e:
@@ -199,20 +236,34 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             env_vars=env_vars,
         )
 
-    def _start_process_watcher(self, uuid: str, process: sh.RunningCommand) -> None:
+    def _start_process_watcher(
+        self,
+        uuid: str,
+        process: sh.RunningCommand,
+        hostname: str,
+        user: str,
+        metadata_file: str,
+    ) -> None:
         """
         Start a monitoring thread for a process.
 
         This thread waits for the process to complete, captures the exit code,
-        and invokes the exit callback if provided.
+        retrieves metadata asynchronously, and invokes the exit callback if provided.
 
         Args:
             uuid: Process UUID
             process: sh.RunningCommand to monitor
+            hostname: Remote hostname for metadata retrieval
+            user: Remote user for metadata retrieval
+            metadata_file: Path to metadata file on remote host
         """
         watcher = ProcessWatcherThread(
             uuid=uuid,
             process=process,
+            manager=self,
+            hostname=hostname,
+            user=user,
+            metadata_file=metadata_file,
             on_exit=self.on_process_exit,
             logger=self.log,
         )
@@ -470,51 +521,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.error(f"SSH validation failed for {user}@{host}: {e}")
             raise RuntimeError(f"SSH connection validation failed: {e}")
 
-    def write_process_metadata(
-        self, uuid: str, metadata: ProcessMetadata, metadata_file: str
-    ) -> None:
-        """
-        Write process metadata to remote JSON file.
-
-        Args:
-            uuid: Process UUID
-            metadata: ProcessMetadata instance to write
-            metadata_file: Remote path for metadata file
-        """
-        try:
-            hostname = metadata.hostname
-            user = metadata.user
-
-            if not hostname or not user:
-                self.log.warning(
-                    f"Cannot write metadata for {uuid}: missing hostname or user"
-                )
-                return
-
-            # Serialise metadata to JSON
-            json_content = metadata.to_json()
-
-            # Escape JSON content for shell command
-            json_escaped = json_content.replace("'", "'\\''")
-
-            # Build user@host string
-            user_host = f"{user}@{hostname}"
-
-            # Build SSH arguments
-            arguments = self._build_ssh_arguments(hostname, user_host)
-
-            # Write JSON content to remote file using echo
-            remote_cmd = f"echo '{json_escaped}' > {metadata_file}"
-            arguments.append(remote_cmd)
-
-            # Execute SSH command
-            self.ssh(*arguments)
-
-            self.log.debug(f"Wrote metadata for {uuid} to {metadata_file}")
-
-        except Exception as e:
-            self.log.error(f"Failed to write metadata for {uuid}: {e}")
-
     def read_process_metadata(
         self,
         uuid: str,
@@ -524,49 +530,51 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_READING_METADATA,
     ) -> Optional[ProcessMetadata]:
         """
-        Read process metadata from remote JSON file with retry logic.
+        Read process metadata from remote JSON file with a single SSH call.
+
+        Uses a remote-side wait loop to avoid multiple SSH round-trips. The remote
+        command polls for file existence and reads it once available, all within
+        a single SSH session.
 
         Args:
-            uuid: Process UUID
-            metadata_file: Remote path to metadata file
-            hostname: Target hostname
-            user: SSH username
-            timeout: Maximum time to wait for metadata file in seconds
+            uuid: Process UUID for identification in logs
+            metadata_file: Absolute path to metadata file on remote host
+            hostname: Target hostname for SSH connection
+            user: SSH username for authentication
+            timeout: Maximum time in seconds to wait for metadata file availability
 
         Returns:
             ProcessMetadata instance if file exists and is valid, None otherwise
         """
+        try:
+            # Build user@host string for SSH connection
+            user_host = f"{user}@{hostname}"
 
-        def attempt_read():
-            try:
-                # Build user@host string
-                user_host = f"{user}@{hostname}"
+            # Build SSH arguments including connection parameters
+            arguments = self._build_ssh_arguments(hostname, user_host)
 
-                # Build SSH arguments
-                arguments = self._build_ssh_arguments(hostname, user_host)
-                arguments.extend(["cat", metadata_file])
+            # Remote command: wait for file to exist, then read it
+            # Polls every 50ms, times out after specified duration
+            remote_command = (
+                f"timeout {timeout} bash -c '"
+                f"while [ ! -f {metadata_file} ]; do sleep 0.05; done; "
+                f"cat {metadata_file}"
+                f"'"
+            )
+            arguments.append(remote_command)
 
-                # Execute SSH command to read file
-                result = self.ssh(*arguments)
-                json_content = str(result).strip()
+            # Execute SSH command to wait for and read file (single round-trip)
+            result = self.ssh(*arguments)
+            json_content = str(result).strip()
 
-                # Parse JSON and create metadata object
-                metadata = ProcessMetadata.from_json(json_content)
+            # Parse JSON content and instantiate metadata object
+            metadata = ProcessMetadata.from_json(json_content)
 
-                self.log.debug(f"Read metadata for {uuid} from {metadata_file}")
-                return metadata
+            return metadata
 
-            except Exception as e:
-                self.log.debug(f"Failed to read metadata for {uuid}: {e}")
-                return None
-
-        # Use wait_for to retry reading metadata until timeout
-        return wait_for(
-            attempt_read,
-            expected_value=lambda x: x is not None,
-            timeout=timeout,
-            poll_interval=0.5,
-        )
+        except Exception as e:
+            self.log.debug(f"Failed to read metadata for {uuid}: {e}")
+            return None
 
     def _execute_ssh_command(
         self,
@@ -616,7 +624,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 _new_session=True,
                 _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
             )
-
             # Store process info
             with self.lock:
                 self.process_store[uuid] = {
@@ -624,16 +631,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                     "hostname": hostname,
                     "user": user,
                 }
-                self.metadata[uuid] = self.read_process_metadata(
-                    uuid, metadata_file, hostname, user
-                )
-                if self.metadata[uuid] is None:
-                    # if we don't have metadata we won't be able to send signals directly to the remote process
-                    self.log.warning(
-                        f"Failed to read metadata for process {uuid} within timeout. Lifecycle management will be limited."
-                    )
+                # Metadata will be populated asynchronously by watcher thread
+                self.metadata[uuid] = None
 
-            self._start_process_watcher(uuid, process)
+            self._start_process_watcher(uuid, process, hostname, user, metadata_file)
             self.log.debug(f"SSH command started for {uuid}")
         except Exception as e:
             with self.lock:

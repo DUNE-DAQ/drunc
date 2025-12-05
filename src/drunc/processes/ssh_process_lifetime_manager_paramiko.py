@@ -672,60 +672,6 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
             if client:
                 client.close()
 
-    def write_process_metadata(
-        self, uuid: str, metadata: ProcessMetadata, metadata_file: str
-    ) -> None:
-        """
-        Write process metadata to remote JSON file.
-
-        Args:
-            uuid: Process UUID
-            metadata: ProcessMetadata instance to write
-            metadata_file: Remote path for metadata file (may contain shell variables)
-        """
-        try:
-            hostname = metadata.hostname
-            user = metadata.user
-
-            if not hostname or not user:
-                self.log.warning(
-                    f"Cannot write metadata for {uuid}: missing hostname or user"
-                )
-                return
-
-            # Create temporary SSH connection for metadata write
-            client = self._create_ssh_client(hostname, user, enable_agent=True)
-            if client is None:
-                self.log.error(f"Failed to connect for metadata write: {uuid}")
-                return
-
-            try:
-                # Expand shell variables in path since SFTP doesn't do this
-                stdin, stdout, stderr = client.exec_command(
-                    f"echo {metadata_file}", timeout=5.0
-                )
-                expanded_path = stdout.read().decode("utf-8").strip()
-
-                # Use SFTP to write metadata file with expanded path
-                sftp = client.open_sftp()
-
-                # Serialise metadata to JSON
-                json_content = metadata.to_json()
-
-                # Write to remote file
-                with sftp.file(expanded_path, "w") as f:
-                    f.write(json_content)
-
-                sftp.close()
-
-                self.log.debug(f"Wrote metadata for {uuid} to {expanded_path}")
-
-            finally:
-                client.close()
-
-        except Exception as e:
-            self.log.error(f"Failed to write metadata for {uuid}: {e}")
-
     def read_process_metadata(
         self,
         uuid: str,
