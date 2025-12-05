@@ -344,10 +344,12 @@ def unified_shell(
             unified_shell_log.warning(
                 f"[yellow]Port {connectivity_service_port} is in use! Use [green]daqconf_set_connectivity_service_port[/green] to set a different port[/yellow]"
             )
+            os._exit(1)
         if controller_port in used_nodeports or is_port_in_use(controller_port):
             unified_shell_log.warning(
                 f"[yellow]Port {controller_port} is in use! Use [green]daqconf_set_rc_controller_port[/green] to set a different port[/yellow]"
             )
+            os._exit(1)
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
     unified_shell_log.debug("Defining the pseudo controller to get its FSM commands")
