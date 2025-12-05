@@ -22,6 +22,8 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    SurrenderControlRequest,
+    SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
 )
@@ -471,6 +473,34 @@ class gRPCChildNode(ChildNode):
                 )
                 response = self._attempt_reconnection(
                     lambda: self.stub.take_control(request)
+                )
+
+        return response
+
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
+        request = SurrenderControlRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.surrender_control(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during surrender_control, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.surrender_control(request)
                 )
 
         return response

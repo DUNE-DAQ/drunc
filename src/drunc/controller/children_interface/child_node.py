@@ -11,6 +11,7 @@ from druncschema.controller_pb2 import (
     IncludeResponse,
     RecomputeStatusResponse,
     StatusResponse,
+    SurrenderControlResponse,
     TakeControlResponse,
 )
 from druncschema.request_response_pb2 import Response
@@ -138,4 +139,13 @@ class ChildNode(ABC):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
+        pass
+
+    @abstractmethod
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
         pass

@@ -22,6 +22,8 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    SurrenderControlRequest,
+    SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
 )
@@ -313,16 +315,26 @@ class ControllerDriver:
 
         return response
 
-    @OLD_pack_empty_addressed_command
     def surrender_control(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "surrender_control",
-            data=addressed_command,
-            outformat=PlainText,
-            timeout=timeout,
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> SurrenderControlResponse:
+        request = SurrenderControlRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.surrender_control(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     @OLD_pack_empty_addressed_command
     def who_is_in_charge(

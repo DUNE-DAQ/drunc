@@ -22,6 +22,7 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     Status,
     StatusResponse,
+    SurrenderControlResponse,
     TakeControlResponse,
 )
 from druncschema.description_pb2 import Description
@@ -709,6 +710,18 @@ class RESTAPIChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
         return TakeControlResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
+        return SurrenderControlResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
