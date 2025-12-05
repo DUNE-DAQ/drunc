@@ -22,6 +22,8 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    TakeControlRequest,
+    TakeControlResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
@@ -437,10 +439,38 @@ class gRPCChildNode(ChildNode):
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
                 self.log.info(
-                    f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
+                    f"Connection to {self.name} at {self.uri} failed during recompute_status, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
                     lambda: self.stub.recompute_status(request)
+                )
+
+        return response
+
+    def take_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> TakeControlResponse:
+        request = TakeControlRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.take_control(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during take_control, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.take_control(request)
                 )
 
         return response

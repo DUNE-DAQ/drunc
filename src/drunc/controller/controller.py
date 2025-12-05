@@ -29,6 +29,8 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    TakeControlRequest,
+    TakeControlResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
@@ -1348,48 +1350,64 @@ class Controller(ControllerServicer):
     ############# Actor commands #############
     ##########################################
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @OLD_unpack_addressed_command_to()  # 3rd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @publish_command_time
     def take_control(
         self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        resp = ""
-        if execute_on_self:
-            if self.actor.take_control(token) != 0:
-                resp += f"Could not take control on {self.name}"
-            else:
-                resp += f"{token.user_name} took control on {self.name}"
-
-        response_children = self.OLD_propagate_to_children(
-            "take_control",
-            addressed_commands,
-            token,
+        request: TakeControlRequest,
+        context: ServicerContext,
+    ) -> TakeControlResponse:
+        response = TakeControlResponse(
+            token=None,
+            name=self.name,
+            text="",
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.take_control(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            if self.actor.take_control(request.token) != 0:
+                response.text += f"Could not take control on {self.name}"
+            else:
+                response.text += (
+                    f"{request.token.user_name} took control on {self.name}"
+                )
+
         if any(
             cr.flag
             not in [
                 ResponseFlag.EXECUTED_SUCCESSFULLY,
                 ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             ]
-            for cr in response_children
+            for cr in child_responses
         ):
-            resp += ", could not take control for all children"
+            response.text += ", could not take control for all children"
 
-        return Response(
-            name=self.name,
-            token=token,
-            data=pack_to_any(PlainText(text=resp)) if resp else None,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=response_children,
-        )
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step

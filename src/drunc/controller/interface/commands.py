@@ -210,7 +210,7 @@ def take_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    ).data
+    )
 
 
 @click.command("surrender-control")
@@ -240,7 +240,7 @@ def surrender_control(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    ).data
+    )
 
 
 @click.command("who-am-i")
@@ -273,18 +273,15 @@ def who_is_in_charge(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    who = (
-        obj.get_driver("controller")
-        .who_is_in_charge(
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-        )
-        .data
+    who = obj.get_driver("controller").who_is_in_charge(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     )
     if who:
+        # TODO: create a table of who is in charge
         log = get_logger(**logger_params)
-        log.info(who.text)  ## TODO create a table of who is in charge
+        log.info(who.text)
 
 
 @click.command("include")

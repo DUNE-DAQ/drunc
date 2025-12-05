@@ -22,6 +22,7 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     Status,
     StatusResponse,
+    TakeControlResponse,
 )
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -696,6 +697,18 @@ class RESTAPIChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
         return RecomputeStatusResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def take_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> TakeControlResponse:
+        return TakeControlResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
