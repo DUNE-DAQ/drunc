@@ -54,7 +54,12 @@ from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
-from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
+from drunc.unified_shell.shell_utils import (
+    generate_fsm_sequence_command,
+    get_controller_and_ports,
+    get_used_nodeports,
+    is_port_in_use,
+)
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -323,6 +328,26 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
+    if "local" in ctx.obj.configuration_id:
+        controller_name, controller_port, connectivity_service_port = (
+            get_controller_and_ports(session_dal, unified_shell_log)
+        )
+
+        used_nodeports = set()
+        if get_pm_type_from_name(process_manager) == ProcessManagerTypes.K8s:
+            used_nodeports = get_used_nodeports()
+            unified_shell_log.debug(f"[green]Used nodeports:[/green] {used_nodeports}")
+
+        if connectivity_service_port in used_nodeports or is_port_in_use(
+            connectivity_service_port
+        ):
+            unified_shell_log.warning(
+                f"[yellow]Port {connectivity_service_port} is in use! Use [green]daqconf_set_connectivity_service_port[/green] to set a different port[/yellow]"
+            )
+        if controller_port in used_nodeports or is_port_in_use(controller_port):
+            unified_shell_log.warning(
+                f"[yellow]Port {controller_port} is in use! Use [green]daqconf_set_rc_controller_port[/green] to set a different port[/yellow]"
+            )
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
     unified_shell_log.debug("Defining the pseudo controller to get its FSM commands")

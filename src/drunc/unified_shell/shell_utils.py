@@ -1,3 +1,5 @@
+import socket
+import sys
 from functools import partial
 
 import click
@@ -161,3 +163,66 @@ def generate_fsm_sequence_command(
     )(cmd)
 
     return cmd, format_name_for_cli(sequence.id)
+
+
+def get_controller_and_ports(session_dal, log):
+    """
+    Returns (controller_name, controller_port, connectivity_service_port)
+    after validating that the controller exposes at least one service.
+    Exits with code 1 on fatal config problems.
+    """
+    controller_dal = session_dal.segment.controller
+    controller_name = controller_dal.id
+
+    services = getattr(controller_dal, "exposes_service", [])
+    if not services:
+        log.error(f"[red]Controller {controller_name} does not expose a service[/red]")
+        sys.exit(1)
+
+    if len(services) > 1:
+        log.warning(
+            f"[yellow]Controller {controller_name} exposes multiple services, "
+            "using the first one[/yellow]"
+        )
+
+    controller_port = services[0].port
+    connectivity_service_port = session_dal.connectivity_service.service.port
+
+    return controller_name, controller_port, connectivity_service_port
+
+
+def get_used_nodeports():
+    """
+    Returns a set of all NodePorts used by Services in the entire cluster.
+    """
+    from kubernetes import client, config
+
+    # Adjust to load_incluster_config() if this runs inside the cluster
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+
+    used_nodeports = {
+        port.node_port
+        for svc in v1.list_service_for_all_namespaces().items
+        if svc.spec and svc.spec.ports
+        for port in svc.spec.ports
+        if port.node_port is not None
+    }
+
+    return used_nodeports
+
+
+def is_port_in_use(port: int, host: str = "0.0.0.0") -> bool:
+    """
+    Return True if the TCP port is in use on this machine.
+    Works on Linux, macOS, Windows.
+
+    Logic: If bind() fails → the port is already in use.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+        except OSError:
+            return True  # bind failed → already in use
+    return False  # bind succeeded → port is free
