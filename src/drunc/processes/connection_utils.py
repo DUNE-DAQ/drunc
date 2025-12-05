@@ -7,6 +7,7 @@ def wait_for(
     expected_value: Any,
     timeout: float = 10.0,
     poll_interval: float = 0.1,
+    logger: Optional[Any] = None,
 ) -> Optional[Any]:
     """
     Wait for a condition to return an expected value within a timeout period.
@@ -53,5 +54,10 @@ def wait_for(
                 return last_value
 
         time.sleep(poll_interval)
+        if logger is not None:
+            logger.debug(
+                f"Waiting for condition: got {last_value}, "
+                f"expecting {expected_value}. Elapsed time: {time.time() - start_time:.2f}s"
+            )
 
     return None

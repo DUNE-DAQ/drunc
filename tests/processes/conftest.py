@@ -140,6 +140,9 @@ def ssh_manager_shell() -> Generator[SSHProcessLifetimeManagerShell, None, None]
     Yields:
         SSHProcessLifetimeManagerShell: Configured manager with logging
     """
+    logging.getLogger("sh.command").setLevel(logging.WARNING)
+    logging.getLogger("sh.stream_bufferer").setLevel(logging.WARNING)
+    logging.getLogger("sh.streamreader").setLevel(logging.WARNING)
     logger = logging.getLogger("test_ssh_shell")
     logger.setLevel(logging.DEBUG)
     console_handler = logging.StreamHandler()

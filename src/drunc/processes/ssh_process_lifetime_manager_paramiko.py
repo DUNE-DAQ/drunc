@@ -67,6 +67,7 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         # Thread-safe locks
         self.locks: Dict[str, threading.Lock] = {}
         self.global_lock = threading.Lock()
+        self.issued_GSS_API_warning = False
 
     @staticmethod
     def get_metadata_file_path(uuid: str) -> str:
@@ -236,9 +237,11 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                     connect_kwargs["gss_kex"] = True
                     connect_kwargs["gss_deleg_creds"] = True
                 else:
-                    self.log.warning(
-                        "GSS-API authentication requested but not supported"
-                    )
+                    if not self.issued_GSS_API_warning:
+                        self.log.warning(
+                            "GSS-API authentication requested but not supported"
+                        )
+                        self.issued_GSS_API_warning = True
                 connect_kwargs["allow_agent"] = enable_agent
                 connect_kwargs["look_for_keys"] = enable_agent
                 self._add_identity_file(connect_kwargs, identity_files)
@@ -350,16 +353,15 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
 
         channel = self.channels[uuid]
         channel_alive = not channel.exit_status_ready()
-        client = self.connections.get(uuid, None)
-        if client is None:
-            self.log.debug(f"No SSH client found for UUID {uuid} while checking alive.")
-            return channel_alive
+
         metadata: ProcessMetadata = self.metadata.get(uuid, None)
         if metadata is None:
-            self.log.debug(f"No metadata found for UUID {uuid} while checking alive.")
+            self.log.debug(f"No metadata found for UUID {uuid} whilst checking alive.")
             return channel_alive
 
-        remote_process_alive = self._is_remote_process_alive(client, metadata.pid)
+        remote_process_alive = self._is_remote_process_alive(
+            metadata.hostname, metadata.user, metadata.pid
+        )
         return channel_alive and remote_process_alive
 
     def pop_early_exit_code(self, uuid: str) -> Optional[int]:
@@ -497,7 +499,14 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         self.watchers.clear()
         return process_exit_codes
 
-    def _start_process_watcher(self, uuid: str, channel: paramiko.Channel) -> None:
+    def _start_process_watcher(
+        self,
+        uuid: str,
+        channel: paramiko.Channel,
+        metadata_file: str,
+        hostname: str,
+        user: str,
+    ) -> None:
         """
         Start a monitoring thread for a channel.
 
@@ -513,6 +522,14 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         def watch_process():
             exception = None
             try:
+                self.metadata[uuid] = self.read_process_metadata(
+                    uuid, metadata_file, hostname, user
+                )
+                if self.metadata[uuid] is None:
+                    # if we don't have metadata we won't be able to send signals directly to the remote process
+                    self.log.warning(
+                        f"Failed to read metadata for process {uuid} within timeout. Lifecycle management will be limited."
+                    )
                 # Read output for real-time logging
                 # Most output goes to log file, but we capture SSH-level messages
                 while not channel.exit_status_ready():
@@ -772,7 +789,7 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
             )
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc ; "
-                f"{{ {command} ; }} &> {log_file} & PID=$! ; "
+                f"{command} &> {log_file} & PID=$! ; "
                 f'echo \'{{"pid": \'$PID\', "hostname": "{hostname}", "user": "{user}", "started_at": \'$(date +%s)\'}}\'  > {metadata_file} ; '
                 f"wait $PID"
             )
@@ -791,15 +808,7 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                 self.stdout_buffers[uuid] = []
                 self.stderr_buffers[uuid] = []
 
-            self._start_process_watcher(uuid, channel)
-            self.metadata[uuid] = self.read_process_metadata(
-                uuid, metadata_file, hostname, user
-            )
-            if self.metadata[uuid] is None:
-                # if we don't have metadata we won't be able to send signals directly to the remote process
-                self.log.warning(
-                    f"Failed to read metadata for process {uuid} within timeout. Lifecycle management will be limited."
-                )
+            self._start_process_watcher(uuid, channel, metadata_file, hostname, user)
             self.log.debug(f"SSH command started for {uuid}")
             return channel
 
@@ -821,7 +830,6 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
 
     def _kill_process_channel(self, uuid: str, channel: paramiko.Channel) -> None:
         """Attempt to terminate remote process by killing the SSH session. Remote process will recieve SIGHUP."""
-        self.log.warning(f"No remote PID for {uuid}, closing SSH connection")
         try:
             if channel:
                 channel.close()
@@ -921,16 +929,16 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                     process_dead = True
 
                 if not process_dead:
-                    self.log.debug(f"Sending SIGTERM to remote PID {remote_pid}")
-                    self._send_remote_signal(signal_client, remote_pid, "TERM")
+                    self.log.debug(f"Sending SIGQUIT to remote PID {remote_pid}")
+                    self._send_remote_signal(signal_client, remote_pid, "QUIT")
                     process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
                     if process_dead:
                         self.log.info(
-                            f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGTERM signal."
+                            f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGQUIT signal."
                         )
                     else:
                         self.log.debug(
-                            f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGTERM signal."
+                            f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGQUIT signal."
                         )
 
                 if not process_dead:
@@ -986,12 +994,36 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         except Exception as e:
             self.log.debug(f"Failed to send {signal_name} to PID {pid}: {e}")
 
-    def _is_remote_process_alive(self, client: paramiko.SSHClient, pid: int) -> bool:
-        """Check if remote process exists using kill -0."""
+    def _is_remote_process_alive(self, hostname: str, user: str, pid: int) -> bool:
+        """
+        Check if remote process exists via /proc filesystem.
+        Creates an independent SSH connection for the check to avoid
+        interfering with the main process connection.
+
+        Args:
+            hostname: Remote hostname
+            user: SSH username
+            pid: Process ID to check
+
+        Returns:
+            True if process exists, False otherwise
+        """
         try:
-            stdin, stdout, stderr = client.exec_command(f"kill -0 {pid}", timeout=5.0)
-            return stdout.channel.recv_exit_status() == 0
-        except Exception:
+            # Create independent SSH connection for process check
+            check_client = self._create_ssh_client(hostname, user, enable_agent=False)
+            if check_client is None:
+                self.log.debug(f"Could not create client to check PID {pid}")
+                return False
+
+            try:
+                _, stdout, _ = check_client.exec_command(
+                    f"[ -d /proc/{pid} ]", timeout=2.0
+                )
+                return stdout.channel.recv_exit_status() == 0
+            finally:
+                check_client.close()
+        except Exception as e:
+            self.log.debug(f"Exception checking if PID {pid} alive: {e}")
             return False
 
     def _cleanup_remote_file_paramiko(

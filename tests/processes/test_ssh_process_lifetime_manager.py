@@ -132,8 +132,8 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
             assert exit_code is not None, (
                 f"No exit code for {process_uuid} after 5s timeout"
             )
-            # 143 is the standard unhandled SIGTERM exit code
-            assert exit_code == 143, (
+            # 0 for successfully handled SIGQUIT
+            assert exit_code == 0, (
                 f"Unexpected exit code {exit_code} for {process_uuid}"
             )
             print(f"Process {process_uuid}: exit code {exit_code}")

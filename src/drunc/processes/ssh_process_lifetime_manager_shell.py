@@ -66,7 +66,6 @@ class ProcessWatcherThread(threading.Thread):
         """
         Monitor process, read metadata asynchronously, and invoke callback on exit.
         """
-        # Attempt to read metadata without blocking startup
         try:
             metadata = self.manager.read_process_metadata(
                 self.uuid,
@@ -607,7 +606,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc ; "
-                f"{{ {command} ; }} &> {log_file} & PID=$! ; "
+                f"{command} &> {log_file} & PID=$! ; "
                 f'echo \'{{"pid": \'$PID\', "hostname": "{hostname}", "user": "{user}", "started_at": \'$(date +%s)\'}}\'  > {metadata_file} ; '
                 f"wait $PID"
             )
@@ -750,16 +749,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 process_dead = True
 
             if not process_dead:
-                self.log.debug(f"Sending SIGTERM to remote PID {remote_pid}")
-                self._send_remote_signal(hostname, user, remote_pid, "TERM")
+                self.log.debug(f"Sending SIGQUIT to remote PID {remote_pid}")
+                self._send_remote_signal(hostname, user, remote_pid, "QUIT")
                 process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
                 if process_dead:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGTERM signal."
+                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGQUIT signal."
                     )
                 else:
                     self.log.debug(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGTERM signal."
+                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGQUIT signal."
                     )
 
             if not process_dead:
@@ -811,11 +810,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.debug(f"Failed to send {signal_name} to PID {pid}: {e}")
 
     def _is_remote_process_alive(self, hostname: str, user: str, pid: int) -> bool:
-        """Check if remote process exists using kill -0."""
+        """Check if remote process exists"""
         try:
             user_host = f"{user}@{hostname}"
             arguments = self._build_ssh_arguments(hostname, user_host)
-            arguments.extend(["kill", "-0", str(pid)])
+            arguments.extend([f"[ -d /proc/{pid} ]"])
             self.ssh(*arguments)
             return True
         except Exception:
