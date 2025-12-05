@@ -24,6 +24,7 @@ from druncschema.controller_pb2 import (
     StatusResponse,
     SurrenderControlResponse,
     TakeControlResponse,
+    WhoIsInChargeResponse,
 )
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -722,6 +723,18 @@ class RESTAPIChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SurrenderControlResponse:
         return SurrenderControlResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def who_is_in_charge(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> WhoIsInChargeResponse:
+        return WhoIsInChargeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,

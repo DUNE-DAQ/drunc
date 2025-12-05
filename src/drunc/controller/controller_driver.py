@@ -26,6 +26,8 @@ from druncschema.controller_pb2 import (
     SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
+    WhoIsInChargeRequest,
+    WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.description_pb2 import Description
@@ -336,16 +338,26 @@ class ControllerDriver:
 
         return response
 
-    @OLD_pack_empty_addressed_command
     def who_is_in_charge(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "who_is_in_charge",
-            data=addressed_command,
-            outformat=PlainText,
-            timeout=timeout,
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> WhoIsInChargeResponse:
+        request = WhoIsInChargeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.who_is_in_charge(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     @OLD_pack_empty_addressed_command
     def to_error(

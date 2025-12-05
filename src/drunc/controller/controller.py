@@ -33,6 +33,8 @@ from druncschema.controller_pb2 import (
     SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
+    WhoIsInChargeRequest,
+    WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
@@ -1363,7 +1365,6 @@ class Controller(ControllerServicer):
         response = TakeControlResponse(
             token=None,
             name=self.name,
-            text="",
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -1373,6 +1374,8 @@ class Controller(ControllerServicer):
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
+
+        text = ""
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1393,9 +1396,9 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             if self.actor.take_control(request.token) == 0:
-                response.text += f"took control on {self.name}"
+                text += f"took control on {self.name}"
             else:
-                response.text += f"Could not take control on {self.name}"
+                text += f"Could not take control on {self.name}"
 
         if any(
             cr.flag
@@ -1405,7 +1408,10 @@ class Controller(ControllerServicer):
             ]
             for cr in child_responses
         ):
-            response.text += ", could not take control of all children"
+            text += ", could not take control of all children"
+
+        if text:
+            response.text = text
 
         return response
 
@@ -1421,7 +1427,6 @@ class Controller(ControllerServicer):
         response = SurrenderControlResponse(
             token=None,
             name=self.name,
-            text="",
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
@@ -1431,6 +1436,8 @@ class Controller(ControllerServicer):
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
+
+        text = ""
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1451,9 +1458,9 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             if self.actor.surrender_control(request.token) == 0:
-                response.text += f"surrendered control on {self.name}"
+                text += f"surrendered control on {self.name}"
             else:
-                response.text += f"Could not surrender control on {self.name}"
+                text += f"Could not surrender control on {self.name}"
 
         if any(
             cr.flag
@@ -1463,41 +1470,55 @@ class Controller(ControllerServicer):
             ]
             for cr in child_responses
         ):
-            response.text += ", could not surrender control of all children"
+            text += ", could not surrender control of all children"
+
+        if text:
+            response.text = text
 
         return response
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.CONTROLLER
-    )  # 2nd step
-    @OLD_unpack_addressed_command_to()  # 3rd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def who_is_in_charge(
         self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> Response:
-        if execute_on_self:
-            user = pack_to_any(PlainText(text=self.actor.get_user_name()))
-        else:
-            user = None
-
-        response_children = self.OLD_propagate_to_children(
-            "who_is_in_charge",
-            addressed_commands,
-            token,
-        )
-
-        return Response(
+        request: WhoIsInChargeRequest,
+        context: ServicerContext,
+    ) -> WhoIsInChargeResponse:
+        response = WhoIsInChargeResponse(
+            token=None,
             name=self.name,
-            token=token,
-            data=user,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-            children=response_children,
         )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.who_is_in_charge(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            response.text = self.actor.get_user_name()
+
+        return response
 
     ##########################################
     ####### Integration test commands ########
