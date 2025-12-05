@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 import click
 from druncschema.token_pb2 import Token
+from kubernetes import client, config
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
@@ -41,57 +42,60 @@ def add_traceback_flag():
 
 def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
     """
-    Checks if the requested port on the specified host is available. This allows us to
-    validate that a specified configuration with a static address is available.
+    Checks if the requested port on the specified host is available by attempting
+    a connection. If connection FAILS (refused), the port is available.
 
     Args:
-        host - what hostname to check on
-        port - the port number to check
+        host: The hostname or IP to check on (e.g., 'localhost', '192.168.1.1').
+        port: The port number to check.
+        timeout: Maximum time in seconds to wait for a connection attempt.
 
     Returns:
-        bool - true if available, false otherwise
+        bool: True if available (connection refused), False otherwise (in use/blocked).
 
     Raises:
-        ValueError - if the hostnmame cannot be resolved to an IP address
+        ValueError: If the hostname cannot be resolved to an IP address.
     """
 
-    # Address the localhost case separately
+    # 1. Check the k8s cluster ports
+    config.load_kube_config()
+    v1 = client.CoreV1Api()
+
+    used_nodeports = {
+        _port.node_port
+        for svc in v1.list_service_for_all_namespaces().items
+        if svc.spec and svc.spec.ports
+        for _port in svc.spec.ports
+        if _port.node_port is not None
+    }
+    if port in used_nodeports:
+        return False
+
+    # 1. Resolve Hostname to IP Address
     if host in ["localhost", "127.0.0.1", "0.0.0.0"]:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            # Set SO_REUSEADDR to allow fast rebinds after a crash
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                # Try to bind to the port on all interfaces
-                s.bind(("0.0.0.0", port))
-                return True
-            except OSError as e:
-                # If bind fails the port is NOT available
-                if "Address already in use" in str(e):
-                    return False
-                # Handle other OS errors differently if needed
-                raise e
+        # Use loopback IP (127.0.0.1), as it includes container proxies.
+        check_ip = "127.0.0.1"
+    else:
+        try:
+            check_ip = socket.gethostbyname(host)
+        except socket.gaierror:
+            raise ValueError(f"Could not resolve hostname: {host}")
 
-    # Address the remote host case separately
-    # Map the hostname to an ip address
-    try:
-        ip_address = socket.gethostbyname(host)
-    except socket.gaierror:
-        raise ValueError(f"Could not resolve hostname: {host}")
-
-    # Attempt to create a connection to the address specified by the host and port
-    # If the connection succeeds, something is listening at the specified address, i.e.
-    # something is already listening
+    # 2. Perform Connection Check
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
         try:
-            # Attempt to connect; if successful, the port is listening (in use)
-            s.connect((ip_address, port))
+            # Something is actively listening (IN USE).
+            s.connect((check_ip, port))
             return False
-        except (TimeoutError, OSError):
-            # If the connection is refused, times out, or other OS error occurs, it's
-            # not listening (available)
-            print("Connection failed")
+
+        except ConnectionRefusedError:
+            # Nothing is listening (AVAILABLE).
             return True
+
+        except (TimeoutError, OSError):
+            # Unclear, assume in use.
+            return False
 
 
 class DecodedResponse:
