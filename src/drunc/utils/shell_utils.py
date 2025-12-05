@@ -1,5 +1,6 @@
 import abc
 import getpass
+import socket
 from collections.abc import Mapping
 
 import click
@@ -37,6 +38,40 @@ def add_traceback_flag():
 
     return wrapper
 
+def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
+    """
+    Checks if the requested port on the specified host is available. This allows us to 
+    validate that a specified configuration with a static address is available.
+
+    Args:
+        host - what hostname to check on
+        port - the port number to check
+
+    Returns:
+        bool - true if available, false otherwise
+
+    Raises:
+        ValueError - if the hostnmame cannot be resolved to an IP address
+    """
+
+    # Map the hostname to an ip address
+    try:
+        ip_address = socket.gethostbyname(host)
+    except socket.gaierror:
+        raise ValueError(f"Could not resolve hostname: {host}")
+
+
+    # Attempt to create a connection to the address specified by the host and port
+    # If the connection fails, the port is considered in use
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            try:
+                # Attempt to connect; if successful, the port is open/listening
+                s.connect((ip_address, port))
+                return True
+            except (ConnectionRefusedError, TimeoutError, OSError):
+                # If the connection is refused, times out, or other OS error occurs, it's not listening
+                return False
 
 class DecodedResponse:
     ## Warning! This should be kept in sync with druncschema/request_response.proto/Response class

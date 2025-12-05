@@ -56,6 +56,7 @@ from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
+from drunc.utils.shell_utils import is_port_available
 from drunc.utils.utils import (
     create_logger_handler,
     format_name_for_cli,
@@ -179,6 +180,14 @@ def unified_shell(
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
+
+    # Check that the address of the root controller is available, otherwise exit
+    root_controller_host = session_dal.segment.controller.runs_on.runs_on.id
+    root_controller_port = [service for service in session_dal.segment.controller.exposes_service if '_control' in service.id][0].port
+    if not is_port_available(root_controller_host, root_controller_port):
+        unified_shell_log.critical("Current root controller port is already in use. Use script [bold green]daqconf_set_rc_controller_port[/bold green] on your configuration file")
+        sys.exit(1)
+
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
