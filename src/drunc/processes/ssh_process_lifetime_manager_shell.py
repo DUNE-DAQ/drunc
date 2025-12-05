@@ -170,10 +170,19 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
     @staticmethod
     def get_metadata_file_path(uuid: str) -> str:
-        """Generate metadata file path for a given process UUID."""
-        return (
-            f"${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc/metadata_{uuid}.json"
-        )
+        """
+        Generate metadata file path for a given process UUID.
+
+        Uses XDG_RUNTIME_DIR if available, otherwise falls back to /tmp.
+        The path will be expanded on the remote host when the command executes.
+
+        Args:
+            uuid: Process UUID to generate metadata file path for
+
+        Returns:
+            Shell-expandable path string containing environment variable reference
+        """
+        return f"${{XDG_RUNTIME_DIR:-/tmp}}/drunc/metadata_{uuid}.json"
 
     def get_active_process_keys(self) -> List[str]:
         """
@@ -605,7 +614,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
             remote_cmd += (
-                f"mkdir -p ${{XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR not set}}/drunc ; "
+                f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
                 f"{command} &> {log_file} & PID=$! ; "
                 f'echo \'{{"pid": \'$PID\', "hostname": "{hostname}", "user": "{user}", "started_at": \'$(date +%s)\'}}\'  > {metadata_file} ; '
                 f"wait $PID"
@@ -639,18 +648,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             with self.lock:
                 if uuid in self.process_store:
                     del self.process_store[uuid]
-
-            # Check for XDG_RUNTIME_DIR error
-            error_msg = str(e)
-            if (
-                "XDG_RUNTIME_DIR not set" in error_msg
-                or "XDG_RUNTIME_DIR: parameter not set" in error_msg
-            ):
-                raise RuntimeError(
-                    f"Failed to execute SSH command for {uuid}: XDG_RUNTIME_DIR environment variable is not set on {hostname}. "
-                    f"Ensure the remote session has XDG_RUNTIME_DIR configured, or run processes as a logged-in user."
-                )
-
             raise RuntimeError(f"Failed to execute SSH command for {uuid}: {e}")
 
     def _kill_client_process(self, process_info: Dict) -> None:
