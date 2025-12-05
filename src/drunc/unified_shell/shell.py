@@ -182,12 +182,32 @@ def unified_shell(
     app_log_path = session_dal.log_path
 
     # Check that the address of the root controller is available, otherwise exit
-    root_controller_host = session_dal.segment.controller.runs_on.runs_on.id
-    root_controller_port = [service for service in session_dal.segment.controller.exposes_service if '_control' in service.id][0].port
+    root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
+    root_controller_port: int = [
+        service
+        for service in session_dal.segment.controller.exposes_service
+        if "_control" in service.id
+    ][0].port
     if not is_port_available(root_controller_host, root_controller_port):
-        unified_shell_log.critical("Current root controller port is already in use. Use script [bold green]daqconf_set_rc_controller_port[/bold green] on your configuration file")
+        unified_shell_log.critical(
+            "Current root controller port is already in use. Use script [bold green]daqconf_set_rc_controller_port[/bold green] on your configuration file to change the root controller port first!"
+        )
         sys.exit(1)
 
+    # If a local connectivity service is being used, perform the same checks
+    connectivity_service_host: str = session_dal.connectivity_service.host
+    connectivity_service_is_local: bool = connectivity_service_host in [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+    ]
+    if connectivity_service_is_local:
+        connectivity_service_port = session_dal.connectivity_service.service.port
+        if not is_port_available(connectivity_service_host, connectivity_service_port):
+            unified_shell_log.critical(
+                "Local connectivity service port is already in use. Use script [bold green]daqconf_set_connectivity_service_port[/bold green] on your configuration file to change the connectivity service port first!"
+            )
+            sys.exit(1)
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "

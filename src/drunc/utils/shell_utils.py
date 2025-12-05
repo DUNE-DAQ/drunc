@@ -38,9 +38,10 @@ def add_traceback_flag():
 
     return wrapper
 
+
 def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
     """
-    Checks if the requested port on the specified host is available. This allows us to 
+    Checks if the requested port on the specified host is available. This allows us to
     validate that a specified configuration with a static address is available.
 
     Args:
@@ -54,24 +55,44 @@ def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
         ValueError - if the hostnmame cannot be resolved to an IP address
     """
 
+    # Address the localhost case separately
+    if host in ["localhost", "127.0.0.1", "0.0.0.0"]:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            # Set SO_REUSEADDR to allow fast rebinds after a crash
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                # Try to bind to the port on all interfaces
+                s.bind(("0.0.0.0", port))
+                return True
+            except OSError as e:
+                # If bind fails the port is NOT available
+                if "Address already in use" in str(e):
+                    return False
+                # Handle other OS errors differently if needed
+                raise e
+
+    # Address the remote host case separately
     # Map the hostname to an ip address
     try:
         ip_address = socket.gethostbyname(host)
     except socket.gaierror:
         raise ValueError(f"Could not resolve hostname: {host}")
 
-
     # Attempt to create a connection to the address specified by the host and port
-    # If the connection fails, the port is considered in use
+    # If the connection succeeds, something is listening at the specified address, i.e.
+    # something is already listening
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(timeout)
-            try:
-                # Attempt to connect; if successful, the port is open/listening
-                s.connect((ip_address, port))
-                return True
-            except (ConnectionRefusedError, TimeoutError, OSError):
-                # If the connection is refused, times out, or other OS error occurs, it's not listening
-                return False
+        s.settimeout(timeout)
+        try:
+            # Attempt to connect; if successful, the port is listening (in use)
+            s.connect((ip_address, port))
+            return False
+        except (TimeoutError, OSError):
+            # If the connection is refused, times out, or other OS error occurs, it's
+            # not listening (available)
+            print("Connection failed")
+            return True
+
 
 class DecodedResponse:
     ## Warning! This should be kept in sync with druncschema/request_response.proto/Response class
