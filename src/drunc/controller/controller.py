@@ -33,6 +33,8 @@ from druncschema.controller_pb2 import (
     SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
+    ToErrorRequest,
+    ToErrorResponse,
     WhoIsInChargeRequest,
     WhoIsInChargeResponse,
 )
@@ -1524,46 +1526,49 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
-    @authentified_and_authorised(
-        action=ActionType.UPDATE, system=SystemType.CONTROLLER
-    )  # 2nd step
+    @broadcasted
+    @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
-    @OLD_unpack_addressed_command_to()  # 3rd step
     @publish_command_time
     def to_error(
         self,
-        addressed_commands: dict[str, AddressedCommand],
-        execute_on_self: bool,
-        token: Token,
-    ) -> PlainText:
+        request: ToErrorRequest,
+        context: ServicerContext,
+    ) -> ToErrorResponse:
         """
         Transitions the stateful node to an error state. Used for testing purposes.
         """
+        response = ToErrorResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
         try:
-            if execute_on_self:
-                self.stateful_node.to_error()
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
 
-            response_children = self.OLD_propagate_to_children(
-                "to_error",
-                addressed_commands,
-                token,
-            )
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.to_error(
+                target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+        )
+        response.children.extend(child_responses)
 
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-                children=response_children,
-            )
-        except Exception as e:
-            self.log.exception(e)
-            return Response(
-                name=self.name,
-                token=token,
-                data=None,
-                flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
-                children=None,
-            )
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            self.stateful_node.to_error()
+
+        return response

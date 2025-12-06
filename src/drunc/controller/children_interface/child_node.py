@@ -13,6 +13,7 @@ from druncschema.controller_pb2 import (
     StatusResponse,
     SurrenderControlResponse,
     TakeControlResponse,
+    ToErrorResponse,
     WhoIsInChargeResponse,
 )
 from druncschema.request_response_pb2 import Response
@@ -158,4 +159,13 @@ class ChildNode(ABC):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> WhoIsInChargeResponse:
+        pass
+
+    @abstractmethod
+    def to_error(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ToErrorResponse:
         pass

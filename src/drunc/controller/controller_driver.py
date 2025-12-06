@@ -26,11 +26,12 @@ from druncschema.controller_pb2 import (
     SurrenderControlResponse,
     TakeControlRequest,
     TakeControlResponse,
+    ToErrorRequest,
+    ToErrorResponse,
     WhoIsInChargeRequest,
     WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -359,16 +360,26 @@ class ControllerDriver:
 
         return response
 
-    @OLD_pack_empty_addressed_command
     def to_error(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "to_error",
-            data=addressed_command,
-            outformat=Description,
-            timeout=timeout,
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ToErrorResponse:
+        request = ToErrorRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.to_error(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
