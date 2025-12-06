@@ -1,10 +1,7 @@
 import multiprocessing
-import re
 import threading
 import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import wraps
 from typing import Callable, List, TypeVar
 
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -40,11 +37,9 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
-from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.opmon.generic_pb2 import RunInfo
-from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
-from google.protobuf.any_pb2 import Any
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -64,7 +59,6 @@ from drunc.controller.utils import (
     get_detector_name,
     get_status_message,
 )
-from drunc.exceptions import DruncCommandException, DruncException
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
@@ -72,155 +66,9 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
-
-
-def OLD_address_command(
-    obj,
-    command_name,
-    command_data,
-    target,
-    execute_along_path,
-    execute_on_all_subsequent_children_in_path,
-):
-    log = get_logger("controller.OLD_address_command")
-
-    ret = {}
-    children_names = [c.name for c in obj.children_nodes]
-
-    start_with_slash = target.startswith("/")
-    target_ = target[:]
-    if start_with_slash:
-        target_ = target[1:]
-
-    if target_ == "":
-        if execute_on_all_subsequent_children_in_path:
-            for child in children_names:
-                ret[child] = AddressedCommand(
-                    command_name=command_name,
-                    command_data=command_data,
-                    target=child,
-                    execute_along_path=execute_along_path,
-                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-                )
-        return ret
-
-    target_path = target_.split("/")
-    if start_with_slash and target_path[0] != obj.name:
-        raise DruncCommandException(f"Target '{target_}' is not matching '{obj.name}'")
-
-    if target_path[0] == obj.name:
-        target_path.pop(0)
-
-    if target_path == []:
-        if execute_on_all_subsequent_children_in_path:
-            for child in children_names:
-                ret[child] = AddressedCommand(
-                    command_name=command_name,
-                    command_data=command_data,
-                    target=child,
-                    execute_along_path=execute_along_path,
-                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-                )
-        return ret
-
-    target_name = target_path[0]
-
-    for child in children_names:
-        if re.match(target_name, child):
-            new_target_path = child
-            if len(target_path) > 1:
-                new_target_path = "/".join([new_target_path] + target_path[1:])
-            ret[child] = AddressedCommand(
-                command_name=command_name,
-                command_data=command_data,
-                target=new_target_path,
-                execute_along_path=execute_along_path,
-                execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-            )
-
-    if ret == {}:
-        log.info(f"Target '{target}' not found in children of '{obj.name}'")
-
-    return ret
-
-
-def OLD_unpack_addressed_command_to(data_type=None):
-    def decor(cmd):
-        command_name = cmd.__name__
-        logger = get_logger(f"controller.upack_add'ed_cmd.{command_name}")
-
-        @wraps(cmd)
-        def wrap(obj, request, context):
-            try:
-                command = unpack_any(request.data, AddressedCommand)
-            except UnpackingError as e:
-                logger.exception(e)
-                return Response(
-                    name=obj.name,
-                    token=None,
-                    data=pack_to_any(PlainText(text=str(e))),
-                    flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                    children=[],
-                )
-
-            try:
-                addressed_commands = OLD_address_command(
-                    obj=obj,
-                    command_name=command_name,
-                    command_data=command.command_data,
-                    target=command.target,
-                    execute_along_path=command.execute_along_path,
-                    execute_on_all_subsequent_children_in_path=command.execute_on_all_subsequent_children_in_path,
-                )
-                logger.debug(f"Addressed commands: {addressed_commands}")
-            except DruncCommandException as e:
-                logger.exception(e)
-                return Response(
-                    name=obj.name,
-                    token=None,
-                    data=pack_to_any(PlainText(text=str(e))),
-                    flag=ResponseFlag.FAILED,
-                    children=[],
-                )
-
-            payload = None
-            if data_type is not None:
-                try:
-                    payload = unpack_any(command.command_data, data_type)
-                except UnpackingError as e:
-                    logger.exception(e)
-                    return Response(
-                        name=obj.name,
-                        token=None,
-                        data=pack_to_any(PlainText(text=str(e))),
-                        flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
-                        children=[],
-                    )
-
-            execute_on_self = (
-                command.target == obj.name
-                or command.target == ""
-                or command.target == "/"
-                or command.execute_along_path
-            )
-
-            kwargs = {
-                "addressed_commands": addressed_commands,
-                "execute_on_self": execute_on_self,
-                "token": request.token,
-            }
-            if payload is not None:
-                kwargs["payload"] = payload
-
-            return cmd(obj, **kwargs)
-
-        return wrap
-
-    return decor
 
 
 class Controller(ControllerServicer):
@@ -545,132 +393,6 @@ class Controller(ControllerServicer):
 
     def __del__(self):
         self.terminate()
-
-    def OLD_propagate_to_all_children(
-        self,
-        command_name: str,
-        token: Token,
-        command_data: Any = None,
-        only_included: bool = True,
-    ):
-        children_to_execute = [
-            cn.name for cn in self.children_nodes if not only_included or cn.included
-        ]
-
-        addressed_commands = {
-            cn: AddressedCommand(
-                command_name=command_name,
-                command_data=command_data,
-                target=cn,
-                execute_along_path=True,
-                execute_on_all_subsequent_children_in_path=True,
-            )
-            for cn in children_to_execute
-        }
-
-        return self.OLD_propagate_to_children(
-            command_name,
-            addressed_commands,
-            token,
-        )
-
-    def OLD_propagate_to_children(
-        self,
-        command_name: str,
-        addressed_commands: dict[str, AddressedCommand],
-        token: Token,
-    ):
-        self.log.debug(f"Propagating {command_name} to children")
-        response_children: list[Response] = []
-        response_lock = threading.Lock()
-
-        def propagate_to_child(
-            child_name,
-            command_name,
-            command_data,
-            token,
-            response_lock,
-            response_children,
-        ):
-            child = next(
-                (cn for cn in self.children_nodes if cn.name == child_name), None
-            )
-
-            if child is None:
-                self.log.error(f"Child {child_name} not found")
-                return
-
-            command_data_str = str(command_data).replace("\n", " ")
-            self.log.debug(
-                f"Propagating {command_name} to child {child.name}, command data: {command_data_str}, token: {token}"
-            )
-
-            try:
-                response = child.propagate_command(command_name, command_data, None)
-                with response_lock:
-                    response_children.append(response)
-
-                if response.flag in [
-                    ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                ]:
-                    self.log.debug(
-                        f"Propagated {command_name} to children ({child.name}) successfully"
-                    )
-                else:
-                    self.log.error(
-                        f"Propagating {command_name} to children ({child.name}) failed: {ResponseFlag.Name(response.flag)}. See its logs for more information and stacktrace."
-                    )
-
-            except Exception as e:  # Catch all, we are in a thread and want to do something sensible when an exception is thrown
-                self.log.error(
-                    f"Something wrong happened while sending the command to {child.name}: Error raised: {e!s}"
-                )
-                self.log.exception(e)
-                flag = (
-                    ResponseFlag.DRUNC_EXCEPTION_THROWN
-                    if isinstance(e, DruncException)
-                    else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-                )
-
-                with response_lock:
-                    stack = traceback.format_exc().split("\n")
-                    response_children.append(
-                        Response(
-                            name=child.name,
-                            token=token,
-                            data=pack_to_any(Stacktrace(text=stack)),
-                            flag=flag,
-                            children=[],
-                        )
-                    )
-
-                self.log.error(
-                    f"Failed to propagate {command_name} to {child.name} ({child.name}) EXCEPTION THROWN: {str(e)}"
-                )
-
-        threads = []
-
-        for child, data in addressed_commands.items():
-            self.log.debug(f"Propagating to {child}")
-            t = threading.Thread(
-                target=propagate_to_child,
-                kwargs={
-                    "child_name": child,
-                    "command_name": command_name,
-                    "command_data": data,
-                    "token": token,
-                    "response_lock": response_lock,
-                    "response_children": response_children,
-                },
-            )
-            t.start()
-            threads.append(t)
-
-        for thread in threads:
-            thread.join()
-
-        return response_children
 
     def parse_target_string(self, target: str) -> str:
         """Parse and check a target string.
@@ -1572,3 +1294,5 @@ class Controller(ControllerServicer):
             self.stateful_node.to_error()
 
         return response
+
+    (DescribeFSMRequest,)
