@@ -13,13 +13,11 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
-    ExcludeResponse,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
-    IncludeResponse,
-    RecomputeStatusResponse,
+    IncludeExcludeResponse,
     Status,
     StatusResponse,
 )
@@ -29,8 +27,7 @@ from druncschema.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
-from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.children_interface.client_side_state import ClientSideState
+from drunc.controller.children_interface.client_side_child import ClientSideChild
 from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
@@ -363,7 +360,7 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
         )
 
 
-class RESTAPIChildNode(ChildNode):
+class RESTAPIChildNode(ClientSideChild):
     def __init__(
         self,
         name: str,
@@ -371,20 +368,20 @@ class RESTAPIChildNode(ChildNode):
         uri: str,
         fsm_configuration: FSMConfHandler,
     ):
-        super().__init__(name, ControlType.REST_API)
+        super().__init__(name, ControlType.REST_API, fsm_configuration)
 
-        self.state = ClientSideState()
         self.configuration = configuration
-        self.fsm_configuration = fsm_configuration
+        self.response_listener = ResponseListener.get()
+
         if fsm_configuration:
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
 
         response_listener_host = socket.gethostname()
-        self.response_listener = ResponseListener.get()
 
         self.app_host, app_port = uri.split(":")
         self.app_port = int(app_port)
+
         if self.app_port == 0:
             raise DruncSetupException(
                 f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable."
@@ -664,10 +661,10 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeResponse:
+    ) -> IncludeExcludeResponse:
         self.state.include()
         self.included = True
-        return IncludeResponse(
+        return IncludeExcludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' included",
@@ -679,10 +676,10 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> ExcludeResponse:
+    ) -> IncludeExcludeResponse:
         self.state.exclude()
         self.included = False
-        return ExcludeResponse(
+        return IncludeExcludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' excluded",
@@ -694,9 +691,9 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> RecomputeStatusResponse:
-        return RecomputeStatusResponse(
-            token=None,
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+    ) -> StatusResponse:
+        return self.status(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )

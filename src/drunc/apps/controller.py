@@ -1,13 +1,14 @@
 from drunc.controller.interface.controller import controller_cli
-from drunc.utils.utils import get_logger, get_root_logger
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def main():
     try:
         controller_cli()
     except Exception as e:
-        get_root_logger("INFO")
-        log = get_logger("controller", rich_handler=False)
+        setup_root_logger("INFO")
+        log = get_logger("controller")
+        create_logger_handler(rich_handler=False)
         log.error("Exception thrown!")
         log.exception(e)
         exit(1)

@@ -11,23 +11,16 @@ from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     AddressedCommand,
-    DescribeFSMRequest,
     DescribeFSMResponse,
-    DescribeRequest,
     DescribeResponse,
-    ExcludeRequest,
-    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
-    IncludeRequest,
-    IncludeResponse,
-    RecomputeStatusRequest,
-    RecomputeStatusResponse,
-    StatusRequest,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
@@ -226,7 +219,7 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
 
-        self.log = get_logger("controller", stream_handlers=True)
+        self.log = get_logger("controller")
         log_init = get_logger("controller.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
@@ -694,7 +687,7 @@ class Controller(ControllerServicer):
         self,
         target: str,
         execute_on_children: bool,
-        include_excluded_nodes: bool = False,
+        ignore_exclusion: bool = False,
     ) -> list[tuple[ChildNode, str]]:
         """Finds the next node(s) along a given path to a target node.
 
@@ -706,8 +699,8 @@ class Controller(ControllerServicer):
         Args:
             target: The path to the target from the current node.
             execute_on_children: If True, run on nodes beyond the target.
-            include_excluded_nodes: If True, traverse ALL nodes, including
-                those marked as excluded (default: False).
+            ignore_exclusion: If True, traverse ALL nodes, including those
+                marked as excluded (default: False).
 
         Returns:
             A list of (child, target) for each addressed child.
@@ -720,7 +713,7 @@ class Controller(ControllerServicer):
                 (child, "/".join(next_target_path))
                 for child in self.children_nodes
                 if child.name == next_target_path[0]
-                and (child.included or include_excluded_nodes)
+                and (child.included or ignore_exclusion)
             ]
             if not targets:
                 self.log.info(
@@ -734,14 +727,14 @@ class Controller(ControllerServicer):
 
         # Handle execute_on_children only if the path is exhausted.
         if execute_on_children:
-            return self.address_all(include_excluded_nodes=include_excluded_nodes)
+            return self.address_all(ignore_exclusion=ignore_exclusion)
 
         # Path is exhausted and we are NOT executing on children.
         return []
 
     def address_all(
         self,
-        include_excluded_nodes: bool = False,
+        ignore_exclusion: bool = False,
     ) -> list[tuple[ChildNode, str]]:
         """Finds all child nodes.
 
@@ -749,8 +742,8 @@ class Controller(ControllerServicer):
         returned data is structured the same as that of address_target_path.
 
         Args:
-            include_excluded_nodes: If True, traverse ALL nodes, including
-                those marked as excluded (default: False).
+            ignore_exclusion: If True, traverse ALL nodes, including those
+                marked as excluded (default: False).
 
         Returns:
             A list of (child, target) for each addressed child.
@@ -758,7 +751,7 @@ class Controller(ControllerServicer):
         return [
             (child, child.name)
             for child in self.children_nodes
-            if child.included or include_excluded_nodes
+            if child.included or ignore_exclusion
         ]
 
     @staticmethod
@@ -791,7 +784,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
-        self, request: StatusRequest, context: ServicerContext
+        self, request: AddressedCommand, context: ServicerContext
     ) -> StatusResponse:
         response = StatusResponse(
             token=None,
@@ -815,7 +808,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.status(
@@ -833,7 +826,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
-        self, request: DescribeRequest, context: ServicerContext
+        self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeResponse:
         response = DescribeResponse(
             token=None,
@@ -866,7 +859,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe(
@@ -884,7 +877,7 @@ class Controller(ControllerServicer):
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
-        self, request: DescribeFSMRequest, context: ServicerContext
+        self, request: AddressedCommand, context: ServicerContext
     ) -> DescribeFSMResponse:
         response = DescribeFSMResponse(
             token=None,
@@ -899,13 +892,16 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # What transitions to describe.
+        key = unpack_any(request.command_data, PlainText).text
+
         # This node.
         if request.target == self.name or request.execute_along_path:
-            if request.key == "all-transitions":
+            if key == "all-transitions":
                 description = convert_fsm_transition(
                     self.stateful_node.get_all_fsm_transitions()
                 )
-            elif request.key == "":
+            elif key == "":
                 description = convert_fsm_transition(
                     self.stateful_node.get_fsm_transitions()
                 )
@@ -913,9 +909,9 @@ class Controller(ControllerServicer):
                 all_transitions = self.stateful_node.get_all_fsm_transitions()
                 interesting_transitions = []
                 for transition in all_transitions:
-                    if request.key == transition.source:
+                    if key == transition.source:
                         interesting_transitions += [transition]
-                    if request.key == transition.name:
+                    if key == transition.name:
                         interesting_transitions += [transition]
                 description = convert_fsm_transition(interesting_transitions)
 
@@ -929,14 +925,14 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe_fsm(
                 target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
-                request.key,
+                key,
             ),
             child_list,
         )
@@ -1165,10 +1161,10 @@ class Controller(ControllerServicer):
     @publish_command_time
     def include(
         self,
-        request: IncludeRequest,
+        request: IncludeExcludeRequest,
         context: ServicerContext,
-    ) -> IncludeResponse:
-        response = IncludeResponse(
+    ) -> IncludeExcludeResponse:
+        response = IncludeExcludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1194,7 +1190,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.include(
@@ -1214,10 +1210,10 @@ class Controller(ControllerServicer):
     @publish_command_time
     def exclude(
         self,
-        request: ExcludeRequest,
+        request: IncludeExcludeRequest,
         context: ServicerContext,
-    ) -> ExcludeResponse:
-        response = ExcludeResponse(
+    ) -> IncludeExcludeResponse:
+        response = IncludeExcludeResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1243,7 +1239,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=True,
+            ignore_exclusion=True,
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.exclude(
@@ -1262,9 +1258,9 @@ class Controller(ControllerServicer):
     @in_control
     @publish_command_time
     def recompute_status(
-        self, request: RecomputeStatusRequest, context: ServicerContext
-    ) -> RecomputeStatusResponse:
-        response = RecomputeStatusResponse(
+        self, request: AddressedCommand, context: ServicerContext
+    ) -> StatusResponse:
+        response = StatusResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1277,70 +1273,102 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # Children nodes.
-        child_list = self.address_target_path(
-            request.target,
-            request.execute_on_all_subsequent_children_in_path,
-        )
-        child_responses = self.propagate_concurrently(
-            lambda child, target: child.recompute_status(
-                target,
-                request.execute_along_path,
-                request.execute_on_all_subsequent_children_in_path,
-            ),
-            child_list,
-        )
-        response.children.extend(child_responses)
-
         # This node.
         if request.target == self.name or request.execute_along_path:
-            # Query status of immediate children only (except excluded).
-            child_status_list = self.address_all()
-            child_status_responses = self.propagate_concurrently(
-                lambda child, target: child.status(target, False, False),
-                child_status_list,
+            child_list = self.address_all()
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
             )
 
+            self_should_go_to_error = False
             children_states = set()
             children_sub_states = set()
-            children_in_error = False
 
-            for s in child_status_responses:
+            for s in child_responses:
                 if s.flag != ResponseFlag.EXECUTED_SUCCESSFULLY:
-                    children_in_error = True
-                child_status = s.status
-                children_states.add(child_status.state)
-                children_sub_states.add(child_status.sub_state)
-                if child_status.in_error:
-                    children_in_error = True
+                    self_should_go_to_error = True
 
-            children_in_bad_state = (
-                children_in_error
-                or len(children_states) > 1
-                or len(children_sub_states) > 1
-            )
+                try:
+                    child_status = s.status
+                    children_states.add(child_status.state)
+                    children_sub_states.add(child_status.sub_state)
+                    if child_status.in_error:
+                        self_should_go_to_error = True
 
-            if children_in_bad_state:
-                self.log.debug(f"{children_states=}, {children_sub_states=}")
+                except UnpackingError as e:
+                    self.log.error(
+                        f"Failed to decode status for {s.name}: {e}, assuming it is excluded"
+                    )
+                    self_should_go_to_error = True
+                    continue
+
+            children_in_inconsistent_state = len(children_states) > 1
+            children_in_inconsistent_sub_state = len(children_sub_states) > 1
+
+            if (
+                children_in_inconsistent_state
+                or children_in_inconsistent_sub_state
+                or self_should_go_to_error
+            ) and not self.stateful_node.node_is_in_error():
                 self.log.warning(
-                    "Child nodes are in error or inconsistent state. Going to error."
+                    f"Children states: {children_states=}, {children_sub_states=}, the state is inconsistent or one node is in error, going to error"
                 )
-
-                # Children are in bad state, so set our state to error.
                 self.stateful_node.to_error()
 
-            else:
-                state = children_states.pop()
-                sub_state = children_sub_states.pop()
-                self.log.debug(f"{state=}, {sub_state=}")
+            if (
+                not children_in_inconsistent_state
+                and not children_in_inconsistent_sub_state
+                and not self_should_go_to_error
+            ):
+                children_state = children_states.pop()
+                children_sub_state = children_sub_states.pop()
+                self.log.info(
+                    f"Children state: {children_state}, children sub state: {children_sub_state}"
+                )
 
-                if sub_state == "idle":
-                    sub_state = state
+                if children_sub_state == "idle":
+                    children_sub_state = children_state
 
-                # All is well, so fix our state.
                 self.stateful_node.resolve_error()
-                self.stateful_node.force_set_node_operational_state(state)
-                self.stateful_node.force_set_node_operational_sub_state(sub_state)
+                self.stateful_node.force_set_node_operational_state(children_state)
+                self.stateful_node.force_set_node_operational_sub_state(
+                    children_sub_state
+                )
+
+            status = get_status_message(self)
+            response.status.CopyFrom(status)
+
+            child_list = self.address_all(ignore_exclusion=True)
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+            )
+            response.children.extend(child_responses)
+
+        # Children nodes.
+        else:
+            child_list = self.address_target_path(
+                request.target,
+                request.execute_on_all_subsequent_children_in_path,
+            )
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.recompute_status(
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+            )
+            response.children.extend(child_responses)
 
         return response
 

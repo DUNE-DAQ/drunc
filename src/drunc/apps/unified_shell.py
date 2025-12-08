@@ -1,6 +1,6 @@
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.unified_shell.shell import unified_shell
-from drunc.utils.utils import get_logger, get_root_logger
+from drunc.utils.utils import create_logger_handler, get_logger, setup_root_logger
 
 
 def main():
@@ -10,8 +10,9 @@ def main():
         unified_shell(obj=context)
 
     except Exception as e:
-        get_root_logger("INFO")
-        log = get_logger("unified_shell", rich_handler=True)
+        setup_root_logger("INFO")
+        log = get_logger("unified_shell")
+        create_logger_handler(rich_handler=True)
         log.error("[red bold]:fire::fire: Exception thrown :fire::fire:")
         log.exception(e)
         if context.pm_process and context.pm_process.is_alive():

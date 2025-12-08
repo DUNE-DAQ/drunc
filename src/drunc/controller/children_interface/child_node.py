@@ -4,12 +4,10 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
-    ExcludeResponse,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    IncludeResponse,
-    RecomputeStatusResponse,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.request_response_pb2 import Response
@@ -109,7 +107,7 @@ class ChildNode(ABC):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeResponse:
+    ) -> IncludeExcludeResponse:
         pass
 
     @abstractmethod
@@ -118,7 +116,7 @@ class ChildNode(ABC):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> ExcludeResponse:
+    ) -> IncludeExcludeResponse:
         pass
 
     @abstractmethod
@@ -127,5 +125,5 @@ class ChildNode(ABC):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> RecomputeStatusResponse:
+    ) -> StatusResponse:
         pass

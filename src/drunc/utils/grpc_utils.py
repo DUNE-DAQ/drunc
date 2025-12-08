@@ -221,7 +221,7 @@ def format_error_details(detail: Message) -> list[str]:
 
         # Handle nested messages
         if field.type == FieldDescriptor.TYPE_MESSAGE:
-            if field.is_repeated:
+            if field.label == FieldDescriptor.LABEL_REPEATED:
                 # Handle repeated nested messages
                 for item in value:
                     parts = _extract_message_parts(item)

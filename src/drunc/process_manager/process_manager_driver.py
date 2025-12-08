@@ -50,7 +50,7 @@ class ProcessManagerDriver:
     controller_address = ""
 
     def __init__(self, address: str, token: Token):
-        self.log = get_logger("process_manager_driver", rich_handler=True)
+        self.log = get_logger("controller.ProcessManagerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds

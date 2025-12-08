@@ -5,22 +5,15 @@ from typing import NoReturn, cast
 import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
-    DescribeFSMRequest,
     DescribeFSMResponse,
-    DescribeRequest,
     DescribeResponse,
-    ExcludeRequest,
-    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    IncludeRequest,
-    IncludeResponse,
-    RecomputeStatusRequest,
-    RecomputeStatusResponse,
-    StatusRequest,
+    IncludeExcludeRequest,
+    IncludeExcludeResponse,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -98,8 +91,10 @@ class gRPCChildNode(ChildNode):
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
 
-        request = DescribeRequest(
+        request = AddressedCommand(
             token=None,
+            command_name="describe",
+            command_data=None,
             target="",
             execute_along_path=False,
             execute_on_all_subsequent_children_in_path=False,
@@ -221,8 +216,9 @@ class gRPCChildNode(ChildNode):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
-        request = StatusRequest(
+        request = AddressedCommand(
             token=None,
+            command_name="status",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -247,8 +243,9 @@ class gRPCChildNode(ChildNode):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
-        request = DescribeRequest(
+        request = AddressedCommand(
             token=None,
+            command_name="describe",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -276,13 +273,14 @@ class gRPCChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
-        request = DescribeFSMRequest(
+        request = AddressedCommand(
             token=None,
-            key=key,
+            command_name="describe_fsm",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.command_data.Pack(PlainText(text=key))
 
         try:
             response = self.stub.describe_fsm(request)
@@ -364,8 +362,8 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeResponse:
-        request = IncludeRequest(
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
             token=None,
             target=target,
             execute_along_path=execute_along_path,
@@ -393,8 +391,8 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> ExcludeResponse:
-        request = ExcludeRequest(
+    ) -> IncludeExcludeResponse:
+        request = IncludeExcludeRequest(
             token=None,
             target=target,
             execute_along_path=execute_along_path,
@@ -422,9 +420,10 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> RecomputeStatusResponse:
-        request = RecomputeStatusRequest(
+    ) -> StatusResponse:
+        request = AddressedCommand(
             token=None,
+            command_name="recompute_status",
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

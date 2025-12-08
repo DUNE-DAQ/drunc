@@ -1,5 +1,17 @@
-import getpass
+"""
+Test SSH Connection Manager with multiple concurrent processes.
+
+Verifies that:
+1. SSHProcessLifetimeManager can execute multiple remote processes concurrently
+2. Log output from each process is captured correctly via remote log files
+3. All processes can be terminated cleanly via SIGHUP
+4. Resource cleanup is complete
+"""
+
+import logging
+import os
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -10,30 +22,62 @@ from druncschema.process_manager_pb2 import (
     ProcessMetadata,
 )
 
-from drunc.grpc_testing_tools.connection_utils import wait_for
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 
-def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
+@pytest.fixture
+def ssh_manager():
+    """Fixture providing SSH Connection Manager with cleanup and console logging."""
+    logger = logging.getLogger("test_ssh")
+    logger.setLevel(logging.DEBUG)
+
+    # Create console handler for command line output
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    # Create formatter for readable log messages
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(formatter)
+
+    # Add handler to logger (avoid duplicate handlers)
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+
+    manager = SSHProcessLifetimeManager(
+        disable_localhost_host_key_check=True,
+        disable_host_key_check=False,
+        logger=logger,
+    )
+
+    yield manager
+
+    # Guaranteed cleanup
+    manager.cleanup_all()
+
+
+@pytest.mark.paramiko
+def test_ssh_multi_process_lifecycle(ssh_manager):
     """
-    Execute and verify lifecycle of multiple concurrent SSH processes.
+    Test lifecycle of 10 concurrent SSH processes.
 
-    Tests complete lifecycle: process execution, log capture, termination
-    via SIGHUP, and resource cleanup. Verifies that all processes execute
-    correctly, produce expected log output, and terminate cleanly.
-
-    Args:
-        ssh_manager: SSH process lifetime manager instance
-        test_file_path: Path to test file (for locating simple_process.py)
+    Executes 10 processes via SSH, verifies log output, terminates all
+    processes via SIGHUP, and confirms complete cleanup.
     """
+
+    # Create temporary directory for log files
     with tempfile.TemporaryDirectory() as temp_dir:
         log_dir = Path(temp_dir)
 
-        simple_process_script = test_file_path.parent / "simple_process.py"
+        # Path to simple_process.py (assumed to be in same directory as test)
+        simple_process_script = Path(__file__).parent / "simple_process.py"
         assert simple_process_script.exists(), (
             f"simple_process.py not found at {simple_process_script}"
         )
 
-        num_processes = 3
+        # Execute 10 processes
+        num_processes = 10
         process_uuids = []
         process_names = []
 
@@ -46,12 +90,13 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
             process_uuid = str(uuid.uuid4())
             process_uuids.append(process_uuid)
 
+            # Build boot request with all necessary parameters
             boot_request = BootRequest(
                 process_description=ProcessDescription(
                     metadata=ProcessMetadata(
                         name=process_name,
                         session="test_session",
-                        user=getpass.getuser(),
+                        user=os.getenv("USER"),
                         hostname="localhost",
                     ),
                     process_execution_directory="/",
@@ -59,17 +104,23 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
                 )
             )
 
+            # Add executable and arguments to boot request
             boot_request.process_description.executable_and_arguments.add(
                 exec=f"python3 {simple_process_script}", args=[process_name]
             )
 
+            # Execute via start_process method
             ssh_manager.start_process(
                 uuid=process_uuid,
                 boot_request=boot_request,
             )
 
             print(f"Executed {process_name} with UUID {process_uuid}")
+        # Wait for processes to write log entries
+        print("\n=== Waiting for log output ===")
+        time.sleep(5.0)
 
+        # Verify all processes are alive
         print("\n=== Verifying process status ===")
         alive_count = sum(
             1 for uuid in process_uuids if ssh_manager.is_process_alive(uuid)
@@ -79,41 +130,42 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
         )
         print(f"✓ All {num_processes} processes confirmed alive")
 
-        def check_log_lines():
+        # Read and verify logs from each process
+        print("\n=== Checking log output ===")
+
+        for i, process_uuid in enumerate(process_uuids):
+            process_name = process_names[i]
+            log_file = str(log_dir / f"{process_name}.log")
+
+            # Read log file via SSH
             log_lines = ssh_manager.read_log_file(
                 hostname="localhost",
-                user=getpass.getuser(),
+                user=os.getenv("USER"),
                 log_file=log_file,
                 num_lines=100,
             )
 
-            if not len(log_lines) > 0:
-                return False
+            assert len(log_lines) > 0, f"No logs found for {process_name}"
 
+            # Verify expected log content
             log_text = "".join(log_lines)
-            if "Process started" not in log_text:
-                return False
-            if "Heartbeat" not in log_text:
-                return False
+            assert "Process started" in log_text, (
+                f"Missing start message in {process_name}"
+            )
+            assert "Heartbeat" in log_text, f"Missing heartbeat in {process_name}"
 
             print(f"✓ {process_name} logs verified ({len(log_lines)} lines)")
-            return True
 
-        print("\n=== Checking log output ===")
-        for i, process_uuid in enumerate(process_uuids):
-            process_name = process_names[i]
-            log_file = str(log_dir / f"{process_name}.log")
-            log_lines_correct = wait_for(
-                check_log_lines, True, timeout=10.0, poll_interval=1.0
-            )
-            assert log_lines_correct, (
-                f"Log lines verification failed for {process_name}"
-            )
-
+        # Terminate all processes via SIGHUP (closing SSH connection)
         print("\n=== Terminating all processes via SIGHUP ===")
+
         for process_uuid in process_uuids:
             ssh_manager.terminate_process(process_uuid, timeout=10.0)
 
+        # Wait for processes to terminate
+        time.sleep(2.0)
+
+        # Verify all processes are dead
         dead_count = sum(
             1 for uuid in process_uuids if not ssh_manager.is_process_alive(uuid)
         )
@@ -122,23 +174,20 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
         )
         print(f"✓ All {num_processes} processes terminated")
 
+        # Verify exit codes are captured
         print("\n=== Verifying exit codes ===")
         for process_uuid in process_uuids:
-            exit_code = wait_for(
-                lambda: ssh_manager.get_exit_code(process_uuid),
-                expected_value=lambda x: x is not None,
-                timeout=5.0,
-                poll_interval=0.5,
-            )
-            assert exit_code is not None, (
-                f"No exit code for {process_uuid} after 5s timeout"
-            )
+            exit_code = ssh_manager.get_exit_code(process_uuid)
+            # Exit code should be -1 for SIGHUP termination
+            assert exit_code is not None, f"No exit code for {process_uuid}"
             print(f"Process {process_uuid}: exit code {exit_code}")
 
+        # Clean up all processes
         print("\n=== Cleaning up resources ===")
         for process_uuid in process_uuids:
             ssh_manager.cleanup_process(process_uuid)
 
+        # Verify no active processes remain
         active_keys = ssh_manager.get_active_process_keys()
         assert len(active_keys) == 0, (
             f"Found {len(active_keys)} active processes after cleanup"
@@ -147,24 +196,3 @@ def execute_multi_process_lifecycle_test(ssh_manager, test_file_path):
         print(
             "\n✓ Test passed: All processes executed, logged, and cleaned up successfully"
         )
-
-
-@pytest.mark.paramiko
-def test_ssh_multi_process_lifecycle_paramiko(ssh_manager_paramiko):
-    """
-    Test lifecycle of 3 concurrent SSH processes using Paramiko.
-
-    Executes 3 processes via SSH, verifies log output, terminates all
-    processes via SIGHUP, and confirms complete cleanup.
-    """
-    execute_multi_process_lifecycle_test(ssh_manager_paramiko, Path(__file__))
-
-
-def test_ssh_multi_process_lifecycle_shell(ssh_manager_shell):
-    """
-    Test lifecycle of 3 concurrent SSH processes using shell.
-
-    Executes 3 processes via SSH, verifies log output, terminates all
-    processes via SIGHUP, and confirms complete cleanup.
-    """
-    execute_multi_process_lifecycle_test(ssh_manager_shell, Path(__file__))

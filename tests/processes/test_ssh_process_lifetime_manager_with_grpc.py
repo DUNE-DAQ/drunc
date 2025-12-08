@@ -1,8 +1,18 @@
+"""
+Test for Manager Boot and Kill functionality.
+
+This test verifies that:
+1. Manager server can boot remote RootController servers via SSH using Boot RPC
+2. Booted servers become operational and respond to requests
+3. Manager Kill RPC terminates all booted servers before shutting down
+4. All processes are properly cleaned up
+"""
+
 import os
 import time
 import uuid
-from getpass import getpass
 from pathlib import Path
+from typing import Generator, List, Optional
 
 import pytest
 from grpc import RpcError, StatusCode, insecure_channel
@@ -16,6 +26,7 @@ from drunc.grpc_testing_tools.grpc_server_manager import (
 from drunc.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
+from drunc.grpc_testing_tools.port_cleaner import kill_process_on_port
 from drunc.grpc_testing_tools.test_services_pb2 import (
     BootRequest,
     DummyRequest,
@@ -32,27 +43,108 @@ from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceStub,
     RootControllerServiceStub,
 )
-from drunc.process_manager.configuration import ProcessManagerTypes
 
 
-def execute_manager_boot_and_kill_test(
-    grpc_process_manager_service_resources, lifetime_manager_type: str
-):
+class ResourcesForTest:
+    """Container for test resources requiring cleanup."""
+
+    def __init__(self):
+        self.log_manager: Optional[LogFileManager] = None
+        self.connection_manager: Optional[MultiprocessingConnectionManager] = None
+        self.server_manager: Optional[GrpcServerManager] = None
+        self.manager_channel = None
+        self.root_channel = None
+        self.ports_to_cleanup: List[int] = []
+
+
+@pytest.fixture
+def test_resources() -> Generator[ResourcesForTest, None, None]:
     """
-    Execute and verify Manager boot and kill functionality via gRPC.
+    Fixture providing test resources with guaranteed cleanup.
 
-    Tests complete lifecycle:
-    1) Manager server startup
-    2) SSH-based RootController server boot via Boot RPC
-    3) Verification of operational state
-    4) Graceful shutdown via Kill RPC
-    5) Resource cleanup.
+    Ensures all resources are cleaned up even if the test fails,
+    preventing orphaned processes and open channels. Also forcefully
+    kills any processes still bound to test ports.
+
+    Yields:
+        ResourcesForTest: Container for test resources
+    """
+    resources = ResourcesForTest()
+
+    try:
+        yield resources
+    finally:
+        # Guaranteed cleanup in reverse order of creation
+        print("\n=== Fixture Cleanup ===")
+
+        # Close gRPC channels
+        if resources.root_channel:
+            try:
+                resources.root_channel.close()
+                print("RootController channel closed")
+            except Exception as e:
+                print(f"Warning: Error closing root channel: {e}")
+
+        if resources.manager_channel:
+            try:
+                resources.manager_channel.close()
+                print("Manager channel closed")
+            except Exception as e:
+                print(f"Warning: Error closing manager channel: {e}")
+
+        # Clean up server manager (stops all servers)
+        if resources.server_manager:
+            try:
+                resources.server_manager.cleanup()
+                print("Server manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during server cleanup: {e}")
+
+        # Clean up connection manager
+        if resources.connection_manager:
+            try:
+                resources.connection_manager.cleanup()
+                print("Connection manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during connection cleanup: {e}")
+
+        # Force kill any remaining processes on test ports
+        if resources.ports_to_cleanup:
+            print("\n=== Force cleanup of test ports ===")
+            for port in resources.ports_to_cleanup:
+                killed = kill_process_on_port(port)
+                if killed:
+                    print(f"Cleaned up orphaned process on port {port}")
+
+        # Clean up log manager
+        if resources.log_manager:
+            try:
+                resources.log_manager.cleanup()
+                print("Log manager cleanup completed")
+            except Exception as e:
+                print(f"Warning: Error during log cleanup: {e}")
+
+
+# Long test - Run pytest with --test-grpc option to enable
+# @pytest.mark.grpc
+@pytest.mark.paramiko
+def test_manager_boot_and_kill_via_grpc(test_resources):
+    """
+    Test that verifies Manager can boot servers via Boot RPC and kill them via Kill RPC.
+
+    This test:
+    1. Starts a Manager server using multiprocessing
+    2. Sends Boot request to start RootController via SSH
+    3. Verifies RootController is operational
+    4. Sends Kill request to Manager
+    5. Verifies Manager terminates booted RootController first
+    6. Verifies Manager itself terminates
+    7. Checks all processes are cleaned up
 
     Args:
-        grpc_process_manager_service_resources: Fixture providing process manager serving via gRPC
-        resources that need to be started/ cleaned up.
-        lifetime_manager_type: Type of process lifetime manager to use
+        test_resources: Fixture providing managed test resources with guaranteed cleanup
     """
+
     PROJECT_ROOT = Path(__file__).resolve().parents[2]
     ENV_SCRIPT_DIR = PROJECT_ROOT.parent.parent
 
@@ -84,35 +176,25 @@ def execute_manager_boot_and_kill_test(
     server_timeout = 60.0
 
     # Register ports for cleanup
-    grpc_process_manager_service_resources.ports_to_cleanup = [
-        manager_port,
-        root_controller_port,
-    ]
+    test_resources.ports_to_cleanup = [manager_port, root_controller_port]
 
-    print(f"\n=== Test Manager Boot and Kill via gRPC ({lifetime_manager_type}) ===")
+    print("=== Test Manager Boot and Kill via gRPC ===")
     print(f"Manager port: {manager_port}")
     print(f"RootController port: {root_controller_port}")
-    print(f"Lifetime manager type: {lifetime_manager_type}")
     print(f"Environment script: {env_setup_script}")
 
     # Create log file manager
-    grpc_process_manager_service_resources.log_manager = LogFileManager()
-    manager_log = grpc_process_manager_service_resources.log_manager.create_log_file(
-        "ManagerServer"
-    )
-    root_log = grpc_process_manager_service_resources.log_manager.create_log_file(
-        "RootControllerServer"
-    )
+    test_resources.log_manager = LogFileManager()
+    manager_log = test_resources.log_manager.create_log_file("ManagerServer")
+    root_log = test_resources.log_manager.create_log_file("RootControllerServer")
     print(f"Manager log: {manager_log}")
     print(f"RootController log (local): {root_log}")
 
     # Create connection and server managers for Manager (multiprocessing)
-    grpc_process_manager_service_resources.connection_manager = (
-        MultiprocessingConnectionManager(env_vars={"GRPC_TRACE": "http"})
+    test_resources.connection_manager = MultiprocessingConnectionManager(
+        env_vars={"GRPC_TRACE": "http"}
     )
-    grpc_process_manager_service_resources.server_manager = GrpcServerManager(
-        grpc_process_manager_service_resources.connection_manager
-    )
+    test_resources.server_manager = GrpcServerManager(test_resources.connection_manager)
 
     # Configure Manager server
     manager_config = GrpcServerConfig(
@@ -128,36 +210,28 @@ def execute_manager_boot_and_kill_test(
 
     print("\n=== Starting Manager Server ===")
 
-    # Start the Manager server with specified lifetime manager type
-    manager_handle = (
-        grpc_process_manager_service_resources.server_manager.start_manager_server(
-            manager_config, lifetime_manager_type=lifetime_manager_type
-        )
-    )
+    # Start the Manager server
+    manager_handle = test_resources.server_manager.start_manager_server(manager_config)
     assert manager_handle is not None, "Failed to create Manager server handle"
     print(f"Manager server handle created: {manager_handle.process_id}")
 
     # Wait for Manager to be ready
     print("\n=== Waiting for Manager Ready ===")
-    ready = grpc_process_manager_service_resources.server_manager.wait_for_server_ready(
+    ready = test_resources.server_manager.wait_for_server_ready(
         "TestManagerServer", timeout=server_timeout
     )
 
     assert ready, "Manager server failed to become ready within timeout"
-    assert grpc_process_manager_service_resources.connection_manager.is_process_alive(
-        manager_handle
-    ), "Manager server process should be alive"
+    assert test_resources.connection_manager.is_process_alive(manager_handle), (
+        "Manager server process should be alive"
+    )
     print("Manager server is ready and process is alive")
 
     # Create gRPC client connection to Manager
     print("\n=== Testing Manager Communication ===")
 
-    grpc_process_manager_service_resources.manager_channel = insecure_channel(
-        f"localhost:{manager_port}"
-    )
-    manager_stub = ManagerServiceStub(
-        grpc_process_manager_service_resources.manager_channel
-    )
+    test_resources.manager_channel = insecure_channel(f"localhost:{manager_port}")
+    manager_stub = ManagerServiceStub(test_resources.manager_channel)
 
     # Send test request to verify Manager is working
     test_request = DummyRequest(
@@ -170,7 +244,7 @@ def execute_manager_boot_and_kill_test(
     print(f"Manager communication successful: {test_response.reply}")
 
     # Send Boot request to start RootController via SSH
-    print("\n=== Sending Boot Request for RootController ===")
+    print("\n=== Sending Boot Request for RootController")
 
     # Create process UUID
     process_uuid = ProcessUUID(uuid=str(uuid.uuid4()))
@@ -178,7 +252,7 @@ def execute_manager_boot_and_kill_test(
     # Create process metadata
     process_metadata = ProcessMetadata(
         uuid=process_uuid,
-        user=getpass.getuser(),
+        user=os.getenv("USER"),
         session="test_session",
         name="RootController",
         hostname="localhost",
@@ -229,7 +303,7 @@ def execute_manager_boot_and_kill_test(
         process_restriction=process_restriction,
     )
 
-    # Send the boot request
+    # Send the boot request using the new 'boot' method
     boot_response = manager_stub.boot(boot_request)
 
     print(f"Boot response: success={boot_response.flag.success}")
@@ -240,7 +314,7 @@ def execute_manager_boot_and_kill_test(
     print(f"RootController log (SSH remote): {root_log}")
 
     # Check for fork() issue after triggering SSH boot on gRPC server
-    error = grpc_process_manager_service_resources.log_manager.check_for_errors()
+    error = test_resources.log_manager.check_for_errors()
     if error is not None:
         pytest.fail(f"Error detected after Boot request. Error: {error}")
 
@@ -250,12 +324,8 @@ def execute_manager_boot_and_kill_test(
 
     # Verify RootController is operational by connecting to it
     print("\n=== Verifying RootController is Operational ===")
-    grpc_process_manager_service_resources.root_channel = insecure_channel(
-        f"localhost:{root_controller_port}"
-    )
-    root_stub = RootControllerServiceStub(
-        grpc_process_manager_service_resources.root_channel
-    )
+    test_resources.root_channel = insecure_channel(f"localhost:{root_controller_port}")
+    root_stub = RootControllerServiceStub(test_resources.root_channel)
 
     root_test_request = DummyRequest(message="Test request to booted RootController")
 
@@ -319,19 +389,16 @@ def execute_manager_boot_and_kill_test(
     start_time = time.time()
 
     while (
-        (time.time() - start_time) < termination_timeout
-        and grpc_process_manager_service_resources.connection_manager.is_process_alive(
-            manager_handle
-        )
+        time.time() - start_time
+    ) < termination_timeout and test_resources.connection_manager.is_process_alive(
+        manager_handle
     ):
         time.sleep(0.5)
         print(".", end="", flush=True)
 
     print()  # New line after dots
 
-    if grpc_process_manager_service_resources.connection_manager.is_process_alive(
-        manager_handle
-    ):
+    if test_resources.connection_manager.is_process_alive(manager_handle):
         pytest.fail("Manager process did not terminate within expected time")
 
     elapsed = time.time() - start_time
@@ -342,42 +409,4 @@ def execute_manager_boot_and_kill_test(
     with pytest.raises(RpcError):
         manager_stub.MakeRequest(test_request, timeout=2.0)
 
-    print(
-        f"\n✓ Test passed: Manager ({lifetime_manager_type}) successfully booted and killed RootController"
-    )
-
-
-@pytest.mark.paramiko
-def test_manager_boot_and_kill_via_grpc_paramiko(
-    grpc_process_manager_service_resources,
-):
-    """
-    Test Manager boot and kill functionality using Paramiko SSH implementation.
-
-    Verifies Manager can boot servers via Boot RPC using Paramiko SSH backend
-    and terminate them via Kill RPC with proper cleanup.
-
-    Args:
-        grpc_process_manager_service_resources: Fixture providing managed gRPC test resources
-    """
-    execute_manager_boot_and_kill_test(
-        grpc_process_manager_service_resources, ProcessManagerTypes.SSH_PARAMIKO
-    )
-
-
-# TODO re-enable after https://github.com/DUNE-DAQ/drunc/issues/677 issue #677 is resolved
-# This test seems to fail due to disabled disabled fork support
-@pytest.mark.skip
-def test_manager_boot_and_kill_via_grpc_shell(grpc_process_manager_service_resources):
-    """
-    Test Manager boot and kill functionality using shell SSH implementation.
-
-    Verifies Manager can boot servers via Boot RPC using shell SSH backend
-    and terminate them via Kill RPC with proper cleanup.
-
-    Args:
-        grpc_process_manager_service_resources: Fixture providing managed gRPC test resources
-    """
-    execute_manager_boot_and_kill_test(
-        grpc_process_manager_service_resources, ProcessManagerTypes.SSH_SHELL
-    )
+    print("\n✓ Test passed: Manager successfully booted and killed RootController")

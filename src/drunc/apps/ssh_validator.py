@@ -3,16 +3,16 @@ import signal
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.process_manager.ssh_process_manager_paramiko_client import on_parent_exit
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
 
 def validate_ssh_connection(configuration: str, session_name: str, log_level: str):
-    log = get_logger("validate_ssh_connection", rich_handler=True)
+    log = get_logger("validate_ssh_connection")
+    create_logger_handler(rich_handler=True)
 
     db = conffwk.Configuration(f"oksconflibs:{configuration}")
     session_dal = db.get_dal(class_name="Session", uid=session_name)
@@ -71,7 +71,7 @@ def validate_ssh_connection(configuration: str, session_name: str, log_level: st
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )

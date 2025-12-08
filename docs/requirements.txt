@@ -7,4 +7,3 @@ mkdocs-section-index
 mkdocstrings
 mkdocstrings-python
 pymdown-extensions
-mkdocs-exclude

@@ -12,13 +12,13 @@ from pathlib import Path
 
 import click
 import paramiko
-from daqpytools.logging.levels import logging_log_levels
 from jinja2 import Template
 
 import drunc as _drunc
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
-log = get_logger("ssh_configurator", rich_handler=True)
+log = get_logger("ssh_configurator")
+create_logger_handler(rich_handler=True)
 
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"
@@ -60,7 +60,7 @@ hosts_to_access = np0x_servers + ["localhost"]
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -79,7 +79,7 @@ def main(log_level: str) -> None:
     """
 
     # Set the log level
-    log.setLevel(logging_log_levels[log_level.upper()])
+    log.setLevel(log_levels[log_level.upper()])
 
     # Determine SSH configuration file path
     ssh_configuration_path: Path = Path("~/.ssh/config").expanduser().resolve()

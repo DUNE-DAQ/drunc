@@ -47,10 +47,7 @@ def collect_apps(
     @return The list of dictionaries holding application attributs
 
     """
-
-    #! process manager should have the rich handler
-    # see #691
-    log = get_logger("process_manager.collect_apps", rich_handler=True)
+    log = get_logger("process_manager.collect_apps")
     # Get default environment from Session
     defenv = env.copy()
 

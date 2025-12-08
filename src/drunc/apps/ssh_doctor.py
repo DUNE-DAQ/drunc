@@ -10,20 +10,17 @@ from pathlib import Path
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.processes.ssh_process_lifetime_manager_paramiko import (
-    SSHProcessLifetimeManagerParamiko,
-)
+from drunc.processes.ssh_process_lifetime_manager import SSHProcessLifetimeManager
 
 # from drunc.process_manager.ssh_process_manager import on_parent_exit
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import create_logger_handler, get_logger, log_levels
 
 kPublicKeyAuth = "publickey"
 kKerberosAuth = "gssapi-with-mic"
 authentication_methods: list[str] = [kPublicKeyAuth, kKerberosAuth]
-log = get_logger("ssh_doctor", rich_handler=True)
+log = get_logger("ssh_doctor")
 
 
 def test_host_connection(host: str, test_auth: str) -> bool:
@@ -39,7 +36,7 @@ def test_host_connection(host: str, test_auth: str) -> bool:
         bool: True if the SSH connection is successful, False otherwise.
     """
 
-    ssh_manager = SSHProcessLifetimeManagerParamiko(disable_host_key_check=True)
+    ssh_manager = SSHProcessLifetimeManager(disable_host_key_check=True)
 
     try:
         ssh_manager.validate_host_connection(host=host, auth_method=test_auth)
@@ -122,7 +119,7 @@ def print_results(results: dict[str, dict[str, bool]]) -> None:
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    type=click.Choice(log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -137,7 +134,8 @@ def main(log_level: str):
 
     Set the log level to error to see only failed connections.\n
     """
-    log.setLevel(logging_log_levels[log_level.upper()])
+    log.setLevel(log_levels[log_level.upper()])
+    create_logger_handler(rich_handler=True)
 
 
 @main.command()

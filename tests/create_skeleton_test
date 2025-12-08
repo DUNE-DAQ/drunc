@@ -2,9 +2,9 @@
 import os
 from pathlib import Path
 
-from drunc.utils.utils import get_logger, get_root_logger
+from drunc.utils.utils import get_logger, setup_root_logger
 
-get_root_logger("ERROR")
+setup_root_logger("ERROR")
 log = get_logger("skeleton_test", rich_handler=True)
 drunc_srcs = (Path(os.path.abspath(__file__)) / ".." / "..").resolve()
 test_dir = (Path(os.path.abspath(__file__)) / "..").resolve()
