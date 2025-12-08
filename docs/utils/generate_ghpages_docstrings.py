@@ -17,6 +17,11 @@ for path in root_folder.rglob("*.py"):
     if any(part in excluded_folders for part in path.parts):
         continue
 
+    # Skip if parent folder has no __init__.py. mkdocstrings currently
+    # fails for directories without __init__
+    if not (path.parent / "__init__.py").exists():
+        continue
+
     # Module and documentation paths relative to root
     module_path = path.relative_to(root_folder).with_suffix("")
     doc_path = path.relative_to(root_folder).with_suffix(".md")

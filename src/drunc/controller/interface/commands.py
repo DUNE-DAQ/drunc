@@ -7,7 +7,7 @@ from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
-logger_params = {"logger_name": "controller.interface", "rich_handler": True}
+logger_params = {"logger_name": "controller.interface"}
 
 
 @click.command("list-transitions")
@@ -116,19 +116,11 @@ def recompute_status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    statuses = obj.get_driver("controller").recompute_status(
+    obj.get_driver("controller").recompute_status(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     )
-    descriptions = obj.get_driver("controller").describe(
-        target=target,
-        execute_along_path=execute_along_path,
-        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    )
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
-    obj.print_status_summary()
 
 
 @click.command("connect")
