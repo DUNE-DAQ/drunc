@@ -46,7 +46,7 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import format_name_for_cli, get_logger
 
-log = get_logger("controller.interface.shell_utils")
+log = get_logger("controller.iface.shell_utils")
 
 
 @dataclass(slots=True)

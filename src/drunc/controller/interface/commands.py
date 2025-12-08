@@ -7,7 +7,7 @@ from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
-log = get_logger("controller.interface", rich_handler=True)
+log = get_logger("controller.iface", rich_handler=True)
 
 
 @click.command("list-transitions")

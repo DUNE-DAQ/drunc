@@ -16,7 +16,7 @@ class ThreadPinning(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="thread-pinning")
         self.log = get_logger(
-            "controller.interface.thread-pinning"
+            "controller.iface.thread-pinning"
         )  # TODO: Verify core/interface choice
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 

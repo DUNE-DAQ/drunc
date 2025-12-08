@@ -31,7 +31,7 @@ class SessionManagerDriver:
             **kwargs: Additional keyword arguments for the driver.
         """
         self.log = get_logger(
-            "controller.interface.SessionManagerDriver"
+            "controller.iface.SessionManagerDriver"
         )  # TODO: Verify core/interface choice
         self.address = address
         options = [

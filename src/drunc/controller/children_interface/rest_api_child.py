@@ -59,7 +59,7 @@ class ResponseDispatcher(threading.Thread):
     def __init__(self, listener):
         threading.Thread.__init__(self)
         self.listener = listener
-        self.log = get_logger("controller.children_interface.ResponseDispatcher")
+        self.log = get_logger("controller.child_iface.ResponseDispatcher")
 
     def run(self) -> None:
         self.log.debug("ResponseDispatcher starting to run")
@@ -112,7 +112,7 @@ class ResponseListener:
                 cls.dispatcher.start()
 
                 def index():
-                    log = get_logger("controller.children_interface.ResponseListener")
+                    log = get_logger("controller.child_iface.ResponseListener")
                     json = request.get_json(force=True)
                     log.debug(f"Received {json}")
                     # enqueue command reply

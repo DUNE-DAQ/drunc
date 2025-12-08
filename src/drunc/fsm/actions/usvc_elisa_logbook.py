@@ -18,7 +18,7 @@ class ElisaLogbook(FSMAction):
     def __init__(self):
         super().__init__(name="elisa-logbook")
         self.log = get_logger(
-            "controller.interface.elisa-logbook"
+            "controller.iface.elisa-logbook"
         )  # TODO: Verify core/interface choice
 
         try:

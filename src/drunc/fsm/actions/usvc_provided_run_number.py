@@ -12,7 +12,7 @@ from drunc.utils.utils import get_logger
 class UsvcProvidedRunNumber(FSMAction):
     def __init__(self, configuration):
         self.log = get_logger(
-            "controller.interface.usvc_run_number"
+            "controller.iface.usvc_run_number"
         )  # TODO: Verify core/interface choice
         super().__init__(name="usvc-provided-run-number")
         dotdrunc = get_dotdrunc_json()
