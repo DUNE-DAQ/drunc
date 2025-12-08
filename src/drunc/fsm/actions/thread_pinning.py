@@ -15,9 +15,7 @@ from drunc.utils.utils import get_logger
 class ThreadPinning(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="thread-pinning")
-        self.log = get_logger(
-            "controller.iface.thread-pinning"
-        )  # TODO: Verify core/interface choice
+        self.log = get_logger("controller.iface.thread-pinning")
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 
     def pin_thread(self, thread_pinning_file, configuration, session):

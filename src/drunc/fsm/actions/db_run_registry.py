@@ -20,7 +20,7 @@ from drunc.utils.utils import get_logger
 class DBRunRegistry(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="db-run-registry")
-        self.log = get_logger("controller.iface.usvc_db_run_registry")  # guess
+        self.log = get_logger("controller.iface.usvc_db_run_registry")
 
         dotdrunc = get_dotdrunc_json()
         try:

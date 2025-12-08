@@ -30,9 +30,7 @@ class SessionManagerDriver:
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        self.log = get_logger(
-            "controller.iface.SessionManagerDriver"
-        )  # TODO: Verify core/interface choice
+        self.log = get_logger("controller.iface.SessionManagerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds

@@ -42,12 +42,10 @@ from drunc.utils.utils import (
 @click.pass_context
 def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
     get_root_logger(log_level)
-
     process_manager_log = get_logger(
         logger_name="process_manager",
         rich_handler=True,
     )
-
     process_manager_shell_log = get_logger("process_manager.shell")
 
     ctx.obj.reset(address=process_manager_address)

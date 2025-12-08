@@ -17,9 +17,7 @@ from drunc.utils.utils import get_logger
 class ElisaLogbook(FSMAction):
     def __init__(self):
         super().__init__(name="elisa-logbook")
-        self.log = get_logger(
-            "controller.iface.elisa-logbook"
-        )  # TODO: Verify core/interface choice
+        self.log = get_logger("controller.iface.elisa-logbook")
 
         try:
             dotdrunc = get_dotdrunc_json()
