@@ -1,6 +1,8 @@
 import abc
 import getpass
 import socket
+import subprocess
+import sys
 from collections.abc import Mapping
 
 import click
@@ -57,21 +59,33 @@ def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
         ValueError: If the hostname cannot be resolved to an IP address.
     """
 
-    # 1. Check the k8s cluster ports
-    config.load_kube_config()
-    v1 = client.CoreV1Api()
+    log = get_logger("utils.is_port_available")
 
-    used_nodeports = {
-        _port.node_port
-        for svc in v1.list_service_for_all_namespaces().items
-        if svc.spec and svc.spec.ports
-        for _port in svc.spec.ports
-        if _port.node_port is not None
-    }
-    if port in used_nodeports:
-        return False
+    # 1. If running on a k8s cluster node, check the k8s cluster ports
+    try:
+        running_processes = subprocess.run(
+            "ps aux", shell=True, capture_output=True, text=True, check=True
+        ).stdout.lower()
+    except subprocess.CalledProcessError as exc:
+        log.exception(exc)
+        log.error("Failed to list all the processes on the host, debug immediately!")
+        sys.exit(1)
 
-    # 1. Resolve Hostname to IP Address
+    if "kubelet" in running_processes:
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+
+        used_nodeports = {
+            _port.node_port
+            for svc in v1.list_service_for_all_namespaces().items
+            if svc.spec and svc.spec.ports
+            for _port in svc.spec.ports
+            if _port.node_port is not None
+        }
+        if port in used_nodeports:
+            return False
+
+    # 2. Resolve Hostname to IP Address
     if host in ["localhost", "127.0.0.1", "0.0.0.0"]:
         # Use loopback IP (127.0.0.1), as it includes container proxies.
         check_ip = "127.0.0.1"
@@ -81,7 +95,7 @@ def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
         except socket.gaierror:
             raise ValueError(f"Could not resolve hostname: {host}")
 
-    # 2. Perform Connection Check
+    # 3. Perform Connection Check
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.settimeout(timeout)
         try:
