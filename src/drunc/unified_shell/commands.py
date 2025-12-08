@@ -19,9 +19,13 @@ from drunc.utils.utils import get_logger
     default=0.1,
     help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
 )
+# Have it as an optional argument
+# Then in the boot object, define a check that sees if you manually override it (takes precedence)
+# If not, then check context metadata
+
 @click.pass_obj
 def boot(
-    obj: ProcessManagerContext,
+    obj: ProcessManagerContext,  # In this object you can define an attribute called (there is already a run mode)
     override_logs: bool,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
@@ -32,11 +36,24 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
+    #! See if you can print out the processmanagercontext
+    log.critical(obj.running_mode)
+
+    #! Now check if you can hook into it..
+
     if len(processes.values) > 0:
         click.confirm(
             f"You already have {len(processes.values)} processes running in session {session_name}, are you sure you want to boot a session?",
             abort=True,
         )
+
+    # test = "50"
+    log.critical(f"Override logs: {override_logs}")
+
+    #! Pass the keyword argument frmo the unified shell to the key loggs
+
+    #! This is path two
+    # This is going to actually boot the actual thing
 
     try:
         results = obj.get_driver("process_manager").boot(

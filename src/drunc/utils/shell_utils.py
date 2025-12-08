@@ -71,6 +71,25 @@ class DecodedResponse:
         return DecodedResponse.str(self)
 
 
+#! define an attribute thats like 'are you a unified shell or not'
+# but better to define an enum thats like the 'running mode' but not that
+# call it operating mode, and then propagate this through
+
+# operating modes are documented (see link) (batch ,semi , interactive)
+# this is in the constructor of the unified shell
+
+# How would boot know if its unified shell, if its override logs or not?
+
+# operating mode is different than deployment mode
+
+# rename operating mode to running mode (update the docs for it as well)
+# then define operating mode as whether we're in unified shell or split shell mode
+
+#! This shouldn't be here, but for now lets put it there
+
+# Well unifiesdhellmode already exists
+
+
 class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
