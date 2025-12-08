@@ -1294,5 +1294,3 @@ class Controller(ControllerServicer):
             self.stateful_node.to_error()
 
         return response
-
-    (DescribeFSMRequest,)
