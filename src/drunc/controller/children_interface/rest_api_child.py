@@ -69,15 +69,8 @@ class ResponseDispatcher(threading.Thread):
         self.log.debug("ResponseDispatcher starting to run")
 
         while True:
-            # self.log.debug(f'starting to iterating: {self.listener.queue.qsize()}')
-            # self.log.debug(f'Queue pointer {self.listener.queue}')
-            # try:
             r = self.listener.queue.get()
             self.log.debug(f"ResponseDispatcher got the following answer: {r}")
-            # except:
-            #     self.log.debug(f'ResponseDispatcher nothing')
-            #     continue
-
             if r == self.STOP:
                 self.log.debug("ResponseDispatcher STOP")
                 break
