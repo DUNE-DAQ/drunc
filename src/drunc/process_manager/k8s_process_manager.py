@@ -711,7 +711,7 @@ class K8sProcessManager(ProcessManager):
 
         if log_file_path:
             self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
-            log_redirect_cmd = f"exec > {log_file_path} 2>&1;"
+            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
         else:
             log_redirect_cmd = ""
 
@@ -730,7 +730,7 @@ class K8sProcessManager(ProcessManager):
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
-            command=["/bin/sh", "-c"],
+            command=["/bin/bash", "-c"],
             args=[final_command_args],
             env=[
                 client.V1EnvVar(name=k, value=v)

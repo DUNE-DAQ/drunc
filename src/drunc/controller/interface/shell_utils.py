@@ -716,27 +716,8 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     return cmd, cmd_name
 
 
-@lru_cache(maxsize=1024)
-def is_private_ip(ip_str: str) -> bool:
-    """
-    Checks if an IP address is private (RFC 1918), loopback, or link-local.
-    These IPs will almost never have a public reverse DNS record.
-    """
-    if not ip_str:
-        return True
-    try:
-        ip_obj = ipaddress.ip_address(ip_str)
-        # .is_private = 10.x, 172.16-31.x, 192.168.x
-        # .is_loopback = 127.x.x.x
-        # .is_link_local = 169.254.x.x
-        return ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local
-    except ValueError:
-        # Not 'valid' IP address -> treat as private
-        return True
-
-
 @lru_cache(maxsize=4096)
-def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
+def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
     Resolves an IP to a hostname, with optimizations:
     1. Caches all results.
@@ -744,20 +725,22 @@ def get_hostname_smart(ip_address: str, timeout_seconds: float = 0.2) -> str:
     3. Uses a short timeout for public IPs.
     """
 
-    # If private IP (k8s), don't try to resolve it
-    if is_private_ip(ip_address):
-        return ip_address
+    if not ip_or_host:
+        return ""
 
+    try:
+        ip_address = ipaddress.ip_address(ip_or_host)
+    except ValueError:
+        return ip_or_host
     # If public IP, try to resolve it.
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)
-
-        hostname, _, _ = socket.gethostbyaddr(ip_address)
-        return hostname
-
-    except (socket.herror, socket.gaierror, socket.timeout):
-        return ip_address
+        try:
+            hostname, _, _ = socket.gethostbyaddr(str(ip_address))
+            return hostname
+        except (socket.herror, socket.gaierror, socket.timeout, OSError):
+            return ip_or_host
 
     finally:
         socket.setdefaulttimeout(original_timeout)
