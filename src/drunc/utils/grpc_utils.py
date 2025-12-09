@@ -11,7 +11,7 @@ from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
 
 
 class UnpackingError(DruncCommandException):
@@ -313,41 +313,57 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     )
 
 
-def respond_with_rich_error_status(
-    context, domain: str, message: str, error_details: str
-):
-    """
-    Abort the RPC with INTERNAL error containing ErrorInfo.
-
-    Args:
-        domain (str): domain or subsystem where the error occurred. This will be
-            prefixed with "drunc.". Examples: SessionManager, ProcessManager.
-        message (str): Quick description of the error. Used for both `Status.message`
-            and as the `ErrorInfo.reason`.
-        error_details (str): Additional error context.
-    Returns:
-        status_pb2.Status: A gRPC rich error status object.
-    """
-    error_info = error_details_pb2.ErrorInfo(
-        reason=message,
-        domain=f"drunc.{domain}",
-        metadata={"error": error_details},
-    )
-    detail_any = any_pb2.Any()
-    detail_any.Pack(error_info)
-
-    rich_status = status_pb2.Status(
-        code=code_pb2.INTERNAL,
-        message=message,
-        details=[detail_any],
-    )
-
-    context.abort_with_status(rpc_status.to_status(rich_status))
-
-
 def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
     """
     Converts a Python dictionary into an instance of a gRPC Protobuf message.
     'proto_class_instance' should be an empty instance, e.g., Token()
     """
     return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+
+
+class RichErrorInterceptor(grpc.ServerInterceptor):
+    def intercept_service(self, continuation, handler_call_details):
+        handler = continuation(handler_call_details)
+
+        def error_wrapper(request, context):
+            try:
+                return handler.unary_unary(request, context)
+
+            except DruncSetupException as e:
+                detail_obj = error_details_pb2.PreconditionFailure(
+                    violations=[
+                        error_details_pb2.PreconditionFailure.Violation(
+                            type="MISSING OR INVALID",
+                            subject=str(e),
+                            description=str(e.details),
+                        )
+                    ]
+                )
+                self._abort_with_detail(context, e.grpc_error_code, str(e), detail_obj)
+
+            except Exception as e:
+                # Fallback
+                detail = error_details_pb2.ErrorInfo(
+                    reason="unexpected_error",
+                    domain="server",
+                    metadata={"exception": str(type(e))},
+                )
+                return self._abort_with_detail(
+                    context, code_pb2.INTERNAL, str(e), detail
+                )
+
+        if handler.unary_unary:
+            return grpc.unary_unary_rpc_method_handler(
+                error_wrapper,
+                request_deserializer=handler.request_deserializer,
+                response_serializer=handler.response_serializer,
+            )
+        return handler
+
+    def _abort_with_detail(self, context, code, message, detail_obj):
+        detail_any = any_pb2.Any()
+        detail_any.Pack(detail_obj)
+        rich_status = status_pb2.Status(
+            code=code, message=message, details=[detail_any]
+        )
+        context.abort_with_status(rpc_status.to_status(rich_status))

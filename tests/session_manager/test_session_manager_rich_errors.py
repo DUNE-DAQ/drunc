@@ -1,4 +1,5 @@
 from concurrent import futures
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import grpc
@@ -7,10 +8,10 @@ from druncschema.session_manager_pb2_grpc import (
     SessionManagerStub,
     add_SessionManagerServicer_to_server,
 )
-from google.rpc import code_pb2, error_details_pb2, status_pb2
+from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import respond_with_rich_error_status
+from drunc.utils.grpc_utils import RichErrorInterceptor
 
 
 class SessionManagerRichErrorTestSuite:
@@ -24,7 +25,7 @@ class SessionManagerRichErrorTestSuite:
         self.stub = None
         self.servicer = None
 
-    def setup_server_and_client(self, method_name: str, rich_error_details: dict):
+    def setup_server_and_client(self):
         """Initialise a real gRPC server and client for testing rich error handling.
 
         Args:
@@ -38,18 +39,11 @@ class SessionManagerRichErrorTestSuite:
             mock_logger.return_value = mock_logger_instance
             self.servicer = SessionManager(name="dummy_session", configuration=[])
 
-        def _stub(request, context):
-            respond_with_rich_error_status(
-                context,
-                domain=rich_error_details.get("domain"),
-                message=rich_error_details.get("message"),
-                error_details=rich_error_details.get("details"),
-            )
-
-        setattr(self.servicer, method_name, _stub)
-
         # Configure and start the gRPC server
-        self.server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+        self.server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=10),
+            interceptors=[RichErrorInterceptor()],
+        )
         add_SessionManagerServicer_to_server(self.servicer, self.server)
         listen_addr = f"[::]:{self.server_port}"
         self.server.add_insecure_port(listen_addr)
@@ -79,41 +73,144 @@ def session_manager_rich_error_test_suite():
     suite.teardown_server_and_client()
 
 
-def test_list_all_configs_rich_error(
-    session_manager_rich_error_test_suite, generic_request
+def test_list_all_configs_no_config_files_rich_error(
+    session_manager_rich_error_test_suite, generic_request, monkeypatch
 ):
-    rich_error_details = {
-        "domain": "SessionManager",
-        "details": "Fake Error",
-        "message": "Unhandled error in list_all_configs",
-    }
+    """
+    Test when DUNEDAQ_DB_PATH is not set in the environment.
+    """
 
-    session_manager_rich_error_test_suite.setup_server_and_client(
-        method_name="list_all_configs", rich_error_details=rich_error_details
-    )
+    session_manager_rich_error_test_suite.setup_server_and_client()
+    stub = session_manager_rich_error_test_suite.stub
 
-    with pytest.raises(grpc.RpcError) as exc:
-        session_manager_rich_error_test_suite.stub.list_all_configs(generic_request)
+    # Remove the DUNEDAQ_DB_PATH from the environment to simulate it's not set
+    monkeypatch.delenv("DUNEDAQ_DB_PATH", raising=False)
 
-    err = exc.value
-    assert exc.value.code() == grpc.StatusCode.INTERNAL
-    assert err.code() == grpc.StatusCode.INTERNAL
+    with pytest.raises(grpc.RpcError) as excinfo:
+        stub.list_all_configs(generic_request)
 
-    # Rich error assertions
-    found_status = None
+    err = excinfo.value
+
+    assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+    assert "DUNEDAQ_DB_PATH" in err.details()
+
+    # Unpack rich error metadata
+    status = status_pb2.Status()
     for key, value in err.trailing_metadata():
         if key == "grpc-status-details-bin":
-            found_status = status_pb2.Status()  # serialised google.rpc.Status
-            found_status.ParseFromString(
-                value
-            )  # deserialise into a status_pb2.Status object
+            status.ParseFromString(value)
 
-    assert found_status.message == rich_error_details["message"]
-    assert found_status.code == code_pb2.INTERNAL
+            # There should be a PreconditionFailure detail
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
 
-    # Unpack the ErrorInfo
-    error_info = error_details_pb2.ErrorInfo()
-    found_status.details[0].Unpack(error_info)
-    assert error_info.domain == "drunc.SessionManager"
-    assert error_info.reason == rich_error_details["message"]
-    assert error_info.metadata["error"] == rich_error_details["details"]
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "DUNEDAQ_DB_PATH env variable not set" in violation.description
+
+
+def test_no_config_files_rich_error(
+    session_manager_rich_error_test_suite, generic_request, monkeypatch
+):
+    session_manager_rich_error_test_suite.setup_server_and_client()
+    stub = session_manager_rich_error_test_suite.stub
+
+    monkeypatch.setenv("DUNEDAQ_DB_PATH", "/fake_path")
+
+    with pytest.raises(grpc.RpcError) as excinfo:
+        stub.list_all_configs(generic_request)
+
+    err = excinfo.value
+
+    assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+    assert "Config files" in err.details()
+
+    # Unpack rich error metadata
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
+
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
+
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "No configuration files found in /fake_path" in violation.description
+
+
+def test_config_parse_failure(
+    session_manager_rich_error_test_suite, generic_request, monkeypatch
+):
+    session_manager_rich_error_test_suite.setup_server_and_client()
+    stub = session_manager_rich_error_test_suite.stub
+
+    # Set env var so search_paths is non-empty
+    monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
+
+    # Mock files returned by Path.rglob
+    mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
+
+    with patch("pathlib.Path.rglob", return_value=mock_files):
+        # Force Configuration to raise
+        with patch(
+            "drunc.session_manager.session_manager.Configuration",
+            side_effect=Exception("Config failed"),
+        ):
+            with pytest.raises(grpc.RpcError) as excinfo:
+                stub.list_all_configs(generic_request)
+
+    err = excinfo.value
+    assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+
+    # Unpack rich error metadata
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
+
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "Config files" in violation.subject
+            assert "Failed to parse configuration file" in violation.description
+
+
+def test_dals_missing_or_invalid(
+    session_manager_rich_error_test_suite, generic_request, monkeypatch
+):
+    session_manager_rich_error_test_suite.setup_server_and_client()
+    stub = session_manager_rich_error_test_suite.stub
+
+    # Set env var so search_paths is non-empty
+    monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
+
+    mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
+
+    with patch("pathlib.Path.rglob", return_value=mock_files):
+        # Patch Configuration to return an object whose get_dals raises
+        fake_config = MagicMock()
+        fake_config.get_dals.side_effect = Exception("DALs broken")
+        with patch(
+            "drunc.session_manager.session_manager.Configuration",
+            return_value=fake_config,
+        ):
+            with pytest.raises(grpc.RpcError) as excinfo:
+                stub.list_all_configs(generic_request)
+
+    err = excinfo.value
+    assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+
+    # Unpack rich error metadata
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
+
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "Session DALs" in violation.subject
+            assert "DALs missing or invalid" in violation.description

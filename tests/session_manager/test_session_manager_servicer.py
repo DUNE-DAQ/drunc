@@ -1,6 +1,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.session_manager_pb2 import (
@@ -9,7 +10,8 @@ from druncschema.session_manager_pb2 import (
     AllConfigKeys,
     ConfigKey,
 )
-from grpc import StatusCode
+
+from drunc.exceptions import DruncSetupException
 
 
 def test_describe(
@@ -50,13 +52,12 @@ def test_list_all_configs_no_db_path(
     """
     monkeypatch.delenv("DUNEDAQ_DB_PATH", raising=False)
 
-    response = session_manager.list_all_configs(mock_request, mock_context)
+    with pytest.raises(DruncSetupException) as excinfo:
+        session_manager.list_all_configs(mock_request, mock_context)
+    assert "DUNEDAQ_DB_PATH" in str(excinfo.value)
 
+    # Verify that the logger logged the error
     mock_logger.error.assert_any_call("DUNEDAQ_DB_PATH not set")
-    assert isinstance(response, AllConfigKeys)
-    assert response.name == "dummy_name"
-    assert response.flag == ResponseFlag.FAILED
-    assert response.config_keys == []
 
 
 def test_list_all_configs_no_files_found(
@@ -68,12 +69,11 @@ def test_list_all_configs_no_files_found(
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
 
     with patch("pathlib.Path.rglob", return_value=[]):
-        response = session_manager.list_all_configs(mock_request, mock_context)
+        with pytest.raises(DruncSetupException) as excinfo:
+            session_manager.list_all_configs(mock_request, mock_context)
+        assert "Config files" in str(excinfo.value)
 
-        assert isinstance(response, AllConfigKeys)
-        assert response.name == "dummy_name"
-        assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
-        assert response.config_keys == []
+        mock_logger.error.assert_any_call("No configuration files found")
 
 
 def test_list_all_configs_files_not_parsed(
@@ -90,16 +90,11 @@ def test_list_all_configs_files_not_parsed(
             "drunc.session_manager.session_manager.Configuration",
             side_effect=Exception("Config failed"),
         ):
-            response = session_manager.list_all_configs(mock_request, mock_context)
+            with pytest.raises(DruncSetupException) as excinfo:
+                session_manager.list_all_configs(mock_request, mock_context)
 
-            assert (
-                mock_logger.error.call_count == 3
-            )  # should error 3 times - once per each file
-
-            assert isinstance(response, AllConfigKeys)
-            assert response.name == "dummy_name"
-            assert response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
-            assert response.config_keys == []
+            # Check that the exception contains the expected error message
+            assert "Config files" in str(excinfo.value)
 
 
 def test_list_all_configs_files_parsed(
@@ -137,24 +132,29 @@ def test_list_all_configs_files_parsed(
             assert response.config_keys == expected_config_keys
 
 
-def test_list_all_configs_rich_status(
+def test_list_all_configs_dals_missing(
     session_manager, mock_request, mock_context, mock_logger, monkeypatch
 ):
     """
-    Test when an exception occurs while listing all configs to check rich status handling.
+    Test when configuration files are found, but DALs are missing or invalid.
     """
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
 
-    with patch("pathlib.Path.rglob", side_effect=Exception("Fake Error")):
-        session_manager.list_all_configs(mock_request, mock_context)
+    mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
 
-        mock_context.abort_with_status.assert_called()
+    with patch("pathlib.Path.rglob", return_value=mock_files):
+        mock_config = MagicMock()
+        mock_config.get_dals.side_effect = Exception("DALs missing or invalid")
 
-        # Check the rich status passed to abort_with_status
-        call_args = mock_context.abort_with_status.call_args[0]
-        rich_status = call_args[0]
+        with patch(
+            "drunc.session_manager.session_manager.Configuration",
+            return_value=mock_config,
+        ):
+            with pytest.raises(DruncSetupException) as excinfo:
+                session_manager.list_all_configs(mock_request, mock_context)
 
-        # Check that the status code and message are what you expect
-        assert rich_status.code == StatusCode.INTERNAL
-        # Check that the details contain the expected error message
-        assert "Unhandled error in list_all_configs" in rich_status.details
+            assert "Session DALs" in str(excinfo.value)
+
+            mock_logger.error.assert_any_call(
+                "Failed to get DALs from mock_file_1.data.xml: DALs missing or invalid"
+            )
