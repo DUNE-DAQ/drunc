@@ -76,7 +76,7 @@ class FlaskManager(threading.Thread):
 
     def __init__(self, name, app, port, workers=1, host="0.0.0.0"):
         super(FlaskManager, self).__init__(daemon=True)
-        self.log = get_logger(f"utils.{name}-flaskmanager")
+        self.log = get_logger(f"{name}-flaskmanager", stream_handlers=True)
         self.name = name
         self.app = app
         self.prod_app = None
