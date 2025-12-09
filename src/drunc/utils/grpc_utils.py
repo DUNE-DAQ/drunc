@@ -344,7 +344,7 @@ class RichErrorInterceptor(grpc.ServerInterceptor):
             except Exception as e:
                 # Fallback
                 detail = error_details_pb2.ErrorInfo(
-                    reason="unexpected_error",
+                    reason="Unexpected error",
                     domain="server",
                     metadata={"exception": str(type(e))},
                 )
