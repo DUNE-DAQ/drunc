@@ -11,7 +11,7 @@ from druncschema.session_manager_pb2_grpc import (
 from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import RichErrorInterceptor
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 class SessionManagerRichErrorTestSuite:
@@ -42,7 +42,7 @@ class SessionManagerRichErrorTestSuite:
         # Configure and start the gRPC server
         self.server = grpc.server(
             futures.ThreadPoolExecutor(max_workers=10),
-            interceptors=[RichErrorInterceptor()],
+            interceptors=[RichErrorServerInterceptor()],
         )
         add_SessionManagerServicer_to_server(self.servicer, self.server)
         listen_addr = f"[::]:{self.server_port}"

@@ -13,7 +13,7 @@ from drunc.grpc_settings import (
 )
 from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import RichErrorInterceptor
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import get_logger, get_root_logger
 
 
@@ -28,7 +28,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS),
         options=MANAGER_SERVER_GRPC_CONFIG,
-        interceptors=[RichErrorInterceptor()],
+        interceptors=[RichErrorServerInterceptor()],
     )
     add_SessionManagerServicer_to_server(session_manager, server)
     port = server.add_insecure_port(address)

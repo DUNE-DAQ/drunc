@@ -171,11 +171,25 @@ def copy_token(token: Token) -> Token:
     return token_copy
 
 
+def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
+    """
+    Converts a Python dictionary into an instance of a gRPC Protobuf message.
+    'proto_class_instance' should be an empty instance, e.g., Token()
+    """
+    return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+
+
+# -----------------------------------------------------
+#    GRPC Rich Error Utils
+# -----------------------------------------------------
+
+
 @dataclass
 class GrpcErrorDetails:
     """
     A structured representation of a gRPC error, including its status code,
-    message, and any extracted rich error details.
+    message, and any extracted rich error details. Used to extract and format
+    detailed error information on the client side.
 
     Attributes:
         code (str): The gRPC status code name (e.g., "NOT_FOUND")
@@ -313,16 +327,49 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     )
 
 
-def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
+def abort_with_rich_error_status(
+    context: grpc.ServicerContext,
+    grpc_error_code: code_pb2.Code,
+    message: str,
+    error_obj: Message,
+) -> NoReturn:
     """
-    Converts a Python dictionary into an instance of a gRPC Protobuf message.
-    'proto_class_instance' should be an empty instance, e.g., Token()
+    Aborts the current gRPC call with a rich error status containing
+    structured error details.
+
+    Args:
+        context (grpc.ServicerContext): The gRPC context used to abort the RPC
+        grpc_error_code (code_pb2.Code): A gRPC status code from `google.rpc.code_pb2`
+            (e.g., `code_pb2.INTERNAL`, `code_pb2.INVALID_ARGUMENT`)
+        message (str): Quick description of the error
+        error_obj (Message): A protobuf message providing additional structured
+            error details. It will be packed into a google.protobuf.Any
+    Raises:
+        grpc.RpcError: Terminate the RPC with the constructed error status
     """
-    return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+
+    detail_any = any_pb2.Any()
+    detail_any.Pack(error_obj)
+
+    rich_status = status_pb2.Status(
+        code=grpc_error_code,
+        message=message,
+        details=[detail_any],
+    )
+
+    context.abort_with_status(rpc_status.to_status(rich_status))
 
 
-class RichErrorInterceptor(grpc.ServerInterceptor):
+class RichErrorServerInterceptor(grpc.ServerInterceptor):
+    """
+    A gRPC server interceptor that catches exceptions and converts them into
+    rich error statuses with structured error details."""
+
     def intercept_service(self, continuation, handler_call_details):
+        """
+        Intercept gRPC service calls to handle exceptions and convert them
+        into rich error statuses.
+        """
         handler = continuation(handler_call_details)
 
         def error_wrapper(request, context):
@@ -339,7 +386,9 @@ class RichErrorInterceptor(grpc.ServerInterceptor):
                         )
                     ]
                 )
-                self._abort_with_detail(context, e.grpc_error_code, str(e), detail_obj)
+                abort_with_rich_error_status(
+                    context, e.grpc_error_code, str(e), detail_obj
+                )
 
             except Exception as e:
                 # Fallback
@@ -353,17 +402,10 @@ class RichErrorInterceptor(grpc.ServerInterceptor):
                 )
 
         if handler.unary_unary:
+            # only wrap unary-unary calls
             return grpc.unary_unary_rpc_method_handler(
                 error_wrapper,
                 request_deserializer=handler.request_deserializer,
                 response_serializer=handler.response_serializer,
             )
         return handler
-
-    def _abort_with_detail(self, context, code, message, detail_obj):
-        detail_any = any_pb2.Any()
-        detail_any.Pack(detail_obj)
-        rich_status = status_pb2.Status(
-            code=code, message=message, details=[detail_any]
-        )
-        context.abort_with_status(rpc_status.to_status(rich_status))
