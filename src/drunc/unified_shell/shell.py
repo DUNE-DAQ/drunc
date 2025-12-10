@@ -190,11 +190,15 @@ def unified_shell(
     ][0].port
     if not is_port_available(root_controller_host, root_controller_port):
         unified_shell_log.critical(
-            "Current root controller port is already in use. Use script [bold green]daqconf_set_rc_controller_port[/bold green] on your configuration file to change the root controller port first!"
+            f"[bold red]Current root controller address ({root_controller_host}:"
+            f"{root_controller_port}) is already in use.[/bold red] Use script [bold "
+            "green]daqconf_set_rc_controller_port[/bold green] on your configuration "
+            "file to change the root controller port first!"
         )
         sys.exit(1)
 
     # If a local connectivity service is being used, perform the same checks
+    # Temporarily removed to allow integration tests to pass without restructuring
     connectivity_service_host: str = session_dal.connectivity_service.host
     connectivity_service_is_local: bool = connectivity_service_host in [
         "localhost",
@@ -205,7 +209,11 @@ def unified_shell(
         connectivity_service_port = session_dal.connectivity_service.service.port
         if not is_port_available(connectivity_service_host, connectivity_service_port):
             unified_shell_log.critical(
-                "Local connectivity service port is already in use. Use script [bold green]daqconf_set_connectivity_service_port[/bold green] on your configuration file to change the connectivity service port first!"
+                f"[bold red]Current local connectivity service address "
+                f"({connectivity_service_host}:{connectivity_service_port}) is already "
+                "in use.[/bold red] Use script [bold green]daqconf_set_connectivity_"
+                "service_port[/bold green] on your configuration file to change the "
+                "connectivity service port first!"
             )
             sys.exit(1)
 

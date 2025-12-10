@@ -1,10 +1,13 @@
 import abc
 import getpass
 import socket
+import subprocess
+import sys
 from collections.abc import Mapping
 
 import click
 from druncschema.token_pb2 import Token
+from kubernetes import client, config
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
@@ -41,19 +44,45 @@ def add_traceback_flag():
 
 def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
     """
-    Checks if the requested port on the specified host is available. This allows us to
-    validate that a specified configuration with a static address is available.
+    Checks if the requested port on the specified host is available by attempting
+    a connection. If connection FAILS (refused), the port is available.
 
     Args:
-        host - what hostname to check on
-        port - the port number to check
+        host: The hostname or IP to check on (e.g., 'localhost', '192.168.1.1').
+        port: The port number to check.
+        timeout: Maximum time in seconds to wait for a connection attempt.
 
     Returns:
-        bool - true if available, false otherwise
+        bool: True if available (connection refused), False otherwise (in use/blocked).
 
     Raises:
-        ValueError - if the hostnmame cannot be resolved to an IP address
+        ValueError: If the hostname cannot be resolved to an IP address.
     """
+
+    # Check if host is running a k8s cluster. If so, check the NodePort service
+    log = get_logger("utils.is_port_available")
+    try:
+        running_processes = subprocess.run(
+            "ps aux", shell=True, capture_output=True, text=True, check=True
+        ).stdout.lower()
+    except subprocess.CalledProcessError as exc:
+        log.exception(exc)
+        log.error("Failed to list all the processes on the host, debug immediately!")
+        sys.exit(1)
+
+    if "kubelet" in running_processes:
+        config.load_kube_config()
+        v1 = client.CoreV1Api()
+
+        used_nodeports = {
+            _port.node_port
+            for svc in v1.list_service_for_all_namespaces().items
+            if svc.spec and svc.spec.ports
+            for _port in svc.spec.ports
+            if _port.node_port is not None
+        }
+        if port in used_nodeports:
+            return False
 
     # Address the localhost case separately
     if host in ["localhost", "127.0.0.1", "0.0.0.0"]:
@@ -71,8 +100,7 @@ def is_port_available(host: str, port: int, timeout: float = 1.0) -> bool:
                 # Handle other OS errors differently if needed
                 raise e
 
-    # Address the remote host case separately
-    # Map the hostname to an ip address
+    # Address the remote host case separately, map the hostname to an IP address
     try:
         ip_address = socket.gethostbyname(host)
     except socket.gaierror:
