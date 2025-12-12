@@ -8,10 +8,10 @@ from druncschema.token_pb2 import Token
 from google.protobuf import any_pb2, json_format
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
-from google.rpc import code_pb2, error_details_pb2
+from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
 
 
 class UnpackingError(DruncCommandException):
@@ -171,11 +171,25 @@ def copy_token(token: Token) -> Token:
     return token_copy
 
 
+def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
+    """
+    Converts a Python dictionary into an instance of a gRPC Protobuf message.
+    'proto_class_instance' should be an empty instance, e.g., Token()
+    """
+    return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+
+
+# -----------------------------------------------------
+#    GRPC Rich Error Utils
+# -----------------------------------------------------
+
+
 @dataclass
 class GrpcErrorDetails:
     """
     A structured representation of a gRPC error, including its status code,
-    message, and any extracted rich error details.
+    message, and any extracted rich error details. Used to extract and format
+    detailed error information on the client side.
 
     Attributes:
         code (str): The gRPC status code name (e.g., "NOT_FOUND")
@@ -313,20 +327,85 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     )
 
 
-def grpc_proto_to_dict(proto_message: Message) -> dict:
+def abort_with_rich_error_status(
+    context: grpc.ServicerContext,
+    grpc_error_code: code_pb2.Code,
+    message: str,
+    error_obj: Message,
+) -> NoReturn:
     """
-    Converts a gRPC Protobuf message object to a Python dictionary.
+    Aborts the current gRPC call with a rich error status containing
+    structured error details.
+
+    Args:
+        context (grpc.ServicerContext): The gRPC context used to abort the RPC
+        grpc_error_code (code_pb2.Code): A gRPC status code from `google.rpc.code_pb2`
+            (e.g., `code_pb2.INTERNAL`, `code_pb2.INVALID_ARGUMENT`)
+        message (str): Quick description of the error
+        error_obj (Message): A protobuf message providing additional structured
+            error details. It will be packed into a google.protobuf.Any
+    Raises:
+        grpc.RpcError: Terminate the RPC with the constructed error status
     """
-    return json_format.MessageToDict(
-        proto_message,
-        preserving_proto_field_name=True,
-        # Removed: including_default_value_fields=True
+
+    detail_any = any_pb2.Any()
+    detail_any.Pack(error_obj)
+
+    rich_status = status_pb2.Status(
+        code=grpc_error_code,
+        message=message,
+        details=[detail_any],
     )
 
+    context.abort_with_status(rpc_status.to_status(rich_status))
 
-def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
+
+class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
-    Converts a Python dictionary into an instance of a gRPC Protobuf message.
-    'proto_class_instance' should be an empty instance, e.g., Token()
-    """
-    return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
+    A gRPC server interceptor that catches exceptions and converts them into
+    rich error statuses with structured error details."""
+
+    def intercept_service(self, continuation, handler_call_details):
+        """
+        Intercept gRPC service calls to handle exceptions and convert them
+        into rich error statuses.
+        """
+        handler = continuation(handler_call_details)
+
+        def error_wrapper(request, context):
+            try:
+                return handler.unary_unary(request, context)
+
+            except DruncSetupException as e:
+                detail_obj = error_details_pb2.PreconditionFailure(
+                    violations=[
+                        error_details_pb2.PreconditionFailure.Violation(
+                            type="MISSING OR INVALID",
+                            subject=str(e),
+                            description=str(e.details),
+                        )
+                    ]
+                )
+                abort_with_rich_error_status(
+                    context, e.grpc_error_code, str(e), detail_obj
+                )
+
+            except Exception as e:
+                # Fallback
+                detail = error_details_pb2.ErrorInfo(
+                    reason="Unexpected error",
+                    domain="server",
+                    metadata={"exception": str(type(e))},
+                )
+                return self._abort_with_detail(
+                    context, code_pb2.INTERNAL, str(e), detail
+                )
+
+        if handler.unary_unary:
+            # only wrap unary-unary calls
+            return grpc.unary_unary_rpc_method_handler(
+                error_wrapper,
+                request_deserializer=handler.request_deserializer,
+                response_serializer=handler.response_serializer,
+            )
+        return handler
