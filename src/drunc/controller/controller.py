@@ -7,7 +7,6 @@ from typing import Callable, List, TypeVar
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
@@ -204,15 +203,7 @@ class Controller(ControllerServicer):
             if child.name in bad_children:
                 continue
             log_init_controller.info(f"Taking control of {child.name}")
-            request = AddressedCommand(
-                token=self.actor.get_token(),
-                command_name="take_control",
-                command_data=None,
-                target=child.name,
-                execute_along_path=True,
-                execute_on_all_subsequent_children_in_path=True,
-            )
-            child.propagate_command("take_control", request, self.actor.get_token())
+            child.take_control(execute_on_all_subsequent_children_in_path=True)
 
         interval_s = getattr(self.configuration.data, "interval_s", 10.0)
 

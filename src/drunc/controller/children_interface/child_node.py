@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
     ExcludeResponse,
@@ -16,8 +15,6 @@ from druncschema.controller_pb2 import (
     ToErrorResponse,
     WhoIsInChargeResponse,
 )
-from druncschema.request_response_pb2 import Response
-from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import (
@@ -48,15 +45,6 @@ class ChildNode(ABC):
 
     @abstractmethod
     def terminate(self) -> None:
-        pass
-
-    @abstractmethod
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
         pass
 
     @abstractmethod

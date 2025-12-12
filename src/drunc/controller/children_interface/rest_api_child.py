@@ -10,7 +10,6 @@ from json import JSONDecodeError
 import requests
 import socks
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
     ExcludeResponse,
@@ -28,8 +27,7 @@ from druncschema.controller_pb2 import (
     WhoIsInChargeResponse,
 )
 from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api
 
@@ -410,18 +408,6 @@ class RESTAPIChildNode(ChildNode):
 
     def terminate(self) -> None:
         pass
-
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
-        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
-        return Response(
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-        )
 
     def status(
         self,

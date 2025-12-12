@@ -4,7 +4,6 @@ from typing import NoReturn, cast
 
 import grpc
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
@@ -33,7 +32,6 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
@@ -198,30 +196,6 @@ class gRPCChildNode(ChildNode):
                 type=ConfTypes.ProtobufAny,
             )
         )
-
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
-        packed_request = Request(token=token)
-        packed_request.data.Pack(request)
-
-        cmd = getattr(self.stub, command)
-
-        try:
-            response = cmd(packed_request)
-        except grpc.RpcError as error:
-            try:
-                self.handle_child_grpc_error(error)
-            except ServerUnreachable:
-                self.log.info(
-                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
-                )
-                response = self._attempt_reconnection(lambda: cmd(packed_request))
-
-        return response
 
     def status(
         self,
