@@ -14,7 +14,7 @@ def broadcasted(cmd):
         cmd
     )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
     def wrap(obj, request, context):
-        log = get_logger("broadcasted_decorator")
+        log = get_logger("broadcasted_decorator", rich_handler=True)
 
         # hummmm I feel like creating a level myself, but...
         # https://docs.python.org/3/howto/logging.html#custom-levels
