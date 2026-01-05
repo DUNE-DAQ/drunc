@@ -1,7 +1,7 @@
 #!/bin/bash
 # 10-Oct-2023, KAB
 
-integtest_list=( "ssh_pm_FSM_child_controller.py" )
+integtest_list=( "ssh_pm_FSM_child_controller.py")
 let last_test_index=${#integtest_list[@]}-1
 
 usage() {

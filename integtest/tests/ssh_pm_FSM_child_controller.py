@@ -7,48 +7,54 @@ import integrationtest.data_classes as data_classes
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
-# Values that help determine the running conditions
-number_of_data_producers = 2
-data_rate_slowdown_factor = 1  # 10 for ProtoWIB/DuneWIB
-run_duration = 10  # seconds
-readout_window_time_before = 1000
-readout_window_time_after = 1001
 
-# Default values for validation parameters
-expected_number_of_data_files = 1
-check_for_logfile_errors = True
-expected_event_count = run_duration
-expected_event_count_tolerance = 2
-wibeth_frag_params = {
-    "fragment_type_description": "WIBEth",
-    "fragment_type": "WIBEth",
-    "expected_fragment_count": number_of_data_producers,
-    "min_size_bytes": 7272,
-    "max_size_bytes": 14472,
-}
-triggercandidate_frag_params = {
-    "fragment_type_description": "Trigger Candidate",
-    "fragment_type": "Trigger_Candidate",
-    "expected_fragment_count": 1,
-    "min_size_bytes": 128,
-    "max_size_bytes": 216,
-}
-hsi_frag_params = {
-    "fragment_type_description": "HSI",
-    "fragment_type": "Hardware_Signal",
-    "expected_fragment_count": 0,
-    "min_size_bytes": 72,
-    "max_size_bytes": 100,
-}
-ignored_logfile_problems = {
-    "-controller": [
-        "Worker with pid \\d+ was terminated due to signal",
-        "Connection '.*' not found on the application registry",
-    ],
-    "connectivity-service": [
-        "errorlog: -",
-    ],
-}
+number_of_data_producers = 2
+run_duration = 10  # seconds
+
+
+@pytest.fixture(scope="module", autouse=True)
+def config_setup():
+    # Values that help determine the running conditions
+    
+    data_rate_slowdown_factor = 1  # 10 for ProtoWIB/DuneWIB
+    readout_window_time_before = 1000
+    readout_window_time_after = 1001
+
+    # Default values for validation parameters
+    expected_number_of_data_files = 1
+    check_for_logfile_errors = True
+    expected_event_count = run_duration
+    expected_event_count_tolerance = 2
+    wibeth_frag_params = {
+        "fragment_type_description": "WIBEth",
+        "fragment_type": "WIBEth",
+        "expected_fragment_count": number_of_data_producers,
+        "min_size_bytes": 7272,
+        "max_size_bytes": 14472,
+    }
+    triggercandidate_frag_params = {
+        "fragment_type_description": "Trigger Candidate",
+        "fragment_type": "Trigger_Candidate",
+        "expected_fragment_count": 1,
+        "min_size_bytes": 128,
+        "max_size_bytes": 216,
+    }
+    hsi_frag_params = {
+        "fragment_type_description": "HSI",
+        "fragment_type": "Hardware_Signal",
+        "expected_fragment_count": 0,
+        "min_size_bytes": 72,
+        "max_size_bytes": 100,
+    }
+    ignored_logfile_problems = {
+        "-controller": [
+            "Worker with pid \\d+ was terminated due to signal",
+            "Connection '.*' not found on the application registry",
+        ],
+        "connectivity-service": [
+            "errorlog: -",
+        ],
+    }
 
 # The next three variable declarations *must* be present as globals in the test
 # file. They're read by the "fixtures" in conftest.py to determine how
@@ -90,7 +96,7 @@ nanorc_command_list = (
 # The tests themselves
 
 
-def test_no_conf_error_in_child_controller(run_nanorc):
+def test_no_conf_error_in_child_controller(run_nanorc, config_setup):
     assert run_nanorc.completed_process.returncode == 0
 
     logs = ""
