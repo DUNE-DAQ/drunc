@@ -39,7 +39,8 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import get_logger, pid_info_str
-from drunc.utils.grpc_utils import respond_with_rich_error_status
+from drunc.utils.grpc_utils import respond_with_rich_error_status, RichErrorServerInterceptor
+
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):

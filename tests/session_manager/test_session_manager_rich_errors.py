@@ -92,7 +92,7 @@ def test_list_all_configs_no_config_files_rich_error(
     err = excinfo.value
 
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
-    assert "DUNEDAQ_DB_PATH" in err.details()
+    assert "Config files" in err.details()
 
     # Unpack rich error metadata
     status = status_pb2.Status()

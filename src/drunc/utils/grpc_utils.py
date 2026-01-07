@@ -11,7 +11,8 @@ from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
-from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
+from drunc.exceptions import DruncCommandException, DruncException
+from drunc.utils.rich_error_builder import build_rich_error
 
 
 class UnpackingError(DruncCommandException):
@@ -376,30 +377,27 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
             try:
                 return handler.unary_unary(request, context)
 
-            except DruncSetupException as e:
-                detail_obj = error_details_pb2.PreconditionFailure(
-                    violations=[
-                        error_details_pb2.PreconditionFailure.Violation(
-                            type="MISSING OR INVALID",
-                            subject=str(e),
-                            description=str(e.details),
-                        )
-                    ]
-                )
+            except DruncException as e:
                 abort_with_rich_error_status(
-                    context, e.grpc_error_code, str(e), detail_obj
-                )
+                    context, 
+                    e.grpc_error_code, 
+                    str(e), 
+                    e.to_rich_error(), 
+                    )
 
             except Exception as e:
                 # Fallback
-                detail = error_details_pb2.ErrorInfo(
-                    reason="Unexpected error",
-                    domain="server",
-                    metadata={"exception": str(type(e))},
-                )
-                return self._abort_with_detail(
-                    context, code_pb2.INTERNAL, str(e), detail
-                )
+                abort_with_rich_error_status( 
+                    context, 
+                    code_pb2.INTERNAL, 
+                    str(e), 
+                    build_rich_error( 
+                        "error_info", 
+                        reason="Unexpected error", 
+                        domain="server", 
+                        metadata={"exception":str(type(e))} 
+                        ), 
+                    )  
 
         if handler.unary_unary:
             # only wrap unary-unary calls
@@ -409,3 +407,5 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 response_serializer=handler.response_serializer,
             )
         return handler
+
+

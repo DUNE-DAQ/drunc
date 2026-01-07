@@ -24,6 +24,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
     get_logger,
@@ -105,6 +106,7 @@ def run_pm(
                 max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS
             ),
             options=MANAGER_SERVER_GRPC_CONFIG,
+            interceptors=[RichErrorServerInterceptor()],
         )
         add_ProcessManagerServicer_to_server(pm, server)
         port = server.add_insecure_port(address)

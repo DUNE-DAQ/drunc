@@ -1,24 +1,40 @@
 from google.rpc import code_pb2
+from drunc.utils.rich_error_builder import build_rich_error
 
+# class DruncException(Exception):
+#     """Base exception for all Drunc errors."""
+
+#     grpc_error_code = code_pb2.INTERNAL  # default
+#     details = None  # optional rich error detail
+
+#     def __init__(
+#         self, message=None, grpc_error_code=None, details=None, *args, **kwargs
+#     ):
+#         if message is None:
+#             message = "Drunc Error"  # default message
+
+#         super().__init__(message, *args, **kwargs)
+
+#         if grpc_error_code is not None:
+#             self.grpc_error_code = grpc_error_code
+#         if details is not None:
+#             self.details = details
 
 class DruncException(Exception):
-    """Base exception for all Drunc errors."""
-
-    grpc_error_code = code_pb2.INTERNAL  # default
-    details = None  # optional rich error detail
-
     def __init__(
-        self, message=None, grpc_error_code=None, details=None, *args, **kwargs
+        self,
+        message: str,
+        grpc_error_code=code_pb2.INTERNAL,
+        detail_type="error_info",
+        **detail_kwargs
     ):
-        if message is None:
-            message = "Drunc Error"  # default message
+        super().__init__(message)
+        self.grpc_error_code = grpc_error_code
+        self.detail_type = detail_type
+        self.detail_kwargs = detail_kwargs
 
-        super().__init__(message, *args, **kwargs)
-
-        if grpc_error_code is not None:
-            self.grpc_error_code = grpc_error_code
-        if details is not None:
-            self.details = details
+    def to_rich_error(self):
+        return build_rich_error(self.detail_type, **self.detail_kwargs)
 
 
 class DruncShellException(DruncException):
