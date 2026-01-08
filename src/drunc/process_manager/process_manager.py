@@ -32,14 +32,14 @@ from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandException, DruncException
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
 from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import get_logger, pid_info_str
-from drunc.utils.grpc_utils import respond_with_rich_error_status, RichErrorServerInterceptor
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 class BadQuery(DruncCommandException):
@@ -252,19 +252,26 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._boot_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in ProcessManager.boot",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in boot")
-            respond_with_rich_error_status(
-                context,
+            context_msg = "Unhandled exception in ProcessManager.boot"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
                 domain="ProcessManager.boot",
-                reason="Unhandled Exception in boot",
-                message=str(e),
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
         return response
 
@@ -285,19 +292,26 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._terminate_impl()
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in boot",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in terminate")
-            respond_with_rich_error_status(
-                context,
+            context_msg = "Unhandled exception in ProcessManager.terminate"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
                 domain="ProcessManager.terminate",
-                reason="Unhandled Exception in terminate",
-                message=str(e),
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
 
         return response
@@ -319,19 +333,26 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._restart_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in ProcessManager.restart",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in restart")
-            respond_with_rich_error_status(
-                context,
+            context_msg = "Unhandled exception in ProcessManager.restart"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
                 domain="ProcessManager.restart",
-                reason="Unhandled Exception in restart",
-                message=str(e),
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
 
         return response
@@ -353,20 +374,28 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._kill_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in ProcessManager.kill",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in kill")
-            respond_with_rich_error_status(
-                context,
+            context_msg = "Unhandled exception in ProcessManager.kill"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
                 domain="ProcessManager.kill",
-                reason="Unhandled Exception in kill",
-                message=str(e),
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
+
 
         return response
 
@@ -387,20 +416,28 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._ps_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in ProcessManager.kill",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in ps")
-            respond_with_rich_error_status(
-                context,
+            context_msg = "Unhandled exception in ProcessManager.ps"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
                 domain="ProcessManager.ps",
-                reason="Unhandled Exception in ps",
-                message=str(e),
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
+
 
         return response
 
@@ -512,21 +549,28 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._logs_impl(request)
         except NotImplementedError:
-            return LogLines(
-                name=self.name,
-                token=None,
-                uuid=None,
-                lines=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncException(
+                message = "Implementation missing in ProcessManager.logs",
+                grpc_error_code=code_pb2.UNIMPLEMENTED,
+                detail_type="help",
+                link_description="Check Documentation",
+                url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            self.log.exception("Unhandled exception in log")
-            respond_with_rich_error_status(
-                context,
-                domain="ProcessManager.log",
-                reason="Unhandled Exception in log",
-                message=str(e),
+            context_msg = "Unhandled exception in ProcessManager.logs"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                grpc_error_code=code_pb2.INTERNAL,
+                detail_type="error_info", 
+                domain="ProcessManager.logs",
+                reason="UNHANDLED_EXCEPTION",
+                metadata={
+                    "original_error": str(e),
+                }
             )
+
 
         return response
 

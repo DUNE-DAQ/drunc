@@ -44,7 +44,10 @@ def broadcasted(cmd):
                 if isinstance(e, DruncException)
                 else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
             )
-            return Response(
+            # Wrap the stack trace in a Response message to broadcast but still
+            # raise the exception to the client so the interceptor can handle it
+
+            error_wrap = Response(
                 name=obj.name,
                 token=request.token,
                 data=pack_to_any(
@@ -55,6 +58,14 @@ def broadcasted(cmd):
                 flag=flag,
                 children=[],
             )
+
+            obj.broadcast(
+                message=f"Command '{cmd.__name__}' failed", 
+                btype=BroadcastType.UNHANDLED_EXCEPTION_RAISED,
+                data=error_wrap
+            )
+
+            raise e
 
         msg = f"User '{request.token.user_name}' successfully executed '{cmd.__name__}'"
 

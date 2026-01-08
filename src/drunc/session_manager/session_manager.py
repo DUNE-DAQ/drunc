@@ -191,15 +191,15 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                     )
                     configs.append(config_key)
             except Exception as e:
-                error_msg = f"Failed to get DALs from {file}: {e}"
-                self.log.error(error_msg)
+                context_msg = f"Failed to get DALs from {file}"
+                self.log.exception(context_msg)
                 raise DruncSetupException(
-                    message=error_msg,
+                    message=f"{context_msg}: {e}",
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
                     type="DALs_STRUCTURE_INVALID",
                     subject=str(file),
-                    description=error_msg,
+                    description=str(e),
                 )
 
         return AllConfigKeys(

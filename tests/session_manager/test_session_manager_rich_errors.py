@@ -201,7 +201,8 @@ def test_dals_missing_or_invalid(
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     expected_error_msg = "Failed to get DALs"
-
+    assert expected_error_msg in err.details()
+    
     # Unpack rich error metadata
     status = status_pb2.Status()
     for key, value in err.trailing_metadata():
@@ -213,4 +214,4 @@ def test_dals_missing_or_invalid(
             violation = precond.violations[0]
             assert violation.type == "DALs_STRUCTURE_INVALID"
             assert "mock_file" in violation.subject
-            assert expected_error_msg in violation.description
+            assert "DALs broken" in violation.description

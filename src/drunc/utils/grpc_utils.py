@@ -360,6 +360,7 @@ def abort_with_rich_error_status(
 
     context.abort_with_status(rpc_status.to_status(rich_status))
 
+    raise Exception(f"Aborting with status: {message}")
 
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
@@ -376,7 +377,9 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         def error_wrapper(request, context):
             try:
                 return handler.unary_unary(request, context)
-
+            except grpc.RpcError:
+                raise
+            
             except DruncException as e:
                 abort_with_rich_error_status(
                     context, 
@@ -398,6 +401,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                         metadata={"exception":str(type(e))} 
                         ), 
                     )  
+            
 
         if handler.unary_unary:
             # only wrap unary-unary calls
