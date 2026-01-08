@@ -29,10 +29,15 @@ class DruncException(Exception):
         **detail_kwargs
     ):
         super().__init__(message)
-        self.grpc_error_code = grpc_error_code
-        self.detail_type = detail_type
-        self.detail_kwargs = detail_kwargs
+        
+        if grpc_error_code is not None:
+            self.grpc_error_code = grpc_error_code
 
+        if detail_type is not None:
+            self.detail_type = detail_type
+
+        self.detail_kwargs = detail_kwargs
+        
     def to_rich_error(self):
         return build_rich_error(self.detail_type, **self.detail_kwargs)
 
@@ -45,7 +50,6 @@ class DruncShellException(DruncException):
 class DruncSetupException(
     DruncException
 ):  # Exceptions that gets thrown when services start
-    grpc_error_code = code_pb2.FAILED_PRECONDITION
 
     pass
 

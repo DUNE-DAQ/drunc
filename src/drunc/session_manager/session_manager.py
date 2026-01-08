@@ -139,13 +139,15 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         # Get search paths for available configurations.
         search_paths = getenv("DUNEDAQ_DB_PATH")
         if search_paths is None:
-            self.log.error("DUNEDAQ_DB_PATH not set")
+            error_msg = "DUNEDAQ_DB_PATH not set"
+            self.log.error(error_msg)
             raise DruncSetupException(
-                    message="Config files",
+                    message=error_msg,
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
-                    type="MISSING OR INVALID",
-                    description="DUNEDAQ_DB_PATH env variable not set",
+                    subject="DUNEDAQ_DB_PATH",
+                    type="MISSING_OR_INVALID",
+                    description=error_msg,
                 )
 
         # Find all configuration files.
@@ -155,15 +157,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             config_files.extend(config_glob)
 
         if not config_files:
-            self.log.error("No configuration files found")
+            error_msg = "Configuration files not found"
+            self.log.error(error_msg)
             raise DruncSetupException(
-                    "Config files",
-                    grpc_error_code=code_pb2.FAILED_PRECONDITION,
-                    detail_type="precondition",
-                    type="SETUP_ERROR",
-                    subject="Config files",
-                    description=f"Failed to parse configuration file ",
-                )
+                message=error_msg,
+                grpc_error_code=code_pb2.NOT_FOUND,
+                detail_type="resource_info",
+                resource_type="SessionConfiguration",
+            )
 
         # Parse all configuration files.
         configs = []
@@ -173,14 +174,13 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             except Exception as e:
                 self.log.error(e)
                 raise DruncSetupException(
-                    "Config files",
+                    message=f"Configuration parse error in '{file}'",
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
-                    type="SETUP_ERROR",
-                    subject="Config files",
-                    description=f"Failed to parse configuration file {file}: {e}",
+                    type="CONFIG_PARSE_FAILURE",
+                    subject=str(file),
+                    description=str(e),
                 )
-
 
             # Parse all session configurations in this file.
             try:
@@ -191,14 +191,15 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                     )
                     configs.append(config_key)
             except Exception as e:
-                self.log.error(f"Failed to get DALs from {file}: {e}")
+                error_msg = f"Failed to get DALs from {file}: {e}"
+                self.log.error(error_msg)
                 raise DruncSetupException(
-                    "Config files",
+                    message=error_msg,
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
-                    type="SETUP_ERROR",
-                    subject="Config files",
-                    description=f"Failed to parse configuration file {file}: {e}",
+                    type="DALs_STRUCTURE_INVALID",
+                    subject=str(file),
+                    description=error_msg,
                 )
 
         return AllConfigKeys(
