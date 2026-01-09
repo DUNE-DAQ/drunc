@@ -142,12 +142,11 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             error_msg = "DUNEDAQ_DB_PATH not set"
             self.log.error(error_msg)
             raise DruncSetupException(
-                    message=error_msg,
-                    grpc_error_code=code_pb2.FAILED_PRECONDITION,
-                    detail_type="precondition",
-                    subject="DUNEDAQ_DB_PATH",
-                    type="MISSING_OR_INVALID",
-                    description=error_msg,
+                message=error_msg,
+                grpc_error_code=code_pb2.FAILED_PRECONDITION,
+                detail_type="precondition",
+                subject="DUNEDAQ_DB_PATH",
+                type="MISSING_OR_INVALID",
                 )
 
         # Find all configuration files.
@@ -172,14 +171,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             try:
                 config = Configuration(f"oksconflibs:{file}")
             except Exception as e:
-                self.log.error(e)
+                context_msg= f"Configuration parse error in '{str(file)}': {str(e)}"
+                self.log.error(context_msg)
                 raise DruncSetupException(
-                    message=f"Configuration parse error in '{file}'",
+                    message=context_msg,
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
-                    type="CONFIG_PARSE_FAILURE",
+                    type="PARSE_ERROR",
                     subject=str(file),
-                    description=str(e),
                 )
 
             # Parse all session configurations in this file.
@@ -191,15 +190,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                     )
                     configs.append(config_key)
             except Exception as e:
-                context_msg = f"Failed to get DALs from {file}"
-                self.log.exception(context_msg)
+                context_msg = f"Failed to get DALs from {str(file)}: {str(e)}"
+                self.log.error(context_msg)
                 raise DruncSetupException(
-                    message=f"{context_msg}: {e}",
+                    message=context_msg,
                     grpc_error_code=code_pb2.FAILED_PRECONDITION,
                     detail_type="precondition",
                     type="DALs_STRUCTURE_INVALID",
                     subject=str(file),
-                    description=str(e),
                 )
 
         return AllConfigKeys(

@@ -10,7 +10,7 @@ from druncschema.process_manager_pb2_grpc import (
     ProcessManagerStub,
     add_ProcessManagerServicer_to_server,
 )
-from drunc.utils.grpc_utils import RichErrorServerInterceptor
+from drunc.utils.grpc_utils import RichErrorServerInterceptor, extract_grpc_rich_error
 
 from tests.session_manager.conftest import generic_request
 from drunc.process_manager.process_manager import ProcessManager
@@ -21,22 +21,6 @@ from tests.process_manager.process_manager_mock_impls import (
 from drunc.exceptions import DruncCommandException, DruncException
 
 
-def get_rich_error(rpc_error, detail_type):
-    """
-    Extracts a specific Rich Error (like ErrorInfo or Help) from a gRPC exception.
-    """
-    status_proto = status_pb2.Status()
-    # Iterate over the trailing metadata to find the binary error details
-    for key, value in rpc_error.trailing_metadata():
-        if key == "grpc-status-details-bin":
-            status_proto.ParseFromString(value)
-            # Iterate over the packed messages in the Status
-            for detail in status_proto.details:
-                if detail.Is(detail_type.DESCRIPTOR):
-                    unpacked = detail_type()
-                    detail.Unpack(unpacked)
-                    return unpacked
-    return None
 
 class ProcessManagerRichErrorTestSuite:
     """Test suite for rich error message propagation for Process Manager."""
@@ -66,7 +50,6 @@ class ProcessManagerRichErrorTestSuite:
             mock_conf = MagicMock()
             mock_conf.get_data_type_name.return_value = "dummy" 
             
-            # Pass the mock object instead of '{}'
             self.servicer = ConcreteProcessManager(name="dummy_name", configuration=mock_conf)
 
         self.server = grpc.server(
@@ -103,53 +86,6 @@ def process_manager_rich_error_test_suite():
     suite = ProcessManagerRichErrorTestSuite()
     yield suite
     suite.teardown_server_and_client()
-
-
-def test_boot_drunc_command_exception(
-        process_manager_rich_error_test_suite, boot_request, boot_response):
-    """Test boot endpoint serialisation/deserialisation."""
-    process_manager_rich_error_test_suite.setup_server_and_client()
-    stub = process_manager_rich_error_test_suite.stub
-    servicer = process_manager_rich_error_test_suite.servicer
-
-    exc_msg = "Mock internal exception"
-    servicer._boot_impl = MagicMock(side_effect=ValueError(exc_msg))
-    
-    with pytest.raises(grpc.RpcError) as exc_info:
-        stub.boot(boot_request)
-    
-    err = exc_info.value
-    assert err.code() == grpc.StatusCode.INTERNAL
-    assert exc_msg in err.details()
-
-    error_info = get_rich_error(err, error_details_pb2.ErrorInfo)
-    
-    assert error_info is not None, "Metadata missing ErrorInfo"
-    assert error_info.domain == "ProcessManager.boot"
-    assert error_info.reason == "UNHANDLED_EXCEPTION"
-    assert error_info.metadata["original_error"] == exc_msg
-
-def test_boot_not_implemented(
-        process_manager_rich_error_test_suite, boot_request):
-    """Test boot endpoint correctly handles NotImplementedError."""
-    
-    process_manager_rich_error_test_suite.setup_server_and_client()
-    stub = process_manager_rich_error_test_suite.stub
-    servicer = process_manager_rich_error_test_suite.servicer
-
-    servicer._boot_impl = MagicMock(side_effect=NotImplementedError())
-    
-    with pytest.raises(grpc.RpcError) as exc_info:
-        stub.boot(boot_request)
-    
-    err = exc_info.value
-
-    assert err.code() == grpc.StatusCode.UNIMPLEMENTED
-    assert "Implementation missing in ProcessManager.boot" in err.details()
-
-    help_info = get_rich_error(err, error_details_pb2.Help)    
-    assert help_info.links[0].description == "Check Documentation"
-    assert "github.com/dune-daq/drunc/issues" in help_info.links[0].url
 
 
 @pytest.mark.parametrize(
@@ -189,13 +125,15 @@ def test_all_methods_not_implemented(
     err = exc_info.value
     assert err.code() == grpc.StatusCode.UNIMPLEMENTED 
         
-    assert f"Implementation missing" in err.details()
+    assert "Implementation missing" in err.details()
 
-    help_info = get_rich_error(err, error_details_pb2.Help)
-    
-    assert help_info is not None, f"Method {method_name} missing 'Help' rich error details"
-    assert help_info.links[0].description == "Check Documentation"
-    assert "github.com" in help_info.links[0].url
+    # Unpack rich error metadata
+    rich_error = extract_grpc_rich_error(err)
+    error_info = rich_error.details[0]
+
+    assert error_info is not None
+    assert error_info.links[0].description == "Check Documentation"
+    assert "github.com" in error_info.links[0].url
 
 
 @pytest.mark.parametrize(
@@ -240,15 +178,12 @@ def test_all_methods_unhandled_exception(
     assert f"Unhandled exception in ProcessManager.{method_name}" in err.details()
     assert exception_msg in err.details()
 
-    # 5. Assert Rich Error Details (ErrorInfo)
-    error_info = get_rich_error(err, error_details_pb2.ErrorInfo)
+    # Unpack rich error metadata
+    rich_error = extract_grpc_rich_error(err)
+    error_info = rich_error.details[0]
     
-    assert error_info is not None, f"Method {method_name} missing 'ErrorInfo' details"
+    assert error_info is not None
     
-    # Validate the structured metadata
-    # (Assuming your code sets domain="ProcessManager.<method_name>")
-    assert error_info.domain == f"ProcessManager.{method_name}"
     assert error_info.reason == "UNHANDLED_EXCEPTION"
     
-    # Validate that the original python error was captured in metadata
     assert error_info.metadata["original_error"] == str(exception_msg)

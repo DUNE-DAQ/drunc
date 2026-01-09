@@ -260,14 +260,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.boot"
+            context_msg = f"Unhandled exception in ProcessManager.boot: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
-                message=f"{context_msg}: {e}",
+                message=context_msg,
                 grpc_error_code=code_pb2.INTERNAL,
                 detail_type="error_info", 
-                domain="ProcessManager.boot",
+                domain="ProcessManager.boot", 
                 reason="UNHANDLED_EXCEPTION",
                 metadata={
                     "original_error": str(e),
@@ -296,15 +296,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 message = "Implementation missing in boot",
                 grpc_error_code=code_pb2.UNIMPLEMENTED,
                 detail_type="help",
-                link_description="Check Documentation",
+                link_description="Check Documentation", 
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.terminate"
+            context_msg = f"Unhandled exception in ProcessManager.terminate: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
-                message=f"{context_msg}: {e}",
+                message=context_msg,
                 grpc_error_code=code_pb2.INTERNAL,
                 detail_type="error_info", 
                 domain="ProcessManager.terminate",
@@ -341,11 +341,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.restart"
+            context_msg = f"Unhandled exception in ProcessManager.restart: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
-                message=f"{context_msg}: {e}",
+                message=context_msg,
                 grpc_error_code=code_pb2.INTERNAL,
                 detail_type="error_info", 
                 domain="ProcessManager.restart",
@@ -382,11 +382,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.kill"
+            context_msg = f"Unhandled exception in ProcessManager.kill: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
-                message=f"{context_msg}: {e}",
+                message=context_msg,
                 grpc_error_code=code_pb2.INTERNAL,
                 detail_type="error_info", 
                 domain="ProcessManager.kill",
@@ -417,18 +417,18 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             response = self._ps_impl(request)
         except NotImplementedError:
             raise DruncException(
-                message = "Implementation missing in ProcessManager.kill",
+                message = "Implementation missing in ProcessManager.ps",
                 grpc_error_code=code_pb2.UNIMPLEMENTED,
                 detail_type="help",
                 link_description="Check Documentation",
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.ps"
+            context_msg = f"Unhandled exception in ProcessManager.ps: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
-                message=f"{context_msg}: {e}",
+                message=context_msg,
                 grpc_error_code=code_pb2.INTERNAL,
                 detail_type="error_info", 
                 domain="ProcessManager.ps",
@@ -557,7 +557,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 url="https://github.com/dune-daq/drunc/issues"
             )
         except Exception as e:
-            context_msg = "Unhandled exception in ProcessManager.logs"
+            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(

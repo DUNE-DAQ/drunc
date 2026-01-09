@@ -316,7 +316,7 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
             if any_detail.Is(detail_type.DESCRIPTOR):
                 msg = detail_type()
                 any_detail.Unpack(msg)
-                error_details.extend(format_error_details(msg))
+                error_details.append(msg)
                 detail_extracted = True
                 break
 
@@ -365,7 +365,8 @@ def abort_with_rich_error_status(
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
     A gRPC server interceptor that catches exceptions and converts them into
-    rich error statuses with structured error details."""
+    rich error statuses with structured error details.
+    """
 
     def intercept_service(self, continuation, handler_call_details):
         """
@@ -377,9 +378,10 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         def error_wrapper(request, context):
             try:
                 return handler.unary_unary(request, context)
+            
             except grpc.RpcError:
                 raise
-            
+
             except DruncException as e:
                 abort_with_rich_error_status(
                     context, 
@@ -395,14 +397,14 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     code_pb2.INTERNAL, 
                     str(e), 
                     build_rich_error( 
-                        "error_info", 
+                        message="An unexpected error occurred.",
+                        detail_type="error_info", 
                         reason="Unexpected error", 
                         domain="server", 
                         metadata={"exception":str(type(e))} 
                         ), 
                     )  
             
-
         if handler.unary_unary:
             # only wrap unary-unary calls
             return grpc.unary_unary_rpc_method_handler(

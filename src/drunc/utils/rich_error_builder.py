@@ -2,14 +2,26 @@ from google.rpc import code_pb2, error_details_pb2, status_pb2
 from google.protobuf import duration_pb2  
 
 
-def build_rich_error(detail_type: str, **kwargs):
+def build_rich_error(message: str, detail_type: str, **kwargs):
+    """
+    Builds a rich error detail based on the specified detail type.
+    For a lookup of detail types, see 
+    https://github.com/googleapis/googleapis/blob/master/google/rpc/error_details.proto .
+    
+    Args:
+        message: The main error message.
+        detail_type: The type of rich error detail to create.
+        **kwargs: Additional keyword arguments specific to the detail type.
+    """
+
+
     # BadRequest: For INVALID_ARGUMENT errors
     if detail_type == "bad_request":
         return error_details_pb2.BadRequest(
             field_violations=[
                 error_details_pb2.BadRequest.FieldViolation(
                     field=kwargs.get("field", ""),
-                    description=kwargs.get("description", "")
+                    description=message
                 )
             ]
         )
@@ -21,7 +33,7 @@ def build_rich_error(detail_type: str, **kwargs):
                 error_details_pb2.PreconditionFailure.Violation(
                     type=kwargs.get("type", ""),
                     subject=kwargs.get("subject", ""),
-                    description=kwargs.get("description", "")
+                    description=message
                 )
             ]
         )
@@ -49,9 +61,9 @@ def build_rich_error(detail_type: str, **kwargs):
     if detail_type == "resource_info":
         return error_details_pb2.ResourceInfo(
             resource_type=kwargs.get("resource_type", ""),
-            resource_name=kwargs.get("resource_name", ""),
+            resource_name=kwargs.get("r~esource_name", ""),
             owner=kwargs.get("owner", ""),
-            description=kwargs.get("description", "")
+            description=message
         )
 
     # DebugInfo: For INTERNAL errors (Stack traces)
@@ -72,4 +84,4 @@ def build_rich_error(detail_type: str, **kwargs):
             ]
         )
 
-    raise ValueError(f"Unknown detail type: {detail_type}")
+    raise ValueError(f"Unknown detail type: {detail_type}")#'
