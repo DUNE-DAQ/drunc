@@ -17,6 +17,7 @@ from druncschema.session_manager_pb2 import (
     ConfigKey,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
+from google.rpc import code_pb2
 from grpc import ServicerContext
 
 from drunc.exceptions import DruncSetupException
@@ -24,7 +25,7 @@ from drunc.session_manager.configuration import SessionManagerConfHandler
 
 # from drunc.utils.grpc_utils import respond_with_rich_error_status, abort_with_rich_error
 from drunc.utils.utils import get_logger, pid_info_str
-from google.rpc import code_pb2
+
 
 class SessionManager(abc.ABC, SessionManagerServicer):
     """Provides a gRPC service to manage and interact with sessions.
@@ -147,7 +148,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 detail_type="precondition",
                 subject="DUNEDAQ_DB_PATH",
                 type="MISSING_OR_INVALID",
-                )
+            )
 
         # Find all configuration files.
         config_files: list[Path] = []
@@ -171,7 +172,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             try:
                 config = Configuration(f"oksconflibs:{file}")
             except Exception as e:
-                context_msg= f"Configuration parse error in '{str(file)}': {str(e)}"
+                context_msg = f"Configuration parse error in '{str(file)}': {str(e)}"
                 self.log.error(context_msg)
                 raise DruncSetupException(
                     message=context_msg,

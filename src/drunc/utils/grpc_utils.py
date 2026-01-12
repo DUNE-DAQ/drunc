@@ -362,6 +362,7 @@ def abort_with_rich_error_status(
 
     raise Exception(f"Aborting with status: {message}")
 
+
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
     A gRPC server interceptor that catches exceptions and converts them into
@@ -378,33 +379,33 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         def error_wrapper(request, context):
             try:
                 return handler.unary_unary(request, context)
-            
+
             except grpc.RpcError:
                 raise
 
             except DruncException as e:
                 abort_with_rich_error_status(
-                    context, 
-                    e.grpc_error_code, 
-                    str(e), 
-                    e.to_rich_error(), 
-                    )
+                    context,
+                    e.grpc_error_code,
+                    str(e),
+                    e.to_rich_error(),
+                )
 
             except Exception as e:
                 # Fallback
-                abort_with_rich_error_status( 
-                    context, 
-                    code_pb2.INTERNAL, 
-                    str(e), 
-                    build_rich_error( 
+                abort_with_rich_error_status(
+                    context,
+                    code_pb2.INTERNAL,
+                    str(e),
+                    build_rich_error(
                         message="An unexpected error occurred.",
-                        detail_type="error_info", 
-                        reason="Unexpected error", 
-                        domain="server", 
-                        metadata={"exception":str(type(e))} 
-                        ), 
-                    )  
-            
+                        detail_type="error_info",
+                        reason="Unexpected error",
+                        domain="server",
+                        metadata={"exception": str(type(e))},
+                    ),
+                )
+
         if handler.unary_unary:
             # only wrap unary-unary calls
             return grpc.unary_unary_rpc_method_handler(
@@ -413,5 +414,3 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 response_serializer=handler.response_serializer,
             )
         return handler
-
-

@@ -60,9 +60,9 @@ def broadcasted(cmd):
             )
 
             obj.broadcast(
-                message=f"Command '{cmd.__name__}' failed", 
+                message=f"Command '{cmd.__name__}' failed",
                 btype=BroadcastType.UNHANDLED_EXCEPTION_RAISED,
-                data=error_wrap
+                data=error_wrap,
             )
 
             raise e

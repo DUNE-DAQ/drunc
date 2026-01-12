@@ -52,7 +52,8 @@ def test_bad_request_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INVALID_ARGUMENT"
-    assert any("Invalid format" in d for d in result.details)
+    field_violation = result.details[0].field_violations[0]
+    assert "Invalid format" in field_violation.description
 
 
 def test_quota_failure_detail():
@@ -74,7 +75,9 @@ def test_quota_failure_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "RESOURCE_EXHAUSTED"
-    assert any("subject=user" in d for d in result.details)
+    violation = result.details[0].violations[0]
+    assert violation.subject == "user"
+    assert violation.description == "Quota exceeded"
 
 
 def test_error_info_detail():
@@ -90,7 +93,9 @@ def test_error_info_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "NOT_FOUND"
-    assert any("reason: NOT_FOUND" in d for d in result.details)
+    assert result.details[0].reason == "NOT_FOUND"
+    assert result.details[0].domain == "example.com"
+    assert result.details[0].metadata == {}
 
 
 def test_precondition_failure_detail():
@@ -112,7 +117,9 @@ def test_precondition_failure_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "FAILED_PRECONDITION"
-    assert any("type=LOCKED" in d for d in result.details)
+    assert result.details[0].violations[0].type == "LOCKED"
+    assert result.details[0].violations[0].subject == "resource"
+    assert result.details[0].violations[0].description == "Locked"
 
 
 def test_help_detail():
@@ -130,7 +137,10 @@ def test_help_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INVALID_ARGUMENT"
-    assert any("description=See docs" in d for d in result.details)
+    assert len(result.details) == 1
+    assert len(result.details[0].links) == 1
+    assert result.details[0].links[0].description == "See docs"
+    assert result.details[0].links[0].url == "link_docs"
 
 
 def test_debug_info_detail():
@@ -148,7 +158,8 @@ def test_debug_info_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INTERNAL"
-    assert any("detail: trace" in d for d in result.details)
+    assert result.details[0].stack_entries == ["func1()", "func2()"]
+    assert result.details[0].detail == "trace"
 
 
 def test_localised_message_detail():
@@ -166,7 +177,8 @@ def test_localised_message_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INTERNAL"
-    assert any("message: Something went wrong" in d for d in result.details)
+    assert result.details[0].locale == "en-US"
+    assert result.details[0].message == "Something went wrong"
 
 
 def test_resource_info_detail():
@@ -187,7 +199,10 @@ def test_resource_info_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "PERMISSION_DENIED"
-    assert any("resource_type: db" in d for d in result.details)
+    assert result.details[0].resource_type == "db"
+    assert result.details[0].resource_name == "users"
+    assert result.details[0].owner == "admin"
+    assert result.details[0].description == "Access denied"
 
 
 def test_request_info_detail():
@@ -205,7 +220,8 @@ def test_request_info_detail():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INTERNAL"
-    assert any("request_id: test_request" in d for d in result.details)
+    assert result.details[0].request_id == "test_request"
+    assert result.details[0].serving_data == "metadata"
 
 
 def test_unknown_detail_type():
@@ -265,7 +281,7 @@ def test_rpc_status_none():
             return grpc.StatusCode.INTERNAL
 
     grpc_error = FakeRpcError()
-    
+
     with patch("drunc.utils.grpc_utils.rpc_status.from_call", return_value=None):
         result = extract_grpc_rich_error(grpc_error)
 
@@ -307,5 +323,8 @@ def test_multiple_detail_types():
         result = extract_grpc_rich_error(grpc_error)
 
     assert result.code == "INVALID_ARGUMENT"
-    assert any("reason: NOT_FOUND" in d for d in result.details)
-    assert any("description=See docs" in d for d in result.details)
+    assert len(result.details) == 2
+    assert result.details[0].reason == "NOT_FOUND"
+    assert result.details[0].domain == "example.com"
+    assert result.details[1].links[0].description == "See docs"
+    assert result.details[1].links[0].url == "docs_link"

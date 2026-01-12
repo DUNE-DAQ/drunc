@@ -8,7 +8,6 @@ from druncschema.session_manager_pb2_grpc import (
     SessionManagerStub,
     add_SessionManagerServicer_to_server,
 )
-from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
 from drunc.utils.grpc_utils import RichErrorServerInterceptor, extract_grpc_rich_error
@@ -159,6 +158,7 @@ def test_config_parse_failure(
     assert "mock_file_" in violation.subject
     assert "Configuration parse error" in violation.description
 
+
 def test_dals_missing_or_invalid(
     session_manager_rich_error_test_suite, generic_request, monkeypatch
 ):
@@ -185,7 +185,7 @@ def test_dals_missing_or_invalid(
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     expected_error_msg = "Failed to get DALs"
     assert expected_error_msg in err.details()
-    
+
     # Unpack rich error metadata
     rich_error = extract_grpc_rich_error(err)
     violation = rich_error.details[0].violations[0]

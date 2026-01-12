@@ -64,7 +64,7 @@ class SessionManagerDriver:
                 )
 
             handle_grpc_error(e)
-            
+
         return response
 
     def list_all_sessions(self, timeout: int | float = 60) -> AllActiveSessions:

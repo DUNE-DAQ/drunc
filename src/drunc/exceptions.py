@@ -1,6 +1,8 @@
+
 from google.rpc import code_pb2
+
 from drunc.utils.rich_error_builder import build_rich_error
-from typing import Optional 
+
 
 class DruncException(Exception):
     def __init__(
@@ -8,10 +10,8 @@ class DruncException(Exception):
         message: str = "An error occurred in Drunc.",
         grpc_error_code=code_pb2.INTERNAL,
         detail_type="error_info",
-        **detail_kwargs
+        **detail_kwargs,
     ):
-        
-        
         super().__init__(message)
 
         if message is not None:
@@ -22,7 +22,6 @@ class DruncException(Exception):
 
         if detail_type is not None:
             self.detail_type = detail_type
-
 
         self.detail_kwargs = detail_kwargs
 
@@ -38,7 +37,6 @@ class DruncShellException(DruncException):
 class DruncSetupException(
     DruncException
 ):  # Exceptions that gets thrown when services start
-
     pass
 
 
