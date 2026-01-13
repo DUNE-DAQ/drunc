@@ -619,6 +619,40 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
+        # Dynamic HOME mount
+        if self.home_path_base:
+            username = self._get_host_username()
+            target_home_path = f"{self.home_path_base}/{username}"
+
+            # Check if this path is already covered by the JSON volumes above
+            is_covered = False
+            for vm in container_volume_mounts:
+                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
+                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                    is_covered = True
+                    break
+
+            if not is_covered:
+                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
+                vol_name = f"home-{username}"
+                
+                pod_volumes.append(
+                    client.V1Volume(
+                        name=vol_name,
+                        host_path=client.V1HostPathVolumeSource(
+                            path=target_home_path, 
+                            type="Directory"
+                        ),
+                    )
+                )
+                container_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name=vol_name,
+                        mount_path=target_home_path,
+                        read_only=False,
+                    )
+                )
+
         # Add log_mount from process_logs_path
         log_dir = None
         log_file_path = boot_request.process_description.process_logs_path
@@ -723,18 +757,9 @@ class K8sProcessManager(ProcessManager):
         """Builds the list of environment variables for the container."""
         env_vars = boot_request.process_description.env
 
-        # Get host username for HOME if needed, but only set USER if not already present
         host_username = None
         if "USER" not in env_vars or self.home_path_base:
-            try:
-                host_username = getpass.getuser()
-            except KeyError:
-                try:
-                    import pwd
-
-                    host_username = pwd.getpwuid(os.getuid()).pw_name
-                except KeyError:
-                    host_username = str(os.getuid())
+            host_username = self._get_host_username()
 
         # Only set USER if not already present in environment
         if "USER" not in env_vars and host_username:
@@ -969,6 +994,17 @@ class K8sProcessManager(ProcessManager):
                 return "Headless"
 
         return "Headless"
+
+    def _get_host_username(self) -> str:
+        """Resolves the username of the user running the process manager."""
+        try:
+            return getpass.getuser()
+        except KeyError:
+            try:
+                import pwd
+                return pwd.getpwuid(os.getuid()).pw_name
+            except KeyError:
+                return str(os.getuid())
 
     def _build_pod_manifest(
         self,
