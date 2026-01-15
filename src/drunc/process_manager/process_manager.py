@@ -467,7 +467,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         Returns:
             A response containing log lines.
         """
-        self.log.debug("Getting logs")
+        self.log.critical("Getting logs")
 
         try:
             response = self._logs_impl(request)
@@ -498,7 +498,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         else:
             if uuids[0] not in self.process_store:
                 raise BadQuery(
-                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the process store"
+                    f"Couldn't find the process corresponding to the UUID {uuids[0]} in the process store. Process store {self.process_store}"
                 )
         return uuids[0]
 

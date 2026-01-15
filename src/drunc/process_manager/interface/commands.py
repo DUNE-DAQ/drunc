@@ -207,16 +207,21 @@ def logs(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
     log = get_logger("process_manager.shell")
-    log.debug(f"Running logs with query {query}")
+    log.critical(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
         query=query,
     )
+    log.critical(f"We are at the log request {log_req}")
 
     result = obj.get_driver("process_manager").logs(log_req)
 
+    log.critical("thingy1")
+
     if result.uuid.uuid is not None:
         obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
+
+    log.critical("thingy2")
 
     for line in result.lines:
         if not line.strip():  # keep empty lines for visual clarity
@@ -234,7 +239,9 @@ def logs(
             line = line.replace(grep, f"[u]{grep}[/]")
 
         obj.print(line)
+    log.critical("thingy3")
     obj.rule("End")
+    log.critical("thingy4")
 
 
 @click.command("restart")
