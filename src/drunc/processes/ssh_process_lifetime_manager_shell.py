@@ -1,8 +1,6 @@
 """
-Provides SSH connection and lifetime management using sh library.
-
-This implementation uses the sh library to execute SSH commands,
-replicating the behaviour of the original SSHProcessManager.
+Provides SSH connection and lifetime management using sh library
+to invoke shell commands over SSH.
 """
 
 import getpass
@@ -124,10 +122,8 @@ class ProcessWatcherThread(threading.Thread):
 class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
     """
     Manages process lifecycle using sh library for SSH connections.
-
-    This implementation uses the sh library's SSH command wrapper to start
-    and manage remote processes, matching the behaviour of the original
-    SSHProcessManager implementation.
+    Uses the sh library's SSH command wrapper to start
+    and manage remote processes.
     """
 
     def __init__(
@@ -234,7 +230,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             cmd = cmd[:-1]
 
         # Execute the command via SSH
-        self._execute_ssh_command(
+        self._execute_bootrequest_via_ssh(
             uuid=uuid,
             boot_request=boot_request,
             hostname=hostname,
@@ -584,7 +580,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.debug(f"Failed to read metadata for {uuid}: {e}")
             return None
 
-    def _execute_ssh_command(
+    def _execute_bootrequest_via_ssh(
         self,
         uuid: str,
         boot_request: BootRequest,
@@ -652,9 +648,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
     def _kill_client_process(self, process_info: Dict) -> None:
         """
-        Kill a local SSH client process.
-        This should send SIGHUP to the remote process but not as reliably
-        as killing directly.
+        Kill a local SSH client process. The remote process will typically
+        recieve a SIGHUP when the SSH client terminates.
         """
         try:
             process_info["process"].signal_group(signal.SIGKILL)
