@@ -210,6 +210,7 @@ def unified_shell(
         unified_shell_log.critical(f"Override logs: {override_logs}")
 
         unified_shell_log.critical(f"See what override_log is: {ctx.obj.override_logs}")
+        # * YOOO THIS TOTALLY WORKS
         ctx.obj.override_logs = override_logs
         unified_shell_log.critical(f"after modifying: {ctx.obj.override_logs}")
 
