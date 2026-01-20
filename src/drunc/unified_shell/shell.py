@@ -204,18 +204,7 @@ def unified_shell(
         port = mp.Value("i", 0)
 
         unified_shell_log.debug("[green]Process manager[/green] starting")
-        #!  This is a multiprocessing process
-        # when we start the processes, its done on a per process manager basis
-
-        unified_shell_log.critical(f"Override logs: {override_logs}")
-
-        unified_shell_log.critical(f"See what override_log is: {ctx.obj.override_logs}")
-        # * YOOO THIS TOTALLY WORKS
         ctx.obj.override_logs = override_logs
-        unified_shell_log.critical(f"after modifying: {ctx.obj.override_logs}")
-
-        #! This is path one, with the unified_shell. It goes into run_pm
-
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
             kwargs={
@@ -395,19 +384,7 @@ def unified_shell(
     ]
     for cmd in controller_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(
-            format_name_for_cli(cmd.name)
-        )  # simple list of click commands that you can run from within the click shell
-        # what you can _probably_ do is to have a hook through the click shell to determine if we're passing the arguments
-        # to the commands
-
-    unified_shell_log.warning(ctx.obj.dynamic_commands)
-    unified_shell_log.critical(ctx.obj)
-    for arg in sys.argv:
-        unified_shell_log.info(arg)
-    unified_shell_log.info("done")
-
-    #! Basically we now can read the args (which obviously i guess?)
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # If any of the commands is in the click commands, set batch mode
     if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):

@@ -48,7 +48,7 @@ def run_pm(
     appName = "process_manager"
     log = get_logger(logger_name=appName, rich_handler=True)
 
-    log.critical("Running [green]run_pm[/green]")
+    log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
         signal_handler()
 
@@ -83,10 +83,6 @@ def run_pm(
     # drunc.[first_child] loggers. See #691
     drunc_log = logging.getLogger("drunc")
     add_file_handler(drunc_log, use_parent_handlers=True, path=log_path)
-
-    #! This is path one.
-    #  This is gonna make the ssh process manager thing
-    # and will start the shell just fine.. but it does not propagate to 'boot'
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
@@ -198,8 +194,6 @@ def process_manager_cli(
     pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
 ) -> None:
     get_root_logger(log_level)
-    mylog = get_logger("process_manager.cli")
-    mylog.critical(f"override log: {override_logs}")
     pm_conf = get_process_manager_configuration(pm_conf)
     run_pm(
         pm_conf=pm_conf,

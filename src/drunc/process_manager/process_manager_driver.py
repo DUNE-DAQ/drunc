@@ -79,8 +79,6 @@ class ProcessManagerDriver:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
     # ----- Boot workflow -----
-
-    #! So this is path two and it goes here now.
     def boot(
         self,
         conf_file: str,

@@ -54,8 +54,6 @@ def boot(
     log.debug(
         f"Booting session {session_name} with boot configuration file {configuration_file} and id {configuration_id}, requested by user {user}"
     )
-
-    #! This is path two
     try:
         results = obj.get_driver("process_manager").boot(
             conf_file=configuration_file,

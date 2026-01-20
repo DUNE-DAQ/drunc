@@ -25,7 +25,7 @@ from drunc.utils.utils import get_logger
 )
 @click.pass_obj
 def boot(
-    obj: ProcessManagerContext,  # In this object you can define an attribute called (there is already a run mode)
+    obj: ProcessManagerContext,
     override_logs: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
@@ -36,38 +36,15 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
-    #! See if you can print out the processmanagercontext
-    log.critical(obj.running_mode)
-
-    #! Now check if you can hook into it..
-    log.critical("hooking into override_logs")
-    log.critical(obj.override_logs)
-    # * YOO THIS TOTALLY WORKS!! OKAY YOU CAN DEVELOP THIS CONVEPT
-
-    #! Now check for the entire tristate area
-    log.critical(override_logs)
-    # log.critical("Checking overridestate")
-
     if override_logs is None:
         override_logs_boot = obj.override_logs
     else:
         override_logs_boot = override_logs
-
-    # log.critical(overridestate)
-    # log.info(None)
-
     if len(processes.values) > 0:
         click.confirm(
             f"You already have {len(processes.values)} processes running in session {session_name}, are you sure you want to boot a session?",
             abort=True,
         )
-    # test = "50"
-    log.critical(f"Override logs boot: {override_logs_boot}")
-
-    #! Pass the keyword argument frmo the unified shell to the key loggs
-
-    #! This is path two
-    # This is going to actually boot the actual thing
 
     try:
         results = obj.get_driver("process_manager").boot(
