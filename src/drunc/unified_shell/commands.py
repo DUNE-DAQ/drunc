@@ -13,22 +13,20 @@ from drunc.utils.utils import get_logger
 
 @click.command("boot")
 @click.option(
-    "--override-logs/--no-override-logs", default=True
-)  # see https://click.palletsprojects.com/en/stable/options/
+    "--override-logs/--no-override-logs",
+    default=None,
+    help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
+)
 @click.option(
     "--sleep-between-app-boot",
     type=float,
     default=0.1,
     help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
 )
-# Have it as an optional argument
-# Then in the boot object, define a check that sees if you manually override it (takes precedence)
-# If not, then check context metadata
-
 @click.pass_obj
 def boot(
     obj: ProcessManagerContext,  # In this object you can define an attribute called (there is already a run mode)
-    override_logs: bool,
+    override_logs: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
@@ -47,7 +45,13 @@ def boot(
     # * YOO THIS TOTALLY WORKS!! OKAY YOU CAN DEVELOP THIS CONVEPT
 
     #! Now check for the entire tristate area
+    log.critical(override_logs)
     # log.critical("Checking overridestate")
+
+    if override_logs is None:
+        override_logs_boot = obj.override_logs
+    else:
+        override_logs_boot = override_logs
 
     # log.critical(overridestate)
     # log.info(None)
@@ -58,7 +62,7 @@ def boot(
             abort=True,
         )
     # test = "50"
-    log.critical(f"Override logs boot: {override_logs}")
+    log.critical(f"Override logs boot: {override_logs_boot}")
 
     #! Pass the keyword argument frmo the unified shell to the key loggs
 
@@ -72,7 +76,7 @@ def boot(
             user=user,
             session_name=session_name,
             log_level="INFO",  # Unused anyway !!
-            override_logs=override_logs,
+            override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
         for result in results:
