@@ -124,8 +124,7 @@ def test_all_methods_not_implemented(
     error_info = rich_error.details[0]
 
     assert error_info is not None
-    assert error_info.links[0].description == "Check Documentation"
-    assert "github.com" in error_info.links[0].url
+    assert error_info.reason == "NOT_IMPLEMENTED"
 
 
 @pytest.mark.parametrize(
@@ -162,9 +161,10 @@ def test_all_methods_unhandled_exception(
         stub_method(boot_request)
 
     err = exc_info.value
+    err_msg = f"Unhandled exception in ProcessManager.{method_name}"
     assert err.code() == grpc.StatusCode.INTERNAL
 
-    assert f"Unhandled exception in ProcessManager.{method_name}" in err.details()
+    assert err_msg in err.details()
     assert exception_msg in err.details()
 
     # Unpack rich error metadata
@@ -173,6 +173,4 @@ def test_all_methods_unhandled_exception(
 
     assert error_info is not None
 
-    assert error_info.reason == "UNHANDLED_EXCEPTION"
-
-    assert error_info.metadata["original_error"] == str(exception_msg)
+    assert exception_msg in error_info.reason

@@ -8,9 +8,10 @@ from druncschema.session_manager_pb2_grpc import (
     SessionManagerStub,
     add_SessionManagerServicer_to_server,
 )
+from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import RichErrorServerInterceptor, extract_grpc_rich_error
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 class SessionManagerRichErrorTestSuite:
@@ -29,6 +30,8 @@ class SessionManagerRichErrorTestSuite:
 
         Args:
             method_name: Name of the method to mock (e.g., 'describe')
+            rich_error_details: Dictionary containing rich error details to be used in the mocked method.
+                Keys are 'domain', 'message', and 'details'.
         """
         # Mock the logger to prevent logging interference during tests
         with patch("drunc.session_manager.session_manager.get_logger") as mock_logger:
@@ -70,7 +73,7 @@ def session_manager_rich_error_test_suite():
     suite.teardown_server_and_client()
 
 
-def test_list_all_configs_no_path_set(
+def test_list_all_configs_no_config_files_rich_error(
     session_manager_rich_error_test_suite, generic_request, monkeypatch
 ):
     """
@@ -88,17 +91,22 @@ def test_list_all_configs_no_path_set(
 
     err = excinfo.value
 
-    expected_error_msg = "DUNEDAQ_DB_PATH not set"
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
-    assert f"{expected_error_msg}" in err.details()
+    assert "DUNEDAQ_DB_PATH" in err.details()
 
     # Unpack rich error metadata
-    rich_error = extract_grpc_rich_error(err)
-    violation = rich_error.details[0].violations[0]
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
 
-    assert violation.type == "MISSING_OR_INVALID"
-    assert violation.subject == "DUNEDAQ_DB_PATH"
-    assert expected_error_msg in violation.description
+            # There should be a PreconditionFailure detail
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
+
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "DUNEDAQ_DB_PATH env variable not set" in violation.description
 
 
 def test_no_config_files_rich_error(
@@ -114,15 +122,21 @@ def test_no_config_files_rich_error(
 
     err = excinfo.value
 
-    assert err.code() == grpc.StatusCode.NOT_FOUND
-    assert "Configuration files not found" in err.details()
+    assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+    assert "Config files" in err.details()
 
     # Unpack rich error metadata
-    rich_error = extract_grpc_rich_error(err)
-    res_info = rich_error.details[0]
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
 
-    assert res_info.resource_type == "SessionConfiguration"
-    assert res_info.resource_name == ""
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
+
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "No configuration files found in /fake_path" in violation.description
 
 
 def test_config_parse_failure(
@@ -148,15 +162,19 @@ def test_config_parse_failure(
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
-    assert "Configuration parse error" in err.details()
 
     # Unpack rich error metadata
-    rich_error = extract_grpc_rich_error(err)
-    violation = rich_error.details[0].violations[0]
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
 
-    assert violation.type == "PARSE_ERROR"
-    assert "mock_file_" in violation.subject
-    assert "Configuration parse error" in violation.description
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "Config files" in violation.subject
+            assert "Failed to parse configuration file" in violation.description
 
 
 def test_dals_missing_or_invalid(
@@ -183,13 +201,16 @@ def test_dals_missing_or_invalid(
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
-    expected_error_msg = "Failed to get DALs"
-    assert expected_error_msg in err.details()
 
     # Unpack rich error metadata
-    rich_error = extract_grpc_rich_error(err)
-    violation = rich_error.details[0].violations[0]
+    status = status_pb2.Status()
+    for key, value in err.trailing_metadata():
+        if key == "grpc-status-details-bin":
+            status.ParseFromString(value)
+            precond = error_details_pb2.PreconditionFailure()
+            status.details[0].Unpack(precond)
 
-    assert violation.type == "DALs_STRUCTURE_INVALID"
-    assert "mock_file" in violation.subject
-    assert "DALs broken" in violation.description
+            violation = precond.violations[0]
+            assert violation.type == "MISSING OR INVALID"
+            assert "Session DALs" in violation.subject
+            assert "DALs missing or invalid" in violation.description

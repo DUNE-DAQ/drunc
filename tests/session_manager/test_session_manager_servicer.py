@@ -68,14 +68,12 @@ def test_list_all_configs_no_files_found(
     """
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
 
-    expected_error_msg = "Configuration files not found"
-
     with patch("pathlib.Path.rglob", return_value=[]):
         with pytest.raises(DruncSetupException) as excinfo:
             session_manager.list_all_configs(mock_request, mock_context)
-        assert expected_error_msg in str(excinfo.value)
+        assert "Config files" in str(excinfo.value)
 
-        mock_logger.error.assert_any_call(expected_error_msg)
+        mock_logger.error.assert_any_call("No configuration files found")
 
 
 def test_list_all_configs_files_not_parsed(
@@ -86,18 +84,17 @@ def test_list_all_configs_files_not_parsed(
     """
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
     mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
-    original_exc_msg = "Config failed"
 
     with patch("pathlib.Path.rglob", return_value=mock_files):
         with patch(
             "drunc.session_manager.session_manager.Configuration",
-            side_effect=Exception(original_exc_msg),
+            side_effect=Exception("Config failed"),
         ):
             with pytest.raises(DruncSetupException) as excinfo:
                 session_manager.list_all_configs(mock_request, mock_context)
-            expected_error_msg = f"Configuration parse error in 'mock_file_1.data.xml': {original_exc_msg}"
+
             # Check that the exception contains the expected error message
-            assert expected_error_msg in str(excinfo.value)
+            assert "Config files" in str(excinfo.value)
 
 
 def test_list_all_configs_files_parsed(
@@ -145,14 +142,9 @@ def test_list_all_configs_dals_missing(
 
     mock_files = [Path(f"mock_file_{i}.data.xml") for i in range(1, 4)]
 
-    original_exc_msg = "DALs missing or invalid"
-
     with patch("pathlib.Path.rglob", return_value=mock_files):
         mock_config = MagicMock()
-        mock_config.get_dals.side_effect = Exception(original_exc_msg)
-        expected_error_msg = (
-            f"Failed to get DALs from mock_file_1.data.xml: {original_exc_msg}"
-        )
+        mock_config.get_dals.side_effect = Exception("DALs missing or invalid")
 
         with patch(
             "drunc.session_manager.session_manager.Configuration",
@@ -161,6 +153,8 @@ def test_list_all_configs_dals_missing(
             with pytest.raises(DruncSetupException) as excinfo:
                 session_manager.list_all_configs(mock_request, mock_context)
 
-            assert expected_error_msg in str(excinfo.value)
+            assert "Session DALs" in str(excinfo.value)
 
-            mock_logger.error.assert_any_call(expected_error_msg)
+            mock_logger.error.assert_any_call(
+                "Failed to get DALs from mock_file_1.data.xml: DALs missing or invalid"
+            )
