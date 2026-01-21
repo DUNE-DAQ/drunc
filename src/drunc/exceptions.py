@@ -1,7 +1,5 @@
 from google.rpc import code_pb2
 
-from drunc.utils.rich_error_builder import build_rich_error
-
 
 class DruncException(Exception):
     def __init__(

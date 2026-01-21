@@ -34,7 +34,6 @@ from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.exceptions import (
     DruncCommandException,
-    DruncException,
     DruncNotImplementedException,
 )
 from drunc.process_manager.configuration import (

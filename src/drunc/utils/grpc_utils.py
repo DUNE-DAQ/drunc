@@ -14,10 +14,9 @@ from grpc_status import rpc_status
 from drunc.exceptions import (
     DruncCommandException,
     DruncException,
-    DruncSetupException,
     DruncNotImplementedException,
+    DruncSetupException,
 )
-from drunc.utils.rich_error_builder import build_rich_error
 
 
 class UnpackingError(DruncCommandException):
