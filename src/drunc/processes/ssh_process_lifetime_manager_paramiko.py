@@ -928,24 +928,28 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                 if not process_dead:
                     self.log.debug(f"Sending SIGQUIT to remote PID {remote_pid}")
                     self._send_remote_signal(signal_client, remote_pid, "QUIT")
-                    process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
+                    process_dead = self.wait_for_process_to_die(
+                        uuid, timeout=timeout, logger=self.log
+                    )
                     if process_dead:
                         self.log.info(
                             f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGQUIT signal."
                         )
                     else:
-                        self.log.debug(
+                        self.log.info(
                             f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGQUIT signal."
                         )
 
                 if not process_dead:
                     self.log.debug(f"Sending SIGKILL to remote PID {remote_pid}")
                     self._send_remote_signal(signal_client, remote_pid, "KILL")
-                    process_dead = self.wait_for_process_to_die(uuid, timeout=timeout)
+                    process_dead = self.wait_for_process_to_die(
+                        uuid, timeout=timeout, logger=self.log
+                    )
 
                     if process_dead:
                         self.log.info(
-                            f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGKILL signal."
+                            f"Remote process {uuid} (PID {remote_pid}) terminated forcibly following SIGKILL signal."
                         )
                     else:
                         self.log.debug(
