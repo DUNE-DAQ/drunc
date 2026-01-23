@@ -30,6 +30,8 @@ def wait_for(
     last_value = None
 
     while time.time() - start_time < timeout:
+        if logger is not None:
+            logger.debug(f"Started waiting for condition to equal {expected_value}")
         try:
             last_value = condition()
         except Exception:
@@ -39,18 +41,34 @@ def wait_for(
         # Handle callable expected_value (predicate function)
         if callable(expected_value):
             if expected_value(last_value):
+                if logger is not None:
+                    logger.debug(
+                        f"Condition satisfied. Total wait time: {time.time() - start_time:.2f}s"
+                    )
                 return last_value
         # Handle tuple of acceptable values
         elif isinstance(expected_value, tuple):
             if last_value in expected_value:
+                if logger is not None:
+                    logger.debug(
+                        f"Condition satisfied. Total wait time: {time.time() - start_time:.2f}s"
+                    )
                 return last_value
         # Handle None as "wait for any truthy value"
         elif expected_value is None:
             if last_value:
+                if logger is not None:
+                    logger.debug(
+                        f"Condition satisfied. Total wait time: {time.time() - start_time:.2f}s"
+                    )
                 return last_value
         # Handle direct value comparison
         else:
             if last_value == expected_value:
+                if logger is not None:
+                    logger.debug(
+                        f"Condition satisfied. Total wait time: {time.time() - start_time:.2f}s"
+                    )
                 return last_value
 
         time.sleep(poll_interval)

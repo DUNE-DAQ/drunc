@@ -18,7 +18,7 @@ class ProcessLifetimeManager(ABC):
     Abstract base class for process lifetime management.
 
     Provides a common interface for starting, monitoring, and terminating
-    processes on remote hosts via SSH. Concrete implementations may use
+    processes on remote hosts via SSH. Concrete implementations use
     different underlying SSH libraries (e.g., Paramiko, sh library).
     """
 
@@ -45,6 +45,8 @@ class ProcessLifetimeManager(ABC):
         Returns:
             True if process terminated within timeout, False otherwise
         """
+        if logger is not None:
+            logger.debug(f"Waiting for process with uuid: {uuid} to terminate...")
         result = wait_for(
             condition=lambda: self.is_process_alive(uuid),
             expected_value=False,
@@ -52,6 +54,7 @@ class ProcessLifetimeManager(ABC):
             poll_interval=self.KILLING_PROCESS_POLL_INTERVAL,
             logger=logger,
         )
+
         return result == False
 
     @abstractmethod

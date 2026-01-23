@@ -59,6 +59,7 @@ class ProcessWatcherThread(threading.Thread):
         self.metadata_file = metadata_file
         self.on_exit = on_exit
         self.logger = logger
+        self.__is_monitoring_remotely = False
 
     def run(self):
         """
@@ -76,38 +77,64 @@ class ProcessWatcherThread(threading.Thread):
                     self.manager.metadata[self.uuid] = metadata
                 self.logger.debug(f"Metadata retrieved for process {self.uuid}")
             else:
-                # if metadata could not be read, we won't be able to kill remote processes
-                # directly
+                # If metadata could not be read, fall back to monitoring SSH client
                 self.logger.warning(
                     f"Failed to retrieve metadata for process {self.uuid}. "
-                    f"Lifecycle management will be limited."
+                    f"Falling back to SSH client monitoring."
                 )
+                self._monitor_ssh_client()
+                return
         except Exception as e:
             self.logger.warning(
                 f"Exception reading metadata for process {self.uuid}: {e}. "
-                f"Lifecycle management will be limited."
+                f"Falling back to SSH client monitoring."
             )
+            self._monitor_ssh_client()
+            return
 
-        # Continue with process monitoring
+        # Monitor the remote process directly
+        self._monitor_remote_process(metadata.pid)
+
+    def _monitor_remote_process(self, remote_pid: int) -> None:
+        """
+        Monitor remote process by polling until PID disappears.
+
+        Uses SSH to run a blocking command that exits when the process dies.
+        """
         exception = None
         exit_code = None
 
         try:
-            # Wait for process to complete
+            user_host = f"{self.user}@{self.hostname}"
+            arguments = self.manager._build_ssh_arguments(self.hostname, user_host)
+
+            # Remote ssh command that will block until process exits
+            remote_cmd = (
+                f"while kill -0 {remote_pid} 2>/dev/null; do sleep 0.1; done; exit 0"
+            )
+            arguments.append(remote_cmd)
+
+            self.__is_monitoring_remotely = True
+            # This ssh command will block until the remote process exits
+            self.manager.ssh(*arguments)
+            self.__is_monitoring_remotely = False
+            self.logger.debug(
+                f"Remote process {self.uuid} (PID {remote_pid}) has exited"
+            )
+
             self.process.wait()
             exit_code = self.process.exit_code
-            self.logger.debug(f"Shell process {self.uuid} exited with code {exit_code}")
-
+            self.logger.debug(
+                f"SSH client for {self.uuid} exited with code {exit_code}"
+            )
         except sh.ErrorReturnCode as e:
-            # Process exited with non-zero code
             exception = e
             exit_code = e.exit_code
-            self.logger.debug(f"Shell process {self.uuid} error: {e}")
+            self.logger.debug(f"Remote process {self.uuid} monitoring error: {e}")
 
         except Exception as e:
-            # Unexpected error during monitoring
             exception = e
-            self.logger.error(f"Shell process {self.uuid} watcher error: {e}")
+            self.logger.error(f"Remote process {self.uuid} watcher error: {e}")
 
         # Invoke callback with results
         if self.on_exit:
@@ -117,6 +144,46 @@ class ProcessWatcherThread(threading.Thread):
                 self.logger.error(
                     f"Error in process exit callback for {self.uuid}: {callback_error}"
                 )
+
+    def _monitor_ssh_client(self) -> None:
+        """
+        Fallback: monitor the SSH client process when remote PID unavailable.
+        """
+        exception = None
+        exit_code = None
+
+        try:
+            self.process.wait()
+            exit_code = self.process.exit_code
+            self.logger.debug(
+                f"SSH client for {self.uuid} exited with code {exit_code}"
+            )
+
+        except sh.ErrorReturnCode as e:
+            exception = e
+            exit_code = e.exit_code
+            self.logger.debug(f"SSH client for {self.uuid} error: {e}")
+
+        except Exception as e:
+            exception = e
+            self.logger.error(f"SSH client for {self.uuid} watcher error: {e}")
+
+        if self.on_exit:
+            try:
+                self.on_exit(self.uuid, exit_code, exception)
+            except Exception as callback_error:
+                self.logger.error(
+                    f"Error in process exit callback for {self.uuid}: {callback_error}"
+                )
+
+    def is_monitoring_remotely(self) -> bool:
+        """
+        Check if the watcher is monitoring the remote process directly.
+
+        Returns:
+            True if monitoring remote process, False if monitoring SSH client
+        """
+        return self.__is_monitoring_remotely
 
 
 class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
@@ -156,7 +223,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self.process_store: Dict[str, sh.RunningCommand] = {}
 
         # Thread tracking for monitoring
-        self.watchers: List[threading.Thread] = []
+        self.watchers: Dict[str, threading.Thread] = {}
 
         # Thread-safe lock for process store modifications
         self.lock = threading.Lock()
@@ -272,7 +339,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             logger=self.log,
         )
         watcher.start()
-        self.watchers.append(watcher)
+        with self.lock:
+            self.watchers[uuid] = watcher
 
     def is_process_alive(self, uuid: str) -> bool:
         """
@@ -299,6 +367,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.process_store[uuid]["hostname"],
             self.process_store[uuid]["user"],
             metadata.pid,
+            uuid,
         )
         return process.is_alive() and remote_process_alive
 
@@ -413,13 +482,18 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 self.log.error(f"Error during cleanup of process {uuid}: {e}")
 
         # Wait for watcher threads to complete
-        for watcher in self.watchers:
+        with self.lock:
+            watchers_to_join = list(self.watchers.values())
+
+        for watcher in watchers_to_join:
             try:
                 watcher.join(timeout=2.0)
             except Exception:
                 pass
 
-        self.watchers.clear()
+        with self.lock:
+            self.watchers.clear()
+
         return killed_exit_codes
 
     def _build_ssh_arguments(self, hostname: str, user_host: str) -> List[str]:
@@ -792,6 +866,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 del self.process_store[uuid]
             if uuid in self.metadata:
                 del self.metadata[uuid]
+            if uuid in self.watchers:
+                del self.watchers[uuid]
 
     def _send_remote_signal(
         self, hostname: str, user: str, pid: int, signal_name: str
@@ -805,8 +881,31 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         except Exception as e:
             self.log.debug(f"Failed to send {signal_name} to PID {pid}: {e}")
 
-    def _is_remote_process_alive(self, hostname: str, user: str, pid: int) -> bool:
-        """Check if remote process exists"""
+    def _is_remote_process_alive(
+        self, hostname: str, user: str, pid: int, uuid: str
+    ) -> bool:
+        """
+        Check if remote process is running.
+        - If the watcher thread is connected remotely and alive, assume process is alive.
+        - If not, we use the slower method of checking via SSH.
+
+        Args:
+            hostname: Remote hostname
+            user: Remote user
+            pid: Process ID to check
+            uuid: Process UUID for watcher thread lookup
+
+        Returns:
+            True if process is alive, False otherwise
+        """
+        with self.lock:
+            watcher = self.watchers.get(uuid)
+
+        if watcher and watcher.is_alive() and watcher.is_monitoring_remotely():
+            # Watcher is blocking on remote process, so remote process must be alive
+            return True
+
+        # Verify remote process via SSH (requires another connection)
         try:
             user_host = f"{user}@{hostname}"
             arguments = self._build_ssh_arguments(hostname, user_host)
