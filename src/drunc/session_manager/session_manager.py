@@ -42,7 +42,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         super().__init__()
 
-        self.log = get_logger("session_manager")
+        self.log = get_logger("session_manager", rich_handler=True)
         self.log.debug(pid_info_str())
         self.log.debug("Initialized SessionManager")
 

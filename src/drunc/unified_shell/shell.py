@@ -342,6 +342,12 @@ def unified_shell(
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
     unified_shell_log.debug("Initializing the [green]FSM[/green]")
+
+    #! This is an absolute _hack_ because we do not want the
+    # unified shell fsm to go to tty but want other fsms to do so
+    # live with it. At least until controller.core uses file handler instead of stream
+    get_logger("controller.core.FSM", log_level="CRITICAL")
+
     fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")

@@ -30,7 +30,7 @@ class SessionManagerDriver:
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        self.log = get_logger("controller.SessionManagerDriver")
+        self.log = get_logger("controller.iface.SessionManagerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
@@ -38,7 +38,7 @@ class SessionManagerDriver:
         self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = SessionManagerStub(self.channel)
         self.token = copy_token(token)
-        self.log = get_logger("session_manager_driver")
+        self.log = get_logger("session_manager_driver", rich_handler=True)
 
     def describe(self, timeout: int | float = 60) -> Description:
         """Describe the session manager service.
@@ -64,7 +64,7 @@ class SessionManagerDriver:
                 )
 
             handle_grpc_error(e)
-            
+
         return response
 
     def list_all_sessions(self, timeout: int | float = 60) -> AllActiveSessions:

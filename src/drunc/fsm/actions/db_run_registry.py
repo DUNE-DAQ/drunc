@@ -22,7 +22,7 @@ from drunc.utils.utils import get_logger
 class DBRunRegistry(FSMAction):
     def __init__(self, configuration):
         super().__init__(name="db-run-registry")
-        self.log = get_logger("controller.usvc_db_run_registry")
+        self.log = get_logger("controller.iface.usvc_db_run_registry")
 
         dotdrunc = get_dotdrunc_json()
         try:
@@ -142,6 +142,7 @@ class DBRunRegistry(FSMAction):
                     timeout=self.timeout,
                 )
                 r.raise_for_status()
+                self.log.info("Successfully published to run registry")
             except requests.HTTPError as exc:
                 error = f"of HTTP Error (maybe failed auth, maybe ill-formed post message, ...) using {__name__}"
                 self.log.error(error)

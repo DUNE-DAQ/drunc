@@ -711,7 +711,9 @@ class K8sProcessManager(ProcessManager):
 
         if log_file_path:
             self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
-            log_redirect_cmd = f"exec > {log_file_path} 2>&1;"
+            log_redirect_cmd = (
+                f"exec > {log_file_path} | sed -u 's/\\x1b\\[[0-9;]*m//g' 2>&1;"
+            )
         else:
             log_redirect_cmd = ""
 
