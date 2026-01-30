@@ -101,7 +101,7 @@ class StatefulNode(abc.ABC):
         self.name = name
         self._ready_state = False
         self.__fsm = FSM(fsm_configuration)
-        self.log = get_logger("controller.StatefulNode")
+        self.log = get_logger("controller.core.StatefulNode")
         self.__operational_state = OperationalState(
             stateful_node=self,
             initial_value=init_state,

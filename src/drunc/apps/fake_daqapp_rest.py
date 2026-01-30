@@ -18,12 +18,11 @@ from drunc.utils.utils import (
     get_new_port,
     get_root_logger,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_standard_loggers,
 )
 
 __version__ = "1.0.0"
 get_root_logger("info")
-setup_standard_loggers()
+log = get_logger("fake_daqapp_rest", rich_handler=True)
 
 
 class AppState:
@@ -236,7 +235,6 @@ def main():
     print(f"Name: {name}")
     app_state = AppState(name)
 
-    log = get_logger("fake_daqapp_rest", rich_handler=True)
     conf = conffwk.Configuration(args.configurationService)
     session = conf.get_dal(
         class_name="Session",

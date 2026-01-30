@@ -50,7 +50,7 @@ from drunc.utils.utils import (
 @click.pass_context
 def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     get_root_logger(log_level)
-    controller_shell_log = get_logger("controller.shell", rich_handler=True)
+    controller_shell_log = get_logger("controller.iface.shell", rich_handler=True)
 
     controller_shell_log.debug("Resetting the context instance address")
     ctx.obj.reset(address=controller_address)

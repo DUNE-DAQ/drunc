@@ -1,29 +1,43 @@
 from google.rpc import code_pb2
 
 
-class DruncException(Exception):  # All exceptions known to drunc
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class DruncException(Exception):
+    """Base exception for all Drunc errors."""
+
+    grpc_error_code = code_pb2.INTERNAL  # default
+    details = None  # optional rich error detail
+
+    def __init__(
+        self, message=None, grpc_error_code=None, details=None, *args, **kwargs
+    ):
+        if message is None:
+            message = "Drunc Error"  # default message
+
+        super().__init__(message, *args, **kwargs)
+
+        if grpc_error_code is not None:
+            self.grpc_error_code = grpc_error_code
+        if details is not None:
+            self.details = details
 
 
-class DruncShellException(DruncException):  # Exceptions that gets thrown by shells
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class DruncShellException(DruncException):
+    # Exceptions that gets thrown by shells
+    pass
 
 
 class DruncSetupException(
     DruncException
 ):  # Exceptions that gets thrown when services start
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    grpc_error_code = code_pb2.FAILED_PRECONDITION
+
+    pass
 
 
 class DruncCommandException(
     DruncException
 ):  # Exceptions that gets thrown when commands run
-    def __init__(self, txt, grpc_error_code=code_pb2.INTERNAL, *args, **kwargs):
-        self.grpc_error_code = grpc_error_code
-        super().__init__(txt, *args, **kwargs)
+    pass
 
 
 class DruncServerSideError(

@@ -34,7 +34,7 @@ def in_control(cmd):
 def publish_command_time(cmd):
     @wraps(cmd)
     def wrap(obj, *args, **kwargs):
-        log = get_logger(f"controller.publish_command_time.{cmd}")
+        log = get_logger(f"controller.core.publish_command_time.{cmd}")
 
         cmd_start_time = time.time()
         try:
