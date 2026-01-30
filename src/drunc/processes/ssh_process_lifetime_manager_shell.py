@@ -15,6 +15,7 @@ from typing import Callable, Dict, List, Optional
 import sh
 from druncschema.process_manager_pb2 import BootRequest
 
+from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.utils import on_parent_exit
 from drunc.processes.connection_utils import wait_for
 from drunc.processes.process_metadata import ProcessMetadata
@@ -480,6 +481,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         Returns:
             Dictionary mapping terminated process UUIDs to their exit codes
         """
+        self.log.debug(f"process_timeouts: {process_timeouts}")
         if process_timeouts is None:
             process_timeouts = {}
 
@@ -558,20 +560,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             if uuid not in process_timeouts:
                 process_timeouts[uuid] = self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
 
-        # Define shutdown sequence for role-based termination
-        shutdown_order = [
-            "unknown",
-            "application",
-            "segment-controller",
-            "root-controller",
-            "local-connection-server",
-        ]
-
         all_exit_codes: Dict[str, Optional[int]] = {}
         killed_uuids = set()
 
         # Execute role-based shutdown in stages
-        for role in shutdown_order:
+        for role in PROCESS_SHUTDOWN_ORDERING:
             self.log.info(
                 f"--- Shutdown stage: Terminating role '{role}' from provided UUIDs ---"
             )

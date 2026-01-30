@@ -13,13 +13,13 @@ from druncschema.process_manager_pb2 import (
 from drunc.grpc_testing_tools.connection_utils import wait_for
 
 
-def create_boot_request(process_name, role, log_file, test_file_path):
+def create_boot_request(process_name, tree_id, log_file, test_file_path):
     """
     Create a boot request for a test process with specified parameters.
 
     Args:
         process_name: Name identifier for the process
-        role: Process role (e.g., "application", "segment-controller")
+        tree_id: Hierarchical process identifier (role computed from this)
         log_file: Path to log file on remote host
         test_file_path: Path to test file directory (for locating simple_process.py)
 
@@ -35,9 +35,8 @@ def create_boot_request(process_name, role, log_file, test_file_path):
                 session="test_session",
                 user=getpass.getuser(),
                 hostname="localhost",
-                tree_id=f"{role}.{process_name}",
+                tree_id=tree_id,
             ),
-            process_execution_directory="/",
             process_logs_path=log_file,
         )
     )
@@ -213,7 +212,7 @@ def boot_processes_and_kill_individually(ssh_manager, test_file_path):
 
             boot_request = create_boot_request(
                 process_name=process_name,
-                role="application",
+                tree_id="this.isan.application",
                 log_file=log_file,
                 test_file_path=test_file_path,
             )
@@ -275,7 +274,7 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
 
             boot_request = create_boot_request(
                 process_name=process_name,
-                role=role,
+                tree_id="this.isan.application",
                 log_file=log_file,
                 test_file_path=test_file_path,
             )
@@ -288,7 +287,7 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
                 "role": role,
             }
 
-            print(f"Executed {process_name} with UUID {process_uuid} and role '{role}'")
+            print(f"Executed {process_name} with UUID {process_uuid}")
 
         verify_all_processes_alive(ssh_manager, process_uuids, num_processes)
         verify_log_output(ssh_manager, process_uuids, process_info)
@@ -329,9 +328,21 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
         # Define processes with different roles based on shutdown order
         # "application" is terminated before "segment-controller"
         process_configs = [
-            {"name": "test_process_app_1", "role": "application"},
-            {"name": "test_process_app_2", "role": "application"},
-            {"name": "test_process_segment", "role": "segment-controller"},
+            {
+                "name": "test_process_app_1",
+                "role": "application",
+                "tree_id": "this.isan.application",
+            },
+            {
+                "name": "test_process_app_2",
+                "role": "application",
+                "tree_id": "this.isan.application",
+            },
+            {
+                "name": "test_process_segment",
+                "role": "segment-controller",
+                "tree_id": "thisisa.segment-controller",
+            },
         ]
 
         process_uuids = []
@@ -347,7 +358,7 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
 
             boot_request = create_boot_request(
                 process_name=process_name,
-                role=role,
+                tree_id=config["tree_id"],
                 log_file=log_file,
                 test_file_path=test_file_path,
             )
