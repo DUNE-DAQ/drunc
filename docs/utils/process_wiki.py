@@ -75,7 +75,9 @@ def process_wiki_content(
 
     # Update links based on index dictionary containing page names and the new page location
     for page_name, new_page_location in index_dict.items():
-        content = re.sub(f"/{page_name}", f"/{new_page_location}", content)
+        # Ignore "raw/develop/docs"
+        pattern = r"(?<!raw/develop/docs)/" + re.escape(page_name) + r"\b"
+        content = re.sub(pattern, f"/{new_page_location}", content)
 
     # Convert [[Link Name]] to [Link Name](Link-Name.html)
     content = re.sub(
