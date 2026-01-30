@@ -25,21 +25,24 @@ jobs:
           # Create temporary wiki subfolder
           path: docs/${{ env.WIKI_SUBFOLDER }}
 
-      - name: Setup Python Environment
-        uses: actions/setup-python@v6
-        with:
-          python-version: 3.11
-          cache: pip
-          cache-dependency-path: |
-              pyproject.toml
-              docs/requirements.txt
+      # Move Archives to a temp folder so they aren't processed
+      - name: Hide Archive files from script
+        run: |
+          mkdir -p /tmp/wiki_archives
+          find docs/${{ env.WIKI_SUBFOLDER }} -name "Archive:*" -exec mv {} /tmp/wiki_archives/ \;
+
+      # Copy images from main docs to the wiki folder
+      - name: Stage Images for Wiki
+        run: |
+          cp docs/*.png docs/${{ env.WIKI_SUBFOLDER }}/ || true
 
       - name: Convert WikiLinks to Markdown Links
         env:
           GITHUB_PAGES_BASE: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
           python docs/utils/process_wiki.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
-          cd ~   
+          cd ~
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -52,5 +55,7 @@ jobs:
       - name: Run Lychee link checker
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --exclude-path "docs/${{ env.WIKI_SUBFOLDER }}/Archive:*" docs/
-          
+          args: >
+            --exclude 'https://twiki.cern.ch/.*' 
+            --exclude 'https://github.com/DUNE-DAQ/drunc/wiki/Archive:.*'
+            docs/
