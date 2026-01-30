@@ -58,4 +58,5 @@ jobs:
           args: >
             --exclude 'https://twiki.cern.ch/.*' 
             --exclude 'https://github.com/DUNE-DAQ/drunc/wiki/Archive:.*'
+            --exclude 'https://github.com/DUNE-DAQ/drunc/raw/.*'
             docs/
