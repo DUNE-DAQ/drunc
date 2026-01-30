@@ -134,15 +134,70 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def kill_all_processes(self) -> Dict[str, Optional[int]]:
+    def kill_processes(
+        self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill multiple processes by their UUIDs in role-based shutdown order.
+
+        Processes are separated by role and terminated in stages to ensure clean
+        shutdown. Within each role, processes are killed asynchronously. After
+        role-based termination, any remaining processes are killed asynchronously
+        as a fallback.
+
+        Args:
+            uuids: List of process UUIDs to terminate
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds for graceful termination. Uses default
+                            timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping process UUIDs to their exit codes. None indicates
+            exit code could not be determined.
+        """
+        pass
+
+    @abstractmethod
+    def kill_all_processes(
+        self, process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
         """
         Kill all managed processes and clean up resources.
 
         Iterates through all active processes, terminates them, and cleans up
         associated resources.
 
+        Args:
+            process_timeouts: Dictionary mapping process UUIDs to their respective timeouts for graceful termination in seconds
+                              If not specified a default timeout will be used for all processes.
+
         Returns:
             Dictionary mapping process UUIDs to their exit codes (None if not determined)
+        """
+        pass
+
+    @abstractmethod
+    def kill_processes_by_role(
+        self,
+        role: str,
+        candidate_uuids: List[str],
+        process_timeouts: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill all processes with the specified role from candidate UUID list.
+
+        Filters candidate UUIDs by role metadata and terminates matching processes
+        asynchronously for parallel shutdown within the role.
+
+        Args:
+            role: Process role to match (e.g., "application", "controller")
+            candidate_uuids: List of process UUIDs to filter and potentially terminate
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds. Uses default timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping terminated process UUIDs to their exit codes.
+            Only includes processes matching the specified role.
         """
         pass
 

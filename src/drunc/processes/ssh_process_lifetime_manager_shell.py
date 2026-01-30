@@ -9,6 +9,7 @@ import os
 import signal
 import tempfile
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Dict, List, Optional
 
 import sh
@@ -458,30 +459,199 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return None
 
-    def kill_all_processes(self) -> Dict[str, Optional[int]]:
+    def kill_processes_by_role(
+        self,
+        role: str,
+        candidate_uuids: List[str],
+        process_timeouts: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Optional[int]]:
         """
-        Clean up all processes and resources.
+        Kill all processes with the specified role from candidate UUID list.
 
-        Terminates all managed processes and releases all associated resources.
-        Safe to call multiple times.
+        Filters candidate UUIDs by matching metadata roles, then terminates
+        matching processes asynchronously using a thread pool.
+
+        Args:
+            role: Process role to match
+            candidate_uuids: List of process UUIDs to filter by role
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds. Uses default timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping terminated process UUIDs to their exit codes
         """
-        # Get list of UUIDs to terminate
+        if process_timeouts is None:
+            process_timeouts = {}
+
+        # Filter candidate UUIDs by role using process metadata
+        uuids_to_kill = []
         with self.lock:
-            uuids = list(self.process_store.keys())
+            for uuid in candidate_uuids:
+                metadata = self.metadata.get(uuid, None)
+                if metadata and metadata.role == role:
+                    uuids_to_kill.append(uuid)
+                    if uuid not in process_timeouts:
+                        process_timeouts[uuid] = (
+                            self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
+                        )
 
-        killed_exit_codes: Dict[str, Optional[int]] = {}
+        if not uuids_to_kill:
+            self.log.debug(f"No processes found with role '{role}' in candidate list")
+            return {}
 
-        # Terminate all processes (each kill_process call auto-cleans up)
+        self.log.info(
+            f"Killing {len(uuids_to_kill)} process(es) with role '{role}' "
+            f"from {len(candidate_uuids)} candidates"
+        )
+
+        exit_codes: Dict[str, Optional[int]] = {}
+
+        # Terminate processes asynchronously using thread pool
+        with ThreadPoolExecutor(max_workers=len(uuids_to_kill)) as executor:
+            # Submit kill tasks for all matching processes
+            future_to_uuid = {
+                executor.submit(self.kill_process, uuid, process_timeouts[uuid]): uuid
+                for uuid in uuids_to_kill
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_uuid):
+                uuid = future_to_uuid[future]
+                try:
+                    exit_code = future.result()
+                    exit_codes[uuid] = exit_code
+                except Exception as e:
+                    self.log.error(
+                        f"Error during termination of process {uuid} with role '{role}': {e}"
+                    )
+                    exit_codes[uuid] = None
+
+        return exit_codes
+
+    def kill_processes(
+        self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill multiple processes by their UUIDs in role-based shutdown order.
+
+        Executes a staged shutdown by role. Processes within each role are terminated
+        asynchronously. After all roles complete, any remaining processes
+        are killed asynchronously as a fallback.
+
+        Args:
+            uuids: List of process UUIDs to terminate
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds. Uses default timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping process UUIDs to their exit codes
+        """
+        if not uuids:
+            self.log.debug("No processes to kill")
+            return {}
+
+        if process_timeouts is None:
+            process_timeouts = {}
+
+        # Ensure all UUIDs have timeout values
         for uuid in uuids:
-            try:
-                killed_exit_codes[uuid] = self.kill_process(
-                    uuid,
-                    timeout=ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
-                )
-            except Exception as e:
-                self.log.error(f"Error during cleanup of process {uuid}: {e}")
+            if uuid not in process_timeouts:
+                process_timeouts[uuid] = self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
 
-        # Wait for watcher threads to complete
+        # Define shutdown sequence for role-based termination
+        shutdown_order = [
+            "unknown",
+            "application",
+            "segment-controller",
+            "root-controller",
+            "local-connection-server",
+        ]
+
+        all_exit_codes: Dict[str, Optional[int]] = {}
+        killed_uuids = set()
+
+        # Execute role-based shutdown in stages
+        for role in shutdown_order:
+            self.log.info(
+                f"--- Shutdown stage: Terminating role '{role}' from provided UUIDs ---"
+            )
+            role_exit_codes = self.kill_processes_by_role(
+                role, uuids, process_timeouts=process_timeouts
+            )
+            all_exit_codes.update(role_exit_codes)
+            killed_uuids.update(role_exit_codes.keys())
+
+            if role_exit_codes:
+                self.log.info(f"--- Shutdown stage: Role '{role}' complete ---")
+
+        # Identify processes not killed during role-based shutdown
+        remaining_uuids = [uuid for uuid in uuids if uuid not in killed_uuids]
+
+        if remaining_uuids:
+            self.log.info(
+                f"Fallback: Killing {len(remaining_uuids)} process(es) without "
+                f"role metadata asynchronously"
+            )
+
+            # Kill remaining processes asynchronously without role ordering
+            fallback_exit_codes: Dict[str, Optional[int]] = {}
+
+            with ThreadPoolExecutor(max_workers=len(remaining_uuids)) as executor:
+                # Submit kill tasks for all remaining processes
+                future_to_uuid = {
+                    executor.submit(
+                        self.kill_process, uuid, process_timeouts[uuid]
+                    ): uuid
+                    for uuid in remaining_uuids
+                }
+
+                # Collect results as they complete
+                for future in as_completed(future_to_uuid):
+                    uuid = future_to_uuid[future]
+                    try:
+                        exit_code = future.result()
+                        fallback_exit_codes[uuid] = exit_code
+                    except Exception as e:
+                        self.log.error(
+                            f"Error during fallback termination of process {uuid}: {e}"
+                        )
+                        fallback_exit_codes[uuid] = None
+
+            all_exit_codes.update(fallback_exit_codes)
+
+        return all_exit_codes
+
+    def kill_all_processes(
+        self, process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill all active processes in role-based shutdown order.
+
+        Retrieves all active process UUIDs and delegates to kill_processes()
+        for role-based termination. Waits for all monitoring threads to
+        complete after termination.
+
+        Args:
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds. Uses default timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping all process UUIDs to their exit codes
+        """
+        # Retrieve all active process UUIDs
+        with self.lock:
+            active_uuids = list(self.process_store.keys())
+
+        if not active_uuids:
+            self.log.info("No processes to terminate")
+            return {}
+
+        self.log.info(f"Terminating all {len(active_uuids)} active process(es)")
+
+        # Delegate to kill_processes for role-based shutdown ordering
+        all_exit_codes = self.kill_processes(active_uuids, process_timeouts)
+
+        # Wait for all watcher threads to complete
         with self.lock:
             watchers_to_join = list(self.watchers.values())
 
@@ -494,7 +664,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         with self.lock:
             self.watchers.clear()
 
-        return killed_exit_codes
+        return all_exit_codes
 
     def _build_ssh_arguments(self, hostname: str, user_host: str) -> List[str]:
         """
@@ -683,10 +853,24 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
+            tree_id = boot_request.process_description.metadata.tree_id
+            name = boot_request.process_description.metadata.name
+            role = ProcessMetadata.compute_role_from_tree_id(tree_id)
+
+            remote_metadata_json = (
+                f"{{\"pid\": '$PID', "
+                f'"hostname": "{hostname}", '
+                f'"user": "{user}", '
+                f"\"started_at\": '$(date +%s)', "
+                f'"tree_id": "{tree_id}", '
+                f'"role": "{role}", '
+                f'"name": "{name}"}}'
+            )
+
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
                 f"{command} &> {log_file} & PID=$! ; "
-                f'echo \'{{"pid": \'$PID\', "hostname": "{hostname}", "user": "{user}", "started_at": \'$(date +%s)\'}}\'  > {metadata_file} ; '
+                f"echo '{remote_metadata_json}' > {metadata_file} ; "
                 f"wait $PID"
             )
 

@@ -20,19 +20,20 @@ class ProcessMetadata:
     hostname: Optional[str] = None
     user: Optional[str] = None
     started_at: Optional[float] = None
+    tree_id: Optional[str] = None
+    role: Optional[str] = None
+    name: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert metadata to dictionary for JSON serialisation.
-
-        Returns:
-            Dictionary representation of metadata
-        """
+        """Convert metadata to dictionary for JSON serialisation."""
         return {
             "pid": self.pid,
             "hostname": self.hostname,
             "user": self.user,
             "started_at": self.started_at,
+            "tree_id": self.tree_id,
+            "role": self.role,
+            "name": self.name,
         }
 
     @classmethod
@@ -51,6 +52,9 @@ class ProcessMetadata:
             hostname=data.get("hostname"),
             user=data.get("user"),
             started_at=data.get("started_at"),
+            tree_id=data.get("tree_id"),
+            role=data.get("role"),
+            name=data.get("name"),
         )
 
     def to_json(self) -> str:
@@ -74,3 +78,29 @@ class ProcessMetadata:
             ProcessMetadata instance
         """
         return cls.from_dict(json.loads(json_str))
+
+    @staticmethod
+    def compute_role_from_tree_id(tree_id: str) -> str:
+        """
+        Determines the role of a process based on its tree_id.
+
+        Args:
+            tree_id: Hierarchical identifier in format session.segment.application
+
+        Returns:
+            Role string: "root-controller", "local-connection-server",
+                        "segment-controller", "application", or "unknown"
+        """
+        if not tree_id:
+            return "unknown"
+        elif tree_id == "0":
+            return "root-controller"
+        elif tree_id == "1":
+            return "local-connection-server"
+        else:
+            depth = tree_id.count(".")
+            if depth == 1:
+                return "segment-controller"
+            elif depth == 2:
+                return "application"
+        return "unknown"
