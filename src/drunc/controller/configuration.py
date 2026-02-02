@@ -213,7 +213,7 @@ class ControllerConfHandler(ConfHandler):
         connectivity_service: ConnectivityServiceClient | None = None,
         timeout: int = 60,
     ) -> ChildNode:
-        log = get_logger("controller.child_node_factory")
+        log = get_logger("controller.core.child_node_factory")
 
         if connectivity_service is not None:
             try:

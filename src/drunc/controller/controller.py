@@ -78,7 +78,7 @@ def OLD_address_command(
     execute_along_path,
     execute_on_all_subsequent_children_in_path,
 ):
-    log = get_logger("controller.OLD_address_command")
+    log = get_logger("controller.core.OLD_address_command")
 
     ret = {}
     children_names = [c.name for c in obj.children_nodes]
@@ -226,8 +226,8 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
 
-        self.log = get_logger("controller")
-        log_init = get_logger("controller.__init__")
+        self.log = get_logger("controller.core", stream_handlers=True)
+        log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
         self.configuration = configuration
@@ -295,7 +295,7 @@ class Controller(ControllerServicer):
             )
 
     def init_controller(self) -> None:
-        log_init_controller = get_logger("controller.init_controller")
+        log_init_controller = get_logger("controller.core.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
 
         self.children_nodes = self.configuration.init_children(

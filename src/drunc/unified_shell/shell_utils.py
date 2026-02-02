@@ -7,8 +7,6 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.utils.utils import format_name_for_cli, get_logger
 
-logger = get_logger("unified_shell.shell_utils")
-
 
 def run_fsm_sequence(
     sequence_commands: list[str],
@@ -34,8 +32,8 @@ def run_fsm_sequence(
         obj (click.core.Context): The object passed to commands, typically containing shared state.
         **kwargs: Additional keyword arguments representing command options and arguments.
     """
+    logger = get_logger("unified_shell.shell_utils")
     logger.info(f"Running sequence: {sequence_commands}")
-
     for command in sequence_commands:
         accepted_command = ["terminate"]  # Always accept terminate
 

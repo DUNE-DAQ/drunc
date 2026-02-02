@@ -50,7 +50,7 @@ class ProcessManagerDriver:
     controller_address = ""
 
     def __init__(self, address: str, token: Token):
-        self.log = get_logger("controller.ProcessManagerDriver")
+        self.log = get_logger("process_manager_driver", rich_handler=True)
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
@@ -58,6 +58,25 @@ class ProcessManagerDriver:
         self.channel = grpc.insecure_channel(self.address, options=options)
         self.stub = ProcessManagerStub(self.channel)
         self.token = copy_token(token)
+
+    def close(self) -> None:
+        """
+        Close the gRPC channel.
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        try:
+            self.log.debug("Closing gRPC channel to Process Manager")
+            self.channel.close()
+        except Exception as e:
+            self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
     # ----- Boot workflow -----
     def boot(

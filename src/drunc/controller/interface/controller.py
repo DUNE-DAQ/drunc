@@ -4,6 +4,7 @@ import signal
 
 import click
 import grpc
+from daqpytools.logging.levels import logging_log_levels
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
@@ -15,11 +16,9 @@ from drunc.grpc_settings import (
 )
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.utils import (
-    create_logger_handler,
     get_logger,
-    log_levels,
+    get_root_logger,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
     validate_command_facility,
 )
 
@@ -64,7 +63,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -77,11 +76,9 @@ def controller_cli(
     log_level: str,
 ):
     """Spawns a single controller defined in the boot-configuration file, in a given session identified by its name, with communications defined through the command-facility.\n"""
-    setup_root_logger(log_level)
-    log = get_logger("controller.controller_cli")
-    create_logger_handler(
-        log_file_path=None,
-        rich_handler=False,
+    get_root_logger(log_level)
+    log = get_logger(
+        "controller.core.ctrl_cli", file_handler_path=None, rich_handler=False
     )
 
     token = Token(
@@ -131,8 +128,8 @@ def controller_cli(
         log.info("ctrlr.terminate() completed")
 
     def kill_me(sig, frame):
-        l = get_logger("controller.kill_me")
-        l.info("Sending SIGKILL")
+        log_km = get_logger("controller.iface.kill_me")
+        log_km.info("Sending SIGKILL")
         if ctrlr.top_segment_controller:
             ctrlr.connectivity_service.retract_partition(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())

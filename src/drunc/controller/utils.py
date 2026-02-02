@@ -48,7 +48,7 @@ def get_status_message(controller):
 
 def get_detector_name(configuration) -> str:
     detector_name = None
-    log = get_logger("controller.get_detector_name")
+    log = get_logger("controller.core.get_detector_name")
     if hasattr(configuration.data, "contains") and len(configuration.data.contains) > 0:
         if len(configuration.data.contains) > 0:
             log.debug(

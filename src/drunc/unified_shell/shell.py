@@ -11,6 +11,7 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
+from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
@@ -57,13 +58,11 @@ from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
-    create_logger_handler,
     format_name_for_cli,
     get_logger,
+    get_root_logger,
     ignore_sigint_sighandler,
-    log_levels,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
 )
 
 
@@ -75,7 +74,7 @@ from drunc.utils.utils import (
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -110,7 +109,7 @@ from drunc.utils.utils import (
 )  # For production, change default to true/remove it
 @click.pass_context
 def unified_shell(
-    ctx,
+    ctx: click.core.Context,
     process_manager: str,
     configuration_file: str,
     configuration_id: str,
@@ -147,10 +146,8 @@ def unified_shell(
             connection to the process manager fails.
     """
     # Set up the drunc and unified_shell loggers
-    setup_root_logger(log_level)
-    unified_shell_log = get_logger("unified_shell")
-    create_logger_handler(rich_handler=True)
-
+    get_root_logger(log_level)
+    unified_shell_log = get_logger("unified_shell", rich_handler=True)
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
@@ -345,6 +342,12 @@ def unified_shell(
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
     unified_shell_log.debug("Initializing the [green]FSM[/green]")
+
+    #! This is an absolute _hack_ because we do not want the
+    # unified shell fsm to go to tty but want other fsms to do so
+    # live with it. At least until controller.core uses file handler instead of stream
+    get_logger("controller.core.FSM", log_level="CRITICAL")
+
     fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
@@ -490,6 +493,10 @@ def unified_shell(
                 unified_shell_log.error(
                     f"Could not retract the session from the connectivity service: {e}"
                 )
+
+        # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").close()
+        ctx.obj.delete_driver("process_manager")
 
         # Remove the process manager
         if internal_pm:

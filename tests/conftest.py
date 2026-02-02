@@ -135,7 +135,7 @@ def boot_session(
             + ".txt"
         )
         log_file = consolidated_conf_path + "/" + log_file
-        args = f"{app_info['type']} {' '.join(app_info['args'])} > {log_file} 2>&1"
+        args = f"{app_info['type']} {' '.join(app_info['args'])} > {log_file}  | sed -u 's/\\x1b\\[[0-9;]*m//g' 2>&1"
         print(f"{args=}")
         logger.debug(f"Running {args}")
         # Use the parent process's session to avoid gunicorn detecting a parent change.
