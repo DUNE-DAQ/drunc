@@ -194,7 +194,6 @@ class K8sProcessManager(ProcessManager):
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 30)
         self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
-        self.total_shutdown_timeout = pod_management.get("total_shutdown_timeout", 60)
 
         # Volume mounts
         self.volume_configs = settings.get("volumes", [])

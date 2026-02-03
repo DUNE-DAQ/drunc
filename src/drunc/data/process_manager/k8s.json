@@ -37,7 +37,6 @@
         },
         "pod_management": {
             "kill_timeout": 120,
-            "total_shutdown_timeout": 180,
             "pod_ready_timeout": 60
         },
         "cleanup": {
