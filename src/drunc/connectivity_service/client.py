@@ -63,7 +63,7 @@ class ConnectivityServiceClient:
                 )
                 return True
 
-        self.log.debug(
+        self.log.error(
             f"Connectivity service not ready after {attempt} attempts. Timeout of {timeout}s reached."
         )
         return False
