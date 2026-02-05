@@ -1,7 +1,9 @@
 # Description
-Addresses issue # 
+Addresses issue # _Fill this in with the relevant issue number so the relevant issue can be closed._
 
 _This issue should contain the full description of what the PR is intended to deliver._
+
+_Start with a brief description of what this PR changes._
 
 ## Type of change
 
@@ -11,7 +13,7 @@ _This issue should contain the full description of what the PR is intended to de
 - [ ] Breaking change (whatever its nature)
 - [ ] Documentation (non-breaking change that adds or improves the documentation)
 
-## Requires
+## List of required branches from other repositories
 _If applicable, list all the related PRs required to implement and test this change._
 
 ## Change log
@@ -22,8 +24,8 @@ _Include a high level overview of the changes introduced by this PR._
 Tests ran on: _include the host name here_
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
-- [ ] Unit tests pass (`pytest`)
-- [ ] Unit tests ran, or at least minimal system quick test run successfully (`pytest -s minimal_system_quick_test.py`)
+- [ ] Unit tests pass (`pytest`) - note please use the broadest marker possible
+- [ ] Integration tests ran (`daqsystemtest_integtest_bundle.sh`) successfully, or at least minimal system quick test run successfully (`pytest -s minimal_system_quick_test.py`)
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
 <!-- - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
 
@@ -31,18 +33,13 @@ Tests ran on: _include the host name here_
 ## Further checks
 
 - [ ] Code is commented where needed, particularly in hard-to-understand areas
-- [ ] If applicable, new tests have been added or an issue has been opened to tackle that in the future.
-  (Indicate issue here: # (issue))
+- [ ] If applicable, new tests have been added or an issue has been opened to tackle that in the future in : # <issue>
 
-_The option below is awaiting discussion with SWIT regarding global linting and styling, and separate templates for the different repo types_
-- [ ] Code style is correct (`dbt-build --lint`, see [the documentation](https://dune-daq-sw.readthedocs.io/en/latest/packages/styleguide/))
+# Developer notes for the reviewer
 
-## Developer notes for the reviewer
-
+## Integration testing completed by the developer
 - [ ] I have run the minimal system quick test only, please run the rest of the tests
 - [ ] I have run the full integration tests bundle, this can be skipped
-
-_If applicable, leave any other guidance here._
 
 ## Suggested manual testing checklist 
 
@@ -52,14 +49,13 @@ _If applicable, include a description of what should be run to demonstrate and t
 _Note - if a reveiwer requests changes and those changes are implemented, this block should be re-checked._
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
-- [ ] Unit tests pass (`pytest`)
-- [ ] Suggested manual tests pass
-- [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO.
-- [ ] Minimal system quick test passes (`pytest -s minimal_system_quick_test.py`)
+- [ ] Unit tests pass (`pytest`) - note please use the broadest marker possible
+- [ ] Suggested manual tests pass as described above
 - [ ] Integration tests pass (`daqsystemtest_integtest_bundle.sh`)
     - This test takes a long time, it can be left running on its own, and does not have to be monitored as it runs. 
-    - The only check that the `drunc` developers should be concerned about in is whether any issues related to `drunc` are mentioned in any of the log files.
+    - The only check that the `drunc` developers should be concerned about in is whether any issues related to `drunc` are mentioned in any of the log files
     - If the issue raised is not related to run control, use the following steps, only move on to the next step if the previous step fails:
       - Validate in a fresh working area
-      - Contact the lead developer
-      - Notify on the `#daq-release-prep channel` on Slack
+      - Contact the lead developer of the relevant WG (contact Run Control lead if unsure)
+      - Notify on the `#daq-release-prep channel` on Slack once another developer has verified this issue
+<!-- - [ ] Drunc integration tests pass (`pytest -m drunc_integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
