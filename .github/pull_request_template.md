@@ -59,3 +59,5 @@ _Note - if a reveiwer requests changes and those changes are implemented, this b
       - Contact the lead developer of the relevant WG (contact Run Control lead if unsure)
       - Notify on the `#daq-release-prep channel` on Slack once another developer has verified this issue
 <!-- - [ ] Drunc integration tests pass (`pytest -m drunc_integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
+
+Once the features are validated and both the unit and integrationm tests pass, the PRs can be merged.
