@@ -35,6 +35,7 @@ Tests ran on: _include the host name here_
 - [ ] New unit tests have been added or an issue has been opened to tackle that in the future in : # <issue>
 
 # Developer notes for the reviewer
+Please select a reviewer from the group this PR relates the most to from list of primary developers [listed in the wiki](https://github.com/DUNE-DAQ/drunc/wiki#active-developers).
 
 ## Integration testing completed by the developer
 - [ ] I have run the minimal system quick test only, please run the rest of the tests
