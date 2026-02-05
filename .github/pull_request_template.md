@@ -12,24 +12,20 @@ _This issue should contain the full description of what the PR is intended to de
 - [ ] Documentation (non-breaking change that adds or improves the documentation)
 
 ## Requires
-If applicable, list all the related PRs required to implement and test this change.
+_If applicable, list all the related PRs required to implement and test this change._
 
 ## Change log
 
 _Include a high level overview of the changes introduced by this PR._
 
-## Suggested manual testing checklist 
-
-_If applicable, include a description of what should be run to demonstrate the changes that are being made._
-
-## Testing checklist, complete prior to marking this as "Ready for Review"
-Testing was ran on: _include the host name here_
+## Developer testing checklist, complete prior to marking this as "Ready for Review"
+Tests ran on: _include the host name here_
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
 - [ ] Unit tests pass (`pytest`)
-- [ ] Minimal system quick test passes (`pytest -s minimal_system_quick_test.py`)
-- [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO.
-- [ ] Testing skipped as there are no core code changes in this PR
+- [ ] Unit tests ran, or at least minimal system quick test run successfully (`pytest -s minimal_system_quick_test.py`)
+- [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
+<!-- - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
 
 
 ## Further checks
@@ -41,8 +37,19 @@ Testing was ran on: _include the host name here_
 _The option below is awaiting discussion with SWIT regarding global linting and styling, and separate templates for the different repo types_
 - [ ] Code style is correct (`dbt-build --lint`, see [the documentation](https://dune-daq-sw.readthedocs.io/en/latest/packages/styleguide/))
 
+## Developer notes for the reviewer
+
+- [ ] I have run the minimal system quick test only, please run the rest of the tests
+- [ ] I have run the full integration tests bundle, this can be skipped
+
+_If applicable, leave any other guidance here._
+
+## Suggested manual testing checklist 
+
+_If applicable, include a description of what should be run to demonstrate and test the changes that are being made._
+
 # Reviewer checklist
-_Note - if a reveiwer requests changes and those changes are implemented, it is expected that the below block is re-ran._
+_Note - if a reveiwer requests changes and those changes are implemented, this block should be re-checked._
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
 - [ ] Unit tests pass (`pytest`)
