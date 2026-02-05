@@ -25,7 +25,7 @@ Tests ran on: _include the host name here_
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
 - [ ] Unit tests pass (`pytest`) - note please use the broadest marker possible
-- [ ] Integration tests ran (`daqsystemtest_integtest_bundle.sh`) successfully, or at least minimal system quick test run successfully (`pytest -s minimal_system_quick_test.py`)
+- [ ] Integration tests ran (`daqsystemtest_integtest_bundle.sh`) successfully, or at least minimal system quick test run successfully (`pytest -s minimal_system_quick_test.py`). Note - these are resource intensive and it is recommended that these are not run locally
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
 <!-- - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
 
