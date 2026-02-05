@@ -20,7 +20,7 @@ _If applicable, list all the related PRs required to implement and test this cha
 
 _Include a high level overview of the changes introduced by this PR._
 
-## Developer testing checklist, complete prior to marking this as "Ready for Review"
+## Initial checklist prior to marking this as "Ready for Review"
 Tests ran on: _include the host name here_
 
 - [ ] Pre-commit hooks run successfully if applicable (e.g. `pre-commit run --all-files`)
@@ -29,11 +29,10 @@ Tests ran on: _include the host name here_
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
 <!-- - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
 
-
-## Further checks
+## Final checklist prior to marking this as "Ready for Review"
 
 - [ ] Code is commented where needed, particularly in hard-to-understand areas
-- [ ] If applicable, new tests have been added or an issue has been opened to tackle that in the future in : # <issue>
+- [ ] New unit tests have been added or an issue has been opened to tackle that in the future in : # <issue>
 
 # Developer notes for the reviewer
 
