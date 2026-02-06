@@ -149,7 +149,8 @@ class ProcessWatcherThread(threading.Thread):
 
     def _monitor_ssh_client(self) -> None:
         """
-        Fallback: monitor the SSH client process when remote PID unavailable.
+        Monitor the SSH client process until it stops, this can be used as a
+        fallback if the remote PID of the process is unavailable.
         """
         exception = None
         exit_code = None

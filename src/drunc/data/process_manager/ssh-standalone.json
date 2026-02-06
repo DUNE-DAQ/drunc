@@ -1,7 +1,7 @@
 {
     "type": "ssh",
     "name": "SSHProcessManager",
-    "kill_timeout": 0.5,
+    "kill_timeout": 10.0,
     "settings": {
         "disable_localhost_host_key_check": true,
         "disable_host_key_check": true
