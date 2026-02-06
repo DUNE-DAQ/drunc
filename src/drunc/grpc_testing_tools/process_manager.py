@@ -49,7 +49,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
     SSHProcessLifetimeManager for SSH-based process execution.
     """
 
-    def __init__(self, lifetime_manager_type=ProcessManagerTypes.SSH_PARAMIKO):
+    def __init__(self, lifetime_manager_type=ProcessManagerTypes.SSH_SHELL):
         """Initialise the Manager service implementation."""
         if lifetime_manager_type == ProcessManagerTypes.SSH_PARAMIKO:
             self.ssh_manager = SSHProcessLifetimeManagerParamiko(

@@ -657,6 +657,25 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                 except Exception:
                     pass
 
+    def kill_processes(
+        self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """not implemented in paramiko manager"""
+        self.log.warning("kill_processes is not implemented in Paramiko manager")
+        return {}
+
+    def kill_processes_by_role(
+        self,
+        role: str,
+        candidate_uuids: List[str],
+        process_timeouts: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Optional[int]]:
+        """not implemented in paramiko manager"""
+        self.log.warning(
+            "kill_processes_by_role is not implemented in Paramiko manager"
+        )
+        return {}
+
     def validate_host_connection(
         self,
         host: str,
