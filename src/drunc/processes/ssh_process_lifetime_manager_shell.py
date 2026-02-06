@@ -818,6 +818,21 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.debug(f"Failed to read metadata for {uuid}: {e}")
             return None
 
+    def _ssh_client_stderr_logger(self, chunk):
+        """Filter the logging of an SSH client stderr to the
+        appropriate log level
+        """
+        # convery bytes to string if necessary
+        if isinstance(chunk, bytes):
+            msg = chunk.decode("utf-8", errors="replace")
+        else:
+            msg = chunk
+
+        if "Connection to" in msg and "closed." in msg:
+            self.log.debug(msg.strip())
+        else:
+            self.log.error(msg.strip())
+
     def _execute_bootrequest_via_ssh(
         self,
         uuid: str,
@@ -874,7 +889,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             process = self.ssh(
                 *arguments,
                 _out=self.log.debug,
-                _err=self.log.error,
+                _err=self._ssh_client_stderr_logger,
                 _bg=True,
                 _bg_exc=False,
                 _new_session=True,
