@@ -33,10 +33,11 @@ def boot(
     )
 
     if len(processes.values) > 0:
-        click.confirm(
-            f"You already have {len(processes.values)} processes running in session {session_name}, are you sure you want to boot a session?",
-            abort=True,
+        log.error(
+            f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
+            "Please terminate the existing session first."
         )
+        return
 
     try:
         results = obj.get_driver("process_manager").boot(
