@@ -286,7 +286,10 @@ class SSHProcessManager(ProcessManager):
                 for (
                     exe_arg
                 ) in boot_request.process_description.executable_and_arguments:
-                    cmd += exe_arg.exec
+                    if exe_arg.exec == "daq_application":
+                        cmd += "sudo -E (which daq_application)"
+                    else:
+                        cmd += exe_arg.exec
                     for arg in exe_arg.args:
                         cmd += f" {arg}"
                     cmd += ";"
