@@ -48,6 +48,14 @@ class K8sPodWatcherThread(threading.Thread):
         self.processed_uuids = set()
 
     def run(self) -> None:
+        """
+        Run the pod watcher loop.
+
+        Continuously watches for Kubernetes pod events across all namespaces
+        managed by the process manager. Detects terminal pod states (Succeeded,
+        Failed, or Deleted) and notifies the process manager of terminations.
+        Automatically restarts the watch stream on API errors or disconnections.
+        """
         self.pm.log.info("K8sPodWatcherThread started")
         while True:
             try:
@@ -228,20 +236,28 @@ class K8sProcessManager(ProcessManager):
         # Set up signal handlers for cleanup when parent process dies
         self._setup_signal_handlers()
 
-    def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
-        """Check if a pod is the local connection server by inspecting its role label."""
-        role_key = f"role.{self.drunc_label}"
-        return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
-
     def _start_watcher(self) -> None:
-        """Starts the background thread that watches for Pod status changes."""
+        """
+        Start the background pod watcher thread.
+
+        Creates and starts a K8sPodWatcherThread daemon thread that monitors
+        pod lifecycle events and notifies the process manager of terminations.
+        The thread reference is stored in self.watchers.
+        """
         self.log.debug("Starting K8s pod watcher thread")
         t = K8sPodWatcherThread(pm=self)
         t.start()
         self.watchers.append(t)
 
     def _setup_signal_handlers(self) -> None:
-        """Set up signal handlers to clean up pods when the process manager is terminated."""
+        """
+        Set up signal handlers to clean up pods when the process manager is terminated.
+
+        Registers handlers for SIGTERM, SIGHUP, and SIGQUIT that trigger full
+        cleanup of all managed pods before exiting. Also attempts to configure
+        a parent death signal (Linux only) so that pods are cleaned up if the
+        parent process dies unexpectedly.
+        """
 
         def signal_handler(signum, frame):
             self.log.info(f"Received signal {signum}, cleaning up all pods...")
@@ -339,6 +355,15 @@ class K8sProcessManager(ProcessManager):
     def _get_creator_label_selector(self) -> str:
         """Returns the label selector for objects created by this class."""
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
+
+    def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
+        """Check if a pod is the local connection server by inspecting its role label and name."""
+        role_key = f"role.{self.drunc_label}"
+        return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
+
+    def _is_root_controller(self, tree_labels: dict[str, str]) -> bool:
+        """Check if a pod is the root controller by inspecting its role label."""
+        return tree_labels.get(f"role.{self.drunc_label}") == "root-controller"
 
     def _is_host_cached(self, host):
         """Check if host is cached and not expired."""
@@ -484,7 +509,19 @@ class K8sProcessManager(ProcessManager):
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
     def _create_headless_service(self, podname, session, pod_uid) -> None:
-        """Creates a headless service for a pod."""
+        """
+        Create a headless Kubernetes Service for inter-pod DNS discovery.
+
+        Builds and creates a headless Service (clusterIP=None) that selects the
+        pod by its 'app' label. The service is owned by the pod via an
+        OwnerReference so it is automatically garbage-collected when the pod
+        is deleted. Silently ignores 409 Conflict errors (service already exists).
+
+        Args:
+            podname - the name of the pod (also used as the service name)
+            session - the Kubernetes namespace (session) to create the service in
+            pod_uid - the UID of the owning pod for the OwnerReference
+        """
         service_manifest = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -524,7 +561,23 @@ class K8sProcessManager(ProcessManager):
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
     def _create_nodeport_service(self, podname, session, pod_uid) -> None:
-        """Creates a NodePort service for the connection server (external + internal access)."""
+        """
+        Create a NodePort Kubernetes Service for external access.
+
+        Builds and creates a NodePort Service with externalTrafficPolicy=Local,
+        mapping the connection_server_port to a fixed NodePort
+        (connection_server_node_port). The service is owned by the pod via an
+        OwnerReference. Raises a DruncK8sException if the NodePort is already
+        allocated or another API error occurs.
+
+        Args:
+            podname - the name of the pod (also used as the service name)
+            session - the Kubernetes namespace (session) to create the service in
+            pod_uid - the UID of the owning pod for the OwnerReference
+
+        Raises:
+            DruncK8sException - if the NodePort is already in use or another API error occurs
+        """
         service_manifest = client.V1Service(
             api_version="v1",
             kind="Service",
@@ -781,7 +834,7 @@ class K8sProcessManager(ProcessManager):
         container_env = [client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
 
         # Add POD_IP environment variable via Downward API for root-controller
-        if "root-controller" in tree_labels["role." + self.drunc_label]:
+        if self._is_root_controller(tree_labels):
             pod_ip_env = client.V1EnvVar(
                 name="POD_IP",
                 value_from=client.V1EnvVarSource(
@@ -803,7 +856,27 @@ class K8sProcessManager(ProcessManager):
         container_volume_mounts: list[client.V1VolumeMount],
         tree_labels: dict[str, str],
     ) -> client.V1Container:
-        """Builds the primary V1Container manifest, including command and preStop hook."""
+        """
+        Build the primary pod container manifest from a boot request.
+
+        Parse the executable and arguments, prepend 'exec' to the final C++
+        application command, expose the connectivity service port for LCS pods,
+        add preStop hooks to send SIGQUIT to daq_applications, redirect log
+        output to file via tee, add signal traps for the local connectivity
+        service (gunicorn), replace hostnames with $POD_IP for root controllers,
+        and assemble the final V1Container with environment, security context,
+        and volume mounts.
+
+        Args:
+            podname - name of the pod to generate
+            boot_request - definition of the environment and executable to run
+            lcs_port - port number of the local connectivity service (None if not LCS)
+            container_volume_mounts - list of volumes to mount in this container
+            tree_labels - the labels defining the application tree ID and role
+
+        Returns:
+            main_container - the fully configured V1Container object
+        """
 
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
@@ -821,7 +894,7 @@ class K8sProcessManager(ProcessManager):
             ):
                 prefix = "exec "
 
-            if "root-controller" in tree_labels["role." + self.drunc_label]:
+            if self._is_root_controller(tree_labels):
                 # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
                 # POD_IP will be injected via Kubernetes Downward API
                 modified_args = []
@@ -920,7 +993,22 @@ class K8sProcessManager(ProcessManager):
     def _get_pod_node_selector(
         self, podname: str, restriction: ProcessRestriction
     ) -> dict:
-        """Verifies the target host and returns the Kubernetes node selector."""
+        """
+        Build the Kubernetes node selector for a pod based on host restrictions.
+
+        If the boot request specifies allowed hosts, resolves 'localhost' to
+        the actual hostname, verifies the target host is available in the
+        cluster, and returns a node selector dictionary. Returns an empty
+        dictionary if no host restriction is specified.
+
+        Args:
+            podname - the name of the pod (used for logging)
+            restriction - the ProcessRestriction containing allowed_hosts
+
+        Returns:
+            node_selector - a dictionary for the pod spec's nodeSelector field
+                            (e.g. {'kubernetes.io/hostname': 'node-01'})
+        """
         node_selector = {}
         if restriction.allowed_hosts:
             target_host = restriction.allowed_hosts[0]
@@ -942,7 +1030,23 @@ class K8sProcessManager(ProcessManager):
     def _get_pod_host_aliases(
         self, podname: str, session: str, tree_labels: dict[str, str]
     ) -> list[client.V1HostAlias] | None:
-        """Gets the ClusterIP of the connection server and prepares host aliases."""
+        """
+        Build host aliases to redirect localhost to the connection server ClusterIP.
+
+        For non-LCS pods when a local connection server is booted, retrieves the
+        connection server's ClusterIP and creates a host alias mapping 'localhost'
+        to that IP. This allows pods to reach the connection server via localhost.
+        Retries up to 10 times if the ClusterIP is not immediately available.
+
+        Args:
+            podname - the name of the pod (used for logging)
+            session - the Kubernetes namespace (session) to look up the service in
+            tree_labels - the labels defining the application tree ID and role
+
+        Returns:
+            host_aliases - a list containing a single V1HostAlias mapping localhost
+                           to the connection server IP, or None if not applicable
+        """
         host_aliases = None
         if (
             not self._is_local_connection_server(tree_labels, podname)
@@ -974,14 +1078,26 @@ class K8sProcessManager(ProcessManager):
         self, podname: str, boot_request: BootRequest, tree_labels: dict[str, str]
     ) -> str:
         """
-        Determines the correct K8s service type for a pod ("NodePort" or "Headless").
-        This logic is centralized here to be used by both pod creation (for hostNetwork)
-        and service creation.
+        Determine the correct Kubernetes service type for a pod.
+
+        Centralizes the service type decision used by both pod creation (for
+        hostNetwork configuration) and service creation. The local connection
+        server always uses NodePort; the root controller uses NodePort if a
+        valid port is extracted from the command, otherwise falls back to
+        Headless. All other pods use Headless.
+
+        Args:
+            podname - the name of the pod (used for logging)
+            boot_request - the boot request to extract port information from
+            tree_labels - the labels defining the application tree ID and role
+
+        Returns:
+            service_type - either "NodePort" or "Headless"
         """
         if self._is_local_connection_server(tree_labels, podname):
             return "NodePort"
 
-        if "root-controller" in tree_labels["role." + self.drunc_label]:
+        if self._is_root_controller(tree_labels):
             port = self._extract_port_from_cmd(boot_request)
             if port is not None and port != 0:
                 return "NodePort"
@@ -1016,7 +1132,26 @@ class K8sProcessManager(ProcessManager):
         extra_labels: dict[str, str] | None = None,
         use_host_network: bool = True,
     ) -> client.V1Pod:
-        """Assembles the final V1Pod object."""
+        """
+        Assemble the final V1Pod manifest from its component parts.
+
+        Combines the main container, node selector, host aliases, volumes,
+        and labels into a complete V1Pod object with the configured
+        termination grace period and restart policy.
+
+        Args:
+            podname - the name of the pod
+            session - the Kubernetes namespace (session) for the pod
+            main_container - the pre-built V1Container for the pod
+            node_selector - dictionary for node scheduling constraints
+            host_aliases - optional list of V1HostAlias entries for DNS overrides
+            pod_volumes - list of V1Volume objects to attach to the pod
+            extra_labels - optional additional labels to merge into the pod metadata
+            use_host_network - whether to enable hostNetwork on the pod (default True)
+
+        Returns:
+            pod - the fully assembled V1Pod object ready for creation
+        """
 
         # Get pod labels
         pod_labels = {
@@ -1048,7 +1183,25 @@ class K8sProcessManager(ProcessManager):
     def _execute_pod_creation_api(
         self, session: str, podname: str, pod_manifest: client.V1Pod
     ) -> str:
-        """Executes the API call to create the pod, handling 409 conflict during restarts."""
+        """
+        Execute the Kubernetes API call to create a pod.
+
+        Attempts to create the pod via the API. If a 409 Conflict error occurs
+        (indicating a previous pod with the same name has not yet been fully
+        deleted), retries with polling until restart_cleanup_time is exceeded.
+
+        Args:
+            session - the Kubernetes namespace (session) to create the pod in
+            podname - the name of the pod to create
+            pod_manifest - the fully assembled V1Pod manifest
+
+        Returns:
+            pod_uid - the UID string of the newly created pod
+
+        Raises:
+            DruncK8sException - if the 409 conflict persists beyond the timeout
+            ApiException - if a non-409 API error occurs
+        """
         start_time = time()
 
         while True:
@@ -1087,7 +1240,27 @@ class K8sProcessManager(ProcessManager):
         service_type: str,
         tree_labels: dict[str, str],
     ) -> None:
-        """Calls the appropriate service creation method based on pod type."""
+        """
+        Create the appropriate Kubernetes Service for a pod.
+
+        Routes to _create_nodeport_service or _create_headless_service based
+        on the determined service_type. For NodePort services, handles both
+        the local connection server case (using the pre-extracted lcs_port)
+        and the root controller case (extracting the port from the boot request).
+        Falls back to headless if the root controller port cannot be determined.
+
+        Args:
+            podname - the name of the pod (also used as the service name)
+            session - the Kubernetes namespace (session) to create the service in
+            pod_uid - the UID of the owning pod for the OwnerReference
+            boot_request - the boot request (used to extract ports for root controller)
+            lcs_port - the port number for the local connectivity service (None if not LCS)
+            service_type - either "NodePort" or "Headless"
+            tree_labels - the labels defining the application tree ID and role
+
+        Raises:
+            DruncK8sException - if LCS service creation is requested but lcs_port is None
+        """
         if service_type == "NodePort":
             if self._is_local_connection_server(tree_labels, podname):
                 if lcs_port is None:
@@ -1097,7 +1270,7 @@ class K8sProcessManager(ProcessManager):
                 # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
 
-            elif "root-controller" in tree_labels["role." + self.drunc_label]:
+            elif self._is_root_controller(tree_labels):
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
@@ -1123,7 +1296,24 @@ class K8sProcessManager(ProcessManager):
     def _create_pod(
         self, podname, session, boot_request: BootRequest, tree_labels: dict[str, str]
     ) -> None:
-        """Constructs and creates a Kubernetes Pod manifest and its associated service."""
+        """
+        Construct and create a Kubernetes Pod and its associated Service.
+
+        Orchestrates the full pod creation pipeline: extracts the LCS port if
+        applicable, prepares volume mounts, builds the main container manifest,
+        determines the service type and hostNetwork setting, constructs the node
+        selector and host aliases, assembles the pod manifest, creates the pod
+        via the API, and creates the associated service (NodePort or Headless).
+
+        Args:
+            podname - the name of the pod to create
+            session - the Kubernetes namespace (session) to create the pod in
+            boot_request - the boot request defining the executable, environment, and restrictions
+            tree_labels - the labels defining the application tree ID and role
+
+        Raises:
+            DruncK8sException - if pod or service creation fails for any reason
+        """
         try:
             lcs_port = None
             # Early Port Extraction and Class Variable Setup for LCS
@@ -1210,7 +1400,19 @@ class K8sProcessManager(ProcessManager):
             ) from e
 
     def _get_connection_server_cluster_ip(self, session: str) -> str:
-        """Gets the ClusterIP of the connection server service."""
+        """
+        Get the ClusterIP of the connection server's Kubernetes Service.
+
+        Reads the named service from the session namespace and returns its
+        clusterIP. Returns None if the service cannot be found or an API
+        error occurs.
+
+        Args:
+            session - the Kubernetes namespace (session) containing the service
+
+        Returns:
+            cluster_ip - the ClusterIP string, or None on failure
+        """
         try:
             service = self._core_v1_api.read_namespaced_service(
                 name=self.connection_server_name, namespace=session
@@ -1486,7 +1688,20 @@ class K8sProcessManager(ProcessManager):
         )
 
     def _wait_for_lcs_readiness(self, podname: str, session: str) -> None:
-        """Blocking two-stage wait for the Local Connection Server (NodePort) to be fully ready."""
+        """
+        Perform a two-stage blocking wait for the Local Connection Server to be fully ready.
+
+        Stage 1: waits for the pod to be Running and Ready in the Kubernetes API.
+        Stage 2: waits for the NodePort to be externally reachable via HTTP.
+        Sets local_connection_server_is_booted to True on success.
+
+        Args:
+            podname - the name of the LCS pod to wait for
+            session - the Kubernetes namespace (session) of the pod
+
+        Raises:
+            DruncK8sException - if either stage times out within pod_ready_timeout seconds
+        """
         self.log.info(f"Waiting for LCS '{podname}' to be fully ready...")
         start_time = time()
         total_timeout = self.pod_ready_timeout
@@ -1514,7 +1729,22 @@ class K8sProcessManager(ProcessManager):
     def _wait_for_controller_readiness(
         self, podname: str, session: str, boot_request: BootRequest
     ) -> None:
-        """Blocking two-stage wait for Drunc Controller (NodePort) to be fully ready."""
+        """
+        Perform a two-stage blocking wait for the Drunc Controller to be fully ready.
+
+        Stage 1: waits for the pod to be Running and Ready in the Kubernetes API
+        (up to pod_ready_timeout seconds).
+        Stage 2: waits for the NodePort to be reachable via TCP socket connection
+        (up to grpc_startup_timeout seconds).
+
+        Args:
+            podname - the name of the controller pod to wait for
+            session - the Kubernetes namespace (session) of the pod
+            boot_request - the boot request used to extract the controller port
+
+        Raises:
+            DruncK8sException - if the port is 0 or missing, or if either stage times out
+        """
         self.log.info(
             f"Waiting for controller '{podname}' (NodePort) to become ready..."
         )
@@ -1539,7 +1769,19 @@ class K8sProcessManager(ProcessManager):
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
-        Internal boot method. Handles pre-checks, pod creation, and blocking wait for critical services.
+        Internal boot method for creating a pod and waiting for critical services.
+
+        Orchestrates the full boot sequence: determines tree labels and roles,
+        runs pre-boot validation, prepares the namespace, stores the boot request,
+        creates the pod and its service, adds the UUID label, and performs
+        blocking readiness waits for the LCS or root controller if applicable.
+
+        Args:
+            boot_request - the BootRequest protobuf defining the process to start
+            uuid - the UUID string to assign to this process
+
+        Returns:
+            process_instance - a ProcessInstance protobuf with RUNNING status
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
@@ -1561,7 +1803,7 @@ class K8sProcessManager(ProcessManager):
         # Special handling and blocking wait for critical processes
         if self._is_local_connection_server(tree_labels, podname):
             self._wait_for_lcs_readiness(podname, session)
-        elif "root-controller" in tree_labels["role." + self.drunc_label]:
+        elif self._is_root_controller(tree_labels):
             self._wait_for_controller_readiness(podname, session, boot_request)
 
         # Post-Process
@@ -1732,8 +1974,21 @@ class K8sProcessManager(ProcessManager):
 
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
-        Handles the 'kill' command with staged, role-based shutdown
-        by querying pod labels.
+        Handle the 'kill' gRPC command with staged, role-based shutdown.
+
+        Performs an ordered shutdown of matched processes by their role labels:
+        unknown → application → segment-controller → root-controller →
+        infrastructure-applications. Each stage issues delete requests and
+        blocks until the watcher thread confirms all pods in that stage have
+        terminated (or a timeout is reached). After all pods are killed,
+        cleans up managed namespaces if no tracked processes remain.
+
+        Args:
+            query - a ProcessQuery specifying which processes to kill
+
+        Returns:
+            process_list - a ProcessInstanceList with DEAD status and exit codes
+                           for all terminated processes
         """
 
         # Get all UUIDs
