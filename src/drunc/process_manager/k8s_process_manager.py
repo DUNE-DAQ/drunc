@@ -228,10 +228,10 @@ class K8sProcessManager(ProcessManager):
         # Set up signal handlers for cleanup when parent process dies
         self._setup_signal_handlers()
 
-    @staticmethod
-    def _is_local_connection_server(name: str) -> bool:
-        """Check if a process is the local connection server by checking if its name contains 'local-connection-server'."""
-        return "local-connection-server" in name
+    def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
+        """Check if a pod is the local connection server by inspecting its role label."""
+        role_key = f"role.{self.drunc_label}"
+        return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
 
     def _start_watcher(self) -> None:
         """Starts the background thread that watches for Pod status changes."""
@@ -735,12 +735,12 @@ class K8sProcessManager(ProcessManager):
             role = "unknown"
         elif tree_id == "0":
             role = "root-controller"
-        elif tree_id == "1":
-            role = "local-connection-server"
         else:
             # Count the depth
             depth = tree_id.count(".")
-            if depth == 1:
+            if depth == 0:
+                role = "infrastructure-applications"
+            elif depth == 1:
                 role = "segment-controller"
             elif depth == 2:
                 role = "application"
@@ -817,7 +817,7 @@ class K8sProcessManager(ProcessManager):
             if (
                 is_last_command
                 and e_and_a.exec != "source"
-                and not self._is_local_connection_server(podname)
+                and not self._is_local_connection_server(tree_labels, podname)
             ):
                 prefix = "exec "
 
@@ -844,7 +844,7 @@ class K8sProcessManager(ProcessManager):
 
         container_ports = []
         if (
-            self._is_local_connection_server(podname)
+            self._is_local_connection_server(tree_labels, podname)
             and lcs_port is not None
         ):
             self.connection_server_name = podname
@@ -856,7 +856,7 @@ class K8sProcessManager(ProcessManager):
         lifecycle_hook = None
         if (
             "controller" not in tree_labels["role." + self.drunc_label]
-            and not self._is_local_connection_server(podname)
+            and not self._is_local_connection_server(tree_labels, podname)
         ):
             self.log.debug(
                 f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
@@ -886,7 +886,7 @@ class K8sProcessManager(ProcessManager):
         else:
             log_redirect_cmd = ""
 
-        if self._is_local_connection_server(podname):
+        if self._is_local_connection_server(tree_labels, podname):
             # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
@@ -945,7 +945,7 @@ class K8sProcessManager(ProcessManager):
         """Gets the ClusterIP of the connection server and prepares host aliases."""
         host_aliases = None
         if (
-            not self._is_local_connection_server(podname)
+            not self._is_local_connection_server(tree_labels, podname)
             and self.local_connection_server_is_booted
         ):
             connection_server_ip = None
@@ -978,7 +978,7 @@ class K8sProcessManager(ProcessManager):
         This logic is centralized here to be used by both pod creation (for hostNetwork)
         and service creation.
         """
-        if self._is_local_connection_server(podname):
+        if self._is_local_connection_server(tree_labels, podname):
             return "NodePort"
 
         if "root-controller" in tree_labels["role." + self.drunc_label]:
@@ -1089,7 +1089,7 @@ class K8sProcessManager(ProcessManager):
     ) -> None:
         """Calls the appropriate service creation method based on pod type."""
         if service_type == "NodePort":
-            if self._is_local_connection_server(podname):
+            if self._is_local_connection_server(tree_labels, podname):
                 if lcs_port is None:
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
@@ -1127,7 +1127,7 @@ class K8sProcessManager(ProcessManager):
         try:
             lcs_port = None
             # Early Port Extraction and Class Variable Setup for LCS
-            if self._is_local_connection_server(podname):
+            if self._is_local_connection_server(tree_labels, podname):
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
                     self.connection_server_port = lcs_port
@@ -1559,7 +1559,7 @@ class K8sProcessManager(ProcessManager):
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
         # Special handling and blocking wait for critical processes
-        if self._is_local_connection_server(podname):
+        if self._is_local_connection_server(tree_labels, podname):
             self._wait_for_lcs_readiness(podname, session)
         elif "root-controller" in tree_labels["role." + self.drunc_label]:
             self._wait_for_controller_readiness(podname, session, boot_request)
@@ -1751,7 +1751,7 @@ class K8sProcessManager(ProcessManager):
             "application",
             "segment-controller",
             "root-controller",
-            "local-connection-server",
+            "infrastructure-applications",
         ]
 
         # Define the blocking kill_and_wait helper
@@ -1805,7 +1805,7 @@ class K8sProcessManager(ProcessManager):
             "application": [],
             "segment-controller": [],
             "root-controller": [],
-            "local-connection-server": [],
+            "infrastructure-applications": [],
         }
 
         uuid_label_key = f"uuid.{self.drunc_label}"
