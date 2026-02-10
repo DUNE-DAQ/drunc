@@ -7,6 +7,7 @@ import uuid
 from time import sleep
 
 import sh
+import shutil
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -287,9 +288,10 @@ class SSHProcessManager(ProcessManager):
                     exe_arg
                 ) in boot_request.process_description.executable_and_arguments:
                     if exe_arg.exec == "daq_application":
-                        cmd += "sudo -E (which daq_application)"
+                        cmd += f"sudo env LD_LIBRARY_PATH=$LD_LIBRARY_PATH DUNEDAQ_DB_PATH=$DUNEDAQ_DB_PATH DETCHANNELMAPS_SHARE=$DETCHANNELMAPS_SHARE {shutil.which('daq_application')} "
                     else:
                         cmd += exe_arg.exec
+
                     for arg in exe_arg.args:
                         cmd += f" {arg}"
                     cmd += ";"
