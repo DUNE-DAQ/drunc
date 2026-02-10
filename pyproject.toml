@@ -63,7 +63,8 @@ markers = [
     "grpc: marks tests for gRPC isolation (run with --test-grpc)",
     "paramiko: marks tests for paramiko isolation (run with --test-paramiko)",
 ]
-addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
+addopts = "-v --tb=short --cov=drunc --cov=src/drunc"
+testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["drunc"]
