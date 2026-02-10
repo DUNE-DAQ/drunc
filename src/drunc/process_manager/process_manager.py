@@ -2,8 +2,11 @@ import abc
 import re
 import threading
 import time
+import os
 
-from daqpytools.logging.handlers import add_ers_kafka_handler
+from daqpytools.logging.handlers import LogHandlerConf, HandlerType
+
+
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -24,9 +27,6 @@ from druncschema.request_response_pb2 import (
     Request,
     ResponseFlag,
 )
-
-# import logging
-from erskafka.ERSKafkaLogHandler import ERSKafkaLogHandler
 from google.rpc import code_pb2
 from grpc import ServicerContext
 
@@ -59,40 +59,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         **kwargs,
     ):
         super().__init__()
+        ers_uri = configuration.get_data().ers_uri
+        self.handlerconf = LogHandlerConf(init_ers=False)
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager"
+            f"process_manager.{configuration.get_data_type_name()}_process_manager", ers_kafka_handler= ers_uri["type"] == "stream"
         )
-
-        #! This is here because we want to set up this specific instance
-
-        try:
-            ers_uri = configuration.get_data().ers_uri
-            self.log.warning(ers_uri)
-            if ers_uri["type"] == "file":
-                self.log.warning("Placeholder for log handler")
-            # TODO Add the log handler? If we add it its gonna spam the file handler I think. We need to be careful
-
-            else:
-                #! This is hacky!
-                self.log.warning("Checking if ERS handler exists")
-                if not any(
-                    isinstance(h, ERSKafkaLogHandler) for h in self.log.handlers
-                ):
-                    self.log.warning("Going to add ers handler")
-
-                    # TODO: Will need to figure out if we want to add this to the current handler or to the root handler..
-                    add_ers_kafka_handler(
-                        self.log,
-                        use_parent_handlers=True,
-                        session_name="session_temporary",
-                        topic=ers_uri["topic"],
-                        address=ers_uri["path"],
-                    )
-        except:
-            self.log.error("Failed to initialise")
-            raise DruncCommandException("Failed to initialise")
-
         self.log.debug(pid_info_str())
+        self.log.debug("Initialized ProcessManager")
+        self.log.info(f'{ers_uri["type"] == "stream"}') # TODO: Delete before merge
 
         self.configuration = configuration
         self.name = name
@@ -169,6 +143,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
 
+        #! Envs dont exist! need to have a workaround
+        self.log.critical(f"{os.getenv('DUNEDAQ_ERS_ERROR')=}")
+
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
@@ -207,14 +184,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 if pi.uuid.uuid == target_uuid:
                     return pi
             return None
-
-        # pi = find_by_uuid(process_instance_list, "5")
-
+        
         n_dead_keep = 0
-        graveyard = set()  # Set of UU1Ds
-
-        # lambda # obtain dead ones
-
+        graveyard = set()  
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -223,14 +195,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.RUNNING
             )
-
             dead_processes = {
                 process.uuid.uuid
                 for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.DEAD
             }
             n_dead = len(dead_processes)
-
             n_session = len(
                 {
                     process.process_description.metadata.session
@@ -242,29 +212,16 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
             )
-            #! Obviously hacky but proof of principle
-            # Checks if n_dead changed compared to the previous iteration
-            # self.log.warning(
-            #     f"Processes: {n_running}, {n_dead}, {n_session}, {n_dead_keep}"
-            # )
 
-            # Change this to increase
             if n_dead_keep < n_dead:
-                # check which one has died
                 n_dead_keep = n_dead
-                # self.log.error("We have a real dead one!", extra={"use_ers": True})
-
-                print(graveyard)
-                print(dead_processes)
                 diff_set = dead_processes - graveyard
-                print(diff_set)
                 for diff in diff_set:
-                    print(diff)
                     pi = find_by_uuid(results, diff)
-                    # print(pi)
                     self.log.critical(
-                        f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
+                        f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}", extra={"handlers": [HandlerType.Rich, HandlerType.Protobufstream]}
                     )
+                    #! No environment variables detected here
 
             time.sleep(interval_s)
 
@@ -273,7 +230,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     """
 
     def broadcast(self, *args, **kwargs):
-        self.log.critical(f"{self.name} broadcasting")
+        self.log.debug(f"{self.name} broadcasting")
         return (
             self.broadcast_service.broadcast(*args, **kwargs)
             if self.broadcast_service
@@ -482,8 +439,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     process_restriction=pr,
                     status_code=(
                         ProcessInstance.StatusCode.RUNNING
-                        if self.process_store[uuid].is_alive()  # this might be the key
-                        # can you easily hook into the processinstancelist stored within processmanager to store in this query
+                        if self.process_store[uuid].is_alive()
                         else ProcessInstance.StatusCode.DEAD
                     ),
                     return_code=return_code,

@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from typing import Callable, List, TypeVar
 
+from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
@@ -68,7 +69,7 @@ from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
 
-from daqpytools.logging.handlers import add_ers_kafka_handler, LogHandlerConf
+from daqpytools.logging.handlers import LogHandlerConf
 
 T = TypeVar("T")
 
@@ -224,33 +225,29 @@ class Controller(ControllerServicer):
     def __init__(self, configuration, name: str, session: str, token: Token):
         super().__init__()
 
-        # handlerconf will be here
-        # construct the handler conf
-        # invert
-
-        # Define it as a control utilities that you call here in the controller class
-
-        # nvm move it to utils/utils (which is where all the logging function is gonna happen anyway)
-
+        self._previous_error_state = False
         self.name = name
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
+        self.handlerconf = LogHandlerConf(init_ers=True)
 
-        self.handlerconf = LogHandlerConf()
 
-        self.log = get_logger("controller.core", stream_handlers=True)
-
-        add_ers_kafka_handler(self.log, True, "emir-test")
-
+        #! I am now in favour of splitting controller.core here to 
+        # "controller.core.{self.name}" or something similar
+        # so we have one kafka handler per controller
+        # its a lot of handlers but we probably want individual handlers per controller?
+        
+        self.log = get_logger(f"controller.core.{name}_ctrl", ers_kafka_handler=True)
         log_init = get_logger("controller.core.__init__")
-        test_loggess = get_logger("controller.heyo", stream_handlers=True)
-        test_loggess.error("Hello, world")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
-
+        
+        #TODO: Delete before merge
+        test_loggess = get_logger("controller.heyo", stream_handlers=True)
         test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_INFO')=}")
-
-        #! This is the next big step, I need to figureo ut how to use another configuration..
+        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_WARNING')=}")
+        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_ERROR')=}")
+        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_FATAL')=}")
 
         self.configuration = configuration
         self.top_segment_controller = (
@@ -271,8 +268,6 @@ class Controller(ControllerServicer):
         bsch = BroadcastSenderConfHandler(
             data=self.configuration.data.controller.broadcaster,
         )
-
-        # And then its gonna go here im sure
 
         self.broadcast_service = BroadcastSender(
             name=name,
@@ -416,6 +411,12 @@ class Controller(ControllerServicer):
         return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
     def controller_publisher(self, message, custom_origin: dict | None = None):
+        if isinstance(message, FSMStatus) and message.in_error:
+            if message.in_error and not self._previous_error_state:
+                self.log.error(f"{self.name} is now in an error state", extra=self.handlerconf.ERS)
+            elif not message.in_error and self._previous_error_state:
+                self.log.info(f"{self.name} is now in a good state",extra=self.handlerconf.ERS)
+            self._previous_error_state = message.in_error
         if self.opmon_publisher is not None:
             try:
                 if custom_origin is None:
@@ -989,35 +990,20 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-        newlog = get_logger("mytestlogger", rich_handler=True)
-        newlog.warning("Hello there")
-
-        # use this as a partial to execute all the stateful commands
-
         try:
             # Parse and validate target.
             request.target = self.parse_target_string(request.target)
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
-
-            #! This is the flag that determines the error stares
-            # enums are in ResponseFlag
             return response
-
-        newlog.warning("Just finished a try")
 
         command = request.command
         command_name = command.command_name
-
-        self.log.warning(f"FSM command: {command_name}")
+        self.log.debug(f"FSM command: {command_name}")
         transition = self.stateful_node.get_fsm_transition(command_name)
-        self.log.warning(f"FSM transition: {transition}")
+        self.log.debug(f"FSM transition: {transition}")
 
         # Check controller readiness.
-
-        #! This is the place wher ethe things get messaged on where it doesnt go as planned
-
-        #! This area is wher eyou want to put the message in!
         if not self.stateful_node.get_ready_state():
             self.log.error(
                 f"Command '{command_name}' not executed: controller is not ready."
@@ -1028,13 +1014,7 @@ class Controller(ControllerServicer):
 
         # Check if node is in error.
         if self.stateful_node.node_is_in_error():
-            self.log.error(f"Command '{command_name}' not executed: node is in error.")
-
-            self.log.error("THIS SHOULD GO TO ERS!!!! yes this i can do...")
-
-            # Wrap it up folks this is what we're after
-            self.log.critical("Test error for ERS", extra=self.handlerconf.ERS)
-
+            self.log.error(f"Command '{command_name}' not executed: node is in error.", extra=self.handlerconf.ERS)
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             return response
 
@@ -1544,9 +1524,6 @@ class Controller(ControllerServicer):
                 addressed_commands,
                 token,
             )
-
-            #! We probably want this as well...
-            self.log.critical("This application has been put into error")
 
             return Response(
                 name=self.name,

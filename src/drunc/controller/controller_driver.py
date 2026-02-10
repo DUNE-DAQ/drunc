@@ -79,11 +79,6 @@ class ControllerDriver:
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
 
-        self.log.error(f"address: {address}, token: {token}")
-
-        #! SO HERE!!! is where we initialise the add ers protobuf handler. The  question is now how do we get the correct config?
-        #! But once yoh ave this it should be fine
-
         try:
             resolved_address = self._resolve_address_to_ipv4(address)
         except ValueError as e:
