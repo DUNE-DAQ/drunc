@@ -28,12 +28,15 @@
         "labels": {
             "drunc_label": "drunc.daq"
         },
+        "home_path_base": "/nfs/home",
         "connection_server": {
             "name": "local-connection-server"
         },
+        "service": {
+            "headless_discovery_port": 80
+        },
         "pod_management": {
-            "kill_timeout": 30,
-            "total_shutdown_timeout": 60,
+            "kill_timeout": 120,
             "pod_ready_timeout": 60
         },
         "cleanup": {

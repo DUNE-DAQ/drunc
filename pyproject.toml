@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "drunc"
 description = "A flexible run control infrastructure for a distributed DAQ system"
-version = "1.0.0"
+version = "1.0.1"
 readme = "docs/README.md"
 requires-python = ">=3.10"
 
@@ -63,7 +63,8 @@ markers = [
     "grpc: marks tests for gRPC isolation (run with --test-grpc)",
     "paramiko: marks tests for paramiko isolation (run with --test-paramiko)",
 ]
-addopts = "-v --tb=short --cov=drunc --cov=src/drunc tests/"
+addopts = "-v --tb=short --cov=drunc --cov=src/drunc"
+testpaths = ["tests"]
 
 [tool.coverage.run]
 source = ["drunc"]

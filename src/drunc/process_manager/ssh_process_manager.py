@@ -224,7 +224,7 @@ class SSHProcessManager(ProcessManager):
         )
 
         # Ensure exactly one process matches the query
-        uid = self._ensure_one_process(matching_uuids)
+        uid = self._ensure_one_process(matching_uuids, in_boot_request=True)
 
         # Extract log file location and connection details from boot request
         logfile = self.boot_request[uid].process_description.process_logs_path

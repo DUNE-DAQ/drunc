@@ -187,14 +187,19 @@ class K8sProcessManager(ProcessManager):
         self.connection_server_port = None
         self.connection_server_node_port = None
 
+        # Service
+        service = settings.get("service", {})
+        self.headless_discovery_port = service.get("headless_discovery_port", 80)
         # Pod management
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 30)
         self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
-        self.total_shutdown_timeout = pod_management.get("total_shutdown_timeout", 60)
 
         # Volume mounts
         self.volume_configs = settings.get("volumes", [])
+
+        # Home path configuration
+        self.home_path_base = settings.get("home_path_base", None)
 
         # Cleanup
         cleanup = settings.get("cleanup", {})
@@ -392,8 +397,42 @@ class K8sProcessManager(ProcessManager):
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
-    def _create_namespace(self, session) -> None:
-        """Creates a Kubernetes namespace if it doesn't already exist."""
+    def _create_namespace_and_wait_for_active(self, session: str) -> None:
+        """Creates a namespace manifest, calls the API to create it, and waits for it to become Active."""
+        self.log.info(f'Creating "{session}" namespace.')
+        namespace_manifest = client.V1Namespace(
+            api_version="v1",
+            kind="Namespace",
+            metadata=self._meta_v1_api(
+                name=session,
+                labels={"pod-security.kubernetes.io/enforce": "privileged"},
+            ),
+        )
+        self._core_v1_api.create_namespace(body=namespace_manifest)
+
+        # Wait until namespace is Active
+        start = time()
+        while time() - start < self.restart_cleanup_time:
+            try:
+                ns = self._core_v1_api.read_namespace(name=session)
+                phase = getattr(ns.status, "phase", None)
+                if phase == "Active":
+                    self.log.info(f"Namespace '{session}' is Active and ready.")
+                    break
+            except self._api_error_v1_api as e:
+                if e.status != 404:
+                    raise DruncK8sException(f"Error reading namespace '{session}': {e}")
+            sleep(self.restart_cleanup_polling)
+        else:
+            raise DruncK8sNamespaceException(
+                f"Namespace '{session}' not ready after {self.restart_cleanup_time} seconds."
+            )
+
+        self._add_creator_label(session, "namespace")
+        self.managed_sessions.add(session)
+
+    def _prepare_namespace(self, session) -> None:
+        """Ensures a Kubernetes namespace exists, handling edge cases like terminating namespaces."""
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
 
@@ -401,25 +440,45 @@ class K8sProcessManager(ProcessManager):
             return
 
         try:
-            self._core_v1_api.read_namespace(name=session)
-            raise DruncK8sNamespaceException(
-                f"Namespace '{session}' already exists. Please use a different session name."
-            )
+            namespace = self._core_v1_api.read_namespace(name=session)
+            # Check if namespace is in Terminating state
+            if namespace.metadata.deletion_timestamp is not None:
+                self.log.info(
+                    f"Namespace '{session}' is in Terminating state. Waiting for deletion to complete..."
+                )
+                # Wait for namespace to be fully deleted
+                start_time = time()
+                while time() - start_time < self.restart_cleanup_time:
+                    try:
+                        self._core_v1_api.read_namespace(name=session)
+                        # Namespace still exists, continue waiting
+                        sleep(self.restart_cleanup_polling)
+                    except self._api_error_v1_api as e:
+                        if e.status == 404:
+                            # Namespace is now deleted, break and create new one
+                            self.log.info(
+                                f"Namespace '{session}' has been fully deleted. Proceeding with creation."
+                            )
+                            self._create_namespace_and_wait_for_active(session)
+                            return
+                        else:
+                            raise DruncK8sException(
+                                f"Error while waiting for namespace '{session}' deletion: {e}"
+                            )
+                    # Timeout reached
+                raise DruncK8sNamespaceException(
+                    f"Timeout waiting for namespace '{session}' to be deleted. "
+                    f"Please wait and try again, or use a different session name."
+                )
+            else:
+                # Namespace exists and is not terminating
+                raise DruncK8sNamespaceException(
+                    f"Namespace '{session}' already exists. Please use a different session name."
+                )
 
         except self._api_error_v1_api as e:
             if e.status == 404:
-                self.log.info(f'Creating "{session}" namespace.')
-                namespace_manifest = client.V1Namespace(
-                    api_version="v1",
-                    kind="Namespace",
-                    metadata=self._meta_v1_api(
-                        name=session,
-                        labels={"pod-security.kubernetes.io/enforce": "privileged"},
-                    ),
-                )
-                self._core_v1_api.create_namespace(body=namespace_manifest)
-                self._add_creator_label(session, "namespace")
-                self.managed_sessions.add(session)
+                self._create_namespace_and_wait_for_active(session)
             else:
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
@@ -446,7 +505,12 @@ class K8sProcessManager(ProcessManager):
             spec=client.V1ServiceSpec(
                 cluster_ip="None",
                 selector={"app": podname},
-                ports=[client.V1ServicePort(port=80, target_port=80)],
+                ports=[
+                    client.V1ServicePort(
+                        port=self.headless_discovery_port,
+                        target_port=self.headless_discovery_port,
+                    )
+                ],
             ),
         )
         try:
@@ -554,6 +618,40 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
+        # Dynamic HOME mount
+        if self.home_path_base:
+            username = self._get_host_username()
+            target_home_path = f"{self.home_path_base}/{username}"
+
+            # Check if this path is already covered by the JSON volumes above
+            is_covered = False
+            for vm in container_volume_mounts:
+                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
+                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                    is_covered = True
+                    break
+
+            if not is_covered:
+                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
+                vol_name = f"home-{username}"
+                
+                pod_volumes.append(
+                    client.V1Volume(
+                        name=vol_name,
+                        host_path=client.V1HostPathVolumeSource(
+                            path=target_home_path, 
+                            type="Directory"
+                        ),
+                    )
+                )
+                container_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name=vol_name,
+                        mount_path=target_home_path,
+                        read_only=False,
+                    )
+                )
+
         # Add log_mount from process_logs_path
         log_dir = None
         log_file_path = boot_request.process_description.process_logs_path
@@ -652,12 +750,57 @@ class K8sProcessManager(ProcessManager):
         )
         return labels
 
+    def _build_container_env(
+        self, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> list[client.V1EnvVar]:
+        """Builds the list of environment variables for the container."""
+        env_vars = boot_request.process_description.env
+
+        host_username = None
+        if "USER" not in env_vars or self.home_path_base:
+            host_username = self._get_host_username()
+
+        # Only set USER if not already present in environment
+        if "USER" not in env_vars and host_username:
+            env_vars["USER"] = host_username
+            self.log.debug(f"Setting USER environment variable to: {host_username}")
+
+        # Set HOME if home_path_base is configured
+        if self.home_path_base and host_username:
+            env_vars["HOME"] = f"{self.home_path_base}/{host_username}"
+            self.log.debug(
+                f"Setting HOME environment variable to: {self.home_path_base}/{host_username}"
+            )
+
+        if "DOTDRUNC" not in env_vars:
+            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            env_vars["DOTDRUNC"] = dotdrunc_path
+
+        # Build environment variable list
+        container_env = [client.V1EnvVar(name=k, value=v) for k, v in env_vars.items()]
+
+        # Add POD_IP environment variable via Downward API for root-controller
+        if "root-controller" in tree_labels["role." + self.drunc_label]:
+            pod_ip_env = client.V1EnvVar(
+                name="POD_IP",
+                value_from=client.V1EnvVarSource(
+                    field_ref=client.V1ObjectFieldSelector(field_path="status.podIP")
+                ),
+            )
+            container_env.append(pod_ip_env)
+            self.log.debug(
+                "Added POD_IP environment variable via Downward API for root-controller"
+            )
+
+        return container_env
+
     def _build_pod_main_container(
         self,
         podname: str,
         boot_request: BootRequest,
         lcs_port: int | None,
         container_volume_mounts: list[client.V1VolumeMount],
+        tree_labels: dict[str, str],
     ) -> client.V1Container:
         """Builds the primary V1Container manifest, including command and preStop hook."""
 
@@ -673,22 +816,48 @@ class K8sProcessManager(ProcessManager):
             if (
                 is_last_command
                 and e_and_a.exec != "source"
-                and podname != self.connection_server_name
+                and self.connection_server_name
+                not in tree_labels["role." + self.drunc_label]
             ):
                 prefix = "exec "
 
-            command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+            if "root-controller" in tree_labels["role." + self.drunc_label]:
+                # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
+                # POD_IP will be injected via Kubernetes Downward API
+                modified_args = []
+                for arg in e_and_a.args:
+                    modified_arg = re.sub(
+                        r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
+                    )
+                    if modified_arg != arg:
+                        self.log.debug(
+                            f"Modified command facility for '{podname}' from {arg} to {modified_arg} "
+                            "(will use pod IP)"
+                        )
+                    modified_args.append(modified_arg)
+                command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
+            else:
+                command_parts.append(
+                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
+                )
         main_command_chain = " && ".join(command_parts)
 
         container_ports = []
-        if podname == self.connection_server_name and lcs_port is not None:
+        if (
+            self.connection_server_name in tree_labels["role." + self.drunc_label]
+            and lcs_port is not None
+        ):
             container_ports.append(
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
 
         # Only add preStop hook for C++ applications (non-controllers)
         lifecycle_hook = None
-        if "controller" not in podname and podname != self.connection_server_name:
+        if (
+            "controller" not in tree_labels["role." + self.drunc_label]
+            and self.connection_server_name
+            not in tree_labels["role." + self.drunc_label]
+        ):
             self.log.debug(
                 f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
             )
@@ -710,12 +879,14 @@ class K8sProcessManager(ProcessManager):
         final_command_args: str
 
         if log_file_path:
-            self.log.info(f"Redirecting pod stdout/stderr to '{log_file_path}'")
+            self.log.debug(
+                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
+            )
             log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
         else:
             log_redirect_cmd = ""
 
-        if podname == self.connection_server_name:
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
@@ -727,15 +898,15 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
+        # Build container environment variables
+        container_env = self._build_container_env(boot_request, tree_labels)
+
         main_container = client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/bash", "-c"],
             args=[final_command_args],
-            env=[
-                client.V1EnvVar(name=k, value=v)
-                for k, v in boot_request.process_description.env.items()
-            ],
+            env=container_env,
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
@@ -769,12 +940,12 @@ class K8sProcessManager(ProcessManager):
         return node_selector
 
     def _get_pod_host_aliases(
-        self, podname: str, session: str
+        self, podname: str, session: str, tree_labels: dict[str, str]
     ) -> list[client.V1HostAlias] | None:
         """Gets the ClusterIP of the connection server and prepares host aliases."""
         host_aliases = None
         if (
-            podname != self.connection_server_name
+            self.connection_server_name not in tree_labels["role." + self.drunc_label]
             and self.local_connection_server_is_booted
         ):
             connection_server_ip = None
@@ -799,16 +970,18 @@ class K8sProcessManager(ProcessManager):
                 )
         return host_aliases
 
-    def _determine_service_type(self, podname: str, boot_request: BootRequest) -> str:
+    def _determine_service_type(
+        self, podname: str, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> str:
         """
         Determines the correct K8s service type for a pod ("NodePort" or "Headless").
         This logic is centralized here to be used by both pod creation (for hostNetwork)
         and service creation.
         """
-        if podname == self.connection_server_name:
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             return "NodePort"
 
-        if "root-controller" in podname:
+        if "root-controller" in tree_labels["role." + self.drunc_label]:
             port = self._extract_port_from_cmd(boot_request)
             if port is not None and port != 0:
                 return "NodePort"
@@ -820,6 +993,17 @@ class K8sProcessManager(ProcessManager):
                 return "Headless"
 
         return "Headless"
+
+    def _get_host_username(self) -> str:
+        """Resolves the username of the user running the process manager."""
+        try:
+            return getpass.getuser()
+        except KeyError:
+            try:
+                import pwd
+                return pwd.getpwuid(os.getuid()).pw_name
+            except KeyError:
+                return str(os.getuid())
 
     def _build_pod_manifest(
         self,
@@ -901,10 +1085,11 @@ class K8sProcessManager(ProcessManager):
         boot_request: BootRequest,
         lcs_port: int | None,
         service_type: str,
+        tree_labels: dict[str, str],
     ) -> None:
         """Calls the appropriate service creation method based on pod type."""
         if service_type == "NodePort":
-            if podname == self.connection_server_name:
+            if self.connection_server_name in tree_labels["role." + self.drunc_label]:
                 if lcs_port is None:
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
@@ -912,7 +1097,7 @@ class K8sProcessManager(ProcessManager):
                 # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
 
-            elif "root-controller" in podname:
+            elif "root-controller" in tree_labels["role." + self.drunc_label]:
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
@@ -935,14 +1120,14 @@ class K8sProcessManager(ProcessManager):
         else:  # service_type == "Headless"
             self._create_headless_service(podname, session, pod_uid)
 
-    def _create_pod(self, podname, session, boot_request: BootRequest) -> None:
+    def _create_pod(
+        self, podname, session, boot_request: BootRequest, tree_labels: dict[str, str]
+    ) -> None:
         """Constructs and creates a Kubernetes Pod manifest and its associated service."""
         try:
             lcs_port = None
-            tree_id = boot_request.process_description.metadata.tree_id
-
             # Early Port Extraction and Class Variable Setup for LCS
-            if podname == self.connection_server_name:
+            if self.connection_server_name in tree_labels["role." + self.drunc_label]:
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
                     self.connection_server_port = lcs_port
@@ -951,9 +1136,6 @@ class K8sProcessManager(ProcessManager):
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
                     )
-
-            # Get correct label using tree_id
-            tree_labels = self._get_tree_labels(tree_id, podname)
 
             # Prepare volume mounts
             (
@@ -967,10 +1149,13 @@ class K8sProcessManager(ProcessManager):
                 boot_request,
                 lcs_port,
                 container_volume_mounts,
+                tree_labels,
             )
 
             # Determine service type and hostNetwork requirement
-            service_type = self._determine_service_type(podname, boot_request)
+            service_type = self._determine_service_type(
+                podname, boot_request, tree_labels
+            )
             use_host_network = service_type != "NodePort"
 
             if not use_host_network:
@@ -982,7 +1167,7 @@ class K8sProcessManager(ProcessManager):
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
             )
-            host_aliases = self._get_pod_host_aliases(podname, session)
+            host_aliases = self._get_pod_host_aliases(podname, session, tree_labels)
             pod_manifest = self._build_pod_manifest(
                 podname,
                 session,
@@ -999,7 +1184,13 @@ class K8sProcessManager(ProcessManager):
 
             # Create associated service
             self._create_associated_service(
-                podname, session, pod_uid, boot_request, lcs_port, service_type
+                podname,
+                session,
+                pod_uid,
+                boot_request,
+                lcs_port,
+                service_type,
+                tree_labels,
             )
 
         except self._api_error_v1_api as e:
@@ -1352,23 +1543,25 @@ class K8sProcessManager(ProcessManager):
         """
         session = boot_request.process_description.metadata.session
         podname = boot_request.process_description.metadata.name
-
+        tree_labels = self._get_tree_labels(
+            boot_request.process_description.metadata.tree_id, podname
+        )
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
         # Resource Creation (Namespace, Pod, Labels)
-        self._create_namespace(session)
+        self._prepare_namespace(session)
         self.boot_request[uuid] = BootRequest()
         self.boot_request[uuid].CopyFrom(boot_request)
 
-        self._create_pod(podname, session, boot_request)
+        self._create_pod(podname, session, boot_request, tree_labels)
         self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
         # Special handling and blocking wait for critical processes
-        if podname == self.connection_server_name:
+        if self.connection_server_name in tree_labels["role." + self.drunc_label]:
             self._wait_for_lcs_readiness(podname, session)
-        elif "root-controller" in podname:
+        elif "root-controller" in tree_labels["role." + self.drunc_label]:
             self._wait_for_controller_readiness(podname, session, boot_request)
 
         # Post-Process

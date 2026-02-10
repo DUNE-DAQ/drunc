@@ -109,7 +109,7 @@ from drunc.utils.utils import (
 )  # For production, change default to true/remove it
 @click.pass_context
 def unified_shell(
-    ctx,
+    ctx: click.core.Context,
     process_manager: str,
     configuration_file: str,
     configuration_id: str,
@@ -342,6 +342,12 @@ def unified_shell(
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
     unified_shell_log.debug("Initializing the [green]FSM[/green]")
+
+    #! This is an absolute _hack_ because we do not want the
+    # unified shell fsm to go to tty but want other fsms to do so
+    # live with it. At least until controller.core uses file handler instead of stream
+    get_logger("controller.core.FSM", log_level="CRITICAL")
+
     fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
 
     unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
@@ -487,6 +493,10 @@ def unified_shell(
                 unified_shell_log.error(
                     f"Could not retract the session from the connectivity service: {e}"
                 )
+
+        # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").close()
+        ctx.obj.delete_driver("process_manager")
 
         # Remove the process manager
         if internal_pm:
