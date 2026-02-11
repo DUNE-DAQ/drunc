@@ -2310,10 +2310,12 @@ class K8sProcessManager(ProcessManager):
 
         Performs an ordered shutdown of matched processes by their role labels:
         unknown → application → segment-controller → root-controller →
-        infrastructure-applications. Each stage issues delete requests and
-        blocks until the watcher thread confirms all pods in that stage have
-        terminated (or a timeout is reached). After all pods are killed,
-        cleans up managed namespaces if no tracked processes remain.
+        infrastructure-applications. Segment-controllers are further split
+        by tree-id depth, shutting down the deepest first (leaves before
+        parents). Each stage issues delete requests and blocks until the
+        watcher thread confirms all pods in that stage have terminated
+        (or a timeout is reached). After all pods are killed, cleans up
+        managed namespaces if no tracked processes remain.
 
         Args:
             query - a ProcessQuery specifying which processes to kill
@@ -2394,20 +2396,46 @@ class K8sProcessManager(ProcessManager):
             "root-controller": [],
             "infrastructure-applications": [],
         }
+        # For segment-controllers, also track tree-id depth per uuid
+        segment_controller_depths: dict[str, int] = {}
 
         uuid_label_key = f"uuid.{self.drunc_label}"
         role_label_key = f"role.{self.drunc_label}"
+        tree_id_label_key = f"tree-id.{self.drunc_label}"
 
         for pod in all_pods:
             uuid = pod.metadata.labels.get(uuid_label_key)
             if uuid and uuid in targeted_uuids:
                 role = pod.metadata.labels.get(role_label_key, "unknown")
                 pods_by_role[role].append(uuid)
+                if role == "segment-controller":
+                    tree_id = pod.metadata.labels.get(tree_id_label_key, "")
+                    segment_controller_depths[uuid] = tree_id.count(".") if tree_id else 0
 
         # Kill in stages using our sorted lists
         for role in shutdown_order:
             uuids_in_step = pods_by_role[role]
-            if uuids_in_step:
+            if not uuids_in_step:
+                continue
+
+            if role == "segment-controller":
+                # Group segment-controllers by depth and kill deepest first
+                by_depth: dict[int, list[str]] = {}
+                for uuid in uuids_in_step:
+                    depth = segment_controller_depths.get(uuid, 0)
+                    by_depth.setdefault(depth, []).append(uuid)
+
+                for depth in sorted(by_depth.keys(), reverse=True):
+                    depth_uuids = by_depth[depth]
+                    self.log.info(
+                        f"--- Termination Step: Shutting down role '{role}' at depth {depth} "
+                        f"({len(depth_uuids)} pod(s)) ---"
+                    )
+                    kill_and_wait(depth_uuids)  # This call is blocking
+                    self.log.info(
+                        f"--- Termination Step: Role '{role}' at depth {depth} complete ---"
+                    )
+            else:
                 self.log.info(
                     f"--- Termination Step: Shutting down role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
