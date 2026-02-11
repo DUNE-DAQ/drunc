@@ -930,13 +930,13 @@ class K8sProcessManager(ProcessManager):
         if "runp" in podname.lower():
             resource_reqs = client.V1ResourceRequirements(
                 limits={
-                    "hugepages-2Mi": "16Gi",
-                    "memory": "8Gi",           
-                    "cpu": "56"
+                    "hugepages-2Mi": "128Gi",
+                    "memory": "64Gi",           
+                    "cpu": "56"                 
                 },
                 requests={
-                    "hugepages-2Mi": "16Gi",
-                    "memory": "4Gi",
+                    "hugepages-2Mi": "64Gi",
+                    "memory": "50Gi",
                     "cpu": "8"
                 }
             )
