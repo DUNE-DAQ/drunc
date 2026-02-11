@@ -195,15 +195,10 @@ def unified_shell(
 
     # If a local connectivity service is being used, perform the same checks
     # Temporarily removed to allow integration tests to pass without restructuring
-    connectivity_service_host: str = session_dal.connectivity_service.host
-    connectivity_service_is_local: bool = connectivity_service_host in [
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-    ]
-    if connectivity_service_is_local:
+    # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
+    if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
+        connectivity_service_host: str = session_dal.connectivity_service.host
         connectivity_service_port = session_dal.connectivity_service.service.port
-        unified_shell_log.info(f"Found LCS port at {connectivity_service_port}")
         if not is_port_available(connectivity_service_host, connectivity_service_port):
             unified_shell_log.info(
                 f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {set_connectivity_service_port(configuration_file, configuration_id)}"
