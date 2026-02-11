@@ -939,6 +939,7 @@ class K8sProcessManager(ProcessManager):
                     "memory": "50Gi",
                     "cpu": "8"
                 }
+            )
 
         # --- BUILD CONTAINER MANIFEST ---
         container_env = self._build_container_env(boot_request, tree_labels)
