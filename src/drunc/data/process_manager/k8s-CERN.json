@@ -73,7 +73,7 @@
                 "name": "vfio",
                 "mount_path": "/dev/vfio",
                 "host_path": "/dev/vfio",
-                "read_only": true
+                "read_only": false
             }
         ]
     }
