@@ -593,17 +593,33 @@ class K8sProcessManager(ProcessManager):
     def _get_pod_volumes_and_mounts(
         self, boot_request: BootRequest
     ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
-        """
-        Prepares all pod volumes and container mounts, including static
-        configs and the dynamic data_mount.
-        """
         pod_volumes = []
         container_volume_mounts = []
+        pod_name = boot_request.process_description.metadata.name
 
-        # Tmp to get readout apps working
+        # --- ADDITION FOR RUNP APPS ---
+        if "runp" in pod_name.lower():
+            # Use Native HugePages instead of the old hostPath for safety
+            pod_volumes.append(
+                client.V1Volume(
+                    name="hugepages",
+                    empty_dir=client.V1EmptyDirVolumeSource(medium="HugePages")
+                )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(
+                    name="hugepages",
+                    mount_path="/dev/hugepages"
+                )
+            )
+
+        # --- ORIGINAL LOGIC: runp02srv003 Temp fix ---
         if "runp02srv003" in boot_request.executable_and_arguments.values():
             vcs = [v for v in self.volume_configs if v["name"] in ["hugepages", "vfio"]]
             for vc in vcs:
+                # Skip hugepages if we already added the native one above
+                if vc["name"] == "hugepages" and "runp" in pod_name.lower():
+                    continue
                 pod_volumes.append(
                     client.V1Volume(
                         name=vc["name"],
@@ -620,8 +636,10 @@ class K8sProcessManager(ProcessManager):
                     )
                 )
 
-        # Volumes from json configuration
+        # --- ORIGINAL LOGIC: Volumes from json configuration ---
         for vc in self.volume_configs:
+            if any(v.name == vc["name"] for v in pod_volumes):
+                continue
             pod_volumes.append(
                 client.V1Volume(
                     name=vc["name"],
@@ -638,27 +656,17 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
-        # Dynamic HOME mount
+        # --- ORIGINAL LOGIC: Dynamic HOME mount ---
         if self.home_path_base:
             username = self._get_host_username()
             target_home_path = f"{self.home_path_base}/{username}"
-
-            # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(
-                    vm.mount_path + "/"
-                ):
-                    self.log.debug(
-                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
-                    )
+                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
                     is_covered = True
                     break
-
             if not is_covered:
-                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
@@ -675,72 +683,46 @@ class K8sProcessManager(ProcessManager):
                     )
                 )
 
-        # Add log_mount from process_logs_path
+        # --- ORIGINAL LOGIC: log_mount ---
         log_dir = None
         log_file_path = boot_request.process_description.process_logs_path
         if log_file_path:
             log_dir = os.path.dirname(log_file_path)
-            self.log.info(f"Adding 'log-mount' for directory: '{log_dir}'")
-
             pod_volumes.append(
                 client.V1Volume(
                     name="log-mount",
                     host_path=client.V1HostPathVolumeSource(
-                        path=log_dir,
-                        type="DirectoryOrCreate",
+                        path=log_dir, type="DirectoryOrCreate"
                     ),
                 )
             )
             container_volume_mounts.append(
                 client.V1VolumeMount(
-                    name="log-mount",
-                    mount_path=log_dir,
-                    read_only=False,
+                    name="log-mount", mount_path=log_dir, read_only=False
                 )
             )
 
-        # Add dynamic data_mount if present in the boot request
-        data_mount_path = None
+        # --- ORIGINAL LOGIC: data_mount ---
         if boot_request.process_restriction.data_mount:
-            self.log.info(
-                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
+            data_mount_path = (
+                boot_request.process_description.process_execution_directory
+                if boot_request.process_restriction.data_mount == "."
+                else boot_request.process_restriction.data_mount
             )
-            if boot_request.process_restriction.data_mount == ".":
-                data_mount_path = (
-                    boot_request.process_description.process_execution_directory
+            if data_mount_path and data_mount_path != log_dir:
+                pod_volumes.append(
+                    client.V1Volume(
+                        name="data-mount",
+                        host_path=client.V1HostPathVolumeSource(
+                            path=data_mount_path, type="Directory"
+                        ),
+                    )
                 )
-                self.log.info(
-                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                container_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name="data-mount", mount_path=data_mount_path, read_only=False
+                    )
                 )
-            else:
-                data_mount_path = boot_request.process_restriction.data_mount
-                self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
-
-            if data_mount_path:
-                if data_mount_path == log_dir:
-                    self.log.info(
-                        f"Skipping 'data-mount' as its path '{data_mount_path}' is already covered by 'log-mount'."
-                    )
-                else:
-                    self.log.info(
-                        f"Adding 'data-mount' for directory: '{data_mount_path}'"
-                    )
-                    pod_volumes.append(
-                        client.V1Volume(
-                            name="data-mount",
-                            host_path=client.V1HostPathVolumeSource(
-                                path=data_mount_path,
-                                type="Directory",
-                            ),
-                        )
-                    )
-                    container_volume_mounts.append(
-                        client.V1VolumeMount(
-                            name="data-mount",
-                            mount_path=data_mount_path,
-                            read_only=False,
-                        )
-                    )
 
         return pod_volumes, container_volume_mounts
 
@@ -825,92 +807,34 @@ class K8sProcessManager(ProcessManager):
         container_volume_mounts: list[client.V1VolumeMount],
         tree_labels: dict[str, str],
     ) -> client.V1Container:
-        """Builds the primary V1Container manifest, including command and preStop hook."""
-
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        # This logic correctly prepends 'exec' to the C++ application command.
+        # --- EXACT ORIGINAL COMMAND LOGIC ---
         command_parts = []
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
             prefix = ""
-
-            if (
-                is_last_command
-                and e_and_a.exec != "source"
-                and self.connection_server_name
-                not in tree_labels["role." + self.drunc_label]
-            ):
+            if (is_last_command and e_and_a.exec != "source" and 
+                self.connection_server_name not in tree_labels["role." + self.drunc_label]):
                 prefix = "exec "
 
             if "root-controller" in tree_labels["role." + self.drunc_label]:
-                # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
-                # POD_IP will be injected via Kubernetes Downward API
                 modified_args = []
                 for arg in e_and_a.args:
-                    modified_arg = re.sub(
-                        r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
-                    )
-                    if modified_arg != arg:
-                        self.log.debug(
-                            f"Modified command facility for '{podname}' from {arg} to {modified_arg} "
-                            "(will use pod IP)"
-                        )
+                    modified_arg = re.sub(r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg)
                     modified_args.append(modified_arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
-                command_parts.append(
-                    prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
-                )
+                command_parts.append(prefix + " ".join([e_and_a.exec] + list(e_and_a.args)))
+        
         main_command_chain = " && ".join(command_parts)
 
-        container_ports = []
-        if (
-            self.connection_server_name in tree_labels["role." + self.drunc_label]
-            and lcs_port is not None
-        ):
-            container_ports.append(
-                client.V1ContainerPort(container_port=lcs_port, name="http-port")
-            )
-
-        # Only add preStop hook for C++ applications (non-controllers)
-        lifecycle_hook = None
-        if (
-            "controller" not in tree_labels["role." + self.drunc_label]
-            and self.connection_server_name
-            not in tree_labels["role." + self.drunc_label]
-        ):
-            self.log.debug(
-                f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
-            )
-            shutdown_command = "kill -QUIT 1"
-            lifecycle_hook = client.V1Lifecycle(
-                pre_stop=client.V1LifecycleHandler(
-                    _exec=client.V1ExecAction(
-                        command=["/bin/sh", "-c", shutdown_command]
-                    )
-                )
-            )
-        else:
-            self.log.debug(
-                f"'{podname}' identified as a Python app, no preStop hook needed."
-            )
-
-        # Redirect logs
+        # --- EXACT ORIGINAL LOG REDIRECTION ---
         log_file_path = boot_request.process_description.process_logs_path
-        final_command_args: str
-
-        if log_file_path:
-            self.log.debug(
-                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
-            )
-            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
-        else:
-            log_redirect_cmd = ""
+        log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;" if log_file_path else ""
 
         if self.connection_server_name in tree_labels["role." + self.drunc_label]:
-            # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
                 f"trap 'kill -KILL $child; wait $child; exit 0' TERM QUIT; "
@@ -921,24 +845,46 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        # Build container environment variables
-        container_env = self._build_container_env(boot_request, tree_labels)
+        # --- EXACT ORIGINAL PORTS & LIFECYCLE ---
+        container_ports = []
+        if self.connection_server_name in tree_labels["role." + self.drunc_label] and lcs_port is not None:
+            container_ports.append(client.V1ContainerPort(container_port=lcs_port, name="http-port"))
 
-        main_container = client.V1Container(
+        lifecycle_hook = None
+        if ("controller" not in tree_labels["role." + self.drunc_label] and 
+            self.connection_server_name not in tree_labels["role." + self.drunc_label]):
+            lifecycle_hook = client.V1Lifecycle(
+                pre_stop=client.V1LifecycleHandler(
+                    _exec=client.V1ExecAction(command=["/bin/sh", "-c", "kill -QUIT 1"])
+                )
+            )
+
+        # --- ADDITION FOR RUNP APPS: Resources ---
+        resource_reqs = None
+        if "runp" in podname.lower():
+            resource_reqs = client.V1ResourceRequirements(
+                limits={"hugepages-2Mi": "1024Mi", "memory": "2Gi"},
+                requests={"hugepages-2Mi": "1024Mi", "memory": "2Gi"}
+            )
+
+        return client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/bash", "-c"],
             args=[final_command_args],
-            env=container_env,
+            env=self._build_container_env(boot_request, tree_labels),
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
+            resources=resource_reqs, # New addition
             working_dir=boot_request.process_description.process_execution_directory,
             security_context=client.V1SecurityContext(
-                run_as_user=os.getuid(), run_as_group=os.getgid()
+                run_as_user=os.getuid(), 
+                run_as_group=os.getgid(),
+                # Added IPC_LOCK only for runp apps
+                capabilities=client.V1Capabilities(add=["IPC_LOCK"]) if "runp" in podname.lower() else None
             ),
         )
-        return main_container
 
     def _get_pod_node_selector(
         self, podname: str, restriction: ProcessRestriction
