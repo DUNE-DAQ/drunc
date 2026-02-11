@@ -47,6 +47,7 @@ def collect_apps(
     @return The list of dictionaries holding application attributs
 
     """
+
     log = get_logger("process_manager.collect_apps")
     # Get default environment from Session
     defenv = env.copy()

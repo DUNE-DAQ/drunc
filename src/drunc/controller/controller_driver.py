@@ -5,15 +5,22 @@ from functools import wraps
 import grpc
 from druncschema.controller_pb2 import (
     AddressedCommand,
+    DescribeFSMRequest,
     DescribeFSMResponse,
+    DescribeRequest,
     DescribeResponse,
+    ExcludeRequest,
+    ExcludeResponse,
     ExecuteExpertCommandRequest,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandRequest,
     ExecuteFSMCommandResponse,
     FSMCommand,
-    IncludeExcludeRequest,
-    IncludeExcludeResponse,
+    IncludeRequest,
+    IncludeResponse,
+    RecomputeStatusRequest,
+    RecomputeStatusResponse,
+    StatusRequest,
     StatusResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
@@ -66,7 +73,7 @@ class ControllerDriver:
             ) from e
 
     def __init__(self, address: str, token: Token):
-        self.log = get_logger("controller.ControllerDriver")
+        self.log = get_logger("controller.core.ControllerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
@@ -116,8 +123,7 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> StatusResponse:
-        request = AddressedCommand(
-            command_name="status",
+        request = StatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -138,8 +144,7 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> DescribeResponse:
-        request = AddressedCommand(
-            command_name="describe",
+        request = DescribeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -161,14 +166,13 @@ class ControllerDriver:
         key: str = "",
         timeout: int | float = 60,
     ) -> DescribeFSMResponse:
-        request = AddressedCommand(
-            command_name="describe_fsm",
+        request = DescribeFSMRequest(
+            key=key,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        request.command_data.Pack(PlainText(text=key))
 
         try:
             response = self.stub.describe_fsm(request, timeout=timeout)
@@ -229,8 +233,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> IncludeResponse:
+        request = IncludeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -250,8 +254,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> IncludeExcludeResponse:
-        request = IncludeExcludeRequest(
+    ) -> ExcludeResponse:
+        request = ExcludeRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
@@ -271,9 +275,8 @@ class ControllerDriver:
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> StatusResponse:
-        request = AddressedCommand(
-            command_name="recompute_status",
+    ) -> RecomputeStatusResponse:
+        request = RecomputeStatusRequest(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

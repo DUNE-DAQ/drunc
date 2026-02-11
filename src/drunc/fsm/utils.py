@@ -53,6 +53,6 @@ def decode_fsm_arguments(arguments, arguments_format):
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise fsme.UnhandledArgumentType(arg.type)
-    log = get_logger("controller.decode_fsm_arguments")
+    log = get_logger("controller.core.decode_fsm_arguments")
     log.debug(f"Parsed FSM arguments: {out_dict}")
     return out_dict

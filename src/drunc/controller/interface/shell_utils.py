@@ -46,6 +46,8 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.utils import format_name_for_cli, get_logger
 
+log = get_logger("controller.iface.shell_utils")
+
 
 @dataclass(slots=True)
 class StatusDescriptionPair:
@@ -474,7 +476,6 @@ def run_one_fsm_command(
         ArgumentException: If there is an issue with the arguments
         ServerTimeout: If the server times out
     """
-    log = get_logger("controller.shell_utils")
     log.info(
         f"Running transition '{transition_name}' on controller '{controller_name}', targeting: '{target if target else controller_name}'"
     )
@@ -628,7 +629,6 @@ def run_one_fsm_command(
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
-    log = get_logger("controller.shell_utils")
     cmd = partial(run_one_fsm_command, controller_name, transition.name)
     cmd = click.pass_obj(cmd)
     cmd = click.option(

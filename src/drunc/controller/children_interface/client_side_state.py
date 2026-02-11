@@ -1,10 +1,5 @@
 from threading import Lock
 
-from drunc.controller.children_interface.child_node import ChildNode
-from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.core import FSM
-from drunc.utils.utils import ControlType
-
 
 class ClientSideState:
     def __init__(self, initial_state="initial"):
@@ -62,19 +57,3 @@ class ClientSideState:
     def in_error(self):
         with self._state_lock:
             return self._errored
-
-
-class ClientSideChild(ChildNode):
-    def __init__(
-        self,
-        name: str,
-        node_type: ControlType,
-        fsm_configuration: FSMConfHandler,
-    ):
-        super().__init__(name, node_type)
-
-        self.state = ClientSideState()
-        self.fsm_configuration = fsm_configuration
-        if fsm_configuration:
-            fsmch = FSMConfHandler(fsm_configuration)
-            self.fsm = FSM(conf=fsmch)

@@ -7,7 +7,7 @@ from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, get_status_table
 from drunc.utils.utils import get_logger
 
-logger_params = {"logger_name": "controller.interface", "rich_handler": True}
+log = get_logger("controller.iface", rich_handler=True)
 
 
 @click.command("list-transitions")
@@ -21,7 +21,6 @@ logger_params = {"logger_name": "controller.interface", "rich_handler": True}
 @click.option("--target", type=str, help="The target to address", default="")
 @click.pass_obj
 def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
-    log = get_logger(**logger_params)
     desc = obj.get_driver("controller").describe_fsm(
         target=target,
         execute_along_path=False,
@@ -49,7 +48,6 @@ def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
 @click.argument("sleep_time", type=int, default=1)
 @click.pass_obj
 def wait(obj: ControllerContext, sleep_time: int) -> None:
-    log = get_logger(**logger_params)
     log.info(f"Command [green]wait[/green] running for {sleep_time} seconds.")
     sleep(sleep_time)  # seconds
     log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
@@ -116,19 +114,11 @@ def recompute_status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    statuses = obj.get_driver("controller").recompute_status(
+    obj.get_driver("controller").recompute_status(
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
     )
-    descriptions = obj.get_driver("controller").describe(
-        target=target,
-        execute_along_path=execute_along_path,
-        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    )
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
-    obj.print_status_summary()
 
 
 @click.command("connect")
@@ -136,8 +126,6 @@ def recompute_status(
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
 def connect(obj: ControllerContext, controller_address: str, force: bool) -> None:
-    log = get_logger(**logger_params)
-
     if obj.has_driver("controller"):
         driver = obj.get_driver("controller")
         log.info(f"Already connected to a controller ({driver.name}@{driver.address})")
@@ -159,8 +147,6 @@ def connect(obj: ControllerContext, controller_address: str, force: bool) -> Non
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
 def disconnect(obj: ControllerContext, force: bool):
-    log = get_logger(**logger_params)
-
     if not obj.has_driver("controller"):
         log.info("You are not connected to any controller.")
         return
@@ -254,7 +240,6 @@ def surrender_control(
 @click.command("who-am-i")
 @click.pass_obj
 def who_am_i(obj: ControllerContext) -> None:
-    log = get_logger(**logger_params)
     log.info(obj.get_token().user_name)
 
 
@@ -291,7 +276,6 @@ def who_is_in_charge(
         .data
     )
     if who:
-        log = get_logger(**logger_params)
         log.info(who.text)  ## TODO create a table of who is in charge
 
 
@@ -309,7 +293,6 @@ def include(
     )
     if not result or not result.text:
         return
-    log = get_logger(**logger_params)
     log.info(result.text)
 
 
@@ -327,7 +310,6 @@ def exclude(
     )
     if not result or not result.text:
         return
-    log = get_logger(**logger_params)
     log.info(result.text)
 
 
@@ -349,7 +331,6 @@ def expert_command(
     target: str,
 ) -> None:
     data = dict()
-    log = get_logger(**logger_params)
     try:
         if string:
             data = json.loads(command)

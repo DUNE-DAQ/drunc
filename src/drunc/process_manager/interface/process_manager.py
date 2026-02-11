@@ -7,6 +7,8 @@ import types
 
 import click
 import grpc
+from daqpytools.logging.handlers import add_file_handler
+from daqpytools.logging.levels import logging_log_levels
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
@@ -23,12 +25,10 @@ from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import (
-    create_logger_handler,
     get_logger,
-    log_levels,
+    get_root_logger,
     parent_death_pact,
     resolve_localhost_and_127_ip_to_network_ip,
-    setup_root_logger,
 )
 
 _cleanup_coroutines = []
@@ -45,7 +45,7 @@ def run_pm(
     generated_port: bool = None,
 ) -> None:
     appName = "process_manager"
-    log = get_logger(logger_name=appName)
+    log = get_logger(logger_name=appName, rich_handler=True)
 
     log.debug("Running [green]run_pm[/green]")
     if signal_handler is not None:
@@ -72,10 +72,9 @@ def run_pm(
         override_logs=override_logs,
         app_log_path=log_path,
     )
-    create_logger_handler(
-        log_file_path=log_path,
-        rich_handler=True,
-    )
+
+    # Logger has been added to process_manager, so everything will be logged
+    add_file_handler(log, use_parent_handlers=True, path=log_path)
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
@@ -165,7 +164,7 @@ def run_pm(
 @click.option(
     "-l",
     "--log-level",
-    type=click.Choice(log_levels.keys(), case_sensitive=False),
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
     default="INFO",
     help="Set the log level",
 )
@@ -186,7 +185,7 @@ def run_pm(
 def process_manager_cli(
     pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
 ) -> None:
-    setup_root_logger(log_level)
+    get_root_logger(log_level)
     pm_conf = get_process_manager_configuration(pm_conf)
     run_pm(
         pm_conf=pm_conf,

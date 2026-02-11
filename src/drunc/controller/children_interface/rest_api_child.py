@@ -13,11 +13,13 @@ from druncschema.controller_pb2 import (
     AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
+    ExcludeResponse,
     ExecuteExpertCommandResponse,
     ExecuteFSMCommandResponse,
     FSMCommand,
     FSMResponseFlag,
-    IncludeExcludeResponse,
+    IncludeResponse,
+    RecomputeStatusResponse,
     Status,
     StatusResponse,
 )
@@ -27,7 +29,8 @@ from druncschema.token_pb2 import Token
 from flask import Flask, request
 from flask_restful import Api
 
-from drunc.controller.children_interface.client_side_child import ClientSideChild
+from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
@@ -56,7 +59,7 @@ class ResponseDispatcher(threading.Thread):
     def __init__(self, listener):
         threading.Thread.__init__(self)
         self.listener = listener
-        self.log = get_logger("controller.ResponseDispatcher")
+        self.log = get_logger("controller.child_iface.ResponseDispatcher")
 
     def run(self) -> None:
         self.log.debug("ResponseDispatcher starting to run")
@@ -109,7 +112,7 @@ class ResponseListener:
                 cls.dispatcher.start()
 
                 def index():
-                    log = get_logger("controller.ResponseListener")
+                    log = get_logger("controller.child_iface.ResponseListener")
                     json = request.get_json(force=True)
                     log.debug(f"Received {json}")
                     # enqueue command reply
@@ -217,7 +220,7 @@ class AppCommander:
         self.proxy_port = proxy_port
 
         self.app = app_name
-        self.log = get_logger(f"controller.{self.app}-commander")
+        self.log = get_logger(f"controller.core.{self.app}-commander")
         self.app_url = f"http://{self.app_host}:{self.app_port}/command"
 
         self.response_queue = queue.Queue()
@@ -360,7 +363,7 @@ class RESTAPIChildNodeConfHandler(ConfHandler):
         )
 
 
-class RESTAPIChildNode(ClientSideChild):
+class RESTAPIChildNode(ChildNode):
     def __init__(
         self,
         name: str,
@@ -368,20 +371,20 @@ class RESTAPIChildNode(ClientSideChild):
         uri: str,
         fsm_configuration: FSMConfHandler,
     ):
-        super().__init__(name, ControlType.REST_API, fsm_configuration)
+        super().__init__(name, ControlType.REST_API)
 
+        self.state = ClientSideState()
         self.configuration = configuration
-        self.response_listener = ResponseListener.get()
-
+        self.fsm_configuration = fsm_configuration
         if fsm_configuration:
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
 
         response_listener_host = socket.gethostname()
+        self.response_listener = ResponseListener.get()
 
         self.app_host, app_port = uri.split(":")
         self.app_port = int(app_port)
-
         if self.app_port == 0:
             raise DruncSetupException(
                 f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable."
@@ -661,10 +664,10 @@ class RESTAPIChildNode(ClientSideChild):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
+    ) -> IncludeResponse:
         self.state.include()
         self.included = True
-        return IncludeExcludeResponse(
+        return IncludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' included",
@@ -676,10 +679,10 @@ class RESTAPIChildNode(ClientSideChild):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> IncludeExcludeResponse:
+    ) -> ExcludeResponse:
         self.state.exclude()
         self.included = False
-        return IncludeExcludeResponse(
+        return ExcludeResponse(
             token=None,
             name=self.name,
             text=f"'{self.name}' excluded",
@@ -691,9 +694,9 @@ class RESTAPIChildNode(ClientSideChild):
         target: str = "",
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> StatusResponse:
-        return self.status(
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    ) -> RecomputeStatusResponse:
+        return RecomputeStatusResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
