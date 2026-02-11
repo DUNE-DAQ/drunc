@@ -175,13 +175,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
         def find_by_uuid(pi_list, target_uuid: str):
+            """Identifies the process from a list by uuid"""
             for pi in pi_list.values:
                 if pi.uuid.uuid == target_uuid:
                     return pi
             return None
 
-        n_dead_keep = 0
-        graveyard = set()
+        n_dead_prev = 0
+        dead_processes_prev = set()
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -207,9 +208,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
             )
-            if n_dead_keep < n_dead:
-                n_dead_keep = n_dead
-                diff_set = dead_processes - graveyard
+            if n_dead_prev < n_dead:
+                n_dead_prev = n_dead
+                diff_set = dead_processes - dead_processes_prev
                 for diff in diff_set:
                     pi = find_by_uuid(results, diff)
                     err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
