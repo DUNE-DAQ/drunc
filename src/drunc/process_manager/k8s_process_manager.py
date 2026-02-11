@@ -42,6 +42,12 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 class K8sPodWatcherThread(threading.Thread):
     def __init__(self, pm) -> None:
+        """
+        Initialize the pod watcher thread.
+
+        Args:
+            pm: The K8sProcessManager instance to monitor and notify on pod events.
+        """
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
@@ -142,9 +148,16 @@ class K8sProcessManager(ProcessManager):
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
-        applications running in Pods. It includes special handling for a local connectivity
-        service, which involves:
-        1.  Using a NodePort service for the orchestrator for external access.
+        applications running in Pods. 
+
+        Args:
+            configuration: The process manager configuration object containing image,
+                settings (labels, service, pod_management, volumes, cleanup, checking),
+                and other runtime parameters.
+            **kwargs: Additional keyword arguments passed to the parent ProcessManager.
+
+        Raises:
+            ConfigException: If the Kubernetes configuration cannot be loaded.
         """
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
@@ -283,7 +296,18 @@ class K8sProcessManager(ProcessManager):
             )
 
     def notify_termination(self, proc_uuid, exit_code, reason, session) -> None:
-        """Callback for when a pod terminates."""
+        """
+        Callback for when a pod terminates.
+
+        Updates the final exit code, broadcasts a status update, and signals
+        the termination_complete_event when all pending deletions are confirmed.
+
+        Args:
+            proc_uuid: The UUID string of the terminated process.
+            exit_code: The integer exit code of the terminated pod.
+            reason: A string describing the termination reason (e.g. 'GracefulShutdown', 'PodDeleted').
+            session: The Kubernetes namespace (session) the pod belonged to.
+        """
         self.log.debug(
             f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}"
         )
@@ -306,7 +330,16 @@ class K8sProcessManager(ProcessManager):
                 self.termination_complete_event.set()
 
     def is_alive(self, podname, session) -> bool:
-        """Checks if a pod is currently in the 'Running' phase."""
+        """
+        Checks if a pod is currently in the 'Running' phase.
+
+        Args:
+            podname: The name of the pod to check.
+            session: The Kubernetes namespace (session) containing the pod.
+
+        Returns:
+            True if the pod exists and its phase is 'Running', False otherwise.
+        """
         try:
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
             return pod_status.status.phase == "Running"
@@ -317,7 +350,22 @@ class K8sProcessManager(ProcessManager):
             return False
 
     def _add_label(self, obj_name, obj_type, key, label, session=None) -> None:
-        """Adds a label to a Kubernetes object (Pod or Namespace)."""
+        """
+        Constructs a label in the format '{key}.{drunc_label}: {label}' and patches
+        the specified Kubernetes object.
+
+        Args:
+            obj_name: The name of the Kubernetes object to label.
+            obj_type: The type of object, either 'pod' or 'namespace'.
+            key: The label key prefix (combined with drunc_label).
+            label: The label value to apply.
+            session: The Kubernetes namespace (required when obj_type is 'pod',
+                ignored for 'namespace').
+
+        Raises:
+            DruncK8sNamespaceException: If obj_type is 'pod' and session is not provided.
+            DruncK8sException: If obj_type is not 'pod' or 'namespace'.
+        """
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
         if obj_type == "pod":
@@ -349,24 +397,62 @@ class K8sProcessManager(ProcessManager):
             raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
 
     def _add_creator_label(self, obj_name, obj_type) -> None:
-        """Adds a 'creator' label to a Kubernetes object."""
+        """
+        Sets the label 'creator.{drunc_label}' to the class name on the given object.
+
+        Args:
+            obj_name: The name of the Kubernetes object to label.
+            obj_type: The type of object, either 'pod' or 'namespace'.
+        """
         self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _get_creator_label_selector(self) -> str:
-        """Returns the label selector for objects created by this class."""
+        """
+        Returns the label selector for objects created by this class.
+
+        Returns:
+            A label selector string in the format 'creator.{drunc_label}={class_name}'.
+        """
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
     def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
-        """Check if a pod is the local connection server by inspecting its role label and name."""
+        """
+        Check if a pod is the local connection server by inspecting its role label and name.
+
+        Args:
+            tree_labels: Dictionary of labels assigned to the pod (including role labels).
+            podname: The name of the pod.
+
+        Returns:
+            True if the pod has the 'infrastructure-applications' role and
+            'local-connection-server' appears in the pod name, False otherwise.
+        """
         role_key = f"role.{self.drunc_label}"
         return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
 
     def _is_root_controller(self, tree_labels: dict[str, str]) -> bool:
-        """Check if a pod is the root controller by inspecting its role label."""
+        """
+        Check if a pod is the root controller by inspecting its role label.
+
+        Args:
+            tree_labels: Dictionary of labels assigned to the pod (including role labels).
+
+        Returns:
+            True if the pod has the 'root-controller' role label, False otherwise.
+        """
         return tree_labels.get(f"role.{self.drunc_label}") == "root-controller"
 
     def _is_host_cached(self, host):
-        """Check if host is cached and not expired."""
+        """
+        Check if host is cached and not expired.
+
+        Args:
+            host: The hostname string to look up in the cache.
+
+        Returns:
+            True if the host is cached and valid, False if cached and invalid,
+            or None if not in the cache or the cache entry has expired.
+        """
         with self._host_cache_lock:
             if host not in self._host_cache:
                 return None
@@ -377,7 +463,23 @@ class K8sProcessManager(ProcessManager):
             return is_valid
 
     def _verify_host_in_cluster(self, target_host):
-        """Verifies that the target host is available in the Kubernetes cluster."""
+        """
+        Verifies that the target host is available in the Kubernetes cluster.
+
+        Checks the host cache first, then queries the Kubernetes API to confirm
+        the node exists, is Ready, and is schedulable. Caches the result for
+        future lookups.
+
+        Args:
+            target_host: The hostname of the Kubernetes node to verify.
+
+        Returns:
+            True if the host is available, Ready, and schedulable.
+
+        Raises:
+            DruncK8sNodeException: If the host is not part of the cluster, not ready, or cordoned.
+            DruncK8sException: If there is a permission error or other API failure.
+        """
         cached = self._is_host_cached(target_host)
         if cached is not None:
             if cached:
@@ -424,7 +526,19 @@ class K8sProcessManager(ProcessManager):
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
 
     def _create_namespace_and_wait_for_active(self, session: str) -> None:
-        """Creates a namespace manifest, calls the API to create it, and waits for it to become Active."""
+        """
+        Constructs a V1Namespace with privileged pod-security enforcement, creates it
+        via the Kubernetes API, then polls until its phase becomes 'Active' (up to
+        restart_cleanup_time seconds). On success, applies the creator label and adds
+        the session to managed_sessions.
+
+        Args:
+            session: The name of the Kubernetes namespace to create.
+
+        Raises:
+            DruncK8sException: If there is an API error while reading the namespace status.
+            DruncK8sNamespaceException: If the namespace does not become Active within the timeout.
+        """
         self.log.info(f'Creating "{session}" namespace.')
         namespace_manifest = client.V1Namespace(
             api_version="v1",
@@ -458,7 +572,20 @@ class K8sProcessManager(ProcessManager):
         self.managed_sessions.add(session)
 
     def _prepare_namespace(self, session) -> None:
-        """Ensures a Kubernetes namespace exists, handling edge cases like terminating namespaces."""
+        """
+        If the namespace already exists and is in 'Terminating' state, waits for it to
+        be fully deleted before recreating it. If the namespace exists and is active,
+        raises an error. If it does not exist (404), creates it from scratch.
+
+        Args:
+            session: The name of the Kubernetes namespace to prepare.
+
+        Raises:
+            DruncK8sNamespaceException: If the namespace already exists and is active, or if
+                a terminating namespace does not complete deletion within the timeout.
+            DruncK8sException: If an unexpected API error occurs while checking or waiting
+                for the namespace.
+        """
         if session in self.sessions_pending_deletion:
             self.sessions_pending_deletion.remove(session)
 
@@ -521,6 +648,9 @@ class K8sProcessManager(ProcessManager):
             podname - the name of the pod (also used as the service name)
             session - the Kubernetes namespace (session) to create the service in
             pod_uid - the UID of the owning pod for the OwnerReference
+
+        Raises:
+            DruncK8sException - if the service creation fails with a non-409 error
         """
         service_manifest = client.V1Service(
             api_version="v1",
@@ -650,6 +780,19 @@ class K8sProcessManager(ProcessManager):
         """
         Prepares all pod volumes and container mounts, including static
         configs and the dynamic data_mount.
+
+        Assembles volumes from JSON configuration, auto-mounts the user's home
+        directory if configured, adds a log mount from process_logs_path, and
+        attaches the data_mount from the boot request's process restriction.
+
+        Args:
+            boot_request: The BootRequest containing process description (for log path)
+                and process restriction (for data_mount path).
+
+        Returns:
+            A tuple of (pod_volumes, container_volume_mounts) where pod_volumes is a
+            list of V1Volume objects and container_volume_mounts is a list of
+            V1VolumeMount objects.
         """
         pod_volumes = []
         container_volume_mounts = []
@@ -779,6 +922,17 @@ class K8sProcessManager(ProcessManager):
         """
         Determines the role of a pod based on its tree_id,
         and returns a dictionary of labels to be applied.
+
+        Role mapping: tree_id '0' -> root-controller, depth 0 -> infrastructure-applications,
+        depth 1 -> segment-controller, depth 2 -> application, otherwise 'unknown'.
+
+        Args:
+            tree_id: The dot-separated tree identifier string (e.g. '0', '1', '0.1', '0.1.2').
+            podname: The name of the pod (used for logging).
+
+        Returns:
+            A dictionary of labels containing 'tree-id.{drunc_label}' and
+            'role.{drunc_label}' keys with their corresponding values.
         """
         role = "unknown"
 
@@ -807,7 +961,22 @@ class K8sProcessManager(ProcessManager):
     def _build_container_env(
         self, boot_request: BootRequest, tree_labels: dict[str, str]
     ) -> list[client.V1EnvVar]:
-        """Builds the list of environment variables for the container."""
+        """
+        Builds the list of environment variables for the container.
+
+        Sets USER and HOME based on the boot request or host configuration,
+        defaults DOTDRUNC if not provided, and adds POD_IP via the Kubernetes
+        Downward API for root-controller pods.
+
+        Args:
+            boot_request: The BootRequest containing the process description with
+                environment variables and user metadata.
+            tree_labels: Dictionary of labels assigned to the pod (used to determine
+                if POD_IP should be injected).
+
+        Returns:
+            A list of V1EnvVar objects representing the container environment variables.
+        """
         env_vars = boot_request.process_description.env
         username_bq = boot_request.process_description.metadata.user
         host_username = None
@@ -901,6 +1070,9 @@ class K8sProcessManager(ProcessManager):
             if self._is_root_controller(tree_labels):
                 # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
                 # POD_IP will be injected via Kubernetes Downward API
+                # The other pods need to use the pod IP to connect to the root-controller
+                # This is because the root-controller uses NodePort and can not use host network
+                # The other pods use Headless and can use host network
                 modified_args = []
                 for arg in e_and_a.args:
                     modified_arg = re.sub(
@@ -1115,7 +1287,15 @@ class K8sProcessManager(ProcessManager):
         return "Headless"
 
     def _get_host_username(self) -> str:
-        """Resolves the username of the user running the process manager."""
+        """
+        Resolves the username of the user running the process manager.
+
+        Tries getpass.getuser() first, then falls back to pwd lookup by UID,
+        and finally returns the numeric UID as a string if both fail.
+
+        Returns:
+            The resolved username string, or the numeric UID as a string on failure.
+        """
         try:
             return getpass.getuser()
         except KeyError:
@@ -1188,8 +1368,6 @@ class K8sProcessManager(ProcessManager):
         self, session: str, podname: str, pod_manifest: client.V1Pod
     ) -> str:
         """
-        Execute the Kubernetes API call to create a pod.
-
         Attempts to create the pod via the API. If a 409 Conflict error occurs
         (indicating a previous pod with the same name has not yet been fully
         deleted), retries with polling until restart_cleanup_time is exceeded.
@@ -1245,8 +1423,6 @@ class K8sProcessManager(ProcessManager):
         tree_labels: dict[str, str],
     ) -> None:
         """
-        Create the appropriate Kubernetes Service for a pod.
-
         Routes to _create_nodeport_service or _create_headless_service based
         on the determined service_type. For NodePort services, handles both
         the local connection server case (using the pre-extracted lcs_port)
@@ -1301,8 +1477,6 @@ class K8sProcessManager(ProcessManager):
         self, podname, session, boot_request: BootRequest, tree_labels: dict[str, str]
     ) -> None:
         """
-        Construct and create a Kubernetes Pod and its associated Service.
-
         Orchestrates the full pod creation pipeline: extracts the LCS port if
         applicable, prepares volume mounts, builds the main container manifest,
         determines the service type and hostNetwork setting, constructs the node
@@ -1429,7 +1603,17 @@ class K8sProcessManager(ProcessManager):
     def _extract_port_from_cmd(self, boot_request) -> int | None:
         """
         Parses the boot request's command arguments to find a port.
+
         It must cover Gunicorn (hardcoded and env var) and drunc-controller.
+        Checks for gunicorn --bind syntax (both hardcoded ports and environment
+        variable references), drunc-controller --port syntax, and drunc-controller
+        -c grpc://host:port syntax.
+
+        Args:
+            boot_request: The BootRequest containing executable_and_arguments to parse.
+
+        Returns:
+            The extracted port as an integer, or None if no valid port is found.
         """
         # Check all command parts for a port argument
         for e_and_a in boot_request.process_description.executable_and_arguments:
@@ -1505,8 +1689,19 @@ class K8sProcessManager(ProcessManager):
         """
         Finds process UUIDs matching a query.
 
-        If order_by is "leaf_first", it sorts the UUIDs so that child processes
-        (which have a longer tree_id) come before their parents.
+        Searches all stored boot requests for processes matching the query criteria
+        (UUIDs, names, session, user). An empty query matches all processes. If
+        order_by is "leaf_first", sorts the UUIDs so that child processes (which
+        have a longer tree_id) come before their parents.
+
+        Args:
+            query: A ProcessQuery protobuf with optional uuids, names, session, and user
+                filters.
+            order_by: Optional sorting mode. Use 'leaf_first' to sort by tree depth
+                (deepest first). Defaults to None (unsorted).
+
+        Returns:
+            A list of UUID strings matching the query, optionally sorted by tree depth.
         """
         initial_match = set()
         for proc_uuid, boot_req in self.boot_request.items():
@@ -1540,7 +1735,19 @@ class K8sProcessManager(ProcessManager):
         return sorted_uuids
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
-        """Handles the 'logs' command."""
+        """
+        Handles the 'logs' command.
+
+        Resolves the target process from the query, retrieves the pod's log tail
+        from the Kubernetes API, and returns the lines.
+
+        Args:
+            log_request: A LogRequest protobuf containing the query to identify the
+                process and how_far (number of tail lines to retrieve).
+
+        Returns:
+            A LogLines protobuf containing the process UUID and its log lines.
+        """
         uuids = self._get_process_uid(log_request.query)
         uuid = self._ensure_one_process(uuids, in_boot_request=True)
         podname = self.boot_request[uuid].process_description.metadata.name
@@ -1557,7 +1764,17 @@ class K8sProcessManager(ProcessManager):
             )
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
-        """Handles the 'boot' command from the gRPC interface."""
+        """
+        Handles the 'boot' command from the gRPC interface.
+
+        Generates a new UUID and delegates to __boot to create the pod.
+
+        Args:
+            boot_request: A BootRequest protobuf defining the process to start.
+
+        Returns:
+            A ProcessInstanceList containing a single ProcessInstance for the booted process.
+        """
         self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
         process = self.__boot(boot_request, this_uuid)
@@ -1566,7 +1783,17 @@ class K8sProcessManager(ProcessManager):
     def _run_pre_boot_checks(
         self, session: str, podname: str, boot_request: BootRequest
     ) -> None:
-        """Performs initial validation."""
+        """
+        Validates that the session name conforms to Kubernetes RFC1123 label rules.
+
+        Args:
+            session: The Kubernetes namespace (session) name to validate.
+            podname: The name of the pod to boot (reserved for future checks).
+            boot_request: The BootRequest protobuf (reserved for future checks).
+
+        Raises:
+            DruncK8sNamespaceException: If the session name is not a valid RFC1123 label.
+        """
         if not validate_k8s_session_name(session):
             raise DruncK8sNamespaceException(
                 f'Invalid session/namespace name "{session}". Must match RFC1123 label: '
@@ -1577,10 +1804,20 @@ class K8sProcessManager(ProcessManager):
         self, podname: str, session: str, timeout: float
     ) -> str:
         """
-        [HELPER] Blocking wait for a pod to be 'Running' and 'Ready'
-        in the K8s API.
-        Returns the node_name on success.
-        Raises DruncK8sException on timeout.
+        Polls the pod status at pod_status_check_sleep intervals until the pod's
+        phase is 'Running' and its 'Ready' condition is 'True', or the timeout
+        is exceeded.
+
+        Args:
+            podname: The name of the pod to wait for.
+            session: The Kubernetes namespace (session) containing the pod.
+            timeout: Maximum number of seconds to wait before raising an exception.
+
+        Returns:
+            The node_name string where the pod is running on success.
+
+        Raises:
+            DruncK8sException: If the pod does not become API Ready within the timeout.
         """
         self.log.info(
             f"Stage 1: Waiting for '{podname}' pod to be Running and Ready..."
@@ -1624,8 +1861,15 @@ class K8sProcessManager(ProcessManager):
 
     def _wait_for_nodeport_http_ready(self, url: str, timeout: float) -> None:
         """
-        [HELPER] Blocking wait for a NodePort URL to be reachable via HTTP.
-        Raises DruncK8sException on timeout.
+        Polls the URL at pod_status_check_sleep intervals using urllib until a
+        successful HTTP response is received, or the timeout is exceeded.
+
+        Args:
+            url: The full HTTP URL to poll (e.g. 'http://node-01:31000').
+            timeout: Maximum number of seconds to wait before raising an exception.
+
+        Raises:
+            DruncK8sException: If the URL does not become reachable within the timeout.
         """
         self.log.info(f"Stage 2: Waiting for NodePort {url} to be reachable...")
         start_time = time()
@@ -1652,8 +1896,17 @@ class K8sProcessManager(ProcessManager):
         self, node_name: str, port: int, timeout: float
     ) -> None:
         """
-        [HELPER] Blocking wait for a NodePort to be reachable via TCP socket.
-        Raises DruncK8sException on timeout.
+        Polls the node_name:port combination at pod_status_check_sleep intervals
+        using a TCP socket connect until a connection succeeds, or the timeout
+        is exceeded.
+
+        Args:
+            node_name: The hostname of the Kubernetes node to connect to.
+            port: The NodePort number to test connectivity on.
+            timeout: Maximum number of seconds to wait before raising an exception.
+
+        Raises:
+            DruncK8sException: If the NodePort does not become reachable within the timeout.
         """
         self.log.info(
             f"Stage 2: Waiting for NodePort {node_name}:{port} to be reachable..."
@@ -1827,7 +2080,20 @@ class K8sProcessManager(ProcessManager):
         )
 
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        """Handles the 'ps' command."""
+        """
+        Handles the 'ps' command.
+
+        Queries matching process UUIDs, fetches their current pod status from
+        the Kubernetes API, and builds a list of ProcessInstance entries with
+        the live status code, return code, and hostname.
+
+        Args:
+            query: A ProcessQuery protobuf specifying which processes to list.
+
+        Returns:
+            A ProcessInstanceList containing a ProcessInstance for each matched process,
+            with status set to RUNNING or DEAD and optional return_code.
+        """
         queried_uuids = self._get_process_uid(query)
         if not queried_uuids:
             return ProcessInstanceList(values=[])
@@ -1890,7 +2156,23 @@ class K8sProcessManager(ProcessManager):
         return ProcessInstanceList(values=ret)
 
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        """Handles the 'restart' command."""
+        """
+        Handles the 'restart' command.
+
+        Kills each matched process and re-boots it using the original boot request.
+        Handles race conditions where a pod may be in a terminal state but not yet
+        fully deleted. Failed restarts are included in the result with DEAD status.
+
+        Args:
+            query: A ProcessQuery specifying which processes to restart.
+
+        Returns:
+            A ProcessInstanceList containing a ProcessInstance for each process,
+            with RUNNING status on success or DEAD status on failure.
+
+        Raises:
+            DruncK8sPodException: If no processes match the query.
+        """
         uuids = self._get_process_uid(query)
         if not uuids:
             raise DruncK8sPodException("No processes found matching the query.")
@@ -1963,7 +2245,21 @@ class K8sProcessManager(ProcessManager):
         return ProcessInstanceList(values=ret)
 
     def _kill_pod(self, podname, session, grace_period_seconds=None) -> None:
-        """Deletes a specific pod from a namespace."""
+        """
+        Deletes a specific pod from a namespace.
+
+        Calls the Kubernetes API to delete the named pod. Silently ignores 404
+        errors (pod already deleted).
+
+        Args:
+            podname: The name of the pod to delete.
+            session: The Kubernetes namespace (session) containing the pod.
+            grace_period_seconds: Optional override for the termination grace period
+                in seconds. None uses the pod's configured default.
+
+        Raises:
+            DruncK8sException: If a non-404 API error occurs during deletion.
+        """
         try:
             self._core_v1_api.delete_namespaced_pod(
                 name=podname,
@@ -2121,7 +2417,16 @@ class K8sProcessManager(ProcessManager):
         return ProcessInstanceList(values=final_ret)
 
     def _terminate_impl(self) -> ProcessInstanceList:
-        """Handles the 'terminate' command, killing all known processes."""
+        """
+        Handles the 'terminate' command, killing all known processes.
+
+        Issues a kill command matching all process names ('.*') to shut down
+        every tracked process. If no processes are tracked, returns an empty list.
+
+        Returns:
+            A ProcessInstanceList containing DEAD-status entries for all terminated
+            processes, or an empty list if there were no processes to terminate.
+        """
         self.log.info("Terminating all known K8s processes.")
         if not self.boot_request:
             self.log.info("No processes to terminate.")
@@ -2130,7 +2435,18 @@ class K8sProcessManager(ProcessManager):
         return self._kill_impl(all_processes_query)
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
-        """Handles the 'flush' command (no-op for Kubernetes)."""
+        """
+        Handles the 'flush' command (no-op for Kubernetes).
+
+        Cleanup of dead processes is handled automatically in real-time by the
+        pod watcher thread, so this command performs no action.
+
+        Args:
+            query: A ProcessQuery specifying which processes to flush (ignored).
+
+        Returns:
+            An empty ProcessInstanceList.
+        """
         self.log.info(
             "The 'flush' command is not needed for the K8sProcessManager. "
             "Cleanup of dead processes is handled automatically in real-time."
