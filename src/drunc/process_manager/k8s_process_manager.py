@@ -945,12 +945,13 @@ class K8sProcessManager(ProcessManager):
         container_env = self._build_container_env(boot_request, tree_labels)
 
         # ADDITION: Security Context modification for IPC_LOCK
-        sec_context = client.V1SecurityContext(
+        security_context = client.V1SecurityContext(
             run_as_user=os.getuid(), 
             run_as_group=os.getgid()
         )
         if "runp" in podname.lower():
-            sec_context.capabilities = client.V1Capabilities(add=["IPC_LOCK"])
+            security_context.privileged = True 
+            security_context.capabilities = client.V1Capabilities(add=["IPC_LOCK"])
 
         main_container = client.V1Container(
             name=podname,
@@ -961,9 +962,9 @@ class K8sProcessManager(ProcessManager):
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
-            resources=resource_reqs, # New field
+            resources=resource_reqs,
             working_dir=boot_request.process_description.process_execution_directory,
-            security_context=sec_context, # Updated field
+            security_context=security_context,
         )
         return main_container
 
