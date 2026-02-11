@@ -595,129 +595,106 @@ class K8sProcessManager(ProcessManager):
     ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
         """
         Prepares all pod volumes and container mounts, including static
-        configs and the dynamic data_mount.
+        configs, the dynamic data_mount, and specialized performance mounts.
         """
         pod_volumes = []
         container_volume_mounts = []
+        pod_name = boot_request.process_description.metadata.name
 
-        # Volumes from json configuration
-        for vc in self.volume_configs:
+        # --- NEW ADDITION: Performance Mounts for 'runp' apps ---
+        if "runp" in pod_name.lower():
+            # Native HugePages (The safe, managed way)
             pod_volumes.append(
                 client.V1Volume(
-                    name=vc["name"],
-                    host_path=client.V1HostPathVolumeSource(
-                        path=vc["host_path"], type="Directory"
-                    ),
+                    name="hugepages",
+                    empty_dir=client.V1EmptyDirVolumeSource(medium="HugePages")
                 )
             )
             container_volume_mounts.append(
-                client.V1VolumeMount(
-                    name=vc["name"],
-                    mount_path=vc["mount_path"],
-                    read_only=vc.get("read_only", True),
-                )
+                client.V1VolumeMount(name="hugepages", mount_path="/dev/hugepages")
             )
 
-        # Dynamic HOME mount
-        if self.home_path_base:
-            username = self._get_host_username()
-            target_home_path = f"{self.home_path_base}/{username}"
-
-            # Check if this path is already covered by the JSON volumes above
-            is_covered = False
-            for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
-                    is_covered = True
-                    break
-
-            if not is_covered:
-                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
-                vol_name = f"home-{username}"
-                
+            # VFIO (Check configuration for host_path to maintain external config dependency)
+            vfio_cfg = next((v for v in self.volume_configs if v["name"] == "vfio"), None)
+            if vfio_cfg:
                 pod_volumes.append(
                     client.V1Volume(
-                        name=vol_name,
+                        name="vfio",
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=vfio_cfg["host_path"], type="Directory"
                         ),
                     )
                 )
                 container_volume_mounts.append(
-                    client.V1VolumeMount(
-                        name=vol_name,
-                        mount_path=target_home_path,
-                        read_only=False,
-                    )
+                    client.V1VolumeMount(name="vfio", mount_path=vfio_cfg["mount_path"], read_only=False)
                 )
 
-        # Add log_mount from process_logs_path
-        log_dir = None
-        log_file_path = boot_request.process_description.process_logs_path
-        if log_file_path:
-            log_dir = os.path.dirname(log_file_path)
-            self.log.info(f"Adding 'log-mount' for directory: '{log_dir}'")
-
+        # --- ORIGINAL: Volumes from json configuration ---
+        for vc in self.volume_configs:
+            if any(v.name == vc["name"] for v in pod_volumes):
+                continue
             pod_volumes.append(
                 client.V1Volume(
-                    name="log-mount",
-                    host_path=client.V1HostPathVolumeSource(
-                        path=log_dir,
-                        type="DirectoryOrCreate",
-                    ),
+                    name=vc["name"],
+                    host_path=client.V1HostPathVolumeSource(path=vc["host_path"], type="Directory"),
                 )
             )
             container_volume_mounts.append(
                 client.V1VolumeMount(
+                    name=vc["name"], mount_path=vc["mount_path"], read_only=vc.get("read_only", True)
+                )
+            )
+
+        # --- ORIGINAL: Dynamic HOME mount ---
+        if self.home_path_base:
+            username = self._get_host_username()
+            target_home_path = f"{self.home_path_base}/{username}"
+            is_covered = any(vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/") 
+                             for vm in container_volume_mounts)
+            if not is_covered:
+                vol_name = f"home-{username}"
+                pod_volumes.append(
+                    client.V1Volume(
+                        name=vol_name,
+                        host_path=client.V1HostPathVolumeSource(path=target_home_path, type="Directory"),
+                    )
+                )
+                container_volume_mounts.append(
+                    client.V1VolumeMount(name=vol_name, mount_path=target_home_path, read_only=False)
+                )
+
+        # --- ORIGINAL: Log mount ---
+        log_dir = None
+        log_file_path = boot_request.process_description.process_logs_path
+        if log_file_path:
+            log_dir = os.path.dirname(log_file_path)
+            pod_volumes.append(
+                client.V1Volume(
                     name="log-mount",
-                    mount_path=log_dir,
-                    read_only=False,
+                    host_path=client.V1HostPathVolumeSource(path=log_dir, type="DirectoryOrCreate"),
                 )
             )
+            container_volume_mounts.append(
+                client.V1VolumeMount(name="log-mount", mount_path=log_dir, read_only=False)
+            )
 
-        # Add dynamic data_mount if present in the boot request
-        data_mount_path = None
+        # --- ORIGINAL: Dynamic data_mount ---
         if boot_request.process_restriction.data_mount:
-            self.log.info(
-                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
+            data_mount_path = (
+                boot_request.process_description.process_execution_directory 
+                if boot_request.process_restriction.data_mount == "." 
+                else boot_request.process_restriction.data_mount
             )
-            if boot_request.process_restriction.data_mount == ".":
-                data_mount_path = (
-                    boot_request.process_description.process_execution_directory
+            if data_mount_path and data_mount_path != log_dir:
+                pod_volumes.append(
+                    client.V1Volume(
+                        name="data-mount",
+                        host_path=client.V1HostPathVolumeSource(path=data_mount_path, type="Directory"),
+                    )
                 )
-                self.log.info(
-                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                container_volume_mounts.append(
+                    client.V1VolumeMount(name="data-mount", mount_path=data_mount_path, read_only=False)
                 )
-            else:
-                data_mount_path = boot_request.process_restriction.data_mount
-                self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
-
-            if data_mount_path:
-                if data_mount_path == log_dir:
-                    self.log.info(
-                        f"Skipping 'data-mount' as its path '{data_mount_path}' is already covered by 'log-mount'."
-                    )
-                else:
-                    self.log.info(
-                        f"Adding 'data-mount' for directory: '{data_mount_path}'"
-                    )
-                    pod_volumes.append(
-                        client.V1Volume(
-                            name="data-mount",
-                            host_path=client.V1HostPathVolumeSource(
-                                path=data_mount_path,
-                                type="Directory",
-                            ),
-                        )
-                    )
-                    container_volume_mounts.append(
-                        client.V1VolumeMount(
-                            name="data-mount",
-                            mount_path=data_mount_path,
-                            read_only=False,
-                        )
-                    )
 
         return pod_volumes, container_volume_mounts
 
@@ -807,7 +784,7 @@ class K8sProcessManager(ProcessManager):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        # This logic correctly prepends 'exec' to the C++ application command.
+        # --- RESTORED EXACT ORIGINAL COMMAND BUILDING ---
         command_parts = []
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
@@ -822,8 +799,7 @@ class K8sProcessManager(ProcessManager):
                 prefix = "exec "
 
             if "root-controller" in tree_labels["role." + self.drunc_label]:
-                # Replace hostname with $POD_IP environment variable in protocol://hostname:port addresses
-                # POD_IP will be injected via Kubernetes Downward API
+                # Preserve the POD_IP regex injection for the root-controller
                 modified_args = []
                 for arg in e_and_a.args:
                     modified_arg = re.sub(
@@ -842,6 +818,7 @@ class K8sProcessManager(ProcessManager):
                 )
         main_command_chain = " && ".join(command_parts)
 
+        # --- RESTORED EXACT ORIGINAL PORTS ---
         container_ports = []
         if (
             self.connection_server_name in tree_labels["role." + self.drunc_label]
@@ -851,7 +828,7 @@ class K8sProcessManager(ProcessManager):
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
 
-        # Only add preStop hook for C++ applications (non-controllers)
+        # --- RESTORED EXACT ORIGINAL LIFECYCLE ---
         lifecycle_hook = None
         if (
             "controller" not in tree_labels["role." + self.drunc_label]
@@ -874,7 +851,7 @@ class K8sProcessManager(ProcessManager):
                 f"'{podname}' identified as a Python app, no preStop hook needed."
             )
 
-        # Redirect logs
+        # --- RESTORED EXACT ORIGINAL LOG REDIRECTION ---
         log_file_path = boot_request.process_description.process_logs_path
         final_command_args: str
 
@@ -887,7 +864,7 @@ class K8sProcessManager(ProcessManager):
             log_redirect_cmd = ""
 
         if self.connection_server_name in tree_labels["role." + self.drunc_label]:
-            # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
+            # LCS (gunicorn) needs the shell trap
             final_command_args = (
                 f"{log_redirect_cmd} "
                 f"trap 'kill -KILL $child; wait $child; exit 0' TERM QUIT; "
@@ -898,8 +875,25 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        # Build container environment variables
+        # --- ADDITION FOR RUNP APPS: RESOURCES ---
+        resource_reqs = None
+        if "runp" in podname.lower():
+            # Mandatory for HugePages to work
+            resource_reqs = client.V1ResourceRequirements(
+                limits={"hugepages-2Mi": "1024Mi", "memory": "2Gi"},
+                requests={"hugepages-2Mi": "1024Mi", "memory": "2Gi"}
+            )
+
+        # --- BUILD CONTAINER MANIFEST ---
         container_env = self._build_container_env(boot_request, tree_labels)
+
+        # ADDITION: Security Context modification for IPC_LOCK
+        sec_context = client.V1SecurityContext(
+            run_as_user=os.getuid(), 
+            run_as_group=os.getgid()
+        )
+        if "runp" in podname.lower():
+            sec_context.capabilities = client.V1Capabilities(add=["IPC_LOCK"])
 
         main_container = client.V1Container(
             name=podname,
@@ -910,10 +904,9 @@ class K8sProcessManager(ProcessManager):
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
+            resources=resource_reqs, # New field
             working_dir=boot_request.process_description.process_execution_directory,
-            security_context=client.V1SecurityContext(
-                run_as_user=os.getuid(), run_as_group=os.getgid()
-            ),
+            security_context=sec_context, # Updated field
         )
         return main_container
 
