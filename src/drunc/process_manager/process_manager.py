@@ -3,7 +3,7 @@ import re
 import threading
 import time
 
-from daqpytools.logging.handlers import LogHandlerConf
+from daqpytools.logging.handlers import HandlerType, LogHandlerConf
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -210,10 +210,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 diff_set = dead_processes - graveyard
                 for diff in diff_set:
                     pi = find_by_uuid(results, diff)
-                    self.log.critical(
-                        f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}",
-                        extra=self.handlerconf.ERS,
-                    )
+                    err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
+                    # easiest way to send one to Rich and ERS
+                    self.log.critical(err_msg, extra={"handlers": [HandlerType.Rich]})
+                    self.log.critical(err_msg, extra=self.handlerconf.ERS)
+
             time.sleep(interval_s)
 
     """
