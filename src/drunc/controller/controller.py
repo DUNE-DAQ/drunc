@@ -221,6 +221,8 @@ class Controller(ControllerServicer):
     children_nodes: List[ChildNode] = []
 
     def __init__(self, configuration, name: str, session: str, token: Token):
+        """C'tor. Note that controllers require the ERS variables defined
+        in OKS to exist as env variables!"""
         super().__init__()
 
         self._previous_error_state = False

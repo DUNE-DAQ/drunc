@@ -55,6 +55,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         session: str = None,
         **kwargs,
     ):
+        """C'tor. Note that this takes the ERS env variables from the
+        json files defined in data/process_manager!"""
         super().__init__()
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
