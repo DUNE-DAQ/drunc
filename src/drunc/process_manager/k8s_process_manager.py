@@ -930,16 +930,15 @@ class K8sProcessManager(ProcessManager):
         if "runp" in podname.lower():
             resource_reqs = client.V1ResourceRequirements(
                 limits={
-                    "hugepages-2Mi": "64Gi",
-                    "memory": "128Gi",           
+                    "hugepages-2Mi": "16Gi",
+                    "memory": "128Gi",
                     "cpu": "56"                 
                 },
                 requests={
-                    "hugepages-2Mi": "64Gi",
+                    "hugepages-2Mi": "16Gi",
                     "memory": "50Gi",
                     "cpu": "8"
                 }
-            )
 
         # --- BUILD CONTAINER MANIFEST ---
         container_env = self._build_container_env(boot_request, tree_labels)
