@@ -600,6 +600,26 @@ class K8sProcessManager(ProcessManager):
         pod_volumes = []
         container_volume_mounts = []
 
+        # Tmp to get readout apps working
+        if "runp02srv003" in boot_request.executable_and_arguments.values():
+            vcs = [v for v in self.volume_configs if v["name"] in ["hugepages", "vfio"]]
+            for vc in vcs:
+                pod_volumes.append(
+                    client.V1Volume(
+                        name=vc["name"],
+                        host_path=client.V1HostPathVolumeSource(
+                            path=vc["host_path"], type="Directory"
+                        ),
+                    )
+                )
+                container_volume_mounts.append(
+                    client.V1VolumeMount(
+                        name=vc["name"],
+                        mount_path=vc["mount_path"],
+                        read_only=vc.get("read_only", True),
+                    )
+                )
+
         # Volumes from json configuration
         for vc in self.volume_configs:
             pod_volumes.append(
@@ -626,21 +646,24 @@ class K8sProcessManager(ProcessManager):
             # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                if vm.mount_path == target_home_path or target_home_path.startswith(
+                    vm.mount_path + "/"
+                ):
+                    self.log.debug(
+                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
+                    )
                     is_covered = True
                     break
 
             if not is_covered:
                 self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-                
+
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=target_home_path, type="Directory"
                         ),
                     )
                 )
@@ -1001,6 +1024,7 @@ class K8sProcessManager(ProcessManager):
         except KeyError:
             try:
                 import pwd
+
                 return pwd.getpwuid(os.getuid()).pw_name
             except KeyError:
                 return str(os.getuid())

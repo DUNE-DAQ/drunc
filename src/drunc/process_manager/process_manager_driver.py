@@ -306,7 +306,7 @@ class ProcessManagerDriver:
             ),
             process_restriction=process_restriction,
         )
-        self.log.debug(f"{breq=}\n\n")
+        self.log.info(f"{breq=}\n\n")
         return breq
 
     def _convert_oks_to_boot_request(
