@@ -11,6 +11,8 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
+from daqconf.set_connectivity_service_port import set_connectivity_service_port
+from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -178,7 +180,8 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    # Check that the address of the root controller is available, otherwise exit
+    # Check that the address of the root controller is available, otherwise change it to
+    # one that is available
     root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
     root_controller_port: int = [
         service
@@ -186,13 +189,10 @@ def unified_shell(
         if "_control" in service.id
     ][0].port
     if not is_port_available(root_controller_host, root_controller_port):
-        unified_shell_log.critical(
-            f"[bold red]Current root controller address ({root_controller_host}:"
-            f"{root_controller_port}) is already in use.[/bold red] Use script [bold "
-            "green]daqconf_set_rc_controller_port[/bold green] on your configuration "
-            "file to change the root controller port first!"
+        unified_shell_log.warning(
+            "The current root controller port is in use, changin the port number to a different port"
         )
-        sys.exit(1)
+        set_rc_controller_port(configuration_file, configuration_id)
 
     # If a local connectivity service is being used, perform the same checks
     # Temporarily removed to allow integration tests to pass without restructuring
@@ -205,14 +205,10 @@ def unified_shell(
     if connectivity_service_is_local:
         connectivity_service_port = session_dal.connectivity_service.service.port
         if not is_port_available(connectivity_service_host, connectivity_service_port):
-            unified_shell_log.critical(
-                f"[bold red]Current local connectivity service address "
-                f"({connectivity_service_host}:{connectivity_service_port}) is already "
-                "in use.[/bold red] Use script [bold green]daqconf_set_connectivity_"
-                "service_port[/bold green] on your configuration file to change the "
-                "connectivity service port first!"
+            unified_shell_log.warning(
+                "The current connectivity port is in use, changin the port number to a different port"
             )
-            sys.exit(1)
+            set_connectivity_service_port(configuration_file, configuration_id)
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
