@@ -1077,6 +1077,13 @@ class K8sProcessManager(ProcessManager):
         if extra_labels:
             pod_labels.update(extra_labels)
 
+        # hugepages permissions
+        pod_security_context = client.V1PodSecurityContext(
+            run_as_user=os.getuid(),
+            run_as_group=os.getgid(),
+            fs_group=os.getgid() 
+        )
+
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
@@ -1093,6 +1100,7 @@ class K8sProcessManager(ProcessManager):
                 containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=pod_volumes,
+                security_context=pod_security_context,
             ),
         )
 
