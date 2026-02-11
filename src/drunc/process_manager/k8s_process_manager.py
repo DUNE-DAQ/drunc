@@ -595,15 +595,18 @@ class K8sProcessManager(ProcessManager):
     ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
         """
         Prepares all pod volumes and container mounts, including static
-        configs, the dynamic data_mount, and specialized performance mounts.
+        configs and the dynamic data_mount.
         """
         pod_volumes = []
         container_volume_mounts = []
+        
+        # ADDITION: Determine if this is a performance app
         pod_name = boot_request.process_description.metadata.name
+        is_runp = "runp" in pod_name.lower()
 
-        # --- NEW ADDITION: Performance Mounts for 'runp' apps ---
-        if "runp" in pod_name.lower():
-            # Native HugePages (The safe, managed way)
+        # --- ADDITION: Native HugePages for runp apps only ---
+        if is_runp:
+            self.log.info(f"Adding native HugePages for performance app '{pod_name}'")
             pod_volumes.append(
                 client.V1Volume(
                     name="hugepages",
@@ -614,87 +617,134 @@ class K8sProcessManager(ProcessManager):
                 client.V1VolumeMount(name="hugepages", mount_path="/dev/hugepages")
             )
 
-            # VFIO (Check configuration for host_path to maintain external config dependency)
-            vfio_cfg = next((v for v in self.volume_configs if v["name"] == "vfio"), None)
-            if vfio_cfg:
-                pod_volumes.append(
-                    client.V1Volume(
-                        name="vfio",
-                        host_path=client.V1HostPathVolumeSource(
-                            path=vfio_cfg["host_path"], type="Directory"
-                        ),
-                    )
-                )
-                container_volume_mounts.append(
-                    client.V1VolumeMount(name="vfio", mount_path=vfio_cfg["mount_path"], read_only=False)
-                )
-
         # --- ORIGINAL: Volumes from json configuration ---
+        # Modified ONLY to guard against leaking hugepages/vfio to standard apps
         for vc in self.volume_configs:
+            
+            # GUARD: Skip hugepages/vfio if the pod name doesn't contain 'runp'
+            if vc["name"] in ["hugepages", "vfio"] and not is_runp:
+                continue
+
+            # AVOID DUPLICATION: Don't add if we already added native hugepages above
             if any(v.name == vc["name"] for v in pod_volumes):
                 continue
+
             pod_volumes.append(
                 client.V1Volume(
                     name=vc["name"],
-                    host_path=client.V1HostPathVolumeSource(path=vc["host_path"], type="Directory"),
+                    host_path=client.V1HostPathVolumeSource(
+                        path=vc["host_path"], type="Directory"
+                    ),
                 )
             )
             container_volume_mounts.append(
                 client.V1VolumeMount(
-                    name=vc["name"], mount_path=vc["mount_path"], read_only=vc.get("read_only", True)
+                    name=vc["name"],
+                    mount_path=vc["mount_path"],
+                    read_only=vc.get("read_only", True),
                 )
             )
 
-        # --- ORIGINAL: Dynamic HOME mount ---
+        # --- ORIGINAL: Dynamic HOME mount (Full Logic) ---
         if self.home_path_base:
             username = self._get_host_username()
             target_home_path = f"{self.home_path_base}/{username}"
-            is_covered = any(vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/") 
-                             for vm in container_volume_mounts)
+
+            # Check if this path is already covered by the JSON volumes above
+            is_covered = False
+            for vm in container_volume_mounts:
+                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
+                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                    is_covered = True
+                    break
+
             if not is_covered:
+                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
+                
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
-                        host_path=client.V1HostPathVolumeSource(path=target_home_path, type="Directory"),
+                        host_path=client.V1HostPathVolumeSource(
+                            path=target_home_path, 
+                            type="Directory"
+                        ),
                     )
                 )
                 container_volume_mounts.append(
-                    client.V1VolumeMount(name=vol_name, mount_path=target_home_path, read_only=False)
+                    client.V1VolumeMount(
+                        name=vol_name,
+                        mount_path=target_home_path,
+                        read_only=False,
+                    )
                 )
 
-        # --- ORIGINAL: Log mount ---
+        # --- ORIGINAL: Add log_mount from process_logs_path (Full Logic) ---
         log_dir = None
         log_file_path = boot_request.process_description.process_logs_path
         if log_file_path:
             log_dir = os.path.dirname(log_file_path)
+            self.log.info(f"Adding 'log-mount' for directory: '{log_dir}'")
+
             pod_volumes.append(
                 client.V1Volume(
                     name="log-mount",
-                    host_path=client.V1HostPathVolumeSource(path=log_dir, type="DirectoryOrCreate"),
+                    host_path=client.V1HostPathVolumeSource(
+                        path=log_dir,
+                        type="DirectoryOrCreate",
+                    ),
                 )
             )
             container_volume_mounts.append(
-                client.V1VolumeMount(name="log-mount", mount_path=log_dir, read_only=False)
+                client.V1VolumeMount(
+                    name="log-mount",
+                    mount_path=log_dir,
+                    read_only=False,
+                )
             )
 
-        # --- ORIGINAL: Dynamic data_mount ---
+        # --- ORIGINAL: Add dynamic data_mount (Full Logic) ---
+        data_mount_path = None
         if boot_request.process_restriction.data_mount:
-            data_mount_path = (
-                boot_request.process_description.process_execution_directory 
-                if boot_request.process_restriction.data_mount == "." 
-                else boot_request.process_restriction.data_mount
+            self.log.info(
+                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
             )
-            if data_mount_path and data_mount_path != log_dir:
-                pod_volumes.append(
-                    client.V1Volume(
-                        name="data-mount",
-                        host_path=client.V1HostPathVolumeSource(path=data_mount_path, type="Directory"),
+            if boot_request.process_restriction.data_mount == ".":
+                data_mount_path = (
+                    boot_request.process_description.process_execution_directory
+                )
+                self.log.info(
+                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                )
+            else:
+                data_mount_path = boot_request.process_restriction.data_mount
+                self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
+
+            if data_mount_path:
+                if data_mount_path == log_dir:
+                    self.log.info(
+                        f"Skipping 'data-mount' as its path '{data_mount_path}' is already covered by 'log-mount'."
                     )
-                )
-                container_volume_mounts.append(
-                    client.V1VolumeMount(name="data-mount", mount_path=data_mount_path, read_only=False)
-                )
+                else:
+                    self.log.info(
+                        f"Adding 'data-mount' for directory: '{data_mount_path}'"
+                    )
+                    pod_volumes.append(
+                        client.V1Volume(
+                            name="data-mount",
+                            host_path=client.V1HostPathVolumeSource(
+                                path=data_mount_path,
+                                type="Directory",
+                            ),
+                        )
+                    )
+                    container_volume_mounts.append(
+                        client.V1VolumeMount(
+                            name="data-mount",
+                            mount_path=data_mount_path,
+                            read_only=False,
+                        )
+                    )
 
         return pod_volumes, container_volume_mounts
 
@@ -878,10 +928,17 @@ class K8sProcessManager(ProcessManager):
         # --- ADDITION FOR RUNP APPS: RESOURCES ---
         resource_reqs = None
         if "runp" in podname.lower():
-            # Mandatory for HugePages to work
             resource_reqs = client.V1ResourceRequirements(
-                limits={"hugepages-2Mi": "1024Mi", "memory": "2Gi"},
-                requests={"hugepages-2Mi": "1024Mi", "memory": "2Gi"}
+                limits={
+                    "hugepages-2Mi": "16Gi",
+                    "memory": "8Gi",           
+                    "cpu": "56"
+                },
+                requests={
+                    "hugepages-2Mi": "16Gi",
+                    "memory": "4Gi",
+                    "cpu": "8"
+                }
             )
 
         # --- BUILD CONTAINER MANIFEST ---
