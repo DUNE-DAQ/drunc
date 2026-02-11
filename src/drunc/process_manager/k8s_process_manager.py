@@ -809,13 +809,17 @@ class K8sProcessManager(ProcessManager):
     ) -> list[client.V1EnvVar]:
         """Builds the list of environment variables for the container."""
         env_vars = boot_request.process_description.env
-
+        username_bq = boot_request.process_description.metadata.user
         host_username = None
-        if "USER" not in env_vars or self.home_path_base:
+
+        if username_bq is not None:
+            env_vars["USER"] = username_bq
+            self.log.debug(f"Setting USER environment variable from boot request: {username_bq}")
+        elif self.home_path_base:
             host_username = self._get_host_username()
 
         # Only set USER if not already present in environment
-        if "USER" not in env_vars and host_username:
+        if username_bq is None and host_username:
             env_vars["USER"] = host_username
             self.log.debug(f"Setting USER environment variable to: {host_username}")
 
