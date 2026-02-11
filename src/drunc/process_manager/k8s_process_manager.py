@@ -618,11 +618,11 @@ class K8sProcessManager(ProcessManager):
             )
 
         # --- ORIGINAL: Volumes from json configuration ---
-        # Modified ONLY to guard against leaking hugepages/vfio to standard apps
+        # Modified ONLY to guard against leaking hugepages/vfio/intel-firmware to standard apps
         for vc in self.volume_configs:
             
-            # GUARD: Skip hugepages/vfio if the pod name doesn't contain 'runp'
-            if vc["name"] in ["hugepages", "vfio"] and not is_runp:
+            # GUARD: Skip performance-specific volumes if the pod name doesn't contain 'runp'
+            if vc["name"] in ["hugepages", "vfio", "intel-firmware"] and not is_runp:
                 continue
 
             # AVOID DUPLICATION: Don't add if we already added native hugepages above

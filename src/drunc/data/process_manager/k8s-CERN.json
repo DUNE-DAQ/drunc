@@ -74,6 +74,12 @@
                 "mount_path": "/dev/vfio",
                 "host_path": "/dev/vfio",
                 "read_only": false
+            },
+            {
+                "name": "intel-firmware",
+                "mount_path": "/lib/firmware/intel/ice",
+                "host_path": "/lib/firmware/intel/ice",
+                "read_only": true
             }
         ]
     }
