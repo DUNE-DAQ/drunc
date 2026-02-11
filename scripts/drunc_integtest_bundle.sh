@@ -57,7 +57,7 @@ let individual_test_requested_iterations=1
 let full_set_requested_interations=1
 let stop_on_failure=0
 requested_test_names=
-PYTEST_COMMAND="pytest -c -s --tb=short"  # our core pytest command, with DAQ printout included and short pytest traceback
+PYTEST_COMMAND="pytest -c /dev/null -s --tb=short"  # our core pytest command, with DAQ printout included and short pytest traceback
 
 while true; do
     case "$1" in
