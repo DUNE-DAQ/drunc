@@ -36,7 +36,6 @@ class ProcessManagerConfData:
         self.settings = {}
         self.opmon_uri = None
         self.opmon_publisher = None
-        self.ers_uri = None
 
 
 class ProcessManagerConfHandler(ConfHandler):
@@ -56,7 +55,6 @@ class ProcessManagerConfHandler(ConfHandler):
             )
         new_data.environment = data.get("environment", {})
         new_data.settings = data.get("settings", {})
-        new_data.ers_uri = data.get("ers_uri")
 
         match data["type"].lower():
             case "ssh":

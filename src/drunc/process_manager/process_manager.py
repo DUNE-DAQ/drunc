@@ -2,11 +2,8 @@ import abc
 import re
 import threading
 import time
-import os
 
-from daqpytools.logging.handlers import LogHandlerConf, HandlerType
-
-
+from daqpytools.logging.handlers import LogHandlerConf
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -59,14 +56,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         **kwargs,
     ):
         super().__init__()
-        ers_uri = configuration.get_data().ers_uri
-        self.handlerconf = LogHandlerConf(init_ers=False)
+        self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager", ers_kafka_handler= ers_uri["type"] == "stream"
+            f"process_manager.{configuration.get_data_type_name()}_process_manager",
+            ers_kafka_handler=True,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
-        self.log.info(f'{ers_uri["type"] == "stream"}') # TODO: Delete before merge
 
         self.configuration = configuration
         self.name = name
@@ -143,9 +139,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
 
-        #! Envs dont exist! need to have a workaround
-        self.log.critical(f"{os.getenv('DUNEDAQ_ERS_ERROR')=}")
-
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
@@ -184,9 +177,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 if pi.uuid.uuid == target_uuid:
                     return pi
             return None
-        
+
         n_dead_keep = 0
-        graveyard = set()  
+        graveyard = set()
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -212,17 +205,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
             )
-
             if n_dead_keep < n_dead:
                 n_dead_keep = n_dead
                 diff_set = dead_processes - graveyard
                 for diff in diff_set:
                     pi = find_by_uuid(results, diff)
                     self.log.critical(
-                        f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}", extra={"handlers": [HandlerType.Rich, HandlerType.Protobufstream]}
+                        f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}",
+                        extra=self.handlerconf.ERS,
                     )
-                    #! No environment variables detected here
-
             time.sleep(interval_s)
 
     """

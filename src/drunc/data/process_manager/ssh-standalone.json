@@ -10,13 +10,13 @@
         "type": "dummy"
     },
     "environment": {
-        "GRPC_ENABLE_FORK_SUPPORT": "false"
+        "GRPC_ENABLE_FORK_SUPPORT": "false",
+        "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_FATAL": "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"
     },
     "opmon_uri": {
-        "path": "./info.json",
-        "type": "file"
-    },
-    "ers_uri": {
         "path": "./info.json",
         "type": "file"
     },

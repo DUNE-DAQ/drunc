@@ -1,4 +1,3 @@
-import os
 import multiprocessing
 import re
 import threading
@@ -8,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import wraps
 from typing import Callable, List, TypeVar
 
-from druncschema.opmon.FSM_pb2 import FSMStatus
+from daqpytools.logging.handlers import LogHandlerConf
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
@@ -35,6 +34,7 @@ from druncschema.controller_pb2 import (
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
+from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -68,8 +68,6 @@ from drunc.fsm.exceptions import (
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import UnpackingError, pack_to_any, unpack_any
 from drunc.utils.utils import get_logger
-
-from daqpytools.logging.handlers import LogHandlerConf
 
 T = TypeVar("T")
 
@@ -231,23 +229,9 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
-
-
-        #! I am now in favour of splitting controller.core here to 
-        # "controller.core.{self.name}" or something similar
-        # so we have one kafka handler per controller
-        # its a lot of handlers but we probably want individual handlers per controller?
-        
         self.log = get_logger(f"controller.core.{name}_ctrl", ers_kafka_handler=True)
         log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
-        
-        #TODO: Delete before merge
-        test_loggess = get_logger("controller.heyo", stream_handlers=True)
-        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_INFO')=}")
-        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_WARNING')=}")
-        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_ERROR')=}")
-        test_loggess.critical(f"{os.getenv('DUNEDAQ_ERS_FATAL')=}")
 
         self.configuration = configuration
         self.top_segment_controller = (
@@ -413,9 +397,13 @@ class Controller(ControllerServicer):
     def controller_publisher(self, message, custom_origin: dict | None = None):
         if isinstance(message, FSMStatus) and message.in_error:
             if message.in_error and not self._previous_error_state:
-                self.log.error(f"{self.name} is now in an error state", extra=self.handlerconf.ERS)
+                self.log.error(
+                    f"{self.name} is now in an error state", extra=self.handlerconf.ERS
+                )
             elif not message.in_error and self._previous_error_state:
-                self.log.info(f"{self.name} is now in a good state",extra=self.handlerconf.ERS)
+                self.log.info(
+                    f"{self.name} is now in a good state", extra=self.handlerconf.ERS
+                )
             self._previous_error_state = message.in_error
         if self.opmon_publisher is not None:
             try:
@@ -1014,7 +1002,10 @@ class Controller(ControllerServicer):
 
         # Check if node is in error.
         if self.stateful_node.node_is_in_error():
-            self.log.error(f"Command '{command_name}' not executed: node is in error.", extra=self.handlerconf.ERS)
+            self.log.error(
+                f"Command '{command_name}' not executed: node is in error.",
+                extra=self.handlerconf.ERS,
+            )
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             return response
 
