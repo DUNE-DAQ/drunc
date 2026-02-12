@@ -684,7 +684,7 @@ To debug it, close drunc and run the following command:
     # ----- RPC methods -----
     def terminate(
         self,
-        timeout: int | float = 60,
+        timeout: int | float = 130,
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
 
