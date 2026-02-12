@@ -682,12 +682,12 @@ class K8sProcessManager(ProcessManager):
             self.log.info(
                 f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
             )
-            if boot_request.process_restriction.data_mount == ".":
+            if boot_request.process_restriction.data_mount == "./":
                 data_mount_path = (
                     boot_request.process_description.process_execution_directory
                 )
                 self.log.info(
-                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                    f"Resolving './' data_mount to process_execution_directory: '{data_mount_path}'"
                 )
             else:
                 data_mount_path = boot_request.process_restriction.data_mount

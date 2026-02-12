@@ -152,16 +152,38 @@ def collect_apps(
         )
         log.debug(f"Collecting app {app.id} with args {args}")
 
-        data_path = None
-        if "DFApplication" in app.oksTypes():
-            try:
-                # DFApplication -> data_writers -> data_store_params -> directory_path
-                data_path = app.data_writers[0].data_store_params.directory_path
-            except (AttributeError, IndexError):
-                log.debug(
-                    f"DFApplication {app.id} is missing its data path configuration."
-                )
-                pass
+        def get_writer_directory_path(app) -> str | None:
+            """
+            Inspect the application configuration and return the directory_path
+            from the first *_writer relation found.
+            """
+            for attr_name in dir(app):
+                if not attr_name.endswith("_writer"):
+                    continue
+
+                writers = getattr(app, attr_name, None)
+                if not writers:
+                    continue
+
+                # Normalise single-object vs list semantics
+                if not isinstance(writers, (list, tuple)):
+                    writers = [writers]
+
+                writer = writers[0]
+
+                params = getattr(writer, "data_store_params", None)
+                if not params:
+                    continue
+
+                directory_path = getattr(params, "directory_path", None)
+                if directory_path:
+                    return directory_path
+                    log.info(f"data path for app {app.id}: {directory_path}")
+            return None 
+
+        data_path = get_writer_directory_path(app)
+        if not data_path:
+            log.debug(f"No data path found for app {app.id}")
 
         apps.append(
             {
