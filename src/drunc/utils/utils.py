@@ -49,7 +49,7 @@ def get_root_logger(log_level: str) -> logging.Logger:
     return setup_root_logger("drunc", log_level)
 
 
-def get_logger(logger_name: str, *args, **kwargs):
+def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
     """Returns / constructs default logging instances. Prepends all loggers with 'drunc'
     to inherit from the root 'drunc' logger.
     Wraps to the daqpytools implementation, see for more details
@@ -59,6 +59,16 @@ def get_logger(logger_name: str, *args, **kwargs):
         args, kwargs: Passed without modification to the daqpytools implementation
     """
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+
+
+def strip_non_drunc_loggers() -> None:
+    """
+    Strip out all the basicConfig handlers from other repositories, which define
+    handlers with the root logger.
+    """
+    root = logging.getLogger()
+    if root.handlers:
+        root.handlers.clear()
 
 
 def get_random_string(length):

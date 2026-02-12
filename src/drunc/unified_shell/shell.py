@@ -66,6 +66,7 @@ from drunc.utils.utils import (
     get_root_logger,
     ignore_sigint_sighandler,
     resolve_localhost_and_127_ip_to_network_ip,
+    strip_non_drunc_loggers,
 )
 
 
@@ -189,8 +190,10 @@ def unified_shell(
         if "_control" in service.id
     ][0].port
     if not is_port_available(root_controller_host, root_controller_port):
+        new_port = set_rc_controller_port(configuration_file, configuration_id)
+        strip_non_drunc_loggers()
         unified_shell_log.info(
-            f"The root controller port at {root_controller_port} is occupied, updating it to {set_rc_controller_port(configuration_file, configuration_id)}"
+            f"The root controller port at {root_controller_port} is occupied, updating it to {new_port}"
         )
 
     # If a local connectivity service is being used, perform the same checks
@@ -200,13 +203,12 @@ def unified_shell(
         connectivity_service_host: str = session_dal.connectivity_service.host
         connectivity_service_port = session_dal.connectivity_service.service.port
         if not is_port_available(connectivity_service_host, connectivity_service_port):
-            unified_shell_log.info(
-                f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {set_connectivity_service_port(configuration_file, configuration_id)}"
+            new_port = set_connectivity_service_port(
+                configuration_file, configuration_id
             )
-
-            session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
+            strip_non_drunc_loggers()
             unified_shell_log.info(
-                f"Updated LCS port to {session_dal.connectivity_service.service.port}"
+                f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {new_port}"
             )
 
     unified_shell_log.info(
