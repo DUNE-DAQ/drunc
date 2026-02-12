@@ -4,7 +4,12 @@ import re
 from functools import update_wrapper
 
 import click
-from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
+from druncschema.process_manager_pb2 import (
+    ProcessInstance,
+    ProcessInstanceList,
+    ProcessQuery,
+    ProcessUUID,
+)
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
@@ -62,7 +67,8 @@ def make_tree(values):
     return lines
 
 
-def order_processes_by_friendly_name_tiered(processes):
+def order_process_by_name(processes: list[ProcessInstance]):
+    """Given a list of processes, perform a tiered order by the name"""
     by_session = {}
     for process in processes:
         m = process.process_description.metadata
@@ -110,7 +116,9 @@ def order_processes_by_friendly_name_tiered(processes):
     return ordered
 
 
-def tabulate_process_instance_list(pil, title, long=False):
+def tabulate_process_instance_list(
+    pil: ProcessInstanceList, title: str, long: bool = False
+):
     t = Table(title=title)
     t.add_column("session")
     t.add_column("friendly name")
@@ -122,7 +130,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     if long:
         t.add_column("executable")
 
-    sorted_pil = order_processes_by_friendly_name_tiered(pil.values)
+    sorted_pil = order_process_by_name(pil.values)
     tree_str = make_tree(sorted_pil)
     try:
         for process, line in zip(sorted_pil, tree_str):
