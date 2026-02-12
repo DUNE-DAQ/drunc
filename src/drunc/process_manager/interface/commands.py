@@ -214,6 +214,8 @@ def logs(
     )
 
     result = obj.get_driver("process_manager").logs(log_req)
+    if result is None:
+        return
 
     if result.uuid.uuid is not None:
         obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
