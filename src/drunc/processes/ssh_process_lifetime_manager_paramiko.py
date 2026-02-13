@@ -374,7 +374,9 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
             # Add the actual command with output redirection
-            remote_cmd += f"{{ {command} ; }} &> {log_file}"
+            remote_cmd += (
+                f"{{ {command} ; }} | sed -u 's/\\x1b\\[[0-9;]*m//g' &> {log_file}"
+            )
 
             transport = client.get_transport()
             channel = transport.open_session()

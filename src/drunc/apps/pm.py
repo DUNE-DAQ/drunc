@@ -7,7 +7,7 @@ def main():
         process_manager_cli()
     except Exception as e:
         get_root_logger("INFO")
-        log = get_logger("process_manager", rich_handler=False)
+        log = get_logger("process_manager", rich_handler=True)
         log.error("Exception thrown!")
         log.exception(e)
         exit(1)

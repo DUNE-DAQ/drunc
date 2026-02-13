@@ -242,7 +242,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
             # Add the actual command with output redirection
-            remote_cmd += f"{{ {command} ; }} &> {log_file}"
+            remote_cmd += (
+                f"{{ {command} ; }} | sed -u 's/\\x1b\\[[0-9;]*m//g' &> {log_file}"
+            )
 
             # Build SSH arguments
             arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]

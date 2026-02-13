@@ -46,10 +46,6 @@ def get_root_logger(log_level: str) -> logging.Logger:
         logging.Logger: Configured drunc root logger instance.
 
     """
-    # This sets up the utils handler as well, which is used in many cases
-    # Works for now, but preferrably this should not be here
-    # See #691
-    setup_standard_loggers()
     return setup_root_logger("drunc", log_level)
 
 
@@ -63,10 +59,6 @@ def get_logger(logger_name: str, *args, **kwargs):
         args, kwargs: Passed without modification to the daqpytools implementation
     """
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
-
-
-def setup_standard_loggers() -> None:
-    get_logger(logger_name="utils", rich_handler=True)
 
 
 def get_random_string(length):

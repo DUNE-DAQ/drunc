@@ -24,7 +24,7 @@ from drunc.utils.utils import (
 
 class ChildNode(ABC):
     def __init__(self, name: str, node_type: ControlType):
-        self.log = get_logger(f"controller.{name}-child-node")
+        self.log = get_logger(f"controller.child_iface.{name}-child-node")
         self.name = name
         self.node_type = node_type
         self.included = True
