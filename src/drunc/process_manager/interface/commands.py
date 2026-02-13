@@ -217,8 +217,8 @@ def logs(
     if result is None:
         return
 
-    if result.uuid.uuid is not None:
-        obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
+    if result.name is not None:
+        obj.rule(f"[yellow]{result.name}[/yellow] logs")
 
     for line in result.lines:
         if not line.strip():  # keep empty lines for visual clarity
@@ -236,7 +236,8 @@ def logs(
             line = line.replace(grep, f"[u]{grep}[/]")
 
         obj.print(line)
-    obj.rule("End")
+    if result.name is not None:
+        obj.rule(f"[yellow]{result.name}[/yellow] end")
 
 
 @click.command("restart")

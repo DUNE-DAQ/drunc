@@ -723,7 +723,7 @@ To debug it, close drunc and run the following command:
 
         return response
 
-    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines:
+    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
 
         try:
