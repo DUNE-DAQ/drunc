@@ -82,8 +82,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
-        self.process_store = {}  # dict[str, sh.RunningCommand]
-        self.boot_request = {}  # dict[str, BootRequest]
+        self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
+        self.boot_request = {}  # dict[str, BootRequest] # str = uuid
+
+        # Define a list of applications that we expect to die, and a lock to read the memory
+        self.dead_process_lock = threading.Lock()
+        self.expected_dead_applications = {}  # dict[str, BootRequest] # str == uuid
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
@@ -301,6 +305,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         try:
             response = self._terminate_impl()
+            # Remove the list of dead applications, they are expected to be dead.
+            with self.dead_process_lock:
+                self.expected_dead_applications.clear()
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
@@ -401,6 +408,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         ret = []
         for uuid in self._get_process_uid(request):
+            # Some unknown process was found, assume it is dead and move on
             if uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=uuid)
                 pi = ProcessInstance(
@@ -440,6 +448,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     return_code=return_code,
                     uuid=pu,
                 )
+                # If we know that this process has died intentionally, remove it from
+                # tracking
+                self.remove_process_from_expected_dead_processes(uuid)
+
                 del self.process_store[uuid]
                 ret += [pi]
 
@@ -604,6 +616,52 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 processes.reverse()
 
         return processes
+
+    def add_process_to_expected_dead_processes(self, uuid: str) -> None:
+        """
+        Add the process to the list of processes that are expected to die. Needed as the
+        OpMon publisher publishes the state when a process dies unexpectedly, and these
+        processes require tracking.
+
+        Args:
+            uuid: str - process UUId to add to the dict
+
+        Returns:
+            None
+
+        Raises:
+            DruncException - if the process is not known about, this error gets raised
+        """
+        with self.dead_process_lock:
+            if uuid in self.boot_request:
+                br = BootRequest()
+                br.CopyFrom(self.boot_request[uuid])
+                self.expected_dead_applications[uuid] = br
+            else:
+                err_msg = f"Unexpected process with UUID {uuid} requested to be added to the list of dead applications!"
+                self.log.error(err_msg)
+
+    def remove_process_from_expected_dead_processes(self, uuid: str) -> None:
+        """
+        Remove the process to the list of processes that are expected to die. Needed as
+        the OpMon publisher publishes the state when a process dies unexpectedly, and
+        these processes require tracking.
+
+        Args:
+            uuid: str - process UUId to add to the dict
+
+        Returns:
+            None
+
+        Raises:
+            DruncException - if the process is not known about, this error gets raised
+        """
+        with self.dead_process_lock:
+            if uuid in self.expected_dead_applications:
+                self.expected_dead_applications.pop(uuid, None)
+            else:
+                err_msg = f"Unexpected process with UUID {uuid} requested to be removed from the list of expected_dead_applications!"
+                self.log.error(err_msg)
 
     def _get_process_uid(
         self,

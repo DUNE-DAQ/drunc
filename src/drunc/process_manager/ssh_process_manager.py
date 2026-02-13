@@ -108,7 +108,11 @@ class SSHProcessManager(ProcessManager):
         ret = []
 
         for proc_uuid in uuids:
-            app_name = self.boot_request[proc_uuid].process_description.metadata.name
+            process_boot_request = self.boot_request[proc_uuid]
+            app_name = process_boot_request.process_description.metadata.name
+
+            # Make sure we know that the process is dying
+            self.add_process_to_expected_dead_processes(proc_uuid)
 
             # Terminate process if still alive
             if self.ssh_lifetime_manager.is_process_alive(proc_uuid):
@@ -473,15 +477,22 @@ class SSHProcessManager(ProcessManager):
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
 
+        # Keep track of what applications are expected to be killed so they are not
+        # reported as unexpectedly dead
+        self.add_process_to_expected_dead_processes(uuid)
+
         if self.ssh_lifetime_manager.is_process_alive(uuid):
             self.ssh_lifetime_manager.terminate_process(uuid)
 
         self.ssh_lifetime_manager.cleanup_process(uuid)
         del self.boot_request[uuid]
-        del uuid
 
         ret = [self.__boot(same_uuid_br, same_uuid)]
 
+        # Remove the application from the list of dead applications
+        self.remove_process_from_expected_dead_processes(uuid)
+
+        del uuid
         del same_uuid_br
         del same_uuid
 
