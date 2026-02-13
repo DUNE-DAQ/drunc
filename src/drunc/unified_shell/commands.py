@@ -13,6 +13,7 @@ from drunc.utils.utils import get_logger
 
 @click.command("boot")
 @click.option(
+    "-o/-no",
     "--override-logs/--no-override-logs",
     default=None,
     help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
