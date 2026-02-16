@@ -216,6 +216,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 n_dead_prev = n_dead
                 diff_set = dead_processes - dead_processes_prev
                 for diff in diff_set:
+                    if diff in self.expected_dead_applications:
+                        self.log.debug(
+                            f"Process {diff} already expected to be dead, continuing"
+                        )
+                        continue
                     pi = find_by_uuid(results, diff)
                     err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
                     # easiest way to send one to Rich and ERS
@@ -306,8 +311,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._terminate_impl()
             # Remove the list of dead applications, they are expected to be dead.
-            with self.dead_process_lock:
-                self.expected_dead_applications.clear()
+            self.clear_dead_processes()
         except NotImplementedError:
             return ProcessInstanceList(
                 name=self.name,
@@ -436,6 +440,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             except Exception:
                 pass
 
+            # If a process is already dead, remove it from the process store
             if not self.process_store[uuid].is_alive():
                 pi = ProcessInstance(
                     process_description=pd,
@@ -662,6 +667,22 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             else:
                 err_msg = f"Unexpected process with UUID {uuid} requested to be removed from the list of expected_dead_applications!"
                 self.log.error(err_msg)
+
+    def clear_dead_processes(self) -> None:
+        """
+        Remove all processes from the tracker of expected dead processes
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        with self.dead_process_lock:
+            self.expected_dead_applications.clear()
 
     def _get_process_uid(
         self,
