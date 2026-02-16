@@ -309,6 +309,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(f"{self.name} running terminate")
 
         try:
+            self.mark_all_processes_as_expected_dead()
             response = self._terminate_impl()
             # Remove the list of dead applications, they are expected to be dead.
             self.clear_dead_processes()
@@ -675,6 +676,27 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             else:
                 err_msg = f"Unexpected process with UUID {uuid} requested to be removed from the list of expected_dead_applications!"
                 self.log.error(err_msg)
+
+    def mark_all_processes_as_expected_dead(self) -> None:
+        """
+        Remove all processes from the tracker of expected dead processes
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        with self.dead_process_lock:
+            for proc_uuid in self.boot_request:
+                if proc_uuid in self.expected_dead_applications:
+                    continue
+                self.expected_dead_applications[proc_uuid] = self.boot_request[
+                    proc_uuid
+                ]
 
     def clear_dead_processes(self) -> None:
         """
