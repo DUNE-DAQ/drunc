@@ -281,6 +281,7 @@ class GrpcProcessTreeManager:
             server_options=self.manager_server_config,
             client_options=self.manager_client_config,
         )
+        print(f"Log file for ManagerServer: {manager_config.log_file}")
 
         self.server_manager.start_manager_server(manager_config)
         self.server_ids.append("ManagerServer")
@@ -329,8 +330,21 @@ class GrpcProcessTreeManager:
             ready = self.server_manager.wait_for_server_ready(server_id, timeout=10.0)
             if not ready:
                 print(
-                    f"Warning: Server {server_id} did not signal ready within timeout"
+                    f"\nERROR: Server {server_id} failed to start. Check the logs below:"
                 )
+                # Find and print the log file
+                for log_file in self.log_file_manager.get_all_log_files():
+                    print(f"Log file: {log_file}")
+                    try:
+                        with open(log_file, "r") as f:
+                            print(f.read())
+                    except Exception as e:
+                        print(f"Could not read log: {e}")
+                    break
+
+                print(f"Error: Server {server_id} did not signal ready within timeout")
+            else:
+                print(f"   {server_id} is ready")
 
         # Create and return ProcessManagerClient
         self.process_manager = ProcessManagerClient(

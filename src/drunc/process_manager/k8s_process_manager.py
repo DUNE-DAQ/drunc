@@ -35,6 +35,7 @@ from drunc.k8s_exceptions import (
     DruncK8sNodeException,
     DruncK8sPodException,
 )
+from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
@@ -1745,15 +1746,6 @@ class K8sProcessManager(ProcessManager):
             f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
         )
 
-        # Define the shutdown order
-        shutdown_order = [
-            "unknown",
-            "application",
-            "segment-controller",
-            "root-controller",
-            "local-connection-server",
-        ]
-
         # Define the blocking kill_and_wait helper
         def kill_and_wait(uuids, grace_period=None) -> None:
             if not uuids:
@@ -1818,7 +1810,7 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
 
         # Kill in stages using our sorted lists
-        for role in shutdown_order:
+        for role in PROCESS_SHUTDOWN_ORDERING:
             uuids_in_step = pods_by_role[role]
             if uuids_in_step:
                 self.log.info(

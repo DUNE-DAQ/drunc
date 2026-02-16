@@ -97,7 +97,7 @@ def run_process_manager_server(
     server_options: Optional[List[Tuple[str, Any]]] = None,
     ready_event=None,
     stop_event=None,
-    lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_PARAMIKO,
+    lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_SHELL,
 ) -> None:
     """Run Manager server process with output logging."""
     from drunc.grpc_testing_tools.process_manager import ManagerServiceImpl
