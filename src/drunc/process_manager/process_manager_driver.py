@@ -731,7 +731,10 @@ To debug it, close drunc and run the following command:
 
             # Check if the response indicates a BadQuery error
             if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
-                self.log.warning(f"Bad query for logs: {response.lines}")
+                lines = response.lines
+                if len(lines) == 1:
+                    lines = lines[0]
+                self.log.warning(f"Bad query for logs: {lines}")
                 return None
 
             # Check for other error flags
