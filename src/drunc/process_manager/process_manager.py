@@ -521,6 +521,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 lines=[],
                 flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
             )
+        except BadQuery as e:
+            return LogLines(
+                name=self.name,
+                token=None,
+                uuid=None,
+                lines=[str(e)],
+                flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+            )
 
         return response
 
