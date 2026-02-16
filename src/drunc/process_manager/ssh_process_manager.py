@@ -230,6 +230,7 @@ class SSHProcessManager(ProcessManager):
         logfile = self.boot_request[uid].process_description.process_logs_path
         user = self.boot_request[uid].process_description.metadata.user
         host = self.boot_request[uid].process_description.metadata.hostname
+        process_name = self.boot_request[uid].process_description.metadata.name
 
         # Determine number of lines to retrieve (default: 100)
         nlines = log_request.how_far if log_request.how_far else 100
@@ -241,7 +242,7 @@ class SSHProcessManager(ProcessManager):
             )
 
             return LogLines(
-                name=self.name,
+                name=process_name,
                 token=None,
                 uuid=ProcessUUID(uuid=uid),
                 lines=lines,
