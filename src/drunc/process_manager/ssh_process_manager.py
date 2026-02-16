@@ -156,7 +156,8 @@ class SSHProcessManager(ProcessManager):
             uuids, self._get_process_timeouts(uuids)
         )
 
-        # Archive exit codes for future reference
+        for proc_uuid in uuids:
+            self.add_process_to_expected_dead_processes(proc_uuid)
         self.archived_exit_codes.update(exit_codes)
 
         # Build ProcessInstance objects from termination results
@@ -488,16 +489,22 @@ class SSHProcessManager(ProcessManager):
         same_uuid_br = BootRequest()
         same_uuid_br.CopyFrom(self.boot_request[uuid])
         same_uuid = uuid
+        # Keep track of what applications are expected to be killed so they are not
+        # reported as unexpectedly dead
+        self.add_process_to_expected_dead_processes(uuid)
 
         self.archived_exit_codes[uuid] = self.ssh_lifetime_manager.kill_process(
             uuid, self.configuration.data.kill_timeout
         )
 
         del self.boot_request[uuid]
-        del uuid
 
         ret = [self.__boot(same_uuid_br, same_uuid)]
 
+        # Remove the application from the list of dead applications
+        self.remove_process_from_expected_dead_processes(uuid)
+
+        del uuid
         del same_uuid_br
         del same_uuid
 
