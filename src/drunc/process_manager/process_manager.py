@@ -64,7 +64,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
-            ers_kafka_handler=False,
+            ers_kafka_handler=session,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
