@@ -2,10 +2,14 @@ import copy as cp
 import os
 import re
 from functools import update_wrapper
-from operator import attrgetter
 
 import click
-from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery, ProcessUUID
+from druncschema.process_manager_pb2 import (
+    ProcessInstance,
+    ProcessInstanceList,
+    ProcessQuery,
+    ProcessUUID,
+)
 from rich.table import Table
 
 from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
@@ -63,7 +67,58 @@ def make_tree(values):
     return lines
 
 
-def tabulate_process_instance_list(pil, title, long=False):
+def order_process_by_name(processes: list[ProcessInstance]):
+    """Given a list of processes, perform a tiered order by the name"""
+    by_session = {}
+    for process in processes:
+        m = process.process_description.metadata
+        by_session.setdefault(m.session, []).append(process)
+
+    ordered = []
+    for session in sorted(by_session.keys()):
+        session_processes = by_session[session]
+        node_by_id = {}
+        children = {}
+        roots = []
+
+        for process in session_processes:
+            tree_id = process.process_description.metadata.tree_id or ""
+            node_by_id.setdefault(tree_id, []).append(process)
+
+        for tree_id, processes in node_by_id.items():
+            node_by_id[tree_id] = sorted(
+                processes,
+                key=lambda p: (
+                    p.process_description.metadata.name,
+                    p.uuid.uuid,
+                ),
+            )
+
+        for tree_id in node_by_id.keys():
+            parent_id = tree_id.rsplit(".", 1)[0] if "." in tree_id else None
+            if not parent_id or parent_id not in node_by_id:
+                roots.append(tree_id)
+            else:
+                children.setdefault(parent_id, []).append(tree_id)
+
+        def sort_key(tree_id):
+            m = node_by_id[tree_id][0].process_description.metadata
+            return (m.name, tree_id)
+
+        def walk(tree_id):
+            ordered.extend(node_by_id[tree_id])
+            for child_id in sorted(children.get(tree_id, []), key=sort_key):
+                walk(child_id)
+
+        for root_id in sorted(roots, key=sort_key):
+            walk(root_id)
+
+    return ordered
+
+
+def tabulate_process_instance_list(
+    pil: ProcessInstanceList, title: str, long: bool = False
+):
     t = Table(title=title)
     t.add_column("session")
     t.add_column("friendly name")
@@ -75,13 +130,7 @@ def tabulate_process_instance_list(pil, title, long=False):
     if long:
         t.add_column("executable")
 
-    sorted_pil = sorted(
-        pil.values,
-        key=attrgetter(
-            "process_description.metadata.session",
-            "process_description.metadata.tree_id",
-        ),
-    )
+    sorted_pil = order_process_by_name(pil.values)
     tree_str = make_tree(sorted_pil)
     try:
         for process, line in zip(sorted_pil, tree_str):

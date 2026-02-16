@@ -6,7 +6,7 @@ For a standalone `process_manager` you will need two shells - one shell to run t
 ## Configurations
 To boot a `process_manager`, you will need to choose the most appropriate configuration that applies to the use case. The configurations that are packaged with `drunc` are defined in `drunc/src/data/process_manager/`, which are
 * `ssh-standalone.json`: `ssh` based implementation without a `kafka` feed. Uses remote shell client processes to manage ssh connections.
-* `ssh-standalone-paramiko-client.json`: `ssh` based implementation without a `kafka` feed. Uses paramiko library to manage ssh connections from the python process.
+* `ssh-standalone-paramiko-client.json`: `ssh` based implementation without a `kafka` feed. Uses paramiko library to manage ssh connections from the python process. Currently NOT maintained but may be revisited in future - use `ssh-standalone` only for now.
 * `ssh-pocket-kafka.json`: `ssh` based implementation with `pocket`'s `kafka` for message broadcasting.
 * `ssh-CERN-kafka.json`: `ssh` based implementation with `kafka` service running at ENH1.
 * `ssh-CERN-kafka-OpMon.json`: `ssh` based implementation with `kafka` service running at ENH1, and with Opmon.

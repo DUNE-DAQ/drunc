@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, TypeVar
 
+from daqpytools.logging.handlers import LogHandlerConf
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
@@ -36,6 +37,7 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
+from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
@@ -74,14 +76,17 @@ class Controller(ControllerServicer):
     children_nodes: List[ChildNode] = []
 
     def __init__(self, configuration, name: str, session: str, token: Token):
+        """C'tor. Note that controllers require the ERS variables defined
+        in OKS to exist as env variables!"""
         super().__init__()
 
+        self._previous_error_state = False
         self.name = name
         self.session = session
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
-
-        self.log = get_logger("controller.core", stream_handlers=True)
+        self.handlerconf = LogHandlerConf(init_ers=True)
+        self.log = get_logger(f"controller.core.{name}_ctrl", ers_kafka_handler=True)
         log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
@@ -239,6 +244,16 @@ class Controller(ControllerServicer):
         return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
     def controller_publisher(self, message, custom_origin: dict | None = None):
+        if isinstance(message, FSMStatus) and message.in_error:
+            if message.in_error and not self._previous_error_state:
+                self.log.error(
+                    f"{self.name} is now in an error state", extra=self.handlerconf.ERS
+                )
+            elif not message.in_error and self._previous_error_state:
+                self.log.info(
+                    f"{self.name} is now in a good state", extra=self.handlerconf.ERS
+                )
+            self._previous_error_state = message.in_error
         if self.opmon_publisher is not None:
             try:
                 if custom_origin is None:
@@ -710,7 +725,10 @@ class Controller(ControllerServicer):
 
         # Check if node is in error.
         if self.stateful_node.node_is_in_error():
-            self.log.error(f"Command '{command_name}' not executed: node is in error.")
+            self.log.error(
+                f"Command '{command_name}' not executed: node is in error.",
+                extra=self.handlerconf.ERS,
+            )
             response.fsm_flag = FSMResponseFlag.FSM_NOT_EXECUTED_IN_ERROR
             return response
 
