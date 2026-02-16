@@ -202,7 +202,7 @@ def controller_cleanup_wrapper(ctx):
         who = ""
 
         try:
-            who = ctx.get_driver("controller").who_is_in_charge().data
+            who = ctx.get_driver("controller").who_is_in_charge().text
         except grpc.RpcError as e:
             dead = grpc.StatusCode.UNAVAILABLE == e.code()
         except Exception as e:
