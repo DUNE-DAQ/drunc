@@ -627,21 +627,24 @@ class K8sProcessManager(ProcessManager):
             # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                if vm.mount_path == target_home_path or target_home_path.startswith(
+                    vm.mount_path + "/"
+                ):
+                    self.log.debug(
+                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
+                    )
                     is_covered = True
                     break
 
             if not is_covered:
                 self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-                
+
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=target_home_path, type="Directory"
                         ),
                     )
                 )
@@ -1002,6 +1005,7 @@ class K8sProcessManager(ProcessManager):
         except KeyError:
             try:
                 import pwd
+
                 return pwd.getpwuid(os.getuid()).pw_name
             except KeyError:
                 return str(os.getuid())
@@ -1344,7 +1348,9 @@ class K8sProcessManager(ProcessManager):
             logs = self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far or 100
             )
-            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n"))
+            return LogLines(
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+            )
         except self._api_error_v1_api as e:
             return LogLines(
                 uuid=ProcessUUID(uuid=uuid),

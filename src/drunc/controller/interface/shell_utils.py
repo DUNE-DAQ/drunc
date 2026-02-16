@@ -615,7 +615,7 @@ def run_one_fsm_command(
                 else "[red]NA[/]"
             ),
         )
-        for child_response in response.children:
+        for child_response in sorted(response.children, key=lambda c: c.name):
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
