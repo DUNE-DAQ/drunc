@@ -33,7 +33,10 @@ from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import (
+    DruncCommandException,
+    DruncNotImplementedException,
+)
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
@@ -285,13 +288,18 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._boot_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.boot",
             )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.boot: {e}"
+            self.log.exception(context_msg)
 
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.boot",
+            )
         return response
 
     @abc.abstractmethod
@@ -314,11 +322,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             # Remove the list of dead applications, they are expected to be dead.
             self.clear_dead_processes()
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.terminate",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.terminate: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.terminate",
             )
 
         return response
@@ -340,11 +354,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._restart_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.restart",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.restart: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.restart",
             )
 
         return response
@@ -366,11 +386,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._kill_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.kill",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.kill: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.kill",
             )
 
         return response
@@ -392,11 +418,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._ps_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.ps",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.ps: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.ps",
             )
 
         return response
@@ -515,12 +547,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._logs_impl(request)
         except NotImplementedError:
-            return LogLines(
-                name=self.name,
-                token=None,
-                uuid=None,
-                lines=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.logs",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                domain="ProcessManager.logs",
             )
         except BadQuery as e:
             return LogLines(
