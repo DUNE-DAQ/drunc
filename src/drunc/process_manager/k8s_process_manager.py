@@ -35,6 +35,7 @@ from drunc.k8s_exceptions import (
     DruncK8sNodeException,
     DruncK8sPodException,
 )
+from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
@@ -148,7 +149,7 @@ class K8sProcessManager(ProcessManager):
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
-        applications running in Pods. 
+        applications running in Pods.
 
         Args:
             configuration: The process manager configuration object containing image,
@@ -415,7 +416,9 @@ class K8sProcessManager(ProcessManager):
         """
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
-    def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
+    def _is_local_connection_server(
+        self, tree_labels: dict[str, str], podname: str
+    ) -> bool:
         """
         Check if a pod is the local connection server by inspecting its role label and name.
 
@@ -428,7 +431,10 @@ class K8sProcessManager(ProcessManager):
             'local-connection-server' appears in the pod name, False otherwise.
         """
         role_key = f"role.{self.drunc_label}"
-        return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
+        return (
+            tree_labels.get(role_key) == "infrastructure-applications"
+            and "local-connection-server" in podname
+        )
 
     def _is_root_controller(self, tree_labels: dict[str, str]) -> bool:
         """
@@ -823,21 +829,24 @@ class K8sProcessManager(ProcessManager):
             # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                if vm.mount_path == target_home_path or target_home_path.startswith(
+                    vm.mount_path + "/"
+                ):
+                    self.log.debug(
+                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
+                    )
                     is_covered = True
                     break
 
             if not is_covered:
                 self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-                
+
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=target_home_path, type="Directory"
                         ),
                     )
                 )
@@ -983,7 +992,9 @@ class K8sProcessManager(ProcessManager):
 
         if username_bq is not None:
             env_vars["USER"] = username_bq
-            self.log.debug(f"Setting USER environment variable from boot request: {username_bq}")
+            self.log.debug(
+                f"Setting USER environment variable from boot request: {username_bq}"
+            )
         elif self.home_path_base:
             host_username = self._get_host_username()
 
@@ -1103,10 +1114,9 @@ class K8sProcessManager(ProcessManager):
 
         # Only add preStop hook for C++ applications (non-controllers)
         lifecycle_hook = None
-        if (
-            "controller" not in tree_labels["role." + self.drunc_label]
-            and not self._is_local_connection_server(tree_labels, podname)
-        ):
+        if "controller" not in tree_labels[
+            "role." + self.drunc_label
+        ] and not self._is_local_connection_server(tree_labels, podname):
             self.log.debug(
                 f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
             )
@@ -1301,6 +1311,7 @@ class K8sProcessManager(ProcessManager):
         except KeyError:
             try:
                 import pwd
+
                 return pwd.getpwuid(os.getuid()).pw_name
             except KeyError:
                 return str(os.getuid())
@@ -1756,7 +1767,9 @@ class K8sProcessManager(ProcessManager):
             logs = self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far or 100
             )
-            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n"))
+            return LogLines(
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+            )
         except self._api_error_v1_api as e:
             return LogLines(
                 uuid=ProcessUUID(uuid=uuid),
@@ -2300,15 +2313,6 @@ class K8sProcessManager(ProcessManager):
             f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
         )
 
-        # Define the shutdown order
-        shutdown_order = [
-            "unknown",
-            "application",
-            "segment-controller",
-            "root-controller",
-            "infrastructure-applications",
-        ]
-
         # Define the blocking kill_and_wait helper
         def kill_and_wait(uuids, grace_period=None) -> None:
             if not uuids:
@@ -2373,7 +2377,7 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
 
         # Kill in stages using our sorted lists
-        for role in shutdown_order:
+        for role in PROCESS_SHUTDOWN_ORDERING:
             uuids_in_step = pods_by_role[role]
             if uuids_in_step:
                 self.log.info(

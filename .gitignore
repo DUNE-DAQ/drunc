@@ -12,5 +12,6 @@ log*
 info.*.json
 .python-version
 *.xml.data
+*.data.xml
 *.hdf5
 .coverage

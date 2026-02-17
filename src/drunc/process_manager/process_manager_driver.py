@@ -21,7 +21,7 @@ from druncschema.process_manager_pb2 import (
     ProcessRestriction,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
-from druncschema.request_response_pb2 import Request
+from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -723,11 +723,27 @@ To debug it, close drunc and run the following command:
 
         return response
 
-    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines:
+    def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
 
         try:
             response = self.stub.logs(request, timeout=timeout)
+
+            # Check if the response indicates a BadQuery error
+            if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
+                lines = response.lines
+                if len(lines) == 1:
+                    lines = lines[0]
+                self.log.warning(f"Bad query for logs: {lines}")
+                return None
+
+            # Check for other error flags
+            if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
+                self.log.error(f"Exception occurred on server: {response.lines}")
+                return None
+
+            return response
+
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -737,10 +753,8 @@ To debug it, close drunc and run the following command:
                     f"Could not extract rich error details from gRPC error: {extraction_error}",
                     exc_info=True,
                 )
-
             handle_grpc_error(e)
-
-        return response
+            return None
 
     def ps(
         self, request: ProcessQuery, timeout: int | float = 60

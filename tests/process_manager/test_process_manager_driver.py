@@ -497,7 +497,9 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
     assert result_localhost == (mock_client_instance, pytest_hostname, 1234)
 
     mock_session_dal.connectivity_service.host = pytest_hostname
-    result_pytest_hostname = mock_driver._connect_to_service(mock_session_dal, "session2")
+    result_pytest_hostname = mock_driver._connect_to_service(
+        mock_session_dal, "session2"
+    )
     mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
     assert result_pytest_hostname == (mock_client_instance, pytest_hostname, 1234)
 

@@ -3,6 +3,7 @@ import re
 import threading
 import time
 
+from daqpytools.logging.handlers import HandlerType, LogHandlerConf
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -32,7 +33,10 @@ from drunc.authoriser.dummy_authoriser import DummyAuthoriser
 from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import (
+    DruncCommandException,
+    DruncNotImplementedException,
+)
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
@@ -54,9 +58,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         session: str = None,
         **kwargs,
     ):
+        """C'tor. Note that this takes the ERS env variables from the
+        json files defined in data/process_manager!"""
         super().__init__()
+        self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager"
+            f"process_manager.{configuration.get_data_type_name()}_process_manager",
+            ers_kafka_handler=True,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -77,8 +85,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
-        self.process_store = {}  # dict[str, sh.RunningCommand]
-        self.boot_request = {}  # dict[str, BootRequest]
+        self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
+        self.boot_request = {}  # dict[str, BootRequest] # str = uuid
+
+        # Define a list of applications that we expect to die, and a lock to read the memory
+        self.dead_process_lock = threading.Lock()
+        self.expected_dead_applications = {}  # dict[str, BootRequest] # str == uuid
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
@@ -169,6 +181,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.thread.join()
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
+        def find_by_uuid(pi_list, target_uuid: str):
+            """Identifies the process from a list by uuid"""
+            for pi in pi_list.values:
+                if pi.uuid.uuid == target_uuid:
+                    return pi
+            return None
+
+        n_dead_prev = 0
+        dead_processes_prev = set()
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -177,11 +198,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.RUNNING
             )
-            n_dead = sum(
-                1
+            dead_processes = {
+                process.uuid.uuid
                 for process in results.values
                 if process.status_code == ProcessInstance.StatusCode.DEAD
-            )
+            }
+            n_dead = len(dead_processes)
             n_session = len(
                 {
                     process.process_description.metadata.session
@@ -193,6 +215,21 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     n_running=n_running, n_dead=n_dead, n_session=n_session
                 ),
             )
+            if n_dead_prev < n_dead:
+                n_dead_prev = n_dead
+                diff_set = dead_processes - dead_processes_prev
+                for diff in diff_set:
+                    if diff in self.expected_dead_applications:
+                        self.log.debug(
+                            f"Process {diff} already expected to be dead, continuing"
+                        )
+                        continue
+                    pi = find_by_uuid(results, diff)
+                    err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
+                    # easiest way to send one to Rich and ERS
+                    self.log.critical(err_msg, extra={"handlers": [HandlerType.Rich]})
+                    self.log.critical(err_msg, extra=self.handlerconf.ERS)
+
             time.sleep(interval_s)
 
     """
@@ -251,13 +288,18 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._boot_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.boot",
             )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.boot: {e}"
+            self.log.exception(context_msg)
 
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.boot",
+            )
         return response
 
     @abc.abstractmethod
@@ -275,13 +317,22 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(f"{self.name} running terminate")
 
         try:
+            self.mark_all_processes_as_expected_dead()
             response = self._terminate_impl()
+            # Remove the list of dead applications, they are expected to be dead.
+            self.clear_dead_processes()
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.terminate",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.terminate: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.terminate",
             )
 
         return response
@@ -303,11 +354,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._restart_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.restart",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.restart: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.restart",
             )
 
         return response
@@ -329,11 +386,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._kill_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.kill",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.kill: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.kill",
             )
 
         return response
@@ -355,11 +418,17 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._ps_impl(request)
         except NotImplementedError:
-            return ProcessInstanceList(
-                name=self.name,
-                token=None,
-                values=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.ps",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.ps: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.ps",
             )
 
         return response
@@ -376,6 +445,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         ret = []
         for uuid in self._get_process_uid(request):
+            # Some unknown process was found, assume it is dead and move on
             if uuid not in self.boot_request:
                 pu = ProcessUUID(uuid=uuid)
                 pi = ProcessInstance(
@@ -403,6 +473,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             except Exception:
                 pass
 
+            # If a process is already dead, remove it from the process store
             if not self.process_store[uuid].is_alive():
                 pi = ProcessInstance(
                     process_description=pd,
@@ -415,6 +486,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     return_code=return_code,
                     uuid=pu,
                 )
+                # If we know that this process has died intentionally, remove it from
+                # tracking
+                self.remove_process_from_expected_dead_processes(uuid)
+
                 del self.process_store[uuid]
                 ret += [pi]
 
@@ -472,12 +547,25 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         try:
             response = self._logs_impl(request)
         except NotImplementedError:
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.logs",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                domain="ProcessManager.logs",
+            )
+        except BadQuery as e:
             return LogLines(
                 name=self.name,
                 token=None,
                 uuid=None,
-                lines=[],
-                flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                lines=[str(e)],
+                flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
             )
 
         return response
@@ -579,6 +667,89 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 processes.reverse()
 
         return processes
+
+    def add_process_to_expected_dead_processes(self, uuid: str) -> None:
+        """
+        Add the process to the list of processes that are expected to die. Needed as the
+        OpMon publisher publishes the state when a process dies unexpectedly, and these
+        processes require tracking.
+
+        Args:
+            uuid: str - process UUId to add to the dict
+
+        Returns:
+            None
+
+        Raises:
+            DruncException - if the process is not known about, this error gets raised
+        """
+        with self.dead_process_lock:
+            if uuid in self.boot_request:
+                br = BootRequest()
+                br.CopyFrom(self.boot_request[uuid])
+                self.expected_dead_applications[uuid] = br
+            else:
+                err_msg = f"Unexpected process with UUID {uuid} requested to be added to the list of dead applications!"
+                self.log.error(err_msg)
+
+    def remove_process_from_expected_dead_processes(self, uuid: str) -> None:
+        """
+        Remove the process to the list of processes that are expected to die. Needed as
+        the OpMon publisher publishes the state when a process dies unexpectedly, and
+        these processes require tracking.
+
+        Args:
+            uuid: str - process UUId to add to the dict
+
+        Returns:
+            None
+
+        Raises:
+            DruncException - if the process is not known about, this error gets raised
+        """
+        with self.dead_process_lock:
+            if uuid in self.expected_dead_applications:
+                self.expected_dead_applications.pop(uuid, None)
+            else:
+                err_msg = f"Unexpected process with UUID {uuid} requested to be removed from the list of expected_dead_applications!"
+                self.log.error(err_msg)
+
+    def mark_all_processes_as_expected_dead(self) -> None:
+        """
+        Remove all processes from the tracker of expected dead processes
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        with self.dead_process_lock:
+            for proc_uuid in self.boot_request:
+                if proc_uuid in self.expected_dead_applications:
+                    continue
+                self.expected_dead_applications[proc_uuid] = self.boot_request[
+                    proc_uuid
+                ]
+
+    def clear_dead_processes(self) -> None:
+        """
+        Remove all processes from the tracker of expected dead processes
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        with self.dead_process_lock:
+            self.expected_dead_applications.clear()
 
     def _get_process_uid(
         self,
