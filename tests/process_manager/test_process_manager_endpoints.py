@@ -44,7 +44,7 @@ def mock_logger():
 
 
 @pytest.fixture(scope="function")
-def grpc_servicer(mock_logger):
+def grpc_servicer(mock_logger, monkeypatch):
     """
     Create and configure a ConcreteProcessManager instance for testing.
 
@@ -57,6 +57,24 @@ def grpc_servicer(mock_logger):
     Returns:
         ConcreteProcessManager: Configured servicer instance ready for testing
     """
+    # Process Manager requires these variables to exist now
+    # Injecting them in the test
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_ERROR",
+        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_FATAL", "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)"
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_INFO",
+        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_WARNING",
+        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+    )
+
     servicer = ConcreteProcessManager(session="mock_session")
     servicer._mock_logger = mock_logger
     return servicer

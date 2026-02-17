@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
     ExcludeResponse,
@@ -11,20 +10,16 @@ from druncschema.controller_pb2 import (
     IncludeResponse,
     RecomputeStatusResponse,
     StatusResponse,
+    SurrenderControlResponse,
+    TakeControlResponse,
+    ToErrorResponse,
+    WhoIsInChargeResponse,
 )
-from druncschema.request_response_pb2 import Response
-from druncschema.token_pb2 import Token
 
-from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import (
     ControlType,
     get_logger,
 )
-
-
-class ChildInterfaceTechnologyUnknown(DruncSetupException):
-    def __init__(self, t, name):
-        super().__init__(f"The type {t} is not supported for the ChildNode {name}")
 
 
 class ChildNode(ABC):
@@ -44,15 +39,6 @@ class ChildNode(ABC):
 
     @abstractmethod
     def terminate(self) -> None:
-        pass
-
-    @abstractmethod
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
         pass
 
     @abstractmethod
@@ -128,4 +114,40 @@ class ChildNode(ABC):
         execute_along_path: bool = True,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
+        pass
+
+    @abstractmethod
+    def take_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> TakeControlResponse:
+        pass
+
+    @abstractmethod
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
+        pass
+
+    @abstractmethod
+    def who_is_in_charge(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> WhoIsInChargeResponse:
+        pass
+
+    @abstractmethod
+    def to_error(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ToErrorResponse:
         pass

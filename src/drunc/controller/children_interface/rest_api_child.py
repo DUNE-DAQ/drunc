@@ -10,7 +10,6 @@ from json import JSONDecodeError
 import requests
 import socks
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMResponse,
     DescribeResponse,
     ExcludeResponse,
@@ -22,10 +21,13 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     Status,
     StatusResponse,
+    SurrenderControlResponse,
+    TakeControlResponse,
+    ToErrorResponse,
+    WhoIsInChargeResponse,
 )
 from druncschema.description_pb2 import Description
-from druncschema.request_response_pb2 import Response, ResponseFlag
-from druncschema.token_pb2 import Token
+from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api
 
@@ -65,15 +67,8 @@ class ResponseDispatcher(threading.Thread):
         self.log.debug("ResponseDispatcher starting to run")
 
         while True:
-            # self.log.debug(f'starting to iterating: {self.listener.queue.qsize()}')
-            # self.log.debug(f'Queue pointer {self.listener.queue}')
-            # try:
             r = self.listener.queue.get()
             self.log.debug(f"ResponseDispatcher got the following answer: {r}")
-            # except:
-            #     self.log.debug(f'ResponseDispatcher nothing')
-            #     continue
-
             if r == self.STOP:
                 self.log.debug("ResponseDispatcher STOP")
                 break
@@ -414,18 +409,6 @@ class RESTAPIChildNode(ChildNode):
     def terminate(self) -> None:
         pass
 
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
-        self.log.info(f"Ignoring command '{command}' sent to '{self.name}'")
-        return Response(
-            name=self.name,
-            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-        )
-
     def status(
         self,
         target: str = "",
@@ -699,4 +682,53 @@ class RESTAPIChildNode(ChildNode):
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def take_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> TakeControlResponse:
+        return TakeControlResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
+        return SurrenderControlResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def who_is_in_charge(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> WhoIsInChargeResponse:
+        return WhoIsInChargeResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+        )
+
+    def to_error(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ToErrorResponse:
+        self.state.to_error()
+        return ToErrorResponse(
+            token=None,
+            name=self.name,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )

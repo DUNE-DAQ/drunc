@@ -238,6 +238,7 @@ def unified_shell(
         port = mp.Value("i", 0)
 
         unified_shell_log.debug("[green]Process manager[/green] starting")
+        ctx.obj.override_logs = override_logs
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
             kwargs={

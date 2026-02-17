@@ -1,7 +1,7 @@
 {
     "type": "ssh",
     "name": "SSHProcessManager",
-    "kill_timeout": 0.1,
+    "kill_timeout": 10.0,
     "settings": {
         "disable_localhost_host_key_check": true,
         "disable_host_key_check": true
@@ -10,7 +10,11 @@
         "type": "dummy"
     },
     "environment": {
-        "GRPC_ENABLE_FORK_SUPPORT": "false"
+        "GRPC_ENABLE_FORK_SUPPORT": "false",
+        "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_FATAL": "erstrace,lstdout",
+        "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout"
     },
     "opmon_uri": {
         "path": "./info.json",
