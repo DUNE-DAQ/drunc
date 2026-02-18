@@ -176,7 +176,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     def __del__(self):
-        if self.opmon_publisher is not None:
+        if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
             self.stop_event.set()
             self.thread.join()
 

@@ -67,7 +67,6 @@ def collect_apps(
     rc_env = defenv.copy()
     collect_variables(controller.application_environment, rc_env)
     rc_env["DUNEDAQ_APPLICATION_NAME"] = controller.id
-    rc_env["GRPC_ENABLE_FORK_SUPPORT"] = "false"
     host = controller.runs_on.runs_on.id
 
     tree_id_str = ".".join(map(str, tree_prefix))
