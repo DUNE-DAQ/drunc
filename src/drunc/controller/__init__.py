@@ -1,3 +1,6 @@
+import os
+
+os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "false"
 from drunc.utils.utils import get_logger
 
 # Initialise controller core logger with Rich handler
