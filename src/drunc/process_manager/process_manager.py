@@ -4,6 +4,7 @@ import threading
 import time
 
 from daqpytools.logging.handlers import HandlerType, LogHandlerConf
+from daqpytools.logging.logger import setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -64,8 +65,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
-            ers_kafka_handler=session,
         )
+        setup_daq_ers_logger(self.log, session)
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
 
