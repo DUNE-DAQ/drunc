@@ -3,7 +3,7 @@ import re
 import threading
 import time
 
-from daqpytools.logging.handlers import HandlerType, LogHandlerConf
+from daqpytools.logging.handlers import LogHandlerConf
 from daqpytools.logging.logger import setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
@@ -228,8 +228,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                         continue
                     pi = find_by_uuid(results, diff)
                     err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
-                    # easiest way to send one to Rich and ERS
-                    self.log.critical(err_msg, extra={"handlers": [HandlerType.Rich]})
                     self.log.critical(err_msg, extra=self.handlerconf.ERS)
 
             time.sleep(interval_s)
