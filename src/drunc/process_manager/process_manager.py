@@ -176,9 +176,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     def __del__(self):
-        if self.opmon_publisher is not None:
-            self.stop_event.set()
-            self.thread.join()
+        if hasattr(self, "opmon_publisher"):
+            if self.opmon_publisher is not None:
+                self.stop_event.set()
+                self.thread.join()
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
         def find_by_uuid(pi_list, target_uuid: str):
