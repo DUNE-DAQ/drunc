@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, TypeVar
 
 from daqpytools.logging.handlers import LogHandlerConf
+from daqpytools.logging.logger import setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
@@ -86,7 +87,8 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
-        self.log = get_logger(f"controller.core.{name}_ctrl", ers_kafka_handler=session)
+        self.log = get_logger(f"controller.core.{name}_ctrl")
+        setup_daq_ers_logger(self.log, session)
         log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
