@@ -66,7 +66,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
         )
-        setup_daq_ers_logger(self.log, session)
+        setup_daq_ers_logger(self.log, session, "drunc.process_manager")
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
 

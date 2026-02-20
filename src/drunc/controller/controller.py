@@ -88,7 +88,7 @@ class Controller(ControllerServicer):
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(f"controller.core.{name}_ctrl")
-        setup_daq_ers_logger(self.log, session)
+        setup_daq_ers_logger(self.log, session, f"drunc.{name}_ctrl")
         log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
