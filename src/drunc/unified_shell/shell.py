@@ -188,14 +188,6 @@ def unified_shell(
             f"The session [green]{ctx.obj.configuration_id} in file {ctx.obj.configuration_file}[/green] [yellow]does not have a resource manager defined[/yellow], resources will not be requested from the resource management service"
         )
 
-    # If the resource manager is present, extract its parameters and log them
-    resource_manager_address: str | None = None
-    if resource_manager:
-        resource_manager_address = f"{resource_manager.address}:{resource_manager.port}"
-        unified_shell_log.info(
-            f"Found resource manager at address {resource_manager_address}"
-        )
-
     # If the resource manager is present, get the list of resources required from it
     if resource_manager:
         session_requested_resources: set(str) = (
@@ -204,7 +196,7 @@ def unified_shell(
             )
         )
         unified_shell_log.info(
-            f"This session has requested the following resources: {session_requested_resources=}"
+            f"This session has requested the following resources: {session_requested_resources}"
         )
 
     unified_shell_log.info(
