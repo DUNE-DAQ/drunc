@@ -185,7 +185,7 @@ def unified_shell(
     else:
         # This will be changed to an error once the resource manager service is deployed and all configurations have a resource manager configuration.
         unified_shell_log.info(
-            f"The session {ctx.obj.configuration_id} in file {ctx.obj.configuration_file} does not have a resource manager defined in the file, resources will not be parsed out."
+            f"The session [green]{ctx.obj.configuration_id} in file {ctx.obj.configuration_file}[/green] [yellow]does not have a resource manager defined[/yellow], resources will not be requested from the resource management service"
         )
 
     # If the resource manager is present, extract its parameters and log them
