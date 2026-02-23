@@ -600,11 +600,11 @@ class K8sProcessManager(ProcessManager):
         pod_volumes = []
         container_volume_mounts = []
         
-        # ADDITION: Determine if this is a performance app
+        # Determine if this is a performance app
         pod_name = boot_request.process_description.metadata.name
         is_runp = "runp" in pod_name.lower()
 
-        # --- ADDITION: Native HugePages for runp apps only ---
+        # Native HugePages for readout apps
         if is_runp:
             self.log.info(f"Adding native HugePages for performance app '{pod_name}'")
             pod_volumes.append(
@@ -617,15 +617,13 @@ class K8sProcessManager(ProcessManager):
                 client.V1VolumeMount(name="hugepages", mount_path="/dev/hugepages")
             )
 
-        # --- ORIGINAL: Volumes from json configuration ---
-        # Modified ONLY to guard against leaking hugepages/vfio/intel-firmware to standard apps
+        # Volumes from json configuration
         for vc in self.volume_configs:
             
-            # GUARD: Skip performance-specific volumes if the pod name doesn't contain 'runp'
+            # Skip performance-specific volumes if the pod isn't readout
             if vc["name"] in ["hugepages", "vfio", "intel-firmware"] and not is_runp:
                 continue
 
-            # AVOID DUPLICATION: Don't add if we already added native hugepages above
             if any(v.name == vc["name"] for v in pod_volumes):
                 continue
 
@@ -645,7 +643,7 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
-        # --- ORIGINAL: Dynamic HOME mount (Full Logic) ---
+        # Dynamic HOME mount
         if self.home_path_base:
             username = self._get_host_username()
             target_home_path = f"{self.home_path_base}/{username}"
@@ -679,7 +677,7 @@ class K8sProcessManager(ProcessManager):
                     )
                 )
 
-        # --- ORIGINAL: Add log_mount from process_logs_path (Full Logic) ---
+        # Add log_mount from process_logs_path
         log_dir = None
         log_file_path = boot_request.process_description.process_logs_path
         if log_file_path:
@@ -703,7 +701,7 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
-        # --- ORIGINAL: Add dynamic data_mount (Full Logic) ---
+        # Add dynamic data_mount
         data_mount_path = None
         if boot_request.process_restriction.data_mount:
             self.log.info(
@@ -834,7 +832,6 @@ class K8sProcessManager(ProcessManager):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        # --- RESTORED EXACT ORIGINAL COMMAND BUILDING ---
         command_parts = []
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
@@ -868,7 +865,6 @@ class K8sProcessManager(ProcessManager):
                 )
         main_command_chain = " && ".join(command_parts)
 
-        # --- RESTORED EXACT ORIGINAL PORTS ---
         container_ports = []
         if (
             self.connection_server_name in tree_labels["role." + self.drunc_label]
@@ -878,7 +874,6 @@ class K8sProcessManager(ProcessManager):
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
 
-        # --- RESTORED EXACT ORIGINAL LIFECYCLE ---
         lifecycle_hook = None
         if (
             "controller" not in tree_labels["role." + self.drunc_label]
@@ -901,7 +896,6 @@ class K8sProcessManager(ProcessManager):
                 f"'{podname}' identified as a Python app, no preStop hook needed."
             )
 
-        # --- RESTORED EXACT ORIGINAL LOG REDIRECTION ---
         log_file_path = boot_request.process_description.process_logs_path
         final_command_args: str
 
@@ -925,7 +919,7 @@ class K8sProcessManager(ProcessManager):
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        # --- ADDITION FOR RUNP APPS: RESOURCES ---
+        # Resources for readout apps
         resource_reqs = None
         if "runp" in podname.lower():
             resource_reqs = client.V1ResourceRequirements(
@@ -941,10 +935,9 @@ class K8sProcessManager(ProcessManager):
                 }
             )
 
-        # --- BUILD CONTAINER MANIFEST ---
         container_env = self._build_container_env(boot_request, tree_labels)
 
-        # ADDITION: Security Context modification for IPC_LOCK
+        # Security Context modification for IPC_LOCK
         security_context = client.V1SecurityContext(
             run_as_user=os.getuid(), 
             run_as_group=os.getgid()
