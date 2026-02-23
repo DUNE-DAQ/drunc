@@ -61,18 +61,20 @@ def grpc_servicer(mock_logger, monkeypatch):
     # Injecting them in the test
     monkeypatch.setenv(
         "DUNEDAQ_ERS_ERROR",
-        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "rich",
     )
-    monkeypatch.setenv(
-        "DUNEDAQ_ERS_FATAL", "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)"
-    )
+    monkeypatch.setenv("DUNEDAQ_ERS_FATAL", "rich")
     monkeypatch.setenv(
         "DUNEDAQ_ERS_INFO",
-        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "rich",
     )
     monkeypatch.setenv(
         "DUNEDAQ_ERS_WARNING",
-        "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "rich",
+    )
+    monkeypatch.setattr(
+        "drunc.process_manager.process_manager.setup_daq_ers_logger",
+        lambda *args, **kwargs: None,
     )
 
     servicer = ConcreteProcessManager(session="mock_session")
