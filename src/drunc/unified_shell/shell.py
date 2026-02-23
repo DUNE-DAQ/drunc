@@ -188,6 +188,22 @@ def unified_shell(
             f"The session [green]{ctx.obj.configuration_id} in file {ctx.obj.configuration_file}[/green] [yellow]does not have a resource manager defined[/yellow], resources will not be requested from the resource management service"
         )
 
+    # Iterate through all the segment nest levels, parse out the requested managed
+    # objects for that segment, and allocate them to a dict
+    managed_objects: dict[
+        str : list(str)
+    ] = {}  # segment: list[managed_object_identifier]
+    segments = session_dal.segment.segments
+    while segments:
+        nested_segments = []
+        for segment in segments:
+            managed_objects[segment.id] = confmodel_dal.segment_get_managed_object_tags(
+                db._obj, ctx.obj.configuration_id, segment.id
+            )
+            nested_segments += [nested_segment for nested_segment in segment.segments]
+        segments = nested_segments
+    unified_shell_log.info(f"{managed_objects=}")
+
     # If the resource manager is present, get the list of resources required from it
     if resource_manager:
         session_requested_resources: set(str) = (
