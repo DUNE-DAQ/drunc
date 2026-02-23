@@ -622,7 +622,7 @@ class K8sProcessManager(ProcessManager):
 
         # Volumes from json config
         for vc in self.volume_configs:
-            if vc["name"] in ["hugepages", "vfio", "intel-firmware"] and not is_runp:
+            if vc["name"] in ["hugepages", "vfio", "intel-firmware"] and not is_perf_app:
                 continue
 
             if any(v.name == vc["name"] for v in pod_volumes):
