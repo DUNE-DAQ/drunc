@@ -11,6 +11,7 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
+import confmodel_dal
 from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -176,6 +177,30 @@ def unified_shell(
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
+
+    # Get access to the resource manager if it is defined in the configuration
+    resource_manager: "confmodel_dal.ResourceManagerConf | None" = None
+    if getattr(session_dal, "resource_manager", None):
+        resource_manager = session_dal.resource_manager
+
+    # If the resource manager is present, extract its parameters and log them
+    resource_manager_address: str | None = None
+    if resource_manager:
+        resource_manager_address = f"{resource_manager.address}:{resource_manager.port}"
+        unified_shell_log.info(
+            f"Found resource manager at address {resource_manager_address}"
+        )
+
+    # If the resource manager is present, get the list of resources required from it
+    if resource_manager:
+        session_requested_resources: set(str) = (
+            confmodel_dal.segment_get_managed_object_tags(
+                db._obj, ctx.obj.configuration_id
+            )
+        )
+        unified_shell_log.info(
+            f"This session has requested the following resources: {session_requested_resources=}"
+        )
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "

@@ -105,6 +105,11 @@
  <rel name="controller" class="RCApplication" id="controller-0"/>
 </obj>
 
+<obj class="ResourceManagerConf" id="ResourceManagerConf_test">
+ <attr name="address" type="string" val="localhost"/>
+ <attr name="port" type="u16" val="32009"/>
+</obj>
+
 <obj class="Session" id="one-controller-config">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
@@ -124,6 +129,7 @@
  </rel>
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+ <rel name="resource_manager" class="ResourceManagerConf" id="ResourceManagerConf_test"/>
 </obj>
 
 
