@@ -182,6 +182,11 @@ def unified_shell(
     resource_manager: "confmodel_dal.ResourceManagerConf | None" = None
     if getattr(session_dal, "resource_manager", None):
         resource_manager = session_dal.resource_manager
+    else:
+        # This will be changed to an error once the resource manager service is deployed and all configurations have a resource manager configuration.
+        unified_shell_log.info(
+            f"The session {ctx.obj.configuration_id} in file {ctx.obj.configuration_file} does not have a resource manager defined in the file, resources will not be parsed out."
+        )
 
     # If the resource manager is present, extract its parameters and log them
     resource_manager_address: str | None = None
