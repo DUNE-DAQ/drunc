@@ -18,6 +18,14 @@ from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger
 
+PROCESS_SHUTDOWN_ORDERING = [
+    "unknown",
+    "application",
+    "segment-controller",
+    "root-controller",
+    "local-connection-server",
+]
+
 
 class ProcessManagerTypes(Enum):
     Unknown = 0

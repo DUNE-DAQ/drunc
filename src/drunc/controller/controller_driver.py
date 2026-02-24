@@ -1,10 +1,8 @@
 import ipaddress
 import socket
-from functools import wraps
 
 import grpc
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
@@ -22,11 +20,18 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    SurrenderControlRequest,
+    SurrenderControlResponse,
+    TakeControlRequest,
+    TakeControlResponse,
+    ToErrorRequest,
+    ToErrorResponse,
+    WhoIsInChargeRequest,
+    WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, ResponseFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
@@ -92,29 +97,6 @@ class ControllerDriver:
         self.stub = ControllerStub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
-
-    def OLD_pack_empty_addressed_command(cmd):
-        @wraps(cmd)
-        def wrapper(
-            self,
-            target: str = "",
-            execute_along_path: bool = True,
-            execute_on_all_subsequent_children_in_path: bool = True,
-            **kwargs,
-        ):
-            command_name = cmd.__name__
-            return cmd(
-                self,
-                addressed_command=AddressedCommand(
-                    command_name=command_name,
-                    target=target,
-                    execute_along_path=execute_along_path,
-                    execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-                ),
-                **kwargs,
-            )
-
-        return wrapper
 
     def status(
         self,
@@ -290,46 +272,89 @@ class ControllerDriver:
 
         return response
 
-    @OLD_pack_empty_addressed_command
     def take_control(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "take_control", data=addressed_command, outformat=PlainText, timeout=timeout
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> TakeControlResponse:
+        request = TakeControlRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
-    @OLD_pack_empty_addressed_command
-    def who_is_in_charge(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "who_is_in_charge",
-            data=addressed_command,
-            outformat=PlainText,
-            timeout=timeout,
-        )
+        try:
+            response = self.stub.take_control(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
 
-    @OLD_pack_empty_addressed_command
+        return response
+
     def surrender_control(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "surrender_control",
-            data=addressed_command,
-            outformat=PlainText,
-            timeout=timeout,
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> SurrenderControlResponse:
+        request = SurrenderControlRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
 
-    @OLD_pack_empty_addressed_command
-    def to_error(
-        self, addressed_command: AddressedCommand, timeout: int | float = 60
-    ) -> DecodedResponse:
-        return self.OLD_send_command(
-            "to_error",
-            data=addressed_command,
-            outformat=Description,
-            timeout=timeout,
+        try:
+            response = self.stub.surrender_control(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def who_is_in_charge(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> WhoIsInChargeResponse:
+        request = WhoIsInChargeRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.who_is_in_charge(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def to_error(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> ToErrorResponse:
+        request = ToErrorRequest(
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.to_error(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
 
     def handle_response(self, response, command, outformat):
         dr = DecodedResponse(
@@ -392,23 +417,3 @@ class ControllerDriver:
                 self.log.error(f"Exception thrown from child: {e}")
 
         return dr
-
-    def OLD_send_command(
-        self,
-        command: str,
-        data=None,
-        outformat=None,
-        timeout: int | float = 60,
-    ):
-        request = Request()
-        request.token.CopyFrom(self.token)
-        if data is not None:
-            request.data.Pack(data)
-
-        try:
-            cmd = getattr(self.stub, command)
-            response = cmd(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
-        return self.handle_response(response, command, outformat)

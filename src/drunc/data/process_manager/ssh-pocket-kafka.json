@@ -19,5 +19,10 @@
     "opmon_conf": {
         "level": "debug",
         "interval_s": 10.0
+        "GRPC_ENABLE_FORK_SUPPORT": "false",
+        "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_FATAL": "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
+        "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"
     }
 }
