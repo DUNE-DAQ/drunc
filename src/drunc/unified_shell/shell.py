@@ -59,12 +59,12 @@ from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.shell_utils import is_port_available
 from drunc.utils.utils import (
     format_name_for_cli,
     get_logger,
     get_root_logger,
     ignore_sigint_sighandler,
+    is_port_available,
     resolve_localhost_and_127_ip_to_network_ip,
     strip_non_drunc_loggers,
 )
