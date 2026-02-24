@@ -80,7 +80,13 @@ def run_pm(
     for key, value in pmch.data.environment.items():
         os.environ[key] = value
 
-    pm = ProcessManager.get(pmch, name="process_manager")
+    try:
+        pm = ProcessManager.get(pmch, name="process_manager")
+    except Exception as e:
+        msg = "Process manager encountered error when starting up"
+        log.critical(msg)
+        log.critical(e)
+        return
     log.debug("Setup up ProcessManager")
 
     server: grpc.Server | None = None
