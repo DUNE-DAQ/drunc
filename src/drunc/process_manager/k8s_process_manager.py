@@ -152,7 +152,10 @@ class K8sProcessManager(ProcessManager):
                 "Please ensure 'kubectl' is configured correctly or the KUBECONFIG environment variable is set."
             )
             self.log.critical("----------------------------------------------")
-            raise
+            
+            # we can do any other ERS things if desired here!
+            self._terminate_impl()
+            return
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
