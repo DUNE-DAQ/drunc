@@ -516,6 +516,16 @@ class RESTAPIChildNode(ChildNode):
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command_name)
         exit_state = self.fsm.get_destination_state(entry_state, transition)
+
+        if exit_state is None:
+            self.log.info(
+                f"The transition {transition} corresponding to the command {command_name}"
+                f" is not valid from current state '{entry_state}'"
+            )
+            response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
+            response.flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+            return response
+
         self.state.executing_command_mark()
         self.log.info(f"Sending '{command_name}' to '{self.name}'")
 

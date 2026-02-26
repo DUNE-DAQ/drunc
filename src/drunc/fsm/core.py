@@ -222,7 +222,7 @@ class FSM:
         """Grab all the transitions"""
         return self.sequences
 
-    def get_destination_state(self, source_state, transition) -> str:
+    def get_destination_state(self, source_state, transition) -> Optional[str]:
         """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
         for tr in right_name:
@@ -231,6 +231,7 @@ class FSM:
                     return source_state
                 else:
                     return tr.destination
+        return None
 
     def get_executable_transitions(self, source_state) -> list[Transition]:
         valid_transitions = []

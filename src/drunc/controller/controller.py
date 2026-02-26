@@ -827,9 +827,11 @@ class Controller(ControllerServicer):
             for child_response in child_responses:
                 if child_response.flag not in [
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
+                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ] or child_response.fsm_flag not in [
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
                     FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                    FSMResponseFlag.FSM_INVALID_TRANSITION,
                 ]:
                     response.fsm_flag = FSMResponseFlag.FSM_FAILED
                     self.stateful_node.to_error()
