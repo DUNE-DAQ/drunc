@@ -2,11 +2,14 @@ import getpass
 import sys
 
 import click
+import conffwk
+import confmodel_dal
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.unified_shell.context import UnifiedShellMode
+from drunc.unified_shell.shell_utils import resource_log_tree
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
 
@@ -25,14 +28,58 @@ from drunc.utils.utils import get_logger
     help="Sleep between app boot, in seconds. This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.",
 )
 @click.pass_obj
+@click.pass_context
 def boot(
+    ctx: click.core.Context,
     obj: ProcessManagerContext,
     override_logs: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
+
+    # Instantiate the session dal to parse out the managed objects
+    db = conffwk.Configuration(ctx.obj.configuration_file)
+    session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     session_name = obj.session_name
     user = getpass.getuser()
+
+    # Iterate through all the segment nest levels, parse out the requested managed
+    # objects for that segment, and allocate them to a dict
+    managed_objects: dict[
+        str : list(str)
+    ] = {}  # segment: list[managed_object_identifier]
+    managed_objects_present: bool = False
+    segments = session_dal.segment.segments
+    while segments:
+        nested_segments = []
+        for segment in segments:
+            managed_objects[segment.id] = confmodel_dal.segment_get_managed_object_tags(
+                db._obj, ctx.obj.configuration_id, segment.id
+            )
+            if managed_objects[segment.id]:
+                managed_objects_present = True
+            nested_segments += [nested_segment for nested_segment in segment.segments]
+        segments = nested_segments
+    ctx.obj.managed_objects_present = managed_objects_present
+    ctx.obj.managed_objects = managed_objects
+
+    # Split out the segments that have requested resources
+    empty_segments = [k for k, v in managed_objects.items() if not v]
+    active_segments = {k: v for k, v in managed_objects.items() if v}
+
+    # Log the request of resources if they are used
+    if ctx.obj.managed_objects_present:
+        log.info(
+            "[blue]Placeholder[/blue] Requesting objects in the following segments:"
+        )
+    # Note the next 4 lines should be considered to be indented
+    if active_segments:
+        resource_log_tree(active_segments, log)
+    if empty_segments:
+        log.info(
+            f"[yellow]Empty segments (skipped):[/yellow] {', '.join(empty_segments)}"
+        )
+
     processes = obj.get_driver("process_manager").ps(
         ProcessQuery(user=user, session=session_name)
     )
@@ -95,6 +142,43 @@ def boot(
                 "Unified shell: Running in batch mode, and because error state is detected, exiting."
             )
             sys.exit(1)
+
+
+@click.command("terminate")
+@click.pass_obj
+@click.pass_context
+def terminate(ctx, obj):
+    """
+    Execute the process manager terminate command, but release the resources prior to
+    doing so
+    """
+
+    log = get_logger("unified_shell.terminate")
+
+    # Get the handle to the managed objects
+    all_objects = ctx.obj.managed_objects
+
+    # Split out the segments that have requested resources
+    empty_segments = [k for k, v in all_objects.items() if not v]
+    active_segments = {k: v for k, v in all_objects.items() if v}
+
+    # Log the release of requested resources if they were used
+    if ctx.obj.managed_objects_present:
+        log.info(
+            "[blue]Placeholder[/blue] Releasing managed objects in the following segments:"
+        )
+
+    # if ctx.obj.managed_objects_present:all_objects = ctx.obj.managed_objects
+    if active_segments:
+        resource_log_tree(active_segments, log)
+    if empty_segments:
+        log.info(
+            f"[yellow]Empty segments (skipped):[/yellow] {', '.join(empty_segments)}"
+        )
+    ctx.obj.managed_objects = {}
+    ctx.obj.managed_objects_present = False
+
+    obj.get_driver("process_manager").terminate()
 
 
 @click.command("start-shell")

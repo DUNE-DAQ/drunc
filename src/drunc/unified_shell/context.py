@@ -25,6 +25,10 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.session_name = ""
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
+        self.managed_objects: dict[
+            str : list(str)
+        ] = {}  # segment: list[managed_object_identifier]
+        self.managed_objects_present: bool = False
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):

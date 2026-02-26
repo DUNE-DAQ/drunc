@@ -11,7 +11,6 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
-import confmodel_dal
 from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -49,11 +48,10 @@ from drunc.process_manager.interface.commands import (
     logs,
     ps,
     restart,
-    terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.commands import boot, start_shell, terminate
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -177,43 +175,6 @@ def unified_shell(
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
-
-    # Get access to the resource manager if it is defined in the configuration
-    resource_manager: "confmodel_dal.ResourceManagerConf | None" = None
-    if getattr(session_dal, "resource_manager", None):
-        resource_manager = session_dal.resource_manager
-    else:
-        # This will be changed to an error once the resource manager service is deployed and all configurations have a resource manager configuration.
-        unified_shell_log.info(
-            f"The session [green]{ctx.obj.configuration_id} in file {ctx.obj.configuration_file}[/green] [yellow]does not have a resource manager defined[/yellow], resources will not be requested from the resource management service"
-        )
-
-    # Iterate through all the segment nest levels, parse out the requested managed
-    # objects for that segment, and allocate them to a dict
-    managed_objects: dict[
-        str : list(str)
-    ] = {}  # segment: list[managed_object_identifier]
-    segments = session_dal.segment.segments
-    while segments:
-        nested_segments = []
-        for segment in segments:
-            managed_objects[segment.id] = confmodel_dal.segment_get_managed_object_tags(
-                db._obj, ctx.obj.configuration_id, segment.id
-            )
-            nested_segments += [nested_segment for nested_segment in segment.segments]
-        segments = nested_segments
-    unified_shell_log.info(f"{managed_objects=}")
-
-    # If the resource manager is present, get the list of resources required from it
-    if resource_manager:
-        session_requested_resources: set(str) = (
-            confmodel_dal.segment_get_managed_object_tags(
-                db._obj, ctx.obj.configuration_id
-            )
-        )
-        unified_shell_log.info(
-            f"This session has requested the following resources: {session_requested_resources}"
-        )
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
@@ -345,8 +306,10 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     unified_shell_log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands: list[click.Command] = [boot, terminate]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     unified_shell_log.debug("Adding [green]process_manager[/green] commands")
@@ -451,7 +414,14 @@ def unified_shell(
 
         # Attempt a stateful shutdown of the controller if possible, returning to
         # initial state before terminating
-        if ctx.obj.get_driver("controller", quiet_fail=True):
+        if (
+            len(
+                ctx.obj.get_driver("process_manager")
+                .ps(ProcessQuery(user=getpass.getuser(), session=ctx.obj.session_name))
+                .values
+            )
+            > 0
+        ) and ctx.obj.get_driver("controller", quiet_fail=True):
             try:
                 if ctx.obj.get_driver("controller").status().status.in_error:
                     unified_shell_log.warning(
@@ -493,7 +463,11 @@ def unified_shell(
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            terminate_cmd = ctx.command.get_command(ctx, "terminate")
+            if terminate_cmd:
+                ctx.invoke(terminate_cmd)
+            else:
+                unified_shell_log.error("Command 'terminate' not found.")
 
         # Check if any processes are still running
         if (
