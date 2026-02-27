@@ -3,7 +3,7 @@ import re
 import threading
 import time
 
-from daqpytools.logging.handlers import LogHandlerConf
+from daqpytools.logging.handlerconf import LogHandlerConf
 from daqpytools.logging.logger import setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
