@@ -36,7 +36,7 @@ _LIST COMMANDS TO DEMONSTRATE CHANGE_
 </summary>
 ## Prior to marking this as "Ready for Review"
 
-Tests ran on: _WHAT HOSTNAME_
+Tests ran on: _WHAT HOSTNAME_ from release _RELEASE_NAME_
 
 Unit tests - some tests can't be ran on the CI. This is [documented](https://github.com/DUNE-DAQ/drunc/wiki/Testing-prior-to-PR-merges). If this PR checks a feature that can't be tested with CI, this has been marked appropriately.
 
