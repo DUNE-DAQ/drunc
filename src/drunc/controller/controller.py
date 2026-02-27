@@ -4,8 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, TypeVar
 
-from daqpytools.logging.handlerconf import LogHandlerConf
-from daqpytools.logging.logger import setup_daq_ers_logger
+from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (

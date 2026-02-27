@@ -7,9 +7,7 @@ import types
 
 import click
 import grpc
-from daqpytools.logging.handlerconf import HandlerType
-from daqpytools.logging.handlers import add_handler
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException

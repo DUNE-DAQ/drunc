@@ -3,9 +3,7 @@ import os
 
 import click
 import click_shell
-from daqpytools.logging.handlerconf import HandlerType
-from daqpytools.logging.handlers import add_handler
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 
 from drunc.process_manager.interface.commands import (
     boot,

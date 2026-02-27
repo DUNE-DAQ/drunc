@@ -14,7 +14,7 @@ from enum import Enum
 from urllib.parse import urlparse
 
 from click import BadParameter
-from daqpytools.logging.logger import get_daq_logger, setup_root_logger
+from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import delete, get, patch, post
 from rich.progress import (
     BarColumn,
