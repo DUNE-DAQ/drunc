@@ -3,9 +3,62 @@ from typing import Dict, List
 
 import confmodel_dal
 
-from drunc.exceptions import DruncException
+from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import get_logger
+
+
+def get_full_db_path(db_path: str) -> str:
+    """
+    Find the path of the DB
+
+    Parse through the DUNEDAQ_DB_PATH, look for the passed file. If it exists, return
+    the full path. Otherwise, raise an error.
+
+    Raise an error if multiple values match the parameter.
+
+    Args:
+        db_path - path to the configuration
+    """
+
+    log = get_logger("utils.get_full_db_path")
+
+    # If the path is absolute, return it straight away
+    if os.path.isabs(db_path):
+        return db_path
+
+    # Get the env var that points to the configuration files. If it doesn't exist, raise
+    # an exception
+    search_path_str = os.environ.get("DUNEDAQ_DB_PATH", None)
+    if not search_path_str:
+        err_str = "DUNEDAQ_DB_PATH not set, exiting."
+        raise DruncSetupException(err_str)
+
+    # Split the contents of DUNEDAQ_DB_PATH, this is expected to contain multiple values
+    search_paths = search_path_str.split(":")
+
+    # Validate there are entries here
+    if not search_paths:
+        err_str = "There are no paths to search for DBs, exiting."
+        raise DruncSetupException(err_str)
+
+    # Find the matched paths
+    matched_configuration_files: list[str] = []
+    for path in search_paths:
+        candidate_path = os.path.join(path, db_path)
+        if os.path.exists(candidate_path):
+            matched_configuration_files.append(candidate_path)
+
+    # Perform basic checks
+    if not matched_configuration_files:
+        err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}, exiting."
+        raise DruncSetupException(err_str)
+    # if len(matched_configuration_files) > 1:
+    #     err_str = f"Multiple files found in DUNEDAQ_DB_PATH matching {db_path}, exiting."
+    #     raise DruncSetupException(err_str)
+
+    log.debug(f"Path {db_path} resolved to path {matched_configuration_files[0]}")
+    return matched_configuration_files[0]
 
 
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:

@@ -11,8 +11,6 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
-from daqconf.set_connectivity_service_port import set_connectivity_service_port
-from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -64,9 +62,7 @@ from drunc.utils.utils import (
     get_logger,
     get_root_logger,
     ignore_sigint_sighandler,
-    is_port_available,
     resolve_localhost_and_127_ip_to_network_ip,
-    strip_non_drunc_loggers,
 )
 
 
@@ -180,36 +176,6 @@ def unified_shell(
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
-
-    # Check that the address of the root controller is available, otherwise change it to
-    # one that is available
-    root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
-    root_controller_port: int = [
-        service
-        for service in session_dal.segment.controller.exposes_service
-        if "_control" in service.id
-    ][0].port
-    if not is_port_available(root_controller_host, root_controller_port):
-        new_port = set_rc_controller_port(configuration_file, configuration_id)
-        strip_non_drunc_loggers()
-        unified_shell_log.info(
-            f"The root controller port at {root_controller_port} is occupied, updating it to {new_port}"
-        )
-
-    # If a local connectivity service is being used, perform the same checks
-    # Temporarily removed to allow integration tests to pass without restructuring
-    # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
-    if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
-        connectivity_service_host: str = session_dal.connectivity_service.host
-        connectivity_service_port = session_dal.connectivity_service.service.port
-        if not is_port_available(connectivity_service_host, connectivity_service_port):
-            new_port = set_connectivity_service_port(
-                configuration_file, configuration_id
-            )
-            strip_non_drunc_loggers()
-            unified_shell_log.info(
-                f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {new_port}"
-            )
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "

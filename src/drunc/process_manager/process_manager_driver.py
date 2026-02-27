@@ -8,7 +8,11 @@ from collections.abc import Iterator
 from time import sleep
 from typing import Any, Dict, List
 
+import conffwk
 import grpc
+from daqconf.set_connectivity_service_port import set_connectivity_service_port
+from daqconf.set_rc_controller_port import set_rc_controller_port
+from daqconf.utils import find_free_port
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -28,6 +32,7 @@ from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.process_manager.oks_parser import get_full_db_path
 from drunc.process_manager.utils import (
     get_log_path,
     get_rte_script,
@@ -38,11 +43,14 @@ from drunc.utils.grpc_utils import (
     handle_grpc_error,
 )
 from drunc.utils.utils import (
+    file_is_read_only,
     get_control_type_and_uri_from_connectivity_service,
     get_logger,
     host_is_local,
+    is_port_available,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
+    strip_non_drunc_loggers,
 )
 
 
@@ -101,16 +109,19 @@ class ProcessManagerDriver:
         # Step 2 - initialise session
         db, session_dal = self._initialise_session(conf_file, conf_id)
 
-        # Step 3 - connect_to_service
+        # Step 3 - check for port conflicts and update configuration/DAL as needed
+        db, session_dal = self.check_port_conflicts(db, session_dal)
+
+        # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
         )
 
-        # Step 4 - track boot timings per host
+        # Step 5 - track boot timings per host
         last_boot_on_host_at = {}
         previous_host = None
 
-        # Step 5: iterate over boot requests
+        # Step 6: iterate over boot requests
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
@@ -166,7 +177,7 @@ class ProcessManagerDriver:
                     )
                 handle_grpc_error(e)
 
-        # Step 6: discover controller
+        # Step 7: discover segment root controller
         self._discover_controller(
             session_dal, session_name, csc, connection_server, connection_port
         )
@@ -366,6 +377,112 @@ To debug it, close drunc and run the following command:
 """
                 )
                 return
+
+    def check_port_conflicts(
+        self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
+    ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
+        """
+        Check that the ports allocated in the configuration file are available. If the
+        file is editable, make the changes in the file itself. Otherwise, make the
+        changes in the session_dal, logging the difference.
+
+        Note - this logic will go into the run control servuce, where the mapping from
+        OKS files will be run.
+
+        Args:
+            db - configuration database object to get the port numbers from
+            session_dal - DAL object to get the port numbers from
+
+        Returns
+            db - configuration database object, potentially updated if there were port conflicts
+            session_dal - DAL object, potentially updated if there were port conflicts
+
+        Raises:
+            None
+        """
+
+        # Firstly, check if the file is read only. If so, we will only update the DAL
+        configuration_file = db.active_database
+        config_is_read_only: bool = file_is_read_only(
+            get_full_db_path(configuration_file)
+        )
+
+        # Get the configuration ID to use in logging and potential DAL re-instantiation
+        configuration_id = session_dal.id
+
+        # Keep track of whether we made any changes, to avoid unnecessary DAL re-instantiation
+        config_updated = False
+
+        # Check that the address of the root controller is available, otherwise change
+        # it to one that is available
+        root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
+        root_controller_service: int = [
+            service
+            for service in session_dal.segment.controller.exposes_service
+            if "_control" in service.id
+        ][0]
+        root_controller_port = root_controller_service.port
+        if not is_port_available(root_controller_host, root_controller_port):
+            config_updated = True
+            if config_is_read_only:
+                new_port = find_free_port(30000, 32767)
+                root_controller_service.port = new_port
+                self.log.debug(
+                    f"Configuration file is read-only, updated root controller port in DAL to {new_port} to resolve conflict with occupied port {root_controller_port}"
+                )
+            else:
+                new_port = set_rc_controller_port(configuration_file, configuration_id)
+                strip_non_drunc_loggers()
+                self.log.debug(
+                    f"The root controller port at {root_controller_port} is occupied, updating it to {new_port}"
+                )
+
+        # If a local connectivity service is being used, perform the same checks
+        # Temporarily removed to allow integration tests to pass without restructuring
+        # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
+        if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
+            connectivity_service_host: str = session_dal.connectivity_service.host
+            connectivity_service_port = session_dal.connectivity_service.service.port
+            if not is_port_available(
+                connectivity_service_host, connectivity_service_port
+            ):
+                config_updated = True
+                if config_is_read_only:
+                    new_port = find_free_port(30000, 32767)
+                    session_dal.connectivity_service.service.port = new_port
+                    self.log.debug(
+                        f"Configuration file is read-only, updated connectivity service port in DAL to {new_port} to resolve conflict with occupied port {connectivity_service_port}"
+                    )
+                else:
+                    new_port = set_connectivity_service_port(
+                        configuration_file, configuration_id
+                    )
+                    strip_non_drunc_loggers()
+                    self.log.debug(
+                        f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {new_port}"
+                    )
+
+        if not config_updated:
+            self.log.debug("Configuration did not require modifications.")
+            return db, session_dal
+
+        if config_is_read_only:
+            # If the configuration file is read-only, we updated the DAL directly, so we can just
+            # return it without re-instantiating
+            self.log.debug(
+                "Configuration required updates but file is read-only, returning updated DAL without changing the original file."
+            )
+            return db, session_dal
+        else:
+            # If the configuration file has been modified, instantiate a new DAL
+            updated_db = conffwk.Configuration("oksconflibs:" + configuration_file)
+            updated_session_dal = updated_db.get_dal(
+                class_name="Session", uid=configuration_id
+            )
+            self.log.debug(
+                "Configuration required updates and file is writable, re-instantiating DAL to reflect changes in the file."
+            )
+            return updated_db, updated_session_dal
 
     def _initialise_session(self, conf_file: str, conf_id: str) -> tuple:
         import conffwk  # isort: skip

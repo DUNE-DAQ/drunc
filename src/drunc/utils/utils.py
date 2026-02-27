@@ -508,3 +508,16 @@ def is_port_available(host: str, port: int, timeout: int = 2) -> bool:
         except OSError:
             # Catch other network errors
             return False
+
+
+def file_is_read_only(file_path: str) -> bool:
+    """
+    Runs checks to see if the file path is read only.
+
+    Args:
+        file_path - path of file to read
+
+    Returns:
+        bool - true is file is read only, false otherwise
+    """
+    return not os.access(file_path, os.W_OK)
