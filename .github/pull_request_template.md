@@ -34,6 +34,7 @@ _LIST COMMANDS TO DEMONSTRATE CHANGE_
 # Developer checklist
 
 </summary>
+
 ## Prior to marking this as "Ready for Review"
 
 Tests ran on: _WHAT HOSTNAME_ from release _RELEASE_NAME_
@@ -85,7 +86,6 @@ Once the features are validated and both the unit and integration tests pass, th
 
 # Prior to merging
 </summary>
-<details>
 Choose one of the following an complete all substeps
 
 - Changes only affect the Run Control, are in a single repository, and do not affect the end user. 
@@ -97,13 +97,12 @@ Choose one of the following an complete all substeps
   - [ ] #daq-sw-librarians Slack channel notified (see below)
 
 Once completed, the reviewer can merge the PR.
-</details>
+<details>
 
 <summary>
 
 ## Notification message for #daq-sw-librarians Slack channel
 </summary>
-<details>
 
 ### For an single merge that changes the user workflow
 ```
