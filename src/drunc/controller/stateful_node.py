@@ -146,12 +146,10 @@ class StatefulNode(abc.ABC):
         self.__operational_sub_state.value = state
 
     def get_fsm_transitions(self):
-        r = self.__fsm.get_executable_transitions(self.get_node_operational_state())
-        return r
+        return self.__fsm.get_executable_transitions(self.get_node_operational_state())
 
     def get_all_fsm_transitions(self):
-        r = self.__fsm.get_all_transitions()
-        return r
+        return self.__fsm.get_all_transitions()
 
     def get_fsm_transition(self, transition_name):
         return self.__fsm.get_transition(transition_name)
@@ -193,6 +191,9 @@ class StatefulNode(abc.ABC):
 
     def decode_fsm_arguments(self, fsm_command):
         transition = self.get_fsm_transition(fsm_command.command_name)
+        self.log.critical(f"{fsm_command=}")
+        self.log.critical(f"{transition=}")
+
         return decode_fsm_arguments(fsm_command.arguments, transition.arguments)
 
     def prepare_transition(

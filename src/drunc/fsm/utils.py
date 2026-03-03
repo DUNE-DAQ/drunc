@@ -26,6 +26,10 @@ def convert_fsm_transition(transitions):
 
 
 def decode_fsm_arguments(arguments, arguments_format):
+    log = get_logger("controller.core.decode_fsm_arguments")
+    log.critical(f"{arguments=}")
+    log.critical(f"{arguments_format=}")
+
     def get_argument(name, arguments):
         for n, k in arguments.items():
             if n == name:
@@ -34,7 +38,12 @@ def decode_fsm_arguments(arguments, arguments_format):
 
     out_dict = {}
     for arg in arguments_format:
+        log.critical(
+            f"Parsing argument {arg.name} of type {arg.type} with presence {arg.presence}"
+        )
         arg_value = get_argument(arg.name, arguments)
+        log.critical(f"Argument value: ~{arg_value}~")
+        log.critical(f"Argument value None?: {arg_value is None}")
 
         if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
             raise fsme.MissingArgument(arg.name, "")
@@ -53,6 +62,5 @@ def decode_fsm_arguments(arguments, arguments_format):
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise fsme.UnhandledArgumentType(arg.type)
-    log = get_logger("controller.core.decode_fsm_arguments")
-    log.debug(f"Parsed FSM arguments: {out_dict}")
+    log.critical(f"Parsed FSM arguments: {out_dict}")
     return out_dict

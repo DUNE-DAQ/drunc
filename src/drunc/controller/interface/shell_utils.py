@@ -629,6 +629,25 @@ def run_one_fsm_command(
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
+    """
+    Generate a click command for a given FSM transition.
+
+    Args:
+        ctx: UnifiedShellContext
+        transition: FSMCommandDescription of the transition to generate the command for
+        controller_name: Name of the controller to run the command on
+
+    Returns:
+        A click command that can be added to the CLI
+
+    Raises:
+        Exception: If the argument type is unhandled
+    """
+
+    # Construct the partial command executing the defined FSM command with click options
+    # based on the transition's arguments
+    # log.critical(f"{transition=}")
+    # log.critical(f"{controller_name=}")
     cmd = partial(run_one_fsm_command, controller_name, transition.name)
     cmd = click.pass_obj(cmd)
     cmd = click.option(
