@@ -56,8 +56,8 @@ class FSMConfHandler(ConfHandler):
         self.pre_transitions: dict(Transition, PreOrPostTransitionSequence) = {}
         self.post_transitions: dict(Transition, PreOrPostTransitionSequence) = {}
         self.actions: dict(
-            str, "FSMAction"
-        ) = {}  # str: FSMAction (e.g. "start": usvc_provided_run_number)
+            str, "conffwk.dal.FSMAction"
+        ) = {}  # (e.g. "thread_pinning": thread_pinning FSM action object)
         self.transitions: list(Transition) = []  # list of Transition
         self.sequences = []  # list of FSMSequence
         self.states = self.data.states

@@ -183,6 +183,9 @@ class PreOrPostTransitionSequence:
                         default_value = pack_to_any(float_msg(value=p.default))
 
                 elif p.annotation in (int, Optional[int], Union[int, None]):
+                    print(
+                        f"GET ARGUEMENTS {callback.method=} {pname=} {p.annotation=} {p.default=}"
+                    )
                     t = Argument.Type.INT
 
                     if p.default != Parameter.empty:
