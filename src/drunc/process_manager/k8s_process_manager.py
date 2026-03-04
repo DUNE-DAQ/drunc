@@ -704,18 +704,21 @@ class K8sProcessManager(ProcessManager):
         # Add dynamic data_mount
         data_mount_path = None
         if boot_request.process_restriction.data_mount:
+            mount_req = boot_request.process_restriction.data_mount
             self.log.info(
-                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
+                f"Found data_mount request: '{mount_req}'"
             )
-            if boot_request.process_restriction.data_mount == "./":
+            
+            # Use normpath to safely handle both "." and "./"
+            if os.path.normpath(mount_req) == ".":
                 data_mount_path = (
                     boot_request.process_description.process_execution_directory
                 )
                 self.log.info(
-                    f"Resolving './' data_mount to process_execution_directory: '{data_mount_path}'"
+                    f"Resolving '{mount_req}' data_mount to process_execution_directory: '{data_mount_path}'"
                 )
             else:
-                data_mount_path = boot_request.process_restriction.data_mount
+                data_mount_path = mount_req
                 self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
 
             if data_mount_path:
