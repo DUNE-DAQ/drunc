@@ -700,11 +700,6 @@ class Controller(ControllerServicer):
             fsm_flag=FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-        self.log.critical(f"{request=}")
-        self.log.critical(f"{context=}")
-        self.log.critical(
-            f"Executing {request.command.command_name} with data {request.command.data}"
-        )
 
         try:
             # Parse and validate target.
@@ -755,7 +750,6 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
-            self.log.critical(f"FSM transition arguments: {fsm_args}")
             fsm_data = self.stateful_node.prepare_transition(
                 transition=transition,
                 transition_args=fsm_args,
