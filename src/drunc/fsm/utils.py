@@ -27,8 +27,6 @@ def convert_fsm_transition(transitions):
 
 def decode_fsm_arguments(arguments, arguments_format):
     log = get_logger("controller.core.decode_fsm_arguments")
-    log.critical(f"{arguments=}")
-    log.critical(f"{arguments_format=}")
 
     def get_argument(name, arguments):
         for n, k in arguments.items():
