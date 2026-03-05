@@ -42,7 +42,9 @@ class PreOrPostTransitionSequence:
         self.sequence: list(Callback) = []
         self.log = get_logger("controller.core.PreOrPostTransitionSequence")
 
-    def add_callback(self, action, mandatory=True) -> None:
+    def add_callback(
+        self, action: "conffwk.dal.FSMaction", mandatory: bool = True
+    ) -> None:
         """
         Add a callback to the sequence. The method to be called will be determined by
         the name of the transition and the prefix (pre or post).
@@ -51,17 +53,27 @@ class PreOrPostTransitionSequence:
         be called will be "pre_start".
 
         Args:
+            action (conffwk.dal.FSMAction): The action to be added to the sequence.
+            mandatory (bool): Whether the callback is mandatory or not.
 
+        Returns:
+            None
+
+        Raises:
+            DruncSetupException: If the method to be called is not found in the action.
         """
 
-        # Get the method to be called from the action, based on the name of the transition and the prefix (pre or post)
+        # Get the method to be called from the action, based on the name of the
+        # transition and the prefix (pre or post)
         method = getattr(action, f"{self.prefix}_{self.transition.name}")
 
+        # Sanity check
         if not method:
             raise DruncSetupException(
                 f"{self.prefix}_{self.transition.name} method not found in {action.name}"
             )
 
+        # Add the callback to the sequence
         self.sequence += [
             Callback(
                 method=method,
