@@ -387,37 +387,69 @@ def tree_prefix(i, n):
 
 
 def validate_and_format_fsm_arguments(
-    arguments: dict, command_arguments: list[Argument]
-):
+    arguments: dict[int | bool | str | float | None], command_arguments: list[Argument]
+) -> dict[int | bool | str | float | None]:
+    """
+    Validates and formats the arguments passed to an FSM command based on the command's
+    argument descriptions.
+
+    Args:
+        arguments (dict): A dictionary of argument names and their values passed to the command.
+        command_arguments (list): A list of Argument descriptions for the command.
+
+    Returns:
+        dict: A dictionary of argument names and their formatted values, ready to be sent to the controller.
+
+    Raises:
+        ArgumentException: If there is an issue with the arguments (missing, duplicate, invalid type, or unhandled type)
+    """
+    # Define the output dict that will be sent to the controller, with argument names
+    # and their formatted values
     out_dict = {}
 
-    arguments_left = arguments
     # If the argument dict is empty, don't bother trying to read it
     if not arguments:
         return out_dict
 
-    for argument_desc in command_arguments:
-        aname = argument_desc.name
-        atype = Argument.Type.Name(argument_desc.type)
-        adefa = argument_desc.default_value
+    # Strip out any arguments that are None, as they are considered not passed, and will
+    # be set to default values if they exist, or raise an error if they are mandatory
+    # without default value
+    arguments = {k: v for k, v in arguments.items() if v is not None}
 
+    # Keep track of the arguments that are left after processing, to detect any
+    # unhandled arguments at the end
+    arguments_left = arguments
+
+    # Iterate over the command's argument descriptions, validate the passed arguments,
+    # and format them to be sent to the controller
+    for argument_desc in command_arguments:  #  type: Argument
+        aname: str = argument_desc.name
+        atype: str = Argument.Type.Name(argument_desc.type)
+        adefa: str | int | float | bool | None = argument_desc.default_value
+
+        # Check for duplicate arguments
         if aname in out_dict:
             raise DuplicateArgument(aname)
 
+        # Check for missing mandatory arguments
         if (
             argument_desc.presence == Argument.Presence.MANDATORY
             and aname not in arguments
         ):
             raise MissingArgument(aname, atype)
 
-        value = arguments.get(aname)
+        # If the argument is not passed, and it has a default value, use the default value
+        value: str | int | float | bool | None = arguments.get(aname)
         if value is None:
             out_dict[aname] = adefa
             continue
 
+        # If the argument is passed, remove it from the arguments to keep track of
         if value:
             del arguments_left[aname]
 
+        # Convert the argument value to the appropriate type based on the argument
+        # description, and format it to be sent to the controller
         match argument_desc.type:
             case Argument.Type.INT:
                 try:
@@ -447,6 +479,7 @@ def validate_and_format_fsm_arguments(
                 raise UnhandledArgumentType(argument_desc.name, pretty_type)
         out_dict[aname] = pack_to_any(value)
 
+    # This needs to be dealt with later
     # if arguments_left:
     #     raise UnhandledArguments(arguments_left)
     return out_dict
@@ -648,7 +681,11 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     # based on the transition's arguments
     # log.critical(f"{transition=}")
     # log.critical(f"{controller_name=}")
-    cmd = partial(run_one_fsm_command, controller_name, transition.name)
+    cmd = partial(
+        run_one_fsm_command,
+        controller_name=controller_name,
+        transition_name=transition.name,
+    )
     cmd = click.pass_obj(cmd)
     cmd = click.option(
         "--target",
@@ -695,7 +732,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             default_value = raw_default
 
         cmd = click.option(
-            f"{argument_name_cli}",
+            f"--{argument_name_cli}",
             type=atype,
             default=default_value,
             show_default=True,

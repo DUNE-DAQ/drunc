@@ -64,11 +64,6 @@ class FSMConfHandler(ConfHandler):
         self.initial_state = self.data.initial_state
 
         for action in self.data.actions:
-            # self.log.critical(f"Setting up action '{action.id}' with action data: {action} (of type {type(action)})")
-            # Setting up action 'file-run-registry' with action data: FSMaction(id='file-run-registry',
-            #     commands = [],
-            #     name = file-run-registry,
-            #     parameters = []]) (of type <class 'conffwk.dal.FSMaction'>)
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )
@@ -93,23 +88,15 @@ class FSMConfHandler(ConfHandler):
                     "post", tr, self.data.post_transitions
                 )
             )
-            # print(f"Got post transitions: {post_transitions}")
 
-            # print(f"Before adding args: {tr.arguments}")
+            # Add the arguments of the pre and post transition sequences to the transition
             tr.arguments += pre_transitions.get_arguments()
             tr.arguments += post_transitions.get_arguments()
-            # print(f"After adding args: {tr.arguments}")
-
-            # print("Sanity check")
-            args = pre_transitions.get_arguments()
-            _a = [arg for arg in args if arg.name == "run_number"]
 
             self.pre_transitions[tr] = pre_transitions
             self.post_transitions[tr] = post_transitions
 
-            # print(f"Final transition: {tr}")
-            # print(f"Final args: {tr.arguments}")
-
+            # Add the transition to the list of transitions
             self.transitions += [tr]
 
         for sequence in self.data.command_sequences:

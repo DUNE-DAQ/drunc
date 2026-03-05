@@ -362,7 +362,6 @@ def unified_shell(
         "Adding [green]controller[/green] commands to the click context"
     )
     for transition in transitions.commands:
-        # unified_shell_log.critical(f"{transition=}")
         ctx.command.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
