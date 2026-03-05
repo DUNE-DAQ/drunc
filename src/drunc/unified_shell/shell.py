@@ -14,7 +14,6 @@ import conffwk
 from daqpytools.logging.levels import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
-from kubernetes.config.config_exception import ConfigException
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.configuration import ControllerConfHandler
@@ -220,10 +219,7 @@ def unified_shell(
                 "generated_port": port,
             },
         )
-        try:
-            ctx.obj.pm_process.start()
-        except ConfigException:
-            sys.exit(1)
+        ctx.obj.pm_process.start()
         unified_shell_log.debug("[green]Process manager[/green] started")
 
         # Check if the process manager started correctly
