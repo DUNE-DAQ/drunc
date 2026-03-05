@@ -4,6 +4,7 @@ import os
 import re
 import signal
 import socket
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -155,7 +156,7 @@ class K8sProcessManager(ProcessManager):
                 "Please ensure 'kubectl' is configured correctly or the KUBECONFIG environment variable is set."
             )
             self.log.critical("----------------------------------------------")
-            raise
+            sys.exit(1)
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
