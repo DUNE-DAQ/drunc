@@ -1,4 +1,5 @@
 import datetime
+import functools
 import ipaddress
 import logging
 import os
@@ -8,7 +9,6 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from functools import lru_cache, partial
 from urllib.parse import urlparse
 
 import click
@@ -25,6 +25,7 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
+from google.protobuf import any_pb2
 from rich.console import ConsoleRenderable, Group, RichCast
 from rich.progress import (
     BarColumn,
@@ -486,10 +487,10 @@ def validate_and_format_fsm_arguments(
 
 
 def run_one_fsm_command(
-    obj: UnifiedShellContext,  # Move this to index 0
-    controller_name: str,  # Index 1
-    transition_name: str,  # Index 2
-    target: str,  # Index 3
+    obj: UnifiedShellContext,
+    controller_name: str,
+    transition_name: str,
+    target: str,
     **kwargs,
 ) -> None:
     """
@@ -678,10 +679,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     """
 
     # Construct the partial command executing the defined FSM command with click options
-    # based on the transition's arguments
-    # log.critical(f"{transition=}")
-    # log.critical(f"{controller_name=}")
-    cmd = partial(
+    cmd: functools.partial = functools.partial(
         run_one_fsm_command,
         controller_name=controller_name,
         transition_name=transition.name,
@@ -695,7 +693,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     )(cmd)
 
     # Define the mapping of gRPC argument types to click types
-    type_map = {
+    type_map: dict[int, str | int | float | bool] = {
         Argument.Type.STRING: str,
         Argument.Type.INT: int,
         Argument.Type.FLOAT: float,
@@ -704,33 +702,42 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 
     # Define the mapping of gRPC argument types to their corresponding protobuf message
     # types for default value unpacking
-    msg_map = {str: string_msg, int: int_msg, float: float_msg, bool: bool_msg}
+    msg_map: dict(any_pb2) = {
+        str: string_msg,
+        int: int_msg,
+        float: float_msg,
+        bool: bool_msg,
+    }
 
-    # Iterate over the Arguments (druncschema.controller_pb2) of the Transitions
-    # (drunc.controller.transition.Transition), and add them as click options to the
-    # click command
-    for argument in transition.arguments:
-        # Map the gRPC argument type to a click type, and raise an exception if the type is unhandled
-        atype = type_map.get(argument.type)
+    # Iterate over the Arguments of the Transitions, and add them as click options to
+    # the click command
+    for argument in transition.arguments:  # type: Argument
+        # Map the gRPC argument type to a click type, raise an exception if the type is
+        # unhandled
+        atype: Argument.Type.V = type_map.get(argument.type)
         if not atype:
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
-        # Unpack the default value of the argument if it exists, and convert it to the appropriate type
-        raw_default = None
+        # Unpack the default value of the argument if it exists, and convert it to the
+        # appropriate type
+        raw_default: int | float | str | bool | None = None
         if argument.HasField("default_value"):
             unpacked = unpack_any(argument.default_value, msg_map[atype])
             raw_default = atype(unpacked.value)
 
-        argument_name_cli = argument.name.lower().replace("_", "-")
-        env_var = f"DRUNC_{argument.name.upper()}_DEFAULT"
-        env_val = os.getenv(env_var)
+        # Check for default values defined in the environment variables
+        argument_name_cli: str = argument.name.lower().replace("_", "-")
+        env_var: str = f"DRUNC_{argument.name.upper()}_DEFAULT"
+        env_val: str | None = os.getenv(env_var)
 
+        # Assign the default value if it is present
         if env_val is not None:
             log.info(f"Env override for {argument_name_cli}: {env_val}")
             default_value = atype(env_val)
         else:
             default_value = raw_default
 
+        # Add the argument to the click command
         cmd = click.option(
             f"--{argument_name_cli}",
             type=atype,
@@ -743,18 +750,17 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
             help=argument.help,
         )(cmd)
 
-    cmd_name = format_name_for_cli(transition.name)
-
+    # Construct the click command
+    cmd_name: str = format_name_for_cli(transition.name)
     cmd = click.command(
         name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
     )(cmd)
-    # cmd = click.pass_obj(cmd)
 
     return cmd, cmd_name
 
 
-@lru_cache(maxsize=4096)
+@functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
     Resolves an IP to a hostname, with optimizations:

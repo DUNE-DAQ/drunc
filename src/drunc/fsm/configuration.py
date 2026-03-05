@@ -1,3 +1,4 @@
+import conffwk
 from druncschema.controller_pb2 import FSMSequence
 
 from drunc.fsm.action_factory import FSMActionFactory
@@ -51,24 +52,44 @@ class FSMConfHandler(ConfHandler):
         return seq
 
     def _post_process_oks(self):
+        """
+        Post-process the configuration data after it has been loaded and validated.
+
+        This method:
+            - initializes the FSM configuration
+            - fills the pre and post transition sequences for each transition
+            - adds the arguments of the pre and post transition sequences to the
+                corresponding transition
+
+        Args:
+            None
+
+        Returns:
+            None
+
+        Raises:
+            None
+        """
+        # Define the data structures to store the FSM configuration
         self.log.debug("_post_process_oks configuration")
         self.pre_transitions: dict(Transition, PreOrPostTransitionSequence) = {}
         self.post_transitions: dict(Transition, PreOrPostTransitionSequence) = {}
         self.actions: dict(
             str, "conffwk.dal.FSMAction"
         ) = {}  # (e.g. "thread_pinning": thread_pinning FSM action object)
-        self.transitions: list(Transition) = []  # list of Transition
-        self.sequences = []  # list of FSMSequence
-        self.states = self.data.states
-        self.initial_state = self.data.initial_state
+        self.transitions: list(Transition) = []
+        self.sequences: list["conffwk.dal.FSMSequence"] = []
+        self.states: list(str) = self.data.states
+        self.initial_state: str = self.data.initial_state
 
-        for action in self.data.actions:
+        # Fill the actions dictionary with the FSMAction objects corresponding to the
+        # action names defined in the configuration
+        for action in self.data.actions:  # type: 'conffwk.dal.FSMAction'
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )
 
-        self.log.critical(f"self.data.transitions: {self.data.transitions}")
-        for transition in self.data.transitions:
+        for transition in self.data.transitions:  # type: 'conffwk.dal.FSMTransition'
             tr = Transition(
                 name=transition.id,
                 source=transition.source,
@@ -76,7 +97,7 @@ class FSMConfHandler(ConfHandler):
                 arguments=[],  # list(google.protobuf.any_pb2.Any)
             )
 
-            # Get the pre and post transition sequences for the current transition
+            # Get the pre and post transition sequences for the transition
             pre_transitions: PreOrPostTransitionSequence = (
                 self._fill_pre_post_transition_sequence_oks(
                     "pre", tr, self.data.pre_transitions
@@ -88,16 +109,18 @@ class FSMConfHandler(ConfHandler):
                 )
             )
 
-            # Add the arguments of the pre and post transition sequences to the transition
+            # Add the pre and post transition sequence arguments to the transition
             tr.arguments += pre_transitions.get_arguments()
             tr.arguments += post_transitions.get_arguments()
 
+            # Store the pre and post transition sequences for the transition
             self.pre_transitions[tr] = pre_transitions
             self.post_transitions[tr] = post_transitions
 
             # Add the transition to the list of transitions
             self.transitions += [tr]
 
+        # Fill the sequences of commands to execute for each transition
         for sequence in self.data.command_sequences:
             seq_id = sequence.id
             cmd_ids = [cmd.id for cmd in sequence.sequence]
