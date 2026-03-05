@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 import grpc
-import pytest
 from google.protobuf.any_pb2 import Any
 from google.rpc import error_details_pb2, status_pb2
 
