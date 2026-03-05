@@ -5,7 +5,7 @@ import pytest
 from google.protobuf.any_pb2 import Any
 from google.rpc import error_details_pb2, status_pb2
 
-from drunc.utils.grpc_utils import GrpcErrorDetails, extract_grpc_rich_error
+from drunc.utils.grpc_utils import extract_grpc_rich_error
 
 
 def make_grpc_error_with_details(code, message, detail_messages):
