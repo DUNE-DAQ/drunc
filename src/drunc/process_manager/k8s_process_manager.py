@@ -126,7 +126,10 @@ class K8sPodWatcherThread(threading.Thread):
                 sleep(3)
 
             except Exception as e:
-                self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
+                self.pm.log.error(
+                    "K8s watcher thread encountered an error, stacktrace present in the debug logs. Restarting watch."
+                )
+                self.pm.log.debug(f"K8s watcher thread error: {e}.")
                 sleep(self.pm.watcher_retry_sleep)
 
 
