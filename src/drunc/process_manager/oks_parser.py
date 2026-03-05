@@ -80,6 +80,42 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
+def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
+    """
+    Drop-in, db-free replacement for:
+        confmodel_dal.component_disabled(db._obj, session_obj.id, component_id)
+
+    Uses only the Session DAL object (session_obj) and the component UID.
+
+    Semantics:
+      - Returns True if the component UID is explicitly present in session_obj.disabled
+      - Returns False otherwise
+
+    Notes:
+      - This matches the common meaning of 'disabled' in OKS configs as exposed via
+        conffwk.dal.Session.disabled.
+      - It does *not* attempt to infer disabled state via parent/child propagation
+        rules that may exist in confmodel C++ (if any).
+    """
+    # session_obj.disabled is a list of DAL objects (Resources) disabled in this session
+    try:
+        disabled = session_obj.disabled
+    except Exception:
+        # If OKS/DAL isn't available, fall back to "not disabled"
+        return False
+
+    # Compare by UID (DAL .id)
+    for d in disabled:
+        try:
+            if d.id == component_id:
+                return True
+        except Exception:
+            # Defensive: if an element doesn't look like a DAL object, ignore it
+            continue
+
+    return False
+
+
 # Recursively process all Segments in given Segment extracting Applications
 def collect_apps(
     config_filename,
@@ -145,9 +181,12 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if confmodel_dal.component_disabled(
+        dalcomp = component_disabled_from_session_dal(session_obj, sub_segment_obj.id)
+        confcomp = confmodel_dal.component_disabled(
             db._obj, session_obj.id, sub_segment_obj.id
-        ):
+        )
+        log.critical(f"{dalcomp=}, {confcomp=} ")
+        if dalcomp:
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
