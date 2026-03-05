@@ -79,21 +79,15 @@ class FSMConfHandler(ConfHandler):
                 name=transition.id,
                 source=transition.source,
                 destination=transition.dest,
-                arguments=[],  # /!\
+                arguments=[],  # list(google.protobuf.any_pb2.Any)
             )
-            print("")
-            print(f"Transition: {tr.name}")
-            # print(f"Pre transitions?: {self.data.pre_transitions}")
-            # print(f"Post transitions?: {self.data.post_transitions}")
-            # print("Calling fun pre-transitions")
+
+            # Get the pre and post transition sequences for the current transition
             pre_transitions: PreOrPostTransitionSequence = (
                 self._fill_pre_post_transition_sequence_oks(
                     "pre", tr, self.data.pre_transitions
                 )
             )
-            print(f"\t\tGot pre transitions: {pre_transitions}")
-            print(f"\t\tGot pre transitions args: {pre_transitions.get_arguments()}")
-            # print("Calling fun post-transitions")
             post_transitions: PreOrPostTransitionSequence = (
                 self._fill_pre_post_transition_sequence_oks(
                     "post", tr, self.data.post_transitions
@@ -107,8 +101,8 @@ class FSMConfHandler(ConfHandler):
             # print(f"After adding args: {tr.arguments}")
 
             # print("Sanity check")
-            print(f"{pre_transitions=}")
-            print(f"{pre_transitions.get_arguments()=}")
+            args = pre_transitions.get_arguments()
+            _a = [arg for arg in args if arg.name == "run_number"]
 
             self.pre_transitions[tr] = pre_transitions
             self.post_transitions[tr] = post_transitions
@@ -122,10 +116,6 @@ class FSMConfHandler(ConfHandler):
             seq_id = sequence.id
             cmd_ids = [cmd.id for cmd in sequence.sequence]
             self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))
-
-        # import pprint
-        # print("")
-        # pprint.pprint(self.actions, indent=4)
 
     # def _parse_dict(self, data):
     #     pass

@@ -159,3 +159,72 @@ class ConfHandler:
 
             case _:
                 raise ConfTypeNotSupported(self.initial_type, self.class_name)
+
+
+# def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
+#     # Construct the base command
+#     # run_one_fsm_command(controller, transition, target, **kwargs)
+#     cmd = partial(run_one_fsm_command, controller_name, transition.name)
+#     cmd = click.pass_obj(cmd)
+
+#     # Standard target option
+#     cmd = click.option(
+#         "--target",
+#         type=str,
+#         help="The target to address",
+#         default="",
+#     )(cmd)
+
+#     for argument in transition.arguments:
+#         # Mapping gRPC types to Python types
+#         type_map = {
+#             Argument.Type.STRING: str,
+#             Argument.Type.INT: int,
+#             Argument.Type.FLOAT: float,
+#             Argument.Type.BOOL: bool,
+#         }
+
+#         atype = type_map.get(argument.type)
+#         if not atype:
+#             raise Exception(f"Unhandled argument type '{argument.type}'")
+
+#         # Extract Default Value
+#         # Ensure we don't accidentally turn a 'None' into '0' or 'False'
+#         # until we know if it's required.
+#         raw_default = None
+#         if argument.HasField("default_value"):
+#             msg_map = {str: string_msg, int: int_msg, float: float_msg, bool: bool_msg}
+#             unpacked = unpack_any(argument.default_value, msg_map[atype])
+#             raw_default = atype(unpacked.value)
+
+#         # Environment Variable Override
+#         argument_name_cli = argument.name.lower().replace('_', '-')
+#         env_var = f"DRUNC_{argument.name.upper()}_DEFAULT"
+#         env_val = os.getenv(env_var)
+
+#         if env_val is not None:
+#             log.info(f"Env override for {argument_name_cli}: {env_val}")
+#             default_value = atype(env_val)
+#         else:
+#             default_value = raw_default
+
+#         # Logic Fix: A parameter is REQUIRED if the FSM says it is MANDATORY,
+#         # regardless of whether the Python default is None.
+#         is_required = (argument.presence == Argument.Presence.MANDATORY) and (default_value is None)
+
+#         cmd = click.option(
+#             f"--{argument_name_cli}",
+#             type=atype,
+#             default=default_value,
+#             required=is_required,
+#             show_default=True,
+#             help=argument.help,
+#         )(cmd)
+
+#     cmd_name = format_name_for_cli(transition.name)
+
+#     # Return as a Command object
+#     return click.command(
+#         name=cmd_name,
+#         help=f"Execute {transition.name} on {controller_name}",
+#     )(cmd)

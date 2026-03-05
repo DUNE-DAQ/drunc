@@ -453,10 +453,10 @@ def validate_and_format_fsm_arguments(
 
 
 def run_one_fsm_command(
-    controller_name: str,
-    transition_name: str,
-    obj: UnifiedShellContext,
-    target: str,
+    obj: UnifiedShellContext,  # Move this to index 0
+    controller_name: str,  # Index 1
+    transition_name: str,  # Index 2
+    target: str,  # Index 3
     **kwargs,
 ) -> None:
     """
@@ -657,67 +657,52 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
         default="",
     )(cmd)
 
+    # Define the mapping of gRPC argument types to click types
+    type_map = {
+        Argument.Type.STRING: str,
+        Argument.Type.INT: int,
+        Argument.Type.FLOAT: float,
+        Argument.Type.BOOL: bool,
+    }
+
+    # Define the mapping of gRPC argument types to their corresponding protobuf message
+    # types for default value unpacking
+    msg_map = {str: string_msg, int: int_msg, float: float_msg, bool: bool_msg}
+
+    # Iterate over the Arguments (druncschema.controller_pb2) of the Transitions
+    # (drunc.controller.transition.Transition), and add them as click options to the
+    # click command
     for argument in transition.arguments:
-        atype = None
-        if argument.type == Argument.Type.STRING:
-            atype = str
-            default_value = (
-                unpack_any(argument.default_value, string_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, string_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.INT:
-            atype = int
-            default_value = (
-                unpack_any(argument.default_value, int_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, int_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.FLOAT:
-            atype = float
-            default_value = (
-                unpack_any(argument.default_value, float_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, float_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.BOOL:
-            atype = bool
-            default_value = (
-                unpack_any(argument.default_value, bool_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, bool_msg).value for choice in argument.choices] if argument.choices else None
-        else:
+        # Map the gRPC argument type to a click type, and raise an exception if the type is unhandled
+        atype = type_map.get(argument.type)
+        if not atype:
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
-        argument_name = f"--{argument.name.lower().replace('_', '-')}"
-        default_value = atype(default_value.value) if default_value else None
+        # Unpack the default value of the argument if it exists, and convert it to the appropriate type
+        raw_default = None
+        if argument.HasField("default_value"):
+            unpacked = unpack_any(argument.default_value, msg_map[atype])
+            raw_default = atype(unpacked.value)
 
-        def grab_default_value_from_env(argument_name):
-            env_var = f"DRUNC_{argument_name}_DEFAULT".upper().replace("-", "_")
-            env_var_value = os.getenv(env_var, None)
-            if env_var_value:
-                log.info(
-                    f"Using environment variable '{env_var}' as default value for argument '--{argument.name.lower().replace('_', '-')}' of {transition.name.replace('_', '-').lower()} ('{env_var_value}')"
-                )
-                return atype(env_var_value)
-            return None
+        argument_name_cli = argument.name.lower().replace("_", "-")
+        env_var = f"DRUNC_{argument.name.upper()}_DEFAULT"
+        env_val = os.getenv(env_var)
 
-        env_default_value = grab_default_value_from_env(argument.name)
-        if env_default_value is not None:
-            default_value = env_default_value
+        if env_val is not None:
+            log.info(f"Env override for {argument_name_cli}: {env_val}")
+            default_value = atype(env_val)
+        else:
+            default_value = raw_default
 
         cmd = click.option(
-            f"{argument_name}",
+            f"{argument_name_cli}",
             type=atype,
             default=default_value,
             show_default=True,
-            required=argument.presence == Argument.Presence.MANDATORY
-            and default_value is None,
+            required=(
+                (argument.presence == Argument.Presence.MANDATORY)
+                and (default_value is None)
+            ),
             help=argument.help,
         )(cmd)
 
@@ -727,6 +712,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
         name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
     )(cmd)
+    # cmd = click.pass_obj(cmd)
 
     return cmd, cmd_name
 

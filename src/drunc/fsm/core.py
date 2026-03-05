@@ -20,6 +20,7 @@ from typing import Optional, Union
 import conffwk
 from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from google.protobuf import any_pb2
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException
@@ -53,6 +54,7 @@ class PreOrPostTransitionSequence:
 
         """
 
+        # Get the method to be called from the action, based on the name of the transition and the prefix (pre or post)
         method = getattr(action, f"{self.prefix}_{self.transition.name}")
 
         if not method:
@@ -112,12 +114,12 @@ class PreOrPostTransitionSequence:
 
         return json.dumps(input_data)
 
-    def get_arguments(self):
+    def get_arguments(self) -> list[Argument]:
         """
         Create a list of arguments.
 
         This is a bit sloppy, as really, I shouldn't be using protobuf here, and convert them later, but...
-        /\ Thanks Pierre :/
+        Thanks Pierre :/
 
         Args:
             None
@@ -137,7 +139,7 @@ class PreOrPostTransitionSequence:
 
         # Check that there are no duplicate parameter names across the callbacks
         # otherwise, we won't know which one to use when executing the sequence
-        all_sequence_arguments: list(str) = []  # list(Argument names)
+        all_sequence_arguments: set(str) = set()  # set(Argument names)
 
         # Iterate over the callbacks, construct the list of arguments
         for callback in self.sequence:
@@ -159,16 +161,16 @@ class PreOrPostTransitionSequence:
                     )
 
                 # Keep track of the parameter names to check for duplicates
-                all_sequence_arguments.append(p)
+                all_sequence_arguments.add(pname)
 
                 # Set the default value to an empty string, as protobuf doesn't allow
                 # using default None
-                default_value = ""
+                default_value: any_pb2.Any | None = None
 
                 # Determine the type of the argument, and set the default value if it is
                 # optional. If the type is not one of the supported types, raise an
                 # error
-                t = Argument.Type.INT
+                t: Argument.Type = Argument.Type.INT
 
                 if p.annotation in (str, Optional[str], Union[str, None]):
                     t = Argument.Type.STRING
@@ -183,9 +185,6 @@ class PreOrPostTransitionSequence:
                         default_value = pack_to_any(float_msg(value=p.default))
 
                 elif p.annotation in (int, Optional[int], Union[int, None]):
-                    print(
-                        f"GET ARGUEMENTS {callback.method=} {pname=} {p.annotation=} {p.default=}"
-                    )
                     t = Argument.Type.INT
 
                     if p.default != Parameter.empty:
@@ -201,7 +200,7 @@ class PreOrPostTransitionSequence:
                     raise fsme.UnhandledArgumentType(p.annotation)
 
                 presence = Argument.Presence.MANDATORY
-                if p.annotation in (
+                if default_value or p.annotation in (
                     Optional[str],
                     Optional[float],
                     Optional[int],
@@ -211,8 +210,6 @@ class PreOrPostTransitionSequence:
                     Union[int, None],
                     Union[bool, None],
                 ):
-                    presence = Argument.Presence.OPTIONAL
-                if default_value:
                     presence = Argument.Presence.OPTIONAL
 
                 a = Argument(
