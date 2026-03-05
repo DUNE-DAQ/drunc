@@ -1,11 +1,3 @@
-"""
-Shared pytest fixtures and test data for drunc.fsm.core tests.
-
-All constants are exposed as fixtures so that test modules can receive them
-as injected arguments without any explicit imports — avoiding ambiguity with
-other conftest.py files higher up in the project tree.
-"""
-
 from unittest.mock import MagicMock, patch
 
 import pytest

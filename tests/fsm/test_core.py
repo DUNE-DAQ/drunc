@@ -1,6 +1,7 @@
 import pytest
 
 import drunc.fsm.exceptions as fsme
+from drunc.fsm.core import FSMDestinationType
 
 # ---------------------------------------------------------------------------
 # Initialisation tests
@@ -77,21 +78,37 @@ def test_cannot_execute_outside_regex_alternation(fsm):
 
 
 def test_destination_state_normal_transition(fsm):
-    """conf from 'initial' must resolve to 'configured'."""
+    """conf from 'initial' must resolve to 'configured' with a VALID destination type."""
     tr = fsm.get_transition("conf")
-    assert fsm.get_destination_state("initial", tr) == "configured"
+    result = fsm.get_destination_state("initial", tr)
+    assert result.destination_state == "configured"
+    assert result.destination_type == FSMDestinationType.VALID
 
 
-def test_destination_state_self_loop(fsm):
-    """change_rate has an empty destination; the source state must be returned unchanged."""
+def test_destination_state_self_loop_empty_destination(fsm):
+    """change_rate has an empty destination; source state must be returned with DESTINATION_IS_SOURCE type."""
     tr = fsm.get_transition("change_rate")
-    assert fsm.get_destination_state("running", tr) == "running"
+    result = fsm.get_destination_state("running", tr)
+    assert result.destination_state == "running"
+    assert result.destination_type == FSMDestinationType.DESTINATION_IS_SOURCE
 
 
-def test_destination_state_incompatible_source_returns_none(fsm):
-    """Resolving a destination from an incompatible source state must return None."""
+def test_destination_state_self_loop_with_destination(fsm):
+    """A transition whose destination explicitly matches the source state returns DESTINATION_IS_SOURCE.
+    but the source state does not match the required initial state for the transition"""
+    tr = fsm.get_transition("conf")
+    result = fsm.get_destination_state("configured", tr)
+    assert not fsm.can_execute_transition("configured", tr)
+    assert result.destination_state == "configured"
+    assert result.destination_type == FSMDestinationType.DESTINATION_IS_SOURCE
+
+
+def test_destination_state_incompatible_source(fsm):
+    """Resolving a destination from an incompatible source state must return TRANSITION_NOT_VALID."""
     tr = fsm.get_transition("conf")  # only valid from 'initial'
-    assert fsm.get_destination_state("configured", tr) is None
+    result = fsm.get_destination_state("not_initial_state", tr)
+    assert result.destination_state is None
+    assert result.destination_type == FSMDestinationType.TRANSITION_NOT_VALID
 
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.core import FSM
+from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
 from drunc.utils.utils import ControlType, get_logger, get_new_port
@@ -515,12 +515,26 @@ class RESTAPIChildNode(ChildNode):
         cmd_data = {"modules": [{"data": module_data, "match": ""}]}
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command_name)
-        exit_state = self.fsm.get_destination_state(entry_state, transition)
+        destination_state_result: FSMDestinationResult = self.fsm.get_destination_state(
+            entry_state, transition
+        )
 
-        if exit_state is None:
+        if destination_state_result.destination_type == FSMDestinationType.VALID:
+            exit_state = destination_state_result.destination_state
+        elif (
+            destination_state_result.destination_type
+            == FSMDestinationType.DESTINATION_IS_SOURCE
+        ):
+            self.log.debug(
+                f"Transition {transition} is a self-loop or has no destination,"
+                f"treating it as a source -> source transition"
+            )
+            exit_state = destination_state_result.destination_state
+        else:
             self.log.info(
                 f"The transition {transition} corresponding to the command {command_name}"
-                f" is not valid from current state '{entry_state}'"
+                f" is not valid from current state '{entry_state}', or the transition was"
+                f" not found in the FSM configuration"
             )
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
             response.flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED

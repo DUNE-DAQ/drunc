@@ -264,7 +264,7 @@ class StatefulNode(abc.ABC):
         self.__operational_sub_state.value = f"{transition.name}-terminated"
         self.__operational_state.value = self.__fsm.get_destination_state(
             self.__operational_state.value, transition
-        )
+        ).destination_state
 
     def finalise_transition(
         self, transition, transition_data, transition_args, ctx=None
