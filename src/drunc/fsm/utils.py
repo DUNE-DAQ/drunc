@@ -42,8 +42,6 @@ def decode_fsm_arguments(arguments, arguments_format):
             f"Parsing argument {arg.name} of type {arg.type} with presence {arg.presence}"
         )
         arg_value = get_argument(arg.name, arguments)
-        log.critical(f"Argument value: ~{arg_value}~")
-        log.critical(f"Argument value None?: {arg_value is None}")
 
         if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
             raise fsme.MissingArgument(arg.name, "")
@@ -62,5 +60,4 @@ def decode_fsm_arguments(arguments, arguments_format):
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise fsme.UnhandledArgumentType(arg.type)
-    log.critical(f"Parsed FSM arguments: {out_dict}")
     return out_dict
