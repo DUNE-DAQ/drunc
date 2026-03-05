@@ -388,8 +388,9 @@ def tree_prefix(i, n):
 
 
 def validate_and_format_fsm_arguments(
-    arguments: dict[int | bool | str | float | None], command_arguments: list[Argument]
-) -> dict[int | bool | str | float | None]:
+    arguments: dict[str, int | bool | str | float | None] | None,
+    command_arguments: list[Argument],
+) -> dict[str, int | bool | str | float | None]:
     """
     Validates and formats the arguments passed to an FSM command based on the command's
     argument descriptions.
@@ -404,22 +405,20 @@ def validate_and_format_fsm_arguments(
     Raises:
         ArgumentException: If there is an issue with the arguments (missing, duplicate, invalid type, or unhandled type)
     """
-    # Define the output dict that will be sent to the controller, with argument names
-    # and their formatted values
-    out_dict = {}
-
     # If the argument dict is empty, don't bother trying to read it
     if not arguments:
-        return out_dict
+        return {}
+
+    # Define the output dict that will be sent to the controller, with argument names
+    # and their formatted values
+    out_dict: dict[str, any_pb2] = {}
 
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
     # without default value
-    arguments = {k: v for k, v in arguments.items() if v is not None}
-
-    # Keep track of the arguments that are left after processing, to detect any
-    # unhandled arguments at the end
-    arguments_left = arguments
+    arguments: dict[str, int | bool | str | float] = {
+        k: v for k, v in arguments.items() if v is not None
+    }
 
     # Iterate over the command's argument descriptions, validate the passed arguments,
     # and format them to be sent to the controller
@@ -444,10 +443,6 @@ def validate_and_format_fsm_arguments(
         if value is None:
             out_dict[aname] = adefa
             continue
-
-        # If the argument is passed, remove it from the arguments to keep track of
-        if value:
-            del arguments_left[aname]
 
         # Convert the argument value to the appropriate type based on the argument
         # description, and format it to be sent to the controller
@@ -480,9 +475,6 @@ def validate_and_format_fsm_arguments(
                 raise UnhandledArgumentType(argument_desc.name, pretty_type)
         out_dict[aname] = pack_to_any(value)
 
-    # This needs to be dealt with later
-    # if arguments_left:
-    #     raise UnhandledArguments(arguments_left)
     return out_dict
 
 
