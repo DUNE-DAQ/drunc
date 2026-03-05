@@ -34,31 +34,6 @@ def make_grpc_error_with_details(code, message, detail_messages):
     return FakeRpcError(), status
 
 
-def test_grpc_error_details_validation_success():
-    """
-    Test that GrpcErrorDetails validates on creation.
-    """
-    valid = GrpcErrorDetails(code="OK", message="Success", details=["All good"])
-    assert str(valid) == "[OK] Success\nAll good"
-
-
-def test_grpc_error_details_validation_fail():
-    """
-    Test that GrpcErrorDetails validates on creation.
-    """
-
-    class BrokenGrpcErrorDetails:
-        def __str__(self):
-            raise AttributeError("BrokenGrpcErrorDetails")
-
-    with pytest.raises(TypeError) as excinfo:
-        GrpcErrorDetails(
-            code="FAIL", message="Fail", details=[BrokenGrpcErrorDetails()]
-        )
-
-    assert "Invalid data in GrpcErrorDetails" in str(excinfo.value)
-
-
 def test_bad_request_detail():
     """
     Test extraction of BadRequest error details.

@@ -206,15 +206,6 @@ class GrpcErrorDetails:
     message: str
     details: List[str]
 
-    def __post_init__(self):
-        """
-        Validate the return object can be converted into string.
-        """
-        try:
-            str(self)
-        except Exception as e:
-            raise TypeError(f"Invalid data in GrpcErrorDetails: {e}") from e
-
     def __str__(self):
         """
         Return a human-readable string representation of the error.
