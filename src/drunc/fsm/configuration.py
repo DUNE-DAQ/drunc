@@ -42,7 +42,6 @@ class FSMConfHandler(ConfHandler):
         # contains the list of actions to execute for the given transition.
         for fsm_x_transition in data:
             if fsm_x_transition.transition == transition.name:
-                # print(f"Found matching FSMxTransition: {fsm_x_transition}")
                 for action_name in fsm_x_transition.order:
                     seq.add_callback(
                         action=self.actions[action_name],
