@@ -122,7 +122,7 @@ class ProcessManagerConfHandler(ConfHandler):
         return new_data
 
 
-def get_commandline_parameters(db, config_filename, session_id, session_name, obj):
+def get_commandline_parameters(config_filename, session_dal, session_name, obj):
     runs_on = obj.runs_on.runs_on.id
     control_service_port = -1
     control_service_protocol = ""
@@ -136,7 +136,7 @@ def get_commandline_parameters(db, config_filename, session_id, session_name, ob
         "-s",
         session_name,
         "-k",
-        session_id,
+        session_dal.id,
         "-n",
         obj.id,
         "-c",
@@ -147,7 +147,7 @@ def get_commandline_parameters(db, config_filename, session_id, session_name, ob
     if "RCApplication" in obj.oksTypes():
         commandline_parameters += [
             "-l",
-            db.get_dal("Session", session_id).controller_log_level,
+            session_dal.controller_log_level,
         ]
 
     return commandline_parameters
