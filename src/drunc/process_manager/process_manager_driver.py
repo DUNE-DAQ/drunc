@@ -198,8 +198,7 @@ class ProcessManagerDriver:
         apps = collect_apps(
             session_name=session_name,
             config_filename=oks_conf,
-            db=db,
-            session_obj=session_dal,
+            session_obj=session_dal,  # stil the dal for some rason. WHy t
             segment_obj=session_dal.segment,
             env=env,
             tree_prefix=[

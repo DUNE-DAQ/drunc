@@ -120,9 +120,8 @@ def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
 def collect_apps(
     config_filename,
     session_name,
-    db,
-    session_obj,
-    segment_obj,
+    session_obj,  # need to figure out what this does
+    segment_obj,  # need to figure out what this guy does as well
     env: Dict[str, str],
     tree_prefix=[
         0,
@@ -181,12 +180,7 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        dalcomp = component_disabled_from_session_dal(session_obj, sub_segment_obj.id)
-        confcomp = confmodel_dal.component_disabled(
-            db._obj, session_obj.id, sub_segment_obj.id
-        )
-        log.critical(f"{dalcomp=}, {confcomp=} ")
-        if dalcomp:
+        if component_disabled_from_session_dal(session_obj, sub_segment_obj.id):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -196,7 +190,6 @@ def collect_apps(
             sub_apps = collect_apps(
                 session_name=session_name,
                 config_filename=config_filename,
-                db=db,
                 session_obj=session_obj,
                 segment_obj=sub_segment_obj,
                 env=env,
@@ -213,9 +206,7 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not confmodel_dal.component_disabled(
-                db._obj, session_obj.id, app.id
-            )
+            enabled = not component_disabled_from_session_dal(session_obj, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
