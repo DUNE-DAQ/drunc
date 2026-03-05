@@ -127,7 +127,6 @@ class ProcessManagerDriver:
             user=user,
             session_dal=session_dal,
             session_name=session_name,
-            db=db,
             override_logs=override_logs,
             **kwargs,
         ):
@@ -186,7 +185,6 @@ class ProcessManagerDriver:
         self,
         oks_conf: str,
         session_dal,
-        db,
         session_name: str,
     ) -> List[Dict]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
@@ -324,11 +322,10 @@ class ProcessManagerDriver:
         oks_conf: str,
         user: str,
         session_dal,
-        db,
         session_name: str,
         override_logs: bool,
     ) -> Iterator[BootRequest]:
-        apps = self._collect_all_apps(oks_conf, session_dal, db, session_name)
+        apps = self._collect_all_apps(oks_conf, session_dal, session_name)
 
         pwd = os.getcwd()
 
