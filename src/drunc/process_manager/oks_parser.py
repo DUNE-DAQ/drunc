@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List
-
+import json
+from pprint import pformat
 import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
@@ -68,11 +69,15 @@ def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     @param env_dict   The desitnation dictionary
 
     """
+    log = get_logger("utils.collect_variables")
     for item in variables:
         if item.className() == "VariableSet":
             collect_variables(item.contains, env_dict)
         else:
             if item.className() == "Variable":
+                # log.warning(f"{env_dict[item.name]=}",f"{item.value=}" )
+                log.warning(f"{item.name=}, {item.value=}")
+                # START HERE
                 env_dict[item.name] = item.value
 
 
@@ -146,7 +151,15 @@ def collect_apps(
     else:
         defenv["DUNEDAQ_DB_PATH"] = DB_PATH
 
-    collect_variables(session_obj.environment, defenv)
+    # log.warning("session_obj.__dict__=\n%s", pformat(session_obj.__dict__, width=120))
+
+    log.warning(f"{defenv=}")
+
+    collect_variables(session_obj.environment, defenv)  # somethings pretty wild here
+
+    log.warning(f"{session_obj.connectivity_service.service.port=}")
+
+    log.warning(f"{defenv=}")
 
     apps = []
 
@@ -176,6 +189,8 @@ def collect_apps(
             "log_path": controller.log_path,
         }
     )
+
+    log.critical(f"{json.dumps(apps, indent=4)}")
 
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
