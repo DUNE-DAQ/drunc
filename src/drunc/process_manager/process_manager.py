@@ -65,7 +65,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
         )
-        setup_daq_ers_logger(self.log, session, "drunc.process_manager")
+        self.ers_handler_initialized: bool = False
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
 
@@ -226,7 +226,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                         )
                         continue
                     pi = find_by_uuid(results, diff)
-                    err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
+                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi.return_code}"
+                    if not self.ers_handler_initialized:
+                        setup_daq_ers_logger(
+                            self.log,
+                            pi.process_description.metadata.session,
+                            "drunc.process_manager",
+                        )
                     self.log.critical(err_msg, extra=self.handlerconf.ERS)
 
             time.sleep(interval_s)
