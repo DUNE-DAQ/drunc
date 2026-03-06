@@ -212,7 +212,11 @@ class GrpcErrorDetails:
         """
         lines = [f"[{self.code}] {self.message}"]
         for detail in self.details:
-            lines.append(f"{detail}")
+            # If it's a Proto message format the error detail
+            if hasattr(detail, "DESCRIPTOR"):
+                lines.extend(format_error_details(detail))
+            else:
+                lines.append(str(detail))
         return "\n".join(lines)
 
 
@@ -230,6 +234,10 @@ def format_error_details(detail: Message) -> list[str]:
     """
 
     results = []
+
+    # if detail is not a valid Protobuf message
+    if not hasattr(detail, "DESCRIPTOR"):
+        return [str(detail)]
 
     for field in detail.DESCRIPTOR.fields:
         value = getattr(detail, field.name)
@@ -426,7 +434,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     metadata={"original_error": str(type(e))},
                 )
                 abort_with_rich_error_status(
-                    context, e.grpc_error_code, str(e), detail_obj
+                    context, code_pb2.INTERNAL, str(e), detail_obj
                 )
 
         if handler.unary_unary:
