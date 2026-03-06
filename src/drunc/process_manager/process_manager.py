@@ -1,9 +1,10 @@
 import abc
 import re
+import sys
 import threading
 import time
 
-from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
+from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -61,13 +62,23 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         """C'tor. Note that this takes the ERS env variables from the
         json files defined in data/process_manager!"""
         super().__init__()
-        self.handlerconf = LogHandlerConf(init_ers=True)
+
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
         )
-        self.ers_handler_initialized: bool = False
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
+
+        # Validate that the ERS configuration is valid
+        try:
+            self.handlerconf = LogHandlerConf(init_ers=True)
+        except exceptions.ERSEnvError as e:
+            self.log.error(
+                f"Failed to set up ERS logger for process manager: [red]{e}[/red]"
+            )
+            sys.exit(1)
+
+        self.ers_handler_initialized: bool = False
 
         self.configuration = configuration
         self.name = name
