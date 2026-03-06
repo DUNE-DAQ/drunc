@@ -14,6 +14,8 @@ class Callback:
 
 import json
 import traceback
+from dataclasses import dataclass
+from enum import Enum
 from inspect import Parameter, signature
 from typing import Optional, Union
 
@@ -178,6 +180,21 @@ class PreOrPostTransitionSequence:
         return retr
 
 
+class FSMDestinationType(Enum):
+    # The transition is valid and has a destination that is different from the source
+    VALID = ("valid",)
+    # The transition is a self-loop, the destination is the same as the source
+    DESTINATION_IS_SOURCE = ("destination_is_source",)
+    # The transition provided is not valid for the source state
+    TRANSITION_NOT_VALID = ("transition_not_valid",)
+
+
+@dataclass
+class FSMDestinationResult:
+    destination_state: str | None
+    destination_type: FSMDestinationType
+
+
 class FSM:
     def __init__(self, conf):
         self.log = get_logger("controller.core.FSM")
@@ -186,7 +203,7 @@ class FSM:
         self.initial_state = self.configuration.get_initial_state()
         self.states = self.configuration.get_states()
 
-        self.transitions = self.configuration.get_transitions()
+        self.transitions: list[Transition] = self.configuration.get_transitions()
         self.sequences = self.configuration.get_sequences()
         self._enusure_unique_transition(self.transitions)
         self.pre_transition_sequences = (
@@ -222,15 +239,42 @@ class FSM:
         """Grab all the transitions"""
         return self.sequences
 
-    def get_destination_state(self, source_state, transition) -> str:
+    def is_destination_of_this_transition(self, state, transition) -> bool:
+        return transition.destination == state
+
+    def get_destination_state(self, source_state, transition) -> FSMDestinationResult:
         """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
+
         for tr in right_name:
             if self.can_execute_transition(source_state, transition):
                 if tr.destination == "":
-                    return source_state
+                    # if no destination is provided by transition, assume it's source -> source
+                    return FSMDestinationResult(
+                        destination_state=source_state,
+                        destination_type=FSMDestinationType.DESTINATION_IS_SOURCE,
+                    )
                 else:
-                    return tr.destination
+                    # found a transition that matches the source state provided, return the new destination
+                    return FSMDestinationResult(
+                        destination_state=tr.destination,
+                        destination_type=FSMDestinationType.VALID,
+                    )
+            else:
+                if tr.destination == source_state:
+                    # if the transition is not valid from the source state provided,
+                    # but its destination is the same as the source state, return that information
+                    return FSMDestinationResult(
+                        destination_state=source_state,
+                        destination_type=FSMDestinationType.DESTINATION_IS_SOURCE,
+                    )
+
+        # no transitions match the source state provided
+        # or the transition doesn't exist at all
+        return FSMDestinationResult(
+            destination_state=None,
+            destination_type=FSMDestinationType.TRANSITION_NOT_VALID,
+        )
 
     def get_executable_transitions(self, source_state) -> list[Transition]:
         valid_transitions = []
