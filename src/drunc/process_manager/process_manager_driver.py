@@ -417,10 +417,9 @@ To debug it, close drunc and run the following command:
 
         # Firstly, check if the file is read only. If so, we will only update the DAL
         configuration_file = db.active_database
-        # config_is_read_only: bool = file_is_read_only(
-        #     get_full_db_path(configuration_file)
-        # )
-        config_is_read_only = True
+        config_is_read_only: bool = file_is_read_only(
+            get_full_db_path(configuration_file)
+        )
 
         # Get the configuration ID to use in logging and potential DAL re-instantiation
         configuration_id = session_dal.id
