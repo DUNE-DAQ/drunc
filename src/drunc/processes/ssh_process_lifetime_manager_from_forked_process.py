@@ -49,6 +49,49 @@ class _SSHProcessLifetimeManagerShellWithBytesEntry(SSHProcessLifetimeManagerShe
         self.start_process(uuid, boot_request)
 
 
+def _resolve_parent_log_handlers() -> List[logging.Handler]:
+    """
+    Resolve handlers used by the parent QueueListener for child log records.
+
+    Preference order:
+      1) drunc.process_manager handlers
+      2) drunc handlers
+      3) root handlers
+      4) StreamHandler fallback
+    """
+    for logger_name in ("drunc.process_manager", "drunc"):
+        candidate_logger = logging.getLogger(logger_name)
+        if candidate_logger.handlers:
+            return list(candidate_logger.handlers)
+
+    root_handlers = list(logging.getLogger().handlers)
+    return root_handlers if root_handlers else [logging.StreamHandler()]
+
+
+def _configure_child_logging_to_queue(log_queue: multiprocessing.Queue) -> None:
+    """
+    Configure child-process logging to forward all records via QueueHandler.
+
+    Clears inherited handlers from root and drunc* loggers to avoid duplicate
+    output and enforce a single logging path:
+        child logger -> root -> QueueHandler -> parent QueueListener
+    """
+    queue_handler = logging.handlers.QueueHandler(log_queue)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.handlers.clear()
+    root_logger.addHandler(queue_handler)
+
+    # Clear inherited handlers from drunc hierarchy in the forked child and
+    # keep propagation enabled so records bubble up to root QueueHandler.
+    for logger_name in list(logging.root.manager.loggerDict.keys()):
+        if logger_name == "drunc" or logger_name.startswith("drunc."):
+            child_logger = logging.getLogger(logger_name)
+            child_logger.handlers.clear()
+            child_logger.propagate = True
+
+
 def _worker_process_main(
     request_queue: multiprocessing.Queue,
     response_queue: multiprocessing.Queue,
@@ -83,12 +126,7 @@ def _worker_process_main(
     # will forward them to the real handlers, so all child logs appear
     # as if they originated from the parent process.
     # ------------------------------------------------------------------
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    # Clear any handlers inherited from the parent after fork to prevent
-    # duplicate output or issues with non-fork-safe handlers (e.g. SocketHandler).
-    root_logger.handlers.clear()
-    root_logger.addHandler(logging.handlers.QueueHandler(log_queue))
+    _configure_child_logging_to_queue(log_queue)
 
     def _on_process_exit(
         uuid: str,
@@ -197,16 +235,13 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
 
         # Dedicated queue for log records forwarded from the child process.
         # A QueueListener in the parent drains this queue and dispatches
-        # records to whichever handlers are attached to the root logger,
-        # ensuring child-process logs appear in the same sink as parent logs.
+        # records to drunc hierarchy handlers, with root fallback.
         self._log_queue: multiprocessing.Queue = multiprocessing.Queue()
-        _parent_handlers = logging.getLogger().handlers or [logging.StreamHandler()]
         self._log_listener = logging.handlers.QueueListener(
             self._log_queue,
-            *_parent_handlers,
+            *_resolve_parent_log_handlers(),
             respect_handler_level=True,
         )
-        self._log_listener.start()
 
         # Maps request_id -> dict with event + result storage, used to match
         # asynchronous queue responses back to their blocking callers.
@@ -231,6 +266,10 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         self.log.debug(
             f"SSHProcessLifetimeManagerShell worker process started (PID {self._worker.pid})"
         )
+
+        # Start listener thread only after forking worker to avoid forking
+        # while this parent thread is already running.
+        self._log_listener.start()
 
         # Background thread that routes response messages to their waiting callers.
         self._response_dispatcher = threading.Thread(
@@ -379,14 +418,6 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         """
         self.log.debug("Shutting down SSHProcessLifetimeManager worker process...")
 
-        # Stop the log listener after signalling the child to exit so that any
-        # final log records flushed by the child are still processed before the
-        # listener's internal thread terminates.
-        try:
-            self._log_listener.stop()
-        except Exception:
-            pass
-
         # Signal the child's event loop to exit.
         try:
             self._request_queue.put(None)
@@ -412,6 +443,12 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             )
             self._worker.terminate()
             self._worker.join(timeout=2.0)
+
+        # Stop listener last so final child log records are drained.
+        try:
+            self._log_listener.stop()
+        except Exception:
+            pass
 
         self.log.debug("SSHProcessLifetimeManager worker process shut down.")
 
