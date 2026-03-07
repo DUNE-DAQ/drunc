@@ -36,9 +36,6 @@ def decode_fsm_arguments(arguments, arguments_format):
 
     out_dict = {}
     for arg in arguments_format:
-        log.critical(
-            f"Parsing argument {arg.name} of type {arg.type} with presence {arg.presence}"
-        )
         arg_value = get_argument(arg.name, arguments)
 
         if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
