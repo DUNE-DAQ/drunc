@@ -7,9 +7,9 @@ class FSMAction:
 
 
 class Callback:
-    def __init__(self, method, mandatory=True):
-        self.method = method
-        self.mandatory = mandatory
+    def __init__(self, method: "conffwk.dal.FSMAction", mandatory: bool = True):
+        self.method: "conffwk.dal.FSMAction" = method
+        self.mandatory: bool = mandatory
 
 
 import json
@@ -19,8 +19,10 @@ from enum import Enum
 from inspect import Parameter, signature
 from typing import Optional, Union
 
+import conffwk
 from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+from google.protobuf import any_pb2
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncException, DruncSetupException
@@ -30,26 +32,50 @@ from drunc.utils.utils import get_logger, regex_match
 
 
 class PreOrPostTransitionSequence:
-    def __init__(self, transition: Transition, pre_or_post="pre"):
-        self.transition = transition
+    def __init__(self, transition: Transition, pre_or_post: str = "pre"):
+        self.transition: Transition = transition
         if pre_or_post not in ["pre", "post"]:
             raise DruncSetupException(
                 f"pre_or_post should be either 'pre' of 'post', you provided '{pre_or_post}'"
             )
 
-        self.prefix = pre_or_post
+        self.prefix: str = pre_or_post
 
-        self.sequence = []
+        self.sequence: list(Callback) = []
         self.log = get_logger("controller.core.PreOrPostTransitionSequence")
 
-    def add_callback(self, action, mandatory=True):
+    def add_callback(
+        self, action: "conffwk.dal.FSMaction", mandatory: bool = True
+    ) -> None:
+        """
+        Add a callback to the sequence. The method to be called will be determined by
+        the name of the transition and the prefix (pre or post).
+
+        For example, if the transition is "start" and the prefix is "pre", the method to
+        be called will be "pre_start".
+
+        Args:
+            action (conffwk.dal.FSMAction): The action to be added to the sequence.
+            mandatory (bool): Whether the callback is mandatory or not.
+
+        Returns:
+            None
+
+        Raises:
+            DruncSetupException: If the method to be called is not found in the action.
+        """
+
+        # Get the method to be called from the action, based on the name of the
+        # transition and the prefix (pre or post)
         method = getattr(action, f"{self.prefix}_{self.transition.name}")
 
+        # Sanity check
         if not method:
             raise DruncSetupException(
                 f"{self.prefix}_{self.transition.name} method not found in {action.name}"
             )
 
+        # Add the callback to the sequence
         self.sequence += [
             Callback(
                 method=method,
@@ -59,7 +85,10 @@ class PreOrPostTransitionSequence:
 
     def __str__(self):
         return ", ".join(
-            [f"{cb.method.__name__} (mandatory={cb.mandatory})" for cb in self.sequence]
+            [
+                f"{cb.method.__self__.__class__.__name__} (mandatory={cb.mandatory})"
+                for cb in self.sequence
+            ]
         )
 
     def execute(self, transition_data, transition_args, ctx=None):
@@ -99,30 +128,63 @@ class PreOrPostTransitionSequence:
 
         return json.dumps(input_data)
 
-    def get_arguments(self):
-        """Creates a list of arguments
-        This is a bit sloppy, as really, I shouldn't be using protobuf here, and convert them later, but...
+    def get_arguments(self) -> list[Argument]:
         """
-        retr = []
-        all_the_parameter_names = []
+        Create a list of arguments.
 
+        This is a bit sloppy, as really, I shouldn't be using protobuf here, and convert them later, but...
+        Thanks Pierre :/
+
+        Args:
+            None
+
+        Returns:
+            list(Argument): A list of arguments that the sequence requires.
+
+        Raises:
+            fsme.UnhandledArgumentType: If the type of an argument is not one of the
+                following: str, float, int, bool, Optional[str], Optional[float],
+                Optional[int], Optional[bool], Union[str, None], Union[float, None],
+                Union[int, None], Union[bool, None]
+        """
+
+        # Construct the list of arguments by looking at the signature of the methods
+        arguments: list(Argument) = []
+
+        # Check that there are no duplicate parameter names across the callbacks
+        # otherwise, we won't know which one to use when executing the sequence
+        all_sequence_arguments: set(str) = set()  # set(Argument names)
+
+        # Iterate over the callbacks, construct the list of arguments
         for callback in self.sequence:
+            # Get the signature of the method to determine the arguments
             method = callback.method
             s = signature(method)
 
+            # Iterate over the parameters of the method
             for pname, p in s.parameters.items():
+                # Skip the special parameters that are used to pass the input data and
+                # context to the callbacks
                 if pname in ["_input_data", "_context", "args", "kwargs"]:
                     continue
 
-                if pname in all_the_parameter_names:
+                # Check that the parameter name is not already in the list of arguments
+                if pname in all_sequence_arguments:
                     raise fsme.DoubleArgument(
                         f"Parameter {pname} is already in the list of parameters"
                     )
-                all_the_parameter_names.append(p)
 
-                default_value = ""
+                # Keep track of the parameter names to check for duplicates
+                all_sequence_arguments.add(pname)
 
-                t = Argument.Type.INT
+                # Set the default value to an empty string, as protobuf doesn't allow
+                # using default None
+                default_value: any_pb2.Any | None = None
+
+                # Determine the type of the argument, and set the default value if it is
+                # optional. If the type is not one of the supported types, raise an
+                # error
+                t: Argument.Type = Argument.Type.INT
 
                 if p.annotation in (str, Optional[str], Union[str, None]):
                     t = Argument.Type.STRING
@@ -152,7 +214,7 @@ class PreOrPostTransitionSequence:
                     raise fsme.UnhandledArgumentType(p.annotation)
 
                 presence = Argument.Presence.MANDATORY
-                if p.annotation in (
+                if default_value or p.annotation in (
                     Optional[str],
                     Optional[float],
                     Optional[int],
@@ -162,8 +224,6 @@ class PreOrPostTransitionSequence:
                     Union[int, None],
                     Union[bool, None],
                 ):
-                    presence = Argument.Presence.OPTIONAL
-                if default_value:
                     presence = Argument.Presence.OPTIONAL
 
                 a = Argument(
@@ -175,9 +235,9 @@ class PreOrPostTransitionSequence:
 
                 if default_value:
                     a.default_value.CopyFrom(default_value)
-                retr += [a]
+                arguments += [a]
 
-        return retr
+        return arguments
 
 
 class FSMDestinationType(Enum):

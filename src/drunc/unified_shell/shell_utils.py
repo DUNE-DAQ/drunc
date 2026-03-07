@@ -1,10 +1,13 @@
-from functools import partial
+import functools
 
 import click
 import conffwk
-from druncschema.process_manager_pb2 import ProcessQuery
+from druncschema.controller_pb2 import DescribeFSMResponse
+from druncschema.process_manager_pb2 import ProcessInstanceList, ProcessQuery
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncException, DruncSetupException
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.utils import format_name_for_cli, get_logger
 
 
@@ -34,39 +37,82 @@ def run_fsm_sequence(
     """
     logger = get_logger("unified_shell.shell_utils")
     logger.info(f"Running sequence: {sequence_commands}")
-    for command in sequence_commands:
-        accepted_command = ["terminate"]  # Always accept terminate
 
-        controller_driver = obj.get_driver("controller", quiet_fail=True)
+    # Check all required parameters for all commands in the sequence before executing
+    # any command
+    for cmd_name in sequence_commands:
+        # Get the sub-command to check its parameters
+        sub_cmd: click.core.Command = ctx.command.commands[cmd_name]
+
+        # Check if all required parameters for the sub-command are provided in kwargs
+        # If any required parameter is missing, log an error and exit
+        for param in sub_cmd.get_params(ctx):  # type: click.core.Option
+            # If the parameter is required and not provided, log an error and return
+            if param.required and kwargs.get(param.name) is None:
+                flag_display = param.opts[0] if param.opts else param.name
+                logger.error(
+                    f"Aborting sequence! Command '{cmd_name}' requires "
+                    f"'{flag_display}' but it was not provided."
+                )
+                return
+
+    # Iterate through the sequence commands and invoke them with the appropriate options
+    # and arguments
+    for command in sequence_commands:  # type: str
+        # Define the set of commands that can be ran
+        accepted_command: list[str] = []
+
+        # These commands are not stateful. If they are a part of the sequence, they
+        # should be run regardless of their position in the sequence
+        pmd: ProcessManagerDriver | None = obj.get_driver(
+            "process_manager", quiet_fail=True
+        )
         if command == "boot":
-            pmd = obj.get_driver("process_manager", quiet_fail=True)
-            process_list = pmd.ps(ProcessQuery(names=[".*"]))
+            process_list: ProcessInstanceList = pmd.ps(ProcessQuery(names=[".*"]))
             if not process_list.values:  # We haven't started anything yet
                 accepted_command.append("boot")
+        elif command == "terminate":
+            process_list: ProcessInstanceList = pmd.ps(ProcessQuery(names=[".*"]))
+            if (
+                process_list.values
+            ):  # We have started something that needs to be terminated
+                accepted_command.append("terminate")
+
+        # Get the FSM commands that can be ran from the current state
+        controller_driver: ControllerDriver | None = obj.get_driver(
+            "controller", quiet_fail=True
+        )
         if controller_driver:
-            accepted_command_raw = controller_driver.describe_fsm()
+            accepted_command_raw: DescribeFSMResponse = controller_driver.describe_fsm()
             accepted_command += [
                 format_name_for_cli(c.name)
                 for c in accepted_command_raw.description.commands
             ]
-        logger.debug(f"Accepted commands: {accepted_command}")
 
-        if command not in accepted_command and command != [sequence_commands[-1]]:
-            logger.info(f"Skipping command '{command}'")
+        # If the command is not in the list of accepted commands, skip it and move on to
+        # the next command in the sequence
+        if command not in accepted_command:
+            logger.info(
+                f"Command '{command}' cannot be run in the current state, skipping."
+            )
             continue
 
-        logger.info(f"Running command: '{command}'")
+        # Get the sub-command to invoke
+        sub_cmd: click.core.Command = ctx.command.commands[command]
 
-        cmd_kwargs = {
-            kwarg_name: kwargs[kwarg_name]
-            for kwarg_name in sequence_command_opts_and_args[command]
+        # Build command kwargs
+        cmd_kwargs: dict(str, bool | str | int | float | None) = {
+            param.name: kwargs[param.name]
+            for param in sub_cmd.get_params(ctx)
+            if param.name in kwargs
         }
 
+        # Invoke the command with the appropriate kwargs
         try:
-            ctx.invoke(ctx.command.commands[command], **cmd_kwargs)
+            logger.info(f"Running command: '{command}'")
+            ctx.invoke(sub_cmd, **cmd_kwargs)
         except DruncException as e:
             logger.error(f"Error running command: '{command}'")
-            logger.exception(e)
             raise e
 
 
@@ -98,14 +144,14 @@ def generate_fsm_sequence_command(
     sequence_command_options: dict[
         str, list[str]
     ] = {}  # {sequence_command: [sequence_command_option_name]}
-    sequence_options: dict[
-        str, conffwk.dal.FSMParameter
-    ] = {}  # {option_name: option}, dict removes duplicates
-    command_ids = [command.id for command in sequence.sequence]
+
+    sequence_options: dict[str, conffwk.dal.FSMParameter] = {}  # {option_name: option}
+
+    command_ids: list[str] = [command.id for command in sequence.sequence]
 
     # Build the command string for help
-    sequence_str = ""
-    middle_text = "[optionally], then "
+    sequence_str: str = ""
+    middle_text: str = "[optionally], then "
 
     # Special handling for start_run and shutdown sequences
     if sequence.id == "start_run":
@@ -114,9 +160,9 @@ def generate_fsm_sequence_command(
         command_ids = command_ids + ["terminate"]
 
     # Parse the sequence commands, construct the command string, and gather parameters
-    for command_id in command_ids:
+    for command_id in command_ids:  # type: str
         # Parse the sequence command id to match the Click command name
-        command_name = format_name_for_cli(command_id)
+        command_name: str = format_name_for_cli(command_id)
         if command_name not in ctx.command.commands.keys():
             raise DruncSetupException(
                 f"Command {command_name} required by sequence {sequence.id} not found in the command list!"
@@ -127,35 +173,42 @@ def generate_fsm_sequence_command(
         sequence_str += f"{command_name} {middle_text}"
 
         # Gather the command parameters, add them to the command options and args
-        params = ctx.command.commands[command_name].get_params(ctx)
+        params: list(click.core.Option) = ctx.command.commands[command_name].get_params(
+            ctx
+        )
         sequence_command_options[command_name] = []
-        for param in params:
+        for param in params:  #  type: click.core.Option
             if param.name == "help":
                 continue
             sequence_command_options[command_name].append(param.name)
             sequence_options[param.name] = param
 
     # Construct the sequence function
-    cmd = partial(run_fsm_sequence, sequence_commands, sequence_command_options, ctx)
+    cmd: functools.partial = functools.partial(
+        run_fsm_sequence, sequence_commands, sequence_command_options, ctx
+    )
     cmd = click.pass_obj(cmd)
 
     # Add click options to the function
-    for param_name, param in sequence_options.items():
+    for param_name, param in sequence_options.items():  # type: str, conffwk.dal.FSMParameter
         if param.name == "help":
             continue
 
-        param_name = format_name_for_cli(param_name)
+        param_name: str = format_name_for_cli(param_name)
+        param_default: str | int | float | bool | None = (
+            param.default if param.default is not None else None
+        )
         cmd = click.option(
             f"--{param_name}",
             type=param.type,
-            default=param.default,
+            default=param_default,
             show_default=param.show_default,
             required=param.required,
             help=param.help,
         )(cmd)
 
     # Transform the function into a Click command
-    cmd = click.command(
+    cmd: click.core.Command = click.command(
         name=format_name_for_cli(sequence.id),
         help=f"Run the sequence {sequence.id}: {sequence_str}",
     )(cmd)

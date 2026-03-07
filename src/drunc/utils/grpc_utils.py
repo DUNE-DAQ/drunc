@@ -50,7 +50,7 @@ def unpack_error_response(name: str, text: str, token: Token) -> Response:
     )
 
 
-def pack_to_any(data):
+def pack_to_any(data) -> any_pb2.Any:
     any = any_pb2.Any()
     any.Pack(data)
     return any
