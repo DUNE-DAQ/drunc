@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 from typing import Any, Callable, Optional
 
+from druncschema.controller_pb2 import FSMCommand
 from druncschema.opmon.FSM_pb2 import FSMStatus
 
 from drunc.exceptions import DruncCommandException
@@ -189,7 +190,24 @@ class StatefulNode(abc.ABC):
             self.get_node_operational_state(), transition
         )
 
-    def decode_fsm_arguments(self, fsm_command):
+    def decode_fsm_arguments(self, fsm_command: FSMCommand):
+        """
+        Decodes the arguments of a FSMCommand according to the transition definition in
+        the FSM configuration.
+
+        Args:
+            fsm_command (FSMCommand): The FSMCommand containing the command name and
+                arguments.
+
+        Returns:
+            dict: A dictionary containing the decoded arguments for the transition.
+
+        Raises:
+            KeyError: If the command name does not correspond to any transition in the
+                FSM configuration.
+            ValueError: If the arguments cannot be decoded according to the transition
+                definition.
+        """
         transition = self.get_fsm_transition(fsm_command.command_name)
         return decode_fsm_arguments(fsm_command.arguments, transition.arguments)
 
