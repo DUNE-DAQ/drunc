@@ -1,11 +1,14 @@
 import os
-from typing import Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import get_logger
+
+if TYPE_CHECKING:
+    import conffwk
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -77,9 +80,11 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
-def component_disabled_from_session_dal(session_dal_obj, component_id: str) -> bool:
+def component_disabled_from_session_dal(
+    session_dal_obj: "conffwk.dal.Session", component_id: str
+) -> bool:
     """
-    Drop-in, db-free replacement for:
+    Replaces the following without any db dependence
         confmodel_dal.component_disabled(db._obj, session_dal_obj.id, component_id)
 
     Uses only the Session DAL object (session_dal_obj) and the component UID.
@@ -115,12 +120,12 @@ def component_disabled_from_session_dal(session_dal_obj, component_id: str) -> b
 
 # Recursively process all Segments in given Segment extracting Applications
 def collect_apps(
-    config_filename,
-    session_name,
-    session_dal_obj,
-    segment_obj,
+    config_filename: str,
+    session_name: str,
+    session_dal_obj: "conffwk.dal.Session",
+    segment_obj: "conffwk.dal.Segment",
     env: Dict[str, str],
-    tree_prefix=[
+    tree_prefix: List[int] = [
         0,
     ],
 ) -> List[Dict]:
@@ -259,7 +264,11 @@ def collect_apps(
     return apps
 
 
-def collect_infra_apps(session, env: Dict[str, str], tree_prefix) -> List[Dict]:
+def collect_infra_apps(
+    session: "conffwk.dal.Session",
+    env: Dict[str, str],
+    tree_prefix: List[int],
+) -> List[Dict[str, Any]]:
     """! Collect infrastructure applications
 
     @param session  The session

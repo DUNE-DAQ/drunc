@@ -6,7 +6,7 @@ import tempfile
 import time
 from collections.abc import Iterator
 from time import sleep
-from typing import Any, Dict, List
+from typing import Dict, List
 
 import conffwk
 import grpc
@@ -184,7 +184,7 @@ class ProcessManagerDriver:
     def _collect_all_apps(
         self,
         oks_conf: str,
-        session_dal,
+        session_dal: "conffwk.dal.Session",
         session_name: str,
     ) -> List[Dict]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
@@ -374,13 +374,12 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def update_connectivity_port_dal(self, env_variables, new_port):
-        """!Process a dal::Variable object, placing key/value pairs in a dictionary
-
-        @param variables  A Variable/VariableSet object
-        @param env_dict   The destination dictionary
-
-        """
+    def update_connectivity_port_dal(
+        self,
+        env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
+        new_port: int,
+    ) -> None:
+        """Process a dal::Variable object, placing key/value pairs in a dictionary"""
         for item in env_variables:
             if item.className() == "VariableSet":
                 self.update_connectivity_port_dal(item.contains, new_port)
@@ -508,7 +507,7 @@ To debug it, close drunc and run the following command:
         return db, session_dal
 
     def _connect_to_service(
-        self, session_dal, session_name: str
+        self, session_dal: "conffwk.dal.Session", session_name: str
     ) -> ConnectivityServiceClient | None:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
@@ -529,7 +528,7 @@ To debug it, close drunc and run the following command:
 
     def _discover_controller(
         self,
-        session_dal: Any,
+        session_dal: "conffwk.dal.Session",
         session_name: str,
         csc: ConnectivityServiceClient | None,
         connection_server: str,
