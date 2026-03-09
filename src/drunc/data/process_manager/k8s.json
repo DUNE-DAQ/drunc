@@ -3,11 +3,9 @@
     "name": "K8sProcessManager",
     "command_address": "0.0.0.0:10054",
     "image": "ghcr.io/dune-daq/alma9:latest",
-
     "authoriser": {
         "type": "dummy"
     },
-
     "broadcaster": {
         "type": "kafka",
         "kafka_address": "monkafka.cern.ch:30092",
@@ -23,9 +21,9 @@
         "path": "./info.json",
         "type": "file"
     },
-    "opmon_conf":{
+    "opmon_conf": {
         "level": "info",
-        "interval_s" : 10.0
+        "interval_s": 10.0
     },
     "settings": {
         "labels": {
@@ -65,6 +63,12 @@
                 "mount_path": "/cvmfs",
                 "host_path": "/cvmfs",
                 "read_only": true
+            },
+            {
+                "name": "tmp",
+                "mount_path": "/tmp",
+                "host_path": "/tmp",
+                "read_only": false
             }
         ]
     }
