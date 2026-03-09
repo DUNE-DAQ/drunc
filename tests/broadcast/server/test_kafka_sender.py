@@ -16,7 +16,7 @@ def mock_kafka_producer():
 
 
 @pytest.fixture
-def mock_sender(mock_kafka_producer):
+def sender_with_mocked_producer(mock_kafka_producer):
     """Fixture to create a KafkaSender instance with a mocked KafkaProducer."""
     kafka_sender = KafkaSender(
         kafka_address="test-kafka-address", publish_timeout=5, topic="test-topic"
@@ -46,11 +46,10 @@ def test_init_raises_drunc_setup_exception():
     assert expected_exc_msg in str(exc_info.value)
 
 
-def test_send_success(mock_sender, mock_kafka_producer):
+def test_send_success(sender_with_mocked_producer, mock_kafka_producer):
     """Test that KafkaSender._send successfully sends a message and logs the metadata."""
     _, mock_instance = mock_kafka_producer
-    sender = mock_sender
-    sender._log = MagicMock()
+    sender = sender_with_mocked_producer
 
     mock_future = MagicMock()
     mock_future.get.return_value = "test-metadata"
@@ -64,10 +63,10 @@ def test_send_success(mock_sender, mock_kafka_producer):
     sender._log.debug.assert_called_with("test-metadata published")
 
 
-def test_send_handle_exception(mock_sender, mock_kafka_producer):
+def test_send_handle_exception(sender_with_mocked_producer, mock_kafka_producer):
     """Test that KafkaSender._send handles KafkaError exceptions and logs the error."""
     _, mock_instance = mock_kafka_producer
-    sender = mock_sender
+    sender = sender_with_mocked_producer
 
     mock_future = MagicMock()
     mock_future.get.side_effect = KafkaError("Connection lost")
@@ -85,10 +84,10 @@ def test_send_handle_exception(mock_sender, mock_kafka_producer):
     assert "Connection lost" in log_message
 
 
-def test_describe_broadcast(mock_sender):
+def test_describe_broadcast(sender_with_mocked_producer):
     """Test that KafkaSender.describe_broadcast returns the correct information."""
 
-    result = mock_sender.describe_broadcast()
+    result = sender_with_mocked_producer.describe_broadcast()
 
     assert result.topic == "test-topic"
     assert result.kafka_address == "test-kafka-address"
