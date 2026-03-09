@@ -35,6 +35,7 @@ from drunc.k8s_exceptions import (
     DruncK8sNodeException,
     DruncK8sPodException,
 )
+from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
@@ -651,21 +652,24 @@ class K8sProcessManager(ProcessManager):
 
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                if vm.mount_path == target_home_path or target_home_path.startswith(
+                    vm.mount_path + "/"
+                ):
+                    self.log.debug(
+                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
+                    )
                     is_covered = True
                     break
 
             if not is_covered:
                 self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-                
+
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=target_home_path, type="Directory"
                         ),
                     )
                 )
@@ -1017,6 +1021,7 @@ class K8sProcessManager(ProcessManager):
         except KeyError:
             try:
                 import pwd
+
                 return pwd.getpwuid(os.getuid()).pw_name
             except KeyError:
                 return str(os.getuid())
@@ -1367,7 +1372,9 @@ class K8sProcessManager(ProcessManager):
             logs = self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far or 100
             )
-            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n"))
+            return LogLines(
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+            )
         except self._api_error_v1_api as e:
             return LogLines(
                 uuid=ProcessUUID(uuid=uuid),
@@ -1769,15 +1776,6 @@ class K8sProcessManager(ProcessManager):
             f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
         )
 
-        # Define the shutdown order
-        shutdown_order = [
-            "unknown",
-            "application",
-            "segment-controller",
-            "root-controller",
-            "local-connection-server",
-        ]
-
         # Define the blocking kill_and_wait helper
         def kill_and_wait(uuids, grace_period=None) -> None:
             if not uuids:
@@ -1842,7 +1840,7 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
 
         # Kill in stages using our sorted lists
-        for role in shutdown_order:
+        for role in PROCESS_SHUTDOWN_ORDERING:
             uuids_in_step = pods_by_role[role]
             if uuids_in_step:
                 self.log.info(

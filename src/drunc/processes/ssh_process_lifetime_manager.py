@@ -5,11 +5,12 @@ Defines the common interface for managing remote process lifecycles,
 including process startup, monitoring, termination, and output capture.
 """
 
-import logging
 from abc import ABC, abstractmethod
-from typing import Callable, List, Optional
+from typing import Any, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
+
+from drunc.processes.connection_utils import wait_for
 
 
 class ProcessLifetimeManager(ABC):
@@ -17,30 +18,44 @@ class ProcessLifetimeManager(ABC):
     Abstract base class for process lifetime management.
 
     Provides a common interface for starting, monitoring, and terminating
-    processes on remote hosts via SSH. Concrete implementations may use
+    processes on remote hosts via SSH. Concrete implementations use
     different underlying SSH libraries (e.g., Paramiko, sh library).
     """
 
-    @abstractmethod
-    def __init__(
+    # The maximum amount of time to wait for a process to die after kill is called
+    # before it is considered an error.
+    DEFAULT_TIMEOUT_FOR_KILLING_PROCESS = 10.0  # seconds
+    # Interval to wait between checking if a process is dead after kill is called.
+    KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
+    # Interval to wait before concluding metadata file writing failed on remote host.
+    DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
+
+    def wait_for_process_to_die(
         self,
-        disable_host_key_check: bool = False,
-        disable_localhost_host_key_check: bool = False,
-        logger: Optional[logging.Logger] = None,
-        on_process_exit: Optional[
-            Callable[[str, Optional[int], Optional[Exception]], None]
-        ] = None,
-    ):
+        uuid: str,
+        timeout: float,
+        logger: Optional[Any] = None,
+    ) -> bool:
         """
-        Initialise process lifetime manager.
+        Wait for a process to terminate within a timeout period.
 
         Args:
-            disable_host_key_check: Disable SSH host key verification for all hosts
-            disable_localhost_host_key_check: Disable SSH host key verification for localhost
-            logger: Logger instance for real-time output logging
-            on_process_exit: Optional callback function(uuid, exit_code, exception) invoked when process exits
+            uuid: Process UUID to monitor
+
+        Returns:
+            True if process terminated within timeout, False otherwise
         """
-        pass
+        if logger is not None:
+            logger.debug(f"Waiting for process with uuid: {uuid} to terminate...")
+        result = wait_for(
+            condition=lambda: self.is_process_alive(uuid),
+            expected_value=False,
+            timeout=timeout,
+            poll_interval=self.KILLING_PROCESS_POLL_INTERVAL,
+            logger=logger,
+        )
+
+        return result == False
 
     @abstractmethod
     def get_active_process_keys(self) -> List[str]:
@@ -84,26 +99,105 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def get_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
         """
-        Get process exit code.
+        If a process was killed before kill_process was called. This method
+        retrieves and removes the exit code from internal storage. Otherwise
+        it will return None.
 
         Args:
             uuid: Process UUID
 
         Returns:
-            Exit code if process has terminated, None if still running or not found
+            Exit code if process is dead, None if still running or not found
         """
         pass
 
     @abstractmethod
-    def terminate_process(self, uuid: str, timeout: float = 10.0) -> None:
+    def kill_process(
+        self, uuid: str, timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
+    ) -> Optional[int]:
         """
-        Terminate process gracefully with optional timeout.
+        Kill a remote process and clean up associated resources upon successful termination.
+        Sends termination signals to the remote process and waits for it to die.
+        Safe to call multiple times - subsequent calls will have no effect if
+        resources have already been cleaned up.
 
         Args:
             uuid: Process UUID to terminate
             timeout: Timeout for graceful termination in seconds
+
+        Returns:
+          the exit code of the process if it was able to be determined (None otherwise).
+
+        """
+        pass
+
+    @abstractmethod
+    def kill_processes(
+        self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill multiple processes by their UUIDs in role-based shutdown order.
+
+        Processes are separated by role and terminated in stages to ensure clean
+        shutdown. Within each role, processes are killed asynchronously. After
+        role-based termination, any remaining processes are killed asynchronously
+        as a fallback.
+
+        Args:
+            uuids: List of process UUIDs to terminate
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds for graceful termination. Uses default
+                            timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping process UUIDs to their exit codes. None indicates
+            exit code could not be determined.
+        """
+        pass
+
+    @abstractmethod
+    def kill_all_processes(
+        self, process_timeouts: Optional[Dict[str, float]] = None
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill all managed processes and clean up resources.
+
+        Iterates through all active processes, terminates them, and cleans up
+        associated resources.
+
+        Args:
+            process_timeouts: Dictionary mapping process UUIDs to their respective timeouts for graceful termination in seconds
+                              If not specified a default timeout will be used for all processes.
+
+        Returns:
+            Dictionary mapping process UUIDs to their exit codes (None if not determined)
+        """
+        pass
+
+    @abstractmethod
+    def kill_processes_by_role(
+        self,
+        role: str,
+        candidate_uuids: List[str],
+        process_timeouts: Optional[Dict[str, float]] = None,
+    ) -> Dict[str, Optional[int]]:
+        """
+        Kill all processes with the specified role from candidate UUID list.
+
+        Filters candidate UUIDs by role metadata and terminates matching processes
+        asynchronously for parallel shutdown within the role.
+
+        Args:
+            role: Process role to match (e.g., "application", "controller")
+            candidate_uuids: List of process UUIDs to filter and potentially terminate
+            process_timeouts: Dictionary mapping process UUIDs to timeout values
+                            in seconds. Uses default timeout for unmapped UUIDs.
+
+        Returns:
+            Dictionary mapping terminated process UUIDs to their exit codes.
+            Only includes processes matching the specified role.
         """
         pass
 
@@ -130,27 +224,6 @@ class ProcessLifetimeManager(ABC):
 
         Returns:
             Accumulated stderr content as string, None if not found
-        """
-        pass
-
-    @abstractmethod
-    def cleanup_process(self, uuid: str) -> None:
-        """
-        Clean up process resources.
-
-        Terminates the process (if still running) and releases all associated resources.
-
-        Args:
-            uuid: Process UUID to clean up
-        """
-        pass
-
-    @abstractmethod
-    def cleanup_all(self) -> None:
-        """
-        Clean up all processes and resources.
-
-        Terminates all managed processes and releases all associated resources.
         """
         pass
 

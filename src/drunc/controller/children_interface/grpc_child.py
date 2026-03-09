@@ -4,7 +4,6 @@ from typing import NoReturn, cast
 
 import grpc
 from druncschema.controller_pb2 import (
-    AddressedCommand,
     DescribeFSMRequest,
     DescribeFSMResponse,
     DescribeRequest,
@@ -22,10 +21,17 @@ from druncschema.controller_pb2 import (
     RecomputeStatusResponse,
     StatusRequest,
     StatusResponse,
+    SurrenderControlRequest,
+    SurrenderControlResponse,
+    TakeControlRequest,
+    TakeControlResponse,
+    ToErrorRequest,
+    ToErrorResponse,
+    WhoIsInChargeRequest,
+    WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import Request, Response
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
@@ -190,30 +196,6 @@ class gRPCChildNode(ChildNode):
                 type=ConfTypes.ProtobufAny,
             )
         )
-
-    def propagate_command(
-        self,
-        command: str,
-        request: AddressedCommand,
-        token: Token | None,
-    ) -> Response:
-        packed_request = Request(token=token)
-        packed_request.data.Pack(request)
-
-        cmd = getattr(self.stub, command)
-
-        try:
-            response = cmd(packed_request)
-        except grpc.RpcError as error:
-            try:
-                self.handle_child_grpc_error(error)
-            except ServerUnreachable:
-                self.log.info(
-                    f"Connection to {self.name} at {self.uri} failed, attempting to reconnect..."
-                )
-                response = self._attempt_reconnection(lambda: cmd(packed_request))
-
-        return response
 
     def status(
         self,
@@ -437,10 +419,122 @@ class gRPCChildNode(ChildNode):
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
                 self.log.info(
-                    f"Connection to {self.name} at {self.uri} failed during recompute_status check, attempting to reconnect..."
+                    f"Connection to {self.name} at {self.uri} failed during recompute_status, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
                     lambda: self.stub.recompute_status(request)
+                )
+
+        return response
+
+    def take_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> TakeControlResponse:
+        request = TakeControlRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.take_control(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during take_control, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.take_control(request)
+                )
+
+        return response
+
+    def surrender_control(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> SurrenderControlResponse:
+        request = SurrenderControlRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.surrender_control(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during surrender_control, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.surrender_control(request)
+                )
+
+        return response
+
+    def who_is_in_charge(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> WhoIsInChargeResponse:
+        request = WhoIsInChargeRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.who_is_in_charge(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during who_is_in_charge, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.who_is_in_charge(request)
+                )
+
+        return response
+
+    def to_error(
+        self,
+        target: str = "",
+        execute_along_path: bool = True,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> ToErrorResponse:
+        request = ToErrorRequest(
+            token=None,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.to_error(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during to_error, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.to_error(request)
                 )
 
         return response

@@ -23,6 +23,7 @@ def main():
     """Main process loop that runs until SIGHUP received."""
     # Register SIGHUP handler for SSH connection termination
     signal.signal(signal.SIGHUP, signal_handler)
+    signal.signal(signal.SIGQUIT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 

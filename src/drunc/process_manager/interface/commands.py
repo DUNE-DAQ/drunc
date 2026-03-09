@@ -214,9 +214,12 @@ def logs(
     )
 
     result = obj.get_driver("process_manager").logs(log_req)
+    if result is None:
+        return
 
-    if result.uuid.uuid is not None:
-        obj.rule(f"[yellow]{result.uuid.uuid}[/yellow] logs")
+    display_name = result.name or result.uuid.uuid or ""
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] logs")
 
     for line in result.lines:
         if not line.strip():  # keep empty lines for visual clarity
@@ -234,7 +237,8 @@ def logs(
             line = line.replace(grep, f"[u]{grep}[/]")
 
         obj.print(line)
-    obj.rule("End")
+    if result.name is not None:
+        obj.rule(f"[yellow]{display_name}[/yellow] end")
 
 
 @click.command("restart")

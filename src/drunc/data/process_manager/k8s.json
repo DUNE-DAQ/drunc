@@ -14,7 +14,10 @@
         "publish_timeout": 2
     },
     "environment": {
-        "GRPC_ENABLE_FORK_SUPPORT": "false"
+        "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_FATAL": "erstrace,lstdout",
+        "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout"
     },
     "opmon_uri": {
         "path": "./info.json",

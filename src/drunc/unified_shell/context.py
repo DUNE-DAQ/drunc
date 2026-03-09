@@ -23,6 +23,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.configuration_file = ""
         self.configuration_id = ""
         self.session_name = ""
+        self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
         super(UnifiedShellContext, self).__init__()
 
