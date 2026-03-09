@@ -22,7 +22,7 @@ def validate_ssh_connection(configuration: str, session_name: str, log_level: st
     apps = collect_apps(
         config_filename=configuration,
         session_name=session_name,
-        session_obj=session_dal,
+        session_dal_obj=session_dal,
         segment_obj=session_dal.segment,
         env={},
         tree_prefix=[],

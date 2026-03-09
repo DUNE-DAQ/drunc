@@ -1,7 +1,6 @@
 import os
 from typing import Dict, List
-import json
-from pprint import pformat
+
 import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
@@ -58,6 +57,7 @@ def get_full_db_path(db_path: str) -> str:
     log.debug(f"Path {db_path} resolved to path {matched_configuration_files[0]}")
     return matched_configuration_files[0]
 
+
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
@@ -77,15 +77,15 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
-def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
+def component_disabled_from_session_dal(session_dal_obj, component_id: str) -> bool:
     """
     Drop-in, db-free replacement for:
-        confmodel_dal.component_disabled(db._obj, session_obj.id, component_id)
+        confmodel_dal.component_disabled(db._obj, session_dal_obj.id, component_id)
 
-    Uses only the Session DAL object (session_obj) and the component UID.
+    Uses only the Session DAL object (session_dal_obj) and the component UID.
 
     Semantics:
-      - Returns True if the component UID is explicitly present in session_obj.disabled
+      - Returns True if the component UID is explicitly present in session_dal_obj.disabled
       - Returns False otherwise
 
     Notes:
@@ -94,9 +94,9 @@ def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
       - It does *not* attempt to infer disabled state via parent/child propagation
         rules that may exist in confmodel C++ (if any).
     """
-    # session_obj.disabled is a list of DAL objects (Resources) disabled in this session
+    # session_dal_obj.disabled is a list of DAL objects (Resources) disabled in this session
     try:
-        disabled = session_obj.disabled
+        disabled = session_dal_obj.disabled
     except Exception:
         # If OKS/DAL isn't available, fall back to "not disabled"
         return False
@@ -117,7 +117,7 @@ def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
 def collect_apps(
     config_filename,
     session_name,
-    session_obj,
+    session_dal_obj,
     segment_obj,
     env: Dict[str, str],
     tree_prefix=[
@@ -126,7 +126,7 @@ def collect_apps(
 ) -> List[Dict]:
     """! Recustively collect (daq) application belonging to segment and its subsegments
 
-    @param session_obj  The session the segment belongs to
+    @param session_dal_obj  The session the segment belongs to
     @param segment_obj  Segment to collect applications from
 
     @return The list of dictionaries holding application attributs
@@ -143,7 +143,7 @@ def collect_apps(
     else:
         defenv["DUNEDAQ_DB_PATH"] = DB_PATH
 
-    collect_variables(session_obj.environment, defenv)
+    collect_variables(session_dal_obj.environment, defenv)
 
     apps = []
 
@@ -162,7 +162,7 @@ def collect_apps(
             "type": controller.application_name,
             "args": get_commandline_parameters(
                 config_filename=config_filename,
-                session_dal=session_obj,
+                session_dal=session_dal_obj,
                 session_name=session_name,
                 obj=controller,
             ),
@@ -177,7 +177,7 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if component_disabled_from_session_dal(session_obj, sub_segment_obj.id):
+        if component_disabled_from_session_dal(session_dal_obj, sub_segment_obj.id):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -187,7 +187,7 @@ def collect_apps(
             sub_apps = collect_apps(
                 session_name=session_name,
                 config_filename=config_filename,
-                session_obj=session_obj,
+                session_dal_obj=session_dal_obj,
                 segment_obj=sub_segment_obj,
                 env=env,
                 tree_prefix=new_tree_prefix,
@@ -203,7 +203,7 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not component_disabled_from_session_dal(session_obj, app.id)
+            enabled = not component_disabled_from_session_dal(session_dal_obj, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
@@ -224,7 +224,7 @@ def collect_apps(
         host = app.runs_on.runs_on.id
         args = get_commandline_parameters(
             config_filename=config_filename,
-            session_dal=session_obj,
+            session_dal=session_dal_obj,
             session_name=session_name,
             obj=app,
         )

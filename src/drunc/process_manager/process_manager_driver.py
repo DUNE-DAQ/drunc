@@ -196,7 +196,7 @@ class ProcessManagerDriver:
         apps = collect_apps(
             session_name=session_name,
             config_filename=oks_conf,
-            session_obj=session_dal,
+            session_dal_obj=session_dal,
             segment_obj=session_dal.segment,
             env=env,
             tree_prefix=[
