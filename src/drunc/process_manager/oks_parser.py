@@ -54,13 +54,9 @@ def get_full_db_path(db_path: str) -> str:
     if not matched_configuration_files:
         err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}, exiting."
         raise DruncSetupException(err_str)
-    # if len(matched_configuration_files) > 1:
-    #     err_str = f"Multiple files found in DUNEDAQ_DB_PATH matching {db_path}, exiting."
-    #     raise DruncSetupException(err_str)
 
     log.debug(f"Path {db_path} resolved to path {matched_configuration_files[0]}")
     return matched_configuration_files[0]
-
 
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
@@ -69,15 +65,11 @@ def collect_variables(variables, env_dict: Dict[str, str]) -> None:
     @param env_dict   The desitnation dictionary
 
     """
-    log = get_logger("utils.collect_variables")
     for item in variables:
         if item.className() == "VariableSet":
             collect_variables(item.contains, env_dict)
         else:
             if item.className() == "Variable":
-                # log.warning(f"{env_dict[item.name]=}",f"{item.value=}" )
-                log.warning(f"{item.name=}, {item.value=}")
-                # START HERE
                 env_dict[item.name] = item.value
 
 
@@ -125,8 +117,8 @@ def component_disabled_from_session_dal(session_obj, component_id: str) -> bool:
 def collect_apps(
     config_filename,
     session_name,
-    session_obj,  # need to figure out what this does
-    segment_obj,  # need to figure out what this guy does as well
+    session_obj,
+    segment_obj,
     env: Dict[str, str],
     tree_prefix=[
         0,
@@ -151,15 +143,7 @@ def collect_apps(
     else:
         defenv["DUNEDAQ_DB_PATH"] = DB_PATH
 
-    # log.warning("session_obj.__dict__=\n%s", pformat(session_obj.__dict__, width=120))
-
-    log.warning(f"{defenv=}")
-
-    collect_variables(session_obj.environment, defenv)  # somethings pretty wild here
-
-    log.warning(f"{session_obj.connectivity_service.service.port=}")
-
-    log.warning(f"{defenv=}")
+    collect_variables(session_obj.environment, defenv)
 
     apps = []
 
@@ -189,8 +173,6 @@ def collect_apps(
             "log_path": controller.log_path,
         }
     )
-
-    log.critical(f"{json.dumps(apps, indent=4)}")
 
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):

@@ -109,7 +109,6 @@ class ProcessManagerDriver:
         # Step 2 - initialise session
         db, session_dal = self._initialise_session(conf_file, conf_id)
 
-        # self.log.info
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
@@ -197,7 +196,7 @@ class ProcessManagerDriver:
         apps = collect_apps(
             session_name=session_name,
             config_filename=oks_conf,
-            session_obj=session_dal,  # stil the dal for some rason. WHy t
+            session_obj=session_dal,
             segment_obj=session_dal.segment,
             env=env,
             tree_prefix=[
@@ -209,10 +208,9 @@ class ProcessManagerDriver:
         next_tree_id = max([int(app["tree_id"].split(".")[0]) for app in apps]) + 1
         infra_apps = collect_infra_apps(session_dal, env, tree_prefix=[next_tree_id])
 
-        # self.log.debug(f"{json.dumps(apps, indent=4)}")
         apps = infra_apps + apps
 
-        # self.log.debug(f"{json.dumps(infra_apps, indent=4)}")
+        self.log.debug(f"{json.dumps(apps, indent=4)}")
 
         return apps
 
@@ -380,10 +378,9 @@ To debug it, close drunc and run the following command:
         """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
         @param variables  A Variable/VariableSet object
-        @param env_dict   The desitnation dictionary
+        @param env_dict   The destination dictionary
 
         """
-        # env_variables = session_dal.environment
         for item in env_variables:
             if item.className() == "VariableSet":
                 self.update_connectivity_port_dal(item.contains, new_port)
@@ -430,28 +427,11 @@ To debug it, close drunc and run the following command:
         # Check that the address of the root controller is available, otherwise change
         # it to one that is available
         root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
-
-        ### New code
-        # control_services = [
-        #     (i, service)
-        #     for i, service in enumerate(session_dal.segment.controller.exposes_service)
-        #     if "_control" in service.id
-        # ]
-        # if not control_services:
-        #     raise DruncSetupException(
-        #         "No '*_control' service found in session_dal.segment.controller.exposes_service"
-        #     )
-        # control_idx, _ = control_services[0]
-        # root_controller_port = session_dal.segment.controller.exposes_service[control_idx].port
-
-        ### Old code
         root_controller_service_list: int = [
             service
             for service in session_dal.segment.controller.exposes_service
             if "_control" in service.id
         ]
-
-        self.log.critical(f"{root_controller_service_list=}")
         root_controller_service = root_controller_service_list[0]
         root_controller_port = root_controller_service.port
 
@@ -460,7 +440,6 @@ To debug it, close drunc and run the following command:
             if config_is_read_only:
                 new_port = find_free_port(30000, 32767)
                 root_controller_service.port = new_port
-                # session_dal.segment.controller.exposes_service[control_idx].port = new_port
                 self.log.info(
                     f"Configuration file is read-only, updated root controller port in DAL to {new_port} to resolve conflict with occupied port {root_controller_port}"
                 )
@@ -470,13 +449,6 @@ To debug it, close drunc and run the following command:
                 self.log.info(
                     f"The root controller port at {root_controller_port} is occupied, updating it to {new_port}"
                 )
-
-        # Check if log is done
-        # self.log.critical(f"local root_controller_service.port={root_controller_port}")
-        # self.log.critical(
-        #     "session_dal port now=%s",
-        #     session_dal.segment.controller.exposes_service[control_idx].port,
-        # )
 
         # If a local connectivity service is being used, perform the same checks
         # Temporarily removed to allow integration tests to pass without restructuring
@@ -490,20 +462,7 @@ To debug it, close drunc and run the following command:
                 config_updated = True
                 if config_is_read_only:
                     new_port = find_free_port(30000, 32767)
-                    # best way is that once you make your dal from the session
-                    # everyattribute of the dal is a direct rep in the config file
-                    # you will have to iterate through to find 'connection_port'
-                    # basically finding the line 214 in ccm.data.xml
-                    # which variable has that name, because thats the one thats going to be pasesed
-                    # back to the gUNICORn app thing
-                    # session_dal.connectivity_service.service.port = new_port
                     self.update_connectivity_port_dal(session_dal.environment, new_port)
-
-                    # DEFINE A NEW FUNCTION THAT UPDATES THIS
-
-                    # basically go through session_dal.environments,its a variable set, and then go thorugh all the way to CONNECTIVITY-PORT
-                    # you have a very nice function already that exists that is colelct_variable and basically just rip out code for that
-                    # jeesuusss christ
                     self.log.info(
                         f"Configuration file is read-only, updated connectivity service port in DAL to {new_port} to resolve conflict with occupied port {connectivity_service_port}"
                     )
@@ -515,8 +474,6 @@ To debug it, close drunc and run the following command:
                     self.log.info(
                         f"The local connectivity service port at {connectivity_service_port} is occupied, updating it to {new_port}"
                     )
-
-        self.log.critical(f"{session_dal.connectivity_service.service.port=}")
 
         if not config_updated:
             self.log.info("Configuration did not require modifications.")
@@ -541,7 +498,7 @@ To debug it, close drunc and run the following command:
             return (
                 updated_db,
                 updated_session_dal,
-            )  # inject old db instead of new one as a test
+            )
 
     def _initialise_session(self, conf_file: str, conf_id: str) -> tuple:
         import conffwk  # isort: skip
