@@ -113,7 +113,6 @@ def boot_session(
     apps = collect_apps(
         session_name=session_name,
         config_filename=configuration_consolidated_file,
-        db=db,
         session_obj=session_dal,
         segment_obj=session_dal.segment,
         env=env,
