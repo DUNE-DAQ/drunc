@@ -28,7 +28,7 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def mock_logger():
     with patch(
         "drunc.process_manager.process_manager_driver.get_logger"
@@ -839,6 +839,38 @@ def test_terminate_grpc_error(mock_driver):
 
         # Verify error handler was called with the exception
         mock_handler.assert_called_once_with(grpc_error)
+
+
+def test_terminate_error_no_grpc(mock_driver, mock_logger):
+    """
+    Test that terminate method properly handles exceptions that are not gRPC.
+    """
+    # Outer exception
+    grpc_err = grpc.RpcError("gRPC Failed")
+    mock_driver._mock_stub.terminate.side_effect = grpc_err
+
+    # Inner exception for when extract_grpc_rich_error_fails
+    extract_grpc_rich_error_path = (
+        "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+    )
+    handle_grpc_error_path = (
+        "drunc.process_manager.process_manager_driver.handle_grpc_error"
+    )
+
+    with (
+        patch(extract_grpc_rich_error_path) as mock_extract_grpc_rich_error,
+        patch(handle_grpc_error_path) as mock_handler,
+    ):
+        # Simulate a TypeError
+        mock_extract_grpc_rich_error.side_effect = TypeError("Test TypeError")
+        mock_handler.side_effect = grpc_err
+
+        with pytest.raises(grpc.RpcError):
+            mock_driver.terminate()
+
+        args, kwargs = mock_logger.debug.call_args
+        assert "Could not extract rich error details" in args[0]
+        assert kwargs.get("exc_info") is True
 
 
 def test_kill_success(mock_driver, process_query_request, kill_response):
