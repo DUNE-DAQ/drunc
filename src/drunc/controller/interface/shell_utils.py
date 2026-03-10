@@ -1,4 +1,5 @@
 import datetime
+import functools
 import ipaddress
 import logging
 import os
@@ -8,7 +9,6 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from functools import lru_cache, partial
 from urllib.parse import urlparse
 
 import click
@@ -25,6 +25,7 @@ from druncschema.controller_pb2 import (
 from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
+from google.protobuf import any_pb2
 from rich.console import ConsoleRenderable, Group, RichCast
 from rich.progress import (
     BarColumn,
@@ -387,37 +388,64 @@ def tree_prefix(i, n):
 
 
 def validate_and_format_fsm_arguments(
-    arguments: dict, command_arguments: list[Argument]
-):
-    out_dict = {}
+    arguments: dict[str, int | bool | str | float | None] | None,
+    command_arguments: list[Argument],
+) -> dict[str, int | bool | str | float | None]:
+    """
+    Validates and formats the arguments passed to an FSM command based on the command's
+    argument descriptions.
 
-    arguments_left = arguments
+    Args:
+        arguments (dict): A dictionary of argument names and their values passed to the command.
+        command_arguments (list): A list of Argument descriptions for the command.
+
+    Returns:
+        dict: A dictionary of argument names and their formatted values, ready to be sent to the controller.
+
+    Raises:
+        ArgumentException: If there is an issue with the arguments (missing, duplicate, invalid type, or unhandled type)
+    """
     # If the argument dict is empty, don't bother trying to read it
     if not arguments:
-        return out_dict
+        return {}
 
-    for argument_desc in command_arguments:
-        aname = argument_desc.name
-        atype = Argument.Type.Name(argument_desc.type)
-        adefa = argument_desc.default_value
+    # Define the output dict that will be sent to the controller, with argument names
+    # and their formatted values
+    out_dict: dict[str, any_pb2] = {}
 
+    # Strip out any arguments that are None, as they are considered not passed, and will
+    # be set to default values if they exist, or raise an error if they are mandatory
+    # without default value
+    arguments: dict[str, int | bool | str | float] = {
+        k: v for k, v in arguments.items() if v is not None
+    }
+
+    # Iterate over the command's argument descriptions, validate the passed arguments,
+    # and format them to be sent to the controller
+    for argument_desc in command_arguments:  #  type: Argument
+        aname: str = argument_desc.name
+        atype: str = Argument.Type.Name(argument_desc.type)
+        adefa: str | int | float | bool | None = argument_desc.default_value
+
+        # Check for duplicate arguments
         if aname in out_dict:
             raise DuplicateArgument(aname)
 
+        # Check for missing mandatory arguments
         if (
             argument_desc.presence == Argument.Presence.MANDATORY
             and aname not in arguments
         ):
             raise MissingArgument(aname, atype)
 
-        value = arguments.get(aname)
+        # If the argument is not passed, and it has a default value, use the default value
+        value: str | int | float | bool | None = arguments.get(aname)
         if value is None:
             out_dict[aname] = adefa
             continue
 
-        if value:
-            del arguments_left[aname]
-
+        # Convert the argument value to the appropriate type based on the argument
+        # description, and format it to be sent to the controller
         match argument_desc.type:
             case Argument.Type.INT:
                 try:
@@ -447,15 +475,13 @@ def validate_and_format_fsm_arguments(
                 raise UnhandledArgumentType(argument_desc.name, pretty_type)
         out_dict[aname] = pack_to_any(value)
 
-    # if arguments_left:
-    #     raise UnhandledArguments(arguments_left)
     return out_dict
 
 
 def run_one_fsm_command(
+    obj: UnifiedShellContext,
     controller_name: str,
     transition_name: str,
-    obj: UnifiedShellContext,
     target: str,
     **kwargs,
 ) -> None:
@@ -629,7 +655,27 @@ def run_one_fsm_command(
 
 
 def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name: str):
-    cmd = partial(run_one_fsm_command, controller_name, transition.name)
+    """
+    Generate a click command for a given FSM transition.
+
+    Args:
+        ctx: UnifiedShellContext
+        transition: FSMCommandDescription of the transition to generate the command for
+        controller_name: Name of the controller to run the command on
+
+    Returns:
+        A click command that can be added to the CLI
+
+    Raises:
+        Exception: If the argument type is unhandled
+    """
+
+    # Construct the partial command executing the defined FSM command with click options
+    cmd: functools.partial = functools.partial(
+        run_one_fsm_command,
+        controller_name=controller_name,
+        transition_name=transition.name,
+    )
     cmd = click.pass_obj(cmd)
     cmd = click.option(
         "--target",
@@ -638,72 +684,66 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
         default="",
     )(cmd)
 
-    for argument in transition.arguments:
-        atype = None
-        if argument.type == Argument.Type.STRING:
-            atype = str
-            default_value = (
-                unpack_any(argument.default_value, string_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, string_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.INT:
-            atype = int
-            default_value = (
-                unpack_any(argument.default_value, int_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, int_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.FLOAT:
-            atype = float
-            default_value = (
-                unpack_any(argument.default_value, float_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, float_msg).value for choice in argument.choices] if argument.choices else None
-        elif argument.type == Argument.Type.BOOL:
-            atype = bool
-            default_value = (
-                unpack_any(argument.default_value, bool_msg)
-                if argument.HasField("default_value")
-                else None
-            )
-            # choices = [unpack_any(choice, bool_msg).value for choice in argument.choices] if argument.choices else None
-        else:
+    # Define the mapping of gRPC argument types to click types
+    type_map: dict[int, str | int | float | bool] = {
+        Argument.Type.STRING: str,
+        Argument.Type.INT: int,
+        Argument.Type.FLOAT: float,
+        Argument.Type.BOOL: bool,
+    }
+
+    # Define the mapping of gRPC argument types to their corresponding protobuf message
+    # types for default value unpacking
+    msg_map: dict(any_pb2) = {
+        str: string_msg,
+        int: int_msg,
+        float: float_msg,
+        bool: bool_msg,
+    }
+
+    # Iterate over the Arguments of the Transitions, and add them as click options to
+    # the click command
+    for argument in transition.arguments:  # type: Argument
+        # Map the gRPC argument type to a click type, raise an exception if the type is
+        # unhandled
+        atype: Argument.Type.V = type_map.get(argument.type)
+        if not atype:
             raise Exception(f"Unhandled argument type '{argument.type}'")
 
-        argument_name = f"--{argument.name.lower().replace('_', '-')}"
-        default_value = atype(default_value.value) if default_value else None
+        # Unpack the default value of the argument if it exists, and convert it to the
+        # appropriate type
+        raw_default: int | float | str | bool | None = None
+        if argument.HasField("default_value"):
+            unpacked = unpack_any(argument.default_value, msg_map[atype])
+            raw_default = atype(unpacked.value)
 
-        def grab_default_value_from_env(argument_name):
-            env_var = f"DRUNC_{argument_name}_DEFAULT".upper().replace("-", "_")
-            env_var_value = os.getenv(env_var, None)
-            if env_var_value:
-                log.info(
-                    f"Using environment variable '{env_var}' as default value for argument '--{argument.name.lower().replace('_', '-')}' of {transition.name.replace('_', '-').lower()} ('{env_var_value}')"
-                )
-                return atype(env_var_value)
-            return None
+        # Check for default values defined in the environment variables
+        argument_name_cli: str = argument.name.lower().replace("_", "-")
+        env_var: str = f"DRUNC_{argument.name.upper()}_DEFAULT"
+        env_val: str | None = os.getenv(env_var)
 
-        env_default_value = grab_default_value_from_env(argument.name)
-        if env_default_value is not None:
-            default_value = env_default_value
+        # Assign the default value if it is present
+        if env_val is not None:
+            log.info(f"Env override for {argument_name_cli}: {env_val}")
+            default_value = atype(env_val)
+        else:
+            default_value = raw_default
 
+        # Add the argument to the click command
         cmd = click.option(
-            f"{argument_name}",
+            f"--{argument_name_cli}",
             type=atype,
             default=default_value,
             show_default=True,
-            required=argument.presence == Argument.Presence.MANDATORY
-            and default_value is None,
+            required=(
+                (argument.presence == Argument.Presence.MANDATORY)
+                and (default_value is None)
+            ),
             help=argument.help,
         )(cmd)
 
-    cmd_name = format_name_for_cli(transition.name)
-
+    # Construct the click command
+    cmd_name: str = format_name_for_cli(transition.name)
     cmd = click.command(
         name=cmd_name,
         help=f"Execute the transition {transition.name} on the controller {controller_name}",
@@ -712,7 +752,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     return cmd, cmd_name
 
 
-@lru_cache(maxsize=4096)
+@functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
     Resolves an IP to a hostname, with optimizations:

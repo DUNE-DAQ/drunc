@@ -64,7 +64,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
-            ers_kafka_handler=True,
+            ers_kafka_handler=False,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -176,7 +176,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     def __del__(self):
-        if self.opmon_publisher is not None:
+        if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
             self.stop_event.set()
             self.thread.join()
 

@@ -70,6 +70,27 @@ class ProcessManagerRichErrorTestSuite:
 
 
 @pytest.fixture(scope="function")
+def ers_env(monkeypatch):
+    """Provide required ERS environment variables for ProcessManager initialisation."""
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_ERROR",
+        "lstdout",
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_FATAL",
+        "lstdout",
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_INFO",
+        "lstdout",
+    )
+    monkeypatch.setenv(
+        "DUNEDAQ_ERS_WARNING",
+        "lstdout",
+    )
+
+
+@pytest.fixture(scope="function")
 def process_manager_rich_error_test_suite():
     """
     Pytest fixture for ProcessManagerRichErrorTestSuite.
@@ -94,7 +115,7 @@ def process_manager_rich_error_test_suite():
     ],
 )
 def test_all_methods_not_implemented(
-    process_manager_rich_error_test_suite, method_name, impl_name, boot_request
+    process_manager_rich_error_test_suite, ers_env, method_name, impl_name, boot_request
 ):
     """
     Parametrized test to verify that all ProcessManager methods correctly
@@ -139,7 +160,7 @@ def test_all_methods_not_implemented(
     ],
 )
 def test_all_methods_unhandled_exception(
-    process_manager_rich_error_test_suite, method_name, impl_name, boot_request
+    process_manager_rich_error_test_suite, ers_env, method_name, impl_name, boot_request
 ):
     """
     Parametrized test to verify that all ProcessManager methods correctly

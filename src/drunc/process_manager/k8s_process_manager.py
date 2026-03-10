@@ -215,6 +215,12 @@ class K8sProcessManager(ProcessManager):
         labels = settings.get("labels", {})
         self.drunc_label = labels.get("drunc_label", "drunc.daq")
 
+        # Readout app selector
+        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
+
+        # Readout app selector
+        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
+
         # CONFIGURATION - connection server connection port numbers
         self.connection_server_port = None
         self.connection_server_node_port = None
@@ -832,7 +838,7 @@ class K8sProcessManager(ProcessManager):
     ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
         """
         Prepares all pod volumes and container mounts, including static
-        configs and the dynamic data_mount.
+        configs, performance hardware, and dynamic data/home mounts.
 
         Assembles volumes from JSON configuration, auto-mounts the user's home
         directory if configured, adds a log mount from process_logs_path, and
@@ -850,8 +856,34 @@ class K8sProcessManager(ProcessManager):
         pod_volumes = []
         container_volume_mounts = []
 
-        # Volumes from json configuration
+        # Check for readout apps
+        pod_name = boot_request.process_description.metadata.name
+        is_perf_app = self.perf_selector in pod_name.lower()
+
+        # Set HugePages
+        if is_perf_app:
+            self.log.info(f"Adding native HugePages for performance app '{pod_name}'")
+            pod_volumes.append(
+                client.V1Volume(
+                    name="hugepages",
+                    empty_dir=client.V1EmptyDirVolumeSource(medium="HugePages"),
+                )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(name="hugepages", mount_path="/dev/hugepages")
+            )
+
+        # Volumes from json config
         for vc in self.volume_configs:
+            if (
+                vc["name"] in ["hugepages", "vfio", "intel-firmware"]
+                and not is_perf_app
+            ):
+                continue
+
+            if any(v.name == vc["name"] for v in pod_volumes):
+                continue
+
             pod_volumes.append(
                 client.V1Volume(
                     name=vc["name"],
@@ -873,7 +905,6 @@ class K8sProcessManager(ProcessManager):
             username = self._get_host_username()
             target_home_path = f"{self.home_path_base}/{username}"
 
-            # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
                 if vm.mount_path == target_home_path or target_home_path.startswith(
@@ -929,21 +960,22 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
-        # Add dynamic data_mount if present in the boot request
+        # Add dynamic data_mount
         data_mount_path = None
         if boot_request.process_restriction.data_mount:
-            self.log.info(
-                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
-            )
-            if boot_request.process_restriction.data_mount == ".":
+            mount_req = boot_request.process_restriction.data_mount
+            self.log.info(f"Found data_mount request: '{mount_req}'")
+
+            # Use normpath to safely handle both "." and "./"
+            if os.path.normpath(mount_req) == ".":
                 data_mount_path = (
                     boot_request.process_description.process_execution_directory
                 )
                 self.log.info(
-                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                    f"Resolving '{mount_req}' data_mount to process_execution_directory: '{data_mount_path}'"
                 )
             else:
-                data_mount_path = boot_request.process_restriction.data_mount
+                data_mount_path = mount_req
                 self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
 
             if data_mount_path:
@@ -1112,7 +1144,7 @@ class K8sProcessManager(ProcessManager):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        # This logic correctly prepends 'exec' to the C++ application command.
+        # Build command to exec
         command_parts = []
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
@@ -1121,7 +1153,8 @@ class K8sProcessManager(ProcessManager):
             if (
                 is_last_command
                 and e_and_a.exec != "source"
-                and not self._is_local_connection_server(tree_labels, podname)
+                and self.connection_server_name
+                not in tree_labels["role." + self.drunc_label]
             ):
                 prefix = "exec "
 
@@ -1136,30 +1169,42 @@ class K8sProcessManager(ProcessManager):
                     modified_arg = re.sub(
                         r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
                     )
-                    if modified_arg != arg:
-                        self.log.debug(
-                            f"Modified command facility for '{podname}' from {arg} to {modified_arg} "
-                            "(will use pod IP)"
-                        )
                     modified_args.append(modified_arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
                 command_parts.append(
                     prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
                 )
+
         main_command_chain = " && ".join(command_parts)
 
-        container_ports = []
-        if (
-            self._is_local_connection_server(tree_labels, podname)
-            and lcs_port is not None
-        ):
-            self.connection_server_name = podname
-            container_ports.append(
-                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+        # Resolve Host
+        target_host = None
+        if boot_request.process_restriction.allowed_hosts:
+            target_host = boot_request.process_restriction.allowed_hosts[0]
+
+        # Performance Resource Lookup
+        resource_reqs = None
+        is_perf_app = self.perf_selector in podname.lower()
+        if is_perf_app:
+            settings = getattr(self.configuration.data, "settings", {})
+            host_configs = settings.get("host_configs", {})
+
+            if not target_host or target_host not in host_configs:
+                error_msg = (
+                    f"FATAL: Pod '{podname}' is a readout app, but host '{target_host}' "
+                    f"is missing from 'settings.host_configs' in k8s-CERN.json."
+                )
+                self.log.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            self.log.info(f"Applying hardware profile for {target_host} to {podname}")
+            h_config = host_configs[target_host]
+            resource_reqs = client.V1ResourceRequirements(
+                limits=h_config.get("limits"), requests=h_config.get("requests")
             )
 
-        # Only add preStop hook for C++ applications (non-controllers)
+        # Lifecycle Hooks
         lifecycle_hook = None
         if "controller" not in tree_labels[
             "role." + self.drunc_label
@@ -1175,53 +1220,53 @@ class K8sProcessManager(ProcessManager):
                     )
                 )
             )
-        else:
-            self.log.debug(
-                f"'{podname}' identified as a Python app, no preStop hook needed."
-            )
 
-        # Redirect logs
+        # Log Redirection
         log_file_path = boot_request.process_description.process_logs_path
-        final_command_args: str
-
-        if log_file_path:
-            self.log.debug(
-                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
-            )
-            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
-        else:
-            log_redirect_cmd = ""
+        log_redirect_cmd = (
+            f"exec > >(tee -a {log_file_path}) 2>&1;" if log_file_path else ""
+        )
 
         if self._is_local_connection_server(tree_labels, podname):
             # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
                 f"trap 'kill -KILL $child; wait $child; exit 0' TERM QUIT; "
-                f"{main_command_chain} & "
-                f"child=$!; "
-                f"wait $child"
+                f"{main_command_chain} & child=$!; wait $child"
             )
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        # Build container environment variables
-        container_env = self._build_container_env(boot_request, tree_labels)
+        # Security Context
+        security_context = client.V1SecurityContext(
+            run_as_user=os.getuid(), run_as_group=os.getgid()
+        )
+        if is_perf_app:
+            security_context.privileged = True
+            security_context.capabilities = client.V1Capabilities(add=["IPC_LOCK"])
 
-        main_container = client.V1Container(
+        container_ports = []
+        if (
+            self.connection_server_name in tree_labels["role." + self.drunc_label]
+            and lcs_port is not None
+        ):
+            container_ports.append(
+                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+            )
+
+        return client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/bash", "-c"],
             args=[final_command_args],
-            env=container_env,
+            env=self._build_container_env(boot_request, tree_labels),
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
+            resources=resource_reqs,
             working_dir=boot_request.process_description.process_execution_directory,
-            security_context=client.V1SecurityContext(
-                run_as_user=os.getuid(), run_as_group=os.getgid()
-            ),
+            security_context=security_context,
         )
-        return main_container
 
     def _get_pod_node_selector(
         self, podname: str, restriction: ProcessRestriction
@@ -1403,6 +1448,11 @@ class K8sProcessManager(ProcessManager):
         if extra_labels:
             pod_labels.update(extra_labels)
 
+        # hugepages permissions
+        pod_security_context = client.V1PodSecurityContext(
+            run_as_user=os.getuid(), run_as_group=os.getgid(), fs_group=os.getgid()
+        )
+
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
@@ -1419,6 +1469,7 @@ class K8sProcessManager(ProcessManager):
                 containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=pod_volumes,
+                security_context=pod_security_context,
             ),
         )
 

@@ -146,9 +146,8 @@ class ControllerConfHandler(ConfHandler):
                 return  # Ignore disabled segments.
 
             cmd_args = get_commandline_parameters(
-                db=self.db,
                 config_filename=self.initial_data,
-                session_id=session.id,
+                session_dal=session,
                 session_name=session_name,
                 obj=segment.controller,
             )
@@ -169,9 +168,8 @@ class ControllerConfHandler(ConfHandler):
                 return  # Ignore disabled applications.
 
             cmd_args = get_commandline_parameters(
-                db=self.db,
                 config_filename=self.initial_data,
-                session_id=session.id,
+                session_dal=session,
                 session_name=session_name,
                 obj=app,
             )

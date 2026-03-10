@@ -28,7 +28,7 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def mock_logger():
     with patch(
         "drunc.process_manager.process_manager_driver.get_logger"
@@ -83,6 +83,7 @@ def boot_test_setup(mock_driver):
 
         # Create a mock session DAL with no infrastructure applications
         fake_dal = MagicMock(infrastructure_applications=[])
+        fake_db = MagicMock()
 
         # Mock connectivity service
         csc_mock = MagicMock(is_ready=MagicMock(return_value=is_ready))
@@ -92,7 +93,8 @@ def boot_test_setup(mock_driver):
 
         # Internal methods of the driver
         mock_driver._consolidate_config = MagicMock()
-        mock_driver._initialise_session = MagicMock(return_value=("db", fake_dal))
+        mock_driver._initialise_session = MagicMock(return_value=(fake_db, fake_dal))
+        mock_driver.check_port_conflicts = MagicMock(return_value=(fake_db, fake_dal))
 
         mock_driver._convert_oks_to_boot_request = MagicMock(
             return_value=[mock_request]
@@ -118,7 +120,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     """
     mock_session_dal = MagicMock()
 
-    mock_db = MagicMock()
     mock_apps.return_value = [
         {"tree_id": "0.1", "name": "daq_app_1"},
         {"tree_id": "0.2", "name": "daq_app_2"},
@@ -129,7 +130,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     result = mock_driver._collect_all_apps(
         oks_conf="config.oks",
         session_dal=mock_session_dal,
-        db=mock_db,
         session_name="test_session",
     )
 
@@ -396,7 +396,6 @@ def test_convert_oks_to_boot_request_yields_correct_number(mock_driver, app_data
             oks_conf="config.oks",
             user="test_user",
             session_dal=MagicMock(),
-            db=MagicMock(),
             session_name="session1",
             override_logs=False,
         )
@@ -840,6 +839,38 @@ def test_terminate_grpc_error(mock_driver):
 
         # Verify error handler was called with the exception
         mock_handler.assert_called_once_with(grpc_error)
+
+
+def test_terminate_error_no_grpc(mock_driver, mock_logger):
+    """
+    Test that terminate method properly handles exceptions that are not gRPC.
+    """
+    # Outer exception
+    grpc_err = grpc.RpcError("gRPC Failed")
+    mock_driver._mock_stub.terminate.side_effect = grpc_err
+
+    # Inner exception for when extract_grpc_rich_error_fails
+    extract_grpc_rich_error_path = (
+        "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+    )
+    handle_grpc_error_path = (
+        "drunc.process_manager.process_manager_driver.handle_grpc_error"
+    )
+
+    with (
+        patch(extract_grpc_rich_error_path) as mock_extract_grpc_rich_error,
+        patch(handle_grpc_error_path) as mock_handler,
+    ):
+        # Simulate a TypeError
+        mock_extract_grpc_rich_error.side_effect = TypeError("Test TypeError")
+        mock_handler.side_effect = grpc_err
+
+        with pytest.raises(grpc.RpcError):
+            mock_driver.terminate()
+
+        args, kwargs = mock_logger.debug.call_args
+        assert "Could not extract rich error details" in args[0]
+        assert kwargs.get("exc_info") is True
 
 
 def test_kill_success(mock_driver, process_query_request, kill_response):
