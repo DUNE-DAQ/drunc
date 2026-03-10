@@ -460,11 +460,14 @@ To debug it, close drunc and run the following command:
             ):
                 config_updated = True
                 if config_is_read_only:
-                    new_port = find_free_port(30000, 32767)
-                    self.update_connectivity_port_dal(session_dal.environment, new_port)
-                    self.log.info(
-                        f"Configuration file is read-only, updated connectivity service port in DAL to {new_port} to resolve conflict with occupied port {connectivity_service_port}"
+                    err_str = (
+                        "Configuration is read only, and [red]the connectivity service "
+                        f"address ({connectivity_service_host}:"
+                        f"{connectivity_service_port}) is currently occupied[/red]. "
+                        "[yellow]To fix this, clone the configuration file locally and "
+                        "rerun[/yellow]."
                     )
+                    raise DruncSetupException(err_str)
                 else:
                     new_port = set_connectivity_service_port(
                         configuration_file, configuration_id
