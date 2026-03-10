@@ -287,7 +287,7 @@ def get_writer_directory_path(app, log) -> str | None:
     params = getattr(writer, "data_store_params", None)
     if params and getattr(params, "directory_path", None):
         directory_path = params.directory_path
-        log.info(f"data path for app {app.id}: {directory_path}")
+        log.debug(f"data path for app {app.id}: {directory_path}")
         return directory_path
 
     return None
