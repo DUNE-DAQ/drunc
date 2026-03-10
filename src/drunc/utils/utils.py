@@ -49,7 +49,7 @@ def get_root_logger(log_level: str) -> logging.Logger:
     return setup_root_logger("drunc", log_level)
 
 
-def get_logger(logger_name: str, *args, **kwargs):
+def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
     """Returns / constructs default logging instances. Prepends all loggers with 'drunc'
     to inherit from the root 'drunc' logger.
     Wraps to the daqpytools implementation, see for more details
@@ -59,6 +59,16 @@ def get_logger(logger_name: str, *args, **kwargs):
         args, kwargs: Passed without modification to the daqpytools implementation
     """
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+
+
+def strip_non_drunc_loggers() -> None:
+    """
+    Strip out all the basicConfig handlers from other repositories, which define
+    handlers with the root logger.
+    """
+    root = logging.getLogger()
+    if root.handlers:
+        root.handlers.clear()
 
 
 def get_random_string(length):
@@ -408,3 +418,106 @@ def format_name_for_cli(name: str) -> str:
         str: The formatted command name suitable for CLI usage.
     """
     return name.replace("_", "-").lower()
+
+
+def resolve_target_ip(host: str) -> str | None:
+    """
+    Intelligently resolves the host.
+    If host is 'localhost' or '127.0.0.1', it finds the actual LAN IP.
+
+    Args:
+        host - the name of the host to reolve to LAN IP
+
+    Returns:
+        str - LAN IP of the host
+        None - if the host could not be resolved, None is returned
+    """
+
+    log = get_logger("utils.resolve_target_ip")
+
+    # Linux usually resolves the hostname of localhosts to loopback, this needs to be
+    # addressed separately
+    # if host.lower() in ['localhost', '127.0.0.1', '0.0.0.0', socket.gethostname().lower()]:
+    if host_is_local(host.lower()):
+        # Need to check external traffic as otherwise resolution goes to loopback or all
+        # interface addresses, which fails the check.
+        try:
+            # Use IPv4 and UDP (no SYN handshake packet, less noisy network)
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                # Attempt to connect to the Broadcast Address - this is automatically
+                # blocked from sending data outside of the LAN. Use connect - this does
+                # send any data, just establishes the connection.
+                s.connect(("10.255.255.255", 1))
+                return s.getsockname()[0]
+        except Exception:
+            # Return the loopback address.
+            log.warning(f"Failed to resolve the IP address of {host}")
+            return "127.0.0.1"
+
+    # Otherwise, resolve the remote hostname normally
+    try:
+        return socket.gethostbyname(host)
+    except socket.gaierror:
+        # Server only has an IPv6 address
+        log.error(f"Could not resolve host: {host}")
+        return None
+
+
+def is_port_available(host: str, port: int, timeout: int = 2) -> bool:
+    """
+    Check if the given port number on a specified host is available.
+
+    Args:
+        host - the host name to check
+        port - the port number to check
+        timeout - timeout of attempting to establish the connection
+
+    Returns:
+        true - the port is available
+        false - the port is not available
+    """
+
+    log = get_logger("utils.is_port_available")
+
+    # Resolve the IP address to the LAN IP
+    target_ip = resolve_target_ip(host)
+
+    # Cannot resolve hostname, assume unavailable/error
+    if not target_ip:
+        return False
+
+    log.debug(f"Checking {host} (resolved to {target_ip}) on port {port}")
+
+    # Attempt to connect to the address with IPv4 and TCP
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(timeout)
+        try:
+            s.connect((target_ip, port))
+            # Connection established succesfully - the port is not available
+            return False
+        except ConnectionRefusedError:
+            # Connection failed to establish - the port is available
+            return True
+        except socket.timeout:
+            # Connection timed out - connection may be available, marked as unavailable
+            # for safety
+            log.debug(
+                f"The port {host}:{port} may be available, but connection to the address timed out. Marked as unavailable for safety."
+            )
+            return False
+        except OSError:
+            # Catch other network errors
+            return False
+
+
+def file_is_read_only(file_path: str) -> bool:
+    """
+    Runs checks to see if the file path is read only.
+
+    Args:
+        file_path - path of file to read
+
+    Returns:
+        bool - true is file is read only, false otherwise
+    """
+    return not os.access(file_path, os.W_OK)

@@ -83,6 +83,7 @@ def boot_test_setup(mock_driver):
 
         # Create a mock session DAL with no infrastructure applications
         fake_dal = MagicMock(infrastructure_applications=[])
+        fake_db = MagicMock()
 
         # Mock connectivity service
         csc_mock = MagicMock(is_ready=MagicMock(return_value=is_ready))
@@ -92,7 +93,8 @@ def boot_test_setup(mock_driver):
 
         # Internal methods of the driver
         mock_driver._consolidate_config = MagicMock()
-        mock_driver._initialise_session = MagicMock(return_value=("db", fake_dal))
+        mock_driver._initialise_session = MagicMock(return_value=(fake_db, fake_dal))
+        mock_driver.check_port_conflicts = MagicMock(return_value=(fake_db, fake_dal))
 
         mock_driver._convert_oks_to_boot_request = MagicMock(
             return_value=[mock_request]
@@ -118,7 +120,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     """
     mock_session_dal = MagicMock()
 
-    mock_db = MagicMock()
     mock_apps.return_value = [
         {"tree_id": "0.1", "name": "daq_app_1"},
         {"tree_id": "0.2", "name": "daq_app_2"},
@@ -129,7 +130,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     result = mock_driver._collect_all_apps(
         oks_conf="config.oks",
         session_dal=mock_session_dal,
-        db=mock_db,
         session_name="test_session",
     )
 
@@ -396,7 +396,6 @@ def test_convert_oks_to_boot_request_yields_correct_number(mock_driver, app_data
             oks_conf="config.oks",
             user="test_user",
             session_dal=MagicMock(),
-            db=MagicMock(),
             session_name="session1",
             override_logs=False,
         )
