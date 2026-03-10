@@ -25,8 +25,7 @@ class ThreadPinning(FSMAction):
         apps = collect_apps(
             config_filename=configuration,
             session_name=session,
-            db=db,
-            session_obj=session_dal,
+            session_dal_obj=session_dal,
             segment_obj=session_dal.segment,
             env=environ,
             tree_prefix=[],
