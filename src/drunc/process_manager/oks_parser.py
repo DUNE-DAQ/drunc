@@ -234,16 +234,9 @@ def collect_apps(
         )
         log.debug(f"Collecting app {app.id} with args {args}")
 
-        data_path = None
-        if "DFApplication" in app.oksTypes():
-            try:
-                # DFApplication -> data_writers -> data_store_params -> directory_path
-                data_path = app.data_writers[0].data_store_params.directory_path
-            except (AttributeError, IndexError):
-                log.debug(
-                    f"DFApplication {app.id} is missing its data path configuration."
-                )
-                pass
+        data_path = get_writer_directory_path(app, log)
+        if not data_path:
+            log.debug(f"No data path found for app {app.id}")
 
         apps.append(
             {
@@ -261,6 +254,43 @@ def collect_apps(
         app_index += 1
 
     return apps
+
+
+def get_writer_directory_path(app, log) -> str | None:
+    # Map known OKS types to their specific writer attribute
+    APP_TYPE_TO_WRITER_ATTR = {
+        "DFApplication": "data_writers",
+        "TPStreamWriterApplication": "tp_writer",
+    }
+
+    # Find which app type we are dealing with
+    app_types = app.oksTypes()
+    writer_attr_name = None
+
+    for known_type, attr_name in APP_TYPE_TO_WRITER_ATTR.items():
+        if known_type in app_types:
+            writer_attr_name = attr_name
+            break
+
+    if not writer_attr_name:
+        return None  # Not a known writer application
+
+    writers = getattr(app, writer_attr_name, None)
+    if not writers:
+        return None
+
+    # Normalise single-object vs list semantics
+    if not isinstance(writers, (list, tuple)):
+        writers = [writers]
+
+    writer = writers[0]
+    params = getattr(writer, "data_store_params", None)
+    if params and getattr(params, "directory_path", None):
+        directory_path = params.directory_path
+        log.info(f"data path for app {app.id}: {directory_path}")
+        return directory_path
+
+    return None
 
 
 def collect_infra_apps(

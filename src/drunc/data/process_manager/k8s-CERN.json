@@ -53,19 +53,39 @@
             "grpc_startup_timeout": 30,
             "socket_retry_timeout": 1.0
         },
-        "volumes": [
-            {
-                "name": "nfs",
-                "mount_path": "/nfs",
-                "host_path": "/nfs",
-                "read_only": false
+        "readout_app_selector": "runp",
+        "host_configs": {
+            "np02-srv-001": {
+                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "64", "memory": "512Gi"},
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "16", "memory": "128Gi"}
             },
-            {
-                "name": "cvmfs",
-                "mount_path": "/cvmfs",
-                "host_path": "/cvmfs",
-                "read_only": true
+            "np02-srv-002": {
+                "limits":   {"hugepages-2Mi": "8Gi", "cpu": "32", "memory": "512Gi"},
+                "requests": {"hugepages-2Mi": "8Gi", "cpu": "8", "memory": "128Gi"}
+            },
+            "np02-srv-003": {
+                "limits":   {"hugepages-2Mi": "8Gi", "cpu": "112", "memory": "256Gi"},
+                "requests": {"hugepages-2Mi": "8Gi", "cpu": "24", "memory": "64Gi"}
+            },
+            "np04-srv-004": {
+                "limits":   {"hugepages-2Mi": "64Gi", "cpu": "256", "memory": "2048Gi"},
+                "requests": {"hugepages-2Mi": "64Gi", "cpu": "64", "memory": "512Gi"}
+            },
+            "np02-srv-005": {
+                "limits":   {"hugepages-2Mi": "64Gi", "cpu": "192", "memory": "1536Gi"},
+                "requests": {"hugepages-2Mi": "64Gi", "cpu": "48", "memory": "384Gi"}
+            },
+            "np04-srv-031": {
+                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
+                "requests": {"hugepages-2Mi": "32Gi", "cpu": "32", "memory": "256Gi"}
             }
+        },
+        "volumes": [
+            { "name": "nfs", "mount_path": "/nfs", "host_path": "/nfs", "read_only": false },
+            { "name": "cvmfs", "mount_path": "/cvmfs", "host_path": "/cvmfs", "read_only": true },
+            { "name": "hugepages", "mount_path": "/dev/hugepages", "host_path": "/dev/hugepages", "read_only": false },
+            { "name": "vfio", "mount_path": "/dev/vfio", "host_path": "/dev/vfio", "read_only": false },
+            { "name": "intel-firmware", "mount_path": "/lib/firmware/intel/ice", "host_path": "/lib/firmware/intel/ice", "read_only": true }
         ]
     }
 }
