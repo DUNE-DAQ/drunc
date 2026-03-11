@@ -1,11 +1,12 @@
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from druncschema.token_pb2 import Token
+import pytest
+from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.request_response_pb2 import Request
+from druncschema.token_pb2 import Token
 
 from drunc.broadcast.server.decorators import broadcasted
-from druncschema.broadcast_pb2 import BroadcastType
+
 
 class MockException(Exception):
     pass

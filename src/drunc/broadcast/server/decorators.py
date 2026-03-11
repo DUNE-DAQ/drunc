@@ -1,9 +1,5 @@
-import traceback
 
-from druncschema.generic_pb2 import Stacktrace
-from druncschema.request_response_pb2 import Response, ResponseFlag
 
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger
 
 
