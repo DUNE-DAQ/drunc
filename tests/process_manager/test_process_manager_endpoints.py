@@ -17,7 +17,9 @@ import grpc
 import grpc_testing
 import pytest
 from druncschema.process_manager_pb2 import DESCRIPTOR
+from druncschema.request_response_pb2 import ResponseFlag
 
+from drunc.process_manager.process_manager import BadQuery
 from tests.process_manager.process_manager_mock_impls import (
     ConcreteProcessManager,
 )
@@ -303,3 +305,30 @@ def test_logs_endpoint(grpc_test_server_factory, log_request, logs_response):
 
     # Verify all response fields match expected values
     assert expected_response == response
+
+
+def test_logs_endpoint_bad_query(grpc_servicer, log_request):
+    """Test that BadQuery in logs returns a clean bad-request response."""
+    error_message = "The process corresponding to the query doesn't exist"
+    mock_method = MagicMock(side_effect=BadQuery(error_message))
+    setattr(grpc_servicer, "_logs_impl", mock_method)
+
+    servicers = {DESCRIPTOR.services_by_name["ProcessManager"]: grpc_servicer}
+    grpc_test_server = grpc_testing.server_from_dictionary(
+        servicers, grpc_testing.strict_real_time()
+    )
+
+    logs_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["logs"]
+        ),
+        invocation_metadata={},
+        request=log_request,
+        timeout=1,
+    )
+
+    response, metadata, code, details = logs_method.termination()
+
+    assert code == grpc.StatusCode.OK
+    assert response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    assert list(response.lines) == [error_message]

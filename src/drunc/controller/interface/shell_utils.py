@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 import click
 import grpc
+from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
 from druncschema.controller_pb2 import (
     Argument,
     DescribeResponse,
@@ -151,9 +152,9 @@ def get_status_table(
         table.add_row("Run type", status.run_info.run_type)
         table.add_row(
             "Start time",
-            datetime.datetime.fromtimestamp(status.run_info.run_time_at_start).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            ),
+            datetime.datetime.fromtimestamp(
+                status.run_info.run_time_at_start, tz=TIME_ZONE
+            ).strftime(DATE_TIME_BASE_FORMAT),
         )
         table.add_row(
             "Duration",

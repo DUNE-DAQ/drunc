@@ -566,14 +566,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 message="Implementation missing",
                 domain="ProcessManager.logs",
             )
-        except Exception as e:
-            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
-            self.log.exception(context_msg)
-
-            raise DruncCommandException(
-                message=f"{context_msg}: {e}",
-                domain="ProcessManager.logs",
-            )
         except BadQuery as e:
             return LogLines(
                 name=self.name,
@@ -581,6 +573,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 uuid=None,
                 lines=[str(e)],
                 flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                domain="ProcessManager.logs",
             )
 
         return response

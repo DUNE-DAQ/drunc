@@ -20,6 +20,7 @@ from druncschema.process_manager_pb2 import (
     ProcessMetadata,
     ProcessRestriction,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -943,6 +944,36 @@ def test_logs_grpc_error(mock_driver, log_request):
             mock_driver.logs(log_request)
 
         mock_handler.assert_called_once_with(grpc_error)
+
+
+def test_logs_bad_query_target_not_found(mock_driver, mock_logger, log_request):
+    """Test that logs bad-query target misses are reported with a concise message."""
+    mock_response = MagicMock()
+    mock_response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    mock_response.lines = ["The process corresponding to the query doesn't exist"]
+    mock_driver._mock_stub.logs.return_value = mock_response
+
+    response = mock_driver.logs(log_request)
+
+    assert response is None
+    mock_logger.warning.assert_called_once_with(
+        "Bad query for logs: The process corresponding to the query doesn't exist"
+    )
+
+
+def test_logs_bad_query_generic_message(mock_driver, mock_logger, log_request):
+    """Test that logs bad-query non-missing-target errors keep their details."""
+    mock_response = MagicMock()
+    mock_response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    mock_response.lines = ["There are more than 1 processes corresponding to the query"]
+    mock_driver._mock_stub.logs.return_value = mock_response
+
+    response = mock_driver.logs(log_request)
+
+    assert response is None
+    mock_logger.warning.assert_called_once_with(
+        "Bad query for logs: There are more than 1 processes corresponding to the query"
+    )
 
 
 def test_ps_success(mock_driver, process_query_request, ps_response):
