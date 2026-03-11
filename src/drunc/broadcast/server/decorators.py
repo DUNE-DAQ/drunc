@@ -36,35 +36,11 @@ def broadcasted(cmd):
         except Exception as e:
             log.exception(e)
 
-            stack = traceback.format_exc().split("\n")
-            from drunc.exceptions import DruncException
-
-            flag = (
-                ResponseFlag.DRUNC_EXCEPTION_THROWN
-                if isinstance(e, DruncException)
-                else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-            )
-            # Wrap the stack trace in a Response message to broadcast but still
-            # raise the exception to the client so the interceptor can handle it
-
-            error_wrap = Response(
-                name=obj.name,
-                token=request.token,
-                data=pack_to_any(
-                    Stacktrace(
-                        text=stack,
-                    )
-                ),
-                flag=flag,
-                children=[],
-            )
-
             obj.broadcast(
                 message=f"Command '{cmd.__name__}' failed",
                 btype=BroadcastType.UNHANDLED_EXCEPTION_RAISED,
-                data=error_wrap,
             )
-
+            # raise the exception to the client so the interceptor can handle it
             raise e
 
         msg = f"User '{request.token.user_name}' successfully executed '{cmd.__name__}'"
