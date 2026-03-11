@@ -3,7 +3,7 @@ import os
 
 import click
 import click_shell
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 
 from drunc.controller.interface.commands import (
     connect,

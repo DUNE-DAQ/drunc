@@ -3,7 +3,7 @@ import signal
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
