@@ -29,7 +29,6 @@ NP0X_CLUSTER_HOSTS = [
     "np04-srv-021",
     "np04-srv-022",
     "np04-srv-024",
-    "np04-srv-025",
     "np04-srv-026",
     "np04-srv-028",
     "np04-srv-029",
