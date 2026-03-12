@@ -1,244 +1,388 @@
 import os
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import paramiko
 from rich import box
 from rich.console import Console
+from rich.live import Live
 from rich.table import Table
 
-NP0X_CLUSTER_HOSTS = [
-    "np02-srv-001",
-    "np02-srv-002",
-    "np02-srv-003",
-    "np02-srv-004",
-    "np02-srv-005",
-    "np04-srv-001",
-    "np04-srv-002",
-    "np04-srv-003",
-    "np04-srv-004",
-    "np04-srv-005",
-    "np04-srv-011",
-    "np04-srv-012",
-    "np04-srv-013",
-    "np04-srv-014",
-    "np04-srv-015",
-    "np04-srv-016",
-    "np04-srv-017",
-    "np04-srv-018",
-    "np04-srv-019",
-    "np04-srv-021",
-    "np04-srv-022",
-    "np04-srv-024",
-    "np04-srv-026",
-    "np04-srv-028",
-    "np04-srv-029",
-    "np04-srv-030",
-    "np04-srv-031",
-]
-NP0X_CLUSTER_HOSTS = sorted(NP0X_CLUSTER_HOSTS)
+# List of NP0x cluster hosts to check
+NP0X_CLUSTER_HOSTS = sorted(
+    [
+        "np02-srv-001",
+        "np02-srv-002",
+        "np02-srv-003",
+        "np02-srv-004",
+        "np02-srv-005",
+        "np04-srv-001",
+        "np04-srv-002",
+        "np04-srv-003",
+        "np04-srv-004",
+        "np04-srv-005",
+        "np04-srv-011",
+        "np04-srv-012",
+        "np04-srv-013",
+        "np04-srv-014",
+        "np04-srv-015",
+        "np04-srv-016",
+        "np04-srv-017",
+        "np04-srv-018",
+        "np04-srv-019",
+        "np04-srv-021",
+        "np04-srv-022",
+        "np04-srv-024",
+        "np04-srv-026",
+        "np04-srv-028",
+        "np04-srv-029",
+        "np04-srv-030",
+        "np04-srv-031",
+    ]
+)
 
 
 class TrackingAutoAddPolicy(paramiko.MissingHostKeyPolicy):
     """
-    Custom policy that auto-adds keys (ignoring the 'yes/no' prompt),
-    but records that it happened so we can report it in the table.
+    Custom policy to track missing host keys and update the result dict accordingly.
     """
 
     def __init__(self, result_dict):
+        """
+        Initialize with a reference to the result dictionary to update key status.
+        """
         self.result_dict = result_dict
 
-    def missing_host_key(self, client, hostname, key):
-        # Record that we saw a new key
-        self.result_dict["key_status"] = "Update known_hosts"
-        self.result_dict["key_color"] = "yellow"
-
-        # Perform the standard AutoAdd logic (save to memory/disk)
-        client._host_keys.add(hostname, key.get_name(), key)
-        if client._host_keys_filename is not None:
-            client.save_host_keys(client._host_keys_filename)
+    def missing_host_key(self, client, hostname: str, key: paramiko.PKey) -> None:
+        """
+        When a host key is missing, update the result dictionary to indicate that the
+        key is being added.
+        """
+        # Update the result dictionary to reflect the missing key status
+        self.result_dict["ssh_key_status"] = "ADD KEY TO KNOWN_HOSTS"
+        self.result_dict["ssh_key_color"] = "bold yellow"
 
 
 def load_ssh_config() -> paramiko.SSHConfig:
     """
-    Parses the local user's SSH config file.
+    Load the user's SSH configuration from ~/.ssh/config using Paramiko's SSHConfig
+    class.
+
+    This function reads the SSH configuration file and parses it to create an SSHConfig
+    object that can be used to look up host-specific settings when connecting to hosts.
 
     Args:
         None
 
     Returns:
-        paramiko.SSHConfig: An object containing the parsed SSH configuration.
+        paramiko.SSHConfig: An SSHConfig object containing the parsed SSH configuration.
 
-    Notes:
-        - This function looks for the SSH config file at ~/.ssh/config.
-        - If the file exists, it will be parsed and returned as a paramiko.SSHConfig
-            object.
-        - If the file does not exist, an empty SSHConfig object will be returned, which
-            will cause all hosts to be treated with default settings (hostname = alias,
-            port = 22, etc.).
+    Raises:
+        FileNotFoundError: If the SSH configuration file is not found at the expected
+        location.
     """
+    # Determine the absolute path to the SSH configuration file.
     config_path = os.path.expanduser("~/.ssh/config")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"SSH config file not found at {config_path}")
+
+    # Create an SSHConfig object and parse the SSH configuration file to populate it
+    # with the host-specific settings.
     ssh_config = paramiko.SSHConfig()
 
-    if os.path.exists(config_path):
-        with open(config_path) as f:
+    # Open the SSH configuration file and parse it to populate the SSHConfig object.
+    with open(config_path) as f:
+        try:
             ssh_config.parse(f)
+        except Exception as e:
+            raise Exception(f"Error parsing SSH config file: {e}")
+
     return ssh_config
 
 
 def get_host_info(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
     """
-    Connects to a host and retrieves its status and key information.
+    Connect to a host using Paramiko and retrieve its status, key verification status,
+    CPU vendor, and uptime information.
+
+    This function attempts to establish an SSH connection to the specified host alias
+    using the provided SSH configuration. It checks the host key against known hosts,
+    retrieves CPU vendor and uptime information, and handles various exceptions to
+    determine the host's status.
 
     Args:
-        host_alias (str): The alias of the host as defined in the SSH config.
-        ssh_config (paramiko.SSHConfig): The parsed SSH configuration object.
+        host_alias (str): The alias of the host to connect to, as defined in the SSH
+            configuration.
+        ssh_config (paramiko.SSHConfig): An SSHConfig object containing the parsed
+            SSH configuration to use for looking up host-specific settings.
 
     Returns:
-        dict: A dictionary containing the host's alias, real hostname, connection
-            status, key status, and uptime details.
-
+        dict: A dictionary containing the host's alias, connection status, key
+        verification status, CPU vendor, uptime, and any additional details. The keys
+        in the dictionary include:
+            - "alias": The host alias used for the connection.
+            - "status": The connection status, which can be "UP", "OFFLINE", or
+                "SCANNING".
+            - "key_status": The status of the host key verification, which can be
+                "Verified", "MISMATCH", or "Not Verified".
+            - "key_color": The color code to use for displaying the key status.
+            - "vendor": The CPU vendor string retrieved from the host.
+            - "cpu_color": The color code to use for displaying the CPU vendor in the
+                UI.
+            - "uptime": The uptime string retrieved from the host.
+            - "details": Additional details about the host, such as CPU model
+                information, which is initialized as an empty string and can be
+                populated based on the command output.
     Raises:
-        None: All exceptions are caught and handled within the function, with results
-            returned in the result dictionary.
+        paramiko.BadHostKeyException: If the host key does not match the expected key in
+            the known hosts file, indicating a potential security issue.
+        Exception: Any other exceptions that occur during the connection attempt, which
+            will be handled to indicate that the host is offline or the key is not
     """
-
+    # Initialize the SSH client and the result dictionary with default values
     client = paramiko.SSHClient()
-
-    # Default result structure
     result = {
         "alias": host_alias,
-        "real_host": "Resolving...",
-        "status": "DOWN",
-        "key_status": "Verified",  # Default assumption
-        "key_color": "green",
+        "status": "SCANNING",
+        "ssh_key_status": "Unknown",
+        "ssh_key_color": "red",
+        "cpu_color": "dim white",
+        "uptime": "",
         "details": "",
     }
 
-    # Load System Host Keys (known_hosts)
+    # Load system host keys to ensure we have the latest known hosts information. If
+    # this fails, use the default behavior of the SSH client, which will handle missing
+    # keys according to the policy set below.
     try:
         client.load_system_host_keys()
-    except IOError:
-        # No known_hosts file exists
+    except Exception:
         pass
 
-    # Attach a Custom Policy that tracks new keys
+    # Set the custom missing host key policy to track and update the result dictionary
     client.set_missing_host_key_policy(TrackingAutoAddPolicy(result))
+    # Check if we already have a key for this hostname in our loaded keys
+    # If we don't, the policy WILL be triggered during connect()
+    known_keys = client.get_host_keys()
+    if host_alias in known_keys:
+        result["ssh_key_status"] = "Verified"
+        result["ssh_key_color"] = "green"
+    else:
+        # This will be updated by the policy the moment client.connect() runs.
+        result["ssh_key_status"] = "Missing"
+        result["ssh_key_color"] = "yellow"
 
-    # Parse the SSH config for this host
+    # Look up the host configuration from the SSH config using the provided alias. This
+    # will allow us to retrieve the real hostname, username, port, and key file to use
+    # for the connection. If the alias is not found in the SSH config, we will use the
+    # alias itself as the hostname.
     host_conf = ssh_config.lookup(host_alias)
-    real_host = host_conf.get("hostname", host_alias)
-    result["real_host"] = real_host
 
+    # Determine the real hostname to connect to. If the SSH config provides a "hostname"
+    # entry for this alias, use that; otherwise, use the alias itself as the hostname.
+    hostname = host_conf.get("hostname", host_alias)
+
+    # Attempt to connect to the host using the SSH client. If the connection is
+    # successful, execute the command to retrieve CPU and uptime information, parse the
+    # output, and update the result dictionary accordingly. If exceptions occur during
+    # the connection attempt, handle them to update the result dictionary accordingly.
     try:
-        # Define connection parameters for this SSH config
+        # Prepare the connection arguments based on the SSH config.
         connect_args = {
-            "hostname": real_host,
-            "username": host_conf.get("user"),
+            "hostname": hostname,
+            "username": host_conf.get("user", os.getlogin()),
             "port": int(host_conf.get("port", 22)),
-            "timeout": 10,
-            "key_filename": host_conf.get("identityfile"),
+            "timeout": 5,
+            "key_filename": host_conf.get("identityfile", None),
         }
 
-        # Connect to the host
+        # Attempt to establish an SSH connection to the host using the prepared
+        # arguments. If the host key is missing, the custom policy will handle it and
+        # update the result dict.
         client.connect(**connect_args)
 
-        # If a connection is established, get the host uptime
-        stdin, stdout, stderr = client.exec_command("uptime -p")
-        output = stdout.read().decode().strip()
+        # If the connection is successful, execute the command to retrieve CPU and
+        # uptime information.
+        _, stdout, _ = client.exec_command("lscpu && uptime -p")
+        cmd_output = stdout.read().decode().strip()
 
-        # If we got here, the connection is successful, so we mark it as UP
+        # If we reach this point, the connection was successful and the host key was
+        # verified.
         result["status"] = "UP"
-        result["details"] = output if output else "Shell OK (No output)"
+        if result["ssh_key_status"] != "ADD KEY TO KNOWN_HOSTS":
+            result["ssh_key_status"] = "Verified"
+            result["ssh_key_color"] = "green"
 
-        # Close the connection after we're done
-        client.close()
+        # Parse the command output to extract CPU vendor, model details, and uptime.
+        for line in cmd_output.splitlines():
+            if line.startswith("up "):
+                result["uptime"] = line.replace("up ", "")
+            if "Vendor ID:" in line:
+                v = line.split(":")[1].strip()
+                if "AuthenticAMD" in v:
+                    result["cpu_color"] = "bold red"
+                elif "GenuineIntel" in v:
+                    result["cpu_color"] = "bold blue"
+            if "Model name:" in line:
+                result["details"] = line.split(":")[1].strip()
 
-    # Address the case where the host key is known but does not match (potential
-    # security issue)
+    # Handle the case where the host key does not match the expected key in the known
+    # hosts file. This indicates a potential security issue, and we will update the
+    # result dictionary to reflect that the key is a mismatch and the host is down.
     except paramiko.BadHostKeyException:
-        result["key_status"] = "MISMATCH"
-        result["key_color"] = "bold red"
-        result["details"] = "Security Warning: Key Changed"
+        result["status"] = "DOWN"
+        result["ssh_key_status"] = "MISMATCH"
+        result["ssh_key_color"] = "bold red"
 
-    # Handle authentication failures (wrong password or key)
+    # Handle authentication failures, which indicate that the host is offline or the key
+    # is not valid for this host.
     except paramiko.AuthenticationException:
-        result["details"] = "Auth Failed (Pass/Key)"
+        result["status"] = "OFFLINE"
+        result["details"] = "Auth Failed (Key/Pass)"
 
-    # Handle SSH protocol errors (e.g., connection issues, timeouts, etc.)
+    # Handle SSH exceptions, which can occur for various reasons such as network issues,
+    # SSH service not running on the host, or other SSH-related problems.
     except paramiko.SSHException as e:
-        result["details"] = f"Proto Error: {str(e)}"
+        result["status"] = "OFFLINE"
+        result["details"] = f"SSH Error: {str(e)[:20]}"
 
-    # Handle any other exceptions (like network errors, DNS resolution failures, etc.)
+    # Handle any other exceptions that occur during the connection attempt. Treat this
+    # as an indication that the host is offline or unreachable.
     except Exception:
-        result["details"] = "Unreachable"
+        result["status"] = "OFFLINE"
+        result["ssh_key_status"] = "Unknown"
+        result["ssh_key_color"] = "dim white"
+        result["uptime"] = "Unknown"
+        result["details"] = "Unknown"
+
+    finally:
+        client.close()
 
     return result
 
 
+def generate_table(results_map: dict[str, str]) -> Table:
+    """
+    Generate a Rich Table object to display the status of the NP0x cluster hosts.
+
+    This function creates a Rich Table with columns for Host, Status, User SSH Key
+    Status, CPU Model/Details, and Uptime. It iterates through results_map, and updates
+    the table rows based on the its content.
+
+    Args:
+        results_map (dict[str, str]): A dictionary mapping host aliases to their status
+            information, including connection status, key verification status, CPU
+            details, and uptime.
+
+    Returns:
+        Table: A Rich Table object populated with the status information for each host
+        in the NP0x cluster, ready to be rendered in the console.
+    """
+
+    # QOL feature
+    up_count = sum(1 for res in results_map.values() if res["status"] == "UP")
+    total_hosts = len(results_map)
+
+    # Create a Rich Table with appropriate columns and styling to display the host
+    # status information.
+    table = Table(
+        title=f"ProtoDUNE Cluster [bold cyan]({up_count}/{total_hosts} Online)[/]",
+        box=box.ROUNDED,
+    )
+    table.add_column("Host", style="cyan", no_wrap=True, justify="center")
+    table.add_column("User SSH Key Status", justify="center")
+    table.add_column("Status", justify="center")
+    table.add_column("CPU Model / Details", justify="center", style="dim white")
+    table.add_column("Uptime", justify="center", style="dim white")
+
+    # Iterate through the results_map and add a row to the table for each host.
+    for host in NP0X_CLUSTER_HOSTS:
+        res = results_map.get(host)
+
+        # Format the status string based on the connection status of the host.
+        if res["status"] == "UP":
+            status_str = "[bold green]ONLINE[/]"
+        elif res["status"] == "OFFLINE":
+            status_str = "[bold red]OFFLINE[/]"
+        else:
+            status_str = "[bold yellow]SCANNING[/]"
+
+        # Format the key status string with appropriate color based on the key
+        # verification status.
+        key_str = f"[{res['ssh_key_color']}]{res['ssh_key_status']}[/]"
+
+        # Format the CPU details string with appropriate color based on the CPU vendor.
+        # If details are not available, show "..." instead.
+        details_str = f"[{res['cpu_color']}]{res['details']}[/]"
+
+        # Add the row to the table.
+        table.add_row(res["alias"], key_str, status_str, details_str, res["uptime"])
+
+    return table
+
+
 def main():
     """
-    Main function to check the status of all hosts in the NP0X_CLUSTER_HOSTS list and
-    display the results in a formatted table.
+    Main function to execute the NP0x cluster status check and display results in a
+    live-updating table.
+
+    This function initializes the console and SSH configuration, sets up a results map
+    to track the status of each host, and uses a ThreadPoolExecutor to concurrently
+    check the status of each host in the NP0x cluster. The results are displayed in a
+    live-updating table using Rich's Live feature, which refreshes the display as
+    results come in.
 
     Args:
         None
 
     Returns:
-        None: The function prints the results to the console.
+        None
 
-    Notes:
-        - The function uses a ThreadPoolExecutor to check multiple hosts concurrently
-            for faster results.
-        - The results include the connection status (UP/DOWN), key status (Verified,
-            Update known_hosts, MISMATCH), and any relevant details (like uptime or
-            error messages).
-        - The output is displayed in a rich-formatted table for better readability.
+    Raises:
+        Any exceptions that occur during the execution of the host checks will be
+        handled within the get_host_info function.
     """
 
-    # Initialize the console
+    # Initialize the console for Rich output and load the SSH configuration.
     console = Console()
+    console.print("")  # Buffer line for better aesthetics
+    ssh_config = load_ssh_config()
 
-    # Load the user SSH configuration
-    ssh_config: paramiko.SSHConfig = load_ssh_config()
+    # Define the default results map with initial values for each host. This map will be
+    # updated as results come in from the concurrent checks.
+    results_map = {
+        host: {
+            "alias": host,
+            "status": "WAITING",
+            "ssh_key_status": "Pending",
+            "ssh_key_color": "dim white",
+            "cpu_color": "dim white",
+            "uptime": "...",
+            "details": "...",
+        }
+        for host in NP0X_CLUSTER_HOSTS
+    }
 
-    # Insert a clear line for better readability
-    console.print("")
+    # Use Rich's Live to create a live-updating table. The table will be refreshed as
+    # results come in from the concurrent checks.
+    with Live(
+        generate_table(results_map), console=console, refresh_per_second=10
+    ) as live:
+        with ThreadPoolExecutor(max_workers=15) as executor:
+            # Map each host to a future that will execute the get_host_info function
+            # concurrently.
+            future_to_host = {
+                executor.submit(get_host_info, host, ssh_config): host
+                for host in NP0X_CLUSTER_HOSTS
+            }
 
-    # Create Table with the new column
-    table = Table(title="Connection Status", box=box.ROUNDED)
-    table.add_column("Host", style="cyan", justify="center")
-    table.add_column("Status", justify="center")
-    table.add_column("User Key Status", justify="center")
-    table.add_column("Uptime details", style="dim white")
+            # As each future completes, update the results map with the new information
+            # and refresh the live table to reflect the updated status of the hosts.
+            for future in as_completed(future_to_host):
+                host_alias = future_to_host[future]
+                results_map[host_alias] = future.result()
+                live.update(generate_table(results_map))
 
-    # Check all hosts concurrently
-    results = []
-    with ThreadPoolExecutor(max_workers=10) as executor:
-        futures = [
-            executor.submit(get_host_info, host, ssh_config)
-            for host in NP0X_CLUSTER_HOSTS
-        ]
-        for future in futures:
-            results.append(future.result())
-
-    # Process results and add rows to the table
-    for res in results:
-        # Format Status with color based on UP/DOWN
-        if res["status"] == "UP":
-            status_str = "[bold green]ONLINE[/bold green]"
-        else:
-            status_str = "[bold red]OFFLINE[/bold red]"
-
-        # Format Key Status using the color determined in the function
-        key_str = f"[{res['key_color']}]{res['key_status']}[/{res['key_color']}]"
-
-        table.add_row(res["alias"], status_str, key_str, str(res["details"]))
-
-    # Display the table
-    console.print(table)
-
-    # Insert a clear line for better readability
-    console.print("")
+    console.print("\n[bold green]Scan Complete.[/]")
 
 
 if __name__ == "__main__":
