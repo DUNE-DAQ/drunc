@@ -8,6 +8,7 @@ from drunc.controller.interface.shell_utils import controller_setup, get_status_
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
+log_echo = get_logger("echo", rich_handler=True)
 
 
 @click.command("list-transitions")
@@ -245,22 +246,26 @@ def who_am_i(obj: ControllerContext) -> None:
 
 # click_shell/_cmd.py, line 23. identchars only accepts ascii letters + digits + _
 # Can't really be used by the integ test tho..
-@click.command("comment", 
+@click.command(
+    "comment",
     hidden=True,
     context_settings=dict(
-    ignore_unknown_options=True,
-    allow_extra_args=True,
-))
+        ignore_unknown_options=True,
+        allow_extra_args=True,
+    ),
+)
 def comment_handler():
     """Ignore this line"""
     pass
+
 
 @click.command("echo")
 @click.argument("text", required=False)
 @click.pass_obj
 def echo(obj, text: str | None) -> None:
-    log.info(text or "")
-    
+    log_echo.info(text or "")
+
+
 @click.command("who-is-in-charge")
 @click.option("--target", type=str, help="The target to address", default="")
 @click.option(
