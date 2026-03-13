@@ -1246,9 +1246,10 @@ class K8sProcessManager(ProcessManager):
 
         container_ports = []
         if (
-            self.connection_server_name in tree_labels["role." + self.drunc_label]
+            self._is_local_connection_server(tree_labels, podname)
             and lcs_port is not None
         ):
+            self.connection_server_name = podname
             container_ports.append(
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
