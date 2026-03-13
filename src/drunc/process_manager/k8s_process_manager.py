@@ -1066,19 +1066,19 @@ class K8sProcessManager(ProcessManager):
             A list of V1EnvVar objects representing the container environment variables.
         """
         env_vars = boot_request.process_description.env
-        username_bq = boot_request.process_description.metadata.user
+        username_br = boot_request.process_description.metadata.user
         host_username = None
 
-        if username_bq is not None:
-            env_vars["USER"] = username_bq
+        if username_br is not None:
+            env_vars["USER"] = username_br
             self.log.debug(
-                f"Setting USER environment variable from boot request: {username_bq}"
+                f"Setting USER environment variable from boot request: {username_br}"
             )
         elif self.home_path_base:
             host_username = self._get_host_username()
 
         # Only set USER if not already present in environment
-        if username_bq is None and host_username:
+        if username_br is None and host_username:
             env_vars["USER"] = host_username
             self.log.debug(f"Setting USER environment variable to: {host_username}")
 
@@ -1153,8 +1153,7 @@ class K8sProcessManager(ProcessManager):
             if (
                 is_last_command
                 and e_and_a.exec != "source"
-                and self.connection_server_name
-                not in tree_labels["role." + self.drunc_label]
+                and not self._is_local_connection_server(tree_labels, podname)
             ):
                 prefix = "exec "
 
