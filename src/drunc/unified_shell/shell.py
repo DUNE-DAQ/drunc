@@ -18,8 +18,10 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
+    comment_handler,
     connect,
     disconnect,
+    echo,
     exclude,
     expert_command,
     include,
@@ -30,8 +32,6 @@ from drunc.controller.interface.commands import (
     to_error,
     wait,
     who_am_i,
-    echo,
-    comment_handler,
     who_is_in_charge,
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command

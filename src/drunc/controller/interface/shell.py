@@ -6,8 +6,10 @@ import click_shell
 from daqpytools.logging import logging_log_levels
 
 from drunc.controller.interface.commands import (
+    comment_handler,
     connect,
     disconnect,
+    echo,
     exclude,
     expert_command,
     include,
@@ -17,8 +19,6 @@ from drunc.controller.interface.commands import (
     take_control,
     wait,
     who_am_i,
-    echo,
-    comment_handler,
     who_is_in_charge,
 )
 from drunc.controller.interface.shell_utils import (
