@@ -236,7 +236,7 @@ def logs(
         if grep is not None:
             line = line.replace(grep, f"[u]{grep}[/]")
 
-        obj.print(line)
+        obj.print(line, soft_wrap=True)
     if result.name is not None:
         obj.rule(f"[yellow]{display_name}[/yellow] end")
 
