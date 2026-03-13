@@ -229,6 +229,8 @@ def main():
         help="This is a dummy argument in this case",
     )
     parser.add_argument("-s", "--session", default="test", help="name of session")
+    parser.add_argument("-k", "--configurationID", default="test-config", help="ID of session")
+
     args = parser.parse_args()
 
     name = args.name
@@ -238,7 +240,7 @@ def main():
     conf = conffwk.Configuration(args.configurationService)
     session = conf.get_dal(
         class_name="Session",
-        uid=args.session,
+        uid=args.configurationID,
     )
     connectivity_service_address = (
         session.connectivity_service.host
