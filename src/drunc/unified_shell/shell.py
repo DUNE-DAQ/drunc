@@ -11,7 +11,7 @@ from urllib.parse import ParseResult, urlparse
 import click
 import click_shell
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 

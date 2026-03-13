@@ -7,8 +7,7 @@ import types
 
 import click
 import grpc
-from daqpytools.logging.handlers import add_file_handler
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 from druncschema.process_manager_pb2_grpc import add_ProcessManagerServicer_to_server
 
 from drunc.exceptions import DruncSetupException
@@ -75,7 +74,7 @@ def run_pm(
     )
 
     # Logger has been added to process_manager, so everything will be logged
-    add_file_handler(log, use_parent_handlers=True, path=log_path)
+    add_handler(log, HandlerType.File, True, path=log_path)
 
     for key, value in pmch.data.environment.items():
         os.environ[key] = value

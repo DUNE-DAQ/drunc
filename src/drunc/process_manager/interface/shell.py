@@ -3,8 +3,7 @@ import os
 
 import click
 import click_shell
-from daqpytools.logging.handlers import add_file_handler
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 
 from drunc.process_manager.interface.commands import (
     boot,
@@ -64,7 +63,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     # Not possible to initialise logger immediately as it requires
     # knowledge of the log path
     if desc.info:
-        add_file_handler(process_manager_log, use_parent_handlers=True, path=desc.info)
+        add_handler(process_manager_log, HandlerType.File, True, path=desc.info)
 
     process_manager_log.info(
         f"[green]{getpass.getuser()}[/green] connected to the process manager through a [green]drunc-process-manager-shell[/green] via address [green]{process_manager_address}[/green]"

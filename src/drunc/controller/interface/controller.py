@@ -4,7 +4,7 @@ import signal
 
 import click
 import grpc
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 from druncschema.controller_pb2_grpc import add_ControllerServicer_to_server
 from druncschema.token_pb2 import Token
 
