@@ -78,6 +78,19 @@ class ProcessWatcherThread(threading.Thread):
                 with self.manager.lock:
                     self.manager.metadata[self.uuid] = metadata
                 self.logger.debug(f"Metadata retrieved for process {self.uuid}")
+
+                # Log the terminal commands used to manually SIGKILL this process
+                # from outside the process manager which can be useful for debugging
+                # unexpected process deaths
+                if metadata.pid is not None:
+                    self.logger.debug(
+                        f"To manually kill remote process '{metadata.name}' (UUID: {self.uuid}), run: "
+                        f"ssh {self.user}@{self.hostname} kill -9 {metadata.pid}"
+                    )
+                self.logger.debug(
+                    f"To manually kill the local SSH client for '{metadata.name}' (UUID: {self.uuid}), run: "
+                    f"kill -9 {self.process.pid}"
+                )
             else:
                 # If metadata could not be read, fall back to monitoring SSH client
                 self.logger.warning(
