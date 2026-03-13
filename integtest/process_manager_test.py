@@ -72,7 +72,13 @@ confgen_arguments = {"MinimalSystem": conf_dict}
 # see #821
 
 dunerc_command_list = f"""
+
+echo pre_boot
+ps -u {getpass.getuser()}
 boot
+echo on_boot
+ps -u {getpass.getuser()}
+
 
 echo testing_logs
 logs --name unknown
@@ -82,21 +88,18 @@ logs --name mlt --how-far 5
 echo test_wait
 wait 10
 
-echo on_boot
-ps -u {getpass.getuser()}
-
-restart -n root-controller
+echo WE_STILL_NEED_TO_TEST-RESTART
 restart -n mlt
+restart -n root-controller
 wait 5
+
 
 echo pre_kill_mlt
 ps -u {getpass.getuser()}
-
 kill -n mlt
 wait 2
 echo post_kill_mlt
 ps -u {getpass.getuser()}
-
 
 
 restart -n mlt
@@ -115,6 +118,7 @@ terminate
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    r"|^[0-9a-fA-F]{8}-[-0-9a-fA-F]*\u2026"  # truncated by Rich table column width
 )
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
 
@@ -123,7 +127,9 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
 
 
-def _parse_ps_table_from_index(lines: list[str], start_idx: int) -> list[dict[str, str]]:
+def _parse_ps_table_from_index(
+    lines: list[str], start_idx: int
+) -> list[dict[str, str]]:
     table_rows: list[dict[str, str]] = []
 
     for line in lines[start_idx + 1 :]:
@@ -165,23 +171,27 @@ def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str
         ),
         None,
     )
-    assert echo_idx is not None, f"Could not find drunc.echo marker '{echo_marker}' in stdout."
+    assert echo_idx is not None, (
+        f"Could not find drunc.echo marker '{echo_marker}' in stdout."
+    )
 
     table_start_idx = next(
-        (idx for idx in range(echo_idx + 1, len(lines)) if "Processes running" in lines[idx]),
+        (
+            idx
+            for idx in range(echo_idx + 1, len(lines))
+            if "Processes running" in lines[idx]
+        ),
         None,
     )
-    assert (
-        table_start_idx is not None
-    ), f"Could not find a 'Processes running' table after marker '{echo_marker}'."
+    if table_start_idx is None:
+        return []
 
-    table_rows = _parse_ps_table_from_index(lines, table_start_idx)
-    assert table_rows, f"Found table header after marker '{echo_marker}', but no rows were parsed."
-
-    return table_rows
+    return _parse_ps_table_from_index(lines, table_start_idx)
 
 
-def get_uuid_for_friendly_name(ps_table: list[dict[str, str]], friendly_name: str) -> str:
+def get_uuid_for_friendly_name(
+    ps_table: list[dict[str, str]], friendly_name: str
+) -> str:
     for row in ps_table:
         if row["friendly_name"].strip() == friendly_name:
             return row["uuid"]
@@ -193,6 +203,24 @@ def get_uuid_for_friendly_name(ps_table: list[dict[str, str]], friendly_name: st
     )
 
 
+def test_boot(run_dunerc) -> None:
+    stdout = run_dunerc.completed_process.stdout
+
+    ps_pre_boot = get_ps_table_after_echo(stdout, "pre_boot")
+    ps_on_boot = get_ps_table_after_echo(stdout, "on_boot")
+
+    assert not ps_pre_boot, (
+        f"Expected ps table before boot to be empty, but found {len(ps_pre_boot)} row(s): "
+        + ", ".join(row["friendly_name"] for row in ps_pre_boot)
+    )
+
+    assert ps_on_boot, (
+        "Expected ps table after boot to contain processes, but it was empty."
+    )
+    for row in ps_on_boot:
+        assert UUID_RE.match(row["uuid"]), (
+            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
+        )
 
 
 def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
@@ -208,8 +236,25 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
         row for row in ps_after_kill if row["friendly_name"].strip() == "mlt"
     ]
 
-    assert mlt_before_kill, "Expected to find 'mlt' in ps table before kill, but it was missing."
-    assert not mlt_after_kill, "Expected 'mlt' to be absent from ps table after kill, but it is still present."
+    assert mlt_before_kill, (
+        "Expected to find 'mlt' in ps table before kill, but it was missing."
+    )
+    assert not mlt_after_kill, (
+        "Expected 'mlt' to be absent from ps table after kill, but it is still present."
+    )
+
+
+def test_mlt_recovers_after_kill(run_dunerc) -> None:
+    stdout = run_dunerc.completed_process.stdout
+
+    ps_after_recovery = get_ps_table_after_echo(stdout, "ps_after_recovery")
+
+    mlt_after_recovery = [
+        row for row in ps_after_recovery if row["friendly_name"].strip() == "mlt"
+    ]
+    assert mlt_after_recovery, (
+        "Expected 'mlt' to be present in ps table after recovery, but it was missing."
+    )
 
 
 def test_wait_command_duration_from_logs(run_dunerc) -> None:
@@ -224,23 +269,37 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
         ),
         None,
     )
-    assert echo_idx is not None, "Could not find drunc.echo marker 'test_wait' in stdout."
+    assert echo_idx is not None, (
+        "Could not find drunc.echo marker 'test_wait' in stdout."
+    )
 
     running_pattern = re.compile(r"Command wait running for (\d+) seconds\.")
     ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
     timestamp_pattern = re.compile(r"^\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
 
     running_idx = next(
-        (idx for idx in range(echo_idx + 1, len(lines)) if running_pattern.search(lines[idx])),
+        (
+            idx
+            for idx in range(echo_idx + 1, len(lines))
+            if running_pattern.search(lines[idx])
+        ),
         None,
     )
-    assert running_idx is not None, "Did not find 'Command wait running for ... seconds.' after test_wait marker."
+    assert running_idx is not None, (
+        "Did not find 'Command wait running for ... seconds.' after test_wait marker."
+    )
 
     ran_idx = next(
-        (idx for idx in range(running_idx + 1, len(lines)) if ran_pattern.search(lines[idx])),
+        (
+            idx
+            for idx in range(running_idx + 1, len(lines))
+            if ran_pattern.search(lines[idx])
+        ),
         None,
     )
-    assert ran_idx is not None, "Did not find 'Command wait ran for ... seconds.' after wait start log."
+    assert ran_idx is not None, (
+        "Did not find 'Command wait ran for ... seconds.' after wait start log."
+    )
 
     running_match = running_pattern.search(lines[running_idx])
     ran_match = ran_pattern.search(lines[ran_idx])
@@ -257,7 +316,9 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
 
     start_ts_match = timestamp_pattern.search(lines[running_idx])
     end_ts_match = timestamp_pattern.search(lines[ran_idx])
-    assert start_ts_match is not None, "Could not parse timestamp in wait start log line."
+    assert start_ts_match is not None, (
+        "Could not parse timestamp in wait start log line."
+    )
     assert end_ts_match is not None, "Could not parse timestamp in wait end log line."
 
     start_ts = datetime.strptime(start_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
@@ -269,10 +330,6 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
         f"Expected wait log timestamps to differ by {expected_seconds}±{tolerance_seconds} seconds, "
         f"got {elapsed_seconds} seconds."
     )
-
-
-
-
 
 
 def test_nanorc_success(run_dunerc):
@@ -291,8 +348,10 @@ def test_nanorc_success(run_dunerc):
 
 
 def test_log_command(run_dunerc) -> None:
-    test_str = "Bad query for logs: The process corresponding to the query doesn't exist"
-    assert test_str in run_dunerc.completed_process.stdout 
+    test_str = (
+        "Bad query for logs: The process corresponding to the query doesn't exist"
+    )
+    assert test_str in run_dunerc.completed_process.stdout
 
 
 def test_root_controller_logs(run_dunerc) -> None:
@@ -317,16 +376,19 @@ def test_root_controller_logs(run_dunerc) -> None:
         None,
     )
 
-    assert header_idx is not None, "Did not find the 'root-controller logs' header line in stdout."
-    assert footer_idx is not None, "Did not find the 'root-controller end' footer line in stdout."
+    assert header_idx is not None, (
+        "Did not find the 'root-controller logs' header line in stdout."
+    )
+    assert footer_idx is not None, (
+        "Did not find the 'root-controller end' footer line in stdout."
+    )
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
     # 2) Check there are 5 lines between header and footer
     between = lines[header_idx + 1 : footer_idx]
-    assert (
-        len(between) == 5
-    ), f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n" + "\n".join(
-        between
+    assert len(between) == 5, (
+        f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
+        + "\n".join(between)
     )
 
     # 3) Check the init_controller line ends with "Controller ready"
@@ -337,12 +399,10 @@ def test_root_controller_logs(run_dunerc) -> None:
     )
 
     matches = [line for line in between if init_controller_ready_re.search(line)]
-    assert (
-        len(matches) >= 1
-    ), "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n" + "\n".join(
-        between
+    assert len(matches) >= 1, (
+        "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n"
+        + "\n".join(between)
     )
-
 
 
 # def test_restart_changes_process_uuid(run_dunerc) -> None:
@@ -366,7 +426,6 @@ def test_root_controller_logs(run_dunerc) -> None:
 #     )
 
 
-
 def test_log_files(run_dunerc):
     # Check that at least some of the expected log files are present
     assert any(
@@ -387,6 +446,11 @@ def test_log_files(run_dunerc):
         # Check that there are no warnings or errors in the log files
         assert log_file_checks.logs_are_error_free(
             [
-                logname for logname in run_dunerc.log_files if "process_manager" in str(logname)
-            ], True, True, ignored_logfile_problems
+                logname
+                for logname in run_dunerc.log_files
+                if "process_manager" in str(logname)
+            ],
+            True,
+            True,
+            ignored_logfile_problems,
         )
