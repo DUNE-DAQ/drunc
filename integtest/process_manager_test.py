@@ -88,10 +88,11 @@ logs --name mlt --how-far 5
 echo test_wait
 wait 10
 
-echo WE_STILL_NEED_TO_TEST-RESTART
+echo pre_restart_mlt
 restart -n mlt
 restart -n root-controller
 wait 5
+echo post_restart_mlt
 
 
 echo pre_kill_mlt
@@ -332,6 +333,84 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     )
 
 
+def test_restart_mlt_logs(run_dunerc) -> None:
+    stdout = run_dunerc.completed_process.stdout
+    lines = strip_ansi(stdout).splitlines()
+
+    echo_idx = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if "drunc.echo" in line and line.rstrip().endswith("pre_restart_mlt")
+        ),
+        None,
+    )
+    assert echo_idx is not None, (
+        "Could not find drunc.echo marker 'pre_restart_mlt' in stdout."
+    )
+
+    post_restart_idx = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if idx > echo_idx
+            and "drunc.echo" in line
+            and line.rstrip().endswith("post_restart_mlt")
+        ),
+        None,
+    )
+    assert post_restart_idx is not None, (
+        "Could not find drunc.echo marker 'post_restart_mlt' in stdout."
+    )
+
+    restart_lines = lines[echo_idx + 1 : post_restart_idx]
+    restart_text = "\n".join(restart_lines)
+
+    restart_request_match = re.search(
+        r"process_manager restarting \['mlt'\] in session",
+        restart_text,
+    )
+    assert restart_request_match is not None, (
+        "Did not find the mlt restart request log line between restart markers."
+    )
+
+    graceful_termination_match = re.search(
+        r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
+        restart_text[restart_request_match.end() :],
+        re.DOTALL,
+    )
+    assert graceful_termination_match is not None, (
+        "Did not find the graceful termination log line for mlt after restart request."
+    )
+
+    exit_code_search_text = restart_text[
+        restart_request_match.end() + graceful_termination_match.end() :
+    ]
+    exit_code_match = re.search(
+        r"Process 'mlt'.*?process exited\s+with exit code 0",
+        exit_code_search_text,
+        re.DOTALL,
+    )
+    assert exit_code_match is not None, (
+        "Did not find the mlt exit-code log line after graceful termination."
+    )
+
+    booted_search_text = exit_code_search_text[exit_code_match.end() :]
+    booted_match = re.search(
+        r"Booted 'mlt'.*?with UUID\s+([^\s\n]+)",
+        booted_search_text,
+        re.DOTALL,
+    )
+    assert booted_match is not None, (
+        "Did not find the mlt boot log line after the restart exit log."
+    )
+
+    booted_uuid = booted_match.group(1)
+    assert UUID_RE.match(booted_uuid), (
+        f"Expected the mlt boot log to contain a UUID, got: {booted_uuid}"
+    )
+
+
 def test_nanorc_success(run_dunerc):
     # print the name of the current test
     current_test = os.environ.get("PYTEST_CURRENT_TEST")
@@ -403,27 +482,6 @@ def test_root_controller_logs(run_dunerc) -> None:
         "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n"
         + "\n".join(between)
     )
-
-
-# def test_restart_changes_process_uuid(run_dunerc) -> None:
-#     stdout = run_dunerc.completed_process.stdout
-
-#     ps_before_restart = get_ps_table_after_echo(stdout, "ps_before_restart")
-#     ps_after_restart = get_ps_table_after_echo(stdout, "ps_after_restart")
-
-#     root_before = get_uuid_for_friendly_name(ps_before_restart, "root-controller")
-#     root_after = get_uuid_for_friendly_name(ps_after_restart, "root-controller")
-#     assert root_before != root_after, (
-#         "Expected root-controller UUID to change after restart, "
-#         f"but it stayed the same ({root_before})."
-#     )
-
-#     mlt_before = get_uuid_for_friendly_name(ps_before_restart, "mlt")
-#     mlt_after = get_uuid_for_friendly_name(ps_after_restart, "mlt")
-#     assert mlt_before != mlt_after, (
-#         "Expected mlt UUID to change after restart, "
-#         f"but it stayed the same ({mlt_before})."
-#     )
 
 
 def test_log_files(run_dunerc):
