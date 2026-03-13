@@ -17,6 +17,8 @@ from drunc.controller.interface.commands import (
     take_control,
     wait,
     who_am_i,
+    echo,
+    comment_handler,
     who_is_in_charge,
 )
 from drunc.controller.interface.shell_utils import (
@@ -90,6 +92,8 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     ctx.command.add_command(take_control, "take-control")
     ctx.command.add_command(surrender_control, "surrender-control")
     ctx.command.add_command(who_am_i, "whoami")
+    ctx.command.add_command(echo, "echo")
+    ctx.command.add_command(comment_handler, "comment-handler")
     ctx.command.add_command(who_is_in_charge, "who-is-in-charge")
     for transition in transitions.commands:
         ctx.command.add_command(*generate_fsm_command(ctx.obj, transition, desc.name))

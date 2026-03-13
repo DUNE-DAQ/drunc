@@ -30,6 +30,8 @@ from drunc.controller.interface.commands import (
     to_error,
     wait,
     who_am_i,
+    echo,
+    comment_handler,
     who_is_in_charge,
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
@@ -381,6 +383,8 @@ def unified_shell(
         take_control,
         surrender_control,
         who_am_i,
+        echo,
+        comment_handler,
         who_is_in_charge,
         include,
         exclude,
