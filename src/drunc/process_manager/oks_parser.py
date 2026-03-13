@@ -32,13 +32,13 @@ def get_full_db_path(db_path: str) -> str:
 
     # Get the env var that points to the configuration files. If it doesn't exist, raise
     # an exception
-    search_path_str = os.environ.get("DUNEDAQ_DB_PATH", None)
+    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", None)
     if not search_path_str:
         err_str = "DUNEDAQ_DB_PATH not set, exiting."
         raise DruncSetupException(err_str)
 
     # Split the contents of DUNEDAQ_DB_PATH, this is expected to contain multiple values
-    search_paths = search_path_str.split(":")
+    search_paths: list[str] = search_path_str.split(":")
 
     # Validate there are entries here
     if not search_paths:
@@ -47,18 +47,46 @@ def get_full_db_path(db_path: str) -> str:
 
     # Find the matched paths
     matched_configuration_files: list[str] = []
+
+    # Iterate through the search paths to find the configuration file.
     for path in search_paths:
+        # Strip out None or empty entries (e.g. due to trailing colons)
+        if not path:
+            continue
+
+        # Check the DB path
         candidate_path = os.path.join(path, db_path)
         if os.path.exists(candidate_path):
-            matched_configuration_files.append(candidate_path)
+            matched_configuration_files.append(os.path.abspath(candidate_path))
+            continue
 
-    # Perform basic checks
-    if not matched_configuration_files:
-        err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}, exiting."
+        # Check the parent of the DB path
+        parent_candidate = os.path.join(os.path.dirname(path), db_path)
+        if os.path.exists(parent_candidate):
+            abs_parent_candidate = os.path.abspath(parent_candidate)
+            if abs_parent_candidate not in matched_configuration_files:
+                matched_configuration_files.append(abs_parent_candidate)
+
+    # Clean up duplicates (in case of symlinks or trailing slashes)
+    unique_matched_files: list[str] = list(set(matched_configuration_files))
+
+    # If no matches are found in DUNEDAQ_DB_PATH or its parents
+    if not unique_matched_files:
+        err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}."
         raise DruncSetupException(err_str)
 
-    log.debug(f"Path {db_path} resolved to path {matched_configuration_files[0]}")
-    return matched_configuration_files[0]
+    # If multiple matches are found, raise an error to avoid ambiguity
+    if len(unique_matched_files) > 1:
+        matches_str = ", ".join(list(unique_matched_files))
+        err_str = (
+            f"Ambiguous match: {db_path} found in multiple locations: {matches_str}"
+        )
+        raise DruncSetupException(err_str)
+
+    # If exactly one match is found, return it
+    resolved_path = unique_matched_files[0]
+    log.debug(f"Path {db_path} resolved to {resolved_path}")
+    return resolved_path
 
 
 def collect_variables(variables, env_dict: Dict[str, str]) -> None:
