@@ -76,7 +76,6 @@ def get_full_db_path(db_path: str) -> str:
         raise DruncSetupException(err_str)
 
     # If multiple matches are found, take the first instance that matches.
-    # Note this is not a good solution, 
     resolved_path = unique_matched_files[0]
     log.debug(f"Path {db_path} resolved to {resolved_path}")
     return resolved_path
