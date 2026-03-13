@@ -4,6 +4,7 @@ import os
 import re
 import signal
 import socket
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -126,7 +127,10 @@ class K8sPodWatcherThread(threading.Thread):
                 sleep(3)
 
             except Exception as e:
-                self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
+                self.pm.log.error(
+                    "K8s watcher thread encountered an error, stacktrace present in the debug logs. Restarting watch."
+                )
+                self.pm.log.debug(f"K8s watcher thread error: {e}.")
                 sleep(self.pm.watcher_retry_sleep)
 
 
@@ -152,7 +156,7 @@ class K8sProcessManager(ProcessManager):
                 "Please ensure 'kubectl' is configured correctly or the KUBECONFIG environment variable is set."
             )
             self.log.critical("----------------------------------------------")
-            raise
+            sys.exit(1)
 
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
