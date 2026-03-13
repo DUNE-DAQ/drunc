@@ -1,6 +1,7 @@
 import getpass
 import os
 import re
+from datetime import datetime
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
@@ -78,22 +79,199 @@ logs --name unknown
 logs --name root-controller --how-far 5
 logs --name mlt --how-far 5
 
+echo test_wait
+wait 10
+
+echo on_boot
 ps -u {getpass.getuser()}
 
 restart -n root-controller
 restart -n mlt
 wait 5
+
+echo pre_kill_mlt
+ps -u {getpass.getuser()}
+
 kill -n mlt
 wait 2
+echo post_kill_mlt
+ps -u {getpass.getuser()}
+
+
+
 restart -n mlt
 restart -n trg-controller
 wait 5
+
+echo ps_after_recovery
+ps -u {getpass.getuser()}
 
 
 flush
 terminate
 
 """.split()
+
+
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", text)
+
+
+def _parse_ps_table_from_index(lines: list[str], start_idx: int) -> list[dict[str, str]]:
+    table_rows: list[dict[str, str]] = []
+
+    for line in lines[start_idx + 1 :]:
+        stripped = line.strip()
+
+        if stripped.startswith("└"):
+            break
+
+        if not stripped.startswith("│"):
+            continue
+
+        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
+        if len(cells) < 7:
+            continue
+
+        table_rows.append(
+            {
+                "session": cells[0],
+                "friendly_name": cells[1],
+                "user": cells[2],
+                "host": cells[3],
+                "uuid": cells[4],
+                "alive": cells[5],
+                "exit_code": cells[6],
+            }
+        )
+
+    return table_rows
+
+
+def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
+    lines = strip_ansi(stdout).splitlines()
+
+    echo_idx = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if "drunc.echo" in line and line.rstrip().endswith(echo_marker)
+        ),
+        None,
+    )
+    assert echo_idx is not None, f"Could not find drunc.echo marker '{echo_marker}' in stdout."
+
+    table_start_idx = next(
+        (idx for idx in range(echo_idx + 1, len(lines)) if "Processes running" in lines[idx]),
+        None,
+    )
+    assert (
+        table_start_idx is not None
+    ), f"Could not find a 'Processes running' table after marker '{echo_marker}'."
+
+    table_rows = _parse_ps_table_from_index(lines, table_start_idx)
+    assert table_rows, f"Found table header after marker '{echo_marker}', but no rows were parsed."
+
+    return table_rows
+
+
+def get_uuid_for_friendly_name(ps_table: list[dict[str, str]], friendly_name: str) -> str:
+    for row in ps_table:
+        if row["friendly_name"].strip() == friendly_name:
+            return row["uuid"]
+
+    available_names = ", ".join(row["friendly_name"].strip() for row in ps_table)
+    raise AssertionError(
+        f"Could not find friendly name '{friendly_name}' in ps table. "
+        f"Available names: {available_names}"
+    )
+
+
+
+
+def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
+    stdout = run_dunerc.completed_process.stdout
+
+    ps_before_kill = get_ps_table_after_echo(stdout, "pre_kill_mlt")
+    ps_after_kill = get_ps_table_after_echo(stdout, "post_kill_mlt")
+
+    mlt_before_kill = [
+        row for row in ps_before_kill if row["friendly_name"].strip() == "mlt"
+    ]
+    mlt_after_kill = [
+        row for row in ps_after_kill if row["friendly_name"].strip() == "mlt"
+    ]
+
+    assert mlt_before_kill, "Expected to find 'mlt' in ps table before kill, but it was missing."
+    assert not mlt_after_kill, "Expected 'mlt' to be absent from ps table after kill, but it is still present."
+
+
+def test_wait_command_duration_from_logs(run_dunerc) -> None:
+    stdout = run_dunerc.completed_process.stdout
+    lines = strip_ansi(stdout).splitlines()
+
+    echo_idx = next(
+        (
+            idx
+            for idx, line in enumerate(lines)
+            if "drunc.echo" in line and line.rstrip().endswith("test_wait")
+        ),
+        None,
+    )
+    assert echo_idx is not None, "Could not find drunc.echo marker 'test_wait' in stdout."
+
+    running_pattern = re.compile(r"Command wait running for (\d+) seconds\.")
+    ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
+    timestamp_pattern = re.compile(r"^\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
+
+    running_idx = next(
+        (idx for idx in range(echo_idx + 1, len(lines)) if running_pattern.search(lines[idx])),
+        None,
+    )
+    assert running_idx is not None, "Did not find 'Command wait running for ... seconds.' after test_wait marker."
+
+    ran_idx = next(
+        (idx for idx in range(running_idx + 1, len(lines)) if ran_pattern.search(lines[idx])),
+        None,
+    )
+    assert ran_idx is not None, "Did not find 'Command wait ran for ... seconds.' after wait start log."
+
+    running_match = running_pattern.search(lines[running_idx])
+    ran_match = ran_pattern.search(lines[ran_idx])
+    assert running_match is not None
+    assert ran_match is not None
+
+    expected_seconds = 10
+    assert int(running_match.group(1)) == expected_seconds, (
+        f"Expected wait start log to report {expected_seconds} seconds, got {running_match.group(1)}."
+    )
+    assert int(ran_match.group(1)) == expected_seconds, (
+        f"Expected wait end log to report {expected_seconds} seconds, got {ran_match.group(1)}."
+    )
+
+    start_ts_match = timestamp_pattern.search(lines[running_idx])
+    end_ts_match = timestamp_pattern.search(lines[ran_idx])
+    assert start_ts_match is not None, "Could not parse timestamp in wait start log line."
+    assert end_ts_match is not None, "Could not parse timestamp in wait end log line."
+
+    start_ts = datetime.strptime(start_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
+    end_ts = datetime.strptime(end_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
+    elapsed_seconds = (end_ts - start_ts).total_seconds()
+
+    tolerance_seconds = 1
+    assert abs(elapsed_seconds - expected_seconds) <= tolerance_seconds, (
+        f"Expected wait log timestamps to differ by {expected_seconds}±{tolerance_seconds} seconds, "
+        f"got {elapsed_seconds} seconds."
+    )
+
+
+
 
 
 
@@ -164,6 +342,28 @@ def test_root_controller_logs(run_dunerc) -> None:
     ), "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n" + "\n".join(
         between
     )
+
+
+
+# def test_restart_changes_process_uuid(run_dunerc) -> None:
+#     stdout = run_dunerc.completed_process.stdout
+
+#     ps_before_restart = get_ps_table_after_echo(stdout, "ps_before_restart")
+#     ps_after_restart = get_ps_table_after_echo(stdout, "ps_after_restart")
+
+#     root_before = get_uuid_for_friendly_name(ps_before_restart, "root-controller")
+#     root_after = get_uuid_for_friendly_name(ps_after_restart, "root-controller")
+#     assert root_before != root_after, (
+#         "Expected root-controller UUID to change after restart, "
+#         f"but it stayed the same ({root_before})."
+#     )
+
+#     mlt_before = get_uuid_for_friendly_name(ps_before_restart, "mlt")
+#     mlt_after = get_uuid_for_friendly_name(ps_after_restart, "mlt")
+#     assert mlt_before != mlt_after, (
+#         "Expected mlt UUID to change after restart, "
+#         f"but it stayed the same ({mlt_before})."
+#     )
 
 
 
