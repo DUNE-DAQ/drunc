@@ -75,15 +75,7 @@ def get_full_db_path(db_path: str) -> str:
         err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}."
         raise DruncSetupException(err_str)
 
-    # If multiple matches are found, raise an error to avoid ambiguity
-    if len(unique_matched_files) > 1:
-        matches_str = ", ".join(list(unique_matched_files))
-        err_str = (
-            f"Ambiguous match: {db_path} found in multiple locations: {matches_str}"
-        )
-        raise DruncSetupException(err_str)
-
-    # If exactly one match is found, return it
+    # If multiple matches are found, take the first instance that matches.
     resolved_path = unique_matched_files[0]
     log.debug(f"Path {db_path} resolved to {resolved_path}")
     return resolved_path
