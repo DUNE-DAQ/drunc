@@ -1,5 +1,7 @@
 import inspect
 
+import conffwk
+
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.actions.db_run_registry import DBRunRegistry
@@ -64,33 +66,54 @@ class FSMActionFactory:
         for k, v in post_transition.items():
             self._validate_signature(k, v, action.name)
 
-    def get_action(self, action_name, configuration):
+    def get_action(
+        self, action_name: str, action_configuration: "conffwk.dal.FSMaction"
+    ):
+        """
+        Construct the action interface for the given action name and configuration.
+
+        Args:
+            action_name (str): The name of the action to construct.
+            configuration (conffwk.dal.FSMaction): The configuration for the action.
+
+        Returns:
+            An instance of the action interface corresponding to the given action name.
+
+        Raises:
+            fsme.UnknownAction: If the action name is not recognized.
+            fsme.InvalidAction: If the constructed action does not have valid pre/post
+                transition methods.
+        """
         iface = None
         match action_name:
             case "user-provided-run-number":
-                iface = UserProvidedRunNumber(configuration)
+                iface = UserProvidedRunNumber(action_configuration)
             case "usvc-provided-run-number":
-                iface = UsvcProvidedRunNumber(configuration)
+                iface = UsvcProvidedRunNumber(action_configuration)
             case "test-action":
-                iface = SomeTestAction(configuration)
+                iface = SomeTestAction(action_configuration)
             case "file-logbook":
-                iface = FileLogbook(configuration)
+                iface = FileLogbook(action_configuration)
             case "elisa-logbook":
                 iface = ElisaLogbook()
             case "file-run-registry":
-                iface = FileRunRegistry(configuration)
+                iface = FileRunRegistry(action_configuration)
             case "db-run-registry":
-                iface = DBRunRegistry(configuration)
+                iface = DBRunRegistry(action_configuration)
             case "thread-pinning":
-                iface = ThreadPinning(configuration)
+                iface = ThreadPinning(action_configuration)
             case "master-send-fl-command":
-                iface = MasterSendFLCommand(configuration)
+                iface = MasterSendFLCommand(action_configuration)
             case "trigger-rate-specifier":
-                iface = TriggerRateSpecifier(configuration)
+                iface = TriggerRateSpecifier(action_configuration)
             case _:
                 raise fsme.UnknownAction(action_name)
 
-        self._validate_action(iface)
+        # Validate the constructed action interface to ensure it has valid pre/post
+        # transition methods.
+        if iface:
+            self._validate_action(iface)
+
         return iface
 
     _instance = None

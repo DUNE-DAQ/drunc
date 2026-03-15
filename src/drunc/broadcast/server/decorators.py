@@ -1,9 +1,5 @@
-import traceback
 
-from druncschema.generic_pb2 import Stacktrace
-from druncschema.request_response_pb2 import Response, ResponseFlag
 
-from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger
 
 
@@ -36,25 +32,12 @@ def broadcasted(cmd):
         except Exception as e:
             log.exception(e)
 
-            stack = traceback.format_exc().split("\n")
-            from drunc.exceptions import DruncException
-
-            flag = (
-                ResponseFlag.DRUNC_EXCEPTION_THROWN
-                if isinstance(e, DruncException)
-                else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
+            obj.broadcast(
+                message=f"Command '{cmd.__name__}' failed",
+                btype=BroadcastType.UNHANDLED_EXCEPTION_RAISED,
             )
-            return Response(
-                name=obj.name,
-                token=request.token,
-                data=pack_to_any(
-                    Stacktrace(
-                        text=stack,
-                    )
-                ),
-                flag=flag,
-                children=[],
-            )
+            # raise the exception to the client so the interceptor can handle it
+            raise e
 
         msg = f"User '{request.token.user_name}' successfully executed '{cmd.__name__}'"
 

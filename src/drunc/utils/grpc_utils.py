@@ -11,7 +11,12 @@ from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2, status_pb2
 from grpc_status import rpc_status
 
-from drunc.exceptions import DruncCommandException, DruncException, DruncSetupException
+from drunc.exceptions import (
+    DruncCommandException,
+    DruncException,
+    DruncNotImplementedException,
+    DruncSetupException,
+)
 
 
 class UnpackingError(DruncCommandException):
@@ -45,7 +50,7 @@ def unpack_error_response(name: str, text: str, token: Token) -> Response:
     )
 
 
-def pack_to_any(data):
+def pack_to_any(data) -> any_pb2.Any:
     any = any_pb2.Any()
     any.Pack(data)
     return any
@@ -207,7 +212,11 @@ class GrpcErrorDetails:
         """
         lines = [f"[{self.code}] {self.message}"]
         for detail in self.details:
-            lines.append(f"{detail}")
+            # If it's a Proto message format the error detail
+            if hasattr(detail, "DESCRIPTOR"):
+                lines.extend(format_error_details(detail))
+            else:
+                lines.append(str(detail))
         return "\n".join(lines)
 
 
@@ -225,6 +234,10 @@ def format_error_details(detail: Message) -> list[str]:
     """
 
     results = []
+
+    # if detail is not a valid Protobuf message
+    if not hasattr(detail, "DESCRIPTOR"):
+        return [str(detail)]
 
     for field in detail.DESCRIPTOR.fields:
         value = getattr(detail, field.name)
@@ -315,7 +328,7 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
             if any_detail.Is(detail_type.DESCRIPTOR):
                 msg = detail_type()
                 any_detail.Unpack(msg)
-                error_details.extend(format_error_details(msg))
+                error_details.append(msg)
                 detail_extracted = True
                 break
 
@@ -359,6 +372,8 @@ def abort_with_rich_error_status(
 
     context.abort_with_status(rpc_status.to_status(rich_status))
 
+    raise Exception(f"Aborting with status: {message}")
+
 
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
@@ -389,16 +404,37 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 abort_with_rich_error_status(
                     context, e.grpc_error_code, str(e), detail_obj
                 )
+            except DruncNotImplementedException as e:
+                detail_obj = error_details_pb2.ErrorInfo(
+                    reason="NOT_IMPLEMENTED",
+                    domain="server",
+                    metadata={},
+                )
+                abort_with_rich_error_status(
+                    context, e.grpc_error_code, str(e), detail_obj
+                )
+
+            except DruncCommandException as e:
+                exception_data = e.detail_kwargs
+                detail_obj = error_details_pb2.ErrorInfo(
+                    reason=str(e.message),
+                    domain=str(
+                        exception_data.get("domain", ""),
+                    ),
+                )
+                abort_with_rich_error_status(
+                    context, e.grpc_error_code, str(e), detail_obj
+                )
 
             except Exception as e:
                 # Fallback
-                detail = error_details_pb2.ErrorInfo(
+                detail_obj = error_details_pb2.ErrorInfo(
                     reason="Unexpected error",
                     domain="server",
-                    metadata={"exception": str(type(e))},
+                    metadata={"original_error": str(type(e))},
                 )
-                return self._abort_with_detail(
-                    context, code_pb2.INTERNAL, str(e), detail
+                abort_with_rich_error_status(
+                    context, code_pb2.INTERNAL, str(e), detail_obj
                 )
 
         if handler.unary_unary:

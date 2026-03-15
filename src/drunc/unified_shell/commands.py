@@ -5,6 +5,7 @@ import click
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
+from drunc.exceptions import DruncSetupException
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand
@@ -12,7 +13,12 @@ from drunc.utils.utils import get_logger
 
 
 @click.command("boot")
-@click.option("--override-logs/--no-override-logs", default=True)
+@click.option(
+    "-o/-no",
+    "--override-logs/--no-override-logs",
+    default=None,
+    help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
+)
 @click.option(
     "--sleep-between-app-boot",
     type=float,
@@ -22,7 +28,7 @@ from drunc.utils.utils import get_logger
 @click.pass_obj
 def boot(
     obj: ProcessManagerContext,
-    override_logs: bool,
+    override_logs: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
@@ -32,6 +38,10 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
+    if override_logs is None:
+        override_logs_boot = obj.override_logs
+    else:
+        override_logs_boot = override_logs
     if len(processes.values) > 0:
         log.error(
             f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
@@ -46,7 +56,7 @@ def boot(
             user=user,
             session_name=session_name,
             log_level="INFO",  # Unused anyway !!
-            override_logs=override_logs,
+            override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
         for result in results:
@@ -57,6 +67,9 @@ def boot(
             )
     except InterruptedCommand:
         log.warning("Booting interrupted")
+        return
+    except DruncSetupException as e:
+        log.error(e)
         return
 
     processes = obj.get_driver("process_manager").ps(

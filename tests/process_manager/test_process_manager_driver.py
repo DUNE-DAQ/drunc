@@ -20,6 +20,7 @@ from druncschema.process_manager_pb2 import (
     ProcessMetadata,
     ProcessRestriction,
 )
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
@@ -28,7 +29,7 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def mock_logger():
     with patch(
         "drunc.process_manager.process_manager_driver.get_logger"
@@ -83,6 +84,7 @@ def boot_test_setup(mock_driver):
 
         # Create a mock session DAL with no infrastructure applications
         fake_dal = MagicMock(infrastructure_applications=[])
+        fake_db = MagicMock()
 
         # Mock connectivity service
         csc_mock = MagicMock(is_ready=MagicMock(return_value=is_ready))
@@ -92,7 +94,8 @@ def boot_test_setup(mock_driver):
 
         # Internal methods of the driver
         mock_driver._consolidate_config = MagicMock()
-        mock_driver._initialise_session = MagicMock(return_value=("db", fake_dal))
+        mock_driver._initialise_session = MagicMock(return_value=(fake_db, fake_dal))
+        mock_driver.check_port_conflicts = MagicMock(return_value=(fake_db, fake_dal))
 
         mock_driver._convert_oks_to_boot_request = MagicMock(
             return_value=[mock_request]
@@ -118,7 +121,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     """
     mock_session_dal = MagicMock()
 
-    mock_db = MagicMock()
     mock_apps.return_value = [
         {"tree_id": "0.1", "name": "daq_app_1"},
         {"tree_id": "0.2", "name": "daq_app_2"},
@@ -129,7 +131,6 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     result = mock_driver._collect_all_apps(
         oks_conf="config.oks",
         session_dal=mock_session_dal,
-        db=mock_db,
         session_name="test_session",
     )
 
@@ -396,7 +397,6 @@ def test_convert_oks_to_boot_request_yields_correct_number(mock_driver, app_data
             oks_conf="config.oks",
             user="test_user",
             session_dal=MagicMock(),
-            db=MagicMock(),
             session_name="session1",
             override_logs=False,
         )
@@ -497,7 +497,9 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
     assert result_localhost == (mock_client_instance, pytest_hostname, 1234)
 
     mock_session_dal.connectivity_service.host = pytest_hostname
-    result_pytest_hostname = mock_driver._connect_to_service(mock_session_dal, "session2")
+    result_pytest_hostname = mock_driver._connect_to_service(
+        mock_session_dal, "session2"
+    )
     mock_client_class.assert_called_with("session2", f"{pytest_hostname}:1234")
     assert result_pytest_hostname == (mock_client_instance, pytest_hostname, 1234)
 
@@ -840,6 +842,38 @@ def test_terminate_grpc_error(mock_driver):
         mock_handler.assert_called_once_with(grpc_error)
 
 
+def test_terminate_error_no_grpc(mock_driver, mock_logger):
+    """
+    Test that terminate method properly handles exceptions that are not gRPC.
+    """
+    # Outer exception
+    grpc_err = grpc.RpcError("gRPC Failed")
+    mock_driver._mock_stub.terminate.side_effect = grpc_err
+
+    # Inner exception for when extract_grpc_rich_error_fails
+    extract_grpc_rich_error_path = (
+        "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
+    )
+    handle_grpc_error_path = (
+        "drunc.process_manager.process_manager_driver.handle_grpc_error"
+    )
+
+    with (
+        patch(extract_grpc_rich_error_path) as mock_extract_grpc_rich_error,
+        patch(handle_grpc_error_path) as mock_handler,
+    ):
+        # Simulate a TypeError
+        mock_extract_grpc_rich_error.side_effect = TypeError("Test TypeError")
+        mock_handler.side_effect = grpc_err
+
+        with pytest.raises(grpc.RpcError):
+            mock_driver.terminate()
+
+        args, kwargs = mock_logger.debug.call_args
+        assert "Could not extract rich error details" in args[0]
+        assert kwargs.get("exc_info") is True
+
+
 def test_kill_success(mock_driver, process_query_request, kill_response):
     """
     Test that kill method correctly calls stub.kill and returns response.
@@ -910,6 +944,36 @@ def test_logs_grpc_error(mock_driver, log_request):
             mock_driver.logs(log_request)
 
         mock_handler.assert_called_once_with(grpc_error)
+
+
+def test_logs_bad_query_target_not_found(mock_driver, mock_logger, log_request):
+    """Test that logs bad-query target misses are reported with a concise message."""
+    mock_response = MagicMock()
+    mock_response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    mock_response.lines = ["The process corresponding to the query doesn't exist"]
+    mock_driver._mock_stub.logs.return_value = mock_response
+
+    response = mock_driver.logs(log_request)
+
+    assert response is None
+    mock_logger.warning.assert_called_once_with(
+        "Bad query for logs: The process corresponding to the query doesn't exist"
+    )
+
+
+def test_logs_bad_query_generic_message(mock_driver, mock_logger, log_request):
+    """Test that logs bad-query non-missing-target errors keep their details."""
+    mock_response = MagicMock()
+    mock_response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+    mock_response.lines = ["There are more than 1 processes corresponding to the query"]
+    mock_driver._mock_stub.logs.return_value = mock_response
+
+    response = mock_driver.logs(log_request)
+
+    assert response is None
+    mock_logger.warning.assert_called_once_with(
+        "Bad query for logs: There are more than 1 processes corresponding to the query"
+    )
 
 
 def test_ps_success(mock_driver, process_query_request, ps_response):

@@ -4,6 +4,7 @@ import os
 import re
 import signal
 import socket
+import sys
 import threading
 import urllib.error
 import urllib.request
@@ -35,6 +36,10 @@ from drunc.k8s_exceptions import (
     DruncK8sNodeException,
     DruncK8sPodException,
 )
+from drunc.process_manager.configuration import (
+    PROCESS_SHUTDOWN_ORDERING,
+    ProcessManagerConfHandler,
+)
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
@@ -43,10 +48,10 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 class K8sPodWatcherThread(threading.Thread):
     def __init__(self, pm) -> None:
         """
-        Initialize the pod watcher thread.
+        Initialize the pod watcher thread that monitors and notifies on pod events.
 
         Args:
-            pm: The K8sProcessManager instance to monitor and notify on pod events.
+            pm: The K8sProcessManager instance to watch.
         """
         threading.Thread.__init__(self)
         self.pm = pm
@@ -139,16 +144,19 @@ class K8sPodWatcherThread(threading.Thread):
                 sleep(3)
 
             except Exception as e:
-                self.pm.log.error(f"K8s watcher thread error: {e}. Restarting watch.")
+                self.pm.log.error(
+                    "K8s watcher thread encountered an error, stacktrace present in the debug logs. Restarting watch."
+                )
+                self.pm.log.debug(f"K8s watcher thread error: {e}.")
                 sleep(self.pm.watcher_retry_sleep)
 
 
 class K8sProcessManager(ProcessManager):
-    def __init__(self, configuration, **kwargs) -> None:
+    def __init__(self, configuration: ProcessManagerConfHandler, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
-        applications running in Pods. 
+        applications running in Pods.
 
         Args:
             configuration: The process manager configuration object containing image,
@@ -159,10 +167,17 @@ class K8sProcessManager(ProcessManager):
         Raises:
             ConfigException: If the Kubernetes configuration cannot be loaded.
         """
+
+        # Get the username for the session. This is needed as k8s does not pass the
+        # username through to the pod
         self.session = getpass.getuser()
         super().__init__(configuration=configuration, session=self.session, **kwargs)
+
+        # Setup the loger
         self.log = get_logger("process_manager.k8s-process-manager")
 
+        # Validate that the host this process manager is running on is part of a
+        # kubernetes cluster
         try:
             config.load_kube_config()
         except ConfigException as e:
@@ -172,14 +187,16 @@ class K8sProcessManager(ProcessManager):
                 "Please ensure 'kubectl' is configured correctly or the KUBECONFIG environment variable is set."
             )
             self.log.critical("----------------------------------------------")
-            raise
+            sys.exit(1)
 
+        # Set up the hooks to the k8s API, makes later setup easier
         self._k8s_client = client
         self._core_v1_api = client.CoreV1Api()
         self._meta_v1_api = client.V1ObjectMeta
         self._pod_spec_v1_api = client.V1PodSpec
         self._api_error_v1_api = client.rest.ApiException
 
+        # Storage for process orchestrator parameters
         self.managed_sessions = set()
         self.watchers = []
         self._start_watcher()
@@ -193,37 +210,46 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Get settings from configuration
+        # Get settings from configuration JSON file
+        # Any comments following this one will relate to the parameters retrieved from
+        # the configuration file if the comment starts as "CONFIGURATION -"
         settings = getattr(self.configuration.data, "settings", {})
 
-        # Labels
+        # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
         self.drunc_label = labels.get("drunc_label", "drunc.daq")
 
-        # Connection server
+        # Readout app selector
+        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
+
+        # Readout app selector
+        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
+
+        # CONFIGURATION - connection server connection port numbers
         self.connection_server_port = None
         self.connection_server_node_port = None
 
-        # Service
+        # CONFIGURATION - per-pod service port number
         service = settings.get("service", {})
         self.headless_discovery_port = service.get("headless_discovery_port", 80)
-        # Pod management
+
+        # CONFIGURATION - pod startup management parameters
         pod_management = settings.get("pod_management", {})
         self.kill_timeout = pod_management.get("kill_timeout", 30)
         self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
 
-        # Volume mounts
-        self.volume_configs = settings.get("volumes", [])
-
-        # Home path configuration
-        self.home_path_base = settings.get("home_path_base", None)
-
-        # Cleanup
+        # CONFIGURATION - restart cleanup parameters
         cleanup = settings.get("cleanup", {})
         self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
         self.restart_cleanup_polling = cleanup.get("restart_cleanup_polling", 0.5)
 
-        # Checking
+        # CONFIGURATION - volume mounts
+        self.volume_configs = settings.get("volumes", [])
+
+        # CONFIGURATION - home path definition
+        self.home_path_base = settings.get("home_path_base", None)
+
+        # CONFIGURATION - timeouts and check parameters
         checking = settings.get("checking", {})
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
@@ -231,14 +257,12 @@ class K8sProcessManager(ProcessManager):
         self.grpc_startup_timeout = checking.get("grpc_startup_timeout", 30)
         self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
 
-        self.log.debug(f"Using kill_timeout of {self.kill_timeout} seconds.")
-
+        # Get and print the list of active namespaces managed by drunc
         namespaces = self._core_v1_api.list_namespace(
             label_selector=f"creator.{self.drunc_label}={self.__class__.__name__}"
         )
         namespace_names = [ns.metadata.name for ns in namespaces.items]
         namespace_list_str = "\n - ".join(namespace_names)
-
         if namespace_list_str:
             self.log.info(
                 f"Active namespaces created by drunc:\n - {namespace_list_str}"
@@ -295,7 +319,9 @@ class K8sProcessManager(ProcessManager):
                 f"Could not set parent death signal (may not be supported on this platform): {e}"
             )
 
-    def notify_termination(self, proc_uuid, exit_code, reason, session) -> None:
+    def notify_termination(
+        self, proc_uuid: str, exit_code: int, reason: str, session: str
+    ) -> None:
         """
         Callback for when a pod terminates.
 
@@ -312,14 +338,18 @@ class K8sProcessManager(ProcessManager):
             f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}"
         )
 
+        # Publish a log message and to kafka for each process that is terminated
         if proc_uuid in self.boot_request:
+            # Get the exit data, and compose a message for tty viewing
             self.final_exit_codes[proc_uuid] = exit_code
-
             meta = self.boot_request[proc_uuid].process_description.metadata
             end_str = f"Pod '{meta.name}' (session: '{session}', user: '{meta.user}', uuid: {proc_uuid}) terminated with exit code {exit_code}. Reason: {reason}"
+
+            # Publish this information
             self.log.info(end_str)
             self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
+        # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
             self.uuids_pending_deletion.remove(proc_uuid)
             self.log.debug(
@@ -329,7 +359,7 @@ class K8sProcessManager(ProcessManager):
                 self.log.debug("All pending pods terminated, setting event.")
                 self.termination_complete_event.set()
 
-    def is_alive(self, podname, session) -> bool:
+    def is_alive(self, podname: str, session: str) -> bool:
         """
         Checks if a pod is currently in the 'Running' phase.
 
@@ -340,16 +370,28 @@ class K8sProcessManager(ProcessManager):
         Returns:
             True if the pod exists and its phase is 'Running', False otherwise.
         """
+
         try:
+            # Attempt to get the pod status, if you can the pod is alive
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
             return pod_status.status.phase == "Running"
         except self._api_error_v1_api as e:
+            # Error 404 implies that if pod is not found, i.e. it is not alive
             if e.status == 404:
                 return False
+            # If some other exception occurs, the pod is not found and the cause of the
+            # exception is logged.
             self.log.error(f"Error checking status for pod {session}.{podname}: {e}")
             return False
 
-    def _add_label(self, obj_name, obj_type, key, label, session=None) -> None:
+    def _add_label(
+        self,
+        obj_name: str,
+        obj_type: str,
+        key: str,
+        label: str,
+        session: str | None = None,
+    ) -> None:
         """
         Constructs a label in the format '{key}.{drunc_label}: {label}' and patches
         the specified Kubernetes object.
@@ -366,15 +408,19 @@ class K8sProcessManager(ProcessManager):
             DruncK8sNamespaceException: If obj_type is 'pod' and session is not provided.
             DruncK8sException: If obj_type is not 'pod' or 'namespace'.
         """
+        # Construct the body of the metadata to allocate to the object
         body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
 
+        # Allocated the metadata
         if obj_type == "pod":
+            # Ensure all required information has been provided for the pod
             if not session:
                 raise DruncK8sNamespaceException(
                     "Session (namespace) must be provided to label a pod."
                 )
 
             try:
+                # Add the label, and log the entry
                 self._core_v1_api.patch_namespaced_pod(
                     name=obj_name, namespace=session, body=body
                 )
@@ -387,6 +433,7 @@ class K8sProcessManager(ProcessManager):
                 )
         elif obj_type == "namespace":
             try:
+                # Add the label, and log the entry
                 self._core_v1_api.patch_namespace(name=obj_name, body=body)
                 self.log.info(
                     f'Added label "{key}.{self.drunc_label}:{label}" to namespace "{obj_name}"'
@@ -396,7 +443,7 @@ class K8sProcessManager(ProcessManager):
         else:
             raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
 
-    def _add_creator_label(self, obj_name, obj_type) -> None:
+    def _add_creator_label(self, obj_name: str, obj_type: str) -> None:
         """
         Sets the label 'creator.{drunc_label}' to the class name on the given object.
 
@@ -415,7 +462,9 @@ class K8sProcessManager(ProcessManager):
         """
         return f"creator.{self.drunc_label}={self.__class__.__name__}"
 
-    def _is_local_connection_server(self, tree_labels: dict[str, str], podname: str) -> bool:
+    def _is_local_connection_server(
+        self, tree_labels: dict[str, str], podname: str
+    ) -> bool:
         """
         Check if a pod is the local connection server by inspecting its role label and name.
 
@@ -428,7 +477,10 @@ class K8sProcessManager(ProcessManager):
             'local-connection-server' appears in the pod name, False otherwise.
         """
         role_key = f"role.{self.drunc_label}"
-        return tree_labels.get(role_key) == "infrastructure-applications" and "local-connection-server" in podname
+        return (
+            tree_labels.get(role_key) == "infrastructure-applications"
+            and "local-connection-server" in podname
+        )
 
     def _is_root_controller(self, tree_labels: dict[str, str]) -> bool:
         """
@@ -442,7 +494,7 @@ class K8sProcessManager(ProcessManager):
         """
         return tree_labels.get(f"role.{self.drunc_label}") == "root-controller"
 
-    def _is_host_cached(self, host):
+    def _is_host_cached(self, host: str) -> None | bool:
         """
         Check if host is cached and not expired.
 
@@ -454,15 +506,18 @@ class K8sProcessManager(ProcessManager):
             or None if not in the cache or the cache entry has expired.
         """
         with self._host_cache_lock:
+            # If the host has not been cached already, ignore it
             if host not in self._host_cache:
                 return None
+
+            # Retrieve the currently stored metadata, validate that it has not expired
             is_valid, timestamp = self._host_cache[host]
             if time() - timestamp > self._host_cache_expiry:
                 del self._host_cache[host]
                 return None
             return is_valid
 
-    def _verify_host_in_cluster(self, target_host):
+    def _verify_host_in_cluster(self, target_host: str) -> bool:
         """
         Verifies that the target host is available in the Kubernetes cluster.
 
@@ -480,6 +535,7 @@ class K8sProcessManager(ProcessManager):
             DruncK8sNodeException: If the host is not part of the cluster, not ready, or cordoned.
             DruncK8sException: If there is a permission error or other API failure.
         """
+        # If the host has already been cached, check if it is valid and return that state
         cached = self._is_host_cached(target_host)
         if cached is not None:
             if cached:
@@ -490,37 +546,44 @@ class K8sProcessManager(ProcessManager):
                     f"Host '{target_host}' was previously verified as unavailable"
                 )
 
+        # The host has not already been checked, check it and assign the data to the
+        # cache
         try:
-            target_node = self._core_v1_api.read_node(name=target_host)
             # Check node is ready and schedulable
+            target_node = self._core_v1_api.read_node(name=target_host)
             is_ready = any(
                 c.type == "Ready" and c.status == "True"
                 for c in target_node.status.conditions or []
             )
             is_schedulable = not (target_node.spec and target_node.spec.unschedulable)
 
+            # Host is not usable, store this metadata, raise the exception
             if not is_ready or not is_schedulable:
                 with self._host_cache_lock:
                     self._host_cache[target_host] = (False, time())
                 reason = "not ready" if not is_ready else "cordoned"
                 raise DruncK8sNodeException(f"Host '{target_host}' {reason}")
 
+            # Host is usable, store this information
             with self._host_cache_lock:
                 self._host_cache[target_host] = (True, time())
             self.log.info(f"Host '{target_host}' verified and available")
             return True
 
         except self._api_error_v1_api as e:
+            # If the host is not part of the cluster, this will raise the 404
             if e.status == 404:
                 with self._host_cache_lock:
                     self._host_cache[target_host] = (False, time())
                 raise DruncK8sNodeException(
                     f"Target host '{target_host}' is not part of the Kubernetes cluster"
                 )
+            # If permissions are denied
             elif e.status in [401, 403]:
                 raise DruncK8sException(
                     f"Permission denied accessing cluster to verify '{target_host}': {e}"
                 )
+            # Otherwise
             raise DruncK8sException(f"Failed to verify host '{target_host}': {e}")
         except Exception as e:
             raise DruncK8sException(f"Error verifying host '{target_host}': {e}")
@@ -779,7 +842,7 @@ class K8sProcessManager(ProcessManager):
     ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
         """
         Prepares all pod volumes and container mounts, including static
-        configs and the dynamic data_mount.
+        configs, performance hardware, and dynamic data/home mounts.
 
         Assembles volumes from JSON configuration, auto-mounts the user's home
         directory if configured, adds a log mount from process_logs_path, and
@@ -797,8 +860,34 @@ class K8sProcessManager(ProcessManager):
         pod_volumes = []
         container_volume_mounts = []
 
-        # Volumes from json configuration
+        # Check for readout apps
+        pod_name = boot_request.process_description.metadata.name
+        is_perf_app = self.perf_selector in pod_name.lower()
+
+        # Set HugePages
+        if is_perf_app:
+            self.log.info(f"Adding native HugePages for performance app '{pod_name}'")
+            pod_volumes.append(
+                client.V1Volume(
+                    name="hugepages",
+                    empty_dir=client.V1EmptyDirVolumeSource(medium="HugePages"),
+                )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(name="hugepages", mount_path="/dev/hugepages")
+            )
+
+        # Volumes from json config
         for vc in self.volume_configs:
+            if (
+                vc["name"] in ["hugepages", "vfio", "intel-firmware"]
+                and not is_perf_app
+            ):
+                continue
+
+            if any(v.name == vc["name"] for v in pod_volumes):
+                continue
+
             pod_volumes.append(
                 client.V1Volume(
                     name=vc["name"],
@@ -820,24 +909,26 @@ class K8sProcessManager(ProcessManager):
             username = self._get_host_username()
             target_home_path = f"{self.home_path_base}/{username}"
 
-            # Check if this path is already covered by the JSON volumes above
             is_covered = False
             for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(vm.mount_path + "/"):
-                    self.log.debug(f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'")
+                if vm.mount_path == target_home_path or target_home_path.startswith(
+                    vm.mount_path + "/"
+                ):
+                    self.log.debug(
+                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
+                    )
                     is_covered = True
                     break
 
             if not is_covered:
                 self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
                 vol_name = f"home-{username}"
-                
+
                 pod_volumes.append(
                     client.V1Volume(
                         name=vol_name,
                         host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, 
-                            type="Directory"
+                            path=target_home_path, type="Directory"
                         ),
                     )
                 )
@@ -873,21 +964,22 @@ class K8sProcessManager(ProcessManager):
                 )
             )
 
-        # Add dynamic data_mount if present in the boot request
+        # Add dynamic data_mount
         data_mount_path = None
         if boot_request.process_restriction.data_mount:
-            self.log.info(
-                f"Found data_mount request: '{boot_request.process_restriction.data_mount}'"
-            )
-            if boot_request.process_restriction.data_mount == ".":
+            mount_req = boot_request.process_restriction.data_mount
+            self.log.info(f"Found data_mount request: '{mount_req}'")
+
+            # Use normpath to safely handle both "." and "./"
+            if os.path.normpath(mount_req) == ".":
                 data_mount_path = (
                     boot_request.process_description.process_execution_directory
                 )
                 self.log.info(
-                    f"Resolving '.' data_mount to process_execution_directory: '{data_mount_path}'"
+                    f"Resolving '{mount_req}' data_mount to process_execution_directory: '{data_mount_path}'"
                 )
             else:
-                data_mount_path = boot_request.process_restriction.data_mount
+                data_mount_path = mount_req
                 self.log.info(f"Using provided data_mount path: '{data_mount_path}'")
 
             if data_mount_path:
@@ -1010,17 +1102,19 @@ class K8sProcessManager(ProcessManager):
             A list of V1EnvVar objects representing the container environment variables.
         """
         env_vars = boot_request.process_description.env
-        username_bq = boot_request.process_description.metadata.user
+        username_br = boot_request.process_description.metadata.user
         host_username = None
 
-        if username_bq is not None:
-            env_vars["USER"] = username_bq
-            self.log.debug(f"Setting USER environment variable from boot request: {username_bq}")
+        if username_br is not None:
+            env_vars["USER"] = username_br
+            self.log.debug(
+                f"Setting USER environment variable from boot request: {username_br}"
+            )
         elif self.home_path_base:
             host_username = self._get_host_username()
 
         # Only set USER if not already present in environment
-        if username_bq is None and host_username:
+        if username_br is None and host_username:
             env_vars["USER"] = host_username
             self.log.debug(f"Setting USER environment variable to: {host_username}")
 
@@ -1086,7 +1180,7 @@ class K8sProcessManager(ProcessManager):
         pod_image = self.configuration.data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
-        # This logic correctly prepends 'exec' to the C++ application command.
+        # Build command to exec
         command_parts = []
         for i, e_and_a in enumerate(exec_and_args_list):
             is_last_command = i == len(exec_and_args_list) - 1
@@ -1110,35 +1204,46 @@ class K8sProcessManager(ProcessManager):
                     modified_arg = re.sub(
                         r"(grpc://)([^:]+)(:\d+)", r"\g<1>${POD_IP}\g<3>", arg
                     )
-                    if modified_arg != arg:
-                        self.log.debug(
-                            f"Modified command facility for '{podname}' from {arg} to {modified_arg} "
-                            "(will use pod IP)"
-                        )
                     modified_args.append(modified_arg)
                 command_parts.append(prefix + " ".join([e_and_a.exec] + modified_args))
             else:
                 command_parts.append(
                     prefix + " ".join([e_and_a.exec] + list(e_and_a.args))
                 )
+
         main_command_chain = " && ".join(command_parts)
 
-        container_ports = []
-        if (
-            self._is_local_connection_server(tree_labels, podname)
-            and lcs_port is not None
-        ):
-            self.connection_server_name = podname
-            container_ports.append(
-                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+        # Resolve Host
+        target_host = None
+        if boot_request.process_restriction.allowed_hosts:
+            target_host = boot_request.process_restriction.allowed_hosts[0]
+
+        # Performance Resource Lookup
+        resource_reqs = None
+        is_perf_app = self.perf_selector in podname.lower()
+        if is_perf_app:
+            settings = getattr(self.configuration.data, "settings", {})
+            host_configs = settings.get("host_configs", {})
+
+            if not target_host or target_host not in host_configs:
+                error_msg = (
+                    f"FATAL: Pod '{podname}' is a readout app, but host '{target_host}' "
+                    f"is missing from 'settings.host_configs' in k8s-CERN.json."
+                )
+                self.log.error(error_msg)
+                raise RuntimeError(error_msg)
+
+            self.log.info(f"Applying hardware profile for {target_host} to {podname}")
+            h_config = host_configs[target_host]
+            resource_reqs = client.V1ResourceRequirements(
+                limits=h_config.get("limits"), requests=h_config.get("requests")
             )
 
-        # Only add preStop hook for C++ applications (non-controllers)
+        # Lifecycle Hooks
         lifecycle_hook = None
-        if (
-            "controller" not in tree_labels["role." + self.drunc_label]
-            and not self._is_local_connection_server(tree_labels, podname)
-        ):
+        if "controller" not in tree_labels[
+            "role." + self.drunc_label
+        ] and not self._is_local_connection_server(tree_labels, podname):
             self.log.debug(
                 f"'{podname}' identified as a C++ app, adding preStop hook with SIGQUIT."
             )
@@ -1150,53 +1255,54 @@ class K8sProcessManager(ProcessManager):
                     )
                 )
             )
-        else:
-            self.log.debug(
-                f"'{podname}' identified as a Python app, no preStop hook needed."
-            )
 
-        # Redirect logs
+        # Log Redirection
         log_file_path = boot_request.process_description.process_logs_path
-        final_command_args: str
-
-        if log_file_path:
-            self.log.debug(
-                f"Redirecting pod stdout/stderr to '{log_file_path}' (also available via kubectl logs)"
-            )
-            log_redirect_cmd = f"exec > >(tee -a {log_file_path}) 2>&1;"
-        else:
-            log_redirect_cmd = ""
+        log_redirect_cmd = (
+            f"exec > >(tee -a {log_file_path}) 2>&1;" if log_file_path else ""
+        )
 
         if self._is_local_connection_server(tree_labels, podname):
             # LCS (gunicorn) needs a shell trap to handle SIGTERM grace
             final_command_args = (
                 f"{log_redirect_cmd} "
                 f"trap 'kill -KILL $child; wait $child; exit 0' TERM QUIT; "
-                f"{main_command_chain} & "
-                f"child=$!; "
-                f"wait $child"
+                f"{main_command_chain} & child=$!; wait $child"
             )
         else:
             final_command_args = f"{log_redirect_cmd} {main_command_chain}"
 
-        # Build container environment variables
-        container_env = self._build_container_env(boot_request, tree_labels)
+        # Security Context
+        security_context = client.V1SecurityContext(
+            run_as_user=os.getuid(), run_as_group=os.getgid()
+        )
+        if is_perf_app:
+            security_context.privileged = True
+            security_context.capabilities = client.V1Capabilities(add=["IPC_LOCK"])
 
-        main_container = client.V1Container(
+        container_ports = []
+        if (
+            self._is_local_connection_server(tree_labels, podname)
+            and lcs_port is not None
+        ):
+            self.connection_server_name = podname
+            container_ports.append(
+                client.V1ContainerPort(container_port=lcs_port, name="http-port")
+            )
+
+        return client.V1Container(
             name=podname,
             image=pod_image,
             command=["/bin/bash", "-c"],
             args=[final_command_args],
-            env=container_env,
+            env=self._build_container_env(boot_request, tree_labels),
             lifecycle=lifecycle_hook,
             ports=container_ports,
             volume_mounts=container_volume_mounts,
+            resources=resource_reqs,
             working_dir=boot_request.process_description.process_execution_directory,
-            security_context=client.V1SecurityContext(
-                run_as_user=os.getuid(), run_as_group=os.getgid()
-            ),
+            security_context=security_context,
         )
-        return main_container
 
     def _get_pod_node_selector(
         self, podname: str, restriction: ProcessRestriction
@@ -1333,6 +1439,7 @@ class K8sProcessManager(ProcessManager):
         except KeyError:
             try:
                 import pwd
+
                 return pwd.getpwuid(os.getuid()).pw_name
             except KeyError:
                 return str(os.getuid())
@@ -1377,6 +1484,11 @@ class K8sProcessManager(ProcessManager):
         if extra_labels:
             pod_labels.update(extra_labels)
 
+        # hugepages permissions
+        pod_security_context = client.V1PodSecurityContext(
+            run_as_user=os.getuid(), run_as_group=os.getgid(), fs_group=os.getgid()
+        )
+
         return client.V1Pod(
             api_version="v1",
             kind="Pod",
@@ -1393,6 +1505,7 @@ class K8sProcessManager(ProcessManager):
                 containers=[main_container],
                 host_aliases=host_aliases if host_aliases else None,
                 volumes=pod_volumes,
+                security_context=pod_security_context,
             ),
         )
 
@@ -1788,7 +1901,9 @@ class K8sProcessManager(ProcessManager):
             logs = self._core_v1_api.read_namespaced_pod_log(
                 podname, session, tail_lines=log_request.how_far or 100
             )
-            return LogLines(uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n"))
+            return LogLines(
+                name=podname, uuid=ProcessUUID(uuid=uuid), lines=logs.split("\n")
+            )
         except self._api_error_v1_api as e:
             return LogLines(
                 uuid=ProcessUUID(uuid=uuid),
@@ -2334,15 +2449,6 @@ class K8sProcessManager(ProcessManager):
             f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
         )
 
-        # Define the shutdown order
-        shutdown_order = [
-            "unknown",
-            "application",
-            "segment-controller",
-            "root-controller",
-            "infrastructure-applications",
-        ]
-
         # Define the blocking kill_and_wait helper
         def kill_and_wait(uuids, grace_period=None) -> None:
             if not uuids:
@@ -2413,7 +2519,7 @@ class K8sProcessManager(ProcessManager):
                     segment_controller_depths[uuid] = tree_id.count(".") if tree_id else 0
 
         # Kill in stages using our sorted lists
-        for role in shutdown_order:
+        for role in PROCESS_SHUTDOWN_ORDERING:
             uuids_in_step = pods_by_role[role]
             if not uuids_in_step:
                 continue

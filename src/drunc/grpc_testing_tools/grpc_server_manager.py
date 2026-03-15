@@ -54,7 +54,7 @@ class GrpcServerManager:
     def start_manager_server(
         self,
         config: GrpcServerConfig,
-        lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_PARAMIKO,
+        lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_SHELL,
     ) -> RunningGrpcServer:
         """
         Start a Manager gRPC server.

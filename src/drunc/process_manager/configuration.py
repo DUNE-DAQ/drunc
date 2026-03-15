@@ -3,7 +3,7 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import Any, Dict, Union
+from typing import TYPE_CHECKING, Any, Dict, Union
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -17,6 +17,18 @@ from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger
+
+if TYPE_CHECKING:
+    import conffwk
+
+
+PROCESS_SHUTDOWN_ORDERING = [
+    "unknown",
+    "application",
+    "segment-controller",
+    "root-controller",
+    "infrastructure-applications",
+]
 
 
 class ProcessManagerTypes(Enum):
@@ -114,7 +126,28 @@ class ProcessManagerConfHandler(ConfHandler):
         return new_data
 
 
-def get_commandline_parameters(db, config_filename, session_id, session_name, obj):
+def get_commandline_parameters(
+    config_filename: str,
+    session_dal: "conffwk.dal.Session",
+    session_name: str,
+    obj: Any,
+) -> list[str]:
+    """
+    Build CLI arguments used to launch a process manager application.
+
+    The control endpoint is derived from the first service exposed by ``obj`` whose
+    id ends with ``"_control"``. If no such service is present, defaults are kept
+    (empty protocol and port ``-1``), matching existing behavior.
+
+    Args:
+        config_filename: OKS configuration filename/path passed to ``-d``.
+        session_dal: Session DAL object containing session metadata and log level.
+        session_name: Runtime session name passed to ``-s``.
+        obj: DAL object (application/controller) being launched.
+
+    Returns:
+        Ordered list of command-line arguments for process launch.
+    """
     runs_on = obj.runs_on.runs_on.id
     control_service_port = -1
     control_service_protocol = ""
@@ -128,7 +161,7 @@ def get_commandline_parameters(db, config_filename, session_id, session_name, ob
         "-s",
         session_name,
         "-k",
-        session_id,
+        session_dal.id,
         "-n",
         obj.id,
         "-c",
@@ -139,7 +172,7 @@ def get_commandline_parameters(db, config_filename, session_id, session_name, ob
     if "RCApplication" in obj.oksTypes():
         commandline_parameters += [
             "-l",
-            db.get_dal("Session", session_id).controller_log_level,
+            session_dal.controller_log_level,
         ]
 
     return commandline_parameters

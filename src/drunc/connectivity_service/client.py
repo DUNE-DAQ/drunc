@@ -63,7 +63,9 @@ class ConnectivityServiceClient:
                 )
                 return True
 
-        self.log.debug(
+        # 04-Feb-2026, KAB: increased the severity of the 'Connectivity service not ready' message
+        # so that users are notified that this happened.
+        self.log.error(
             f"Connectivity service not ready after {attempt} attempts. Timeout of {timeout}s reached."
         )
         return False
