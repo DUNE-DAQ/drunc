@@ -27,7 +27,7 @@ PROCESS_SHUTDOWN_ORDERING = [
     "application",
     "segment-controller",
     "root-controller",
-    "local-connection-server",
+    "infrastructure-applications",
 ]
 
 
