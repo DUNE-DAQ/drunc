@@ -180,11 +180,38 @@ def require_echo_marker_index(
     return require_line_index(
         lines,
         lambda line: "drunc.echo" in line and line.rstrip().endswith(echo_marker),
-        error_message=(
-            f"Could not find drunc.echo marker '{echo_marker}' in stdout."
-        ),
+        error_message=(f"Could not find drunc.echo marker '{echo_marker}' in stdout."),
         start_idx=start_idx,
     )
+
+
+def require_pattern_match_index(
+    lines: list[str],
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> tuple[int, re.Match[str]]:
+    line_idx = require_line_index(
+        lines,
+        lambda line: pattern.search(line) is not None,
+        error_message=error_message,
+        start_idx=start_idx,
+    )
+    match = pattern.search(lines[line_idx])
+    assert match is not None
+    return line_idx, match
+
+
+def require_pattern_match(
+    text: str,
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+) -> re.Match[str]:
+    match = pattern.search(text)
+    assert match is not None, error_message
+    return match
 
 
 def _parse_ps_table_from_index(
@@ -247,6 +274,47 @@ def get_uuid_for_friendly_name(
     raise AssertionError(
         f"Could not find friendly name '{friendly_name}' in ps table. "
         f"Available names: {available_names}"
+    )
+
+
+def get_rows_for_friendly_name(
+    ps_table: list[dict[str, str]], friendly_name: str
+) -> list[dict[str, str]]:
+    return [row for row in ps_table if row["friendly_name"].strip() == friendly_name]
+
+
+def assert_process_presence(
+    ps_table: list[dict[str, str]],
+    friendly_name: str,
+    *,
+    expected_present: bool,
+    context: str,
+) -> None:
+    matching_rows = get_rows_for_friendly_name(ps_table, friendly_name)
+
+    if expected_present:
+        assert matching_rows, (
+            f"Expected to find '{friendly_name}' in ps table {context}, but it was missing."
+        )
+        return
+
+    assert not matching_rows, (
+        f"Expected '{friendly_name}' to be absent from ps table {context}, but it is still present."
+    )
+
+
+def assert_process(
+    ps_table: list[dict[str, str]],
+    friendly_name: str,
+    *,
+    context: str,
+    expected_present=True,
+) -> None:
+    assert_process_presence(
+        ps_table,
+        friendly_name,
+        expected_present=expected_present,
+        context=context,
     )
 
 
@@ -337,28 +405,23 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
     timestamp_pattern = re.compile(r"^\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
 
-    running_idx = require_line_index(
+    running_idx, running_match = require_pattern_match_index(
         lines,
-        lambda line: running_pattern.search(line) is not None,
+        running_pattern,
         error_message=(
             "Did not find 'Command wait running for ... seconds.' after test_wait marker."
         ),
         start_idx=echo_idx + 1,
     )
 
-    ran_idx = require_line_index(
+    ran_idx, ran_match = require_pattern_match_index(
         lines,
-        lambda line: ran_pattern.search(line) is not None,
+        ran_pattern,
         error_message=(
             "Did not find 'Command wait ran for ... seconds.' after wait start log."
         ),
         start_idx=running_idx + 1,
     )
-
-    running_match = running_pattern.search(lines[running_idx])
-    ran_match = ran_pattern.search(lines[ran_idx])
-    assert running_match is not None
-    assert ran_match is not None
 
     expected_seconds = 10
     assert int(running_match.group(1)) == expected_seconds, (
@@ -368,12 +431,16 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
         f"Expected wait end log to report {expected_seconds} seconds, got {ran_match.group(1)}."
     )
 
-    start_ts_match = timestamp_pattern.search(lines[running_idx])
-    end_ts_match = timestamp_pattern.search(lines[ran_idx])
-    assert start_ts_match is not None, (
-        "Could not parse timestamp in wait start log line."
+    start_ts_match = require_pattern_match(
+        lines[running_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait start log line.",
     )
-    assert end_ts_match is not None, "Could not parse timestamp in wait end log line."
+    end_ts_match = require_pattern_match(
+        lines[ran_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait end log line.",
+    )
 
     start_ts = datetime.strptime(start_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
     end_ts = datetime.strptime(end_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
@@ -401,12 +468,10 @@ def test_restart_mlt_logs(run_dunerc) -> None:
     restart_lines = lines[echo_idx + 1 : post_restart_idx]
     restart_text = "\n".join(restart_lines)
 
-    restart_request_match = re.search(
-        r"process_manager restarting \['mlt'\] in session",
+    restart_request_match = require_pattern_match(
         restart_text,
-    )
-    assert restart_request_match is not None, (
-        "Did not find the mlt restart request log line between restart markers."
+        re.compile(r"process_manager restarting \['mlt'\] in session"),
+        error_message="Did not find the mlt restart request log line between restart markers.",
     )
 
     #! Reinsert this in the future, but this log-based thing is super janky
@@ -454,33 +519,15 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
     ps_before_kill = get_ps_table_after_echo(stdout, "pre_kill_mlt")
     ps_after_kill = get_ps_table_after_echo(stdout, "post_kill_mlt")
 
-    mlt_before_kill = [
-        row for row in ps_before_kill if row["friendly_name"].strip() == "mlt"
-    ]
-    mlt_after_kill = [
-        row for row in ps_after_kill if row["friendly_name"].strip() == "mlt"
-    ]
-
-    assert mlt_before_kill, (
-        "Expected to find 'mlt' in ps table before kill, but it was missing."
-    )
-    assert not mlt_after_kill, (
-        "Expected 'mlt' to be absent from ps table after kill, but it is still present."
-    )
+    assert_process(ps_before_kill, "mlt", context="before kill")
+    assert_process(ps_after_kill, "mlt", context="after kill", expected_present=False)
 
 
 def test_mlt_recovers_after_kill(run_dunerc) -> None:
     """Checks that mlt is present again after the recovery restart sequence."""
     stdout = run_dunerc.completed_process.stdout
-
     ps_after_recovery = get_ps_table_after_echo(stdout, "ps_after_recovery")
-
-    mlt_after_recovery = [
-        row for row in ps_after_recovery if row["friendly_name"].strip() == "mlt"
-    ]
-    assert mlt_after_recovery, (
-        "Expected 'mlt' to be present in ps table after recovery, but it was missing."
-    )
+    assert_process(ps_after_recovery, "mlt", context="after recovery")
 
 
 def test_nanorc_success(run_dunerc):
