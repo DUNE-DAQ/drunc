@@ -223,7 +223,8 @@ def collect_apps(
             apps.append(app)
 
     # Get all the enabled applications of this segment
-    app_index = 0
+    # Start app_index after sub-segment indices to avoid tree_id collisions
+    app_index = len(segment_obj.segments)
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
