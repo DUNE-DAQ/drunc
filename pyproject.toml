@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "drunc"
 description = "A flexible run control infrastructure for a distributed DAQ system"
-version = "1.0.1"
+version = "1.1.0"
 readme = "docs/README.md"
 requires-python = ">=3.10"
 
