@@ -76,7 +76,7 @@ conf_dict.config_substitutions.append(substitution)
 
 
 confgen_arguments = {"MinimalSystem": conf_dict}
-# The commands to run in nanorc, as a list
+# The commands to run in dunerc
 # NOTE THAT WE HAVE NOT TESTED FLUSH BECAUSE IT IS BROKEN
 # see #821
 
@@ -120,7 +120,6 @@ echo ps_recovery
 restart -n mlt
 restart -n trg-controller
 wait 5
-
 echo ps_after_recovery
 ps -u {getpass.getuser()}
 echo ps_recovery_done
@@ -137,6 +136,52 @@ UUID_RE = re.compile(
     r"|^[0-9a-fA-F]{8}-[-0-9a-fA-F]*\u2026"  # truncated by Rich table column width
 )
 
+
+def test_nanorc_success(run_dunerc) -> None:
+    """Checks that the drunc integration command sequence completes successfully."""
+    # print the name of the current test
+    current_test = os.environ.get("PYTEST_CURRENT_TEST")
+    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
+    if match_obj:
+        current_test = match_obj.group(1)
+    banner_line = re.sub(".", "=", current_test)
+    print(banner_line)
+    print(current_test)
+    print(banner_line)
+
+    # Check that nanorc completed correctly
+    assert run_dunerc.completed_process.returncode == 0
+
+
+def test_log_files(run_dunerc) -> None:
+    """Checks that expected process-manager log files exist and are free of errors."""
+    # Check that at least some of the expected log files are present
+    assert any(
+        f"{run_dunerc.session}_df-01" in str(logname)
+        for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{run_dunerc.session}_dfo" in str(logname) for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{run_dunerc.session}_mlt" in str(logname) for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{run_dunerc.session}_ru" in str(logname) for logname in run_dunerc.log_files
+    )
+
+    if check_for_logfile_errors:
+        # Check that there are no warnings or errors in the log files
+        assert log_file_checks.logs_are_error_free(
+            [
+                logname
+                for logname in run_dunerc.log_files
+                if "process_manager" in str(logname)
+            ],
+            True,
+            True,
+            ignored_logfile_problems,
+        )
 
 
 def test_boot(run_dunerc) -> None:
@@ -160,7 +205,7 @@ def test_boot(run_dunerc) -> None:
         )
 
 
-def test_log_command(run_dunerc) -> None:
+def test_unknown_log_command(run_dunerc) -> None:
     """Checks that querying logs for an unknown process reports the expected error."""
     test_str = (
         "Bad query for logs: The process corresponding to the query doesn't exist"
@@ -175,10 +220,7 @@ def test_root_controller_logs(run_dunerc) -> None:
     - there are exactly 5 lines between those two lines
     - among those 5 lines, the one from "drunc.controller.core.init_controller" ends with "Controller ready"
     """
-    stdout = run_dunerc.completed_process.stdout
-    assert isinstance(stdout, str)
-
-    lines = stdout.splitlines()
+    lines = run_dunerc.completed_process.stdout.splitlines()
 
     # 1) Find the header/footer lines
     header_idx = require_line_containing(
@@ -200,7 +242,7 @@ def test_root_controller_logs(run_dunerc) -> None:
         + "\n".join(between)
     )
 
-    # 3) Check the init_controller line ends with "Controller ready"
+    # 3) Check one of the init_controller line ends with "Controller ready"
     # Example line:
     # [2026/03/13 08:17:47 UTC] INFO ... drunc.controller.core.init_controller ... Controller ready
     init_controller_ready_re = re.compile(
@@ -214,11 +256,9 @@ def test_root_controller_logs(run_dunerc) -> None:
     )
 
 
-#! This you need to take a look at more
 def test_wait_command_duration_from_logs(run_dunerc) -> None:
     """Checks that the wait command logs the expected duration and elapsed time."""
-    stdout = run_dunerc.completed_process.stdout
-    lines = strip_ansi(stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
     echo_idx = require_echo_marker_index(lines, "test_wait")
 
@@ -263,8 +303,9 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
         error_message="Could not parse timestamp in wait end log line.",
     )
 
-    start_ts = datetime.strptime(start_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
-    end_ts = datetime.strptime(end_ts_match.group(1), "%Y/%m/%d %H:%M:%S")
+    ts_strp_pattern = "%Y/%m/%d %H:%M:%S"
+    start_ts = datetime.strptime(start_ts_match.group(1), ts_strp_pattern)
+    end_ts = datetime.strptime(end_ts_match.group(1), ts_strp_pattern)
     elapsed_seconds = (end_ts - start_ts).total_seconds()
 
     tolerance_seconds = 1
@@ -274,7 +315,6 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     )
 
 
-#! This you need to take a look at more
 def test_restart_mlt_logs(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
     stdout = run_dunerc.completed_process.stdout
@@ -289,48 +329,31 @@ def test_restart_mlt_logs(run_dunerc) -> None:
     restart_lines = lines[echo_idx + 1 : post_restart_idx]
     restart_text = "\n".join(restart_lines)
 
-    restart_request_match = require_pattern_match(
+    require_pattern_match(
         restart_text,
-        re.compile(r"process_manager restarting \['mlt'\] in session"),
-        error_message="Did not find the mlt restart request log line between restart markers.",
+        re.compile(
+            r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
+            re.DOTALL,
+        ),
+        error_message="Did not find the graceful termination log line for mlt after restart request.",
     )
 
-    #! Reinsert this in the future, but this log-based thing is super janky
-    # graceful_termination_match = re.search(
-    #     r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
-    #     restart_text[restart_request_match.end() :],
-    #     re.DOTALL,
-    # )
-    # assert graceful_termination_match is not None, (
-    #     "Did not find the graceful termination log line for mlt after restart request."
-    # )
+    require_pattern_match(
+        restart_text,
+        re.compile(r"Process 'mlt'.*?process exited\s+with exit code 0", re.DOTALL),
+        error_message="Did not find the mlt exit-code log line after graceful termination.",
+    )
 
-    # exit_code_search_text = restart_text[
-    #     restart_request_match.end() + graceful_termination_match.end() :
-    # ]
-    # exit_code_match = re.search(
-    #     r"Process 'mlt'.*?process exited\s+with exit code 0",
-    #     exit_code_search_text,
-    #     re.DOTALL,
-    # )
-    # assert exit_code_match is not None, (
-    #     "Did not find the mlt exit-code log line after graceful termination."
-    # )
+    booted_match = require_pattern_match(
+        restart_text,
+        re.compile(r"Booted 'mlt'.*?with UUID\s+([^\s\n]+)", re.DOTALL),
+        error_message="Did not find the mlt boot log line after the restart exit log.",
+    )
 
-    # booted_search_text = exit_code_search_text[exit_code_match.end() :]
-    # booted_match = re.search(
-    #     r"Booted 'mlt'.*?with UUID\s+([^\s\n]+)",
-    #     booted_search_text,
-    #     re.DOTALL,
-    # )
-    # assert booted_match is not None, (
-    #     "Did not find the mlt boot log line after the restart exit log."
-    # )
-
-    # booted_uuid = booted_match.group(1)
-    # assert UUID_RE.match(booted_uuid), (
-    #     f"Expected the mlt boot log to contain a UUID, got: {booted_uuid}"
-    # )
+    booted_uuid = booted_match.group(1)
+    assert UUID_RE.match(booted_uuid), (
+        f"Expected the mlt boot log to contain a UUID, got: {booted_uuid}"
+    )
 
 
 def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
@@ -349,50 +372,3 @@ def test_mlt_recovers_after_kill(run_dunerc) -> None:
     stdout = run_dunerc.completed_process.stdout
     ps_after_recovery = get_ps_table_after_echo(stdout, "ps_after_recovery")
     assert_process(ps_after_recovery, "mlt", context="after recovery")
-
-
-def test_nanorc_success(run_dunerc):
-    """Checks that the drunc integration command sequence completes successfully."""
-    # print the name of the current test
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    # Check that nanorc completed correctly
-    assert run_dunerc.completed_process.returncode == 0
-
-
-def test_log_files(run_dunerc):
-    """Checks that expected process-manager log files exist and are free of errors."""
-    # Check that at least some of the expected log files are present
-    assert any(
-        f"{run_dunerc.session}_df-01" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.session}_dfo" in str(logname) for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.session}_mlt" in str(logname) for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.session}_ru" in str(logname) for logname in run_dunerc.log_files
-    )
-
-    if check_for_logfile_errors:
-        # Check that there are no warnings or errors in the log files
-        assert log_file_checks.logs_are_error_free(
-            [
-                logname
-                for logname in run_dunerc.log_files
-                if "process_manager" in str(logname)
-            ],
-            True,
-            True,
-            ignored_logfile_problems,
-        )
