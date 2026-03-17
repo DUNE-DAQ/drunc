@@ -85,15 +85,15 @@ dunerc_command_list = f"""
 echo pre_boot
 ps -u {getpass.getuser()}
 boot
-echo on_boot
+echo post_boot
 ps -u {getpass.getuser()}
 
 
-echo testing_logs
+echo test_logs
 logs --name unknown
 logs --name root-controller --how-far 5
 logs --name mlt --how-far 5
-echo testing_logs_done
+echo test_logs_done
 
 echo test_wait
 wait 10
@@ -101,28 +101,27 @@ echo test_wait_done
 
 echo pre_restart_mlt
 restart -n mlt
-echo fixture_1
 restart -n root-controller
 wait 5
 echo post_restart_mlt
 
 
-echo pre_kill_mlt
+echo test_kill_mlt
 ps -u {getpass.getuser()}
 kill -n mlt
 wait 2
-echo post_kill_mlt
+echo test_kill_mlt_post
 ps -u {getpass.getuser()}
-echo kill_mlt_done
+echo test_kill_mlt_done
 
 
-echo ps_recovery
+echo test_recovery
 restart -n mlt
 restart -n trg-controller
 wait 5
-echo ps_after_recovery
+echo test_recovery_post
 ps -u {getpass.getuser()}
-echo ps_recovery_done
+echo test_recovery_done
 
 
 flush
@@ -189,17 +188,17 @@ def test_boot(run_dunerc) -> None:
     stdout = run_dunerc.completed_process.stdout
 
     ps_pre_boot = get_ps_table_after_echo(stdout, "pre_boot")
-    ps_on_boot = get_ps_table_after_echo(stdout, "on_boot")
+    ps_post_boot = get_ps_table_after_echo(stdout, "post_boot")
 
     assert not ps_pre_boot, (
         f"Expected ps table before boot to be empty, but found {len(ps_pre_boot)} row(s): "
         + ", ".join(row["friendly_name"] for row in ps_pre_boot)
     )
 
-    assert ps_on_boot, (
+    assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
-    for row in ps_on_boot:
+    for row in ps_post_boot:
         assert UUID_RE.match(row["uuid"]), (
             f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
         )
@@ -360,8 +359,8 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
     """Checks that killing mlt removes it from the subsequent ps table."""
     stdout = run_dunerc.completed_process.stdout
 
-    ps_before_kill = get_ps_table_after_echo(stdout, "pre_kill_mlt")
-    ps_after_kill = get_ps_table_after_echo(stdout, "post_kill_mlt")
+    ps_before_kill = get_ps_table_after_echo(stdout, "test_kill_mlt")
+    ps_after_kill = get_ps_table_after_echo(stdout, "test_kill_mlt_post")
 
     assert_process(ps_before_kill, "mlt", context="before kill")
     assert_process(ps_after_kill, "mlt", context="after kill", expected_present=False)
@@ -370,5 +369,5 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
 def test_mlt_recovers_after_kill(run_dunerc) -> None:
     """Checks that mlt is present again after the recovery restart sequence."""
     stdout = run_dunerc.completed_process.stdout
-    ps_after_recovery = get_ps_table_after_echo(stdout, "ps_after_recovery")
+    ps_after_recovery = get_ps_table_after_echo(stdout, "test_recovery_post")
     assert_process(ps_after_recovery, "mlt", context="after recovery")
