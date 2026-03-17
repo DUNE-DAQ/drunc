@@ -765,17 +765,21 @@ def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     if not ip_or_host:
         return ""
 
+    def to_short_hostname(hostname: str) -> str:
+        # Reverse DNS typically returns FQDNs; table output expects short hostnames.
+        return hostname.rstrip(".").split(".", 1)[0]
+
     try:
         ip_address = ipaddress.ip_address(ip_or_host)
     except ValueError:
-        return ip_or_host
+        return to_short_hostname(ip_or_host)
     # If public IP, try to resolve it.
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)
         try:
             hostname, _, _ = socket.gethostbyaddr(str(ip_address))
-            return hostname
+            return to_short_hostname(hostname)
         except (socket.herror, socket.gaierror, socket.timeout, OSError):
             return ip_or_host
 
