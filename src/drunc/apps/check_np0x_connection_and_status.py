@@ -71,7 +71,8 @@ def ping_host(hostname: str) -> bool:
     Ping a host to check if it is reachable.
 
     This function uses the system's ping command to send a single ICMP echo request to
-    the specified hostname.
+    the specified hostname. Sends a single packet and waits for a response for up to 1
+    second.
 
     Args:
         hostname: The hostname or IP address of the host to ping.
@@ -117,9 +118,11 @@ def load_ssh_config() -> paramiko.SSHConfig:
     ssh_config = paramiko.SSHConfig()
 
     # Open the SSH configuration file and parse it to populate the SSHConfig object.
-    if os.path.exists(config_path):
-        with open(config_path) as f:
-            ssh_config.parse(f)
+    try:
+        ssh_config.parse(open(config_path))
+    except Exception as e:
+        raise Exception(f"Error parsing SSH config file: {e}")
+
     return ssh_config
 
 
@@ -173,7 +176,7 @@ def get_host_info(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
         "ssh_key_status": "Unknown",
         "ssh_key_color": "dim white",
         "cpu_color": "dim white",
-        "uptime": "N/A",
+        "uptime": "",
         "details": "",
     }
 
@@ -237,6 +240,9 @@ def get_host_info(host_alias: str, ssh_config: paramiko.SSHConfig) -> dict:
         result["sshable"] = True
         result["status"] = "UP"
 
+        # If the SSH key status is still "Unknown" after attempting to connect, the key
+        # was verified successfully, the status is be updated to "Verified" and the
+        # color is set to green.
         if result["ssh_key_status"] == "Unknown":
             result["ssh_key_status"] = "Verified"
             result["ssh_key_color"] = "green"
