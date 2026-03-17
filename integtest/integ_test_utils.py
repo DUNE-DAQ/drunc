@@ -1,8 +1,8 @@
 """Shared helpers for drunc integration tests.
 
-This module centralizes commoon patterns used by process-manager integration tests. 
+This module centralizes commoon patterns used by process-manager integration tests.
 Importantly, most of these are defined to help with processing the stdout log outputs
-of the integ tests. 
+of the integ tests.
 
 Common functions include:
 - searching ordered log output for marker lines,
@@ -34,6 +34,17 @@ def find_line_index(
     """Return the first line index at or after `start_idx` matching `predicate`.
 
     Returns `None` when no line matches.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:48:10 UTC] INFO drunc.controller.iface Command wait running for 5 seconds.",
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.controller.iface Command wait ran for 5 seconds.",
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post",
+        ... ]
+        >>> find_line_index(lines, lambda line: "Command wait ran" in line)
+        1
+        >>> find_line_index(lines, lambda line: "test_wait_done" in line) is None
+        True
     """
     return next(
         (idx for idx in range(start_idx, len(lines)) if predicate(lines[idx])),
@@ -48,7 +59,20 @@ def require_line_index(
     error_message: str,
     start_idx: int = 0,
 ) -> int:
-    """Like `find_line_index`, but assert a match exists and return its index."""
+    """Like `find_line_index`, but assert a match exists and return its index.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:47:38 UTC] INFO drunc.echo test_wait",
+        ...     "[2026/03/17 10:47:48 UTC] INFO drunc.echo test_wait_done",
+        ... ]
+        >>> require_line_index(
+        ...     lines,
+        ...     lambda line: "test_wait_done" in line,
+        ...     error_message="Could not find wait completion marker",
+        ... )
+        1
+    """
     line_idx = find_line_index(lines, predicate, start_idx=start_idx)
     assert line_idx is not None, error_message
     return line_idx
@@ -61,7 +85,21 @@ def require_line_containing(
     error_message: str,
     start_idx: int = 0,
 ) -> int:
-    """Assert and return index of the first line containing `text`."""
+    """Assert and return index of the first line containing `text`.
+
+    Example:
+    [2026/03/17] WARNING drunc.process_manager_driver Bad query for logs
+    ────────────────────────────── root-controller logs ──────────────────────────────
+    [2026/03/17] INFO drunc.init_controller Taking control of trg-controller
+
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
+    )
+
+
+    """
     return require_line_index(
         lines,
         lambda line: text in line,
@@ -75,6 +113,14 @@ def require_echo_marker_index(
 ) -> int:
     """Assert and return index of a `drunc.echo` line ending with `echo_marker`.
     This is hardcoded since echo is a specific callable function with its own logger.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post",
+        ...     "Processes running",
+        ... ]
+        >>> require_echo_marker_index(lines, "test_recovery_post")
+        0
     """
     return require_line_index(
         lines,
@@ -91,7 +137,22 @@ def require_pattern_match_index(
     error_message: str,
     start_idx: int = 0,
 ) -> tuple[int, re.Match[str]]:
-    """Assert and return `(index, match)` for first line matching `pattern`."""
+    """Assert and return `(index, match)` for first line matching `pattern`.
+
+    Example:
+        >>> lines = [
+        ...     "[2026/03/17] INFO drunc.iface Command wait running for 10 seconds.",
+        ...     "[2026/03/17] INFO drunc.iface Command wait ran for 10 seconds.",
+        ... ]
+        >>> pattern = re.compile(r"Command wait ran for (\\d+) seconds\\.")
+        >>> line_idx, match = require_pattern_match_index(
+        ...     lines,
+        ...     pattern,
+        ...     error_message="Did not find wait completion log line.",
+        ... )
+        >>> (line_idx, match.group(1))
+        (1, '10')
+    """
     line_idx = require_line_index(
         lines,
         lambda line: pattern.search(line) is not None,
@@ -109,7 +170,19 @@ def require_pattern_match(
     *,
     error_message: str,
 ) -> re.Match[str]:
-    """Assert `pattern` matches `text` and return the `re.Match` object."""
+    """Assert `pattern` matches `text` and return the `re.Match` object.
+
+    Example:
+        >>> line = "[2026/03/17] INFO Command wait ran for 10 seconds."
+        >>> pattern = re.compile(r"Command wait ran for (\\d+) seconds\\.")
+        >>> match = require_pattern_match(
+        ...     line,
+        ...     pattern,
+        ...     error_message="Did not find wait completion log line.",
+        ... )
+        >>> match.group(1)
+        '10'
+    """
     match = pattern.search(text)
     assert match is not None, error_message
     return match
@@ -157,6 +230,17 @@ def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str
     """Return parsed process-table rows found after a specific echo marker.
 
     If no process table is found after the marker, returns an empty list.
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_recovery_post\n"
+        ...     "Processes running\n"
+        ...     "│ minimal │ root-controller │ emmuhamm │ localhost │ f201f9c7-b910-4100-bd78-11765a4d2ee1 │ True │ 0 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_ps_table_after_echo(stdout, "test_recovery_post")
+        >>> table[0]["friendly_name"]
+        'root-controller'
     """
     lines = strip_ansi(stdout).splitlines()
 
@@ -203,8 +287,8 @@ def assert_process_presence(
     ps_table: list[dict[str, str]],
     friendly_name: str,
     *,
-    expected_present: bool,
     context: str,
+    expected_present: bool = True,
 ) -> None:
     """Assert whether a process is present/absent in a process table.
 
@@ -213,6 +297,31 @@ def assert_process_presence(
         friendly_name: Process name to check.
         expected_present: `True` if process should exist, `False` otherwise.
         context: Short phrase appended to error text (e.g. "before kill").
+
+    Example:
+        >>> ps_table = [
+        ...     {
+        ...         "session": "minimal",
+        ...         "friendly_name": "root-controller",
+        ...         "user": "daq",
+        ...         "host": "localhost",
+        ...         "uuid": "f201f9c7-b910-4100-bd78-11765a4d2ee1",
+        ...         "alive": "True",
+        ...         "exit_code": "0",
+        ...     }
+        ... ]
+        >>> assert_process_presence(
+        ...     ps_table,
+        ...     "root-controller",
+        ...     context="before restart",
+        ...     expected_present=True,
+        ... )
+        >>> assert_process_presence(
+        ...     ps_table,
+        ...     "mlt",
+        ...     context="after restart",
+        ...     expected_present=False,
+        ... )
     """
     matching_rows = get_rows_for_friendly_name(ps_table, friendly_name)
 
@@ -224,23 +333,4 @@ def assert_process_presence(
 
     assert not matching_rows, (
         f"Expected '{friendly_name}' to be absent from ps table {context}, but it is still present."
-    )
-
-
-def assert_process(
-    ps_table: list[dict[str, str]],
-    friendly_name: str,
-    *,
-    context: str,
-    expected_present: bool = True,
-) -> None:
-    """Convenience wrapper around `assert_process_presence`.
-
-    By default, asserts that the process is present.
-    """
-    assert_process_presence(
-        ps_table,
-        friendly_name,
-        expected_present=expected_present,
-        context=context,
     )

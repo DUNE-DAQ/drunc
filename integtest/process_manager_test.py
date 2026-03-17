@@ -6,7 +6,7 @@ from datetime import datetime
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
 from integ_test_utils import (
-    assert_process,
+    assert_process_presence,
     get_ps_table_after_echo,
     require_echo_marker_index,
     require_line_containing,
@@ -362,12 +362,14 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
     ps_before_kill = get_ps_table_after_echo(stdout, "test_kill_mlt")
     ps_after_kill = get_ps_table_after_echo(stdout, "test_kill_mlt_post")
 
-    assert_process(ps_before_kill, "mlt", context="before kill")
-    assert_process(ps_after_kill, "mlt", context="after kill", expected_present=False)
+    assert_process_presence(ps_before_kill, "mlt", context="before kill")
+    assert_process_presence(
+        ps_after_kill, "mlt", context="after kill", expected_present=False
+    )
 
 
 def test_mlt_recovers_after_kill(run_dunerc) -> None:
     """Checks that mlt is present again after the recovery restart sequence."""
     stdout = run_dunerc.completed_process.stdout
     ps_after_recovery = get_ps_table_after_echo(stdout, "test_recovery_post")
-    assert_process(ps_after_recovery, "mlt", context="after recovery")
+    assert_process_presence(ps_after_recovery, "mlt", context="after recovery")
