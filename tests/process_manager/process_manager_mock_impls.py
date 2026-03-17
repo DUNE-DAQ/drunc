@@ -99,3 +99,6 @@ class ConcreteProcessManager(ProcessManager):
             lines=[],
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
+
+    def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        return self._not_implemented_response()
