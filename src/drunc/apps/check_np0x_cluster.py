@@ -39,7 +39,6 @@ NP0X_CLUSTER_HOSTS = sorted(
         "np04-srv-029",
         "np04-srv-030",
         "np04-srv-031",
-        "np04-srv-032",
     ]
 )
 
