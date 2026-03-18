@@ -151,44 +151,69 @@ def dummy_boot(
 
 
 @click.command("terminate")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
-def terminate(obj: ProcessManagerContext) -> None:
+def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug("Terminating")
     result = obj.get_driver("process_manager").terminate()
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False)
+        tabulate_process_instance_list(result, "Terminated process", False, width=width)
     )  # rich tables require console printing
     obj.delete_driver("controller")
 
 
 @click.command("kill")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @add_query_options(at_least_one=True)
 @click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
     result = obj.get_driver("process_manager").kill(query)
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Killed process", False)
+        tabulate_process_instance_list(result, "Killed process", False, width=width)
     )  # rich tables require console printing
 
 
 @click.command("flush")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @click.pass_obj
-def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def flush(
+    obj: ProcessManagerContext,
+    query: ProcessQuery,
+    width: int | None,
+) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
     result = obj.get_driver("process_manager").flush(query)
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Flushed process", False)
+        tabulate_process_instance_list(result, "Flushed process", False, width=width)
     )  # rich tables require console printing
 
 
