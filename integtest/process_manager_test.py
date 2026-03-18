@@ -83,10 +83,10 @@ confgen_arguments = {"MinimalSystem": conf_dict}
 dunerc_command_list = f"""
 
 echo pre_boot
-ps -u {getpass.getuser()}
+ps -u {getpass.getuser()} -w 180
 boot
 echo post_boot
-ps -u {getpass.getuser()}
+ps -u {getpass.getuser()} -w 180
 
 
 echo test_logs
@@ -107,11 +107,11 @@ echo post_restart_mlt
 
 
 echo test_kill_mlt
-ps -u {getpass.getuser()}
+ps -u {getpass.getuser()} -w 180
 kill -n mlt
 wait 2
 echo test_kill_mlt_post
-ps -u {getpass.getuser()}
+ps -u {getpass.getuser()} -w 180
 echo test_kill_mlt_done
 
 
@@ -120,7 +120,7 @@ restart -n mlt
 restart -n trg-controller
 wait 5
 echo test_recovery_post
-ps -u {getpass.getuser()}
+ps -u {getpass.getuser()} -w 180
 echo test_recovery_done
 
 
@@ -132,7 +132,6 @@ terminate
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-    r"|^[0-9a-fA-F]{8}-[-0-9a-fA-F]*\u2026"  # truncated by Rich table column width
 )
 
 
