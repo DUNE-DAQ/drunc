@@ -260,8 +260,20 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     default=False,
     help="Whether to have a long output",
 )
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
-def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> None:
+def ps(
+    obj: ProcessManagerContext,
+    query: ProcessQuery,
+    long_format: bool,
+    width: int | None,
+) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
@@ -269,6 +281,8 @@ def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> No
         return
     obj.print(
         tabulate_process_instance_list(
-            results, title="Processes running", long=long_format
-        )
+            results, title="Processes running", long=long_format, width=width
+        ),
+        overflow="fold",
+        soft_wrap=True,
     )
