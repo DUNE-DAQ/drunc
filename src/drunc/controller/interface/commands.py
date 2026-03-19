@@ -244,21 +244,6 @@ def who_am_i(obj: ControllerContext) -> None:
     log.info(obj.get_token().user_name)
 
 
-# click_shell/_cmd.py, line 23. identchars only accepts ascii letters + digits + _
-# Can't really be used by the integ test tho..
-@click.command(
-    "comment",
-    hidden=True,
-    context_settings=dict(
-        ignore_unknown_options=True,
-        allow_extra_args=True,
-    ),
-)
-def comment_handler():
-    """Ignore this line"""
-    pass
-
-
 @click.command("echo")
 @click.argument("text", required=False)
 @click.pass_obj

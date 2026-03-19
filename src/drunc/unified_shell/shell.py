@@ -18,7 +18,6 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
-    comment_handler,
     connect,
     disconnect,
     echo,
@@ -384,7 +383,6 @@ def unified_shell(
         surrender_control,
         who_am_i,
         echo,
-        comment_handler,
         who_is_in_charge,
         include,
         exclude,
