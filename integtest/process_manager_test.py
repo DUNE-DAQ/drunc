@@ -53,7 +53,7 @@ conf_dict.session = "minimal"
 conf_dict.tpg_enabled = False
 
 # For testing, allow drunc to manage ConnectivityService (default is False, integrationtest manages Connectivity Service)
-# conf_dict.drunc_connsvc = True
+conf_dict.drunc_connsvc = True
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
@@ -80,6 +80,10 @@ confgen_arguments = {"MinimalSystem": conf_dict}
 # NOTE THAT WE HAVE NOT TESTED FLUSH BECAUSE IT IS BROKEN
 # see #821
 
+
+# The commands mostly come from the msqt, with a few minor changes
+# The entire format is a standard that is  basically copied over from the
+#  typical msqt tests, so they bear no direct effect on the scope of this test.
 dunerc_command_list = f"""
 
 echo pre_boot

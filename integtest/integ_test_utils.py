@@ -1,6 +1,6 @@
 """Shared helpers for drunc integration tests.
 
-This module centralizes commoon patterns used by process-manager integration tests.
+This module centralizes common patterns used by process-manager integration tests.
 Importantly, most of these are defined to help with processing the stdout log outputs
 of the integ tests.
 
