@@ -1,6 +1,7 @@
 import getpass
 import os
 import re
+from collections.abc import Callable
 from datetime import datetime
 
 import integrationtest.data_classes as data_classes
@@ -84,12 +85,15 @@ echo testing_logs
 logs --name unknown
 logs --name root-controller --how-far 5
 logs --name mlt --how-far 5
+echo testing_logs_done
 
 echo test_wait
 wait 10
+echo test_wait_done
 
 echo pre_restart_mlt
 restart -n mlt
+echo fixture_1
 restart -n root-controller
 wait 5
 echo post_restart_mlt
@@ -101,14 +105,17 @@ kill -n mlt
 wait 2
 echo post_kill_mlt
 ps -u {getpass.getuser()}
+echo kill_mlt_done
 
 
+echo ps_recovery
 restart -n mlt
 restart -n trg-controller
 wait 5
 
 echo ps_after_recovery
 ps -u {getpass.getuser()}
+echo ps_recovery_done
 
 
 flush
@@ -126,6 +133,58 @@ ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
 
 def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
+
+
+def find_line_index(
+    lines: list[str],
+    predicate: Callable[[str], bool],
+    *,
+    start_idx: int = 0,
+) -> int | None:
+    return next(
+        (idx for idx in range(start_idx, len(lines)) if predicate(lines[idx])),
+        None,
+    )
+
+
+def require_line_index(
+    lines: list[str],
+    predicate: Callable[[str], bool],
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> int:
+    line_idx = find_line_index(lines, predicate, start_idx=start_idx)
+    assert line_idx is not None, error_message
+    return line_idx
+
+
+def require_line_containing(
+    lines: list[str],
+    text: str,
+    *,
+    error_message: str,
+    start_idx: int = 0,
+) -> int:
+    return require_line_index(
+        lines,
+        lambda line: text in line,
+        error_message=error_message,
+        start_idx=start_idx,
+    )
+
+
+def require_echo_marker_index(
+    lines: list[str], echo_marker: str, *, start_idx: int = 0
+) -> int:
+    return require_line_index(
+        lines,
+        lambda line: "drunc.echo" in line and line.rstrip().endswith(echo_marker),
+        error_message=(
+            f"Could not find drunc.echo marker '{echo_marker}' in stdout."
+        ),
+        start_idx=start_idx,
+    )
 
 
 def _parse_ps_table_from_index(
@@ -164,25 +223,12 @@ def _parse_ps_table_from_index(
 def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
     lines = strip_ansi(stdout).splitlines()
 
-    echo_idx = next(
-        (
-            idx
-            for idx, line in enumerate(lines)
-            if "drunc.echo" in line and line.rstrip().endswith(echo_marker)
-        ),
-        None,
-    )
-    assert echo_idx is not None, (
-        f"Could not find drunc.echo marker '{echo_marker}' in stdout."
-    )
+    echo_idx = require_echo_marker_index(lines, echo_marker)
 
-    table_start_idx = next(
-        (
-            idx
-            for idx in range(echo_idx + 1, len(lines))
-            if "Processes running" in lines[idx]
-        ),
-        None,
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: "Processes running" in line,
+        start_idx=echo_idx + 1,
     )
     if table_start_idx is None:
         return []
@@ -246,20 +292,15 @@ def test_root_controller_logs(run_dunerc) -> None:
     lines = stdout.splitlines()
 
     # 1) Find the header/footer lines
-    header_idx = next(
-        (i for i, line in enumerate(lines) if "root-controller logs" in line),
-        None,
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
     )
-    footer_idx = next(
-        (i for i, line in enumerate(lines) if "root-controller end" in line),
-        None,
-    )
-
-    assert header_idx is not None, (
-        "Did not find the 'root-controller logs' header line in stdout."
-    )
-    assert footer_idx is not None, (
-        "Did not find the 'root-controller end' footer line in stdout."
+    footer_idx = require_line_containing(
+        lines,
+        "root-controller end",
+        error_message="Did not find the 'root-controller end' footer line in stdout.",
     )
     assert footer_idx > header_idx, "Footer appears before header in stdout."
 
@@ -284,49 +325,34 @@ def test_root_controller_logs(run_dunerc) -> None:
     )
 
 
+#! This you need to take a look at more
 def test_wait_command_duration_from_logs(run_dunerc) -> None:
     """Checks that the wait command logs the expected duration and elapsed time."""
     stdout = run_dunerc.completed_process.stdout
     lines = strip_ansi(stdout).splitlines()
 
-    echo_idx = next(
-        (
-            idx
-            for idx, line in enumerate(lines)
-            if "drunc.echo" in line and line.rstrip().endswith("test_wait")
-        ),
-        None,
-    )
-    assert echo_idx is not None, (
-        "Could not find drunc.echo marker 'test_wait' in stdout."
-    )
+    echo_idx = require_echo_marker_index(lines, "test_wait")
 
     running_pattern = re.compile(r"Command wait running for (\d+) seconds\.")
     ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
     timestamp_pattern = re.compile(r"^\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
 
-    running_idx = next(
-        (
-            idx
-            for idx in range(echo_idx + 1, len(lines))
-            if running_pattern.search(lines[idx])
+    running_idx = require_line_index(
+        lines,
+        lambda line: running_pattern.search(line) is not None,
+        error_message=(
+            "Did not find 'Command wait running for ... seconds.' after test_wait marker."
         ),
-        None,
-    )
-    assert running_idx is not None, (
-        "Did not find 'Command wait running for ... seconds.' after test_wait marker."
+        start_idx=echo_idx + 1,
     )
 
-    ran_idx = next(
-        (
-            idx
-            for idx in range(running_idx + 1, len(lines))
-            if ran_pattern.search(lines[idx])
+    ran_idx = require_line_index(
+        lines,
+        lambda line: ran_pattern.search(line) is not None,
+        error_message=(
+            "Did not find 'Command wait ran for ... seconds.' after wait start log."
         ),
-        None,
-    )
-    assert ran_idx is not None, (
-        "Did not find 'Command wait ran for ... seconds.' after wait start log."
+        start_idx=running_idx + 1,
     )
 
     running_match = running_pattern.search(lines[running_idx])
@@ -360,35 +386,16 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     )
 
 
+#! This you need to take a look at more
 def test_restart_mlt_logs(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
     stdout = run_dunerc.completed_process.stdout
     lines = strip_ansi(stdout).splitlines()
 
-    echo_idx = next(
-        (
-            idx
-            for idx, line in enumerate(lines)
-            if "drunc.echo" in line and line.rstrip().endswith("pre_restart_mlt")
-        ),
-        None,
-    )
-    assert echo_idx is not None, (
-        "Could not find drunc.echo marker 'pre_restart_mlt' in stdout."
-    )
+    echo_idx = require_echo_marker_index(lines, "pre_restart_mlt")
 
-    post_restart_idx = next(
-        (
-            idx
-            for idx, line in enumerate(lines)
-            if idx > echo_idx
-            and "drunc.echo" in line
-            and line.rstrip().endswith("post_restart_mlt")
-        ),
-        None,
-    )
-    assert post_restart_idx is not None, (
-        "Could not find drunc.echo marker 'post_restart_mlt' in stdout."
+    post_restart_idx = require_echo_marker_index(
+        lines, "post_restart_mlt", start_idx=echo_idx + 1
     )
 
     restart_lines = lines[echo_idx + 1 : post_restart_idx]
