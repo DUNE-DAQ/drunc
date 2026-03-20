@@ -407,17 +407,26 @@ class SSHProcessManager(ProcessManager):
         with self.boot_request_lock:
             ret = []
 
+            # check from alive/active processes in the lifetime manager and from archived exit codes for dead processes
+            available_uuids = (
+                list(self._get_active_process_keys())
+                + list(self.archived_exit_codes.keys())
+                if hasattr(self, "archived_exit_codes")
+                else []
+            )
+
             process_uuids = ProcessManager._match_processes_against_query(
                 query=query,
-                available_uuids=list(self._get_active_process_keys()),
+                available_uuids=available_uuids,
                 boot_request_dict=self.boot_request,
                 order_by="random",
             )
 
             # Iterate through all processes matching the query
             for proc_uuid in process_uuids:
-                # Handle case where process UUID exists in boot_request but not in SSH manager
-                # This can occur if process failed to start or has been cleaned up
+                # Handle case where process UUID does not exist in the boot_request but is active in SSH manager
+                # This can occur if process has been cleaned up in the process manager but is still alive in the
+                # lifetime manager
                 if proc_uuid not in self.boot_request:
                     pu = ProcessUUID(uuid=proc_uuid)
                     pi = ProcessInstance(
@@ -430,28 +439,21 @@ class SSHProcessManager(ProcessManager):
                     ret += [pi]
                     continue
 
-                # Query SSH manager for current process status
-                alive = self.ssh_lifetime_manager.is_process_alive(proc_uuid)
+                exit_code = self.archived_exit_codes.get(proc_uuid, None)
 
-                # Retrieve archived exit code if process is dead
-                return_code = (
-                    self.archived_exit_codes.get(proc_uuid, None) if not alive else None
-                )
-                if not alive:
-                    self.log.debug(
-                        f"Process {proc_uuid} is dead with exit code: {return_code}"
+                if exit_code is not None:
+                    pi = self._build_process_instance(
+                        uuid=proc_uuid,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        return_code=exit_code,
+                    )
+                else:
+                    pi = self._build_process_instance(
+                        uuid=proc_uuid,
+                        status_code=ProcessInstance.StatusCode.RUNNING,
+                        return_code=None,
                     )
 
-                # Build ProcessInstance with current status
-                pi = self._build_process_instance(
-                    uuid=proc_uuid,
-                    status_code=(
-                        ProcessInstance.StatusCode.RUNNING
-                        if alive
-                        else ProcessInstance.StatusCode.DEAD
-                    ),
-                    return_code=return_code,
-                )
                 ret += [pi]
 
             return ProcessInstanceList(
@@ -501,6 +503,7 @@ class SSHProcessManager(ProcessManager):
         # Remove the application from the list of dead applications
         self.remove_process_from_expected_dead_processes(uuid)
 
+        del self.archived_exit_codes[uuid]
         del uuid
         del same_uuid_br
         del same_uuid

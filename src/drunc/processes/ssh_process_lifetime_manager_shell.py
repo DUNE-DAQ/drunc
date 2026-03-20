@@ -975,7 +975,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self,
         uuid: str,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
-    ) -> Optional[int]:
+    ) -> int | None:
         """
         Kill a remote process and clean up all associated resources.
 
@@ -1064,6 +1064,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         except Exception as e:
             self.log.error(f"Error terminating remote process {uuid}: {e}")
             return None
+
+        return None
 
     def _cleanup_process_resources(self, uuid: str) -> None:
         """Remove all resources associated with a process UUID."""
