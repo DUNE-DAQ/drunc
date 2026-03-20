@@ -408,12 +408,17 @@ class SSHProcessManager(ProcessManager):
             ret = []
 
             # check from alive/active processes in the lifetime manager and from archived exit codes for dead processes
-            available_uuids = (
-                list(self._get_active_process_keys())
-                + list(self.archived_exit_codes.keys())
+            dead_processes = (
+                list(self.archived_exit_codes.keys())
                 if hasattr(self, "archived_exit_codes")
                 else []
             )
+            alive_processes = [
+                uuid
+                for uuid in self._get_active_process_keys()
+                if self.ssh_lifetime_manager.is_process_alive(uuid) == True
+            ]
+            available_uuids = alive_processes + dead_processes
 
             process_uuids = ProcessManager._match_processes_against_query(
                 query=query,
