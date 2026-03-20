@@ -404,21 +404,38 @@ class SSHProcessManager(ProcessManager):
         Returns:
             ProcessInstanceList containing status information for matching processes
         """
+        return self.__ps_impl(query=query, show_dead=False)
+
+    def __ps_impl(self, query: ProcessQuery, show_dead: bool) -> ProcessInstanceList:
+        """
+        Retrieve process status information for processes matching the query.
+        Returns process details including running status, exit codes, and metadata
+        for all processes that match the provided query criteria.
+
+        Args:
+            query: ProcessQuery object containing process selection criteria
+
+        Returns:
+            ProcessInstanceList containing status information for matching processes
+        """
         with self.boot_request_lock:
             ret = []
 
             # check from alive/active processes in the lifetime manager and from archived exit codes for dead processes
-            dead_processes = (
-                list(self.archived_exit_codes.keys())
-                if hasattr(self, "archived_exit_codes")
-                else []
-            )
-            alive_processes = [
-                uuid
-                for uuid in self._get_active_process_keys()
-                if self.ssh_lifetime_manager.is_process_alive(uuid) == True
-            ]
-            available_uuids = alive_processes + dead_processes
+            if show_dead:
+                dead_processes = (
+                    list(self.archived_exit_codes.keys())
+                    if hasattr(self, "archived_exit_codes")
+                    else []
+                )
+                alive_processes = [
+                    uuid
+                    for uuid in self._get_active_process_keys()
+                    if self.ssh_lifetime_manager.is_process_alive(uuid) == True
+                ]
+                available_uuids = alive_processes + dead_processes
+            else:
+                available_uuids = self._get_active_process_keys()
 
             process_uuids = ProcessManager._match_processes_against_query(
                 query=query,
