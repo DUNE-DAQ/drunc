@@ -55,6 +55,14 @@ class DruncServerSideError(
         return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
 
 
+class DruncBatchShellArgError(DruncException):
+    # Custom error for batch shell args
+    def __init__(self, msg) -> None:
+        """C'tor"""
+        err_msg = f"Caught exception on bad arguments for the batch shell: {msg}"
+        super().__init__(err_msg)
+
+
 class DruncNotImplementedException(DruncException):
     grpc_error_code = code_pb2.UNIMPLEMENTED
     pass

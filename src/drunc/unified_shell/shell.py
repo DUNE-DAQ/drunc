@@ -34,7 +34,7 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.exceptions import DruncSetupException
+from drunc.exceptions import DruncBatchShellArgError, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
@@ -397,6 +397,62 @@ def unified_shell(
         ctx.obj.running_mode = UnifiedShellMode.BATCH
         ctx.command.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
+
+    def split_chain(
+        chain_args: list[str], command_names: set[str]
+    ) -> list[tuple[str, list[str]]]:
+        """Partition command-line arguments into individual command invocations.
+        Args:
+            chain_args (list): Flattened list of all command tokens and arguments.
+            command_names (set): Set of valid command names to use as boundaries.
+
+        Returns:
+            list[tuple]: List of (command_name, command_args) tuples representing
+                individual command invocations in sequence order.
+
+        Raises:
+            click.UsageError: If a token in chain_args doesn't match any known
+                command name when expected to be a command.
+        """
+        parts = []
+        i = 0
+        while i < len(chain_args):
+            cmd = chain_args[i]
+            if cmd not in command_names:
+                raise click.UsageError(f"No such command '{cmd}'")
+            i += 1
+            cmd_args = []
+            while i < len(chain_args) and chain_args[i] not in command_names:
+                cmd_args.append(chain_args[i])
+                i += 1
+            parts.append((cmd, cmd_args))
+        return parts
+
+    def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
+        """Validate syntax and arguments for all commands in a chain.
+        Args:
+            ctx: Click context object containing the command registry.
+            chain_args (list): Flattened list of tokens from extract_chain_tokens.
+        """
+        command_names = set(ctx.command.commands.keys())
+
+        try:
+            chained_cmds = split_chain(chain_args, command_names)
+        except click.UsageError as e:
+            raise DruncBatchShellArgError(e) from e
+
+        for cmd_name, cmd_args in chained_cmds:
+            sub_cmd = ctx.command.commands[cmd_name]
+            try:
+                sub_cmd.make_context(
+                    cmd_name, cmd_args, parent=ctx, resilient_parsing=False
+                )
+            except click.UsageError as e:
+                raise DruncBatchShellArgError(e) from e
+
+    parser = ctx.command.make_parser(ctx)
+    _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
+    validate_chain(ctx, extract_batch_args)
 
     # If start-shell is in the arguments, set semibatch mode
     if "start-shell" in sys.argv:
