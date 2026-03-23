@@ -547,7 +547,7 @@ class SSHProcessManager(ProcessManager):
                 order_by="leaf_first",
             )
 
-            if query.crash:
+            if hasattr(query, "crash") and query.crash:
                 return self._crash_processes(uuids)
 
             return self.kill_processes(uuids)
