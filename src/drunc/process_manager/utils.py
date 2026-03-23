@@ -49,6 +49,7 @@ def generate_process_query(
             names=name,
             user=user,
             uuids=uuids,
+            crash=kwargs.pop("crash", False),
         )
         # print(query)
         return ctx.invoke(f, query=query, **kwargs)

@@ -515,12 +515,15 @@ class SSHProcessManager(ProcessManager):
         Kill processes matching the query.
 
         Terminates all processes that match the provided query criteria.
+        If query.crash is True, sends SIGKILL without any cleanup to simulate
+        an unexpected process crash.
 
         Args:
-            query: ProcessQuery object containing process selection criteria
+            query: ProcessQuery object containing process selection criteria.
+                   Set query.crash=True to simulate a crash instead of a clean kill.
 
         Returns:
-            ProcessInstanceList containing status of killed processes
+            ProcessInstanceList containing status of killed/crashed processes
         """
         self.log.info(f"{self.name} killing {query.names} in session {self.session}")
 
@@ -531,6 +534,10 @@ class SSHProcessManager(ProcessManager):
                 boot_request_dict=self.boot_request,
                 order_by="leaf_first",
             )
+
+            if query.crash:
+                return self._crash_processes(uuids)
+
             return self.kill_processes(uuids)
 
         self.log.info("No known process to kill")
@@ -538,6 +545,44 @@ class SSHProcessManager(ProcessManager):
             name=self.name,
             token=None,
             values=[],
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+    def _crash_processes(self, uuids: list) -> ProcessInstanceList:
+        """
+        Simulate crashes for processes identified by their UUIDs.
+
+        Sends SIGKILL to each process via the lifetime manager's crash_process
+        method without performing any cleanup. This deliberately avoids marking
+        processes as expected-dead so that the subsequent unexpected process
+        deaths trigger crash-recovery handling.
+
+        Args:
+            uuids: List of process UUIDs to crash
+
+        Returns:
+            ProcessInstanceList containing the ProcessInstances for each
+            crashed process with DEAD status and no return code.
+        """
+        for this_uuid in uuids:
+            self.log.info(
+                f"Simulating crash of process {this_uuid} (sending SIGKILL, no cleanup)."
+            )
+            self.ssh_lifetime_manager.crash_process(this_uuid)
+
+        ret = [
+            self._build_process_instance(
+                uuid=uuid,
+                status_code=ProcessInstance.StatusCode.DEAD,
+                return_code=None,
+            )
+            for uuid in uuids
+        ]
+
+        return ProcessInstanceList(
+            name=self.name,
+            token=None,
+            values=ret,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 

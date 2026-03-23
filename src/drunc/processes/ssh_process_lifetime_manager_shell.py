@@ -1067,6 +1067,41 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return None
 
+    def crash_process(self, uuid: str) -> None:
+        """
+        Simulate a process crash by sending SIGKILL without performing any cleanup.
+
+        Sends SIGKILL to the remote process identified by uuid but deliberately
+        skips all cleanup steps (metadata file removal, internal tracking cleanup,
+        SSH client termination). This leaves the process manager in the same state
+        as if the process had crashed unexpectedly, allowing crash-recovery logic
+        to be exercised in tests.
+
+        Args:
+            uuid: Process UUID to crash
+        """
+        if uuid not in self.process_store:
+            self.log.warning(f"crash_process called for unknown UUID {uuid}")
+            return
+
+        process_info = self.process_store[uuid]
+        hostname = process_info["hostname"]
+        user = process_info["user"]
+
+        metadata = self.metadata.get(uuid, None)
+        if metadata is None or metadata.pid is None:
+            self.log.warning(
+                f"No remote PID for {uuid}, cannot send SIGKILL to simulate crash."
+            )
+            return
+
+        remote_pid = metadata.pid
+        self.log.debug(
+            f"Simulating crash of process {uuid} (PID {remote_pid}): "
+            f"sending SIGKILL without cleanup."
+        )
+        self._send_remote_signal(hostname, user, remote_pid, "KILL")
+
     def _cleanup_process_resources(self, uuid: str) -> None:
         """Remove all resources associated with a process UUID."""
         with self.lock:
