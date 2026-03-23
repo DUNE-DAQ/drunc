@@ -95,6 +95,7 @@ class SSHProcessManager(ProcessManager):
             status_code=status_code,
             return_code=return_code,
             uuid=pu,
+            remote_pid="not available",
         )
 
     def _get_process_timeouts(self, uuids: List[str]) -> dict[str, float]:
@@ -430,6 +431,7 @@ class SSHProcessManager(ProcessManager):
                         status_code=ProcessInstance.StatusCode.DEAD,
                         return_code=None,
                         uuid=pu,
+                        remote_pid="not available",
                     )
                     remote_pid_result = self.ssh_lifetime_manager.get_remote_pid(
                         proc_uuid

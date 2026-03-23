@@ -154,7 +154,7 @@ def tabulate_process_instance_list(
                 row += [
                     process.remote_pid
                     if process.HasField("remote_pid")
-                    else "no metadata"
+                    else "Not available"
                 ]
             if long:
                 executables = [

@@ -34,9 +34,8 @@ def _make_process_instance(
         status_code=ProcessInstance.StatusCode.RUNNING,
         return_code=0,
         uuid=ProcessUUID(uuid=uuid),
+        remote_pid=remote_pid if remote_pid is not None else None,
     )
-    if remote_pid is not None:
-        pi.remote_pid = remote_pid
     return pi
 
 
