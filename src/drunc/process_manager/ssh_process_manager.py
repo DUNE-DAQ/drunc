@@ -431,6 +431,13 @@ class SSHProcessManager(ProcessManager):
                         return_code=None,
                         uuid=pu,
                     )
+                    remote_pid_result = self.ssh_lifetime_manager.get_remote_pid(
+                        proc_uuid
+                    )
+                    if remote_pid_result.successful:
+                        pi.remote_pid = str(remote_pid_result.pid)
+                    else:
+                        pi.remote_pid = remote_pid_result.reason
                     ret += [pi]
                     continue
 
@@ -449,6 +456,11 @@ class SSHProcessManager(ProcessManager):
                         return_code=None,
                     )
 
+                remote_pid_result = self.ssh_lifetime_manager.get_remote_pid(proc_uuid)
+                if remote_pid_result.successful:
+                    pi.remote_pid = str(remote_pid_result.pid)
+                else:
+                    pi.remote_pid = remote_pid_result.reason
                 ret += [pi]
 
             return ProcessInstanceList(

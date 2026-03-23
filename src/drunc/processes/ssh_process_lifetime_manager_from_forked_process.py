@@ -16,7 +16,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
-from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager import (
+    ProcessLifetimeManager,
+    RemotePidResult,
+)
 from drunc.processes.ssh_process_lifetime_manager_shell import (
     SSHProcessLifetimeManagerShell,
 )
@@ -654,3 +657,20 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             RuntimeError: If the SSH connection validation fails.
         """
         self._call("validate_host_connection", host, auth_method, user)
+
+    def get_remote_pid(self, uuid: str) -> RemotePidResult:
+        """
+        Retrieve the remote PID for a managed process via the child process.
+
+        Delegates to the underlying SSHProcessLifetimeManagerShell running in the
+        forked worker process. The returned RemotePidResult dataclass is picklable
+        and transmitted across the process boundary without special handling.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason`` explaining
+            why the PID is unavailable (e.g. metadata not yet written).
+        """
+        return self._call("get_remote_pid", uuid)

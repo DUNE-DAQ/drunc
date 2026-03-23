@@ -6,11 +6,28 @@ including process startup, monitoring, termination, and output capture.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.processes.connection_utils import wait_for
+
+
+@dataclass
+class RemotePidResult:
+    """
+    Result of a remote PID query.
+
+    Either ``pid`` is set (success) or ``reason`` explains why it is unavailable.
+    """
+
+    pid: Optional[int] = None
+    reason: Optional[str] = None
+
+    @property
+    def successful(self) -> bool:
+        return self.pid is not None
 
 
 class ProcessLifetimeManager(ABC):
@@ -285,5 +302,20 @@ class ProcessLifetimeManager(ABC):
 
         Raises:
             RuntimeError: If SSH connection or command execution fails
+        """
+        pass
+
+    @abstractmethod
+    def get_remote_pid(self, uuid: str) -> "RemotePidResult":
+        """
+        Return the remote PID for the process, if available.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason`` describing
+            why the PID is unavailable (e.g. ``"no metadata"`` when the metadata
+            file has not yet been written by the remote shell wrapper).
         """
         pass

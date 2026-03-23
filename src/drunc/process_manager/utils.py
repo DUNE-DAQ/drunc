@@ -128,10 +128,17 @@ def tabulate_process_instance_list(
     t.add_column("uuid")
     t.add_column("alive")
     t.add_column("exit-code")
+
+    sorted_pil = order_process_by_name(pil.values)
+
+    show_remote_pid = long and any(
+        process.HasField("remote_pid") for process in sorted_pil
+    )
+    if show_remote_pid:
+        t.add_column("remote-pid")
     if long:
         t.add_column("executable")
 
-    sorted_pil = order_process_by_name(pil.values)
     tree_str = make_tree(sorted_pil)
     try:
         for process, line in zip(sorted_pil, tree_str):
@@ -142,12 +149,18 @@ def tabulate_process_instance_list(
                 else "[danger]False[/danger]"
             )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
+            row += [alive, f"{process.return_code}"]
+            if show_remote_pid:
+                row += [
+                    process.remote_pid
+                    if process.HasField("remote_pid")
+                    else "no metadata"
+                ]
             if long:
                 executables = [
                     e.exec for e in process.process_description.executable_and_arguments
                 ]
                 row += ["; ".join(executables)]
-            row += [alive, f"{process.return_code}"]
             t.add_row(*row)
     except TypeError:
         raise DruncCommandException(

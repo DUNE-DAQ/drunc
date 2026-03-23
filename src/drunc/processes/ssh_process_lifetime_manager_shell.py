@@ -19,7 +19,10 @@ from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.utils import on_parent_exit
 from drunc.processes.connection_utils import wait_for
 from drunc.processes.process_metadata import ProcessMetadata
-from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager import (
+    ProcessLifetimeManager,
+    RemotePidResult,
+)
 from drunc.utils.utils import get_logger
 
 
@@ -272,6 +275,24 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         """
         with self.lock:
             return list(self.process_store.keys())
+
+    def get_remote_pid(self, uuid: str) -> RemotePidResult:
+        """
+        Return the remote PID for the process identified by *uuid*.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason``
+            set to ``"no metadata"`` when the metadata file has not yet
+            been written or could not be read.
+        """
+        with self.lock:
+            metadata = self.metadata.get(uuid)
+        if metadata is None or metadata.pid is None:
+            return RemotePidResult(reason="no metadata")
+        return RemotePidResult(pid=metadata.pid)
 
     def start_process(self, uuid: str, boot_request: BootRequest) -> None:
         """
