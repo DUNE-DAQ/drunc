@@ -7,6 +7,7 @@ import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
 from integ_test_utils import (
     assert_process_presence,
+    get_column_for_friendly_name,
     get_ps_table_after_echo,
     require_echo_marker_index,
     require_line_containing,
@@ -128,7 +129,18 @@ ps -u {getpass.getuser()} -w 180
 echo test_recovery_done
 
 
+echo test_flush
+ps -u {getpass.getuser()} -w 180
+kill -n mlt --crash 
+wait 5
+echo after_crash
+ps -u {getpass.getuser()} -w 180
 flush
+echo after_flush
+ps -u {getpass.getuser()} -w 180
+echo test_flush_done
+
+
 terminate
 
 """.split()
@@ -376,3 +388,21 @@ def test_mlt_recovers_after_kill(run_dunerc) -> None:
     stdout = run_dunerc.completed_process.stdout
     ps_after_recovery = get_ps_table_after_echo(stdout, "test_recovery_post")
     assert_process_presence(ps_after_recovery, "mlt", context="after recovery")
+
+
+def test_flush(run_dunerc) -> None:
+    """Checks that flush work by crashing mlt, seeing that the process exists,
+    and then flushing to show its gone"""
+
+    stdout = run_dunerc.completed_process.stdout
+    ps_initial = get_ps_table_after_echo(stdout, "test_flush")
+    assert_process_presence(ps_initial, "mlt", context="before crash")
+
+    ps_after_crash = get_ps_table_after_echo(stdout, "after_crash")
+    mlt_alive = get_column_for_friendly_name(ps_after_crash, "mlt", "alive")
+    assert mlt_alive == "False", "The mlt should have crashed"
+
+    ps_after_flash = get_ps_table_after_echo(stdout, "after_flush")
+    assert_process_presence(
+        ps_after_flash, "mlt", context="after crash", expected_present=False
+    )

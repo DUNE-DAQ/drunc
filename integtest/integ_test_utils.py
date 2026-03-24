@@ -257,17 +257,17 @@ def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str
     return _parse_ps_table_from_index(lines, table_start_idx)
 
 
-def get_uuid_for_friendly_name(
-    ps_table: list[dict[str, str]], friendly_name: str
+def get_column_for_friendly_name(
+    ps_table: list[dict[str, str]], friendly_name: str, column: str
 ) -> str:
-    """Return UUID for `friendly_name` from a parsed process table.
+    """Return the column for `friendly_name` from a parsed process table.
 
     Raises:
         AssertionError: if the friendly name is absent.
     """
     for row in ps_table:
         if row["friendly_name"].strip() == friendly_name:
-            return row["uuid"]
+            return row[column]
 
     available_names = ", ".join(row["friendly_name"].strip() for row in ps_table)
     raise AssertionError(
