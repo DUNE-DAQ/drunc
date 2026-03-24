@@ -595,17 +595,13 @@ def validate_batch_cmd(ctx: click.core.Context) -> None:
 
         try:
             chained_cmds = split_chain(chain_args, command_names)
-        except click.UsageError as e:
-            raise DruncBatchShellArgError(e) from e
-
-        for cmd_name, cmd_args in chained_cmds:
-            sub_cmd = ctx.command.commands[cmd_name]
-            try:
+            for cmd_name, cmd_args in chained_cmds:
+                sub_cmd = ctx.command.commands[cmd_name]
                 sub_cmd.make_context(
                     cmd_name, cmd_args, parent=ctx, resilient_parsing=False
                 )
-            except click.UsageError as e:
-                raise DruncBatchShellArgError(e) from e
+        except click.UsageError as e:
+            raise DruncBatchShellArgError(e) from e
 
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
