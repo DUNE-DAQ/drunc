@@ -437,6 +437,7 @@ The `ps` command must take at least one the following options:
 * `-n/--name`, to select a process to flush based on its "friendly name".
 * `-s/--session`, to select the processes to flush based on a session name.
 * `--long-format/-l`, to get a long listing format.
+* `-w/--width`, to fix the table width to a supplied length.
 
 By default, `ps` list all the processes.
 
