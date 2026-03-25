@@ -10,7 +10,8 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from urllib.parse import urlparse
-
+from kubernetes import client, config
+from kubernetes.config.config_exception import ConfigException
 import click
 import grpc
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
@@ -39,6 +40,7 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.exceptions import DruncSetupException, DruncShellException
+from drunc.process_manager.configuration import ProcessManagerTypes
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
     ServerTimeout,
@@ -118,7 +120,7 @@ def get_status_table(
             ip_address = urlparse(endpoint).hostname
             if not ip_address:
                 return ""
-            resolved_host = get_hostname_smart(ip_address)
+            resolved_host = get_hostname_for_display(ip_address)
             return endpoint.replace(ip_address, resolved_host)
 
         table.add_row(
@@ -752,6 +754,60 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 
     return cmd, cmd_name
 
+@functools.lru_cache(maxsize=1)
+def get_k8s_core_v1():
+
+    click_ctx = click.get_current_context(silent=True)
+    shell_ctx = click_ctx.obj if click_ctx is not None else None
+    process_manager_type = getattr(shell_ctx, "process_manager_type", None)
+    if not process_manager_type == ProcessManagerTypes.K8s:
+        return None
+
+    try:
+        try:
+            config.load_incluster_config()
+        except ConfigException:
+            config.load_kube_config()
+        _k8s_core_v1 = client.CoreV1Api()
+        return _k8s_core_v1
+    except Exception as e:
+        log.debug(f"Kubernetes client unavailable: {e}")
+        _k8s_available = False
+        return None
+
+
+@functools.lru_cache(maxsize=4096)
+def get_node_name_from_pod_ip(pod_ip: str) -> str | None:
+    """
+    Resolve a pod IP to the Kubernetes node name hosting that pod.
+    Returns None if the IP is not a pod IP or K8s API is unavailable.
+    """
+    api = get_k8s_core_v1()
+    if api is None or not pod_ip:
+        return None
+
+    try:
+        pods = api.list_pod_for_all_namespaces(
+            field_selector=f"status.podIP={pod_ip}"
+        )
+        for pod in pods.items:
+            if pod.spec and pod.spec.node_name:
+                return pod.spec.node_name
+    except Exception as e:
+        log.debug(f"Failed to resolve pod IP '{pod_ip}' via Kubernetes API: {e}")
+
+    return None
+
+
+def get_hostname_for_display(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
+    """
+    Prefer Kubernetes-aware resolution for pod IPs, then fall back to reverse DNS.
+    """
+    node_name = get_node_name_from_pod_ip(ip_or_host)
+    if node_name:
+        return node_name
+
+    return get_hostname_smart(ip_or_host, timeout_seconds=timeout_seconds)
 
 @functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:

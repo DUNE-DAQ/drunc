@@ -157,9 +157,9 @@ def unified_shell(
         internal_pm = False
 
     # If using a k8s process manager, validate the session name before proceeding
-    if get_pm_type_from_name(
-        process_manager
-    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+    ctx.obj.process_manager_type = get_pm_type_from_name(process_manager)
+
+    if ctx.obj.process_manager_type == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
         unified_shell_log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
