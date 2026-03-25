@@ -1,6 +1,6 @@
 import abc
 import getpass
-from collections.abc import Mapping
+from collections.abc import MutableMapping
 
 import click
 from druncschema.token_pb2 import Token
@@ -44,7 +44,7 @@ class DecodedResponse:
     token = None
     data = None
     flag = None
-    children = []
+    children: list["DecodedResponse"] = []
 
     def __init__(self, name, token, flag, data=None, children=None):
         self.name = name
@@ -75,7 +75,7 @@ class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
         self._token = self.create_token(**token_args)
-        self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
+        self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
 
     def __init__(self, *args, **kwargs):
         log = get_logger("utils.ShellContext")
@@ -91,7 +91,7 @@ class ShellContext:
         pass
 
     @abc.abstractmethod
-    def create_drivers(self, **kwargs) -> Mapping[str, object]:
+    def create_drivers(self, **kwargs) -> MutableMapping[str, object]:
         pass
 
     @abc.abstractmethod
@@ -107,7 +107,7 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str = None, quiet_fail: bool = False) -> object:
+    def get_driver(self, name: str | None = None, quiet_fail: bool = False) -> object:
         try:
             if name:
                 return self._drivers[name]
