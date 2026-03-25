@@ -97,7 +97,7 @@ def server_is_reachable(grpc_error: grpc.RpcError) -> bool:
     return True
 
 
-def rethrow_if_unreachable_server(grpc_error: grpc.RpcError) -> NoReturn:
+def rethrow_if_unreachable_server(grpc_error: grpc.RpcError) -> None:
     """
     Raise a ServerUnreachable exception if the gRPC error indicates the server is unreachable.
 
@@ -114,7 +114,7 @@ def rethrow_if_unreachable_server(grpc_error: grpc.RpcError) -> NoReturn:
             raise ServerUnreachable(grpc_error._details) from grpc_error
 
 
-def rethrow_if_timeout(grpc_error: grpc.RpcError) -> NoReturn:
+def rethrow_if_timeout(grpc_error: grpc.RpcError) -> None:
     """
     Raise a ServerTimeout if timeout.
 

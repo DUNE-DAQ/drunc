@@ -3,7 +3,6 @@ import signal
 import threading
 import time
 from multiprocessing import Process
-from typing import NoReturn
 
 import gunicorn.app.base
 import psutil
@@ -188,7 +187,7 @@ class FlaskManager(threading.Thread):
     def __del__(self):
         self.stop()
 
-    def stop(self) -> NoReturn:
+    def stop(self) -> None:
         # gunicorn is forked, so we need to now need send signal ourselves
         if self.gunicorn_pid:
             gunicorn_proc = psutil.Process(self.gunicorn_pid)
@@ -238,7 +237,7 @@ class FlaskManager(threading.Thread):
 
         self.log.info(f"{self.name}-flaskmanager terminated")
 
-    def run(self) -> NoReturn:
+    def run(self) -> None:
         self._create_and_join_flask()
 
 
