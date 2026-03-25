@@ -1133,7 +1133,7 @@ class K8sProcessManager(ProcessManager):
                     "Unable to determine username for environment variable and USER "
                     "not set in boot request metadata. Exiting."
                 )
-                log.error(err_msg)
+                self.log.error(err_msg)
                 raise RuntimeError(err_msg)
 
         # Set HOME if home_path_base is configured. This is done manually ane explicitly
