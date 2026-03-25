@@ -1,6 +1,7 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
+from typing import Protocol, cast
 
 import click
 from druncschema.token_pb2 import Token
@@ -8,6 +9,37 @@ from rich.console import Console
 
 from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
+
+
+class CommandLike(Protocol):
+    name: str
+
+
+class SequenceLike(Protocol):
+    id: str
+
+
+class FSMDescriptionLike(Protocol):
+    commands: list[CommandLike]
+    sequences: list[SequenceLike]
+
+
+class DescribeFSMReplyLike(Protocol):
+    description: FSMDescriptionLike
+
+
+class StatusLike(Protocol):
+    state: str
+    in_error: bool
+
+
+class StatusReplyLike(Protocol):
+    status: StatusLike
+
+
+class ControllerDriverProtocol(Protocol):
+    def status(self) -> StatusReplyLike: ...
+    def describe_fsm(self) -> DescribeFSMReplyLike: ...
 
 
 class InterruptedCommand(DruncShellException):
@@ -147,8 +179,9 @@ class ShellContext:
 
     def print_status_summary(self) -> None:
         log = get_logger("utils.ShellContext")
-        status = self.get_driver("controller").status().status
-        describe_fsm = self.get_driver("controller").describe_fsm().description
+        controller = cast(ControllerDriverProtocol, self.get_driver("controller"))
+        status = controller.status().status
+        describe_fsm = controller.describe_fsm().description
         current_state = status.state
         if status.in_error:
             log.error(
