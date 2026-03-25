@@ -160,6 +160,7 @@ def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
             return grpc_error._state.details
         elif hasattr(grpc_error, "_details"):
             return grpc_error._details
+    return None
 
 
 def copy_token(token: Token) -> Token:
