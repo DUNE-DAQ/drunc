@@ -70,6 +70,10 @@
                 "limits":   {"hugepages-2Mi": "64Gi", "cpu": "192", "memory": "1536Gi"},
                 "requests": {"hugepages-2Mi": "64Gi", "cpu": "48", "memory": "384Gi"}
             },
+            "np02-srv-005-1": {
+                "limits":   {"hugepages-2Mi": "64Gi", "cpu": "192", "memory": "1536Gi"},
+                "requests": {"hugepages-2Mi": "64Gi", "cpu": "48", "memory": "384Gi"}
+            },
             "np04-srv-031": {
                 "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
                 "requests": {"hugepages-2Mi": "32Gi", "cpu": "32", "memory": "256Gi"}
