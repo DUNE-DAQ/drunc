@@ -10,8 +10,7 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from urllib.parse import urlparse
-from kubernetes import client, config
-from kubernetes.config.config_exception import ConfigException
+
 import click
 import grpc
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
@@ -28,6 +27,8 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
+from kubernetes import client, config
+from kubernetes.config.config_exception import ConfigException
 from rich.console import ConsoleRenderable, Group, RichCast
 from rich.progress import (
     BarColumn,
