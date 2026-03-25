@@ -64,7 +64,7 @@ class ConfHandler:
         self,
         data=None,
         type=ConfTypes.PyObject,
-        oks_key: OKSKey = None,
+        oks_key: OKSKey | None = None,
         *args,
         **kwargs,
     ):
