@@ -180,7 +180,7 @@ def address_regex(address: str, hostname_or_ip: str) -> str:
         str: The address with 127.x.x.x and 0.x.x.x replaced by the hostname or IP.
     """
 
-    ip_match: re.Match = re.search(
+    ip_match: re.Match[str] | None = re.search(
         r"((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)",
         address,
     )
@@ -371,14 +371,14 @@ def get_control_type_and_uri_from_connectivity_service(
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds
     progress_bar: bool = False,
-    title: str = None,
+    title: str | None = None,
 ) -> tuple[ControlType, str]:
     uris = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
     shared_console = get_shared_rich_console(logger)
 
     start = time.time()
-    elapsed = 0
+    elapsed = 0.0
 
     if progress_bar:
         with Progress(
