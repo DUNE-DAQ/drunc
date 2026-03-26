@@ -1,3 +1,5 @@
+"""A set of utility functions for drunc."""
+
 import ctypes
 import logging
 import os
@@ -11,11 +13,12 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
-from urllib.parse import urlparse
+from typing import Any
+from urllib.parse import ParseResult, urlparse
 
 from click import BadParameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
-from requests import delete, get, patch, post
+from requests import Response, delete, get, patch, post
 from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
@@ -35,8 +38,8 @@ CONSOLE_THEMES = Theme({"info": "dim cyan", "warning": "magenta", "danger": "bol
 
 
 def get_root_logger(log_level: str) -> logging.Logger:
-    """
-    Set up the base logger which all other loggers will inherit.
+    """Set up the base logger which all other loggers will inherit.
+
     This base logger is named the 'drunc' logger, and functions similarly to the root
     logger. It should have no handlers attached to it.
 
@@ -50,14 +53,16 @@ def get_root_logger(log_level: str) -> logging.Logger:
     return setup_root_logger("drunc", log_level)
 
 
-def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
-    """Returns / constructs default logging instances. Prepends all loggers with 'drunc'
-    to inherit from the root 'drunc' logger.
-    Wraps to the daqpytools implementation, see for more details
+def get_logger(logger_name: str, *args: Any, **kwargs: Any) -> logging.Logger:
+    """Get a logger instance for the given logger name.
 
     Args:
-        logger_name (str): Name of the logger
-        args, kwargs: Passed without modification to the daqpytools implementation
+        logger_name (str): The name of the logger.
+        *args: Additional positional arguments to pass to get_daq_logger.
+        **kwargs: Additional keyword arguments to pass to get_daq_logger.
+
+    Returns:
+        logging.Logger: Configured logger instance.
     """
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
 
@@ -102,8 +107,7 @@ def get_shared_rich_console(logger: logging.Logger):
 
 
 def strip_non_drunc_loggers() -> None:
-    """
-    Strip out all the basicConfig handlers from other repositories, which define
+    """Strip out all the basicConfig handlers from other repositories, which define
     handlers with the root logger.
     """
     root = logging.getLogger()
@@ -111,37 +115,90 @@ def strip_non_drunc_loggers() -> None:
         root.handlers.clear()
 
 
-def get_random_string(length):
+def get_random_string(length: int) -> str:
+    """Generate a random string of lowercase ASCII letters.
+
+    Args:
+        length (int): The desired length of the random string.
+
+    Returns:
+        str: A random string of the specified length.
+    """
     letters = string.ascii_lowercase
     return "".join(random.choice(letters) for i in range(length))
 
 
-def regex_match(regex, string):
+def regex_match(regex: str, string: str) -> bool:
+    """Check if a regex pattern matches a string.
+
+    Args:
+        regex (str): The regular expression pattern.
+        string (str): The string to match against.
+
+    Returns:
+        bool: True if the pattern matches, False otherwise.
+    """
     return re.match(regex, string) is not None
 
 
-def get_new_port():
+def get_new_port() -> int:
+    """Get an available port number.
+
+    Returns:
+        int: An available port number.
+    """
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(("", 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return s.getsockname()[1]
+        return int(s.getsockname()[1])
 
 
-def now_str(posix_friendly=False):
+def now_str(posix_friendly: bool = False) -> str:
+    """Get the current time as a formatted string.
+
+    Args:
+        posix_friendly (bool): If True, use POSIX-friendly format. Defaults to False.
+
+    Returns:
+        str: The current time as a formatted string.
+    """
     if not posix_friendly:
         return datetime.now().strftime("%m/%d/%Y,%H:%M:%S")
     else:
         return datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
 
 
-def expand_path(path, turn_to_abs_path=False):
+def expand_path(path: str, turn_to_abs_path: bool = False) -> str:
+    """Expand a path with user and environment variables.
+
+    Args:
+        path (str): The path to expand.
+        turn_to_abs_path (bool): If True, also convert to absolute path. 
+            Defaults to False.
+
+    Returns:
+        str: The expanded path.
+    """
     if turn_to_abs_path:
         return os.path.abspath(os.path.expanduser(os.path.expandvars(path)))
     return os.path.expanduser(os.path.expandvars(path))
 
 
-def validate_command_facility(ctx, param, value):
-    parsed = ""
+def validate_command_facility(ctx: Any, param: Any, value: str) -> str:
+    """Validate a command facility parameter.
+
+    Args:
+        ctx (Any): Click context.
+        param (Any): Click parameter.
+        value (str): The value to validate.
+
+    Returns:
+        str: The validated netloc.
+
+    Raises:
+        BadParameter: If the value is invalid.
+    """
+    parsed: ParseResult
     try:
         parsed = urlparse(value)
     except Exception as e:
@@ -166,8 +223,7 @@ def validate_command_facility(ctx, param, value):
 
 
 def address_regex(address: str, hostname_or_ip: str) -> str:
-    """
-    Replace 127.x.x.x and 0.x.x.x IPs with the provided hostname
+    """Replace 127.x.x.x and 0.x.x.x IPs with the provided hostname.
 
     This is useful when a service binds to localhost or 127.x.x.x, but we
     want to access it using the hostname or network IP.
@@ -241,7 +297,15 @@ def resolve_localhost_and_127_ip_to_network_ip(address: str) -> str:
     return address_regex(address, this_ip)
 
 
-def host_is_local(host):
+def host_is_local(host: str) -> bool:
+    """Check if a host is local.
+
+    Args:
+        host (str): The hostname or IP to check.
+
+    Returns:
+        bool: True if the host is local, False otherwise.
+    """
     if host in [
         "localhost",
         socket.gethostname(),
@@ -255,15 +319,21 @@ def host_is_local(host):
     return False
 
 
-def pid_info_str():
+def pid_info_str() -> str:
+    """Get a string with process ID information.
+
+    Returns:
+        str: A string containing the parent and current process IDs.
+    """
     return f"Parent's PID: {os.getppid()} | This PID: {os.getpid()}"
 
 
-def ignore_sigint_sighandler():
+def ignore_sigint_sighandler() -> None:
+    """Ignore SIGINT (Ctrl+C) signals."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-def parent_death_pact(signal=signal.SIGHUP):
+def parent_death_pact(signal: int = signal.SIGHUP) -> None:
     """Commit to kill current process when parent process dies.
     Each time you spawn a new process, run this to set signal
     handler appropriately (e.g put it at the beginning of each
@@ -280,15 +350,42 @@ def parent_death_pact(signal=signal.SIGHUP):
 
 
 class IncorrectAddress(DruncException):
+    """Exception raised when an address is invalid."""
     pass
 
 
-def https_or_http_present(address: str):
+def https_or_http_present(address: str) -> None:
+    """Validate that an address starts with http:// or https://.
+
+    Args:
+        address (str): The address to validate.
+
+    Raises:
+        IncorrectAddress: If the address does not start with http:// or https://.
+    """
     if not address.startswith("https://") and not address.startswith("http://"):
         raise IncorrectAddress("Endpoint should start with http:// or https://")
 
 
-def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+def http_post(
+    address: str,
+    data: Any,
+    as_json: bool = True,
+    ignore_errors: bool = False,
+    **post_kwargs: Any,
+) -> Response:
+    """Send an HTTP POST request.
+
+    Args:
+        address (str): The URL to send the request to.
+        data (Any): The data to send in the request body.
+        as_json (bool): If True, send data as JSON. Defaults to True.
+        ignore_errors (bool): If True, do not raise exceptions for HTTP errors. Defaults to False.
+        **post_kwargs: Additional keyword arguments to pass to requests.post.
+
+    Returns:
+        Response: The response from the server.
+    """
     https_or_http_present(address)
     if as_json:
         r = post(address, json=data, **post_kwargs)
@@ -300,7 +397,25 @@ def http_post(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     return r
 
 
-def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+def http_get(
+    address: str,
+    data: Any,
+    as_json: bool = True,
+    ignore_errors: bool = False,
+    **post_kwargs: Any,
+) -> Response:
+    """Send an HTTP GET request.
+
+    Args:
+        address (str): The URL to send the request to.
+        data (Any): The data to send in the request body.
+        as_json (bool): If True, send data as JSON. Defaults to True.
+        ignore_errors (bool): If True, do not raise exceptions for HTTP errors. Defaults to False.
+        **post_kwargs: Additional keyword arguments to pass to requests.get.
+
+    Returns:
+        Response: The response from the server.
+    """
     https_or_http_present(address)
 
     log = get_logger("utils.http_get")
@@ -320,7 +435,25 @@ def http_get(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     return r
 
 
-def http_patch(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+def http_patch(
+    address: str,
+    data: Any,
+    as_json: bool = True,
+    ignore_errors: bool = False,
+    **post_kwargs: Any,
+) -> Response:
+    """Send an HTTP PATCH request.
+
+    Args:
+        address (str): The URL to send the request to.
+        data (Any): The data to send in the request body.
+        as_json (bool): If True, send data as JSON. Defaults to True.
+        ignore_errors (bool): If True, do not raise exceptions for HTTP errors. Defaults to False.
+        **post_kwargs: Additional keyword arguments to pass to requests.patch.
+
+    Returns:
+        Response: The response from the server.
+    """
     https_or_http_present(address)
 
     if as_json:
@@ -333,7 +466,22 @@ def http_patch(address, data, as_json=True, ignore_errors=False, **post_kwargs):
     return r
 
 
-def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs):
+def http_delete(
+    address: str,
+    data: Any,
+    as_json: bool = True,
+    ignore_errors: bool = False,
+    **post_kwargs: Any,
+) -> None:
+    """Send an HTTP DELETE request.
+
+    Args:
+        address (str): The URL to send the request to.
+        data (Any): The data to send in the request body.
+        as_json (bool): If True, send data as JSON. Defaults to True.
+        ignore_errors (bool): If True, do not raise exceptions for HTTP errors. Defaults to False.
+        **post_kwargs: Additional keyword arguments to pass to requests.delete.
+    """
     https_or_http_present(address)
 
     if as_json:
@@ -346,6 +494,8 @@ def http_delete(address, data, as_json=True, ignore_errors=False, **post_kwargs)
 
 
 class ControlType(Enum):
+    """Enumeration of control types for DUNE DAQ services."""
+
     Unknown = 0
     gRPC = 1
     REST_API = 2
@@ -353,6 +503,17 @@ class ControlType(Enum):
 
 
 def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType, str]:
+    """Extract control type and URI from CLI arguments.
+
+    Args:
+        cli_args (list[str]): The CLI arguments to parse.
+
+    Returns:
+        tuple[ControlType, str]: A tuple of (control_type, uri).
+
+    Raises:
+        DruncSetupException: If protocol is not 'grpc://' or 'rest://'.
+    """
     for arg in cli_args:
         if arg.startswith("rest://"):
             uri = arg.replace("rest://", "")
@@ -366,13 +527,29 @@ def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType,
 
 
 def get_control_type_and_uri_from_connectivity_service(
-    connectivity_service,
+    connectivity_service: Any,
     name: str,
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds
     progress_bar: bool = False,
     title: str | None = None,
 ) -> tuple[ControlType, str]:
+    """Get control type and URI from connectivity service.
+
+    Args:
+        connectivity_service (Any): The connectivity service instance.
+        name (str): The name of the service to resolve.
+        timeout (int): Maximum time to wait for resolution in seconds. Defaults to 10.
+        retry_wait (float): Time to wait between retries in seconds. Defaults to 0.1.
+        progress_bar (bool): Whether to display a progress bar. Defaults to False.
+        title (str | None): Title for the progress bar. Defaults to None.
+
+    Returns:
+        tuple[ControlType, str]: A tuple of (control_type, uri).
+
+    Raises:
+        ApplicationLookupUnsuccessful: If the URI cannot be resolved.
+    """
     uris = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
     shared_console = get_shared_rich_console(logger)
@@ -443,16 +620,20 @@ def get_control_type_and_uri_from_connectivity_service(
     return get_control_type_and_uri_from_cli([uri])
 
 
-def print_with_timestamp(message):
+def print_with_timestamp(message: str) -> None:
+    """Print a message with a timestamp.
+
+    Args:
+        message (str): The message to print.
+    """
     now = datetime.now()
     now_str = now.isoformat()
     print(f"{now_str}: {message}")
 
 
 def format_name_for_cli(name: str) -> str:
-    """
-    Format a command name or argument name to be CLI-friendly by replacing underscores
-    with hyphens and converting to lowercase.
+    """ Format a command name or argument name to be CLI-friendly by replacing
+    underscores with hyphens and converting to lowercase.
 
     Args:
         name (str): The original command name.
@@ -464,16 +645,16 @@ def format_name_for_cli(name: str) -> str:
 
 
 def resolve_target_ip(host: str) -> str | None:
-    """
-    Intelligently resolves the host.
+    """Intelligently resolve a host to its IP address.
+
     If host is 'localhost' or '127.0.0.1', it finds the actual LAN IP.
 
     Args:
-        host - the name of the host to reolve to LAN IP
+        host (str): The name of the host to resolve to LAN IP.
 
     Returns:
-        str - LAN IP of the host
-        None - if the host could not be resolved, None is returned
+        str: LAN IP of the host.
+        None: If the host could not be resolved, None is returned.
     """
 
     log = get_logger("utils.resolve_target_ip")
@@ -491,7 +672,7 @@ def resolve_target_ip(host: str) -> str | None:
                 # blocked from sending data outside of the LAN. Use connect - this does
                 # send any data, just establishes the connection.
                 s.connect(("10.255.255.255", 1))
-                return s.getsockname()[0]
+                return str(s.getsockname()[0])
         except Exception:
             # Return the loopback address.
             log.warning(f"Failed to resolve the IP address of {host}")
@@ -507,17 +688,15 @@ def resolve_target_ip(host: str) -> str | None:
 
 
 def is_port_available(host: str, port: int, timeout: int = 2) -> bool:
-    """
-    Check if the given port number on a specified host is available.
+    """Check if the given port number on a specified host is available.
 
     Args:
-        host - the host name to check
-        port - the port number to check
-        timeout - timeout of attempting to establish the connection
+        host (str): The host name to check.
+        port (int): The port number to check.
+        timeout (int): Timeout of attempting to establish the connection. Defaults to 2.
 
     Returns:
-        true - the port is available
-        false - the port is not available
+        bool: True if the port is available, False otherwise.
     """
 
     log = get_logger("utils.is_port_available")
@@ -554,13 +733,12 @@ def is_port_available(host: str, port: int, timeout: int = 2) -> bool:
 
 
 def file_is_read_only(file_path: str) -> bool:
-    """
-    Runs checks to see if the file path is read only.
+    """Check if a file is read-only.
 
     Args:
-        file_path - path of file to read
+        file_path (str): Path of file to check.
 
     Returns:
-        bool - true is file is read only, false otherwise
+        bool: True if the file is read-only, False otherwise.
     """
     return not os.access(file_path, os.W_OK)
