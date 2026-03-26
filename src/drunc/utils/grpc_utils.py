@@ -1,5 +1,7 @@
+"""gRPC utilities for DRUNC."""
+
 from dataclasses import dataclass
-from typing import List, NoReturn, Optional
+from typing import Any, Callable, List, NoReturn
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -20,7 +22,15 @@ from drunc.exceptions import (
 
 
 class UnpackingError(DruncCommandException):
-    def __init__(self, data, format):
+    """Exception raised when unpacking gRPC messages fails."""
+
+    def __init__(self, data: Any, format: type[Message]) -> None:
+        """Initialize the UnpackingError.
+
+        Args:
+            data: The data that failed to unpack.
+            format: The expected format.
+        """
         self.data = data
         self.format = format
 
@@ -50,13 +60,33 @@ def unpack_error_response(name: str, text: str, token: Token) -> Response:
     )
 
 
-def pack_to_any(data) -> any_pb2.Any:
+def pack_to_any(data: Message) -> any_pb2.Any:
+    """Pack a protobuf message into an Any message.
+
+    Args:
+        data: The protobuf message to pack.
+
+    Returns:
+        any_pb2.Any: The packed message.
+    """
     any = any_pb2.Any()
     any.Pack(data)
     return any
 
 
-def unpack_any(data, format):
+def unpack_any(data: any_pb2.Any, format: type[Message]) -> Message:
+    """Unpack an Any message into a specific protobuf format.
+
+    Args:
+        data: The Any message to unpack.
+        format: The protobuf message type to unpack into.
+
+    Returns:
+        Message: The unpacked message.
+
+    Raises:
+        UnpackingError: If the message cannot be unpacked into the specified format.
+    """
     if not data.Is(format.DESCRIPTOR):
         raise UnpackingError(data, format)
     req = format()
@@ -65,13 +95,27 @@ def unpack_any(data, format):
 
 
 class ServerUnreachable(DruncException):
-    def __init__(self, message):
+    """Exception raised when the gRPC server is unreachable."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize the ServerUnreachable exception.
+
+        Args:
+            message: The error message.
+        """
         self.message = message
         super(ServerUnreachable, self).__init__(message)
 
 
 class ServerTimeout(DruncException):
-    def __init__(self, message):
+    """Exception raised when the gRPC server times out."""
+
+    def __init__(self, message: str) -> None:
+        """Initialize the ServerTimeout exception.
+
+        Args:
+            message: The error message.
+        """
         self.message = message
         super(ServerTimeout, self).__init__(message)
 
@@ -135,6 +179,7 @@ def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
 
     Args:
         error: The gRPC error to handle.
+
     Raises:
         A custom exception if the error matches a known category, or the original
         gRPC error if no classification applies.
@@ -144,12 +189,11 @@ def handle_grpc_error(error: grpc.RpcError) -> NoReturn:
     raise error
 
 
-def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
-    """
-    Interrupt if server is not reachable and return the error details.
+def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> str | None:
+    """Interrupt if server is not reachable and return the error details.
 
     Args:
-        grpc_error (grpc.RpcError): The gRPC error
+        grpc_error: The gRPC error
 
     Returns:
         str | None: The internal error details if the server is unreachable and details are available;
@@ -157,9 +201,9 @@ def interrupt_if_unreachable_server(grpc_error: grpc.RpcError) -> Optional[str]:
     """
     if not server_is_reachable(grpc_error):
         if hasattr(grpc_error, "_state"):
-            return grpc_error._state.details
+            return str(grpc_error._state.details)
         elif hasattr(grpc_error, "_details"):
-            return grpc_error._details
+            return str(grpc_error._details)
     return None
 
 
@@ -177,10 +221,17 @@ def copy_token(token: Token) -> Token:
     return token_copy
 
 
-def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
-    """
-    Converts a Python dictionary into an instance of a gRPC Protobuf message.
+def dict_to_grpc_proto(data: dict[str, Any], proto_class_instance: Message) -> Message:
+    """Converts a Python dictionary into an instance of a gRPC Protobuf message.
+
     'proto_class_instance' should be an empty instance, e.g., Token()
+
+    Args:
+        data: The dictionary to convert.
+        proto_class_instance: An empty instance of the target protobuf message type.
+
+    Returns:
+        Message: The converted protobuf message.
     """
     return json_format.ParseDict(data, proto_class_instance, ignore_unknown_fields=True)
 
@@ -192,7 +243,8 @@ def dict_to_grpc_proto(data: dict, proto_class_instance: Message) -> Message:
 
 @dataclass
 class GrpcErrorDetails:
-    """
+    """A structured representation of a gRPC error.
+
     A structured representation of a gRPC error, including its status code,
     message, and any extracted rich error details. Used to extract and format
     detailed error information on the client side.
@@ -200,17 +252,15 @@ class GrpcErrorDetails:
     Attributes:
         code (str): The gRPC status code name (e.g., "NOT_FOUND")
         message (str): The error message from the gRPC status
-        details (List[str]): A list of formatted error detail strings
+        details: A list of formatted error detail strings or protobuf Messages.
     """
 
     code: str
     message: str
-    details: List[str]
+    details: list[str | Message]
 
-    def __str__(self):
-        """
-        Return a human-readable string representation of the error.
-        """
+    def __str__(self) -> str:
+        """Return a human-readable string representation of the error."""
         lines = [f"[{self.code}] {self.message}"]
         for detail in self.details:
             # If it's a Proto message format the error detail
@@ -377,18 +427,24 @@ def abort_with_rich_error_status(
 
 
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
-    """
-    A gRPC server interceptor that catches exceptions and converts them into
-    rich error statuses with structured error details."""
+    """Catch exceptions and convert them into rich error statuses.
 
-    def intercept_service(self, continuation, handler_call_details):
+    A gRPC server interceptor that catches exceptions and converts them into
+    rich error statuses with structured error details.
+    """
+
+    def intercept_service(
+        self,
+        continuation: Callable[..., Any],
+        handler_call_details: Any,
+    ) -> Any:
         """
         Intercept gRPC service calls to handle exceptions and convert them
         into rich error statuses.
         """
         handler = continuation(handler_call_details)
 
-        def error_wrapper(request, context):
+        def error_wrapper(request: Any, context: grpc.ServicerContext) -> Any:
             try:
                 return handler.unary_unary(request, context)
 
