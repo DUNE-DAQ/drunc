@@ -333,7 +333,7 @@ def format_hostname(hostname: str) -> str:
     formatted_hostname = hostname
 
     # Strip common suffixes that do not reflect the true host alias
-    if hostname.endswith("-1")
+    if hostname.endswith("-1"):
         formatted_hostname = hostname[:-2]
 
     return formatted_hostname
