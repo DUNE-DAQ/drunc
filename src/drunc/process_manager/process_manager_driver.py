@@ -36,6 +36,7 @@ from drunc.process_manager.oks_parser import get_full_db_path
 from drunc.process_manager.utils import (
     get_log_path,
     get_rte_script,
+    format_hostname
 )
 from drunc.utils.grpc_utils import (
     copy_token,
@@ -258,8 +259,7 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        hostname = app["restriction"]
-        hostname = hostname[:-2] if hostname.endswith("-1") else hostname
+        hostname = format_hostname(app["restriction"])
         host = hostname
         name = app["name"]
         exe = app["type"]

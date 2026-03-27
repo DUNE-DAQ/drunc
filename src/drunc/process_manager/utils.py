@@ -307,3 +307,34 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     )
 
     return pmch.data.type
+
+def format_hostname(hostname: str) -> str:
+    """
+    Format the host name to truly reflect what the host name is, removing any extensions
+    that do not reflect the true host alias.
+
+    Args:
+        hostname (str): The hostname to format.
+
+    Returns:
+        str: The formatted hostname.
+
+    Raises:
+        DruncCommandException: If the hostname is empty or None.
+
+    Example:
+        If the input hostname is "np02-srv-005-1", the output will be "np02-srv-005".
+    """
+    # Validate that the hostname is not empty or None
+    if not hostname:
+        raise DruncCommandException("Hostname cannot be empty or None.")
+
+    # Make a copy of the hostname to modify
+    formatted_hostname = hostname
+
+    # Strip common suffixes that do not reflect the true host alias
+    if hostname.endswith("-1")
+        formatted_hostname = hostname[:-2]
+
+    return formatted_hostname
+
