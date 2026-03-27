@@ -1149,9 +1149,7 @@ class K8sProcessManager(ProcessManager):
         # as other functions (e.g. os.expanduser) may not work as expected in the k8s
         # environment without it.
         home_path: str = self.home_path_base + "/" + env_vars.get("USER")
-        self.log.debug(
-            f"Setting HOME environment variable to: {home_path}"
-        )
+        self.log.debug(f"Setting HOME environment variable to: {home_path}")
         if "HOME" in env_vars:
             self.log.warning(
                 f"HOME environment variable is already set to '{env_vars['HOME']}' but "
@@ -2228,10 +2226,10 @@ class K8sProcessManager(ProcessManager):
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
 
-        # Remap the np02-srv-005-1 if necessary
-        if boot_request.process_description.metadata.hostname == "np02-srv-005-1":
-            boot_request.process_description.metadata.hostname = "np02-srv-005"
-        
+        # Format the hostname for safety
+        hostname = format_hostname(boot_request.process_description.metadata.hostname)
+        boot_request.process_description.metadata.hostname = hostname
+
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
@@ -2556,7 +2554,9 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
                 if role == "segment-controller":
                     tree_id = pod.metadata.labels.get(tree_id_label_key, "")
-                    segment_controller_depths[uuid] = tree_id.count(".") if tree_id else 0
+                    segment_controller_depths[uuid] = (
+                        tree_id.count(".") if tree_id else 0
+                    )
 
         # Kill in stages using our sorted lists
         for role in PROCESS_SHUTDOWN_ORDERING:
