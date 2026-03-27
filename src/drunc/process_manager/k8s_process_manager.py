@@ -41,7 +41,11 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
 )
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name, format_hostname
+from drunc.process_manager.utils import (
+    format_hostname,
+    on_parent_exit,
+    validate_k8s_session_name,
+)
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
