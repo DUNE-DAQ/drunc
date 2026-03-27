@@ -121,7 +121,8 @@ class ProcessManagerDriver:
         last_boot_on_host_at = {}
         previous_host = None
 
-        # Step 6: iterate over boot requests
+        # Step 6: iterate over boot requests, keeping track to ensure all the processes are booted successfully.
+        attempted_boot_count: int = 0
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
             user=user,
@@ -163,6 +164,7 @@ class ProcessManagerDriver:
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
+                attempted_boot_count += 1
                 yield response
 
             except grpc.RpcError as e:
