@@ -28,6 +28,7 @@ from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
 from rich.console import ConsoleRenderable, Group, RichCast
+from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     Progress,
@@ -180,15 +181,38 @@ def get_status_table(
     return t
 
 
+def find_rich_console(logger: logging.Logger):
+    """Traverses logger hierarchy to find a FormattedRichHandler's console."""
+    current = logger
+    while current:
+        for handler in current.handlers:
+            # This checks if it's your custom class or the base RichHandler
+            if isinstance(handler, RichHandler):
+                return handler.console
+        if not current.propagate or current.parent is None:
+            break
+        current = current.parent
+    return None
+
+
 class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
         self.ctx = ctx
         self.update_table()
+
+        # Get the instance of the console that the logger is using with the rich handler
+        # so that the progress bar can be rendered in the same console, and not mess up
+        # the logs
+        shared_console = find_rich_console(self.ctx.log)
+        if shared_console:
+            kwargs["console"] = shared_console
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
+        self.ctx.log.critical("BOOPERIAUOWSBERA")
         self.table = get_status_table(statuses, descriptions)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:

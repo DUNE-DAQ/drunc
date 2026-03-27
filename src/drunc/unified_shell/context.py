@@ -4,6 +4,7 @@ from enum import Enum
 from druncschema.token_pb2 import Token
 
 from drunc.utils.shell_utils import ShellContext
+from drunc.utils.utils import get_logger, get_root_logger
 
 
 class UnifiedShellMode(Enum):
@@ -14,6 +15,10 @@ class UnifiedShellMode(Enum):
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
     def __init__(self):
+        get_root_logger(
+            "INFO"
+        )  # TODO - this is not the log level that is passed through the command line, but it is needed to avoid errors when creating the logger for the unified shell
+        self.log = get_logger("unified_shell", rich_handler=True)
         self.status_receiver_pm = None
         self.status_receiver_controller = None
         self.took_control = False

@@ -60,7 +60,6 @@ from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
     get_logger,
-    get_root_logger,
     ignore_sigint_sighandler,
     resolve_localhost_and_127_ip_to_network_ip,
 )
@@ -146,9 +145,7 @@ def unified_shell(
             connection to the process manager fails.
     """
     # Set up the drunc and unified_shell loggers
-    get_root_logger(log_level)
-    unified_shell_log = get_logger("unified_shell", rich_handler=True)
-    unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
+    ctx.log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
     process_manager_url: ParseResult = urlparse(process_manager)
@@ -160,7 +157,7 @@ def unified_shell(
     if get_pm_type_from_name(
         process_manager
     ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
-        unified_shell_log.error(
+        ctx.log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
             "alphanumeric, max 63 chars."
@@ -177,7 +174,7 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    unified_shell_log.info(
+    ctx.log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
         f"[green]{process_manager}[/green] and configuration id [green]"
         f'"{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
@@ -185,25 +182,21 @@ def unified_shell(
 
     # Establish communication with the process manager, spawning it if needed
     if internal_pm:  # Spawn the Process Manager
-        unified_shell_log.debug(
-            f"Spawning process_manager with configuration {process_manager}"
-        )
+        ctx.log.debug(f"Spawning process_manager with configuration {process_manager}")
         # Check if process_manager is a packaged config
         process_manager_conf_file = get_process_manager_configuration(process_manager)
 
         # Validate the process manager configuration before starting it
         if not validate_pm_config(process_manager_conf_file):
-            unified_shell_log.error(
-                "Process manager configuration validation failed. Exiting."
-            )
+            ctx.log.error("Process manager configuration validation failed. Exiting.")
             sys.exit(1)
 
         # Start the process manager as a separate process
-        unified_shell_log.info("Starting process manager")
+        ctx.log.info("Starting process manager")
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 
-        unified_shell_log.debug("[green]Process manager[/green] starting")
+        ctx.log.debug("[green]Process manager[/green] starting")
         ctx.obj.override_logs = override_logs
         ctx.obj.pm_process = mp.Process(
             target=run_pm,
@@ -220,7 +213,7 @@ def unified_shell(
             },
         )
         ctx.obj.pm_process.start()
-        unified_shell_log.debug("[green]Process manager[/green] started")
+        ctx.log.debug("[green]Process manager[/green] started")
 
         # Check if the process manager started correctly
         process_started = False
@@ -231,13 +224,13 @@ def unified_shell(
 
             if not ctx.obj.pm_process.is_alive():
                 exit_code = ctx.obj.pm_process.exitcode
-                unified_shell_log.error(
+                ctx.log.error(
                     f"[red]Process manager process died unexpectedly with exit code {exit_code}."
                 )
-                unified_shell_log.error(
+                ctx.log.error(
                     "[red]This is likely a configuration error (e.g., bad kube-config)."
                 )
-                unified_shell_log.error(
+                ctx.log.error(
                     "[red]Please check the full traceback in the terminal above this message.[/red]"
                 )
                 sys.exit(exit_code if exit_code else 1)
@@ -258,12 +251,12 @@ def unified_shell(
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
-        unified_shell_log.info(
+        ctx.log.info(
             f"[green]unified_shell[/green] connected to the [green]process_manager"
             f"[/green] at address [green]{process_manager_address}[/green]"
         )
 
-    unified_shell_log.debug(
+    ctx.log.debug(
         f"[green]process_manager[/green] started, communicating through address [green]"
         f"{process_manager_address}[/green]"
     )
@@ -274,20 +267,20 @@ def unified_shell(
     try:
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
-        unified_shell_log.error(
+        ctx.log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        unified_shell_log.debug(f"Reason: {e}")
+        ctx.log.debug(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
-            unified_shell_log.error(
+            ctx.log.error(
                 "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
                 "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
             )
 
         if internal_pm and not ctx.obj.pm_process.is_alive():
-            unified_shell_log.error(
+            ctx.log.error(
                 f"[red]The process_manager is dead[/red], exit code "
                 f"{ctx.obj.pm_process.exitcode}"
             )
@@ -300,18 +293,18 @@ def unified_shell(
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):
-        unified_shell_log.debug("Broadcasting")
+        ctx.log.debug("Broadcasting")
         ctx.obj.start_listening_pm(
             broadcaster_conf=desc.broadcast,
         )
 
     # Add the unified shell Click commands to the CLI
-    unified_shell_log.debug("Adding [green]unified_shell[/green] commands")
+    ctx.log.debug("Adding [green]unified_shell[/green] commands")
     ctx.command.add_command(boot, "boot")
     ctx.obj.dynamic_commands.add("boot")
 
     # Add the process manager Click commands to the CLI
-    unified_shell_log.debug("Adding [green]process_manager[/green] commands")
+    ctx.log.debug("Adding [green]process_manager[/green] commands")
     process_manager_commands: list[click.Command] = [
         kill,
         terminate,
@@ -326,7 +319,7 @@ def unified_shell(
 
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
-    unified_shell_log.debug("Defining the pseudo controller to get its FSM commands")
+    ctx.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
     controller_configuration = ControllerConfHandler(
         type=ConfTypes.OKSFileName,
@@ -342,7 +335,7 @@ def unified_shell(
     # Avoid setting up the ELISA logbook for the unified shell
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
-    unified_shell_log.debug("Initializing the [green]FSM[/green]")
+    ctx.log.debug("Initializing the [green]FSM[/green]")
 
     #! This is an absolute _hack_ because we do not want the
     # unified shell fsm to go to tty but want other fsms to do so
@@ -351,16 +344,14 @@ def unified_shell(
 
     fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
 
-    unified_shell_log.debug("Initializing the [green]StatefulNode[/green]")
+    ctx.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
 
-    unified_shell_log.debug("Retrieving the [green]StatefulNode[/green] transitions")
+    ctx.log.debug("Retrieving the [green]StatefulNode[/green] transitions")
     transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
 
     # Add the FSM transitions and sequences as Click commands to the CLI
-    unified_shell_log.debug(
-        "Adding [green]controller[/green] commands to the click context"
-    )
+    ctx.log.debug("Adding [green]controller[/green] commands to the click context")
     for transition in transitions.commands:
         ctx.command.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
@@ -409,21 +400,21 @@ def unified_shell(
         This function handles the termination of processes, retraction from the
         connectivity service, and logging shutdown.
         """
-        unified_shell_log.info("[green]Shutting down the unified_shell[/green]")
+        ctx.log.info("[green]Shutting down the unified_shell[/green]")
 
         # Attempt a stateful shutdown of the controller if possible, returning to
         # initial state before terminating
         if ctx.obj.get_driver("controller", quiet_fail=True):
             try:
                 if ctx.obj.get_driver("controller").status().status.in_error:
-                    unified_shell_log.warning(
+                    ctx.log.warning(
                         "Controller is in error, cannot gracefully shutdown"
                     )
                 else:
                     # Safe mode crucial for use with hardware
                     if safe_mode:
                         try:
-                            unified_shell_log.info(
+                            ctx.log.info(
                                 "Attempting graceful shutdown of the controller"
                             )
                             stop_run_cmd = ctx.command.commands.get("stop-run")
@@ -431,26 +422,24 @@ def unified_shell(
                             if stop_run_cmd is not None:
                                 ctx.invoke(stop_run_cmd)
                             else:
-                                unified_shell_log.warning(
+                                ctx.log.warning(
                                     "Command 'stop-run' not found; skipping graceful "
                                     "shutdown step."
                                 )
                             if scrap_cmd is not None:
                                 ctx.invoke(scrap_cmd)
                             else:
-                                unified_shell_log.warning(
+                                ctx.log.warning(
                                     "Command 'scrap' not found; skipping graceful "
                                     "shutdown step."
                                 )
-                            unified_shell_log.info("Controller shutdown gracefully")
+                            ctx.log.info("Controller shutdown gracefully")
                         except Exception as e:
-                            unified_shell_log.error(
+                            ctx.log.error(
                                 f"Could not shutdown the controller gracefully, reason: {e}"
                             )
             except Exception as e:
-                unified_shell_log.error(
-                    f"Could not retrieve the controller status, reason: {e}"
-                )
+                ctx.log.error(f"Could not retrieve the controller status, reason: {e}")
             ctx.obj.delete_driver("controller")
 
         # Terminate any residual processes
@@ -466,7 +455,7 @@ def unified_shell(
             )
             > 0
         ):
-            unified_shell_log.error(
+            ctx.log.error(
                 "Some processes are still running, you might want to check them"
             )
 
@@ -487,11 +476,9 @@ def unified_shell(
             )
             try:
                 csc.retract_partition(fail_quickly=True, fail_quietly=True)
-                unified_shell_log.debug(
-                    "Session retracted from the connectivity service"
-                )
+                ctx.log.debug("Session retracted from the connectivity service")
             except Exception as e:
-                unified_shell_log.error(
+                ctx.log.error(
                     f"Could not retract the session from the connectivity service: {e}"
                 )
 
@@ -504,14 +491,14 @@ def unified_shell(
             ctx.obj.pm_process.terminate()  # Send a SIGTERM to the pm_process
             ctx.obj.pm_process.join(timeout=2)  # Block continuing execution for 2s
             if ctx.obj.pm_process.is_alive():
-                unified_shell_log.warning(
+                ctx.log.warning(
                     "Process manager did not exit in time, terminating forcefully."
                 )
                 ctx.obj.pm_process.kill()  # Send a SIGKILL
                 ctx.obj.pm_process.join()  # Block until the process is dead
-            unified_shell_log.debug("Process manager terminated")
+            ctx.log.debug("Process manager terminated")
 
-        unified_shell_log.info("[green]unified_shell exited successfully[/green]")
+        ctx.log.info("[green]unified_shell exited successfully[/green]")
         logging.shutdown()  # Shutdown logging
         ctx.obj.terminate()  # Terminate the broadcasters in the context
         ctx.exit()  # Close the click context
@@ -527,16 +514,14 @@ def unified_shell(
             signum: The signal number.
             frame: The current stack frame (not used).
         """
-        unified_shell_log.info(
-            "[red]SIGTERM received, shutting down unified_shell...[/red]"
-        )
+        ctx.log.info("[red]SIGTERM received, shutting down unified_shell...[/red]")
         ctx.exit()
         return
 
     # Register the SIGTERM handler to gracefully shut down the server
     signal.signal(signal.SIGTERM, signal_sigterm_handler)
 
-    unified_shell_log.info(
+    ctx.log.info(
         "[green]unified_shell[/green] ready with [green]process_manager[/green] and [green]controller[/green] commands"
     )
 
