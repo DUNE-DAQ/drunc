@@ -543,8 +543,7 @@ class K8sProcessManager(ProcessManager):
             DruncK8sException: If there is a permission error or other API failure.
         """
         # If the host has already been cached, check if it is valid and return that state
-        if target_host == "np02-srv-005-1":
-            target_host = "np02-srv-005"
+        target_host = hostname[:-2] if target_host.endswith("-1") else target_host
         cached = self._is_host_cached(target_host)
         if cached is not None:
             if cached:
