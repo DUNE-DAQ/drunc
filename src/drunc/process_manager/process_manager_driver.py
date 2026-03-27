@@ -258,7 +258,9 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = app["restriction"]
+        hostname = app["restriction"]
+        hostname = hostname[:-2] if hostname.endswith("-1") else hostname
+        host = hostname
         name = app["name"]
         exe = app["type"]
         args = app["args"]

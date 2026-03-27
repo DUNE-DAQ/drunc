@@ -543,6 +543,8 @@ class K8sProcessManager(ProcessManager):
             DruncK8sException: If there is a permission error or other API failure.
         """
         # If the host has already been cached, check if it is valid and return that state
+        if target_host == "np02-srv-005-1":
+            target_host = "np02-srv-005"
         cached = self._is_host_cached(target_host)
         if cached is not None:
             if cached:
@@ -2222,6 +2224,11 @@ class K8sProcessManager(ProcessManager):
         tree_labels = self._get_tree_labels(
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
+
+        # Remap the np02-srv-005-1 if necessary
+        if boot_request.process_description.metadata.hostname == "np02-srv-005-1":
+            boot_request.process_description.metadata.hostname = "np02-srv-005"
+        
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
