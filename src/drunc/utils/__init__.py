@@ -1,3 +1,5 @@
+"""drunc utilities module."""
+
 from drunc.utils.utils import get_logger
 
 # Initialise utils logger with Rich handler

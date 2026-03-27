@@ -1,7 +1,7 @@
 """gRPC utilities for DRUNC."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, List, NoReturn
+from typing import Any, Callable, NoReturn
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -264,7 +264,7 @@ class GrpcErrorDetails:
         lines = [f"[{self.code}] {self.message}"]
         for detail in self.details:
             # If it's a Proto message format the error detail
-            if hasattr(detail, "DESCRIPTOR"):
+            if isinstance(detail, Message):
                 lines.extend(format_error_details(detail))
             else:
                 lines.append(str(detail))

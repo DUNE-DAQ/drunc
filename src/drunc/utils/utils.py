@@ -173,7 +173,7 @@ def expand_path(path: str, turn_to_abs_path: bool = False) -> str:
 
     Args:
         path (str): The path to expand.
-        turn_to_abs_path (bool): If True, also convert to absolute path. 
+        turn_to_abs_path (bool): If True, also convert to absolute path.
             Defaults to False.
 
     Returns:
@@ -351,6 +351,7 @@ def parent_death_pact(signal: int = signal.SIGHUP) -> None:
 
 class IncorrectAddress(DruncException):
     """Exception raised when an address is invalid."""
+
     pass
 
 
@@ -632,7 +633,7 @@ def print_with_timestamp(message: str) -> None:
 
 
 def format_name_for_cli(name: str) -> str:
-    """ Format a command name or argument name to be CLI-friendly by replacing
+    """Format a command name or argument name to be CLI-friendly by replacing
     underscores with hyphens and converting to lowercase.
 
     Args:
