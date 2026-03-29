@@ -392,16 +392,16 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
+    validate_batch_cmd(ctx)
+
     # If any of the commands is in the click commands, set batch mode
-    if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
+    if ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.BATCH
         ctx.command.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
 
-    validate_batch_cmd(ctx)
-
     # If start-shell is in the arguments, set semibatch mode
-    if "start-shell" in sys.argv:
+    if "start-shell" in ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
     def cleanup():
@@ -606,5 +606,8 @@ def validate_batch_cmd(ctx: click.core.Context) -> None:
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
 
-    if len(extract_batch_args) > 0:  # no need to validate if no batch
+    # Store the batch commands to determine the UnifiedShellMode
+    ctx.obj.batch_commands = extract_batch_args
+
+    if ctx.obj.batch_commands:  # no need to validate if no batch
         validate_chain(ctx, extract_batch_args)
