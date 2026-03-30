@@ -161,6 +161,7 @@ class Controller(ControllerServicer):
         log_init_controller.info("Finishing initialisation of controller")
 
         try:
+            log_init_controller.info("Initializing the controller children")
             self.children_nodes = self.configuration.init_children(
                 session_name=self.session,
                 init_token=self.actor.get_token(),
