@@ -13,10 +13,10 @@ from datetime import datetime
 from enum import Enum
 from urllib.parse import urlparse
 
-import click
 from click import BadParameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import delete, get, patch, post
+from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     Progress,
@@ -60,6 +60,45 @@ def get_logger(logger_name: str, *args, **kwargs) -> logging.Logger:
         args, kwargs: Passed without modification to the daqpytools implementation
     """
     return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+
+
+def get_shared_rich_console(logger: logging.Logger):
+    """
+    Traverses logger hierarchy to find a FormattedRichHandler's console.
+
+    Using the same rich.Console object is necessary for ensuring that rich tables and
+    log messages are printed in the same order and don't interleave. If no RichHandler
+    is found, returns None.
+
+    Args:
+        logger: The logger to start searching from.
+
+    Returns:
+        The rich.Console object if found, otherwise None.
+
+    Raises:
+        None
+    """
+    # Get the current logger
+    current = logger
+
+    # Iterate through this logger and its parents to find a RichHandler
+    while current:
+        # Iterate through the handlers of the current logger
+        for handler in current.handlers:
+            # If the handler is an instance of RichHandler, if so return its console
+            if isinstance(handler, RichHandler):
+                return handler.console
+
+        # If propagate is False or there is no parent logger, stop searching
+        if not current.propagate or current.parent is None:
+            break
+
+        # Move up to the parent logger
+        current = current.parent
+
+    # No RichHandler found in the logger hierarchy, return None
+    return None
 
 
 def strip_non_drunc_loggers() -> None:
@@ -333,10 +372,10 @@ def get_control_type_and_uri_from_connectivity_service(
     retry_wait: float = 0.1,  # seconds
     progress_bar: bool = False,
     title: str = None,
-    ctx: click.Context | None = None,
 ) -> tuple[ControlType, str]:
     uris = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
+    shared_console = get_shared_rich_console(logger)
 
     start = time.time()
     elapsed = 0
@@ -348,6 +387,8 @@ def get_control_type_and_uri_from_connectivity_service(
             BarColumn(),
             TimeRemainingColumn(),
             TimeElapsedColumn(),
+            console=shared_console,
+            # transient=True,  # Clear the progress bar after completion, once we have established a more complete testing framework with the various failure modes, we can enable this to reduce console clutter
         ) as progress:
             task = progress.add_task(
                 f"[yellow]{title}", total=timeout, visible=progress_bar

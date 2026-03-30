@@ -46,8 +46,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.shell_utils import get_shared_rich_console
-from drunc.utils.utils import format_name_for_cli, get_logger
+from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
 

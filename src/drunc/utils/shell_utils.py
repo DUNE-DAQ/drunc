@@ -1,12 +1,10 @@
 import abc
 import getpass
-import logging
 from collections.abc import Mapping
 
 import click
 from druncschema.token_pb2 import Token
 from rich.console import Console
-from rich.logging import RichHandler
 
 from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
@@ -38,45 +36,6 @@ def add_traceback_flag():
         return f1
 
     return wrapper
-
-
-def find_rich_console(logger: logging.Logger):
-    """
-    Traverses logger hierarchy to find a FormattedRichHandler's console.
-
-    Using the same rich.Console object is necessary for ensuring that rich tables and
-    log messages are printed in the same order and don't interleave. If no RichHandler
-    is found, returns None.
-
-    Args:
-        logger: The logger to start searching from.
-
-    Returns:
-        The rich.Console object if found, otherwise None.
-
-    Raises:
-        None
-    """
-    # Get the current logger
-    current = logger
-
-    # Iterate through this logger and its parents to find a RichHandler
-    while current:
-        # Iterate through the handlers of the current logger
-        for handler in current.handlers:
-            # If the handler is an instance of RichHandler, if so return its console
-            if isinstance(handler, RichHandler):
-                return handler.console
-
-        # If propagate is False or there is no parent logger, stop searching
-        if not current.propagate or current.parent is None:
-            break
-
-        # Move up to the parent logger
-        current = current.parent
-
-    # No RichHandler found in the logger hierarchy, return None
-    return None
 
 
 class DecodedResponse:
