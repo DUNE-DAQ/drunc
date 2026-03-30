@@ -575,6 +575,7 @@ To debug it, close drunc and run the following command:
                         retry_wait=1,
                         progress_bar=True,
                         title=f"Looking for [green]{top_controller_name}[/] on the connectivity service...",
+                        ctx=self.ctx,
                     )
 
                     address = uri.replace("grpc://", "")

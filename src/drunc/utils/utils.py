@@ -13,6 +13,7 @@ from datetime import datetime
 from enum import Enum
 from urllib.parse import urlparse
 
+import click
 from click import BadParameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import delete, get, patch, post
@@ -332,6 +333,7 @@ def get_control_type_and_uri_from_connectivity_service(
     retry_wait: float = 0.1,  # seconds
     progress_bar: bool = False,
     title: str = None,
+    ctx: click.Context | None = None,
 ) -> tuple[ControlType, str]:
     uris = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
