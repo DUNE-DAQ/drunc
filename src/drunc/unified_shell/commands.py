@@ -64,6 +64,9 @@ def boot(
         )
         expected_booted_processes = sum(1 for _ in results)
         for result in results:
+            log.critical(
+                f"Booting process: {result.values[0].process_description.metadata.name}"
+            )
             if not result:
                 break
             log.debug(
@@ -107,10 +110,11 @@ def boot(
     ):
         log.info("Booted successfully")
     elif dead_process_count != 0:
-        log.error(
-            f"Booted, but {dead_process_count} processes died immediately after booting. Placing the controller in error."
-        )
-        obj.get_driver("controller").to_error()
+        log.error(f"Booted, but {dead_process_count} processes died after booting.")
+        # The following line has been commented out as there are issues with the k8s PM
+        # booting process, which terminates processes and immediately reboots them. The
+        # current cause of this issue is unknown, and has been listed in the issue list.
+        # obj.get_driver("controller").to_error()
     elif obj.get_driver("controller").status().status.in_error:
         log.error("Booted, but the top controller is in error")
         if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:

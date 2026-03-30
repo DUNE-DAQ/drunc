@@ -50,6 +50,7 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.controller_actor import ControllerActor
@@ -159,11 +160,18 @@ class Controller(ControllerServicer):
         log_init_controller = get_logger("controller.core.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
 
-        self.children_nodes = self.configuration.init_children(
-            session_name=self.session,
-            init_token=self.actor.get_token(),
-            connectivity_service=self.connectivity_service,
-        )
+        try:
+            self.children_nodes = self.configuration.init_children(
+                session_name=self.session,
+                init_token=self.actor.get_token(),
+                connectivity_service=self.connectivity_service,
+            )
+        except ApplicationLookupUnsuccessful:
+            log_init_controller.error(
+                "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
+            )
+            self.stateful_node.to_error()
+            return
 
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service

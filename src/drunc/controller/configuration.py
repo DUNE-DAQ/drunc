@@ -173,13 +173,19 @@ class ControllerConfHandler(ConfHandler):
                 session_name=session_name,
                 obj=app,
             )
-            node = self.child_node_factory(
-                cmd_args=cmd_args,
-                name=app.id,
-                configuration=app,
-                connectivity_service=connectivity_service,
-                timeout=timeout,
-            )
+            try:
+                node = self.child_node_factory(
+                    cmd_args=cmd_args,
+                    name=app.id,
+                    configuration=app,
+                    connectivity_service=connectivity_service,
+                    timeout=timeout,
+                )
+            except ApplicationLookupUnsuccessful:
+                self.log.warning(
+                    f"Application '{app.id}' could not be found in the connectivity service."
+                )
+                raise
             child_nodes.append(node)
 
         # threading the children look up
