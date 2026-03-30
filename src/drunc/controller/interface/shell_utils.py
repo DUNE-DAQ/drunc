@@ -210,9 +210,12 @@ class StatusTableUpdater(Progress):
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
+        # The following debug log line will be used in an integration test to validate
+        # that issue 817 does not appear again (rich table overriding the log entries)
+        self.ctx.log.debug("Updating the status table...")
+        self.ctx.log.critical("THIS SHOULD NOT BE OVERRIDDEN BY THE STATUS TABLE")
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
-        self.ctx.log.critical("BOOPERIAUOWSBERA")
         self.table = get_status_table(statuses, descriptions)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:

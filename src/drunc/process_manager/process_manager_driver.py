@@ -183,22 +183,6 @@ class ProcessManagerDriver:
             session_dal, session_name, csc, connection_server, connection_port
         )
 
-        # Determine the number of processes that are alive.
-        alive_processes: int = len(
-            self.stub.ps(
-                ProcessQuery(token=copy_token(self.token), session=session_name)
-            ).values
-        )
-
-        # Validate that all processes have been booted.
-        if alive_processes != attempted_boot_count:
-            self.log.warning(
-                f"Expected {attempted_boot_count - alive_processes} more processes to "
-                "have been booted. Check the logs of the applications to see if there "
-                "were any issues during their startup, run [orange]status[/] to see "
-                "the difference between what is expected and what has been booted."
-            )
-
     def _collect_all_apps(
         self,
         oks_conf: str,

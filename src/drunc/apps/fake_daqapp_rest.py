@@ -59,6 +59,11 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
+        # The following block simulates a failure of the app while executing a stateful
+        # command. Thisserves uniquely to test the robustness of the Run Control when an
+        # app exits upon running an applciation, and should not be used for any other
+        # purpose. The environment variable is set in the configuration file that tests
+        # this behaviour.
         if os.getenv("DRUNC_FAILURE_TESTING_CMD", None):
             log.info("Simulating failure during initialization")
             exit(1)
@@ -199,6 +204,10 @@ def get_address_for_conn_srv(hostname):
 
 
 def main():
+    # The following block simulates a failure during the initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # initialize, and should not be used for any other purpose. The environment variable
+    # is set in the configuration file that tests this behaviour.
     if os.getenv("DRUNC_FAILURE_TESTING_INIT", None):
         log.info("Simulating failure during initialization")
         exit(1)
@@ -322,6 +331,10 @@ def main():
 
     connectivity_service_thread.start()
 
+    # The following block simulates a failure after the initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # complete initialization, and should not be used for any other purpose. The
+    # environment variable is set in the configuration file that tests this behaviour.
     if os.getenv("DRUNC_FAILURE_TESTING_POST_BOOT", None):
         log.info("Simulating failure after initialization")
         exit(1)

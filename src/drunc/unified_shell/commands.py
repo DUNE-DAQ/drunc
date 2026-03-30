@@ -2,7 +2,7 @@ import getpass
 import sys
 
 import click
-from druncschema.process_manager_pb2 import ProcessQuery
+from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.exceptions import DruncSetupException
@@ -38,6 +38,9 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
+    # Store the number of processes that are expected to be booted with this command, to check later if any processes died immediately after booting.
+    expected_booted_processes = 0
+
     if override_logs is None:
         override_logs_boot = obj.override_logs
     else:
@@ -59,6 +62,7 @@ def boot(
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
+        expected_booted_processes = sum(1 for _ in results)
         for result in results:
             if not result:
                 break
@@ -90,9 +94,24 @@ def boot(
         log.error("Could not understand where the controller is!")
         return
 
-    if not obj.get_driver("controller").status().status.in_error:
+    # If any processes died immediately, place the controller in error.
+    alive_process_count = len(
+        [p for p in processes.values if p.status_code == ProcessInstance.RUNNING]
+    )
+
+    dead_process_count = expected_booted_processes - alive_process_count
+
+    if (
+        not obj.get_driver("controller").status().status.in_error
+        and dead_process_count == 0
+    ):
         log.info("Booted successfully")
-    else:
+    elif dead_process_count != 0:
+        log.error(
+            f"Booted, but {dead_process_count} processes died immediately after booting. Placing the controller in error."
+        )
+        obj.get_driver("controller").to_error()
+    elif obj.get_driver("controller").status().status.in_error:
         log.error("Booted, but the top controller is in error")
         if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
             log.error(
