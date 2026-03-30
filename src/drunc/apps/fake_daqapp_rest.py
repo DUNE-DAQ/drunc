@@ -2,6 +2,7 @@
 
 import argparse
 import copy as cp
+import os
 import random
 import threading
 import time
@@ -58,6 +59,10 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
+        if os.getenv("DRUNC_FAILURE_TESTING_CMD", None):
+            log.info("Simulating failure during initialization")
+            exit(1)
+
         reply_address = (
             f"http://{answer_host}:{answer_port}/response"
             if answer_host
@@ -194,6 +199,10 @@ def get_address_for_conn_srv(hostname):
 
 
 def main():
+    if os.getenv("DRUNC_FAILURE_TESTING_INIT", None):
+        log.info("Simulating failure during initialization")
+        exit(1)
+
     parser = argparse.ArgumentParser(
         prog="FakeApplication",
         description="This is a fake application that communicate in the same way with the RunControl as the DAQApplication (thru REST)",
@@ -229,7 +238,9 @@ def main():
         help="This is a dummy argument in this case",
     )
     parser.add_argument("-s", "--session", default="test", help="name of session")
-    parser.add_argument("-k", "--configurationID", default="test-config", help="ID of session")
+    parser.add_argument(
+        "-k", "--configurationID", default="test-config", help="ID of session"
+    )
 
     args = parser.parse_args()
 
@@ -310,6 +321,10 @@ def main():
         time.sleep(1)
 
     connectivity_service_thread.start()
+
+    if os.getenv("DRUNC_FAILURE_TESTING_POST_BOOT", None):
+        log.info("Simulating failure after initialization")
+        exit(1)
 
 
 if __name__ == "__main__":
