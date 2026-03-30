@@ -169,7 +169,7 @@ class ControllerConfHandler(ConfHandler):
             ):
                 return
 
-            try:  # <--- The try MUST be inside the thread function
+            try:
                 cmd_args = get_commandline_parameters(
                     config_filename=self.initial_data,
                     session_dal=session,
@@ -189,7 +189,6 @@ class ControllerConfHandler(ConfHandler):
                     f"Application '{app.id}' lookup failed.",
                     extra={"handlers": [HandlerType.Lstdout]},
                 )
-                # Capture the error in the shared list so the main thread can see it
                 booting_errors.append(e)
 
         # threading the children look up
