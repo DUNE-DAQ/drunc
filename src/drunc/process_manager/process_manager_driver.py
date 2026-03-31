@@ -596,7 +596,6 @@ To debug it, close drunc and run the following command:
                 except Exception as e:
                     self.log.error(
                         f"An unexpected error occurred during connectivity service lookup: {e}. "
-                        "Falling back to static OKS configuration."
                     )
 
             else:
