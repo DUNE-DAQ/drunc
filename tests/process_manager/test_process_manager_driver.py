@@ -340,7 +340,6 @@ def test_build_boot_request_success(
     mock_driver._prepare_exec_and_args = MagicMock(
         return_value=[{"exec": "binary", "args": ["--arg1"]}]
     )
-
     breq = mock_driver._build_boot_request(
         app=app_data,
         user="test_user",

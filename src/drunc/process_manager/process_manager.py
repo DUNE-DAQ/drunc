@@ -296,8 +296,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self, request: BootRequest, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(
-            "{self.name} booting '{data.process_description.metadata.name}' "
-            "from session '{data.process_description.metadata.session}'"
+            f"{self.name} booting '{request.process_description.metadata.name}' "
+            f"from session '{request.process_description.metadata.session}'"
         )
 
         try:
