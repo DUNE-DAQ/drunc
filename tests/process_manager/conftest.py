@@ -55,7 +55,7 @@ def bootrequest(app_data):
                 user="test_user",
                 session="session1",
                 name=app_data["name"],
-                hostname="",
+                hostname="localhost",
                 tree_id=app_data["tree_id"],
             ),
             executable_and_arguments=[{"exec": "binary", "args": ["--arg1"]}],
