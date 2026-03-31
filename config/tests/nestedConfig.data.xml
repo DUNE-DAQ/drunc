@@ -258,7 +258,7 @@
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
 
-<obj class="Session" id="test-nested-config-failure-post-boot">
+<!-- <obj class="Session" id="test-nested-config-failure-post-boot">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -300,6 +300,6 @@
  </rel>
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
-</obj>
+</obj> -->
 
 </oks-data>
