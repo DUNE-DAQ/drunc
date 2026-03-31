@@ -2,6 +2,7 @@
 
 import argparse
 import copy as cp
+import os
 import random
 import threading
 import time
@@ -22,7 +23,7 @@ from drunc.utils.utils import (
 
 __version__ = "1.0.0"
 get_root_logger("info")
-log = get_logger("fake_daqapp_rest", rich_handler=True)
+log = get_logger("fake_daqapp_rest", stream_handler=True)
 
 
 class AppState:
@@ -58,6 +59,13 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
+
+        # For testing purposes, we can delay the execution of the command to simulate a
+        # long running command and test timeouts in the run control
+        if os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"):
+            delay = int(os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"))
+            self.log.info(f"Delaying execution by {delay} seconds for testing purposes")
+            time.sleep(delay)
         reply_address = (
             f"http://{answer_host}:{answer_port}/response"
             if answer_host
@@ -303,6 +311,7 @@ def main():
         response = requests.get(flask_url + "/")
         log.info(f"Response: {response.status_code}")
         if response.status_code == 200:
+            self.log.critical("Fake DAQ app started successfully and is responding to requests")
             break
         if i == 9:
             log.error("Failed to start fake DAQ app")
