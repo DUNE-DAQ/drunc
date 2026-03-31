@@ -71,17 +71,14 @@
  <file path="config/daqsystemtest/hosts.data.xml"/>
 </include>
 
-<comments>
- <comment creation-time="20240826T084126" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="Correct cern stream"/>
- <comment creation-time="20240909T081245" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
- <comment creation-time="20240909T082108" created-by="glehmann" created-on="np04-srv-024.cern.ch" author="glehmann" text=" "/>
- <comment creation-time="20240918T124331" created-by="maroda" created-on="np04-srv-015.cern.ch" author="maroda" text="change local session opmon URI"/>
-</comments>
-
 
 <obj class="Variable" id="drunc-simulate-failure-long-command-execution">
  <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD_DELAY"/>
  <attr name="value" type="string" val="70"/>
+</obj>
+<obj class="Variable" id="drunc-simulate-failure-long-command-execution-app-name">
+ <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME"/>
+ <attr name="value" type="string" val="bottom-segment-2-application"/>
 </obj>
 
 <obj class="Service" id="controller_control">
@@ -100,6 +97,16 @@
  </rel>
 </obj>
 <obj class="DaqApplication" id="bottom-segment-2-application">
+ <attr name="application_name" type="string" val="fake_daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="modules">
+ </rel>
+</obj>
+<obj class="DaqApplication" id="bottom-segment-2.1-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -171,6 +178,7 @@
 <obj class="Segment" id="bottom-segment-2">
  <rel name="applications">
   <ref class="DaqApplication" id="bottom-segment-2-application"/>
+  <ref class="DaqApplication" id="bottom-segment-2.1-application"/>
  </rel>
  <rel name="controller" class="RCApplication" id="bottom-segment-2-controller"/>
 </obj>
@@ -238,6 +246,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-simulate-failure-long-command-execution"/>
+  <ref class="Variable" id="drunc-simulate-failure-long-command-execution-app-name"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">

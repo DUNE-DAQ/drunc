@@ -702,16 +702,19 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
+        # Parse and validate target.
         try:
-            # Parse and validate target.
             request.target = self.parse_target_string(request.target)
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # Extract command information.
         command = request.command
         command_name = command.command_name
         self.log.debug(f"FSM command: {command_name}")
+
+        # Extract FSM transition.
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
@@ -748,7 +751,7 @@ class Controller(ControllerServicer):
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
             return response
 
-        # This node.
+        # Execute FSM transition on this node.
         if request.target == self.name or request.execute_along_path:
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
             fsm_data = self.stateful_node.prepare_transition(

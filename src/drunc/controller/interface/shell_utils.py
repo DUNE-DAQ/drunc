@@ -596,6 +596,8 @@ def run_one_fsm_command(
         )  # TODO: Manually raise exception, see if the str declaration is needed with rich handling
         return
     except ServerTimeout as e:
+        import traceback
+        traceback.print_exc()
         log.error(e)
         log.error(
             "The command timed out, unfortunately this means the server is in undefined state, and [red]your best option at this stage is to [bold]terminate[/bold] and [bold]boot[/bold][/]."

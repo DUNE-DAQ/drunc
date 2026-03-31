@@ -60,12 +60,24 @@ class AppState:
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
 
+        self.log.critical(f"{req_data=}")
+        self.log.critical(f"{answer_port=}")
+        self.log.critical(f"{answer_host=}")
+        self.log.critical(f"{remote_host=}")
+
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
-        if os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"):
+        drunc_testing_app_timeout_delay = os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY")
+        drunc_testing_app_timeout_delay_app_name = os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME")
+        if drunc_testing_app_timeout_delay and not drunc_testing_app_timeout_delay_app_name:
+            self.log.error("DRUNC_FAILURE_TESTING_CMD_DELAY is set but DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is not set, not delaying execution")
+        if not drunc_testing_app_timeout_delay and drunc_testing_app_timeout_delay_app_name:
+            self.log.error("DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DELAY is not set, not delaying execution")
+        if drunc_testing_app_timeout_delay and drunc_testing_app_timeout_delay_app_name == self.appname:
             delay = int(os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"))
             self.log.info(f"Delaying execution by {delay} seconds for testing purposes")
             time.sleep(delay)
+
         reply_address = (
             f"http://{answer_host}:{answer_port}/response"
             if answer_host
@@ -311,7 +323,7 @@ def main():
         response = requests.get(flask_url + "/")
         log.info(f"Response: {response.status_code}")
         if response.status_code == 200:
-            self.log.critical("Fake DAQ app started successfully and is responding to requests")
+            log.critical("Fake DAQ app started successfully and is responding to requests")
             break
         if i == 9:
             log.error("Failed to start fake DAQ app")
