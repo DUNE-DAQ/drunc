@@ -255,8 +255,7 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        hostname = format_hostname(app["restriction"])
-        host = hostname
+        host = format_hostname(app["restriction"])
         name = app["name"]
         exe = app["type"]
         args = app["args"]
@@ -302,7 +301,7 @@ class ProcessManagerDriver:
                     user=user,
                     session=session_name,
                     name=name,
-                    hostname="",
+                    hostname=host,
                     tree_id=tree_id,
                 ),
                 executable_and_arguments=executable_and_arguments,
