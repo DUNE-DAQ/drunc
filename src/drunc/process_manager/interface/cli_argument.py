@@ -38,6 +38,12 @@ def add_query_options(at_least_one: bool, all_processes_by_default: bool = False
             multiple=True,
             help="Select the process of a particular UUIDs",
         )(f3)
-        return generate_process_query(f4, at_least_one, all_processes_by_default)
+        f5 = click.option(
+            "--crash",
+            is_flag=True,
+            default=False,
+            help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
+        )(f4)
+        return generate_process_query(f5, at_least_one, all_processes_by_default)
 
     return wrapper

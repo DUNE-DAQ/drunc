@@ -13,12 +13,9 @@ from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
-    ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
@@ -448,6 +445,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
+    @abc.abstractmethod
+    def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        raise NotImplementedError
+
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -456,64 +457,38 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def flush(
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
+        """Remove dead processes from tracking so they no longer appear in ps.
+
+        Dead processes that were killed externally (e.g. via kill -9) will remain
+        visible in ps until flushed. This command clears them from internal state
+        so they cannot be restarted and will not appear in subsequent ps output.
+
+        Args:
+            request: ProcessQuery specifying which processes to flush.
+            context: gRPC servicer context (unused directly).
+
+        Returns:
+            ProcessInstanceList containing the processes that were flushed.
+        """
         self.log.debug(f"{self.name} running flush")
 
-        ret = []
-        for uuid in self._get_process_uid(request):
-            # Some unknown process was found, assume it is dead and move on
-            if uuid not in self.boot_request:
-                pu = ProcessUUID(uuid=uuid)
-                pi = ProcessInstance(
-                    process_description=ProcessDescription(),
-                    process_restriction=ProcessRestriction(),
-                    status_code=ProcessInstance.StatusCode.DEAD,
-                    return_code=None,
-                    uuid=pu,
-                )
-                ret += [pi]
-                continue
+        try:
+            response = self._flush_impl(request)
+        except NotImplementedError:
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.flush",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.flush: {e}"
+            self.log.exception(context_msg)
 
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.flush",
+            )
 
-            return_code = None
-            try:
-                if not self.process_store[
-                    uuid
-                ].is_alive():  # OMG!! remove this implementation code
-                    return_code = self.process_store[uuid].exit_code
-            except Exception:
-                pass
-
-            # If a process is already dead, remove it from the process store
-            if not self.process_store[uuid].is_alive():
-                pi = ProcessInstance(
-                    process_description=pd,
-                    process_restriction=pr,
-                    status_code=(
-                        ProcessInstance.StatusCode.RUNNING
-                        if self.process_store[uuid].is_alive()
-                        else ProcessInstance.StatusCode.DEAD
-                    ),
-                    return_code=return_code,
-                    uuid=pu,
-                )
-                # If we know that this process has died intentionally, remove it from
-                # tracking
-                self.remove_process_from_expected_dead_processes(uuid)
-
-                del self.process_store[uuid]
-                ret += [pi]
-
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=ret,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
