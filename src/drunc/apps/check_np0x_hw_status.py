@@ -1,268 +1,330 @@
 """
-Pings all the WIBs in the NP0x cryostats and displays their status (online vs offline).
+Script to check the power status (on/off) of the NP0x readout hardware.
 
-Currently only does WIBs, will be updated to FEMBs, ongoing discussions are in place
-with Roger.
+For WIBs, each device gets pinged. If reachable, attempt to query its FEMB power status.
 
-Will do AMC crates and AMCs too, but later.
+Including the AMCs is planned for the future.
 """
 
+import os
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 import pytz
-from daqpytools.logging.formatter import timezone_name as tz
 from rich import box
 from rich.columns import Columns
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 
-# Data Mapping
+
+# --- DYNAMIC PATH SETUP ---
+def setup_wib_path():
+    """
+    Sets up the path to the local copy of the dune-wib-firmware repository if it exists.
+
+    Searches for the dune-wib-firmware source directory in the work area root and in
+    sourcecode. If the directory is found, it is added to sys.path for dynamic imports.
+    Returns the path if found, else None.
+
+    Args:
+        None
+
+    Returns:
+        str or None: The path to the dune-wib-firmware/sw directory if found, else None.
+
+    Raises:
+        EnvironmentError: If DBT_AREA_ROOT is not set in the environment.
+    """
+    # Define the root of this work area to start the search from
+    work_area_root = os.getenv("DBT_AREA_ROOT", None)
+    if not work_area_root:
+        raise EnvironmentError(
+            "DBT_AREA_ROOT environment variable not set, ensure you are running from a "
+            "DUNE DAQ release."
+        )
+
+    # Define potential search paths
+    search_paths = [
+        work_area_root,
+        os.path.join(work_area_root, "sourcecode"),
+    ]
+
+    # Search for the dune-wib-firmware/sw directory in the defined paths
+    for base_source in search_paths:
+        potential_path = os.path.join(base_source, "dune-wib-firmware/sw")
+        if os.path.isdir(potential_path):
+            if potential_path not in sys.path:
+                sys.path.insert(0, potential_path)  # TODO: Is this needed?
+            return potential_path
+    return None
+
+
+# Get the path to the WIB firmware/software interface if it exists, and attempt to
+# import the WIB library if found. If the library is not available, the script will
+# still run but will only show online/offline status without FEMB details.
+WIB_FW_SW_IFACE_PATH = setup_wib_path()
+WIB_LIB_AVAILABLE = False
+WIB = None
+wibpb = None
+
+if WIB_FW_SW_IFACE_PATH:
+    try:
+        import wib_pb2 as wibpb
+        from wib import WIB
+
+        WIB_LIB_AVAILABLE = True
+    except (ImportError, ModuleNotFoundError):
+        pass
+
+# Define the addresses of the hardware to check. This is structured as:
+# {
+#   "Apparatus Name": {
+#       "Apparatus Resource/Asset/Name TBC": {
+#           "WIB Number": "IP Address",
+#           ...
+#       },
+#       ...
+#   },
+#   ...
+# }
 WIB_DATA = {
-    "NP04 CB": {
-        "001": "10.73.137.20",
-        "002": "10.73.137.21",
-        "003": "10.73.137.22",
-        "004": "10.73.137.23",
-        "005": "10.73.137.24",
-    },
-    "APA1": {
-        "101": "10.73.137.26",
-        "102": "10.73.137.27",
-        "103": "10.73.137.28",
-        "104": "10.73.137.29",
-        "105": "10.73.137.30",
-    },
-    "APA2": {
-        "201": "10.73.137.31",
-        "202": "10.73.137.32",
-        "203": "10.73.137.33",
-        "204": "10.73.137.34",
-        "205": "10.73.137.35",
-    },
-    "APA3": {
-        "301": "10.73.137.36",
-        "302": "10.73.137.37",
-        "303": "10.73.137.38",
-        "304": "10.73.137.39",
-        "305": "10.73.137.40",
-    },
-    "APA4": {
-        "401": "10.73.137.41",
-        "402": "10.73.137.42",
-        "403": "10.73.137.43",
-        "404": "10.73.137.44",
-        "405": "10.73.137.45",
-    },
     "NP02 CB": {
-        "601": "10.73.137.50",
-        "602": "10.73.137.51",
-        "603": "10.73.137.52",
-        "604": "10.73.137.53",
-        "605": "10.73.137.54",
-        "606": "10.73.137.122",
+        "NP02 CB": {
+            "601": "10.73.137.50",
+            "602": "10.73.137.51",
+            "603": "10.73.137.52",
+            "604": "10.73.137.53",
+            "605": "10.73.137.54",
+            "606": "10.73.137.122",
+        }
     },
-    "CRP4": {
-        "1001": "10.73.137.126",
-        "1002": "10.73.137.127",
-        "1003": "10.73.137.128",
-        "1004": "10.73.137.137",
-        "1005": "10.73.137.129",
-        "1006": "10.73.137.130",
+    "NP02": {
+        "CRP4": {
+            "1001": "10.73.137.126",
+            "1002": "10.73.137.127",
+            "1003": "10.73.137.128",
+            "1004": "10.73.137.137",
+            "1005": "10.73.137.129",
+            "1006": "10.73.137.130",
+        },
+        "CRP5": {
+            "1101": "10.73.137.131",
+            "1102": "10.73.137.132",
+            "1103": "10.73.137.133",
+            "1104": "10.73.137.134",
+            "1105": "10.73.137.135",
+            "1106": "10.73.137.136",
+        },
     },
-    "CRP5": {
-        "1101": "10.73.137.131",
-        "1102": "10.73.137.132",
-        "1103": "10.73.137.133",
-        "1104": "10.73.137.134",
-        "1105": "10.73.137.135",
-        "1106": "10.73.137.136",
+    "NP04 CB": {
+        "NP04 CB": {
+            "001": "10.73.137.20",
+            "002": "10.73.137.21",
+            "003": "10.73.137.22",
+            "004": "10.73.137.23",
+            "005": "10.73.137.24",
+        }
+    },
+    "NP04": {
+        "APA1": {
+            "101": "10.73.137.26",
+            "102": "10.73.137.27",
+            "103": "10.73.137.28",
+            "104": "10.73.137.29",
+            "105": "10.73.137.30",
+        },
+        "APA2": {
+            "201": "10.73.137.31",
+            "202": "10.73.137.32",
+            "203": "10.73.137.33",
+            "204": "10.73.137.34",
+            "205": "10.73.137.35",
+        },
+        "APA3": {
+            "301": "10.73.137.36",
+            "302": "10.73.137.37",
+            "303": "10.73.137.38",
+            "304": "10.73.137.39",
+            "305": "10.73.137.40",
+        },
+        "APA4": {
+            "401": "10.73.137.41",
+            "402": "10.73.137.42",
+            "403": "10.73.137.43",
+            "404": "10.73.137.44",
+            "405": "10.73.137.45",
+        },
     },
 }
 
 
-def ping_host(ip: str) -> bool:
-    """
-    Pings a given IP address to check if it's online.
+def check_hardware(ip: str) -> dict:
+    # Default state is 'In Progress' (None)
+    final_status = {"online": False, "fembs": [False] * 4}
 
-    Any exceptions that occur during the ping process will be caught and result in a
-    False return value.
-
-    Args:
-        ip: The IP address to ping
-
-    Returns:
-        True if the host is online (ping successful), False otherwise
-
-    Raises:
-        None
-    """
-
-    # Construct the ping command. Ping once with a timeout of 1 second.
-    cmd = ["ping", "-c", "1", "-W", "1", ip]
-
-    # Execute the ping command, suppressing output and errors. Use a timeout to avoid
-    # hanging on unresponsive hosts.
     try:
-        result = subprocess.run(
+        # 1. Ping
+        cmd = ["ping", "-c", "1", "-W", "1", ip]
+        ping_res = subprocess.run(
             cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1.5
         )
-        return result.returncode == 0
-    except Exception:
-        return False
 
+        if ping_res.returncode == 0:
+            final_status["online"] = True
 
-def make_wib_table(
-    category: str, wibs: dict[str, str], status_map: dict[str, bool | None]
-) -> Table:
-    """
-    Creates a Rich Table for a given category of WIBs, showing their online status and
-    address.
-
-    Args:
-        category: The name of the category (e.g., "NP04 CB", "APA1", etc.). This is an
-            entry from the WIB_DATA mapping and will be used as the table title.
-        wibs: A mapping of WIB numbers to their IP addresses for this category
-        status_map: A mapping of IP addresses to their online status (True/False/None)
-
-    Returns:
-        A Rich Table object representing the WIBs in this category and their status
-
-    Raises:
-        None
-    """
-
-    # Create a Rich Table with a title based on the category.
-    table = Table(title=f"[magenta]{category}[/]", box=box.ROUNDED, border_style="dim")
-
-    # Add columns for WIB number, address, and online status.
-    table.add_column("WIB #", justify="center")
-    table.add_column("Address", style="dim white")
-    table.add_column("Online?", justify="center")
-
-    # For each relevant WIB, show the status.
-    for wib_num, ip in wibs.items():
-        # Look up the status of this IP in the status map.
-        res = status_map.get(ip)
-
-        # WIB is online
-        if res is True:
-            status = "[bold green]✔[/]"
-
-        # WIB is offline
-        elif res is False:
-            status = "[bold red]✘[/]"
-
-        # Status is unknown (ping not completed yet)
+            # 2. Protocol Check
+            if WIB_LIB_AVAILABLE:
+                try:
+                    wib_inst = WIB(ip)
+                    req = wibpb.GetFEMBStatus()
+                    rep = wibpb.GetFEMBStatus.FEMBStatus()
+                    # We wrap this in a sub-try because gRPC can hang
+                    wib_inst.send_command(req, rep)
+                    if hasattr(rep, "femb_power") and len(rep.femb_power) == 4:
+                        final_status["fembs"] = list(rep.femb_power)
+                    else:
+                        final_status["fembs"] = [False] * 4
+                except Exception:
+                    final_status["fembs"] = [False] * 4
+            else:
+                final_status["fembs"] = [False] * 4
         else:
-            status = "[yellow]...[/]"
+            final_status["online"] = False
+            final_status["fembs"] = [False] * 4
 
-        # Add a row to the table for this WIB with its number, IP address, and status.
-        table.add_row(wib_num, ip, status)
+    except Exception:
+        # Catch-all for timeouts or subprocess errors
+        pass
 
+    return final_status
+
+
+def make_wib_table(category: str, wibs: dict[str, str], results_map: dict) -> Table:
+    table = Table(title=f"[magenta]{category}[/]", box=box.ROUNDED, border_style="dim")
+    table.add_column("WIB #", justify="center")
+    for i in range(4):
+        table.add_column(f"FEMB {i}", justify="center")
+
+    for wib_num, ip in wibs.items():
+        # Get the result, or if not checked yet, show dots
+        res = results_map.get(ip)
+
+        if res is None:
+            wib_text = f"[white]{wib_num}[/]"
+            femb_icons = ["[dim]...[/]"] * 4
+        else:
+            wib_style = "bold green" if res["online"] else "bold red"
+            wib_text = f"[{wib_style}]{wib_num}[/]"
+
+            femb_icons = []
+            for state in res["fembs"]:
+                if state is True:
+                    femb_icons.append("[bold green]✔[/]")
+                else:
+                    femb_icons.append("[bold red]✘[/]")
+
+        table.add_row(wib_text, *femb_icons)
     return table
 
 
-def generate_table(status_map: dict[str, bool | None]) -> Columns:
+def generate_display(results_map: dict) -> Table:
+    grid = Table.grid(expand=True)
+    for group_name, sub_cats in WIB_DATA.items():
+        grid.add_row(f"\n[bold cyan]{group_name}[/]")
+        tables = [
+            make_wib_table(cat, wibs, results_map) for cat, wibs in sub_cats.items()
+        ]
+        grid.add_row(Columns(tables, equal=True, expand=False))
+    return grid
+
+
+def main():
     """
-    Generates a Rich Columns object containing tables for each category of WIBs.
+    Prints the power status of the hardware defined in WIB_DATA.
 
-    Args:
-        status_map: A mapping of IP addresses to their online status
-
-    Returns:
-        A Rich Columns object containing the WIB status tables for display
-
-    Raises:
-        None
-    """
-
-    tables: list[Table] = [
-        make_wib_table(cat, wibs, status_map) for cat, wibs in WIB_DATA.items()
-    ]
-    return Columns(tables, equal=True, expand=False)
-
-
-def main() -> None:
-    """
-    Main function to execute the NP0x HW status check and display results in a
-    live-updating table.
-
-    This function initializes the console, parses out all the IP addresses, and pings
-    them concurrently while updating the display in real-time. It handles graceful
-    shutdown on keyboard interrupt and ensures that all threads are properly terminated.
-
-    Args:
-        None
-
-    Returns:
-        None
-
-    Raises:
-        Any exceptions that occur during the execution of the host checks will be
-        handled within the get_host_info function.
+    For each WIB, the script first checks if it's online via ping, then if it is online,
+    the FEMB power status is queried using the WIB library. Results are displayed in a
+    live-updating table format.
     """
 
-    # Initialize the console for Rich output
+    # Set up the singular console to which all output is redirected.
     console = Console()
 
-    # Get the timezone-aware current time for display in the header.
-    now = datetime.now(pytz.timezone(tz))
-
-    # Print a blank line for spacing and a header to indicate the start of the scan
-    console.print("\n")
+    # Print header with timestamp
+    now = datetime.now(pytz.UTC)
     console.print(
-        f"[bold cyan]Checking NP0x hardware status at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}[/]\n"
+        "\n[bold cyan]Checking NP0x hardware status at "
+        f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}[/]\n"
     )
 
-    # Extract all IPs from the WIB_DATA for processing
-    all_ips: list[str] = [ip for cat in WIB_DATA.values() for ip in cat.values()]
+    # Get all the IP addresses from the WIB_DATA structure to check. This flattens the
+    # nested structure into a single list of IPs.
+    all_ips = [
+        ip
+        for apparatus in WIB_DATA.values()
+        for resource in apparatus.values()
+        for ip in resource.values()
+    ]
 
-    # Initialize a results map to store the status of each IP, starting with None (unknown)
-    results_map: dict[str, bool | None] = {ip: None for ip in all_ips}
+    # Initialize results map as empty/None for all IPs to force dots initially
+    results = {ip: None for ip in all_ips}
 
-    # 1. Create executor outside a context manager to allow manual shutdown control
-    executor = ThreadPoolExecutor(max_workers=40)
-    futures = {executor.submit(ping_host, ip): ip for ip in all_ips}
+    # Define a ThreadPoolExecutor to check hardware in parallel, and a mapping of
+    # futures to IPs
+    executor = ThreadPoolExecutor(max_workers=10)
 
-    # Use Rich's Live to create a live-updating table. The table will be refreshed as
-    # results come in from the concurrent checks.
+    # Submit all hardware checks to the executor and store the future-to-IP mapping for
+    # later reference
+    futures = {executor.submit(check_hardware, ip): ip for ip in all_ips}
+
+    # Use a Live context to update the display as results come in. As each future
+    # completes, the corresponding IP's result is updated in the results map, and the
+    # display is refreshed to show the new status. A final update is done after all
+    # futures complete to ensure the display is fully up to date. The try-except block
+    # allows for graceful interruption with Ctrl+C, ensuring the executor is shut down
+    # properly.
     try:
         with Live(
-            generate_table(results_map), console=console, auto_refresh=True
+            generate_display(results), console=console, refresh_per_second=5
         ) as live:
-            # While we have commands executing, we wait for them to complete. Use a
-            # timeout to periodically refresh the table and check for completed futures.
-            while futures:
-                try:
-                    # Update the table with results as they come in. Remove completed
-                    # futures from the tracking dict to avoid re-processing.
-                    for future in as_completed(futures, timeout=0.1):
-                        ip = futures.pop(future)
-                        results_map[ip] = future.result()
-                        live.update(generate_table(results_map))
+            for future in as_completed(futures):
+                ip = futures[future]
+                results[ip] = future.result()
+                live.update(generate_display(results))
 
-                # No futures have completed, but refresh the table to keep it "live"
-                except TimeoutError:
-                    live.update(generate_table(results_map))
+            # Final sweep
+            live.update(generate_display(results))
 
-                # If all futures are done, break out of the loop to finish up
-                if not futures:
-                    break
-
-    # Handle graceful shutdown on keyboard interrupt. This allows the user to stop the
-    # scan early without leaving hanging threads.
     except KeyboardInterrupt:
         pass
-
-    # When exiting, all threads are properly shut down.
     finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+        executor.shutdown(wait=False)
 
-    # Final display of results after all checks are complete.
+    # Print final status summary and any warnings about hardware communication if the
+    # WIB library is not available.
     console.print("\n[bold green]Scan complete.[/]")
+
+    # If the WIB library is not available, print a warning message to the user. This is
+    # done after the main display loop to ensure it doesn't interfere with the
+    # live-updating tables. The message provides guidance on how to resolve the issue if
+    # the library is not found, or informs the user that the WIB firmware repository is
+    # not present if that's the case. The warning is styled to stand out and is enclosed
+    # in horizontal lines for emphasis.
+    if not WIB_LIB_AVAILABLE:
+        console.print("-" * 40)
+        console.print("[bold yellow]Hardware Communication Warning:[/]")
+        if WIB_FW_SW_IFACE_PATH:
+            console.print(
+                f"Modules found but not loaded. Try running [red]make -o build/%.d python[/] in:\n[blue]{WIB_FW_SW_IFACE_PATH}[/]"
+            )
+        else:
+            console.print(
+                "Couldnt check wib status. [italic]dune-wib-firmware[/italic] repo not found."
+            )
+        console.print("-" * 40)
 
 
 if __name__ == "__main__":
