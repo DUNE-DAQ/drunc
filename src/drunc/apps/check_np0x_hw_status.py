@@ -162,6 +162,28 @@ WIB_DATA = {
 
 
 def check_hardware(ip: str) -> dict:
+    """
+    Checks the hardware status of a given IP address by first pinging it to determine if
+    it is online, and if it is online, attempting to query its FEMB power status using
+    the WIB library.
+
+    Args:
+        ip (str): The IP address of the hardware to check.
+
+    Returns:
+        dict: A dictionary containing the online status and FEMB power status of the
+        hardware, with the following structure:
+            {
+                "online": bool,  # True if the device is reachable, False otherwise
+                "fembs": list[bool]  # A list of 4 booleans indicating the power status
+                    of each FEMB (True for powered, False for not powered)
+            }
+
+    Raises:
+        None: All exceptions are caught and handled within the function, with the final
+            status defaulting to "offline" and all FEMBs as "not powered" in case of any
+            errors (e.g. timeouts, subprocess errors, gRPC errors, etc.).
+    """
     # Default state is 'In Progress' (None)
     final_status = {"online": False, "fembs": [False] * 4}
 
@@ -203,15 +225,54 @@ def check_hardware(ip: str) -> dict:
 
 
 def make_wib_table(category: str, wibs: dict[str, str], results_map: dict) -> Table:
+    """
+    Creates a Rich Table for a given category of WIBs, showing their online status and
+    FEMB power status.
+
+    Args:
+        category (str): The name of the category (e.g. "NP02 CB", "CRP4", etc.) to be
+            displayed as the table title.
+        wibs (dict): A mapping of WIB numbers to their corresponding IP addresses for
+            this category.
+        results_map (dict): A mapping of IP addresses to their hardware status results,
+            where each result is a dictionary containing 'online' status and 'fembs'
+            status.
+
+    Returns:
+        Table: A Rich Table object representing the status of the WIBs in this category,
+            with the WIB number, online status, and FEMB power status displayed in a
+            visually intuitive format (e.g. green checkmarks for online/powered, red Xs
+            for offline/unpowered, and dimmed dots for unknown status).
+
+    Raises:
+        None
+    """
+
+    # Create a table with a title based on the category name.
     table = Table(title=f"[magenta]{category}[/]", box=box.ROUNDED, border_style="dim")
+
+    # Add columns for WIB number and each of the 4 FEMBs, with centered text. The WIB
+    # number will be colored based on online status, and the FEMB columns will show
+    # icons based on their power status.
     table.add_column("WIB #", justify="center")
     for i in range(4):
         table.add_column(f"FEMB {i}", justify="center")
 
+    # Iterate through the WIBs in this category, adding a row for each. The WIB number
+    # is styled based on whether it's online (green) or offline (red), and the FEMB
+    # columns show a green checkmark if powered, a red X if not powered, or dimmed dots
+    # if the status is unknown (e.g. if the ping check hasn't completed yet). The
+    # results_map is used to get the current status for each IP, and if no result is
+    # available yet, the row will show the WIB number in white and the FEMB columns as
+    # dimmed dots to indicate that the status is still being checked.
     for wib_num, ip in wibs.items():
-        # Get the result, or if not checked yet, show dots
+        # Get the result for this IP from the results_map.
         res = results_map.get(ip)
 
+        # If no result is available yet (res is None), show the WIB number in white and
+        # the FEMB columns as dimmed dots. Otherwise, style the WIB number based on
+        # online status and show the FEMB columns with green checkmarks or red Xs based
+        # on their power status.
         if res is None:
             wib_text = f"[white]{wib_num}[/]"
             femb_icons = ["[dim]...[/]"] * 4
@@ -231,6 +292,33 @@ def make_wib_table(category: str, wibs: dict[str, str], results_map: dict) -> Ta
 
 
 def generate_display(results_map: dict) -> Table:
+    """
+    Generates the overall display grid for the current results.
+
+    This function creates a grid layout using the Rich library, where each apparatus
+    group (e.g. "NP02 CB", "NP02", "NP04 CB", "NP04") is displayed in its own section.
+    For each group, it iterates through the subcategories and creates a table for each
+    using the make_wib_table function. The resulting tables are arranged in columns
+    within the grid. The display is designed to be updated live as results come in,
+    showing the current status of each WIB and its FEMBs based on the results_map
+    provided.
+
+    Args:
+        results_map (dict): A mapping of IP addresses to their hardware status results,
+            where each result is a dictionary containing 'online' status and 'fembs'
+            status.
+
+    Returns:
+        Table: A Rich Table object representing the current status display for all
+            hardware.
+
+    Raises:
+        None
+    """
+
+    # Create a main grid to hold all apparatus groups. The grid is set to expand to fill
+    # the available space. Each group will be added as a row, with its own set of tables
+    # for the subcategories.
     grid = Table.grid(expand=True)
     for group_name, sub_cats in WIB_DATA.items():
         grid.add_row(f"\n[bold cyan]{group_name}[/]")
