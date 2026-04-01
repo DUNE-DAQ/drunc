@@ -277,6 +277,39 @@ def test_ps_endpoint(grpc_test_server_factory, process_query_request, ps_respons
     assert expected_response == response
 
 
+def test_flush_endpoint(
+    grpc_test_server_factory, process_query_request, flush_response
+):
+    """
+    Test that invoking the flush method gives the expected response.
+
+    Validates that the flush endpoint correctly processes ProcessQuery requests
+    and returns the expected ProcessInstanceList response format.
+    """
+    grpc_test_server, expected_response = grpc_test_server_factory(
+        "flush", flush_response
+    )
+
+    # Invoke the flush method via gRPC testing framework
+    flush_method = grpc_test_server.invoke_unary_unary(
+        method_descriptor=(
+            DESCRIPTOR.services_by_name["ProcessManager"].methods_by_name["flush"]
+        ),
+        invocation_metadata={},
+        request=process_query_request,
+        timeout=1,
+    )
+
+    # Block until response is ready and extract all response components
+    response, metadata, code, details = flush_method.termination()
+
+    # Verify the RPC completed successfully without errors
+    assert code == grpc.StatusCode.OK
+
+    # Verify all response fields match expected values
+    assert expected_response == response
+
+
 def test_logs_endpoint(grpc_test_server_factory, log_request, logs_response):
     """
     Test that invoking the logs method gives the expected response.

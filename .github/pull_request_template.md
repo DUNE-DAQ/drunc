@@ -101,8 +101,10 @@ Once completed, the reviewer can merge the PR.
 
 <summary>
 
-## Notification message for #daq-sw-librarians Slack channel
+## Notification message for a Slack channel
 </summary>
+
+Note - this should be to #dunedaq-integration for general workflow that isn't during a release candidate period, and to #daq-release-prep otherwise.
 
 ### For an single merge that changes the user workflow
 ```

@@ -19,7 +19,10 @@ from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.utils import on_parent_exit
 from drunc.processes.connection_utils import wait_for
 from drunc.processes.process_metadata import ProcessMetadata
-from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.processes.ssh_process_lifetime_manager import (
+    ProcessLifetimeManager,
+    RemotePidResult,
+)
 from drunc.utils.utils import get_logger
 
 
@@ -78,6 +81,19 @@ class ProcessWatcherThread(threading.Thread):
                 with self.manager.lock:
                     self.manager.metadata[self.uuid] = metadata
                 self.logger.debug(f"Metadata retrieved for process {self.uuid}")
+
+                # Log the terminal commands used to manually SIGKILL this process
+                # from outside the process manager which can be useful for debugging
+                # unexpected process deaths
+                if metadata.pid is not None:
+                    self.logger.debug(
+                        f"To manually kill remote process '{metadata.name}' (UUID: {self.uuid}), run: "
+                        f"ssh {self.user}@{self.hostname} kill -9 {metadata.pid}"
+                    )
+                self.logger.debug(
+                    f"To manually kill the local SSH client for '{metadata.name}' (UUID: {self.uuid}), run: "
+                    f"kill -9 {self.process.pid}"
+                )
             else:
                 # If metadata could not be read, fall back to monitoring SSH client
                 self.logger.warning(
@@ -259,6 +275,24 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         """
         with self.lock:
             return list(self.process_store.keys())
+
+    def get_remote_pid(self, uuid: str) -> RemotePidResult:
+        """
+        Return the remote PID for the process identified by *uuid*.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason``
+            set to ``"no metadata"`` when the metadata file has not yet
+            been written or could not be read.
+        """
+        with self.lock:
+            metadata = self.metadata.get(uuid)
+        if metadata is None or metadata.pid is None:
+            return RemotePidResult(reason="no metadata")
+        return RemotePidResult(pid=metadata.pid)
 
     def start_process(self, uuid: str, boot_request: BootRequest) -> None:
         """
@@ -962,7 +996,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self,
         uuid: str,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
-    ) -> Optional[int]:
+    ) -> int | None:
         """
         Kill a remote process and clean up all associated resources.
 
@@ -1051,6 +1085,43 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         except Exception as e:
             self.log.error(f"Error terminating remote process {uuid}: {e}")
             return None
+
+        return None
+
+    def crash_process(self, uuid: str) -> None:
+        """
+        Simulate a process crash by sending SIGKILL without performing any cleanup.
+
+        Sends SIGKILL to the remote process identified by uuid but deliberately
+        skips all cleanup steps (metadata file removal, internal tracking cleanup,
+        SSH client termination). This leaves the process manager in the same state
+        as if the process had crashed unexpectedly, allowing crash-recovery logic
+        to be exercised in tests.
+
+        Args:
+            uuid: Process UUID to crash
+        """
+        if uuid not in self.process_store:
+            self.log.warning(f"crash_process called for unknown UUID {uuid}")
+            return
+
+        process_info = self.process_store[uuid]
+        hostname = process_info["hostname"]
+        user = process_info["user"]
+
+        metadata = self.metadata.get(uuid, None)
+        if metadata is None or metadata.pid is None:
+            self.log.warning(
+                f"No remote PID for {uuid}, cannot send SIGKILL to simulate crash."
+            )
+            return
+
+        remote_pid = metadata.pid
+        self.log.debug(
+            f"Simulating crash of process {uuid} (PID {remote_pid}): "
+            f"sending SIGKILL without cleanup."
+        )
+        self._send_remote_signal(hostname, user, remote_pid, "KILL")
 
     def _cleanup_process_resources(self, uuid: str) -> None:
         """Remove all resources associated with a process UUID."""
