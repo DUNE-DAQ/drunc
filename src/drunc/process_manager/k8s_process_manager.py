@@ -2286,10 +2286,11 @@ class K8sProcessManager(ProcessManager):
             pd.CopyFrom(self.boot_request[proc_uuid].process_description)
             pr.CopyFrom(self.boot_request[proc_uuid].process_restriction)
 
-            if pod and pod.spec and pod.spec.node_selector:
-                pd.metadata.hostname = pod.spec.node_selector.get(
-                    "kubernetes.io/hostname"
-                )
+            if pod and pod.spec and pod.spec.node_name:
+                # Use the actual scheduled node (spec.node_name), not the
+                # requested node_selector — these differ for the root-controller
+                # which cannot use host networking and gets a private pod IP.
+                pd.metadata.hostname = pod.spec.node_name
 
             ret.append(
                 ProcessInstance(

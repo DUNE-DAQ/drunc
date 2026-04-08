@@ -95,6 +95,37 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         )
         self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
 
+    def get_process_hostnames(self) -> dict[str, str]:
+        """
+        Returns a mapping of process name → node hostname from the process manager.
+
+        For K8s sessions this comes from pod.spec.node_name (the actual scheduled
+        node), which is accurate even for the root-controller whose gRPC endpoint
+        is a private pod IP.  Returns an empty dict when the process manager is
+        unavailable, so callers fall back to DNS-based resolution.
+        """
+        pm_driver = self.get_driver("process_manager", quiet_fail=True)
+        if not pm_driver:
+            return {}
+
+        from druncschema.process_manager_pb2 import ProcessQuery
+
+        try:
+            query = (
+                ProcessQuery(names=[".*"], session=self.session_name)
+                if self.session_name
+                else ProcessQuery(names=[".*"])
+            )
+            proc_list = pm_driver.ps(query)
+            return {
+                proc.process_description.metadata.name: proc.process_description.metadata.hostname
+                for proc in proc_list.values
+                if proc.process_description.metadata.name
+                and proc.process_description.metadata.hostname
+            }
+        except Exception:
+            return {}
+
     def terminate(self) -> None:
         if self.status_receiver_pm:
             self.status_receiver_pm.stop()

@@ -71,7 +71,9 @@ def match_children(
 
 
 def get_status_table(
-    status_response: StatusResponse, describe_response: DescribeResponse
+    status_response: StatusResponse,
+    describe_response: DescribeResponse,
+    name_to_hostname: dict[str, str] | None = None,
 ):
     status = status_response.status
     description = describe_response.description
@@ -102,24 +104,41 @@ def get_status_table(
         if status is None or description is None:
             return
 
-        def update_endpoint(endpoint: str) -> str:
+        def update_endpoint(endpoint: str, proc_name: str) -> str:
             """
-            Parses endpoint to a human readable hostname
+            Returns a human-readable endpoint string.
+
+            Prefers the hostname from the process-manager's ps response
+            (name_to_hostname), which for K8s pods comes from pod.spec.node_name
+            and is therefore accurate even for the root-controller whose gRPC
+            address is a private pod IP.  Falls back to reverse-DNS / FQDN
+            expansion when no PM data is available.
 
             Args:
-            endpoint: Process URI
+                endpoint: gRPC URI reported by the controller (e.g. grpc://10.x:port)
+                proc_name: process name used to look up PM hostname data
 
             Returns:
-            str: URI with human readable hostname
+                str: URI with a fully-qualified, human-readable hostname
             """
             if not endpoint:
                 return ""
 
-            ip_address = urlparse(endpoint).hostname
-            if not ip_address:
+            parsed = urlparse(endpoint)
+            raw_host = parsed.hostname
+            if not raw_host:
                 return ""
-            resolved_host = get_hostname_smart(ip_address)
-            return endpoint.replace(ip_address, resolved_host)
+
+            # Prefer PM-provided hostname (actual K8s node, or SSH target host).
+            if name_to_hostname and proc_name in name_to_hostname:
+                pm_host = get_hostname_smart(name_to_hostname[proc_name])
+                port = parsed.port
+                scheme = parsed.scheme or "grpc"
+                return f"{scheme}://{pm_host}:{port}" if port else f"{scheme}://{pm_host}"
+
+            # Fall back to DNS-based resolution / FQDN expansion.
+            resolved_host = get_hostname_smart(raw_host)
+            return endpoint.replace(raw_host, resolved_host)
 
         table.add_row(
             prefix + status_response.name,
@@ -128,7 +147,7 @@ def get_status_table(
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            update_endpoint(description.endpoint),
+            update_endpoint(description.endpoint, status_response.name),
         )
 
         children = match_children(status_response.children, describe_response.children)
@@ -189,7 +208,10 @@ class StatusTableUpdater(Progress):
     def update_table(self):
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
-        self.table = get_status_table(statuses, descriptions)
+        # Hostname data is provided by the shell context, which owns the
+        # responsibility of bridging the process manager and controller layers.
+        name_to_hostname = self.ctx.get_process_hostnames()
+        self.table = get_status_table(statuses, descriptions, name_to_hostname)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -756,25 +778,45 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 @functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
-    Resolves an IP to a hostname, with optimizations:
+    Resolves an IP to its FQDN hostname, or expands a short hostname to its FQDN:
     1. Caches all results.
-    2. Immediately skips private/internal IPs (like K8s).
-    3. Uses a short timeout for public IPs.
+    2. Uses a short timeout for all DNS lookups.
+    3. For IPs: reverse DNS lookup; expands to FQDN if result is not already qualified.
+    4. For hostnames: forward DNS expansion to FQDN.
     """
 
     if not ip_or_host:
         return ""
 
-    try:
-        ip_address = ipaddress.ip_address(ip_or_host)
-    except ValueError:
-        return ip_or_host
-    # If public IP, try to resolve it.
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)
+
+        try:
+            ip_address = ipaddress.ip_address(ip_or_host)
+        except ValueError:
+            # Not an IP address — it's a hostname.
+            # Map loopback aliases to the machine's actual FQDN so that
+            # SSH sessions that target "localhost" don't show "localhost.localdomain".
+            if ip_or_host in ("localhost", "localhost.localdomain"):
+                fqdn = socket.getfqdn(socket.gethostname())
+                return fqdn if fqdn else socket.gethostname()
+            # Expand short hostname to FQDN via forward DNS lookup.
+            fqdn = socket.getfqdn(ip_or_host)
+            return fqdn if fqdn else ip_or_host
+
+        # Is an IP — resolve loopback IPs (127.x.x.x, ::1) to the machine's FQDN.
+        if ip_address.is_loopback:
+            fqdn = socket.getfqdn(socket.gethostname())
+            return fqdn if fqdn else socket.gethostname()
+
+        # Non-loopback IP — try reverse DNS lookup.
         try:
             hostname, _, _ = socket.gethostbyaddr(str(ip_address))
+            # Expand to FQDN if the reverse-DNS result is only a short hostname.
+            if "." not in hostname:
+                fqdn = socket.getfqdn(hostname)
+                return fqdn if fqdn else hostname
             return hostname
         except (socket.herror, socket.gaierror, socket.timeout, OSError):
             return ip_or_host
