@@ -3,6 +3,8 @@ Fixes issue # _ISSUE NUMBER_
 
 _WHAT DOES THIS PR CHANGE - ONE LINE._
 
+__DON'T FORGET TO LABEL THE ISSUE WITH THE APPROPRIATE TOPIC__
+
 _DOCUMENT THE CHANGE BELOW OR DELETE IT_
 
 The relevant changes in the user workflow have been documented _here_ (link URL)

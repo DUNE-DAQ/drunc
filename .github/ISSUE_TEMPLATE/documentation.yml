@@ -9,7 +9,10 @@ body:
     attributes:
       label: Description
       description: Describe what part of the documentation needs updating
-      placeholder: "XYZ is not described well in the README..."
+      placeholder: | 
+        "XYZ is not described well in the README..." 
+        
+        **Do not forget to label this issue with the approriate topic!**
     validations:
       required: true
   - type: textarea

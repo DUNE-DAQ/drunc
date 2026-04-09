@@ -11,6 +11,8 @@ body:
         Describe what is changing and why. Reference descriptions in other issues, presentations, etc. as appropriate.
 
         (You can attach images or files by clicking this area to highlight it and then dragging files in.)
+
+        **Do not forget to label this issue with the approriate topic!**
       placeholder: "Description here..."
     validations:
       required: true
