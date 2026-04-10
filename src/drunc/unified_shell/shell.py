@@ -34,7 +34,7 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.exceptions import DruncBatchShellArgError, DruncSetupException
+from drunc.exceptions import DruncBatchShellArgError, DruncSetupException, DruncBatchShellUnknownCommand, DruncBatchShellError, DruncBatchShellMissingArg
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
@@ -398,10 +398,10 @@ def unified_shell(
 
     # If any of the commands is in the click commands, set batch mode
     if ctx.obj.batch_commands:
-        validate_chain(ctx, extract_batch_args)
         ctx.obj.running_mode = UnifiedShellMode.BATCH
         ctx.command.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
+        validate_chain(ctx, extract_batch_args)
 
     # If start-shell is in the arguments, set semibatch mode
     if "start-shell" in ctx.obj.batch_commands:
@@ -576,7 +576,7 @@ def split_chain(
     while i < len(chain_args):
         cmd = chain_args[i]
         if cmd not in command_names:
-            raise click.UsageError(f"No such command '{cmd}'")
+            raise DruncBatchShellUnknownCommand(cmd)
         i += 1
         cmd_args = []
         while i < len(chain_args) and chain_args[i] not in command_names:
@@ -593,13 +593,75 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
         chain_args (list): Flattened list of tokens from extract_chain_tokens.
     """
     command_names = set(ctx.command.commands.keys())
+    unified_shell_log = get_logger("unified_shell", rich_handler=True)
+
+    def command_can_consume_more_positionals(
+        command: click.Command, provided_args: list[str]
+    ) -> bool:
+        argument_params = [p for p in command.params if isinstance(p, click.Argument)]
+        if not argument_params:
+            return False
+
+        remaining_tokens = len(provided_args)
+        for argument_param in argument_params:
+            if argument_param.nargs == -1:
+                return True
+
+            if remaining_tokens >= argument_param.nargs:
+                remaining_tokens -= argument_param.nargs
+            else:
+                return True
+
+        return False
 
     try:
         chained_cmds = split_chain(chain_args, command_names)
-        for cmd_name, cmd_args in chained_cmds:
-            sub_cmd = ctx.command.commands[cmd_name]
+        unified_shell_log.critical(chained_cmds)
+        for index, (cmd_name_real, cmd_args_real) in enumerate(chained_cmds):
+            cmd_name = cmd_name_real
+            cmd_args = cmd_args_real.copy()
+            cmd_args_static = cmd_args_real.copy()
+            
+            sub_cmd: click.Command = ctx.command.commands[cmd_name]
+
+            unified_shell_log.info(f'parsing {cmd_name, cmd_args}')
+            # Validate the command as split by split_chain
             sub_cmd.make_context(
                 cmd_name, cmd_args, parent=ctx, resilient_parsing=False
             )
+
+            # Also validate boundary tokens that could still be consumed as positional
+            # arguments by the current command. This catches cases like
+            # "wait conf", where "conf" is a command token but Click may attempt to
+            # parse it as wait's positional argument first.
+            cmd_args = cmd_args_real.copy()
+            if (
+                index + 1 < len(chained_cmds)
+                and not cmd_args
+                and command_can_consume_more_positionals(sub_cmd, cmd_args)
+            ):
+                next_cmd_name, _ = chained_cmds[index + 1]
+                prev_cmd_name, _ = chained_cmds[index]
+                
+                unified_shell_log.info(f'parsing {next_cmd_name}')
+                
+                try:
+                    sub_cmd.make_context(
+                        cmd_name,
+                        [*cmd_args, next_cmd_name],
+                        parent=ctx,
+                        resilient_parsing=False,
+                    )
+                except click.ClickException as e:
+                    raise DruncBatchShellMissingArg(prev_cmd_name,next_cmd_name) from e
+    
+    except click.NoSuchOption as e: 
+        raise DruncBatchShellError(e) from e
+    
     except click.UsageError as e:
-        raise DruncBatchShellArgError(e) from e
+        raise DruncBatchShellArgError(cmd_args_static) from e
+    
+    except click.ClickException as e:
+        raise DruncBatchShellError(e) from e
+
+    
