@@ -202,9 +202,25 @@ def get_status_table(
 
     return t
 
-def render_status_table(ctx: UnifiedShellContext):
-    statuses = ctx.get_driver("controller").status()
-    descriptions = ctx.get_driver("controller").describe()
+from drunc.controller.interface.context import ControllerContext
+
+
+def render_status_table(
+    ctx: ControllerContext,
+    target: str = "",
+    execute_along_path: bool = True,
+    execute_on_all_subsequent_children_in_path: bool = True,
+):
+    statuses = ctx.get_driver("controller").status(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    descriptions = ctx.get_driver("controller").describe(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
     display_host_overrides = ctx.get_endpoint_display_host_overrides()
     return get_status_table(
         statuses,

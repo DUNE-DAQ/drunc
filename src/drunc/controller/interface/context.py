@@ -39,6 +39,16 @@ class ControllerContext(ShellContext):  # boilerplatefest
         )
         self.status_receiver = BroadcastHandler(broadcast_configuration=bcch)
 
+    def get_endpoint_display_host_overrides(self) -> dict[str, str]:
+        """
+        Return UI-only endpoint host overrides.
+
+        The controller's advertised endpoint remains the authoritative connect
+        address. This method only provides cosmetic host substitutions for
+        status-table rendering.
+        """
+        return {}
+
     def terminate(self):
         if self.status_receiver:
             self.status_receiver.stop()

@@ -4,7 +4,7 @@ from time import sleep
 import click
 
 from drunc.controller.interface.context import ControllerContext
-from drunc.controller.interface.shell_utils import controller_setup, get_status_table
+from drunc.controller.interface.shell_utils import controller_setup, render_status_table
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
@@ -76,18 +76,14 @@ def status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    statuses = obj.get_driver("controller").status(
-        target=target,
-        execute_along_path=execute_along_path,
-        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    )  # Get the dynamic system information
-    descriptions = obj.get_driver("controller").describe(
-        target=target,
-        execute_along_path=execute_along_path,
-        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-    )  # Get the static system information
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
+    obj.print(
+        render_status_table(
+            obj,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+    )
     obj.print_status_summary()
 
 
