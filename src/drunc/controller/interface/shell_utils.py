@@ -71,7 +71,7 @@ def match_children(
 
 
 def get_status_table(
-    status_response: StatusResponse, describe_response: DescribeResponse
+    status_response: StatusResponse, describe_response: DescribeResponse, display_host_overrides: dict[str, str] | None = None,
 ):
     status = status_response.status
     description = describe_response.description
@@ -102,7 +102,7 @@ def get_status_table(
         if status is None or description is None:
             return
 
-        def update_endpoint(endpoint: str) -> str:
+        def update_endpoint(endpoint: str, proc_name: str) -> str:
             """
             Parses endpoint to a human readable hostname
 
@@ -115,11 +115,34 @@ def get_status_table(
             if not endpoint:
                 return ""
 
-            ip_address = urlparse(endpoint).hostname
-            if not ip_address:
+            parsed = urlparse(endpoint)
+            raw_host = parsed.hostname
+            if not raw_host:
                 return ""
-            resolved_host = get_hostname_smart(ip_address)
-            return endpoint.replace(ip_address, resolved_host)
+
+            scheme = parsed.scheme
+            port = parsed.port
+
+            if display_host_overrides and proc_name in display_host_overrides:
+                display_host = display_host_overrides[proc_name]
+                pretty = (
+                    f"{scheme}://{display_host}:{port}"
+                    if port is not None
+                    else f"{scheme}://{display_host}"
+                )
+                if display_host != raw_host:
+                    return f"{pretty} [dim](actual: {raw_host})[/dim]"
+                return pretty
+
+            resolved = get_hostname_smart(raw_host)
+            if resolved != raw_host:
+                return (
+                    f"{scheme}://{resolved}:{port}"
+                    if port is not None
+                    else f"{scheme}://{resolved}"
+                )
+
+            return endpoint
 
         table.add_row(
             prefix + status_response.name,
@@ -128,7 +151,7 @@ def get_status_table(
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            update_endpoint(description.endpoint),
+            update_endpoint(description.endpoint, status_response.name),
         )
 
         children = match_children(status_response.children, describe_response.children)
@@ -179,6 +202,15 @@ def get_status_table(
 
     return t
 
+def render_status_table(ctx: UnifiedShellContext):
+    statuses = ctx.get_driver("controller").status()
+    descriptions = ctx.get_driver("controller").describe()
+    display_host_overrides = ctx.get_endpoint_display_host_overrides()
+    return get_status_table(
+        statuses,
+        descriptions,
+        display_host_overrides=display_host_overrides,
+    )
 
 class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
@@ -187,9 +219,7 @@ class StatusTableUpdater(Progress):
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
-        statuses = self.ctx.get_driver("controller").status()
-        descriptions = self.ctx.get_driver("controller").describe()
-        self.table = get_status_table(statuses, descriptions)
+        self.table = render_status_table(self.ctx)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -648,10 +678,7 @@ def run_one_fsm_command(
     add_to_table(t, result)
     obj.print(t)  # rich tables require console printing
 
-    statuses = obj.get_driver("controller").status()
-    descriptions = obj.get_driver("controller").describe()
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
+    obj.print(render_status_table(obj))
     obj.print_status_summary()
 
 

@@ -95,6 +95,52 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         )
         self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
 
+
+    def get_endpoint_display_host_overrides(self) -> dict[str, str]:
+        """
+        Return a mapping of process name -> preferred display hostname for endpoint
+        rendering in the UI.
+
+        These values are cosmetic only. The controller's advertised endpoint remains
+        the authoritative connect address.
+
+        Returns:
+            dict[str, str]: Mapping from process name to preferred display hostname.
+        """
+        pm_driver = self.get_driver("process_manager", quiet_fail=True)
+        if not pm_driver:
+            return {}
+
+        from druncschema.process_manager_pb2 import ProcessQuery
+
+        try:
+            query = (
+                ProcessQuery(names=[".*"], session=self.session_name)
+                if self.session_name
+                else ProcessQuery(names=[".*"])
+            )
+            proc_list = pm_driver.ps(query)
+        except Exception:
+            return {}
+
+        overrides: dict[str, str] = {}
+
+        for proc in proc_list.values:
+            try:
+                metadata = proc.process_description.metadata
+            except Exception:
+                continue
+
+            proc_name = getattr(metadata, "name", "")
+            host_name = getattr(metadata, "hostname", "")
+
+            if not proc_name or not host_name:
+                continue
+
+            overrides[proc_name] = host_name
+
+        return overrides
+
     def terminate(self) -> None:
         if self.status_receiver_pm:
             self.status_receiver_pm.stop()
