@@ -9,6 +9,7 @@ activity and threading state fully isolated from the parent process.
 import logging
 import logging.handlers
 import multiprocessing
+import signal
 import threading
 import types
 import uuid as _uuid_module
@@ -16,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
+from drunc.process_manager.utils import on_parent_exit
 from drunc.processes.ssh_process_lifetime_manager import (
     ProcessLifetimeManager,
     RemotePidResult,
@@ -123,6 +125,9 @@ def _worker_process_main(
         disable_host_key_check:           Forwarded to SSHProcessLifetimeManagerShell.
         disable_localhost_host_key_check: Forwarded to SSHProcessLifetimeManagerShell.
     """
+    # Ensure this worker exits if its creating parent process dies unexpectedly.
+    on_parent_exit(signal.SIGTERM)()
+
     # ------------------------------------------------------------------
     # Redirect all log records from this child process to
     # the parent via the shared queue. The QueueListener in the parent
