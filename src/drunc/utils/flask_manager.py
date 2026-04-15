@@ -5,19 +5,46 @@ import signal
 import threading
 import time
 from multiprocessing import Process
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import gunicorn.app.base
 import psutil
 import requests
 from flask import Flask, jsonify, make_response, request
-from flask_restful import Api, Resource
+
+if TYPE_CHECKING:
+    class _BaseApplication:
+        cfg: Any
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+
+        def run(self) -> None: ...
+
+    class _Resource:
+        pass
+
+    class Api:
+        """Typing stub for flask_restful.Api."""
+
+        def __init__(self, app: Flask) -> None:
+            """Initialize the API with a Flask application."""
+            ...
+
+        def add_resource(
+            self, resource: type[_Resource], *urls: str, **kwargs: Any
+        ) -> None:
+            """Register a resource class on one or more URL routes."""
+            ...
+
+else:
+    from flask_restful import Api
+    from flask_restful import Resource as _Resource
+    from gunicorn.app.base import BaseApplication as _BaseApplication
 
 from drunc.exceptions import DruncCommandException
 from drunc.utils.utils import get_logger, get_new_port
 
 
-class GunicornStandaloneApplication(gunicorn.app.base.BaseApplication):
+class GunicornStandaloneApplication(_BaseApplication):
     """Standalone Gunicorn application wrapper."""
 
     def __init__(
@@ -153,9 +180,8 @@ class FlaskManager(threading.Thread):
                 "workers": self.workers,
             },
         )
-        assert self.prod_app is not None, (
-            "GunicornStandaloneApplication creation failed"
-        )
+        prod_app = self.prod_app
+        assert prod_app is not None, "GunicornStandaloneApplication creation failed"
 
         def run_gunicorn_with_signal_handling() -> None:
             """Run gunicorn with SIGHUP ignored to prevent reload on shutdown.
@@ -171,7 +197,7 @@ class FlaskManager(threading.Thread):
                 # May fail if already in a process group or on some systems, ignore
                 pass
 
-            self.prod_app.run()
+            prod_app.run()
 
         thread_name = f"{self.name}_thread"
         flask_srv = Process(  # Indeed, we've just forked this sucker
@@ -318,7 +344,7 @@ def main() -> None:
     Creates a simple Flask application with a dummy endpoint and starts it.
     """
 
-    class DummyEndpoint(Resource):
+    class DummyEndpoint(_Resource):
         def post(self) -> None:
             print(request)
 
