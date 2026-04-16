@@ -22,7 +22,6 @@ if TYPE_CHECKING:
         cfg: _GunicornConfig
 
         def __init__(self, *args: object, **kwargs: object) -> None: ...
-
         def run(self) -> None: ...
 
     class _Resource:

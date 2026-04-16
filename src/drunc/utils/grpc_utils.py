@@ -247,8 +247,7 @@ def dict_to_grpc_proto(
 
 @dataclass
 class GrpcErrorDetails:
-    """A structured representation of a gRPC error.
-
+    """
     A structured representation of a gRPC error, including its status code,
     message, and any extracted rich error details. Used to extract and format
     detailed error information on the client side.
@@ -431,8 +430,7 @@ def abort_with_rich_error_status(
 
 
 class RichErrorServerInterceptor:
-    """Catch exceptions and convert them into rich error statuses.
-
+    """
     A gRPC server interceptor that catches exceptions and converts them into
     rich error statuses with structured error details.
     """
