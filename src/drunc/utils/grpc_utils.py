@@ -1,7 +1,7 @@
 """gRPC utilities for DRUNC."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, NoReturn, cast
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -363,7 +363,7 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     """
     code = grpc_error.code().name if grpc_error.code() else "UNKNOWN"
     try:
-        status = rpc_status.from_call(grpc_error)
+        status = rpc_status.from_call(cast(grpc.Call, grpc_error))
     except NotImplementedError:
         return GrpcErrorDetails(code=code, message="No message", details=[])
 
