@@ -35,7 +35,7 @@ dependencies = [
 [project.optional-dependencies]
 prod = ["paramiko[gssapi]"]
 dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
-test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
+test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75", "mypy", "types-requests", "types-grpcio-status", "types-psutil"]
 
 [project.scripts]
 fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
@@ -71,6 +71,33 @@ testpaths = ["tests"]
 [tool.coverage.run]
 source = ["drunc"]
 omit = ["tests/*"]
+
+[tool.mypy]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+strict_equality = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+
+disallow_any_explicit = true
+disallow_any_expr = false
+disallow_any_decorated = true
+disallow_any_unimported = true
+
+
+# These overrides are because the library stubs dont exist and not on typeshed
+[[tool.mypy.overrides]]
+module = ["google.rpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["conffwk"]
+ignore_missing_imports = true
 
 # * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
 [tool.ruff.lint]
