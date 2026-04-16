@@ -84,10 +84,10 @@ strict_equality = true
 disallow_any_generics = true
 disallow_subclassing_any = true
 
-disallow_any_explicit = false
+disallow_any_explicit = true
 disallow_any_expr = false
-disallow_any_decorated = false
-disallow_any_unimported = false
+disallow_any_decorated = true
+disallow_any_unimported = true
 
 
 # These overrides are because the library stubs dont exist and not on typeshed

@@ -3,7 +3,7 @@
 import json
 import os
 from enum import Enum
-from typing import Any
+from typing import Protocol, cast
 
 import conffwk
 
@@ -110,19 +110,30 @@ class OKSKey:
         self.session = session
 
 
+class _DataTypeName(Protocol):
+    _name_: str
+
+
+class _ConfigurationData(Protocol):
+    type: _DataTypeName
+    broadcaster: object
+    authoriser: object
+
+
 class ConfHandler:
     """Handler for loading and parsing DRUNC configurations.
 
-    Supports multiple configuration types including JSON files, Protobuf messages, and OKS.
+    Supports multiple configuration types including JSON files, Protobuf messages,
+    and OKS.
     """
 
     def __init__(
         self,
-        data: Any = None,
+        data: object = None,
         type: ConfTypes = ConfTypes.PyObject,
         oks_key: OKSKey | None = None,
-        *args: Any,
-        **kwargs: Any,
+        *args: object,
+        **kwargs: object,
     ) -> None:
         """Initialize a ConfHandler.
 
@@ -152,7 +163,7 @@ class ConfHandler:
         self.oks_key = oks_key
         self.validate_and_parse_configuration_location(*args, **kwargs)
 
-    def get_data(self) -> Any:
+    def get_data(self) -> object:
         """Get the configuration data.
 
         Returns:
@@ -166,23 +177,23 @@ class ConfHandler:
         Returns:
             str: The name of the data type.
         """
-        return str(self.get_data().type._name_)
+        return str(cast(_ConfigurationData, self.get_data()).type._name_)
 
-    def get_data_broadcaster(self) -> Any:
+    def get_data_broadcaster(self) -> object:
         """Get the broadcaster from the configuration data.
 
         Returns:
             Any: The broadcaster object.
         """
-        return self.get_data().broadcaster
+        return cast(_ConfigurationData, self.get_data()).broadcaster
 
-    def get_data_authoriser(self) -> Any:
+    def get_data_authoriser(self) -> object:
         """Get the authoriser from the configuration data.
 
         Returns:
             Any: The authoriser object.
         """
-        return self.get_data().authoriser
+        return cast(_ConfigurationData, self.get_data()).authoriser
 
     def copy_oks_key(self) -> OKSKey | None:
         """Get a copy of the OKS key if one exists.
@@ -192,7 +203,7 @@ class ConfHandler:
         """
         return self.oks_key
 
-    def _parse_oks_file(self, oks_path: str) -> Any:
+    def _parse_oks_file(self, oks_path: str) -> object:
         try:
             self.oks_path = oks_path
             self.log.debug(f"Using {self.oks_path} to configure")
@@ -212,17 +223,17 @@ class ConfHandler:
                 "OKS params where not passed to this ConfigurationHandler, cannot parse OKS configurations"
             ) from e
 
-    def _post_process_oks(self, *args: Any, **kwargs: Any) -> None:
+    def _post_process_oks(self, *args: object, **kwargs: object) -> None:
         pass
 
-    def _parse_pbany(self, pbany_data: Any) -> Any:
+    def _parse_pbany(self, pbany_data: object) -> object:
         raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.class_name)
 
-    def _parse_dict(self, data: dict[str, Any]) -> Any:
+    def _parse_dict(self, data: dict[str, object]) -> object:
         raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.class_name)
 
     def validate_and_parse_configuration_location(
-        self, *args: Any, **kwargs: Any
+        self, *args: object, **kwargs: object
     ) -> None:
         """Validate and parse the configuration from the provided location.
 
@@ -239,8 +250,8 @@ class ConfHandler:
                 self._post_process_oks(*args, **kwargs)
 
             case ConfTypes.JsonFileName:
-                resolved = expand_path(self.initial_data, True)
-                if not os.path.exists(expand_path(self.initial_data)):
+                resolved = expand_path(cast(str, self.initial_data), True)
+                if not os.path.exists(expand_path(cast(str, self.initial_data))):
                     raise DruncSetupException(
                         f"Location {resolved} ({self.initial_data}) is empty!"
                     )
@@ -252,7 +263,7 @@ class ConfHandler:
                     self._post_process_oks(*args, **kwargs)
 
             case ConfTypes.OKSFileName:
-                self.data = self._parse_oks_file(self.initial_data)
+                self.data = self._parse_oks_file(cast(str, self.initial_data))
                 self.type = ConfTypes.PyObject
                 self._post_process_oks(*args, **kwargs)
 

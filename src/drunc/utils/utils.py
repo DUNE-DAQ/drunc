@@ -13,10 +13,10 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Protocol, cast
 from urllib.parse import ParseResult, urlparse
 
-from click import BadParameter
+from click import BadParameter, Context, Parameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import Response, delete, get, patch, post
 from rich.logging import RichHandler
@@ -53,18 +53,29 @@ def get_root_logger(log_level: str) -> logging.Logger:
     return setup_root_logger("drunc", log_level)
 
 
-def get_logger(logger_name: str, *args: Any, **kwargs: Any) -> logging.Logger:
-    """Get a logger instance for the given logger name.
-
-    Args:
-        logger_name (str): The name of the logger.
-        *args: Additional positional arguments to pass to get_daq_logger.
-        **kwargs: Additional keyword arguments to pass to get_daq_logger.
-
-    Returns:
-        logging.Logger: Configured logger instance.
-    """
-    return get_daq_logger(f"drunc.{logger_name}", *args, **kwargs)
+def get_logger(
+    logger_name: str,
+    log_level: int | str = logging.NOTSET,
+    use_parent_handlers: bool = True,
+    rich_handler: bool = False,
+    file_handler_path: str | None = None,
+    stream_handlers: bool = False,
+    ers_kafka_session: str | None = None,
+    throttle: bool = False,
+    **extras: object,
+) -> logging.Logger:
+    """Get a logger instance for the given logger name."""
+    return get_daq_logger(
+        f"drunc.{logger_name}",
+        log_level,
+        use_parent_handlers,
+        rich_handler,
+        file_handler_path,
+        stream_handlers,
+        ers_kafka_session,
+        throttle,
+        **extras,
+    )
 
 
 def get_shared_rich_console(logger: logging.Logger):
@@ -184,7 +195,9 @@ def expand_path(path: str, turn_to_abs_path: bool = False) -> str:
     return os.path.expanduser(os.path.expandvars(path))
 
 
-def validate_command_facility(ctx: Any, param: Any, value: str) -> str:
+def validate_command_facility(
+    ctx: Context | None, param: Parameter | None, value: str
+) -> str:
     """Validate a command facility parameter.
 
     Args:
@@ -370,10 +383,10 @@ def https_or_http_present(address: str) -> None:
 
 def http_post(
     address: str,
-    data: Any,
+    data: object,
     as_json: bool = True,
     ignore_errors: bool = False,
-    **post_kwargs: Any,
+    **post_kwargs: object,
 ) -> Response:
     """Send an HTTP POST request.
 
@@ -389,9 +402,9 @@ def http_post(
     """
     https_or_http_present(address)
     if as_json:
-        r = post(address, json=data, **post_kwargs)
+        r = post(address, json=data, **post_kwargs)  # type: ignore[arg-type]
     else:
-        r = post(address, data=data, **post_kwargs)
+        r = post(address, data=data, **post_kwargs)  # type: ignore[arg-type]
 
     if not ignore_errors:
         r.raise_for_status()
@@ -400,10 +413,10 @@ def http_post(
 
 def http_get(
     address: str,
-    data: Any,
+    data: object,
     as_json: bool = True,
     ignore_errors: bool = False,
-    **post_kwargs: Any,
+    **post_kwargs: object,
 ) -> Response:
     """Send an HTTP GET request.
 
@@ -423,9 +436,9 @@ def http_get(
 
     log.debug(f"GETTING {address} {data}")
     if as_json:
-        r = get(address, json=data, **post_kwargs)
+        r = get(address, json=data, **post_kwargs)  # type: ignore[arg-type]
     else:
-        r = get(address, data=data, **post_kwargs)
+        r = get(address, data=data, **post_kwargs)  # type: ignore[arg-type]
 
     log.debug(r.text)
     log.debug(r.status_code)
@@ -438,10 +451,10 @@ def http_get(
 
 def http_patch(
     address: str,
-    data: Any,
+    data: object,
     as_json: bool = True,
     ignore_errors: bool = False,
-    **post_kwargs: Any,
+    **post_kwargs: object,
 ) -> Response:
     """Send an HTTP PATCH request.
 
@@ -458,9 +471,9 @@ def http_patch(
     https_or_http_present(address)
 
     if as_json:
-        r = patch(address, json=data, **post_kwargs)
+        r = patch(address, json=data, **post_kwargs)  # type: ignore[arg-type]
     else:
-        r = patch(address, data=data, **post_kwargs)
+        r = patch(address, data=data, **post_kwargs)  # type: ignore[arg-type]
 
     if not ignore_errors:
         r.raise_for_status()
@@ -469,10 +482,10 @@ def http_patch(
 
 def http_delete(
     address: str,
-    data: Any,
+    data: object,
     as_json: bool = True,
     ignore_errors: bool = False,
-    **post_kwargs: Any,
+    **post_kwargs: object,
 ) -> None:
     """Send an HTTP DELETE request.
 
@@ -486,12 +499,16 @@ def http_delete(
     https_or_http_present(address)
 
     if as_json:
-        r = delete(address, json=data, **post_kwargs)
+        r = delete(address, json=data, **post_kwargs)  # type: ignore[arg-type]
     else:
-        r = delete(address, data=data, **post_kwargs)
+        r = delete(address, data=data, **post_kwargs)  # type: ignore[arg-type]
 
     if not ignore_errors:
         r.raise_for_status()
+
+
+class _ConnectivityService(Protocol):
+    def resolve(self, name: str, message_type: str) -> list[dict[str, object]]: ...
 
 
 class ControlType(Enum):
@@ -528,7 +545,7 @@ def get_control_type_and_uri_from_cli(cli_args: list[str]) -> tuple[ControlType,
 
 
 def get_control_type_and_uri_from_connectivity_service(
-    connectivity_service: Any,
+    connectivity_service: _ConnectivityService,
     name: str,
     timeout: int = 10,  # seconds
     retry_wait: float = 0.1,  # seconds
@@ -538,7 +555,7 @@ def get_control_type_and_uri_from_connectivity_service(
     """Get control type and URI from connectivity service.
 
     Args:
-        connectivity_service (Any): The connectivity service instance.
+        connectivity_service (object): The connectivity service instance.
         name (str): The name of the service to resolve.
         timeout (int): Maximum time to wait for resolution in seconds. Defaults to 10.
         retry_wait (float): Time to wait between retries in seconds. Defaults to 0.1.
@@ -551,7 +568,7 @@ def get_control_type_and_uri_from_connectivity_service(
     Raises:
         ApplicationLookupUnsuccessful: If the URI cannot be resolved.
     """
-    uris = []
+    uris: list[dict[str, object]] = []
     logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
     shared_console = get_shared_rich_console(logger)
 
@@ -616,7 +633,7 @@ def get_control_type_and_uri_from_connectivity_service(
             f"Could not resolve the URI for '{name}_control' in the connectivity service, got response {uris}"
         )
 
-    uri = uris[0]["uri"]
+    uri = cast(str, uris[0]["uri"])
 
     return get_control_type_and_uri_from_cli([uri])
 

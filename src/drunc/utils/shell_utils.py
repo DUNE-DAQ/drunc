@@ -3,7 +3,7 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from typing import Any, Callable, Protocol, cast
+from typing import Callable, ParamSpec, Protocol, TypeVar, cast
 
 import click
 from druncschema.token_pb2 import Token
@@ -71,6 +71,10 @@ class ControllerDriverProtocol(Protocol):
         ...
 
 
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
 class InterruptedCommand(DruncShellException):
     """Exception thrown to interrupt a shell command without a full stack trace."""
 
@@ -91,13 +95,14 @@ def create_dummy_token_from_uname() -> Token:
     )
 
 
-def add_traceback_flag() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+def add_traceback_flag() -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Add a traceback flag to a command.
 
     Returns:
         Callable: A decorator that adds the traceback flag.
     """
-    def wrapper(f0: Callable[..., Any]) -> Callable[..., Any]:
+
+    def wrapper(f0: Callable[P, R]) -> Callable[P, R]:
         f1 = click.option(
             "-t/-nt",
             "--traceback/--no-traceback",
@@ -112,7 +117,7 @@ def add_traceback_flag() -> Callable[[Callable[..., Any]], Callable[..., Any]]:
 class DecodedResponse:
     """Decoded response object.
 
-    Warning: This should be kept in sync with 
+    Warning: This should be kept in sync with
     druncschema/request_response.proto/Response class
     """
 
@@ -126,8 +131,8 @@ class DecodedResponse:
         self,
         name: str,
         token: Token,
-        flag: Any,
-        data: Any = None,
+        flag: object,
+        data: object | None = None,
         children: list["DecodedResponse"] | None = None,
     ) -> None:
         """Initialize a DecodedResponse.
@@ -183,14 +188,14 @@ class ShellContext:
     def _reset(
         self,
         name: str,
-        token_args: dict[str, Any] = {},
-        driver_args: dict[str, Any] = {},
+        token_args: dict[str, object] = {},
+        driver_args: dict[str, object] = {},
     ) -> None:
         self._console = Console()
         self._token = self.create_token(**token_args)
         self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: object, **kwargs: object) -> None:
         """Initialize the shell context.
 
         Args:
@@ -206,7 +211,7 @@ class ShellContext:
             exit(1)
 
     @abc.abstractmethod
-    def reset(self, **kwargs: Any) -> None:
+    def reset(self, **kwargs: object) -> None:
         """Reset the shell context.
 
         Args:
@@ -215,7 +220,7 @@ class ShellContext:
         pass
 
     @abc.abstractmethod
-    def create_drivers(self, **kwargs: Any) -> MutableMapping[str, object]:
+    def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
         """Create drivers for the context.
 
         Args:
@@ -227,7 +232,7 @@ class ShellContext:
         pass
 
     @abc.abstractmethod
-    def create_token(self, **kwargs: Any) -> Token:
+    def create_token(self, **kwargs: object) -> Token:
         """Create a token for the context.
 
         Args:
@@ -320,23 +325,23 @@ class ShellContext:
         """
         return self._token
 
-    def print(self, *args: Any, **kwargs: Any) -> None:
+    def print(self, *args: object, **kwargs: object) -> None:
         """Print to the console.
 
         Args:
             *args: Positional arguments to pass to the console.
             **kwargs: Keyword arguments to pass to the console.
         """
-        self._console.print(*args, **kwargs)  # rich tables require console printing
+        self._console.print(*args, **kwargs)  # type: ignore[arg-type]
 
-    def rule(self, *args: Any, **kwargs: Any) -> None:
+    def rule(self, *args: object, **kwargs: object) -> None:
         """Print a rule to the console.
 
         Args:
             *args: Positional arguments to pass to the console.
             **kwargs: Keyword arguments to pass to the console.
         """
-        self._console.rule(*args, **kwargs)
+        self._console.rule(*args, **kwargs)  # type: ignore[arg-type]
 
     def print_status_summary(self) -> None:
         """Print a summary of the FSM status and available transitions."""
