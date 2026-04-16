@@ -84,32 +84,19 @@ strict_equality = true
 disallow_any_generics = true
 disallow_subclassing_any = true
 
+disallow_any_explicit = false
+disallow_any_expr = false
+disallow_any_decorated = false
+disallow_any_unimported = false
+
+
+# These overrides are because the library stubs dont exist and not on typeshed
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["conffwk"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["grpc_status.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["requests.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["gunicorn", "gunicorn.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["psutil", "psutil.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["flask_restful", "flask_restful.*"]
 ignore_missing_imports = true
 
 # * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
