@@ -18,6 +18,7 @@ from druncschema.process_manager_pb2 import BootRequest
 from drunc.process_manager.configuration import PROCESS_SHUTDOWN_ORDERING
 from drunc.process_manager.utils import on_parent_exit
 from drunc.processes.connection_utils import wait_for
+from drunc.processes.exit_status import ExitStatus, ExitStatusSource
 from drunc.processes.process_metadata import ProcessMetadata
 from drunc.processes.ssh_process_lifetime_manager import (
     ProcessLifetimeManager,
@@ -39,7 +40,9 @@ class ProcessWatcherThread(threading.Thread):
         hostname: str,
         user: str,
         metadata_file: str,
-        on_exit: Optional[Callable[[str, Optional[int], Optional[Exception]], None]],
+        on_exit: Optional[
+            Callable[[str, Optional[ExitStatus], Optional[Exception]], None]
+        ],
         logger: logging.Logger,
     ):
         """
@@ -77,6 +80,7 @@ class ProcessWatcherThread(threading.Thread):
                 self.hostname,
                 self.user,
             )
+            metadata = None
             if metadata:
                 with self.manager.lock:
                     self.manager.metadata[self.uuid] = metadata
@@ -120,7 +124,7 @@ class ProcessWatcherThread(threading.Thread):
         Uses SSH to run a blocking command that exits when the process dies.
         """
         exception = None
-        exit_code = None
+        raw_exit_code = None
 
         try:
             user_host = f"{self.user}@{self.hostname}"
@@ -147,23 +151,25 @@ class ProcessWatcherThread(threading.Thread):
             )
 
             self.process.wait()
-            exit_code = self.process.exit_code
+            raw_exit_code = self.process.exit_code
             self.logger.debug(
-                f"SSH client for {self.uuid} exited with code {exit_code}"
+                f"SSH client for {self.uuid} exited with code {raw_exit_code}"
             )
         except sh.ErrorReturnCode as e:
             exception = e
-            exit_code = e.exit_code
+            raw_exit_code = e.exit_code
             self.logger.debug(f"Remote process {self.uuid} monitoring error: {e}")
 
         except Exception as e:
             exception = e
             self.logger.error(f"Remote process {self.uuid} watcher error: {e}")
 
+        exit_status = ExitStatus(ExitStatusSource.REMOTE_MONITORING, raw_exit_code)
+
         # Invoke callback with results
         if self.on_exit:
             try:
-                self.on_exit(self.uuid, exit_code, exception)
+                self.on_exit(self.uuid, exit_status, exception)
             except Exception as callback_error:
                 self.logger.error(
                     f"Error in process exit callback for {self.uuid}: {callback_error}"
@@ -175,27 +181,29 @@ class ProcessWatcherThread(threading.Thread):
         fallback if the remote PID of the process is unavailable.
         """
         exception = None
-        exit_code = None
+        raw_exit_code = None
 
         try:
             self.process.wait()
-            exit_code = self.process.exit_code
+            raw_exit_code = self.process.exit_code
             self.logger.debug(
-                f"SSH client for {self.uuid} exited with code {exit_code}"
+                f"SSH client for {self.uuid} exited with code {raw_exit_code}"
             )
 
         except sh.ErrorReturnCode as e:
             exception = e
-            exit_code = e.exit_code
+            raw_exit_code = e.exit_code
             self.logger.debug(f"SSH client for {self.uuid} error: {e}")
 
         except Exception as e:
             exception = e
             self.logger.error(f"SSH client for {self.uuid} watcher error: {e}")
 
+        exit_status = ExitStatus(ExitStatusSource.CLIENT_MONITORING, raw_exit_code)
+
         if self.on_exit:
             try:
-                self.on_exit(self.uuid, exit_code, exception)
+                self.on_exit(self.uuid, exit_status, exception)
             except Exception as callback_error:
                 self.logger.error(
                     f"Error in process exit callback for {self.uuid}: {callback_error}"
@@ -224,7 +232,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         disable_localhost_host_key_check: bool = False,
         logger: Optional[logging.Logger] = None,
         on_process_exit: Optional[
-            Callable[[str, Optional[int], Optional[Exception]], None]
+            Callable[[str, Optional[ExitStatus], Optional[Exception]], None]
         ] = None,
     ):
         """
@@ -234,7 +242,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             disable_host_key_check: Disable SSH host key verification for all hosts
             disable_localhost_host_key_check: Disable SSH host key verification for localhost
             logger: Logger instance for real-time output logging
-            on_process_exit: Optional callback function(uuid, exit_code, exception) invoked when process exits
+            on_process_exit: Optional callback function(uuid, exit_status, exception) invoked when process exits
         """
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
@@ -414,7 +422,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         )
         return process.is_alive() and remote_process_alive
 
-    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_status(self, uuid: str) -> Optional[ExitStatus]:
         """
         Get process exit code if process exited early without being killed.
 
@@ -426,7 +434,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             uuid: Process UUID
 
         Returns:
-            Exit code if process has terminated early, None if still running or not found
+            ExitStatus if process has terminated early, None if still running or not found
         """
         if uuid not in self.process_store:
             self.log.debug(f"Process {uuid} not found in store for exit code retrieval")
@@ -437,21 +445,29 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return None
 
         try:
+            process.wait()
             early_exit_code = process.exit_code
+        except sh.ErrorReturnCode as e:
+            early_exit_code = e.exit_code
         except Exception as e:
             self.log.debug(f"Exception thrown getting exit code for {uuid}: {e}")
             return None
 
         if early_exit_code is not None:
+            exit_status = ExitStatus(
+                ExitStatusSource.CLIENT_MONITORING,
+                early_exit_code,
+            )
             self.log.warning(
-                f"Process {uuid} exited early without being killed. Exit code {early_exit_code}"
+                f"Process {uuid} exited early without being killed. Exit status {exit_status!r}"
             )
             self.log.debug(
-                f"Cleaning up resources for process {uuid} with exit code {early_exit_code}"
+                f"Cleaning up resources for process {uuid} with exit status {exit_status!r}"
             )
             self._cleanup_process_resources(uuid)
+            return exit_status
 
-        return early_exit_code
+        return None
 
     def get_process_stdout(self, uuid: str) -> Optional[str]:
         """
@@ -506,7 +522,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         role: str,
         candidate_uuids: List[str],
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all processes with the specified role from candidate UUID list.
 
@@ -520,7 +536,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                             in seconds. Uses default timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping terminated process UUIDs to their exit codes
+            Dictionary mapping terminated process UUIDs to their exit statuses
         """
         self.log.debug(f"process_timeouts: {process_timeouts}")
         if process_timeouts is None:
@@ -547,7 +563,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             f"from {len(candidate_uuids)} candidates"
         )
 
-        exit_codes: Dict[str, Optional[int]] = {}
+        exit_statuses: Dict[str, Optional[ExitStatus]] = {}
 
         # Terminate processes asynchronously using thread pool
         with ThreadPoolExecutor(max_workers=len(uuids_to_kill)) as executor:
@@ -561,19 +577,18 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             for future in as_completed(future_to_uuid):
                 uuid = future_to_uuid[future]
                 try:
-                    exit_code = future.result()
-                    exit_codes[uuid] = exit_code
+                    exit_statuses[uuid] = future.result()
                 except Exception as e:
                     self.log.error(
                         f"Error during termination of process {uuid} with role '{role}': {e}"
                     )
-                    exit_codes[uuid] = None
+                    exit_statuses[uuid] = None
 
-        return exit_codes
+        return exit_statuses
 
     def kill_processes(
         self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill multiple processes by their UUIDs in role-based shutdown order.
 
@@ -587,7 +602,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                             in seconds. Uses default timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes
+            Dictionary mapping process UUIDs to their exit statuses
         """
         if not uuids:
             self.log.debug("No processes to kill")
@@ -601,7 +616,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             if uuid not in process_timeouts:
                 process_timeouts[uuid] = self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
 
-        all_exit_codes: Dict[str, Optional[int]] = {}
+        all_exit_statuses: Dict[str, Optional[ExitStatus]] = {}
         killed_uuids = set()
 
         # Execute role-based shutdown in stages
@@ -609,13 +624,13 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.info(
                 f"--- Shutdown stage: Terminating role '{role}' from provided UUIDs ---"
             )
-            role_exit_codes = self.kill_processes_by_role(
+            role_exit_statuses = self.kill_processes_by_role(
                 role, uuids, process_timeouts=process_timeouts
             )
-            all_exit_codes.update(role_exit_codes)
-            killed_uuids.update(role_exit_codes.keys())
+            all_exit_statuses.update(role_exit_statuses)
+            killed_uuids.update(role_exit_statuses.keys())
 
-            if role_exit_codes:
+            if role_exit_statuses:
                 self.log.info(f"--- Shutdown stage: Role '{role}' complete ---")
 
         # Identify processes not killed during role-based shutdown
@@ -628,7 +643,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             )
 
             # Kill remaining processes asynchronously without role ordering
-            fallback_exit_codes: Dict[str, Optional[int]] = {}
+            fallback_exit_statuses: Dict[str, Optional[ExitStatus]] = {}
 
             with ThreadPoolExecutor(max_workers=len(remaining_uuids)) as executor:
                 # Submit kill tasks for all remaining processes
@@ -643,21 +658,20 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 for future in as_completed(future_to_uuid):
                     uuid = future_to_uuid[future]
                     try:
-                        exit_code = future.result()
-                        fallback_exit_codes[uuid] = exit_code
+                        fallback_exit_statuses[uuid] = future.result()
                     except Exception as e:
                         self.log.error(
                             f"Error during fallback termination of process {uuid}: {e}"
                         )
-                        fallback_exit_codes[uuid] = None
+                        fallback_exit_statuses[uuid] = None
 
-            all_exit_codes.update(fallback_exit_codes)
+            all_exit_statuses.update(fallback_exit_statuses)
 
-        return all_exit_codes
+        return all_exit_statuses
 
     def kill_all_processes(
         self, process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all active processes in role-based shutdown order.
 
@@ -670,7 +684,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                             in seconds. Uses default timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping all process UUIDs to their exit codes
+            Dictionary mapping all process UUIDs to their exit statuses
         """
         # Retrieve all active process UUIDs
         with self.lock:
@@ -683,7 +697,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self.log.info(f"Terminating all {len(active_uuids)} active process(es)")
 
         # Delegate to kill_processes for role-based shutdown ordering
-        all_exit_codes = self.kill_processes(active_uuids, process_timeouts)
+        all_exit_statuses = self.kill_processes(active_uuids, process_timeouts)
 
         # Wait for all watcher threads to complete
         with self.lock:
@@ -698,7 +712,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         with self.lock:
             self.watchers.clear()
 
-        return all_exit_codes
+        return all_exit_statuses
 
     def _build_ssh_arguments(
         self, hostname: str, user_host: str, use_tty: bool = True
@@ -974,7 +988,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         recieve a SIGHUP when the SSH client terminates.
         """
         try:
-            process_info["process"].signal_group(signal.SIGKILL)
+            process_info["process"].signal_group(signal.SIGQUIT)
         except Exception as e:
             self.log.debug(
                 f"Exception was raised when terminating SSH client process: {e}"
@@ -1005,19 +1019,22 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         if got_exit:
             try:
+                process.wait()
                 return process.exit_code
+            except sh.ErrorReturnCode as e:
+                return e.exit_code
             except Exception as e:
                 self.log.debug(f"Exception getting exit code for {uuid}: {e}")
                 return None
         else:
-            self.log.debug(f"Timeout waiting for exit code of process {uuid}")
+            self.log.warning(f"Timeout waiting for exit code of process {uuid}")
             return None
 
     def kill_process(
         self,
         uuid: str,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
-    ) -> int | None:
+    ) -> ExitStatus | None:
         """
         Kill a remote process and clean up all associated resources.
 
@@ -1030,7 +1047,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             timeout: Timeout for graceful termination in seconds
 
         Returns:
-            Exit code of the terminated process, or None if not found or still running
+            ExitStatus of the terminated process, or None if not found or still running
         """
         if uuid not in self.process_store:
             return None
@@ -1050,7 +1067,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self._kill_client_process(process_info)
             exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
             self._cleanup_process_resources(uuid)
-            return exit_code
+            if exit_code is None:
+                return None
+            return ExitStatus(ExitStatusSource.MANUAL_KILL, exit_code)
 
         remote_pid = metadata.pid
         process_dead = False
@@ -1101,7 +1120,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
-                return exit_code
+                if exit_code is None:
+                    return None
+                return ExitStatus(ExitStatusSource.MANUAL_KILL, exit_code)
 
         except Exception as e:
             self.log.error(f"Error terminating remote process {uuid}: {e}")

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.processes.connection_utils import wait_for
+from drunc.processes.exit_status import ExitStatus
 
 
 @dataclass
@@ -116,24 +117,24 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_status(self, uuid: str) -> Optional[ExitStatus]:
         """
         If a process was killed before kill_process was called. This method
-        retrieves and removes the exit code from internal storage. Otherwise
+        retrieves and removes the exit status from internal storage. Otherwise
         it will return None.
 
         Args:
             uuid: Process UUID
 
         Returns:
-            Exit code if process is dead, None if still running or not found
+            ExitStatus if process is dead, None if still running or not found
         """
         pass
 
     @abstractmethod
     def kill_process(
         self, uuid: str, timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
-    ) -> Optional[int]:
+    ) -> Optional[ExitStatus]:
         """
         Kill a remote process and clean up associated resources upon successful termination.
         Sends termination signals to the remote process and waits for it to die.
@@ -145,7 +146,8 @@ class ProcessLifetimeManager(ABC):
             timeout: Timeout for graceful termination in seconds
 
         Returns:
-          the exit code of the process if it was able to be determined (None otherwise).
+                    the interpreted exit status of the process if it was able to be determined
+                    (None otherwise).
 
         """
         pass
@@ -169,7 +171,7 @@ class ProcessLifetimeManager(ABC):
     @abstractmethod
     def kill_processes(
         self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill multiple processes by their UUIDs in role-based shutdown order.
 
@@ -185,7 +187,7 @@ class ProcessLifetimeManager(ABC):
                             timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes. None indicates
+            Dictionary mapping process UUIDs to their exit statuses. None indicates
             exit code could not be determined.
         """
         pass
@@ -193,7 +195,7 @@ class ProcessLifetimeManager(ABC):
     @abstractmethod
     def kill_all_processes(
         self, process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all managed processes and clean up resources.
 
@@ -205,7 +207,7 @@ class ProcessLifetimeManager(ABC):
                               If not specified a default timeout will be used for all processes.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes (None if not determined)
+            Dictionary mapping process UUIDs to their exit statuses (None if not determined)
         """
         pass
 
@@ -215,7 +217,7 @@ class ProcessLifetimeManager(ABC):
         role: str,
         candidate_uuids: List[str],
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all processes with the specified role from candidate UUID list.
 
@@ -229,7 +231,7 @@ class ProcessLifetimeManager(ABC):
                             in seconds. Uses default timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping terminated process UUIDs to their exit codes.
+            Dictionary mapping terminated process UUIDs to their exit statuses.
             Only includes processes matching the specified role.
         """
         pass
