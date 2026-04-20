@@ -34,7 +34,13 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.exceptions import DruncBatchShellArgError, DruncSetupException, DruncBatchShellUnknownCommand, DruncBatchShellError, DruncBatchShellMissingArg
+from drunc.exceptions import (
+    DruncBatchShellArgError,
+    DruncBatchShellError,
+    DruncBatchShellMissingArg,
+    DruncBatchShellUnknownCommand,
+    DruncSetupException,
+)
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
@@ -593,7 +599,6 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
         chain_args (list): Flattened list of tokens from extract_chain_tokens.
     """
     command_names = set(ctx.command.commands.keys())
-    unified_shell_log = get_logger("unified_shell", rich_handler=True)
 
     def command_can_consume_more_positionals(
         command: click.Command, provided_args: list[str]
@@ -616,15 +621,13 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
 
     try:
         chained_cmds = split_chain(chain_args, command_names)
-        unified_shell_log.critical(chained_cmds)
         for index, (cmd_name_real, cmd_args_real) in enumerate(chained_cmds):
             cmd_name = cmd_name_real
             cmd_args = cmd_args_real.copy()
             cmd_args_static = cmd_args_real.copy()
-            
+
             sub_cmd: click.Command = ctx.command.commands[cmd_name]
 
-            unified_shell_log.info(f'parsing {cmd_name, cmd_args}')
             # Validate the command as split by split_chain
             sub_cmd.make_context(
                 cmd_name, cmd_args, parent=ctx, resilient_parsing=False
@@ -642,9 +645,7 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
             ):
                 next_cmd_name, _ = chained_cmds[index + 1]
                 prev_cmd_name, _ = chained_cmds[index]
-                
-                unified_shell_log.info(f'parsing {next_cmd_name}')
-                
+
                 try:
                     sub_cmd.make_context(
                         cmd_name,
@@ -653,15 +654,13 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
                         resilient_parsing=False,
                     )
                 except click.ClickException as e:
-                    raise DruncBatchShellMissingArg(prev_cmd_name,next_cmd_name) from e
-    
-    except click.NoSuchOption as e: 
-        raise DruncBatchShellError(e) from e
-    
-    except click.UsageError as e:
-        raise DruncBatchShellArgError(cmd_args_static) from e
-    
-    except click.ClickException as e:
+                    raise DruncBatchShellMissingArg(prev_cmd_name, next_cmd_name) from e
+
+    except click.NoSuchOption as e:
         raise DruncBatchShellError(e) from e
 
-    
+    except click.UsageError as e:
+        raise DruncBatchShellArgError(cmd_args_static) from e
+
+    except click.ClickException as e:
+        raise DruncBatchShellError(e) from e

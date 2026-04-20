@@ -60,6 +60,8 @@ class DruncBatchShellError(DruncException):
         """C'tor"""
         err_msg = f"Batch shell error: {msg}"
         super().__init__(err_msg)
+
+
 class DruncBatchShellArgError(DruncException):
     # Custom error for batch shell args
     def __init__(self, msg) -> None:
@@ -74,16 +76,12 @@ class DruncBatchShellUnknownCommand(DruncException):
         err_msg = f"Batch shell error, unknown command: {msg}"
         super().__init__(err_msg)
 
-class DruncBatchShellSplitError(DruncException):
-    def __init__(self, msg) -> None:
-        """C'tor"""
-        err_msg = f"Caught bad command context grouping: {msg}"
-        super().__init__(err_msg)
 
 class DruncBatchShellMissingArg(DruncException):
     def __init__(self, msg1, msg2) -> None:
         err_msg = f"Batch shell error, this optional argument is mandatory in batch mode. Failed command: {msg1}. Next input: {msg2}"
         super().__init__(err_msg)
+
 
 class DruncNotImplementedException(DruncException):
     grpc_error_code = code_pb2.UNIMPLEMENTED
