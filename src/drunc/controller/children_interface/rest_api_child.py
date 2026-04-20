@@ -31,6 +31,7 @@ from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api
 
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
@@ -40,7 +41,12 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
-from drunc.utils.utils import ControlType, get_logger, get_new_port
+from drunc.utils.utils import (
+    ControlType,
+    get_control_type_and_uri_from_connectivity_service,
+    get_logger,
+    get_new_port,
+)
 
 
 class ResponseTimeout(ChildError):
@@ -365,12 +371,14 @@ class RESTAPIChildNode(ChildNode):
         configuration: RESTAPIChildNodeConfHandler,
         uri: str,
         fsm_configuration: FSMConfHandler,
+        connectivity_service=None,
     ):
         super().__init__(name, ControlType.REST_API)
 
         self.state = ClientSideState()
         self.configuration = configuration
         self.fsm_configuration = fsm_configuration
+        self.connectivity_service = connectivity_service
         if fsm_configuration:
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
@@ -409,6 +417,65 @@ class RESTAPIChildNode(ChildNode):
     def terminate(self) -> None:
         pass
 
+    def _refresh_endpoint_from_connectivity_service(self) -> bool:
+        if not self.connectivity_service:
+            return False
+
+        try:
+            ctype, uri = get_control_type_and_uri_from_connectivity_service(
+                self.connectivity_service,
+                self.name,
+                timeout=10,
+            )
+        except ApplicationLookupUnsuccessful as e:
+            self.log.warning(
+                f"Could not refresh endpoint for '{self.name}' from connectivity service: {e}"
+            )
+            return False
+        except Exception as e:
+            self.log.warning(
+                f"Unexpected error while refreshing endpoint for '{self.name}': {e}"
+            )
+            return False
+
+        if ctype != ControlType.REST_API:
+            self.log.warning(
+                f"Connectivity service reported non-REST type '{ctype}' for '{self.name}'"
+            )
+            return False
+
+        if uri == f"{self.app_host}:{self.app_port}":
+            return False
+
+        try:
+            app_host, app_port_str = uri.split(":")
+            app_port = int(app_port_str)
+        except (TypeError, ValueError) as e:
+            self.log.warning(
+                f"Invalid REST endpoint '{uri}' for '{self.name}' from connectivity service: {e}"
+            )
+            return False
+
+        self.log.info(
+            f"Updating REST endpoint for '{self.name}' from {self.app_host}:{self.app_port} to {app_host}:{app_port}"
+        )
+        self.app_host = app_host
+        self.app_port = app_port
+        self.commander.app_host = app_host
+        self.commander.app_port = app_port
+        self.commander.app_url = f"http://{app_host}:{app_port}/command"
+        return True
+
+    def check_connection(self) -> bool:
+        if bool(self.commander.ping()):
+            return True
+
+        # REST apps can restart on a different dynamic port; refresh endpoint and retry.
+        if not self._refresh_endpoint_from_connectivity_service():
+            return False
+
+        return bool(self.commander.ping())
+
     def status(
         self,
         target: str = "",
@@ -420,7 +487,8 @@ class RESTAPIChildNode(ChildNode):
             sub_state=(
                 "idle" if not self.state.get_executing_command() else "executing_cmd"
             ),
-            in_error=self.state.in_error() or not self.commander.ping(),
+            # Connectivity is evaluated by the parent controller pre-check.
+            in_error=self.state.in_error(),
             included=self.state.included(),
         )
 

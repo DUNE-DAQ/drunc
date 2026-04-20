@@ -252,17 +252,23 @@ class ControllerConfHandler(ConfHandler):
 
         match ctype:
             case ControlType.gRPC:
-                conf_handler = gRCPChildConfHandler(configuration, ConfTypes.PyObject)
+                grpc_conf_handler = gRCPChildConfHandler(
+                    configuration, ConfTypes.PyObject
+                )
                 return gRPCChildNode(
-                    name, conf_handler, uri, connectivity_service, init_token
+                    name, grpc_conf_handler, uri, connectivity_service, init_token
                 )
 
             case ControlType.REST_API:
-                conf_handler = RESTAPIChildNodeConfHandler(
+                rest_conf_handler = RESTAPIChildNodeConfHandler(
                     configuration, ConfTypes.PyObject
                 )
                 return RESTAPIChildNode(
-                    name, conf_handler, uri, self.data.controller.fsm
+                    name,
+                    rest_conf_handler,
+                    uri,
+                    self.data.controller.fsm,
+                    connectivity_service=connectivity_service,
                 )
 
             case _:

@@ -490,6 +490,20 @@ def validate_and_format_fsm_arguments(
     return out_dict
 
 
+def collect_not_ready(response, found=None):
+    if found is None:
+        found = []
+
+    if response.flag == ResponseFlag.NOT_EXECUTED_NOT_READY:
+        if not (response.HasField("status") and not response.status.included):
+            found.append(response.name)
+
+    for child in response.children:
+        collect_not_ready(child, found)
+
+    return found
+
+
 def run_one_fsm_command(
     obj: UnifiedShellContext,
     controller_name: str,
@@ -572,6 +586,22 @@ def run_one_fsm_command(
             command_name=transition_name,
             arguments=formated_args,
         )
+
+        resolved_target = target or controller_name
+        pre_status = obj.get_driver("controller").status(
+            target=resolved_target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        not_ready = collect_not_ready(pre_status)
+        if not_ready:
+            log.warning(
+                f"The following nodes could not be reached and will not execute '{transition_name}': {not_ready}. "
+                f"If this is expected, consider excluding them with the 'exclude' command before retrying."
+            )
+            if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
+                sys.exit(1)
+            return
 
         timeout = 60
         time_start = time.time()
