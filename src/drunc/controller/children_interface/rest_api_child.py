@@ -43,9 +43,9 @@ from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
 from drunc.utils.utils import (
     ControlType,
-    get_control_type_and_uri_from_connectivity_service,
     get_logger,
     get_new_port,
+    resolve_localhost_and_127_ip_to_network_ip,
 )
 
 
@@ -417,31 +417,49 @@ class RESTAPIChildNode(ChildNode):
     def terminate(self) -> None:
         pass
 
+    def _resolve_rest_uri_from_connectivity_service(self) -> str | None:
+        """Resolve REST child control URI with a single quick connectivity lookup."""
+        if not self.connectivity_service:
+            return None
+
+        try:
+            uris = self.connectivity_service.resolve(
+                self.name + "_control",
+                "RunControlMessage",
+                ntries=1,
+            )
+        except ApplicationLookupUnsuccessful as e:
+            self.log.warning(
+                f"Could not resolve REST URI for '{self.name}' from connectivity service: {e}"
+            )
+            return None
+        except Exception as e:
+            self.log.warning(
+                f"Unexpected error while resolving REST URI for '{self.name}': {e}"
+            )
+            return None
+
+        if len(uris) != 1:
+            self.log.warning(
+                f"Could not resolve unique REST URI for '{self.name}', got response {uris}"
+            )
+            return None
+
+        uri = uris[0].get("uri", "")
+        if not isinstance(uri, str) or not uri.startswith("rest://"):
+            self.log.warning(
+                f"Connectivity service reported non-REST URI for '{self.name}': {uri}"
+            )
+            return None
+
+        return resolve_localhost_and_127_ip_to_network_ip(uri.removeprefix("rest://"))
+
     def _refresh_endpoint_from_connectivity_service(self) -> bool:
         if not self.connectivity_service:
             return False
 
-        try:
-            ctype, uri = get_control_type_and_uri_from_connectivity_service(
-                self.connectivity_service,
-                self.name,
-                timeout=10,
-            )
-        except ApplicationLookupUnsuccessful as e:
-            self.log.warning(
-                f"Could not refresh endpoint for '{self.name}' from connectivity service: {e}"
-            )
-            return False
-        except Exception as e:
-            self.log.warning(
-                f"Unexpected error while refreshing endpoint for '{self.name}': {e}"
-            )
-            return False
-
-        if ctype != ControlType.REST_API:
-            self.log.warning(
-                f"Connectivity service reported non-REST type '{ctype}' for '{self.name}'"
-            )
+        uri = self._resolve_rest_uri_from_connectivity_service()
+        if not uri:
             return False
 
         if uri == f"{self.app_host}:{self.app_port}":
