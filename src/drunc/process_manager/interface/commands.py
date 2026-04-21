@@ -180,6 +180,12 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     help="Table width. Default is automatically calculated",
 )
 @add_query_options(at_least_one=True)
+@click.option(
+    "--crash",
+    is_flag=True,
+    default=False,
+    help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
+)
 @click.pass_obj
 def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     log = get_logger("process_manager.shell")
