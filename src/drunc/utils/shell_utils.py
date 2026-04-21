@@ -73,7 +73,7 @@ class DecodedResponse:
 
 class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
-        self._console = Console()
+        self._console = Console() # this should be the part where you update with the thing in daqpytools
         self._token = self.create_token(**token_args)
         self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
 
