@@ -33,7 +33,6 @@ from flask_restful import Api
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
-from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
@@ -375,7 +374,6 @@ class RESTAPIChildNode(ChildNode):
     ):
         super().__init__(name, ControlType.REST_API)
 
-        self.state = ClientSideState()
         self.configuration = configuration
         self.fsm_configuration = fsm_configuration
         self.connectivity_service = connectivity_service
@@ -505,7 +503,6 @@ class RESTAPIChildNode(ChildNode):
             sub_state=(
                 "idle" if not self.state.get_executing_command() else "executing_cmd"
             ),
-            # Connectivity is evaluated by the parent controller pre-check.
             in_error=self.state.in_error(),
             included=self.state.included(),
         )

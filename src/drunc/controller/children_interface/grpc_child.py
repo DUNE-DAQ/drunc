@@ -190,6 +190,16 @@ class gRPCChildNode(ChildNode):
         self.broadcast.stop()
 
     def check_connection(self) -> bool:
+        """Probe child connectivity and retry once after reconnecting if needed.
+
+        Use the describe endpoint to check if the child is reachable. If not,
+        the node attempts to resolve a fresh endpoint from the connectivity
+        service, rebuild the gRPC channel, and retry the probe once.
+
+        Returns:
+            True if the child is reachable either immediately or after a successful
+            reconnection attempt, otherwise False.
+        """
         request = DescribeRequest(
             token=None,
             target="",

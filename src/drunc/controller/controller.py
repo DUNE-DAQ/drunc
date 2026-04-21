@@ -212,8 +212,8 @@ class Controller(ControllerServicer):
                         status=Status(
                             state="disconnected",
                             sub_state="disconnected",
-                            in_error=True,
-                            included=child_list[i][0].included,
+                            in_error=child_list[i][0].state.in_error(),
+                            included=child_list[i][0].state.included(),
                         ),
                         flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                     )
@@ -676,8 +676,8 @@ class Controller(ControllerServicer):
                     status=Status(
                         state="disconnected",
                         sub_state="disconnected",
-                        in_error=True,
-                        included=child_list[i][0].included,
+                        in_error=child_list[i][0].state.in_error(),
+                        included=child_list[i][0].state.included(),
                     ),
                     flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                 )
@@ -1192,6 +1192,7 @@ class Controller(ControllerServicer):
         for i in disconnected_indices:
             child = child_list[i][0]
             child.included = False
+            child.state.exclude()
             child_responses.append(
                 ExcludeResponse(
                     token=None,
@@ -1285,8 +1286,8 @@ class Controller(ControllerServicer):
                         status=Status(
                             state="disconnected",
                             sub_state="disconnected",
-                            in_error=True,
-                            included=child_status_list[i][0].included,
+                            in_error=child_list[i][0].state.in_error(),
+                            included=child_list[i][0].state.included(),
                         ),
                         flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                     )

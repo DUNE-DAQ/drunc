@@ -16,6 +16,7 @@ from druncschema.controller_pb2 import (
     WhoIsInChargeResponse,
 )
 
+from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.utils.utils import (
     ControlType,
     get_logger,
@@ -28,6 +29,11 @@ class ChildNode(ABC):
         self.name = name
         self.node_type = node_type
         self.included = True
+        self._state = ClientSideState()
+
+    @property
+    def state(self) -> ClientSideState:
+        return self._state
 
     @abstractmethod
     def __str__(self) -> str:
