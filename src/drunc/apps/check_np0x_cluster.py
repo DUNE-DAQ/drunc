@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import paramiko
 from rich import box
-from rich.console import Console
+from daqpytools.logging import DAQ_CONSOLE
 from rich.live import Live
 from rich.table import Table
 
@@ -438,7 +438,7 @@ def main():
     """
 
     # Initialize the console for Rich output and load the SSH configuration.
-    console = Console()
+    console = DAQ_CONSOLE
     console.print("")  # Buffer line for better aesthetics
     ssh_config = load_ssh_config()
 

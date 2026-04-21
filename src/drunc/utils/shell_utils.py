@@ -9,6 +9,8 @@ from rich.console import Console
 from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
+from daqpytools.logging import DAQ_CONSOLE
+
 
 class InterruptedCommand(DruncShellException):
     """This exception gets thrown if we don't want to have a full stack, but still want to interrupt a **shell** command"""
@@ -73,7 +75,7 @@ class DecodedResponse:
 
 class ShellContext:
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
-        self._console = Console() # this should be the part where you update with the thing in daqpytools
+        self._console = DAQ_CONSOLE # this should be the part where you update with the thing in daqpytools
         self._token = self.create_token(**token_args)
         self._drivers: Mapping[str, object] = self.create_drivers(**driver_args)
 
