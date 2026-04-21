@@ -170,18 +170,24 @@ def test_nanorc_success(run_dunerc) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
+    print(f"PP: TESTING {type(run_dunerc)=}")
+    print(f"PP: TESTING {dir(run_dunerc)=}")
+    print(f"PP: TESTING {run_dunerc.daq_session_name=}")
     assert any(
-        f"{run_dunerc.session}_df-01" in str(logname)
+        f"{run_dunerc.daq_session_name}_df-01" in str(logname)
         for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.session}_dfo" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_dfo" in str(logname)
+        for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.session}_mlt" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_mlt" in str(logname)
+        for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.session}_ru" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_ru" in str(logname)
+        for logname in run_dunerc.log_files
     )
 
     if check_for_logfile_errors:
