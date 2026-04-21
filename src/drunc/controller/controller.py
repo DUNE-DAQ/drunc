@@ -881,22 +881,16 @@ class Controller(ControllerServicer):
             child_list,
             operation_name=f"execute_fsm_command:{command_name}",
         )
-        if disconnected_indices:
-            response.children.extend(
-                [
-                    ExecuteFSMCommandResponse(
-                        token=None,
-                        name=child_list[i][0].name,
-                        command_name=command_name,
-                        fsm_flag=FSMResponseFlag.FSM_FAILED,
-                        flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
-                    )
-                    for i in disconnected_indices
-                ]
+        for i in disconnected_indices:
+            response.children.append(
+                ExecuteFSMCommandResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    command_name=command_name,
+                    fsm_flag=FSMResponseFlag.FSM_FAILED,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
             )
-            response.fsm_flag = FSMResponseFlag.FSM_FAILED
-            response.flag = ResponseFlag.NOT_EXECUTED_NOT_READY
-            return response
 
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")

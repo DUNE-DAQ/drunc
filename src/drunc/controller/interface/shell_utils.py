@@ -495,7 +495,7 @@ def collect_not_ready(response, found=None):
         found = []
 
     if response.flag == ResponseFlag.NOT_EXECUTED_NOT_READY:
-        if not (response.HasField("status") and not response.status.included):
+        if response.HasField("status") and response.status.included:
             found.append(response.name)
 
     for child in response.children:
