@@ -8,6 +8,7 @@ from daqpytools.logging import logging_log_levels
 from drunc.controller.interface.commands import (
     connect,
     disconnect,
+    echo,
     exclude,
     expert_command,
     include,
@@ -90,6 +91,7 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     ctx.command.add_command(take_control, "take-control")
     ctx.command.add_command(surrender_control, "surrender-control")
     ctx.command.add_command(who_am_i, "whoami")
+    ctx.command.add_command(echo, "echo")
     ctx.command.add_command(who_is_in_charge, "who-is-in-charge")
     for transition in transitions.commands:
         ctx.command.add_command(*generate_fsm_command(ctx.obj, transition, desc.name))
