@@ -78,13 +78,9 @@ conf_dict.config_substitutions.append(substitution)
 
 confgen_arguments = {"MinimalSystem": conf_dict}
 # The commands to run in dunerc
-# NOTE THAT WE HAVE NOT TESTED FLUSH BECAUSE IT IS BROKEN
-# see #821
-
-
 # The commands mostly come from the msqt, with a few minor changes
 # The entire format is a standard that is  basically copied over from the
-#  typical msqt tests, so they bear no direct effect on the scope of this test.
+# typical msqt tests, so they bear no direct effect on the scope of this test.
 dunerc_command_list = f"""
 
 echo pre_boot
@@ -170,9 +166,6 @@ def test_nanorc_success(run_dunerc) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
-    print(f"PP: TESTING {type(run_dunerc)=}")
-    print(f"PP: TESTING {dir(run_dunerc)=}")
-    print(f"PP: TESTING {run_dunerc.daq_session_name=}")
     assert any(
         f"{run_dunerc.daq_session_name}_df-01" in str(logname)
         for logname in run_dunerc.log_files

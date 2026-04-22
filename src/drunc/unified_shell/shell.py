@@ -152,10 +152,14 @@ def unified_shell(
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
+    unified_shell_log.critical(
+        f"Parsing the process manager argument: {process_manager}"
+    )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
+    unified_shell_log.critical(f"{internal_pm=}, {process_manager_url=}")
 
     # If using a k8s process manager, validate the session name before proceeding
     if get_pm_type_from_name(
