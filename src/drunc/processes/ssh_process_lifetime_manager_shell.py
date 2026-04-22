@@ -1058,6 +1058,13 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             if uuid in self.metadata:
                 del self.metadata[uuid]
             if uuid in self.watchers:
+                watcher = self.watchers[uuid]
+                # If the watcher has an active SSH handle, we need to kill it
+                if hasattr(watcher, 'process') and watcher.process:
+                    try:
+                        watcher.process.terminate()
+                    except Exception:
+                        pass
                 del self.watchers[uuid]
 
     def _send_remote_signal(
