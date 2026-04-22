@@ -367,6 +367,9 @@ class SSHProcessManager(ProcessManager):
                 # Update hostname in boot request for this attempt
                 self.boot_request[uuid].process_description.metadata.hostname = host
 
+                self.log.critical(
+                    f"Attempting to start process {uuid} on host {host} via SSH lifetime manager"
+                )
                 # Start the process via SSH manager
                 self.ssh_lifetime_manager.start_process(
                     uuid=uuid, boot_request=self.boot_request[uuid]
