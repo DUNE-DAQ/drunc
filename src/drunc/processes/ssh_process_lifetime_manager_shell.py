@@ -1060,7 +1060,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             if uuid in self.watchers:
                 watcher = self.watchers[uuid]
                 # If the watcher has an active SSH handle, we need to kill it
-                if hasattr(watcher, 'process') and watcher.process:
+                if hasattr(watcher, 'active_ssh_call') and watcher.process:
                     try:
                         watcher.active_ssh_call.signal_group(signal.SIGKILL)
                     except Exception:
