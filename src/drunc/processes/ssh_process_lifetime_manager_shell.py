@@ -318,7 +318,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         """
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
-        self.log = logger if logger else get_logger(__name__)
+        # self.log = logger if logger else get_logger(__name__)
+        self.log = get_logger("PM_LMS_TEST", rich_handler=True)
         self._on_process_exit = on_process_exit
 
         # Create SSH command wrapper
