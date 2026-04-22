@@ -38,7 +38,6 @@ from drunc.exceptions import DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
-    ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
 )
@@ -51,7 +50,6 @@ from drunc.process_manager.interface.commands import (
     terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
@@ -151,22 +149,29 @@ def unified_shell(
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
+    unified_shell_log.critical(
+        f"Parsing the process manager argument: {process_manager}"
+    )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
+    unified_shell_log.critical(
+        f"Process manager argument parsed, internal_pm set to {internal_pm}"
+    )
 
-    # If using a k8s process manager, validate the session name before proceeding
-    if get_pm_type_from_name(
-        process_manager
-    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
-        unified_shell_log.error(
-            f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
-            "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
-            "alphanumeric, max 63 chars."
-        )
-        sys.exit(1)
+    # # If using a k8s process manager, validate the session name before proceeding
+    # if get_pm_type_from_name(
+    #     process_manager
+    # ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+    #     unified_shell_log.error(
+    #         f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
+    #         "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
+    #         "alphanumeric, max 63 chars."
+    #     )
+    #     sys.exit(1)
 
+    unified_shell_log.critical("TEST")
     # Setup configuration related context variables
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
@@ -255,6 +260,9 @@ def unified_shell(
         )
 
     else:  # Connect to an existing process manager at the provided address
+        unified_shell_log.critical(
+            "Connecting to an existing process manager at the provided address"
+        )
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
@@ -271,6 +279,7 @@ def unified_shell(
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
+    unified_shell_log.critical("Getting driver")
     try:
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
