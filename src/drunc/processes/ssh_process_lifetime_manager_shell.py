@@ -117,6 +117,11 @@ class ProcessWatcherThread(threading.Thread):
             self.__is_monitoring_remotely = True
             # This ssh command will block until the remote process exits
             self.active_ssh_call = self.manager.ssh(*arguments)
+            try:
+                # Now explicitly wait for it in this thread
+                self.active_ssh_call.wait()
+            except Exception as e:
+                self.logger.debug(f"Watcher SSH call interrupted: {e}")
             self.__is_monitoring_remotely = False
             self.logger.debug(
                 f"Remote process {self.uuid} (PID {remote_pid}) has exited"
@@ -1059,10 +1064,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 del self.metadata[uuid]
             if uuid in self.watchers:
                 watcher = self.watchers[uuid]
-                # If the watcher has an active SSH handle, we need to kill it
-                if hasattr(watcher, 'active_ssh_call') and watcher.process:
+                active_call = getattr(watcher, 'active_ssh_call', None)
+                if active_call:
                     try:
-                        watcher.active_ssh_call.signal_group(signal.SIGKILL)
+                        active_call.signal_group(signal.SIGKILL)
                     except Exception:
                         pass
                 del self.watchers[uuid]
