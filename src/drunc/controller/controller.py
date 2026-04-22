@@ -1117,16 +1117,18 @@ class Controller(ControllerServicer):
             child_list,
             indices=connected_indices,
         )
-        child_responses.extend(
-            [
+        # Disconnected children can't be reached via gRPC/REST, but we can still mark
+        # them included locally so this controller can route commands to them again.
+        for i in disconnected_indices:
+            child = child_list[i][0]
+            child.state.include()
+            child_responses.append(
                 IncludeResponse(
                     token=None,
-                    name=child_list[i][0].name,
-                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                    name=child.name,
+                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
                 )
-                for i in disconnected_indices
-            ]
-        )
+            )
         response.children.extend(child_responses)
 
         # This node.
