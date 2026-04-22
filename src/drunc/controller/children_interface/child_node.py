@@ -28,7 +28,6 @@ class ChildNode(ABC):
         self.log = get_logger(f"controller.child_iface.{name}-child-node")
         self.name = name
         self.node_type = node_type
-        self.included = True
         self._state = ClientSideState()
 
     @property

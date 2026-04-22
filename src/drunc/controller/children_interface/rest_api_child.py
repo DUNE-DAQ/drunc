@@ -756,7 +756,6 @@ class RESTAPIChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
         self.state.include()
-        self.included = True
         return IncludeResponse(
             token=None,
             name=self.name,
@@ -771,7 +770,6 @@ class RESTAPIChildNode(ChildNode):
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
         self.state.exclude()
-        self.included = False
         return ExcludeResponse(
             token=None,
             name=self.name,

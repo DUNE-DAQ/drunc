@@ -491,7 +491,7 @@ class Controller(ControllerServicer):
                 (child, "/".join(next_target_path))
                 for child in self.children_nodes
                 if child.name == next_target_path[0]
-                and (child.included or include_excluded_nodes)
+                and (child.state.included() or include_excluded_nodes)
             ]
             if not targets:
                 self.log.info(
@@ -529,7 +529,7 @@ class Controller(ControllerServicer):
         return [
             (child, child.name)
             for child in self.children_nodes
-            if child.included or include_excluded_nodes
+            if child.state.included() or include_excluded_nodes
         ]
 
     @staticmethod
@@ -1185,7 +1185,6 @@ class Controller(ControllerServicer):
         # them excluded locally so this controller stops routing commands to them.
         for i in disconnected_indices:
             child = child_list[i][0]
-            child.included = False
             child.state.exclude()
             child_responses.append(
                 ExcludeResponse(

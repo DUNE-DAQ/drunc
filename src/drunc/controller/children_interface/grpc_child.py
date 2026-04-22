@@ -397,7 +397,6 @@ class gRPCChildNode(ChildNode):
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
-        self.included = True
 
         try:
             response = self.stub.include(request)
@@ -426,7 +425,6 @@ class gRPCChildNode(ChildNode):
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
-        self.included = False
 
         try:
             response = self.stub.exclude(request)
