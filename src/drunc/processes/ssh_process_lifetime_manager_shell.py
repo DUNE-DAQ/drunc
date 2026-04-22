@@ -313,6 +313,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         hostname = boot_request.process_description.metadata.hostname
         user = boot_request.process_description.metadata.user
         log_file = boot_request.process_description.process_logs_path
+        self.log.critical(
+            f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
+        )
 
         # Extract environment variables from boot request
         env_vars = (
@@ -332,6 +335,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # Remove trailing semicolon if present
         if cmd.endswith(";"):
             cmd = cmd[:-1]
+
+        self.log.critical(f"Built command for {uuid}: {cmd}: {boot_request}")
 
         # Execute the command via SSH
         self._execute_bootrequest_via_ssh(
@@ -705,25 +710,26 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         Returns:
             List of SSH command arguments
         """
-        disable_host_key_check = self.disable_host_key_check or (
-            self.disable_localhost_host_key_check
-            and hostname in ("localhost", "127.0.0.1", "::1")
-        )
+        # disable_host_key_check = self.disable_host_key_check or (
+        #     self.disable_localhost_host_key_check
+        #     and hostname in ("localhost", "127.0.0.1", "::1")
+        # )
 
         arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
+        # "-F /nfs/home/{user_host.split('@')[0]}/.ssh/config",
 
-        if disable_host_key_check:
-            arguments.extend(
-                [
-                    "-o",
-                    "LogLevel=error",
-                    "-o",
-                    "GlobalKnownHostsFile=/dev/null",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
-                ]
-            )
-
+        # if disable_host_key_check:
+        arguments.extend(
+            [
+                "-o",
+                "LogLevel=debug",
+                "-o",
+                "GlobalKnownHostsFile=/dev/null",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
+        self.log.critical(f"SSH arguments for {user_host}: {arguments}")
         return arguments
 
     def read_log_file(
@@ -840,8 +846,15 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             arguments.append(remote_command)
 
             # Execute SSH command to wait for and read file (single round-trip)
+            self.log.critical(
+                f"Attempting to read metadata for {uuid} from {hostname} with timeout {timeout}s"
+            )
             result = self.ssh(*arguments)
+            self.log.critical(
+                f"DEBUG - Raw metadata content for {uuid} from {hostname}: {result}"
+            )
             json_content = str(result).strip()
+            self.log.critical("Attempt successful?|???")
 
             # Parse JSON content and instantiate metadata object
             metadata = ProcessMetadata.from_json(json_content)
@@ -881,6 +894,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         try:
             platform = os.uname().sysname.lower()
             is_macos = "darwin" in platform
+            hostname_for_gssapi = hostname
+            if hostname_for_gssapi == "localhost":
+                hostname_for_gssapi = os.uname().nodename
             user_host = f"{user}@{hostname}"
 
             # Build remote command with metadata file writing
@@ -896,6 +912,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
+            self.log.critical(
+                f"Metadata file for {uuid} will be written to {metadata_file} on remote host"
+            )
             tree_id = boot_request.process_description.metadata.tree_id
             name = boot_request.process_description.metadata.name
             role = ProcessMetadata.compute_role_from_tree_id(tree_id)
