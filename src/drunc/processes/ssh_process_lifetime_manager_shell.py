@@ -111,9 +111,7 @@ class ProcessWatcherThread(threading.Thread):
             arguments = self.manager._build_ssh_arguments(self.hostname, user_host)
 
             # Remote ssh command that will block until process exits
-            remote_cmd = (
-                f"while kill -0 {remote_pid} 2>/dev/null; do sleep 0.1; done; exit 0"
-            )
+            remote_cmd = f"flock -x {self.metadata_file} -c 'echo \"Process died, exiting watcher\"; exit 0'"
             arguments.append(remote_cmd)
 
             self.__is_monitoring_remotely = True
