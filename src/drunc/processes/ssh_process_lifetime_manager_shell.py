@@ -676,7 +676,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             and hostname in ("localhost", "127.0.0.1", "::1")
         )
 
-        arguments = [user_host, "-tt", "-o", "StrictHostKeyChecking=no"]
+        arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
 
         if disable_host_key_check:
             arguments.extend(
