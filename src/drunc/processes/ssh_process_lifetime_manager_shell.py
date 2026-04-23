@@ -676,6 +676,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             and hostname in ("localhost", "127.0.0.1", "::1")
         )
 
+        # Note - we had the `-tt` option here before to force pseudo-tty allocation, but
+        # as superuser accounts have persistent SSH connections that can cause issues 
+        # with tty allocation, leaving behind zombie SSH processes. See drunc PR 887 for
+        # details.
+
         arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
 
         if disable_host_key_check:
