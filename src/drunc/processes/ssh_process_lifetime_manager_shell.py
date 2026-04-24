@@ -108,6 +108,10 @@ class ProcessWatcherThread(threading.Thread):
 
         try:
             user_host = f"{self.user}@{self.hostname}"
+
+            # Superuser accounts have persistent SSH connections that cause watcher
+            # threads to not close when monitored processes exit, so we do not allocate
+            # TTYs for monitoring commands to avoid this issue.
             arguments = self.manager._build_ssh_arguments(
                 self.hostname, user_host, use_tty=False
             )
@@ -690,11 +694,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # host key verification.
         arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
 
-        # Note - we had the `-tt` option here before to force pseudo-tty allocation, but
-        # as superuser accounts have persistent SSH connections that can cause issues
-        # with tty allocation, leaving behind zombie SSH processes. The watcher threads
-        # do not determine when the process has executed when ran as a superuser, hence
-        # we disable tty allocation by default.
         if use_tty:
             arguments.append("-tt")
 
