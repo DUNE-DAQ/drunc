@@ -20,6 +20,7 @@ from drunc.controller.configuration import ControllerConfHandler
 from drunc.controller.interface.commands import (
     connect,
     disconnect,
+    echo,
     exclude,
     expert_command,
     include,
@@ -390,6 +391,7 @@ def unified_shell(
         take_control,
         surrender_control,
         who_am_i,
+        echo,
         who_is_in_charge,
         include,
         exclude,

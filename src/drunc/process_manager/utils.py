@@ -118,9 +118,9 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 
 def tabulate_process_instance_list(
-    pil: ProcessInstanceList, title: str, long: bool = False
+    pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
 ):
-    t = Table(title=title)
+    t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
     t.add_column("user")
