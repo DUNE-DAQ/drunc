@@ -108,7 +108,9 @@ class ProcessWatcherThread(threading.Thread):
 
         try:
             user_host = f"{self.user}@{self.hostname}"
-            arguments = self.manager._build_ssh_arguments(self.hostname, user_host)
+            arguments = self.manager._build_ssh_arguments(
+                self.hostname, user_host, use_tty=False
+            )
 
             # Remote ssh command that will block until process exits
             remote_cmd = (
@@ -725,7 +727,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             user_host = f"{user}@{hostname}"
 
             # Build SSH arguments using helper method
-            arguments = self._build_ssh_arguments(hostname, user_host, use_tty=False)
+            arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.extend(["tail", f"-{num_lines}", log_file])
 
             # Execute SSH command with output redirection
