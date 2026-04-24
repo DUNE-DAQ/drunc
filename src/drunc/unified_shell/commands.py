@@ -7,6 +7,7 @@ from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
@@ -45,12 +46,12 @@ def boot(
         override_logs_boot = obj.override_logs
     else:
         override_logs_boot = override_logs
-    if len(processes.values) > 0:
-        log.error(
-            f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
-            "Please terminate the existing session first."
-        )
-        return
+    # if len(processes.values) > 0:
+    #     log.error(
+    #         f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
+    #         "Please terminate the existing session first."
+    #     )
+    #     return
 
     try:
         results = obj.get_driver("process_manager").boot(
@@ -122,6 +123,43 @@ def boot(
                 "Unified shell: Running in batch mode, and because error state is detected, exiting."
             )
             sys.exit(1)
+
+
+@click.command("terminate")
+@click.pass_obj
+@click.pass_context
+def terminate(ctx, obj):
+    """
+    Execute the process manager terminate command, but only do this for the current
+    session
+    """
+
+    log = get_logger("unified_shell.terminate")
+    session_query = ProcessQuery(session=ctx.obj.session_name)
+    log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
+    obj.get_driver("process_manager").kill(session_query)
+
+
+@click.command("ps")
+@click.pass_obj
+@click.pass_context
+def ps(ctx, obj):
+    """
+    Execute the process manager terminate command, but only do this for the current
+    session
+    """
+
+    log = get_logger("unified_shell.ps")
+    session_query = ProcessQuery(session=ctx.obj.session_name)
+    log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
+    results = obj.get_driver("process_manager").ps(session_query)
+    obj.print(
+        tabulate_process_instance_list(
+            results, title=f"Processes running in session {ctx.obj.session_name}"
+        ),
+        overflow="fold",
+        soft_wrap=True,
+    )
 
 
 @click.command("start-shell")

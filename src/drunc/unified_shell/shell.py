@@ -52,12 +52,12 @@ from drunc.process_manager.interface.commands import (
     flush,
     kill,
     logs,
-    ps,
+    # ps,
     restart,
-    terminate,
+    # terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
-from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.commands import boot, ps, start_shell, terminate
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -156,14 +156,14 @@ def unified_shell(
     ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
-    unified_shell_log.critical(
+    ctx.obj.log.critical(
         f"Parsing the process manager argument: {process_manager}"
     )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
-    unified_shell_log.critical(
+    ctx.obj.log.critical(
         f"Process manager argument parsed, internal_pm set to {internal_pm}"
     )
 
@@ -178,7 +178,7 @@ def unified_shell(
     #     )
     #     sys.exit(1)
 
-    unified_shell_log.critical("TEST")
+    ctx.obj.log.critical("TEST")
     # Setup configuration related context variables
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
@@ -267,7 +267,7 @@ def unified_shell(
         )
 
     else:  # Connect to an existing process manager at the provided address
-        unified_shell_log.critical(
+        ctx.obj.log.critical(
             "Connecting to an existing process manager at the provided address"
         )
         process_manager_address = process_manager.replace(
@@ -286,7 +286,7 @@ def unified_shell(
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
-    unified_shell_log.critical("Getting driver")
+    ctx.obj.log.critical("Getting driver")
     try:
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
@@ -313,6 +313,7 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
+    ctx.obj.log.critical("Process manager described successfully")
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):
@@ -323,18 +324,20 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands = [boot, ps, terminate]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
     process_manager_commands: list[click.Command] = [
         kill,
-        terminate,
+        # terminate,
         flush,
         logs,
         restart,
-        ps,
+        # ps,
     ]
     for cmd in process_manager_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
@@ -475,7 +478,8 @@ def unified_shell(
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            session_processes = ProcessQuery(session=ctx.obj.session_name)
+            ctx.obj.get_driver("process_manager").kill(session_processes)
 
         # Check if any processes are still running
         if (

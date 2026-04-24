@@ -448,6 +448,10 @@ class SSHProcessManager(ProcessManager):
                 boot_request_dict=self.boot_request,
                 order_by="random",
             )
+            if query.session:
+                self.log.warning(
+                    f"{self.name} found {len(process_uuids)} processes matching {query} for ps"
+                )
 
             # Iterate through all processes matching the query
             for proc_uuid in process_uuids:
@@ -495,13 +499,24 @@ class SSHProcessManager(ProcessManager):
                 else:
                     pi.remote_pid = remote_pid_result.reason
                 ret += [pi]
-
-            return ProcessInstanceList(
+            ret_fmt = ProcessInstanceList(
                 name=self.name,
                 token=None,
                 values=ret,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
+            if query.session:
+                self.log.critical(
+                    f"{self.name} returning {len(ret)} processes from ps query {query}"
+                )
+                self.log.critical(ret_fmt)
+                self.log.critical(f"TEST: {ret_fmt=}")
+            else:
+                self.log.warning(
+                    f"{self.name} returning {len(ret)} processes from ps query {query}"
+                )
+                self.log.warning(ret)
+            return ret_fmt
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
