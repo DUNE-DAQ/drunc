@@ -406,7 +406,7 @@ def main():
         console.print("[bold yellow]Hardware Communication Warning:[/]")
         if WIB_FW_SW_IFACE_PATH:
             console.print(
-                f"Modules found but not loaded. Try running [red]make -o build/%.d python[/] in:\n[blue]{WIB_FW_SW_IFACE_PATH}[/]"
+                f"Modules found but not loaded. Try running [red]pip install zmq[/] and [red]make -o build/%.d python[/] in:\n[blue]{WIB_FW_SW_IFACE_PATH}[/]"
             )
         else:
             console.print(
