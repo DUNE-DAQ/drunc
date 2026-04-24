@@ -660,29 +660,44 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return all_exit_codes
 
-    def _build_ssh_arguments(self, hostname: str, user_host: str) -> List[str]:
+    def _build_ssh_arguments(
+        self, hostname: str, user_host: str, use_tty: bool = True
+    ) -> List[str]:
         """
         Build standard SSH arguments with host key checking policy.
 
         Args:
             hostname: Target hostname for policy determination
             user_host: User@hostname string for SSH connection
+            use_tty: Whether to allocate a pseudo-terminal
 
         Returns:
             List of SSH command arguments
         """
+
+        # Determine if host key checking should be disabled based on configuration and
+        # target host
         disable_host_key_check = self.disable_host_key_check or (
             self.disable_localhost_host_key_check
             and hostname in ("localhost", "127.0.0.1", "::1")
         )
 
-        # Note - we had the `-tt` option here before to force pseudo-tty allocation, but
-        # as superuser accounts have persistent SSH connections that can cause issues 
-        # with tty allocation, leaving behind zombie SSH processes. See drunc PR 887 for
-        # details.
-
+        # Base SSH arguments with user@host and strict host key checking disabled
+        # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
+        # the known_hosts file is not shared across hosts, so we cannot rely on it for
+        # host key verification.
         arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
 
+        # Note - we had the `-tt` option here before to force pseudo-tty allocation, but
+        # as superuser accounts have persistent SSH connections that can cause issues
+        # with tty allocation, leaving behind zombie SSH processes. The watcher threads
+        # do not determine when the process has executed when ran as a superuser, hence
+        # we disable tty allocation by default.
+        if use_tty:
+            arguments.append("-tt")
+
+        # If host key checking is disabled, also disable known hosts file usage and
+        # reduce log level to avoid cluttering logs with warnings about host key verification
         if disable_host_key_check:
             arguments.extend(
                 [
@@ -710,7 +725,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             user_host = f"{user}@{hostname}"
 
             # Build SSH arguments using helper method
-            arguments = self._build_ssh_arguments(hostname, user_host)
+            arguments = self._build_ssh_arguments(hostname, user_host, use_tty=False)
             arguments.extend(["tail", f"-{num_lines}", log_file])
 
             # Execute SSH command with output redirection
