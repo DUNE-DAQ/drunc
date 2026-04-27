@@ -488,7 +488,7 @@ def unified_shell(
                 ctx.obj.session_name, connectivity_service_address
             )
             try:
-                csc.retract_partition(fail_quickly=True, fail_quietly=True)
+                csc.retract_session(fail_quickly=True, fail_quietly=True)
                 unified_shell_log.debug(
                     "Session retracted from the connectivity service"
                 )

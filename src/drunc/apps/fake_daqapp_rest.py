@@ -224,12 +224,14 @@ def main():
     )
     parser.add_argument(
         "-p",
-        "--partition",
+        "--partition",  #! will likely need to change
         default="global",
         help="This is a dummy argument in this case",
     )
     parser.add_argument("-s", "--session", default="test", help="name of session")
-    parser.add_argument("-k", "--configurationID", default="test-config", help="ID of session")
+    parser.add_argument(
+        "-k", "--configurationID", default="test-config", help="ID of session"
+    )
 
     args = parser.parse_args()
 
