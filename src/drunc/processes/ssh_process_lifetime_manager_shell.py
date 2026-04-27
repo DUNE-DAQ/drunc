@@ -762,6 +762,14 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         # Execute role-based shutdown in stages
         for role in PROCESS_SHUTDOWN_ORDERING:
+             # Only log and act when there are processes with this role
+            uuids_in_role = [
+                uuid for uuid in uuids
+                if self.metadata.get(uuid) and self.metadata[uuid].role == role
+            ]
+            if not uuids_in_role:
+                continue
+
             self.log.info(
                 f"--- Shutdown stage: Terminating role '{role}' from provided UUIDs ---"
             )
@@ -1127,7 +1135,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
             tree_id = boot_request.process_description.metadata.tree_id
             name = boot_request.process_description.metadata.name
-            role = ProcessMetadata.compute_role_from_tree_id(tree_id)
+            is_controller = any(
+                e_and_a.exec == "drunc-controller"
+                for e_and_a in boot_request.process_description.executable_and_arguments
+            )
+            role = ProcessMetadata.compute_role_from_tree_id(tree_id, is_controller=is_controller)
 
             remote_metadata_json = (
                 f"{{\"pid\": '$PID', "
