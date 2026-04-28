@@ -97,14 +97,12 @@ class ProcessMetadata:
             is_controller: True if the process executable is a drunc-controller.
 
         Returns:
-            Role string: "root-controller", "local-connection-server",
+            Role string: "root-controller",
                         "segment-controller", "application",
                         "infrastructure-applications", or "unknown"
         """
         if not tree_id:
             return "unknown"
-        elif tree_id == "1":
-            return "local-connection-server"
         elif is_controller:
             if tree_id == "0":
                 return "root-controller"
