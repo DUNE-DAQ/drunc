@@ -35,7 +35,13 @@ from drunc.controller.interface.commands import (
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
-from drunc.exceptions import DruncSetupException
+from drunc.exceptions import (
+    DruncBatchShellArgError,
+    DruncBatchShellError,
+    DruncBatchShellMissingArg,
+    DruncBatchShellUnknownCommand,
+    DruncSetupException,
+)
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
@@ -394,14 +400,19 @@ def unified_shell(
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
+    parser = ctx.command.make_parser(ctx)
+    _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
+    ctx.obj.batch_commands = extract_batch_args
+
     # If any of the commands is in the click commands, set batch mode
-    if any([arg in ctx.obj.dynamic_commands for arg in sys.argv]):
+    if ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.BATCH
         ctx.command.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
+        validate_chain(ctx, extract_batch_args)
 
     # If start-shell is in the arguments, set semibatch mode
-    if "start-shell" in sys.argv:
+    if "start-shell" in ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
     def cleanup():
@@ -550,3 +561,108 @@ def _maybe_enter_shell(ctx, results, **_):
     if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
         sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
         sh.cmdloop()
+
+
+def split_chain(
+    chain_args: list[str], command_names: set[str]
+) -> list[tuple[str, list[str]]]:
+    """Partition command-line arguments into individual command invocations.
+    Args:
+        chain_args (list): Flattened list of all command tokens and arguments.
+        command_names (set): Set of valid command names to use as boundaries.
+
+    Returns:
+        list[tuple]: List of (command_name, command_args) tuples representing
+            individual command invocations in sequence order.
+
+    Raises:
+        click.UsageError: If a token in chain_args doesn't match any known
+            command name when expected to be a command.
+    """
+    parts = []
+    i = 0
+    while i < len(chain_args):
+        cmd = chain_args[i]
+        if cmd not in command_names:
+            raise DruncBatchShellUnknownCommand(cmd)
+        i += 1
+        cmd_args = []
+        while i < len(chain_args) and chain_args[i] not in command_names:
+            cmd_args.append(chain_args[i])
+            i += 1
+        parts.append((cmd, cmd_args))
+    return parts
+
+
+def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
+    """Validate syntax and arguments for all commands in a chain.
+    Args:
+        ctx: Click context object containing the command registry.
+        chain_args (list): Flattened list of tokens from extract_chain_tokens.
+    """
+    command_names = set(ctx.command.commands.keys())
+
+    def command_can_consume_more_positionals(
+        command: click.Command, provided_args: list[str]
+    ) -> bool:
+        argument_params = [p for p in command.params if isinstance(p, click.Argument)]
+        if not argument_params:
+            return False
+
+        remaining_tokens = len(provided_args)
+        for argument_param in argument_params:
+            if argument_param.nargs == -1:
+                return True
+
+            if remaining_tokens >= argument_param.nargs:
+                remaining_tokens -= argument_param.nargs
+            else:
+                return True
+
+        return False
+
+    try:
+        chained_cmds = split_chain(chain_args, command_names)
+        for index, (cmd_name_real, cmd_args_real) in enumerate(chained_cmds):
+            cmd_name = cmd_name_real
+            cmd_args = cmd_args_real.copy()
+            cmd_args_static = cmd_args_real.copy()
+
+            sub_cmd: click.Command = ctx.command.commands[cmd_name]
+
+            # Validate the command as split by split_chain
+            sub_cmd.make_context(
+                cmd_name, cmd_args, parent=ctx, resilient_parsing=False
+            )
+
+            # Also validate boundary tokens that could still be consumed as positional
+            # arguments by the current command. This catches cases like
+            # "wait conf", where "conf" is a command token but Click may attempt to
+            # parse it as wait's positional argument first.
+            cmd_args = cmd_args_real.copy()
+            if (
+                index + 1 < len(chained_cmds)
+                and not cmd_args
+                and command_can_consume_more_positionals(sub_cmd, cmd_args)
+            ):
+                next_cmd_name, _ = chained_cmds[index + 1]
+                prev_cmd_name, _ = chained_cmds[index]
+
+                try:
+                    sub_cmd.make_context(
+                        cmd_name,
+                        [*cmd_args, next_cmd_name],
+                        parent=ctx,
+                        resilient_parsing=False,
+                    )
+                except click.ClickException as e:
+                    raise DruncBatchShellMissingArg(prev_cmd_name, next_cmd_name) from e
+
+    except click.NoSuchOption as e:
+        raise DruncBatchShellError(e) from e
+
+    except click.UsageError as e:
+        raise DruncBatchShellArgError(cmd_args_static) from e
+
+    except click.ClickException as e:
+        raise DruncBatchShellError(e) from e

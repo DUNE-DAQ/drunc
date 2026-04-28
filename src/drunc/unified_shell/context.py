@@ -25,6 +25,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.session_name = ""
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
+        self.batch_commands: list(str) = []
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):
