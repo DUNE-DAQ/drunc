@@ -529,6 +529,33 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         """
         return self._call("kill_process", uuid, timeout)
 
+    def kill_process_without_metadata(
+        self,
+        uuid: str,
+        signal_name: str = "QUIT",
+        as_manual_kill: bool = False,
+        timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[ExitStatus]:
+        """
+        Kill a process by signalling the SSH client without using remote metadata.
+
+        Args:
+            uuid: Process UUID to terminate.
+            signal_name: Signal name to send to SSH client process group.
+            as_manual_kill: If True, classify as process-manager initiated kill.
+            timeout: Graceful termination timeout in seconds.
+
+        Returns:
+            ExitStatus of the terminated process, or None if undetermined.
+        """
+        return self._call(
+            "kill_process_without_metadata",
+            uuid,
+            signal_name,
+            as_manual_kill,
+            timeout,
+        )
+
     def crash_process(self, uuid: str) -> None:
         """
         Simulate a process crash by sending SIGKILL without performing any cleanup.

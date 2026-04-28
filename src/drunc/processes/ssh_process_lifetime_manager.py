@@ -153,6 +153,35 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
+    def kill_process_without_metadata(
+        self,
+        uuid: str,
+        signal_name: str = "QUIT",
+        as_manual_kill: bool = False,
+        timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[ExitStatus]:
+        """
+        Terminate a process via SSH client signalling without relying on remote PID metadata.
+
+        This method is used in two contexts:
+        1) As an internal fallback from kill_process when metadata/PID is unavailable.
+        2) In tests to emulate SSH-client-driven termination paths (e.g. SIGQUIT/SIGKILL).
+
+        Args:
+            uuid: Process UUID to terminate.
+            signal_name: Signal to send to the local SSH client process group
+                (e.g. "QUIT" or "KILL").
+            as_manual_kill: If True, classify termination as
+                MANUAL_KILL_THROUGH_SSH_CLIENT. If False, classify as
+                CLIENT_MONITORING.
+            timeout: Maximum time to wait for process termination in seconds.
+
+        Returns:
+            ExitStatus if termination state can be determined, None otherwise.
+        """
+        pass
+
+    @abstractmethod
     def crash_process(self, uuid: str) -> None:
         """
         Simulate a process crash by sending SIGKILL without performing any cleanup.

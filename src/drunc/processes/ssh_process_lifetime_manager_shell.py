@@ -1011,17 +1011,74 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                     del self.process_store[uuid]
             raise RuntimeError(f"Failed to execute SSH command for {uuid}: {e}")
 
-    def _kill_client_process(self, process_info: Dict) -> None:
+    def _kill_client_process(
+        self, process_info: Dict, signal_name: str = "QUIT"
+    ) -> None:
         """
-        Kill a local SSH client process. The remote process will typically
-        recieve a SIGHUP when the SSH client terminates.
+        Send a signal to the local SSH client process group.
+
+        The remote process will typically receive a SIGHUP when the SSH client
+        terminates.
         """
         try:
-            process_info["process"].signal_group(signal.SIGQUIT)
+            signal_name = signal_name.upper()
+            if signal_name == "QUIT":
+                process_info["process"].signal_group(signal.SIGQUIT)
+                return
+            if signal_name == "KILL":
+                process_info["process"].signal_group(signal.SIGKILL)
+                return
+            raise ValueError(f"Unsupported signal_name '{signal_name}'")
         except Exception as e:
             self.log.debug(
                 f"Exception was raised when terminating SSH client process: {e}"
             )
+
+    def kill_process_without_metadata(
+        self,
+        uuid: str,
+        signal_name: str = "QUIT",
+        as_manual_kill: bool = False,
+        timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[ExitStatus]:
+        """
+        Terminate process by signalling the local SSH client without using remote metadata.
+
+        Args:
+            uuid: Process UUID to terminate
+            signal_name: Signal to send to SSH client process group (QUIT/KILL)
+            as_manual_kill: Classify outcome as manual process-manager kill when True
+            timeout: Maximum time to wait for process termination in seconds
+
+        Returns:
+            ExitStatus if termination state can be determined, None otherwise
+        """
+        with self.lock:
+            process_info = self.process_store.get(uuid)
+
+        if process_info is None:
+            self.log.warning(
+                f"kill_process_without_metadata called for unknown UUID {uuid}"
+            )
+            return None
+
+        source_for_return = (
+            ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT
+            if as_manual_kill
+            else ExitStatusSource.CLIENT_MONITORING
+        )
+        # Ensure watcher callbacks classify this termination path as requested.
+        self._set_manual_exit_status_source(uuid, source_for_return)
+
+        self._kill_client_process(process_info, signal_name=signal_name)
+        exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+        self._cleanup_process_resources(uuid)
+
+        if exit_code is None:
+            self._clear_manual_exit_status_source(uuid)
+            return None
+
+        return ExitStatus(source_for_return, exit_code)
 
     def _wait_for_process_exit_code(self, uuid: str, timeout: float) -> Optional[int]:
         """
@@ -1081,30 +1138,24 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         if uuid not in self.process_store:
             return None
 
-        process_info = self.process_store[uuid]
-
-        hostname = process_info["hostname"]
-        user = process_info["user"]
-        metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
-
         # Read metadata to get remote PID
         metadata = self.metadata.get(uuid, None)
         if metadata is None or metadata.pid is None:
             self.log.warning(
                 f"No remote PID for {uuid}, terminating SSH client. Cannot guarantee remote process termination."
             )
-            self._set_manual_exit_status_source(
-                uuid, ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT
+            return self.kill_process_without_metadata(
+                uuid,
+                signal_name="QUIT",
+                as_manual_kill=True,
+                timeout=timeout,
             )
-            self._kill_client_process(process_info)
-            exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
-            self._cleanup_process_resources(uuid)
-            if exit_code is None:
-                self._clear_manual_exit_status_source(uuid)
-                return None
-            return ExitStatus(
-                ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT, exit_code
-            )
+
+        process_info = self.process_store[uuid]
+
+        hostname = process_info["hostname"]
+        user = process_info["user"]
+        metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
 
         remote_pid = metadata.pid
         process_dead = False

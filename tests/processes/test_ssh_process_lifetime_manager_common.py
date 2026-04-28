@@ -4,8 +4,12 @@ Common functions to test all process lifetime manager implementations.
 
 import getpass
 import tempfile
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -14,6 +18,7 @@ from druncschema.process_manager_pb2 import (
 )
 
 from drunc.processes.connection_utils import wait_for
+from drunc.processes.exit_status import ExitStatus, ExitStatusSource
 
 
 def create_boot_request(process_name, tree_id, log_file, test_file_path):
@@ -49,6 +54,247 @@ def create_boot_request(process_name, tree_id, log_file, test_file_path):
     )
 
     return boot_request
+
+
+@dataclass(frozen=True)
+class ExitMessageScenario:
+    name: str
+    kill_mode: str
+    expected_source: ExitStatusSource
+    expected_message_fragment: str
+    expected_reported_exit_code: Optional[int] = None
+
+
+def boot_processes_and_verify_exit_state_messages(
+    ssh_manager,
+    test_file_path,
+):
+    """
+    Boot all exit-status scenarios together and validate emitted status messages.
+
+    This helper starts one process per expected exit-status message variant,
+    then applies mixed kill strategies (client signal, remote crash, manager kill)
+    and verifies the callback-delivered ExitStatus source and
+    get_process_manager_log_message() output for each process.
+
+    Args:
+        ssh_manager: SSH process lifetime manager implementation under test
+        test_file_path: Path to the test file (used to locate simple_process.py)
+    """
+    scenarios = [
+        ExitMessageScenario(
+            name="case_client_sigquit",
+            kill_mode="client_sigquit",
+            expected_source=ExitStatusSource.CLIENT_MONITORING,
+            expected_message_fragment="was terminated unexpectedly with SIGQUIT on the SSH client (SIGHUP on the server)",
+            expected_reported_exit_code=None,
+        ),
+        ExitMessageScenario(
+            name="case_client_sigkill",
+            kill_mode="client_sigkill",
+            expected_source=ExitStatusSource.CLIENT_MONITORING,
+            expected_message_fragment="was terminated unexpectedly by a SIGKILL to the SSH client (SIGHUP on the server)",
+            expected_reported_exit_code=None,
+        ),
+        ExitMessageScenario(
+            name="case_remote_sigkill",
+            kill_mode="remote_sigkill",
+            expected_source=ExitStatusSource.REMOTE_MONITORING,
+            expected_message_fragment="was terminated unexpectedly through the remote pid",
+        ),
+        ExitMessageScenario(
+            name="case_manual_remote_pid",
+            kill_mode="manual_remote_pid",
+            expected_source=ExitStatusSource.MANUAL_KILL_THROUGH_REMOTE_PID,
+            expected_message_fragment="was terminated by the process manager through the remote pid",
+            expected_reported_exit_code=0,
+        ),
+        ExitMessageScenario(
+            name="case_manual_ssh_client",
+            kill_mode="manual_ssh_client",
+            expected_source=ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT,
+            expected_message_fragment="was terminated by the process manager through the SSH client",
+            expected_reported_exit_code=None,
+        ),
+    ]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        log_dir = Path(temp_dir)
+
+        callbacks_lock = threading.Lock()
+        callback_events: dict[str, threading.Event] = {}
+        callback_statuses: dict[str, ExitStatus] = {}
+        callback_messages: dict[str, str] = {}
+
+        process_uuids: list[str] = []
+        process_info: dict[str, dict] = {}
+
+        def on_exit(cb_uuid: str, exit_status: Optional[ExitStatus], exception):
+            if exit_status is None:
+                return
+            with callbacks_lock:
+                callback_statuses[cb_uuid] = exit_status
+                metadata = process_info.get(cb_uuid)
+                if metadata is not None:
+                    callback_messages[cb_uuid] = (
+                        exit_status.get_process_manager_log_message(
+                            metadata["name"],
+                            metadata["session"],
+                            metadata["user"],
+                        )
+                    )
+            event = callback_events.get(cb_uuid)
+            if event is not None:
+                event.set()
+
+        # Shell manager uses `on_process_exit`; forked wrapper dispatches through
+        # `_on_process_exit` in the parent process.
+        if hasattr(ssh_manager, "on_process_exit"):
+            ssh_manager.on_process_exit = on_exit
+        if hasattr(ssh_manager, "_on_process_exit"):
+            ssh_manager._on_process_exit = on_exit
+
+        print("\n=== Booting one process per exit-status scenario ===")
+        for scenario_config in scenarios:
+            process_name = scenario_config.name
+            process_uuid = str(uuid.uuid4())
+            log_file = str(log_dir / f"{process_name}.log")
+            process_uuids.append(process_uuid)
+            callback_events[process_uuid] = threading.Event()
+
+            boot_request = create_boot_request(
+                process_name=process_name,
+                tree_id="this.isan.application",
+                log_file=log_file,
+                test_file_path=test_file_path,
+            )
+
+            ssh_manager.start_process(uuid=process_uuid, boot_request=boot_request)
+
+            process_info[process_uuid] = {
+                "name": process_name,
+                "session": boot_request.process_description.metadata.session,
+                "user": boot_request.process_description.metadata.user,
+                "kill_mode": scenario_config.kill_mode,
+                "scenario": scenario_config,
+                "log_file": log_file,
+            }
+
+            print(
+                f"Executed {process_name} with UUID {process_uuid} "
+                f"(kill mode: {scenario_config.kill_mode})"
+            )
+
+        verify_all_processes_alive(ssh_manager, process_uuids, len(scenarios))
+        verify_log_output(ssh_manager, process_uuids, process_info)
+
+        # Wait until metadata is available for all scenarios that require remote PID.
+        for process_uuid in process_uuids:
+            kill_mode = process_info[process_uuid]["kill_mode"]
+            if kill_mode in ("client_sigquit", "client_sigkill", "manual_ssh_client"):
+                continue
+            metadata_ready = wait_for(
+                lambda u=process_uuid: ssh_manager.get_remote_pid(u).successful,
+                expected_value=True,
+                timeout=10.0,
+                poll_interval=0.2,
+            )
+            assert metadata_ready, (
+                f"Remote PID not available for process {process_uuid}"
+            )
+
+        print("\n=== Triggering all termination paths concurrently ===")
+
+        def trigger_termination(process_uuid: str):
+            kill_mode = process_info[process_uuid]["kill_mode"]
+
+            if kill_mode == "client_sigquit":
+                ssh_manager.kill_process_without_metadata(
+                    process_uuid,
+                    signal_name="QUIT",
+                    as_manual_kill=False,
+                    timeout=10.0,
+                )
+                return
+
+            if kill_mode == "client_sigkill":
+                ssh_manager.kill_process_without_metadata(
+                    process_uuid,
+                    signal_name="KILL",
+                    as_manual_kill=False,
+                    timeout=10.0,
+                )
+                return
+
+            if kill_mode == "remote_sigkill":
+                ssh_manager.crash_process(process_uuid)
+                return
+
+            if kill_mode == "manual_remote_pid":
+                ssh_manager.kill_process(process_uuid, timeout=10.0)
+                return
+
+            if kill_mode == "manual_ssh_client":
+                ssh_manager.kill_process_without_metadata(
+                    process_uuid,
+                    signal_name="QUIT",
+                    as_manual_kill=True,
+                    timeout=10.0,
+                )
+                return
+
+            raise RuntimeError(f"Unhandled kill mode: {kill_mode}")
+
+        with ThreadPoolExecutor(max_workers=len(process_uuids)) as executor:
+            futures = [
+                executor.submit(trigger_termination, process_uuid)
+                for process_uuid in process_uuids
+            ]
+            for future in futures:
+                future.result()
+
+        print("\n=== Waiting for and validating on_process_exit messages ===")
+        for process_uuid in process_uuids:
+            callback_fired = callback_events[process_uuid].wait(timeout=15.0)
+            assert callback_fired, (
+                f"Exit callback did not fire for {process_info[process_uuid]['name']}"
+            )
+
+            exit_status = callback_statuses.get(process_uuid)
+            assert exit_status is not None, (
+                f"No ExitStatus captured for {process_info[process_uuid]['name']}"
+            )
+
+            scenario: ExitMessageScenario = process_info[process_uuid]["scenario"]
+            emitted_message = callback_messages[process_uuid]
+
+            assert exit_status.get_source() is scenario.expected_source, (
+                f"Unexpected source for {process_info[process_uuid]['name']}: "
+                f"got {exit_status.get_source()}, expected {scenario.expected_source}"
+            )
+
+            assert scenario.expected_message_fragment in emitted_message, (
+                f"Unexpected emitted message for {process_info[process_uuid]['name']}: "
+                f"{emitted_message}"
+            )
+
+            if scenario.expected_reported_exit_code is not None:
+                assert (
+                    exit_status.get_reported_exit_code()
+                    == scenario.expected_reported_exit_code
+                ), (
+                    f"Unexpected reported exit code for "
+                    f"{process_info[process_uuid]['name']}: "
+                    f"got {exit_status.get_reported_exit_code()}, expected "
+                    f"{scenario.expected_reported_exit_code}"
+                )
+
+        # Ensure all resources are cleaned up even for paths that intentionally
+        # bypass normal cleanup (e.g. crash_process and direct client signals).
+        ssh_manager.kill_all_processes(
+            process_timeouts={process_uuid: 10.0 for process_uuid in process_uuids}
+        )
+        verify_cleanup_complete(ssh_manager)
 
 
 def verify_log_output(ssh_manager, process_uuids, process_info, timeout=10.0):
