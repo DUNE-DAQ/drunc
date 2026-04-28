@@ -256,7 +256,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
         self.log = logger if logger else get_logger(__name__)
-        self.on_process_exit = on_process_exit
+        self._on_process_exit = on_process_exit
 
         # Create SSH command wrapper
         self.ssh = sh.Command("/usr/bin/ssh")
@@ -415,7 +415,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             hostname=hostname,
             user=user,
             metadata_file=metadata_file,
-            on_exit=self.on_process_exit,
+            on_exit=self._on_process_exit,
             logger=self.log,
         )
         watcher.start()

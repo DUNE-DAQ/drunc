@@ -147,12 +147,7 @@ def boot_processes_and_verify_exit_state_messages(
             if event is not None:
                 event.set()
 
-        # Shell manager uses `on_process_exit`; forked wrapper dispatches through
-        # `_on_process_exit` in the parent process.
-        if hasattr(ssh_manager, "on_process_exit"):
-            ssh_manager.on_process_exit = on_exit
-        if hasattr(ssh_manager, "_on_process_exit"):
-            ssh_manager._on_process_exit = on_exit
+        ssh_manager._on_process_exit = on_exit
 
         print("\n=== Booting one process per exit-status scenario ===")
         for scenario_config in scenarios:
@@ -208,42 +203,35 @@ def boot_processes_and_verify_exit_state_messages(
         def trigger_termination(process_uuid: str):
             kill_mode = process_info[process_uuid]["kill_mode"]
 
-            if kill_mode == "client_sigquit":
-                ssh_manager.kill_process_without_metadata(
+            kill_mode_actions = {
+                "client_sigquit": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="QUIT",
                     as_manual_kill=False,
                     timeout=10.0,
-                )
-                return
-
-            if kill_mode == "client_sigkill":
-                ssh_manager.kill_process_without_metadata(
+                ),
+                "client_sigkill": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="KILL",
                     as_manual_kill=False,
                     timeout=10.0,
-                )
-                return
-
-            if kill_mode == "remote_sigkill":
-                ssh_manager.crash_process(process_uuid)
-                return
-
-            if kill_mode == "manual_remote_pid":
-                ssh_manager.kill_process(process_uuid, timeout=10.0)
-                return
-
-            if kill_mode == "manual_ssh_client":
-                ssh_manager.kill_process_without_metadata(
+                ),
+                "remote_sigkill": lambda: ssh_manager.crash_process(process_uuid),
+                "manual_remote_pid": lambda: ssh_manager.kill_process(
+                    process_uuid, timeout=10.0
+                ),
+                "manual_ssh_client": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="QUIT",
                     as_manual_kill=True,
                     timeout=10.0,
-                )
-                return
+                ),
+            }
 
-            raise RuntimeError(f"Unhandled kill mode: {kill_mode}")
+            action = kill_mode_actions.get(kill_mode)
+            if action is None:
+                raise RuntimeError(f"Unhandled kill mode: {kill_mode}")
+            action()
 
         with ThreadPoolExecutor(max_workers=len(process_uuids)) as executor:
             futures = [

@@ -100,7 +100,7 @@ class ExitStatus:
         return (
             f"Process '{process_name}' (session: '{session}', user: '{user}') "
             f"{self._message_fragment}. "
-            f"Reported exit code: {self._reported_exit_code}."
+            f"Reported exit code: {self._reported_exit_code if self._reported_exit_code is not None else 'N/A (the nature of the shutdown prevented exit code collection)'}."
         )
 
     def __repr__(self) -> str:
