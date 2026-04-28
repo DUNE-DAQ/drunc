@@ -80,7 +80,6 @@ class ProcessWatcherThread(threading.Thread):
                 self.hostname,
                 self.user,
             )
-            metadata = None
             if metadata:
                 with self.manager.lock:
                     self.manager.metadata[self.uuid] = metadata
@@ -164,7 +163,12 @@ class ProcessWatcherThread(threading.Thread):
             exception = e
             self.logger.error(f"Remote process {self.uuid} watcher error: {e}")
 
-        exit_status = ExitStatus(ExitStatusSource.REMOTE_MONITORING, raw_exit_code)
+        exit_status = ExitStatus(
+            self.manager._consume_exit_status_source(
+                self.uuid, ExitStatusSource.REMOTE_MONITORING
+            ),
+            raw_exit_code,
+        )
 
         # Invoke callback with results
         if self.on_exit:
@@ -199,7 +203,12 @@ class ProcessWatcherThread(threading.Thread):
             exception = e
             self.logger.error(f"SSH client for {self.uuid} watcher error: {e}")
 
-        exit_status = ExitStatus(ExitStatusSource.CLIENT_MONITORING, raw_exit_code)
+        exit_status = ExitStatus(
+            self.manager._consume_exit_status_source(
+                self.uuid, ExitStatusSource.CLIENT_MONITORING
+            ),
+            raw_exit_code,
+        )
 
         if self.on_exit:
             try:
@@ -263,6 +272,26 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         # metadata for each process
         self.metadata: Dict[str, ProcessMetadata] = {}
+
+        # Override watcher-reported exit sources when kill_process() initiated
+        # the termination path.
+        self.manual_exit_status_sources: Dict[str, ExitStatusSource] = {}
+
+    def _set_manual_exit_status_source(
+        self, uuid: str, source: ExitStatusSource
+    ) -> None:
+        with self.lock:
+            self.manual_exit_status_sources[uuid] = source
+
+    def _clear_manual_exit_status_source(self, uuid: str) -> None:
+        with self.lock:
+            self.manual_exit_status_sources.pop(uuid, None)
+
+    def _consume_exit_status_source(
+        self, uuid: str, default: ExitStatusSource
+    ) -> ExitStatusSource:
+        with self.lock:
+            return self.manual_exit_status_sources.pop(uuid, default)
 
     @staticmethod
     def get_metadata_file_path(uuid: str) -> str:
@@ -1064,12 +1093,18 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.warning(
                 f"No remote PID for {uuid}, terminating SSH client. Cannot guarantee remote process termination."
             )
+            self._set_manual_exit_status_source(
+                uuid, ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT
+            )
             self._kill_client_process(process_info)
             exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
             self._cleanup_process_resources(uuid)
             if exit_code is None:
+                self._clear_manual_exit_status_source(uuid)
                 return None
-            return ExitStatus(ExitStatusSource.MANUAL_KILL, exit_code)
+            return ExitStatus(
+                ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT, exit_code
+            )
 
         remote_pid = metadata.pid
         process_dead = False
@@ -1079,9 +1114,17 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 self.log.info(
                     f"Skipping killing remote process {uuid} (PID {remote_pid}). It is already dead."
                 )
-                process_dead = True
+                exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+                self._cleanup_remote_file(hostname, user, metadata_file)
+                self._cleanup_process_resources(uuid)
+                if exit_code is None:
+                    return None
+                return ExitStatus(ExitStatusSource.REMOTE_MONITORING, exit_code)
 
             if not process_dead:
+                self._set_manual_exit_status_source(
+                    uuid, ExitStatusSource.MANUAL_KILL_THROUGH_REMOTE_PID
+                )
                 self.log.debug(f"Sending SIGQUIT to remote PID {remote_pid}")
                 self._send_remote_signal(hostname, user, remote_pid, "QUIT")
                 process_dead = self.wait_for_process_to_die(
@@ -1093,7 +1136,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                     )
                 else:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGQUIT signal."
+                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGQUIT signal."
                     )
 
             if not process_dead:
@@ -1108,23 +1151,27 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                         f"Remote process {uuid} (PID {remote_pid}) terminated forcibly following SIGKILL signal."
                     )
                 else:
-                    self.log.debug(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate after SIGKILL signal."
+                    self.log.info(
+                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGKILL signal."
                     )
 
             if not process_dead:
                 self.log.error(
                     f"Remote process {uuid} (PID {remote_pid}) still did not terminate after SIGKILL signal."
                 )
+                self._clear_manual_exit_status_source(uuid)
             else:
                 exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
                 if exit_code is None:
                     return None
-                return ExitStatus(ExitStatusSource.MANUAL_KILL, exit_code)
+                return ExitStatus(
+                    ExitStatusSource.MANUAL_KILL_THROUGH_REMOTE_PID, exit_code
+                )
 
         except Exception as e:
+            self._clear_manual_exit_status_source(uuid)
             self.log.error(f"Error terminating remote process {uuid}: {e}")
             return None
 
