@@ -72,7 +72,7 @@ class ConnectivityServiceClient:
 
     def retract(self, uid, fail_quickly=False):
         data = {
-            "partition": self.session,  #! will likely need to change
+            "session": self.session,  #! will likely need to change
             "connections": [
                 {
                     "connection_id": uid,
@@ -132,7 +132,7 @@ class ConnectivityServiceClient:
             fail_quietly (bool): If True, the function will suppress all exceptions and log
                                  errors as warnings. Default is False.
         """
-        data = {"partition": self.session}  #! will likely need to change
+        data = {"session": self.session}  #! will likely need to change
         for i in range(50):
             try:
                 self.log.debug(
@@ -222,7 +222,7 @@ class ConnectivityServiceClient:
                 http_post(
                     self.address + "/publish",
                     data={
-                        "partition": self.session,  #! will likely need to change
+                        "session": self.session,  #! will likely need to change
                         "connections": [
                             {
                                 "connection_type": 0,
