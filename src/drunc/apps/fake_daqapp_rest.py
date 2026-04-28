@@ -224,7 +224,7 @@ def main():
     )
     parser.add_argument(
         "-p",
-        "--partition",  #! will likely need to change
+        "--partition",
         default="global",
         help="This is a dummy argument in this case",
     )
