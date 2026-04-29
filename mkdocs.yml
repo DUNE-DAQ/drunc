@@ -34,6 +34,8 @@ plugins:
   - exclude:
       glob:
         - Developer-Wiki/*
+  - macros:
+      module_name: docs/gallery_generator
   - gen-files:
       scripts:
         - docs/utils/generate_ghpages_docstrings.py
@@ -50,6 +52,9 @@ plugins:
             show_category_heading: true
             merge_init_into_class: true
           paths: [.]
+
+extra_css:
+  - stylesheets/gallery.css
 
 hooks:
 - docs/utils/mkdocs_hooks.py
