@@ -1,14 +1,8 @@
 exclude = ["*_pb2.py", "*_pb2_grpc.py"]
 
 [lint]
-ignore = [
-    "D201", "D202", "D212", "D205"
-]
+ignore = ["ALL"]
 select = [
     "F",   # PyFlakes
-    "I",   # Isort
-    "D"
+    "I"   # Isort
 ]
-
-[lint.pydocstyle]
-convention = "google"
