@@ -72,7 +72,7 @@ class ConnectivityServiceClient:
 
     def retract(self, uid, fail_quickly=False):
         data = {
-            "partition": self.session,
+            "session": self.session,  #! will likely need to change
             "connections": [
                 {
                     "connection_id": uid,
@@ -120,11 +120,11 @@ class ConnectivityServiceClient:
                 if fail_quickly:
                     return
 
-    def retract_partition(
+    def retract_session(
         self, fail_quickly: bool = False, fail_quietly: bool = False
     ) -> None:
         """
-        Retract the whole partition (session) from the connectivity service.
+        Retract the whole session from the connectivity service.
 
         Args:
             fail_quickly (bool): If True, the function will return immediately on failure without
@@ -132,7 +132,7 @@ class ConnectivityServiceClient:
             fail_quietly (bool): If True, the function will suppress all exceptions and log
                                  errors as warnings. Default is False.
         """
-        data = {"partition": self.session}
+        data = {"session": self.session}  #! will likely need to change
         for i in range(50):
             try:
                 self.log.debug(
@@ -140,7 +140,7 @@ class ConnectivityServiceClient:
                 )
 
                 r = http_post(
-                    self.address + "/retract-partition",
+                    self.address + "/retract-session",
                     data=data,
                     headers={"Content-Type": "application/json"},
                     as_json=True,
@@ -222,7 +222,7 @@ class ConnectivityServiceClient:
                 http_post(
                     self.address + "/publish",
                     data={
-                        "partition": self.session,
+                        "session": self.session,  #! will likely need to change
                         "connections": [
                             {
                                 "connection_type": 0,

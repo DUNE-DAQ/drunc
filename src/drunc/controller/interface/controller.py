@@ -131,7 +131,7 @@ def controller_cli(
         log_km = get_logger("controller.iface.kill_me")
         log_km.info("Sending SIGKILL")
         if ctrlr.top_segment_controller:
-            ctrlr.connectivity_service.retract_partition(fail_quickly=True)
+            ctrlr.connectivity_service.retract_session(fail_quickly=True)
         pgrp = os.getpgid(os.getpid())
         os.killpg(pgrp, signal.SIGKILL)
 
