@@ -76,13 +76,13 @@ def define_env(env):
 
         for p in files:
             rel = f"{folder.rstrip('/')}/{p.name}"
-            site_rel = f"/{rel}"
+            page_rel = f"../{rel}"
             caption = p.stem  # filename without extension
 
             out.append(
                 "<figure>"
-                f'<a href="{html.escape(site_rel)}" target="_blank" rel="noopener">'
-                f'<img src="{html.escape(site_rel)}" loading="lazy" alt="{html.escape(caption)}">'
+                f'<a href="{html.escape(page_rel)}" target="_blank" rel="noopener">'
+                f'<img src="{html.escape(page_rel)}" loading="lazy" alt="{html.escape(caption)}">'
                 "</a>"
                 f"<figcaption>{html.escape(caption)}</figcaption>"
                 "</figure>"
