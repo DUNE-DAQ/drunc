@@ -21,8 +21,6 @@ from grpc import ServicerContext
 
 from drunc.exceptions import DruncSetupException
 from drunc.session_manager.configuration import SessionManagerConfHandler
-
-# from drunc.utils.grpc_utils import respond_with_rich_error_status, abort_with_rich_error
 from drunc.utils.utils import get_logger, pid_info_str
 
 
