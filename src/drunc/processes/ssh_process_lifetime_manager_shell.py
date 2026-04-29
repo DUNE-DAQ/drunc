@@ -1038,7 +1038,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self,
         uuid: str,
         signal_name: str = "QUIT",
-        as_manual_kill: bool = False,
+        as_manual_pm_kill: bool = True,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
     ) -> Optional[ExitStatus]:
         """
@@ -1047,7 +1047,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         Args:
             uuid: Process UUID to terminate
             signal_name: Signal to send to SSH client process group (QUIT/KILL)
-            as_manual_kill: Classify outcome as manual process-manager kill when True
+            as_manual_pm_kill: If True, classify as process-manager initiated kill.
+                               If False, classify as external kill i.e. outside of process manager control
             timeout: Maximum time to wait for process termination in seconds
 
         Returns:
@@ -1064,7 +1065,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         source_for_return = (
             ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT
-            if as_manual_kill
+            if as_manual_pm_kill
             else ExitStatusSource.CLIENT_MONITORING
         )
         # Ensure watcher callbacks classify this termination path as requested.
@@ -1147,7 +1148,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return self.kill_process_without_metadata(
                 uuid,
                 signal_name="QUIT",
-                as_manual_kill=True,
+                as_manual_pm_kill=True,
                 timeout=timeout,
             )
 

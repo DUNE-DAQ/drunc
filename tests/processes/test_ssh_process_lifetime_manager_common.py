@@ -207,13 +207,13 @@ def boot_processes_and_verify_exit_state_messages(
                 "client_sigquit": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="QUIT",
-                    as_manual_kill=False,
+                    as_manual_pm_kill=False,
                     timeout=10.0,
                 ),
                 "client_sigkill": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="KILL",
-                    as_manual_kill=False,
+                    as_manual_pm_kill=False,
                     timeout=10.0,
                 ),
                 "remote_sigkill": lambda: ssh_manager.crash_process(process_uuid),
@@ -223,7 +223,7 @@ def boot_processes_and_verify_exit_state_messages(
                 "manual_ssh_client": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
                     signal_name="QUIT",
-                    as_manual_kill=True,
+                    as_manual_pm_kill=True,
                     timeout=10.0,
                 ),
             }

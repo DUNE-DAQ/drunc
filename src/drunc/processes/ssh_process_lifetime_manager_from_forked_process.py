@@ -533,7 +533,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         self,
         uuid: str,
         signal_name: str = "QUIT",
-        as_manual_kill: bool = False,
+        as_manual_pm_kill: bool = True,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
     ) -> Optional[ExitStatus]:
         """
@@ -542,7 +542,8 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Args:
             uuid: Process UUID to terminate.
             signal_name: Signal name to send to SSH client process group.
-            as_manual_kill: If True, classify as process-manager initiated kill.
+            as_manual_pm_kill: If True, classify as process-manager initiated kill.
+                               If False, classify as external kill i.e. outside of process manager control
             timeout: Graceful termination timeout in seconds.
 
         Returns:
@@ -552,7 +553,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             "kill_process_without_metadata",
             uuid,
             signal_name,
-            as_manual_kill,
+            as_manual_pm_kill,
             timeout,
         )
 
