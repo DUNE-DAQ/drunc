@@ -353,7 +353,9 @@ def verify_all_processes_alive(ssh_manager, process_uuids, expected_count):
     print(f"✓ All {expected_count} processes confirmed alive")
 
 
-def verify_exit_codes(exit_codes, process_uuids, process_info=None):
+def verify_exit_codes(
+    exit_codes: dict[str, ExitStatus], process_uuids, process_info=None
+):
     """
     Verify that all processes terminated with expected exit codes.
 
@@ -367,8 +369,9 @@ def verify_exit_codes(exit_codes, process_uuids, process_info=None):
     """
     print("\n=== Verifying exit codes ===")
     for process_uuid in process_uuids:
-        exit_code = exit_codes.get(process_uuid)
-        assert exit_code is not None, f"No exit code for {process_uuid}"
+        exit_status = exit_codes.get(process_uuid)
+        assert exit_status is not None, f"No exit status for {process_uuid}"
+        exit_code = exit_status.get_reported_exit_code()
 
         # Exit code 0 indicates process successfully handled SIGQUIT
         assert exit_code == 0, f"Unexpected exit code {exit_code} for {process_uuid}"
