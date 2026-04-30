@@ -52,15 +52,18 @@ def boot(
         str : list(str)
     ] = {}  # segment: list[managed_object_identifier]
     managed_objects_present: bool = False
+    session_resources: list[str] = []
     segments = session_dal.segment.segments
     while segments:
         nested_segments = []
         for segment in segments:
-            managed_objects[segment.id] = list(
+            segment_resources = list(
                 confmodel_dal.segment_get_managed_object_tags(
                     db._obj, ctx.obj.configuration_id, segment.id
                 )
             )
+            managed_objects[segment.id] = segment_resources
+            session_resources += segment_resources
             if managed_objects[segment.id]:
                 managed_objects_present = True
             nested_segments += [nested_segment for nested_segment in segment.segments]
@@ -112,6 +115,23 @@ def boot(
     if empty_segments:
         log.info(
             f"[yellow]Empty segments (skipped):[/yellow] {', '.join(empty_segments)}"
+        )
+
+    # Remove storage related ones for initial prototyping
+    ctx.obj.session_resources = [
+        r for r in session_resources if not r.startswith("storage:")
+    ]
+
+    # Request the resources from the resource manager
+    if ctx.obj.resource_manager_client and ctx.obj.session_resources:
+        log.info(
+            f"Requesting the following resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {', '.join(ctx.obj.session_resources)}"
+        )
+        ctx.obj.resource_manager_client.request_resources(
+            ctx.obj.session_resources,
+            getpass.getuser(),
+            ctx.obj.configuration_id,
+            session_name,
         )
 
     processes = obj.get_driver("process_manager").ps(
@@ -214,6 +234,15 @@ def terminate(ctx, obj):
         )
     ctx.obj.managed_objects = {}
     ctx.obj.managed_objects_present = False
+
+    if ctx.obj.resource_manager_client and ctx.obj.session_resources:
+        log.info(
+            f"Releasing the following resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {', '.join(ctx.obj.session_resources)}"
+        )
+        ctx.obj.resource_manager_client.release_resources(
+            ctx.obj.session_resources, getpass.getuser()
+        )
+        ctx.obj.session_resources = []
 
     obj.get_driver("process_manager").terminate()
 

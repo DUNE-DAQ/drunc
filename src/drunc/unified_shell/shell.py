@@ -58,6 +58,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
+from drunc.resource_manager.client import ResourceManagerClient
 from drunc.unified_shell.commands import boot, start_shell, terminate
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
@@ -192,8 +193,9 @@ def unified_shell(
         resource_manager_port = resource_manager_url.port
         resource_manager_url = f"http://{resource_manager_host}:{resource_manager_port}"
         unified_shell_log.info(
-            f"Resource manager URL from configuration: [green]{resource_manager_url}[/green]"
+            f"Resource manager URL parsed from configuration: [green]{resource_manager_url}[/green]"
         )
+        ctx.obj.resource_manager_client = ResourceManagerClient(resource_manager_url)
 
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
