@@ -1,9 +1,10 @@
 import abc
 import re
+import sys
 import threading
 import time
 
-from daqpytools.logging.handlers import HandlerType, LogHandlerConf
+from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
@@ -12,12 +13,9 @@ from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
-    ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
-    ProcessRestriction,
-    ProcessUUID,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
@@ -61,13 +59,23 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         """C'tor. Note that this takes the ERS env variables from the
         json files defined in data/process_manager!"""
         super().__init__()
-        self.handlerconf = LogHandlerConf(init_ers=True)
+
         self.log = get_logger(
             f"process_manager.{configuration.get_data_type_name()}_process_manager",
-            ers_kafka_handler=False,
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
+
+        # Validate that the ERS configuration is valid
+        try:
+            self.handlerconf = LogHandlerConf(init_ers=True)
+        except exceptions.ERSEnvError as e:
+            self.log.error(
+                f"Failed to set up ERS logger for process manager: [red]{e}[/red]"
+            )
+            sys.exit(1)
+
+        self.ers_handler_initialized: bool = False
 
         self.configuration = configuration
         self.name = name
@@ -176,10 +184,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         )
 
     def __del__(self):
-        if hasattr(self, "opmon_publisher"):
-            if self.opmon_publisher is not None:
-                self.stop_event.set()
-                self.thread.join()
+        if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
+            self.stop_event.set()
+            self.thread.join()
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
         def find_by_uuid(pi_list, target_uuid: str):
@@ -226,9 +233,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                         )
                         continue
                     pi = find_by_uuid(results, diff)
-                    err_msg = f"Process {pi.process_description.metadata.name} with UUID {pi.uuid.uuid} has died with a return code {pi.return_code}"
-                    # easiest way to send one to Rich and ERS
-                    self.log.critical(err_msg, extra={"handlers": [HandlerType.Rich]})
+                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi.return_code}"
+                    if not self.ers_handler_initialized:
+                        setup_daq_ers_logger(
+                            self.log,
+                            pi.process_description.metadata.session,
+                            "drunc.process_manager",
+                        )
                     self.log.critical(err_msg, extra=self.handlerconf.ERS)
 
             time.sleep(interval_s)
@@ -434,6 +445,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
+    @abc.abstractmethod
+    def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
+        raise NotImplementedError
+
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
@@ -442,64 +457,38 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def flush(
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
+        """Remove dead processes from tracking so they no longer appear in ps.
+
+        Dead processes that were killed externally (e.g. via kill -9) will remain
+        visible in ps until flushed. This command clears them from internal state
+        so they cannot be restarted and will not appear in subsequent ps output.
+
+        Args:
+            request: ProcessQuery specifying which processes to flush.
+            context: gRPC servicer context (unused directly).
+
+        Returns:
+            ProcessInstanceList containing the processes that were flushed.
+        """
         self.log.debug(f"{self.name} running flush")
 
-        ret = []
-        for uuid in self._get_process_uid(request):
-            # Some unknown process was found, assume it is dead and move on
-            if uuid not in self.boot_request:
-                pu = ProcessUUID(uuid=uuid)
-                pi = ProcessInstance(
-                    process_description=ProcessDescription(),
-                    process_restriction=ProcessRestriction(),
-                    status_code=ProcessInstance.StatusCode.DEAD,
-                    return_code=None,
-                    uuid=pu,
-                )
-                ret += [pi]
-                continue
+        try:
+            response = self._flush_impl(request)
+        except NotImplementedError:
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.flush",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.flush: {e}"
+            self.log.exception(context_msg)
 
-            pd = ProcessDescription()
-            pd.CopyFrom(self.boot_request[uuid].process_description)
-            pr = ProcessRestriction()
-            pr.CopyFrom(self.boot_request[uuid].process_restriction)
-            pu = ProcessUUID(uuid=uuid)
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.flush",
+            )
 
-            return_code = None
-            try:
-                if not self.process_store[
-                    uuid
-                ].is_alive():  # OMG!! remove this implementation code
-                    return_code = self.process_store[uuid].exit_code
-            except Exception:
-                pass
-
-            # If a process is already dead, remove it from the process store
-            if not self.process_store[uuid].is_alive():
-                pi = ProcessInstance(
-                    process_description=pd,
-                    process_restriction=pr,
-                    status_code=(
-                        ProcessInstance.StatusCode.RUNNING
-                        if self.process_store[uuid].is_alive()
-                        else ProcessInstance.StatusCode.DEAD
-                    ),
-                    return_code=return_code,
-                    uuid=pu,
-                )
-                # If we know that this process has died intentionally, remove it from
-                # tracking
-                self.remove_process_from_expected_dead_processes(uuid)
-
-                del self.process_store[uuid]
-                ret += [pi]
-
-        return ProcessInstanceList(
-            name=self.name,
-            token=None,
-            values=ret,
-            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
-        )
+        return response
 
     # ORDER MATTERS!
     @broadcasted  # outer most wrapper 1st step
@@ -552,14 +541,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 message="Implementation missing",
                 domain="ProcessManager.logs",
             )
-        except Exception as e:
-            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
-            self.log.exception(context_msg)
-
-            raise DruncCommandException(
-                message=f"{context_msg}: {e}",
-                domain="ProcessManager.logs",
-            )
         except BadQuery as e:
             return LogLines(
                 name=self.name,
@@ -567,6 +548,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 uuid=None,
                 lines=[str(e)],
                 flag=ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT,
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.logs: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=f"{context_msg}: {e}",
+                domain="ProcessManager.logs",
             )
 
         return response

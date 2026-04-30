@@ -25,6 +25,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.session_name = ""
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
+        self.batch_commands: list(str) = []
         self.managed_objects: dict[
             str : list(str)
         ] = {}  # segment: list[managed_object_identifier]

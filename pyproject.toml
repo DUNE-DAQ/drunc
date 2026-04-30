@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "drunc"
 description = "A flexible run control infrastructure for a distributed DAQ system"
-version = "1.0.1"
+version = "1.1.0"
 readme = "docs/README.md"
 requires-python = ">=3.10"
 
@@ -49,6 +49,7 @@ drunc-fsm-tests = "drunc.tests.fsm:main"
 application-registry-service = "drunc.apps.app_connectivity_server:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
 drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
+drunc-check-np0x-cluster = "drunc.apps.check_np0x_cluster:main"
 
 
 [tool.setuptools.packages.find]

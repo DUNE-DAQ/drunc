@@ -1,16 +1,19 @@
+"""
+Common functions to test all process lifetime manager implementations.
+"""
+
 import getpass
 import tempfile
 import uuid
 from pathlib import Path
 
-import pytest
 from druncschema.process_manager_pb2 import (
     BootRequest,
     ProcessDescription,
     ProcessMetadata,
 )
 
-from drunc.grpc_testing_tools.connection_utils import wait_for
+from drunc.processes.connection_utils import wait_for
 
 
 def create_boot_request(process_name, tree_id, log_file, test_file_path):
@@ -466,70 +469,3 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
             "\n✓ Test passed: Processes with different roles executed, logged, "
             "terminated in correct order, and cleaned up successfully"
         )
-
-
-@pytest.mark.paramiko
-def test_ssh_multi_process_lifecycle_paramiko(ssh_manager_paramiko):
-    """
-    Test lifecycle of 3 concurrent SSH processes using Paramiko.
-
-    Executes 3 processes via SSH, verifies log output, terminates all
-    processes, and confirms complete cleanup.
-    """
-    boot_processes_and_kill_individually(ssh_manager_paramiko, Path(__file__))
-
-
-def test_ssh_multi_process_lifecycle_shell(ssh_manager_shell):
-    """
-    Test lifecycle of 3 concurrent SSH processes using shell.
-
-    Executes 3 processes via SSH, verifies log output, terminates all
-    processes, and confirms complete cleanup.
-    """
-    boot_processes_and_kill_individually(ssh_manager_shell, Path(__file__))
-
-
-@pytest.mark.paramiko
-def test_ssh_terminate_all_same_role_paramiko(ssh_manager_paramiko):
-    """
-    Test batch termination of processes sharing the same role using Paramiko.
-
-    Executes 3 processes with identical roles via SSH, verifies log output,
-    terminates all processes simultaneously, and confirms complete cleanup.
-    """
-    boot_processes_and_terminate_all_same_role(ssh_manager_paramiko, Path(__file__))
-
-
-def test_ssh_terminate_all_same_role_shell(ssh_manager_shell):
-    """
-    Test batch termination of processes sharing the same role using shell.
-
-    Executes 3 processes with identical roles via SSH, verifies log output,
-    terminates all processes simultaneously, and confirms complete cleanup.
-    """
-    boot_processes_and_terminate_all_same_role(ssh_manager_shell, Path(__file__))
-
-
-@pytest.mark.paramiko
-def test_ssh_terminate_all_different_role_paramiko(ssh_manager_paramiko):
-    """
-    Test priority-based termination of processes with different roles using Paramiko.
-
-    Executes processes with varying role priorities via SSH, verifies log output,
-    terminates all processes using role-based shutdown, verifies termination order,
-    and confirms complete cleanup.
-    """
-    boot_processes_and_terminate_all_different_role(
-        ssh_manager_paramiko, Path(__file__)
-    )
-
-
-def test_ssh_terminate_all_different_role_shell(ssh_manager_shell):
-    """
-    Test priority-based termination of processes with different roles using shell.
-
-    Executes processes with varying role priorities via SSH, verifies log output,
-    terminates all processes using role-based shutdown, verifies termination order,
-    and confirms complete cleanup.
-    """
-    boot_processes_and_terminate_all_different_role(ssh_manager_shell, Path(__file__))

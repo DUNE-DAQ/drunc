@@ -3,7 +3,7 @@ import signal
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
@@ -22,8 +22,7 @@ def validate_ssh_connection(configuration: str, session_name: str, log_level: st
     apps = collect_apps(
         config_filename=configuration,
         session_name=session_name,
-        db=db,
-        session_obj=session_dal,
+        session_dal_obj=session_dal,
         segment_obj=session_dal.segment,
         env={},
         tree_prefix=[],

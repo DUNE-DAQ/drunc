@@ -7,6 +7,7 @@ import confmodel_dal
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
+from drunc.exceptions import DruncSetupException
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import resource_log_tree
@@ -113,6 +114,9 @@ def boot(
             )
     except InterruptedCommand:
         log.warning("Booting interrupted")
+        return
+    except DruncSetupException as e:
+        log.error(e)
         return
 
     processes = obj.get_driver("process_manager").ps(
