@@ -1,4 +1,6 @@
 import getpass
+import os
+import socket
 import sys
 
 import click
@@ -54,8 +56,10 @@ def boot(
     while segments:
         nested_segments = []
         for segment in segments:
-            managed_objects[segment.id] = confmodel_dal.segment_get_managed_object_tags(
-                db._obj, ctx.obj.configuration_id, segment.id
+            managed_objects[segment.id] = list(
+                confmodel_dal.segment_get_managed_object_tags(
+                    db._obj, ctx.obj.configuration_id, segment.id
+                )
             )
             if managed_objects[segment.id]:
                 managed_objects_present = True
@@ -63,6 +67,35 @@ def boot(
         segments = nested_segments
     ctx.obj.managed_objects_present = managed_objects_present
     ctx.obj.managed_objects = managed_objects
+
+    # Map the requested dataflow localhost paths to realpaths, and localhost to host names
+    for segment, _managed_objects in managed_objects.items():
+        log.critical(
+            f"Segment '{segment}' has requested the following managed objects: {', '.join(_managed_objects)}"
+        )
+        for i, managed_object in enumerate(_managed_objects):
+            # Correct the storage paths if necessary
+            if managed_object.startswith("storage:"):
+                log.debug(f"Mapping storage path '{managed_object}' to real path")
+
+                # Map localhost to the host name
+                if "localhost" in managed_object:
+                    updated_host = managed_object.replace(
+                        "localhost", socket.gethostname()
+                    )
+                    _managed_objects[i] = updated_host
+
+                # Map the path to a real path, the paths are commonly "."
+                parts = _managed_objects[i].split(":")
+                raw_path = parts[-1]
+                real_path = os.path.abspath(raw_path)
+                mount = "/".join(real_path.split("/")[:2])
+
+                prefix = ":".join(parts[:-1])
+                _managed_objects[i] = f"{prefix}:{mount}"
+                log.critical(
+                    f"Mapped storage path '{managed_object}' to real path '{_managed_objects[i]}'"
+                )
 
     # Split out the segments that have requested resources
     empty_segments = [k for k, v in managed_objects.items() if not v]

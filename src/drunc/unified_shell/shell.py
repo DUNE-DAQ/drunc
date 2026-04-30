@@ -183,6 +183,18 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
+    # Get the session manager URL - FOR DEV
+    resource_manager_url = getattr(session_dal, "resource_manager", None)
+    if not resource_manager_url:
+        unified_shell_log.info("No resource manager URL found in the configuration.")
+    else:
+        resource_manager_host = resource_manager_url.address
+        resource_manager_port = resource_manager_url.port
+        resource_manager_url = f"http://{resource_manager_host}:{resource_manager_port}"
+        unified_shell_log.info(
+            f"Resource manager URL from configuration: [green]{resource_manager_url}[/green]"
+        )
+
     unified_shell_log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
         f"[green]{process_manager}[/green] and configuration id [green]"
