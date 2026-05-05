@@ -11,6 +11,8 @@ from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class ControllerContext(ShellContext):  # boilerplatefest
+    shell_id = "controller_shell"
+
     def __init__(self):
         self.status_receiver = None
         self.took_control = False

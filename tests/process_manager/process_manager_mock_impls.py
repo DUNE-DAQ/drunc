@@ -9,6 +9,7 @@ base class, allowing for testing serialisation/deserialisation. The request-hand
 from typing import Optional
 from unittest.mock import Mock
 
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -99,3 +100,12 @@ class ConcreteProcessManager(ProcessManager):
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         return self._not_implemented_response()
+
+    def _send_msg_impl(
+        self, msg: str | None = None, peer: str | None = None
+    ) -> OutcomeStatus:
+        """
+        Returns an empty response to indicate communication is working.
+        Accepts an optional message parameter for compatibility with new API.
+        """
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
