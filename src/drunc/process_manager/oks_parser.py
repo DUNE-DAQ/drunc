@@ -5,7 +5,7 @@ import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
     import conffwk
@@ -76,7 +76,19 @@ def get_full_db_path(db_path: str) -> str:
         raise DruncSetupException(err_str)
 
     # If multiple matches are found, take the first instance that matches.
+    #! This is a horrible way of choosing it... it could have gone into the cvmfs thing
+    #! we should put in the file_is_read_only config
+    #! and loop across until you find one where its not read only
+
+    #! Also clean up this logic right here
+
+    # Prefer the first writable match; if every match is read-only, fall back to the first one.
     resolved_path = unique_matched_files[0]
+    for matched_file in unique_matched_files:
+        if not file_is_read_only(matched_file):
+            resolved_path = matched_file
+            break
+
     log.debug(f"Path {db_path} resolved to {resolved_path}")
     return resolved_path
 
