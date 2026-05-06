@@ -174,7 +174,13 @@ def unified_shell(
 
     # unified_shell_log.critical("TEST")
     # Setup configuration related context variables
-    ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
+    # Assume oksconflibs if no framework is defined
+    ctx.obj.configuration_file = (
+        lambda path: (
+            path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
+        )
+    )(configuration_file)
+
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
 
