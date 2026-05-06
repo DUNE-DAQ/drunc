@@ -28,7 +28,7 @@ class ProcessLifetimeManager(ABC):
     # Interval to wait between checking if a process is dead after kill is called.
     KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
     # Interval to wait before concluding metadata file writing failed on remote host.
-    DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
+    DEFAULT_TIMEOUT_FOR_READING_METADATA = 10.0  # seconds
 
     def wait_for_process_to_die(
         self,
