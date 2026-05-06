@@ -87,6 +87,26 @@ class ProcessManagerDriver:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
     # ----- Boot workflow -----
+
+    def send_random(self):
+        request = Request(token=copy_token(self.token))
+        timeout = 10
+
+        try:
+            self.stub.send_random(request, timeout=timeout)
+        except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+            handle_grpc_error(e)
+
+        self.log.critical("Hello, world!")
+
     def boot(
         self,
         conf_file: str,
