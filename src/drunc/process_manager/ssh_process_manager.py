@@ -16,7 +16,7 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 from druncschema.request_response_pb2 import ResponseFlag
-
+from google.protobuf.empty_pb2 import Empty
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
@@ -520,6 +520,10 @@ class SSHProcessManager(ProcessManager):
             #     )
             #     self.log.warning(ret)
             return ret_fmt
+
+    def _send_random_impl(self) -> Empty:
+        self.log.critical("Hello, worldsssear!")
+        return Empty()
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")

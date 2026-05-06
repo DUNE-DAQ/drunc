@@ -7,6 +7,7 @@ import time
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
+from google.protobuf.empty_pb2 import Empty
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
@@ -556,6 +557,35 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             raise DruncCommandException(
                 message=f"{context_msg}: {e}",
                 domain="ProcessManager.logs",
+            )
+
+        return response
+
+    @abc.abstractmethod
+    def _send_random_impl(self) -> Empty:
+        raise NotImplementedError
+
+    @broadcasted
+    @authentified_and_authorised(
+        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+    )
+    def send_random(self, request: Request, context: ServicerContext) -> Empty:
+        self.log.debug(f"{self.name} running send_random")
+
+        try:
+            response = self._send_random_impl()
+        except NotImplementedError:
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.send_random",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.send_random: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.send_random",
             )
 
         return response
