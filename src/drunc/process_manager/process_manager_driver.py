@@ -120,6 +120,9 @@ class ProcessManagerDriver:
     ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
+        # Assume oksconflibs if no framework is defined
+        conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
+
         # Step 1 - consolidate configuration
         self._consolidate_config(session_name, conf_file)
 
