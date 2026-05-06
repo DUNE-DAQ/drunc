@@ -150,9 +150,9 @@ def unified_shell(
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
-    unified_shell_log.critical(
-        f"Parsing the process manager argument: {process_manager}"
-    )
+    # unified_shell_log.critical(
+    #     f"Parsing the process manager argument: {process_manager}"
+    # )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
@@ -172,7 +172,7 @@ def unified_shell(
     #     )
     #     sys.exit(1)
 
-    unified_shell_log.critical("TEST")
+    # unified_shell_log.critical("TEST")
     # Setup configuration related context variables
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
@@ -276,11 +276,15 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]"
         f"{process_manager_address}[/green]"
     )
+
+    #! This is where the context objects connection detail
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
-    unified_shell_log.critical("Getting driver")
+    # unified_shell_log.critical("Getting driver")
+
+    #! Here we're getting the driver!
     try:
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
@@ -307,7 +311,7 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
-    unified_shell_log.critical("Process manager described successfully")
+    # unified_shell_log.critical("Process manager described successfully")
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):
