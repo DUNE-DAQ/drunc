@@ -3,6 +3,8 @@ Fixes issue # _ISSUE NUMBER_
 
 _WHAT DOES THIS PR CHANGE - ONE LINE._
 
+__DON'T FORGET TO LABEL THE ISSUE WITH THE APPROPRIATE TOPIC__
+
 _DOCUMENT THE CHANGE BELOW OR DELETE IT_
 
 The relevant changes in the user workflow have been documented _here_ (link URL)
@@ -50,7 +52,7 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
   - [ ] Only `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py`
   - [ ] Full `daqsystemtest_integtest_bundle.sh`
 - [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
-<!-- - [ ] Drunc integration tests pass (`pytest -m integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. -->
+- [ ] Drunc integration tests pass (`./scripts/drunc_integtest_bundle.sh`)
 
 ## Final checklist prior to marking this as "Ready for Review"
 
