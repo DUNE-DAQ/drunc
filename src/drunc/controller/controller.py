@@ -713,10 +713,10 @@ class Controller(ControllerServicer):
         command_name = command.command_name
 
         fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
-        if command_name == "start":
-            fsm_cmd_log += (
-                f"with arguments {self.stateful_node.decode_fsm_arguments(command)}"
-            )
+        if command_name == "start" and (
+            cmd := self.stateful_node.decode_fsm_arguments(command)
+        ):
+            fsm_cmd_log += f"with arguments {cmd}"
         elif command_name == "stop":
             fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
         self.log.info(fsm_cmd_log)
