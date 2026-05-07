@@ -339,6 +339,25 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return RemotePidResult(reason="no metadata")
         return RemotePidResult(pid=metadata.pid)
 
+    def get_runtime_pids(self, uuid: str) -> Dict[str, Optional[int]]:
+        """Return best-effort runtime PID snapshot for a managed process."""
+        with self.lock:
+            running_process = self.process_store.get(uuid)
+            if running_process is None:
+                return {
+                    "ssh_client_pid": None,
+                    "remote_pid": None,
+                    "remote_monitoring_pid": None,
+                    "client_monitoring_pid": None,
+                }
+
+            return {
+                "ssh_client_pid": running_process.ssh_client_pid,
+                "remote_pid": running_process.remote_pid,
+                "remote_monitoring_pid": running_process.remote_monitoring_pid,
+                "client_monitoring_pid": running_process.client_monitoring_pid,
+            }
+
     def start_process(self, uuid: str, boot_request: BootRequest) -> None:
         """
         Start a remote process via SSH using the boot request configuration.

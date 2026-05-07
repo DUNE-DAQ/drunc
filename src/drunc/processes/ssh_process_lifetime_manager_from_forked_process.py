@@ -703,3 +703,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             why the PID is unavailable (e.g. metadata not yet written).
         """
         return self._call("get_remote_pid", uuid)
+
+    def get_runtime_pids(self, uuid: str) -> Dict[str, Optional[int]]:
+        """Return best-effort runtime PID snapshot from the child manager."""
+        return self._call("get_runtime_pids", uuid)

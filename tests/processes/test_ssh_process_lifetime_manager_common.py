@@ -3,6 +3,7 @@ Common functions to test all process lifetime manager implementations.
 """
 
 import getpass
+import os
 import tempfile
 import threading
 import uuid
@@ -183,6 +184,8 @@ def boot_processes_and_verify_exit_state_messages(
         verify_all_processes_alive(ssh_manager, process_uuids, len(scenarios))
         verify_log_output(ssh_manager, process_uuids, process_info)
 
+        pid_snapshots = capture_process_pid_snapshots(ssh_manager, process_uuids)
+
         # Wait until metadata is available for all scenarios that require remote PID.
         for process_uuid in process_uuids:
             kill_mode = process_info[process_uuid]["kill_mode"]
@@ -282,7 +285,7 @@ def boot_processes_and_verify_exit_state_messages(
         ssh_manager.kill_all_processes(
             process_timeouts={process_uuid: 10.0 for process_uuid in process_uuids}
         )
-        verify_cleanup_complete(ssh_manager)
+        verify_cleanup_complete(ssh_manager, pid_snapshots=pid_snapshots)
 
 
 def verify_log_output(ssh_manager, process_uuids, process_info, timeout=10.0):
@@ -383,7 +386,98 @@ def verify_exit_codes(
             print(f"Process {process_uuid}: exit code {exit_code}")
 
 
-def verify_cleanup_complete(ssh_manager):
+def _pid_exists(pid: int) -> bool:
+    """Return True if PID exists (including zombie), False otherwise."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def _pid_state(pid: int) -> Optional[str]:
+    """Return /proc state letter for PID, or None when unavailable."""
+    try:
+        with open(f"/proc/{pid}/stat", "r", encoding="utf-8") as proc_stat:
+            fields = proc_stat.read().split()
+        if len(fields) >= 3:
+            return fields[2]
+    except FileNotFoundError:
+        return None
+    except ProcessLookupError:
+        return None
+    except PermissionError:
+        return None
+    return None
+
+
+def capture_process_pid_snapshots(
+    ssh_manager, process_uuids
+) -> dict[str, dict[str, int]]:
+    """Capture best-effort PID snapshots for processes before kill/cleanup."""
+    snapshots: dict[str, dict[str, int]] = {}
+    get_runtime_pids = getattr(ssh_manager, "get_runtime_pids", None)
+
+    for process_uuid in process_uuids:
+        pid_snapshot: dict[str, int] = {}
+
+        if callable(get_runtime_pids):
+            runtime_pids = get_runtime_pids(process_uuid) or {}
+            for label, pid in runtime_pids.items():
+                if isinstance(pid, int):
+                    pid_snapshot[label] = pid
+
+        remote_pid_result = ssh_manager.get_remote_pid(process_uuid)
+        if remote_pid_result.successful and isinstance(remote_pid_result.pid, int):
+            pid_snapshot["remote_pid"] = remote_pid_result.pid
+
+        snapshots[process_uuid] = pid_snapshot
+
+    return snapshots
+
+
+def _verify_os_pid_cleanup(
+    pid_snapshots: dict[str, dict[str, int]],
+    timeout_per_pid: float = 10.0,
+) -> None:
+    """Verify tracked PIDs fully disappear from the OS and are not zombies."""
+    seen_pids: set[int] = set()
+    checked_count = 0
+
+    for process_uuid, snapshot in pid_snapshots.items():
+        for pid_type, pid in snapshot.items():
+            if pid in seen_pids:
+                continue
+            seen_pids.add(pid)
+
+            cleaned = wait_for(
+                lambda p=pid: not _pid_exists(p),
+                expected_value=True,
+                timeout=timeout_per_pid,
+                poll_interval=0.1,
+            )
+            if cleaned:
+                checked_count += 1
+                continue
+
+            state = _pid_state(pid)
+            if state == "Z":
+                raise AssertionError(
+                    f"PID {pid} ({pid_type}, process UUID {process_uuid}) still exists as a zombie"
+                )
+
+            raise AssertionError(
+                f"PID {pid} ({pid_type}, process UUID {process_uuid}) still exists after cleanup "
+                f"with state '{state if state is not None else 'unknown'}'"
+            )
+
+    if checked_count:
+        print(f"✓ OS-level cleanup verified for {checked_count} tracked PID(s)")
+
+
+def verify_cleanup_complete(ssh_manager, pid_snapshots=None):
     """
     Verify that all process resources have been cleaned up.
 
@@ -397,6 +491,9 @@ def verify_cleanup_complete(ssh_manager):
     assert len(active_keys) == 0, (
         f"Found {len(active_keys)} active processes after cleanup"
     )
+
+    if pid_snapshots:
+        _verify_os_pid_cleanup(pid_snapshots)
 
 
 def verify_all_processes_dead(ssh_manager, process_uuids, expected_count):
@@ -469,6 +566,8 @@ def boot_processes_and_kill_individually(ssh_manager, test_file_path):
         verify_all_processes_alive(ssh_manager, process_uuids, num_processes)
         verify_log_output(ssh_manager, process_uuids, process_info)
 
+        pid_snapshots = capture_process_pid_snapshots(ssh_manager, process_uuids)
+
         exit_codes = {}
         print("\n=== Terminating all processes ===")
         for process_uuid in process_uuids:
@@ -478,7 +577,7 @@ def boot_processes_and_kill_individually(ssh_manager, test_file_path):
 
         verify_all_processes_dead(ssh_manager, process_uuids, num_processes)
         verify_exit_codes(exit_codes, process_uuids)
-        verify_cleanup_complete(ssh_manager)
+        verify_cleanup_complete(ssh_manager, pid_snapshots=pid_snapshots)
 
         print(
             "\n✓ Test passed: All processes executed, logged, and cleaned up successfully"
@@ -532,6 +631,8 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
         verify_all_processes_alive(ssh_manager, process_uuids, num_processes)
         verify_log_output(ssh_manager, process_uuids, process_info)
 
+        pid_snapshots = capture_process_pid_snapshots(ssh_manager, process_uuids)
+
         print(f"\n=== Terminating all processes with role '{role}' ===")
         exit_codes = ssh_manager.kill_processes(
             process_uuids, process_timeouts={uuid: 10.0 for uuid in process_uuids}
@@ -539,7 +640,7 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
 
         verify_all_processes_dead(ssh_manager, process_uuids, num_processes)
         verify_exit_codes(exit_codes, process_uuids, process_info)
-        verify_cleanup_complete(ssh_manager)
+        verify_cleanup_complete(ssh_manager, pid_snapshots=pid_snapshots)
 
         print(
             f"\n✓ Test passed: All {num_processes} processes with role '{role}' "
@@ -616,6 +717,8 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
 
         verify_all_processes_alive(ssh_manager, process_uuids, len(process_configs))
         verify_log_output(ssh_manager, process_uuids, process_info)
+
+        pid_snapshots = capture_process_pid_snapshots(ssh_manager, process_uuids)
 
         print("\n=== Terminating all processes (role-based shutdown) ===")
 
@@ -700,7 +803,7 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
             "'application' before 'segment-controller'"
         )
 
-        verify_cleanup_complete(ssh_manager)
+        verify_cleanup_complete(ssh_manager, pid_snapshots=pid_snapshots)
 
         print(
             "\n✓ Test passed: Processes with different roles executed, logged, "
