@@ -73,7 +73,7 @@ def boot(
 
     # Map the requested dataflow localhost paths to realpaths, and localhost to host names
     for segment, _managed_objects in managed_objects.items():
-        log.critical(
+        log.info(
             f"Segment '{segment}' has requested the following managed objects: {', '.join(_managed_objects)}"
         )
         for i, managed_object in enumerate(_managed_objects):
@@ -96,7 +96,7 @@ def boot(
 
                 prefix = ":".join(parts[:-1])
                 _managed_objects[i] = f"{prefix}:{mount}"
-                log.critical(
+                log.info(
                     f"Mapped storage path '{managed_object}' to real path '{_managed_objects[i]}'"
                 )
 
