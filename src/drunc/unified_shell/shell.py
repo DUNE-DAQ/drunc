@@ -42,16 +42,27 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
+
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
-    logs,
+    # logs,
     # ps,
     restart,
     # terminate,
 )
+
 from drunc.process_manager.interface.process_manager import run_pm
-from drunc.unified_shell.commands import boot, ps, start_shell, terminate
+from drunc.unified_shell.commands import (
+    boot,
+    # flush,
+    # kill,
+    logs,
+    ps,
+    # restart,
+    start_shell,
+    terminate,
+)
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey

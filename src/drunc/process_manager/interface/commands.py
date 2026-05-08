@@ -223,22 +223,21 @@ def flush(
     )  # rich tables require console printing
 
 
+def logs_decorators(f):
+    # order matters: apply options from outermost to innermost
+    f = click.pass_obj(f)
+    f = click.option("--grep", type=str, default=None)(f)
+    f = click.option("--how-far", type=int, show_default=True, default=100, help="How many lines one wants")(f)
+    f = add_query_options(at_least_one=True)(f)
+    return f
+
 @click.command("logs")
-@add_query_options(at_least_one=True)
-@click.option(
-    "--how-far",
-    type=int,
-    show_default=True,
-    default=100,
-    help="How many lines one wants",
-)
-@click.option("--grep", type=str, default=None)
-@click.pass_obj
+@logs_decorators
 def logs(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
     log = get_logger("process_manager.shell")
-    log.debug(f"Running logs with query {query}")
+    log.info(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
         query=query,
