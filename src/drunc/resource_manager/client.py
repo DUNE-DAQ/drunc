@@ -31,7 +31,7 @@ class ResourceManagerClient:
         """
         try:
             # verify=False is used here for local/self-signed certs (like curl -k)
-            self.log.critical(f"Sending request to {endpoint} with payload: {payload}")
+            self.log.debug(f"Sending request to {endpoint} with payload: {payload}")
             response = requests.post(endpoint, data=payload, verify=False)
 
             if "application/json" not in response.headers.get("Content-Type", ""):
@@ -48,6 +48,7 @@ class ResourceManagerClient:
 
         except requests.exceptions.HTTPError:
             self.log.warning(f"Request failed with status {response.status_code}")
+            self.log.debug(f"Response content: {response.text}")
             return response.json()
         except Exception as e:
             self.log.error(f"An unexpected error occurred: {e}")
@@ -92,7 +93,7 @@ class ResourceManagerClient:
         """
         payload = {
             "names": ",".join(resources),
-            "owner": owner,
+            "user_name": owner,
             "session_id": session_id,
             "session_name": session_name,
         }
@@ -100,22 +101,20 @@ class ResourceManagerClient:
 
         return self._send_request(endpoint, payload)
 
-    def release_resources(self, resources: list[str], owner: str):
+    def release_resources(self, resources: list[str], session_id: str):
         """
         Release resources from the Resource Manager for other runs to use.
 
         Args:
             resources (list[str]): List of resource names to query
-            owner (str): The new owner of the resources
             session_id (str): The session ID taking the resources
-            session_name (str): The session name taking the resources
 
         Returns:
             dict: A dictionary containing the status of the queried resources
         """
         payload = {
             "names": ",".join(resources),
-            "owner": owner,
+            "session_id": session_id,
         }
         endpoint = f"{self.url}/api/release_resource/"
 
