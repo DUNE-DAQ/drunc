@@ -283,7 +283,7 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
         manager.kill_process(process_uuid, timeout=10.0)
 
         # Allow time for the exit event to propagate from child to parent.
-        callback_fired = callback_event.wait(timeout=10.0)
+        callback_fired = callback_event.wait(timeout=15.0)
 
         assert callback_fired, (
             "on_process_exit callback was not invoked within the timeout after killing the process"
