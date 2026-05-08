@@ -1145,6 +1145,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
                 f"{command} &> {log_file} & PID=$! ; "
+                f"trap 'kill -HUP $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' HUP TERM INT QUIT ; "
                 f"echo '{remote_metadata_json}' > {metadata_file} ; "
                 f"wait $PID"
             )
@@ -1498,11 +1499,18 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         return self._is_remote_pid_alive(hostname, user, pid)
 
     def _is_remote_pid_alive(self, hostname: str, user: str, pid: int) -> bool:
-        """Check whether a remote PID exists using a direct SSH probe."""
+        """Check whether a remote PID is alive (not exited and not zombie)."""
         try:
             user_host = f"{user}@{hostname}"
             arguments = self._build_ssh_arguments(hostname, user_host)
-            arguments.extend([f"[ -d /proc/{pid} ]"])
+            arguments.extend(
+                [
+                    (
+                        f"test -d /proc/{pid} && "
+                        f'[ "$(awk \'{{print $3}}\' /proc/{pid}/stat 2>/dev/null)" != "Z" ]'
+                    )
+                ]
+            )
             self.ssh(*arguments)
             return True
         except Exception:
