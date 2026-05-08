@@ -72,15 +72,25 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
 - [ ] This branch has been rebased with develop prior to testing.
 - [ ] Suggested manual tests show changes.
 - [ ] CI workflows fails documented (if present)
-- [ ] Integration tests passed
-  - Note - if any of the following apply, you can run only `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py`, otherwise run the full `daqsystemtest_integtest_bundle.sh` either on the np0x cluster or on the IC HEP cluster
-    - PR changes only affect a few log entries
-    - PR changes only affect docstrings
-    - PR changes are small, and do not have a large impact on the workflow (use carefully)
-  - Only concern yourself if failures related to `drunc` are in the log files
-  - If non-`drunc` failure appears:
-    - Validate failure in fresh working area
-    - Contact Pawel if unsure
+- [ ] Integration tests passed (on either np0x or IC HEP clusters)
+  - If the reviewer has already ran the relevant tests, this step is optional
+  - Use the following guidelines to determine which of the integration tests you need to run
+    - You do not need to run any integration tests if
+      - Code changes are not associated with `src/`
+      - In this case, be sure to validate any suggested manual testing.
+    - Run only the minimum integration test as `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py` if
+      - PR changes only affect a few log entries
+      - PR changes only affect docstrings
+      - PR changes are small, and do not have a large impact on the workflow (use carefully)
+    - Otherwise run the full integration test bundle as `daqsystemtest_integtest_bundle.sh`
+  - What to do if the integration tests fail?
+    - Only concern yourself if failures related to `drunc` are in the log files
+    - If non-`drunc` failure appears:
+      - Validate failure in fresh working area
+      - Contact Pawel if unsure
+- [ ] If you have ran the full integration test bundle, leave a comment on the PR stating 
+  - Which host the integration tests have ran on
+  - [Optional] A copy of the test summary
 - [ ] Drunc integration tests pass (`/scripts/drunc_integtest_bundle.sh`)
 
 Once the above boxes are checked, the PR(s) can be merged.
