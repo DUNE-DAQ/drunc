@@ -7,7 +7,6 @@ import time
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
-from google.protobuf.empty_pb2 import Empty
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
@@ -23,6 +22,7 @@ from druncschema.request_response_pb2 import (
     Request,
     ResponseFlag,
 )
+from google.protobuf.empty_pb2 import Empty
 from google.rpc import code_pb2
 from grpc import ServicerContext
 
@@ -650,25 +650,27 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # Filter processes based on query criteria
         processes = []
         for uuid in available_uuids:
-            accepted = False
+            accepted = True
             meta = boot_request_dict[uuid].process_description.metadata
 
             # Check UUID match
-            if uuid in uuid_selector:
-                accepted = True
+            if uuid_selector and uuid not in uuid_selector:
+                accepted = False
 
             # Check name pattern match (regex)
-            for name_reg in name_selector:
-                if re.search(name_reg, meta.name):
-                    accepted = True
+
+            if name_selector and not any(
+                re.search(reg, meta.name) for reg in name_selector
+            ):
+                accepted = False
 
             # Check session match
-            if session_selector == meta.session:
-                accepted = True
+            if session_selector and session_selector != meta.session:
+                accepted = False
 
             # Check user match
-            if user_selector == meta.user:
-                accepted = True
+            if user_selector and user_selector != meta.user:
+                accepted = False
 
             if accepted:
                 processes.append(uuid)
