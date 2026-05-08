@@ -77,10 +77,10 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
   - Use the following guidelines to determine which of the integration tests you need to run
     - You do not need to run any integration tests if
       - Code changes are not associated with `src/`
+      - PR changes only affect docstrings
       - In this case, be sure to validate any suggested manual testing.
     - Run only the minimum integration test as `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py` if
       - PR changes only affect a few log entries
-      - PR changes only affect docstrings
       - PR changes are small, and do not have a large impact on the workflow (use carefully)
     - Otherwise run the full integration test bundle as `daqsystemtest_integtest_bundle.sh`
   - What to do if the integration tests fail?
