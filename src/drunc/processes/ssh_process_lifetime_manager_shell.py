@@ -1203,6 +1203,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
     ) -> Optional[ExitStatus]:
         """
         Terminate process by signalling the local SSH client without using remote metadata.
+        Prefer kill_process(..) to this method, this is mainly intended to help with testing
 
         Args:
             uuid: Process UUID to terminate
