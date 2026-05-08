@@ -33,10 +33,7 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.oks_parser import get_full_db_path
-from drunc.process_manager.utils import (
-    get_log_path,
-    get_rte_script,
-)
+from drunc.process_manager.utils import format_hostname, get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
     copy_token,
     extract_grpc_rich_error,
@@ -258,7 +255,7 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = app["restriction"]
+        host = format_hostname(app["restriction"])
         name = app["name"]
         exe = app["type"]
         args = app["args"]
@@ -304,7 +301,7 @@ class ProcessManagerDriver:
                     user=user,
                     session=session_name,
                     name=name,
-                    hostname="",
+                    hostname=host,
                     tree_id=tree_id,
                 ),
                 executable_and_arguments=executable_and_arguments,
@@ -599,7 +596,6 @@ To debug it, close drunc and run the following command:
                 except Exception as e:
                     self.log.error(
                         f"An unexpected error occurred during connectivity service lookup: {e}. "
-                        "Falling back to static OKS configuration."
                     )
 
             else:

@@ -46,7 +46,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.utils import format_name_for_cli, get_logger
+from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
 
@@ -184,9 +184,20 @@ class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
         self.ctx = ctx
         self.update_table()
+
+        # Get the instance of the console that the logger is using with the rich handler
+        # so that the progress bar can be rendered in the same console, and not mess up
+        # the logs
+        shared_console = get_shared_rich_console(self.ctx.log)
+        if shared_console:
+            kwargs["console"] = shared_console
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
+        # The following debug log line will be used in an integration test to validate
+        # that issue 817 does not appear again (rich table overriding the log entries)
+        self.ctx.log.debug("Updating the status table...")
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
         self.table = get_status_table(statuses, descriptions)

@@ -79,6 +79,21 @@
 </comments>
 
 
+<obj class="Variable" id="drunc-simulate-failure-init"/>
+ <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_INIT"/>
+ <attr name="value" type="string" val="True"/>
+</obj>
+
+<obj class="Variable" id="drunc-simulate-failure-post-boot">
+ <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_POST_BOOT"/>
+ <attr name="value" type="string" val="True"/>
+</obj>
+
+<obj class="Variable" id="drunc-simulate-failure-cmd">
+ <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD"/>
+ <attr name="value" type="string" val="True"/>
+</obj>
+
 <obj class="Service" id="controller_control">
  <attr name="protocol" type="string" val="grpc"/>
  <attr name="port" type="u16" val="0"/>
@@ -94,6 +109,7 @@
  <rel name="modules">
  </rel>
 </obj>
+
 <obj class="DaqApplication" id="bottom-segment-2-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -104,6 +120,7 @@
  <rel name="modules">
  </rel>
 </obj>
+
 <obj class="DaqApplication" id="nested-segment-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -198,7 +215,7 @@
 </obj>
 
 
-<obj class="Session" id="test-config">
+<obj class="Session" id="test-nested-config">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -220,5 +237,70 @@
  <rel name="resource_manager" class="ResourceManagerConf" id="ResourceManagerConf_test"/>
 </obj>
 
+<obj class="Session" id="test-nested-config-failure-on-init">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-simulate-failure-init"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<!-- <obj class="Session" id="test-nested-config-failure-post-boot">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-simulate-failure-post-boot"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="test-nested-config-failure-fsm-cmd">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-simulate-failure-cmd"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj> -->
 
 </oks-data>

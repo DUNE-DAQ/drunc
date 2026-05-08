@@ -15,6 +15,7 @@ class UnifiedShellMode(Enum):
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
     def __init__(self):
+        self.log = None
         self.status_receiver_pm = None
         self.status_receiver_controller = None
         self.took_control = False

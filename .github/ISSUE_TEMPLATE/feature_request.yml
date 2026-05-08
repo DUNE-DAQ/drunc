@@ -9,7 +9,10 @@ body:
     attributes:
       label: Description
       description: Describe what new feature or enhancement you would like to see.
-      placeholder: "Description here..."
+      placeholder: |
+        "Description here..."
+
+        **Do not forget to label this issue with the approriate topic!**
     validations:
       required: true
   - type: dropdown
