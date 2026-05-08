@@ -23,9 +23,6 @@ from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 
-from drunc.utils.utils import get_logger
-
-
 class SSHProcessManager(ProcessManager):
     def __init__(
         self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs

@@ -162,6 +162,105 @@ def ps(ctx, obj):
     )
 
 
+# Logs
+
+from drunc.process_manager.interface.commands import logs as pm_logs_cmd
+from drunc.process_manager.interface.commands import logs_decorators as pm_logs_deco
+
+
+@click.command("logs")
+@pm_logs_deco
+@click.pass_context
+def logs(ctx, obj, how_far: int, grep: str, query: ProcessQuery) -> None:
+    # enforce session
+    
+    #! this kinda works! we still need to figure out how to deal with the session tho 
+    # mainly because we want a strict default here but we have to worry about the 
+    # decorator adding the sessino
+    
+    log = get_logger("unified_shell.logs")
+
+    query.session = ctx.obj.session_name
+
+    log.info("getting logs")
+    # delegate to the process_manager implementation: unwrap decorators
+    cb = pm_logs_cmd.callback
+    # unwrap any decorator layers to reach the original function
+    while hasattr(cb, "__wrapped__"):
+        cb = cb.__wrapped__
+
+    # call the original function which expects (obj, how_far, grep, query)
+
+    # this kinda works but now i need to undertstand how the process query works because i cannot add different queries together for some reason
+    return cb(obj, how_far, grep, query)
+
+
+
+
+
+
+
+
+
+
+#### DO NOT COMMIT
+
+# # Restart
+# @click.command("restart")
+# @click.pass_obj
+# @click.pass_context
+# def restart(ctx, obj):
+#     """
+#     Execute the process manager restart command, but only do this for the current
+#     session
+#     """
+#     log = get_logger("unified_shell.restart")
+#     session_query = ProcessQuery(session=ctx.obj.session_name)
+#     log.info(f"Restarting session [green]{ctx.obj.session_name}[/]")
+#     obj.get_driver("process_manager").restart(session_query)
+
+
+# # Flush
+
+
+# @click.command("flush")
+# @click.pass_obj
+# @click.pass_context
+# def flush(ctx, obj):
+#     """
+#     Execute the process manager flush command, but only do this for the current
+#     session
+#     """
+#     log = get_logger("unified_shell.flush")
+#     session_query = ProcessQuery(session=ctx.obj.session_name)
+#     log.info(f"Flushing session [green]{ctx.obj.session_name}[/]")
+#     obj.get_driver("process_manager").flush(session_query)
+
+
+# # Kill
+
+
+# @click.command("kill")
+# @click.pass_obj
+# @click.pass_context
+# def kill(ctx, obj):
+#     """
+#     Execute the process manager kill command, but only do this for the current
+#     session
+#     """
+#     log = get_logger("unified_shell.kill")
+#     session_query = ProcessQuery(session=ctx.obj.session_name)
+#     log.info(f"Killing processes in session [green]{ctx.obj.session_name}[/]")
+#     obj.get_driver("process_manager").kill(session_query)
+
+
+# # Wait #also put it in the PM shell
+
+#! Note: i cant seem to do a start-run from no boot in the unified shell.. might have to check if this is related somehow
+#! I also cannot do ps?
+#### /DO NOT COMMIT
+
+
 @click.command("start-shell")
 @click.pass_obj
 @click.pass_context
@@ -176,3 +275,5 @@ def start_shell(ctx, obj):
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")
+
+
