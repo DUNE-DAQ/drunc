@@ -31,7 +31,7 @@ jobs:
 
       - name: Install daqpytools for uml generation
         run : |
-          pip install "daqpytools[dev] @ git+https://github.com/DUNE-DAQ/daqpytools.git@emmuhamm/auto-class"
+          pip install "daqpytools[dev] @ git+https://github.com/DUNE-DAQ/daqpytools.git@develop"
 
       # Move Archives to a temp folder so they aren't processed
       - name: Hide Archive files from script
