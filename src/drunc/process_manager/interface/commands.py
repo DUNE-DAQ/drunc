@@ -227,13 +227,24 @@ def logs_decorators(f):
     # order matters: apply options from outermost to innermost
     f = click.pass_obj(f)
     f = click.option("--grep", type=str, default=None)(f)
-    f = click.option("--how-far", type=int, show_default=True, default=100, help="How many lines one wants")(f)
-    f = add_query_options(at_least_one=True)(f)
+    f = click.option(
+        "--how-far",
+        type=int,
+        show_default=True,
+        default=100,
+        help="How many lines one wants",
+    )(f)
     return f
 
+
 @click.command("logs")
+@add_query_options(at_least_one=True)
 @logs_decorators
-def logs(
+def logs(obj, how_far, grep, query):
+    return logs_impl(obj, how_far, grep, query)
+
+
+def logs_impl(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
     log = get_logger("process_manager.shell")

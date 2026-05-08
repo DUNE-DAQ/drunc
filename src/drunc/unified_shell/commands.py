@@ -1,11 +1,14 @@
 import getpass
 import sys
+from functools import update_wrapper
 
 import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.exceptions import DruncSetupException
+from drunc.process_manager.interface.cli_argument import add_query_options_no_session
+from drunc.process_manager.interface.commands import logs_decorators, logs_impl
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
@@ -162,45 +165,26 @@ def ps(ctx, obj):
     )
 
 
+def session_injector(f):
+    @click.pass_context
+    def wrapper(ctx, *args, **kwargs):
+        kwargs["session"] = ctx.obj.session_name
+        return ctx.invoke(f, *args, **kwargs)
+
+    return update_wrapper(wrapper, f)
+
+
 # Logs
-
-from drunc.process_manager.interface.commands import logs as pm_logs_cmd
-from drunc.process_manager.interface.commands import logs_decorators as pm_logs_deco
-
-
 @click.command("logs")
-@pm_logs_deco
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@logs_decorators
 @click.pass_context
-def logs(ctx, obj, how_far: int, grep: str, query: ProcessQuery) -> None:
-    # enforce session
-    
-    #! this kinda works! we still need to figure out how to deal with the session tho 
-    # mainly because we want a strict default here but we have to worry about the 
-    # decorator adding the sessino
-    
+def logs(ctx, obj, how_far, grep, query):
     log = get_logger("unified_shell.logs")
-
-    query.session = ctx.obj.session_name
-
     log.info("getting logs")
-    # delegate to the process_manager implementation: unwrap decorators
-    cb = pm_logs_cmd.callback
-    # unwrap any decorator layers to reach the original function
-    while hasattr(cb, "__wrapped__"):
-        cb = cb.__wrapped__
 
-    # call the original function which expects (obj, how_far, grep, query)
-
-    # this kinda works but now i need to undertstand how the process query works because i cannot add different queries together for some reason
-    return cb(obj, how_far, grep, query)
-
-
-
-
-
-
-
-
+    return logs_impl(obj, how_far, grep, query)
 
 
 #### DO NOT COMMIT
@@ -275,5 +259,3 @@ def start_shell(ctx, obj):
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")
-
-
