@@ -114,7 +114,7 @@ def boot_processes_and_verify_exit_state_messages(
             name="case_manual_ssh_client",
             kill_mode="manual_ssh_client",
             expected_source=ExitStatusSource.MANUAL_KILL_THROUGH_SSH_CLIENT,
-            expected_message_fragment="was terminated by the process manager through the SSH client",
+            expected_message_fragment="was terminated with a SIGKILL by the process manager through the SSH client",
             expected_reported_exit_code=None,
         ),
     ]
@@ -189,7 +189,7 @@ def boot_processes_and_verify_exit_state_messages(
         # Wait until metadata is available for all scenarios that require remote PID.
         for process_uuid in process_uuids:
             kill_mode = process_info[process_uuid]["kill_mode"]
-            if kill_mode in ("client_sigquit", "client_sigkill", "manual_ssh_client"):
+            if kill_mode in ("client_sigkill", "manual_ssh_client"):
                 continue
             metadata_ready = wait_for(
                 lambda u=process_uuid: ssh_manager.get_remote_pid(u).successful,
@@ -215,7 +215,6 @@ def boot_processes_and_verify_exit_state_messages(
                 ),
                 "client_sigkill": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
-                    signal_name="KILL",
                     as_manual_pm_kill=False,
                     timeout=10.0,
                 ),
@@ -225,7 +224,6 @@ def boot_processes_and_verify_exit_state_messages(
                 ),
                 "manual_ssh_client": lambda: ssh_manager.kill_process_without_metadata(
                     process_uuid,
-                    signal_name="QUIT",
                     as_manual_pm_kill=True,
                     timeout=10.0,
                 ),

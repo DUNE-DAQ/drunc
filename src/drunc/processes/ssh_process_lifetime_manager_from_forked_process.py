@@ -532,7 +532,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
     def kill_process_without_metadata(
         self,
         uuid: str,
-        signal_name: str = "QUIT",
+        signal_name: str = "KILL",
         as_manual_pm_kill: bool = True,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
     ) -> Optional[ExitStatus]:

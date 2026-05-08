@@ -156,7 +156,7 @@ class ProcessLifetimeManager(ABC):
     def kill_process_without_metadata(
         self,
         uuid: str,
-        signal_name: str = "QUIT",
+        signal_name: str = "KILL",
         as_manual_pm_kill: bool = True,
         timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
     ) -> Optional[ExitStatus]:
@@ -168,7 +168,7 @@ class ProcessLifetimeManager(ABC):
         Args:
             uuid: Process UUID to terminate.
             signal_name: Signal to send to the local SSH client process group
-                (e.g. "QUIT" or "KILL").
+                (e.g. "KILL" or "QUIT"). Defaults to "KILL".
             as_manual_pm_kill: If True, classify as process-manager initiated kill.
                                If False, classify as external kill i.e. outside of process manager control
             timeout: Maximum time to wait for process termination in seconds.

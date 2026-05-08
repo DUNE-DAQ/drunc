@@ -1,6 +1,7 @@
 """Runtime model for a process launched through the SSH shell lifetime manager."""
 
 import signal as _signal
+import threading
 from typing import Optional
 
 import sh
@@ -33,6 +34,7 @@ class RunningSSHProcess:
         self.client_monitoring_pid: Optional[int] = (
             None  # PID of watcher SSH process in client monitoring mode
         )
+        self._exit_status_lock = threading.Lock()
 
     def populate_from_metadata(self, metadata: ProcessMetadata) -> None:
         """Populate runtime fields from asynchronously read process metadata."""
@@ -53,7 +55,16 @@ class RunningSSHProcess:
         self.exit_status = ExitStatus(source, raw_exit_code)
         return self.exit_status
 
-    def kill_client(self, signal_name: str = "QUIT") -> None:
+    def finalise_exit_once(
+        self, default_source: ExitStatusSource, raw_exit_code: Optional[int]
+    ) -> tuple[ExitStatus, bool]:
+        """Set exit status once across concurrent watcher threads."""
+        with self._exit_status_lock:
+            if self.exit_status is not None:
+                return self.exit_status, False
+            return self.finalise_exit(default_source, raw_exit_code), True
+
+    def kill_client(self, signal_name: str = "KILL") -> None:
         """Send a signal to the local SSH client process group."""
         signal_name = signal_name.upper()
         if signal_name == "QUIT":
