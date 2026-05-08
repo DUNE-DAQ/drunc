@@ -91,7 +91,7 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
 - [ ] If you have ran the full integration test bundle, leave a comment on the PR stating 
   - Which host the integration tests have ran on
   - [Optional] A copy of the test summary
-- [ ] Drunc integration tests pass (`/scripts/drunc_integtest_bundle.sh`)
+- [ ] Drunc integration tests pass (`scripts/drunc_integtest_bundle.sh`)
 
 Once the above boxes are checked, the PR(s) can be merged.
 
