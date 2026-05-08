@@ -7,15 +7,10 @@ def validate_conf_string(ctx, param, boot_configuration):
     return boot_configuration
 
 
-def add_query_options(at_least_one: bool, all_processes_by_default: bool = False):
-    def wrapper(f0):
-        f1 = click.option(
-            "-s",
-            "--session",
-            type=str,
-            default=None,
-            help="Select the processes on a particular session",
-        )(f0)
+def add_query_options_no_session(
+    at_least_one: bool, all_processes_by_default: bool = False
+):
+    def wrapper(f1):  # -> _Wrapped[Callable[..., Any], Any, Callable[..., Any], Any]:
         f2 = click.option(
             "-n",
             "--name",
@@ -39,5 +34,19 @@ def add_query_options(at_least_one: bool, all_processes_by_default: bool = False
             help="Select the process of a particular UUIDs",
         )(f3)
         return generate_process_query(f4, at_least_one, all_processes_by_default)
+
+    return wrapper
+
+
+def add_query_options(at_least_one: bool, all_processes_by_default: bool = False):
+    def wrapper(f0):
+        f1 = click.option(
+            "-s",
+            "--session",
+            type=str,
+            default=None,
+            help="Select the processes on a particular session",
+        )(f0)
+        return add_query_options_no_session(at_least_one, all_processes_by_default)(f1)
 
     return wrapper

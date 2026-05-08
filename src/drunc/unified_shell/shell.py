@@ -42,7 +42,6 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
-
 from drunc.process_manager.interface.commands import (
     flush,
     kill,
@@ -51,7 +50,6 @@ from drunc.process_manager.interface.commands import (
     restart,
     # terminate,
 )
-
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import (
     boot,
