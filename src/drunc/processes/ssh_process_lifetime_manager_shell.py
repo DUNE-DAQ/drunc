@@ -256,7 +256,6 @@ class SSHClientWatcherThread(threading.Thread):
                 self.metadata_file,
             )
         # Client exited after the remote PID is dead, so classify this as remote-driven termination.
-        # We shouldn't hit this path in normal operation as the remote watcher should trigger first
         elif (
             self.running_process.pending_exit_status_source is None
             and remote_pid is not None
@@ -266,10 +265,6 @@ class SSHClientWatcherThread(threading.Thread):
                 remote_pid,
             )
         ):
-            self.logger.warning(
-                f"Unusual Shutdown: remote process uuid={self.uuid} is dead but SSH client exited before remote watcher callback. "
-                f"The remote watcher PID is: {self.running_process.remote_monitoring_pid}"
-            )
             default_source = ExitStatusSource.REMOTE_MONITORING
 
         self.manager._emit_exit_callback_once(
