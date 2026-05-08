@@ -73,13 +73,17 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
 - [ ] Suggested manual tests show changes.
 - [ ] CI workflows fails documented (if present)
 - [ ] Integration tests passed
-    - Only concern yourself if failures related to `drunc` are in the log files
-    - If non-`drunc` failure appears:
-      - Validate failure in fresh working area
-      - Contact Pawel if unsure
-<!-- - [ ] Drunc integration tests pass (`pytest -m drunc_integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. This will test all the Process Managers in a test bundle. -->
+  - Note - if any of the following apply, you can run only `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py`, otherwise run the full `daqsystemtest_integtest_bundle.sh` either on the np0x cluster or on the IC HEP cluster
+    - PR changes only affect a few log entries
+    - PR changes only affect docstrings
+    - PR changes are small, and do not have a large impact on the workflow (use carefully)
+  - Only concern yourself if failures related to `drunc` are in the log files
+  - If non-`drunc` failure appears:
+    - Validate failure in fresh working area
+    - Contact Pawel if unsure
+- [ ] Drunc integration tests pass (`/scripts/drunc_integtest_bundle.sh`)
 
-Once the features are validated and both the unit and integration tests pass, the PRs is ready to be merged.
+Once the above boxes are checked, the PR(s) can be merged.
 
 </details>
 
@@ -96,7 +100,7 @@ Choose one of the following an complete all substeps
 - Otherwise
   - [ ] Workflow changes demonstrated in the Change Log (if necessary)
   - [ ] Wiki has been updated (if necessary)
-  - [ ] #daq-sw-librarians Slack channel notified (see below)
+  - [ ] #dunedaq-integration Slack channel notified (see below)
 
 Once completed, the reviewer can merge the PR.
 <details>
