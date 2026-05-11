@@ -11,8 +11,11 @@ from drunc.process_manager.interface.cli_argument import add_query_options_no_se
 from drunc.process_manager.interface.commands import (
     flush_decorators,
     flush_impl,
+    kill_decorators,
+    kill_impl,
     logs_decorators,
     logs_impl,
+    restart_impl,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
@@ -191,6 +194,18 @@ def logs(obj, how_far, grep, query):
     return logs_impl(obj, how_far, grep, query)
 
 
+# kill
+@click.command("kill")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@kill_decorators
+def kill(obj, query, width):
+    log = get_logger("unified_shell.logs")
+    log.info("getting logs")
+
+    return kill_impl(obj, query, width)
+
+
 # # Flush
 @click.command("flush")
 @session_injector
@@ -198,6 +213,14 @@ def logs(obj, how_far, grep, query):
 @flush_decorators
 def flush(obj, query, width):
     return flush_impl(obj, query, width)
+
+
+@click.command("restart")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@click.pass_obj
+def restart(obj, query):
+    return restart_impl(obj, query)
 
 
 #### DO NOT COMMIT

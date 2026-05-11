@@ -48,22 +48,23 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
-from drunc.process_manager.interface.commands import (
-    # flush,
-    kill,
-    # logs,
-    # ps,
-    restart,
-    # terminate,
-)
+
+# from drunc.process_manager.interface.commands import (
+# flush,
+# kill,
+# logs,
+# ps,
+# restart,
+# terminate,
+# )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import (
     boot,  # TODO: double check. I bet you..
     flush,
-    # kill,
+    kill,
     logs,
     ps,  # TODO: double check
-    # restart,
+    restart,
     start_shell,
     terminate,
     # FINISH THE REST NOW, IT SOULD BE RELATIVELYT STRAIGHTFORWARD
@@ -75,6 +76,8 @@ from drunc.unified_shell.commands import (
 # i bet you this is causing the behaviour that we are seeing with the unified shell
 # when you log into an empty PM with the US, and you start-run, it works just fine
 # but when you start-run from scratch with a running session in the PM, it doesn't work
+# Theres also a whole thing about things not flushing correctly..
+# Aha! in the pm, my terminate doesn't flush properly!
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
