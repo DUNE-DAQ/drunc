@@ -118,9 +118,9 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 
 def tabulate_process_instance_list(
-    pil: ProcessInstanceList, title: str, long: bool = False
+    pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
 ):
-    t = Table(title=title)
+    t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
     t.add_column("user")
@@ -321,3 +321,34 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     )
 
     return pmch.data.type
+
+def format_hostname(hostname: str) -> str:
+    """
+    Format the host name to truly reflect what the host name is, removing any extensions
+    that do not reflect the true host alias.
+
+    Args:
+        hostname (str): The hostname to format.
+
+    Returns:
+        str: The formatted hostname.
+
+    Raises:
+        DruncCommandException: If the hostname is empty or None.
+
+    Example:
+        If the input hostname is "np02-srv-005-1", the output will be "np02-srv-005".
+    """
+    # Validate that the hostname is not empty or None
+    if not hostname:
+        raise DruncCommandException("Hostname cannot be empty or None.")
+
+    # Make a copy of the hostname to modify
+    formatted_hostname = hostname
+
+    # Strip common suffixes that do not reflect the true host alias
+    if hostname.endswith("-1"):
+        formatted_hostname = hostname[:-2]
+
+    return formatted_hostname
+

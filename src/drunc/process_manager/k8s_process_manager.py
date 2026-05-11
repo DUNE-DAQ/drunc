@@ -41,7 +41,11 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
 )
 from drunc.process_manager.process_manager import ProcessManager
-from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
+from drunc.process_manager.utils import (
+    format_hostname,
+    on_parent_exit,
+    validate_k8s_session_name,
+)
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
@@ -247,7 +251,14 @@ class K8sProcessManager(ProcessManager):
         self.volume_configs = settings.get("volumes", [])
 
         # CONFIGURATION - home path definition
-        self.home_path_base = settings.get("home_path_base", None)
+        self.home_path_base = settings.get("home_path_base")
+        if not self.home_path_base:
+            self.log.error(
+                "No 'home_path_base' configured, exiting. Required as Kubernetes is "
+                "stateless, so we must tell the process manager where to mount the "
+                "user's home directory from the host."
+            )
+            sys.exit(1)
 
         # CONFIGURATION - timeouts and check parameters
         checking = settings.get("checking", {})
@@ -536,6 +547,7 @@ class K8sProcessManager(ProcessManager):
             DruncK8sException: If there is a permission error or other API failure.
         """
         # If the host has already been cached, check if it is valid and return that state
+        target_host = format_hostname(target_host)
         cached = self._is_host_cached(target_host)
         if cached is not None:
             if cached:
@@ -905,40 +917,39 @@ class K8sProcessManager(ProcessManager):
             )
 
         # Dynamic HOME mount
-        if self.home_path_base:
-            username = self._get_host_username()
-            target_home_path = f"{self.home_path_base}/{username}"
+        username = self._get_username()
+        target_home_path = f"{self.home_path_base}/{username}"
 
-            is_covered = False
-            for vm in container_volume_mounts:
-                if vm.mount_path == target_home_path or target_home_path.startswith(
-                    vm.mount_path + "/"
-                ):
-                    self.log.debug(
-                        f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
-                    )
-                    is_covered = True
-                    break
-
-            if not is_covered:
-                self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
-                vol_name = f"home-{username}"
-
-                pod_volumes.append(
-                    client.V1Volume(
-                        name=vol_name,
-                        host_path=client.V1HostPathVolumeSource(
-                            path=target_home_path, type="Directory"
-                        ),
-                    )
+        is_covered = False
+        for vm in container_volume_mounts:
+            if vm.mount_path == target_home_path or target_home_path.startswith(
+                vm.mount_path + "/"
+            ):
+                self.log.debug(
+                    f"Home path '{target_home_path}' is already covered by mount '{vm.mount_path}'"
                 )
-                container_volume_mounts.append(
-                    client.V1VolumeMount(
-                        name=vol_name,
-                        mount_path=target_home_path,
-                        read_only=False,
-                    )
+                is_covered = True
+                break
+
+        if not is_covered:
+            self.log.info(f"Auto-mounting home directory: '{target_home_path}'")
+            vol_name = f"home-{username}"
+
+            pod_volumes.append(
+                client.V1Volume(
+                    name=vol_name,
+                    host_path=client.V1HostPathVolumeSource(
+                        path=target_home_path, type="Directory"
+                    ),
                 )
+            )
+            container_volume_mounts.append(
+                client.V1VolumeMount(
+                    name=vol_name,
+                    mount_path=target_home_path,
+                    read_only=False,
+                )
+            )
 
         # Add log_mount from process_logs_path
         log_dir = None
@@ -1101,32 +1112,54 @@ class K8sProcessManager(ProcessManager):
         Returns:
             A list of V1EnvVar objects representing the container environment variables.
         """
+
+        # Parse initial environment variables and user information from the boot request
         env_vars = boot_request.process_description.env
-        username_br = boot_request.process_description.metadata.user
-        host_username = None
+        username_from_br: str | None = boot_request.process_description.metadata.user
 
-        if username_br is not None:
-            env_vars["USER"] = username_br
+        # Initialize the username variable for lookup if not provided in boot request
+        username_from_pm: str | None = None
+
+        # Assign USER from boot request metadata if available, otherwise look it up.
+        if username_from_br:
             self.log.debug(
-                f"Setting USER environment variable from boot request: {username_br}"
+                f"Setting USER env. var. from boot request: {username_from_br}"
             )
-        elif self.home_path_base:
-            host_username = self._get_host_username()
+            env_vars["USER"] = username_from_br
+        else:
+            username_from_pm = self._get_username()
+            if username_from_pm:
+                self.log.debug(
+                    f"Setting USER env. var. from lookup: {username_from_br}"
+                )
+                env_vars["USER"] = username_from_pm
+            else:
+                err_msg: str = (
+                    "Unable to determine username for environment variable and USER "
+                    "not set in boot request metadata. Exiting."
+                )
+                self.log.error(err_msg)
+                raise RuntimeError(err_msg)
 
-        # Only set USER if not already present in environment
-        if username_br is None and host_username:
-            env_vars["USER"] = host_username
-            self.log.debug(f"Setting USER environment variable to: {host_username}")
-
-        # Set HOME if home_path_base is configured
-        if self.home_path_base and host_username:
-            env_vars["HOME"] = f"{self.home_path_base}/{host_username}"
-            self.log.debug(
-                f"Setting HOME environment variable to: {self.home_path_base}/{host_username}"
+        # Set HOME if home_path_base is configured. This is done manually ane explicitly
+        # for k8s as k8s does not use the OS user env var and does not automatically set
+        # HOME as per the non-k8s ProcessManagers.
+        # Note - HOME is not generally used by the DAQ applications, and is enforced
+        # here to ensure that if it is used, it is set to a consistent and expected path
+        # as other functions (e.g. os.expanduser) may not work as expected in the k8s
+        # environment without it.
+        home_path: str = self.home_path_base + "/" + env_vars.get("USER")
+        self.log.debug(f"Setting HOME environment variable to: {home_path}")
+        if "HOME" in env_vars:
+            self.log.warning(
+                f"HOME environment variable is already set to '{env_vars['HOME']}' but "
+                f"will be overridden to '{home_path}' based on home_path_base "
+                "configuration."
             )
+        env_vars["HOME"] = home_path
 
         if "DOTDRUNC" not in env_vars:
-            dotdrunc_path = os.getenv("DOTDRUNC", "~/.drunc.json")
+            dotdrunc_path = os.getenv("DOTDRUNC", home_path + "/.drunc.json")
             env_vars["DOTDRUNC"] = dotdrunc_path
 
         # Build environment variable list
@@ -1424,7 +1457,7 @@ class K8sProcessManager(ProcessManager):
 
         return "Headless"
 
-    def _get_host_username(self) -> str:
+    def _get_username(self) -> str:
         """
         Resolves the username of the user running the process manager.
 
@@ -2192,6 +2225,11 @@ class K8sProcessManager(ProcessManager):
         tree_labels = self._get_tree_labels(
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
+
+        # Format the hostname for safety
+        hostname = format_hostname(boot_request.process_description.metadata.hostname)
+        boot_request.process_description.metadata.hostname = hostname
+
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
 
@@ -2516,7 +2554,9 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
                 if role == "segment-controller":
                     tree_id = pod.metadata.labels.get(tree_id_label_key, "")
-                    segment_controller_depths[uuid] = tree_id.count(".") if tree_id else 0
+                    segment_controller_depths[uuid] = (
+                        tree_id.count(".") if tree_id else 0
+                    )
 
         # Kill in stages using our sorted lists
         for role in PROCESS_SHUTDOWN_ORDERING:

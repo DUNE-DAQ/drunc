@@ -101,7 +101,7 @@ class ControllerDriver:
     def status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> StatusResponse:
@@ -122,7 +122,7 @@ class ControllerDriver:
     def describe(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> DescribeResponse:
@@ -143,7 +143,7 @@ class ControllerDriver:
     def describe_fsm(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
         timeout: int | float = 60,
@@ -167,7 +167,7 @@ class ControllerDriver:
         self,
         command: FSMCommand,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> ExecuteFSMCommandResponse:
@@ -190,7 +190,7 @@ class ControllerDriver:
         self,
         json_string: str,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> ExecuteExpertCommandResponse:
@@ -212,7 +212,7 @@ class ControllerDriver:
     def include(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> IncludeResponse:
@@ -233,7 +233,7 @@ class ControllerDriver:
     def exclude(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> ExcludeResponse:
@@ -254,7 +254,7 @@ class ControllerDriver:
     def recompute_status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> RecomputeStatusResponse:
@@ -275,7 +275,7 @@ class ControllerDriver:
     def take_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> TakeControlResponse:
@@ -296,7 +296,7 @@ class ControllerDriver:
     def surrender_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> SurrenderControlResponse:
@@ -317,7 +317,7 @@ class ControllerDriver:
     def who_is_in_charge(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> WhoIsInChargeResponse:
@@ -338,7 +338,7 @@ class ControllerDriver:
     def to_error(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> ToErrorResponse:

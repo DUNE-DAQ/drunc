@@ -412,7 +412,7 @@ class RESTAPIChildNode(ChildNode):
     def status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
         status = Status(
@@ -436,7 +436,7 @@ class RESTAPIChildNode(ChildNode):
     def describe(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
         response = DescribeResponse(
@@ -472,7 +472,7 @@ class RESTAPIChildNode(ChildNode):
     def describe_fsm(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
@@ -486,7 +486,7 @@ class RESTAPIChildNode(ChildNode):
         self,
         command: FSMCommand,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
         command_name = command.command_name
@@ -580,7 +580,7 @@ class RESTAPIChildNode(ChildNode):
         self,
         json_string: str,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
         response = ExecuteExpertCommandResponse(
@@ -669,7 +669,7 @@ class RESTAPIChildNode(ChildNode):
     def include(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
         self.state.include()
@@ -684,7 +684,7 @@ class RESTAPIChildNode(ChildNode):
     def exclude(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
         self.state.exclude()
@@ -699,7 +699,7 @@ class RESTAPIChildNode(ChildNode):
     def recompute_status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
         return RecomputeStatusResponse(
@@ -711,7 +711,7 @@ class RESTAPIChildNode(ChildNode):
     def take_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
         return TakeControlResponse(
@@ -723,7 +723,7 @@ class RESTAPIChildNode(ChildNode):
     def surrender_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SurrenderControlResponse:
         return SurrenderControlResponse(
@@ -735,7 +735,7 @@ class RESTAPIChildNode(ChildNode):
     def who_is_in_charge(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> WhoIsInChargeResponse:
         return WhoIsInChargeResponse(
@@ -747,7 +747,7 @@ class RESTAPIChildNode(ChildNode):
     def to_error(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
         self.state.to_error()

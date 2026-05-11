@@ -8,6 +8,7 @@ from drunc.controller.interface.shell_utils import controller_setup, render_stat
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
+log_echo = get_logger("echo", rich_handler=True)
 
 
 @click.command("list-transitions")
@@ -237,6 +238,13 @@ def surrender_control(
 @click.pass_obj
 def who_am_i(obj: ControllerContext) -> None:
     log.info(obj.get_token().user_name)
+
+
+@click.command("echo")
+@click.argument("text", required=False)
+@click.pass_obj
+def echo(obj, text: str | None) -> None:
+    log_echo.info(text or "")
 
 
 @click.command("who-is-in-charge")
