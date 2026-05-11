@@ -16,7 +16,7 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 from druncschema.request_response_pb2 import ResponseFlag
-from google.protobuf.empty_pb2 import Empty
+from druncschema.process_manager_pb2 import PMResponseFlag, PMmsg
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
@@ -491,9 +491,18 @@ class SSHProcessManager(ProcessManager):
             #     self.log.warning(ret)
             return ret_fmt
 
-    def _send_random_impl(self) -> Empty:
-        self.log.critical("Hello, worldsssear!")
-        return Empty()
+    def _send_msg_impl(self, msg: str | None = None) -> PMmsg:
+        # If a custom message was provided, log it. Otherwise keep legacy text.
+        try:
+            if msg:
+                self.log.critical(msg)
+            else:
+                self.log.critical("Hello, worldsssear!")
+        except Exception:
+            self.log.critical("Omigosh an exception!")
+            return PMmsg(flag=PMResponseFlag.FAIL)
+
+        return PMmsg(flag=PMResponseFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
