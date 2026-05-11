@@ -200,45 +200,10 @@ def restart(obj, query):
     return restart_impl(obj, query)
 
 
-#### DO NOT COMMIT
-
-# # Restart
-# @click.command("restart")
-# @click.pass_obj
-# @click.pass_context
-# def restart(ctx, obj):
-#     """
-#     Execute the process manager restart command, but only do this for the current
-#     session
-#     """
-#     log = get_logger("unified_shell.restart")
-#     session_query = ProcessQuery(session=ctx.obj.session_name)
-#     log.info(f"Restarting session [green]{ctx.obj.session_name}[/]")
-#     obj.get_driver("process_manager").restart(session_query)
-
-
-# # Kill
-
-
-# @click.command("kill")
-# @click.pass_obj
-# @click.pass_context
-# def kill(ctx, obj):
-#     """
-#     Execute the process manager kill command, but only do this for the current
-#     session
-#     """
-#     log = get_logger("unified_shell.kill")
-#     session_query = ProcessQuery(session=ctx.obj.session_name)
-#     log.info(f"Killing processes in session [green]{ctx.obj.session_name}[/]")
-#     obj.get_driver("process_manager").kill(session_query)
-
-
 # # Wait #also put it in the PM shell
 
 #! Note: i cant seem to do a start-run from no boot in the unified shell.. might have to check if this is related somehow
 #! I also cannot do ps?
-#### /DO NOT COMMIT
 
 
 @click.command("start-shell")
