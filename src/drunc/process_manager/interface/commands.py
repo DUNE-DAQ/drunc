@@ -198,17 +198,26 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
     )  # rich tables require console printing
 
 
+def flush_decorators(f):
+    f = click.pass_obj(f)
+    f = click.option(
+        "-w",
+        "--width",
+        type=int,
+        default=None,
+        help="Table width. Default is automatically calculated",
+    )(f)
+    return f
+
+
 @click.command("flush")
-@click.option(
-    "-w",
-    "--width",
-    type=int,
-    default=None,
-    help="Table width. Default is automatically calculated",
-)
 @add_query_options(at_least_one=False, all_processes_by_default=True)
-@click.pass_obj
-def flush(
+@flush_decorators
+def flush(obj, query, width):
+    return flush_impl(obj, query, width)
+
+
+def flush_impl(
     obj: ProcessManagerContext,
     query: ProcessQuery,
     width: int | None,

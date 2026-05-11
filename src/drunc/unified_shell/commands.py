@@ -8,7 +8,12 @@ from druncschema.process_manager_pb2 import ProcessQuery
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.interface.cli_argument import add_query_options_no_session
-from drunc.process_manager.interface.commands import logs_decorators, logs_impl
+from drunc.process_manager.interface.commands import (
+    flush_decorators,
+    flush_impl,
+    logs_decorators,
+    logs_impl,
+)
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
@@ -156,12 +161,20 @@ def session_injector(f):
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @logs_decorators
-@click.pass_context
-def logs(ctx, obj, how_far, grep, query):
+def logs(obj, how_far, grep, query):
     log = get_logger("unified_shell.logs")
     log.info("getting logs")
 
     return logs_impl(obj, how_far, grep, query)
+
+
+# # Flush
+@click.command("flush")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@flush_decorators
+def flush(obj, query, width):
+    return flush_impl(obj, query, width)
 
 
 #### DO NOT COMMIT
@@ -179,23 +192,6 @@ def logs(ctx, obj, how_far, grep, query):
 #     session_query = ProcessQuery(session=ctx.obj.session_name)
 #     log.info(f"Restarting session [green]{ctx.obj.session_name}[/]")
 #     obj.get_driver("process_manager").restart(session_query)
-
-
-# # Flush
-
-
-# @click.command("flush")
-# @click.pass_obj
-# @click.pass_context
-# def flush(ctx, obj):
-#     """
-#     Execute the process manager flush command, but only do this for the current
-#     session
-#     """
-#     log = get_logger("unified_shell.flush")
-#     session_query = ProcessQuery(session=ctx.obj.session_name)
-#     log.info(f"Flushing session [green]{ctx.obj.session_name}[/]")
-#     obj.get_driver("process_manager").flush(session_query)
 
 
 # # Kill

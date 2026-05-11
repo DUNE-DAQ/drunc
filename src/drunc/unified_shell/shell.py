@@ -43,7 +43,7 @@ from drunc.process_manager.configuration import (
     validate_pm_config,
 )
 from drunc.process_manager.interface.commands import (
-    flush,
+    # flush,
     kill,
     # logs,
     # ps,
@@ -52,15 +52,23 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import (
-    boot,
-    # flush,
+    boot,  # TODO: double check. I bet you..
+    flush,
     # kill,
     logs,
-    ps,
+    ps,  # TODO: double check
     # restart,
     start_shell,
     terminate,
+    # FINISH THE REST NOW, IT SOULD BE RELATIVELYT STRAIGHTFORWARD
 )
+
+#! Note with boot
+# When you run boot in the process manager with nothing else running, it works just fine
+# however when you have a running session already, boot asks 'are you sure you want to do this?
+# i bet you this is causing the behaviour that we are seeing with the unified shell
+# when you log into an empty PM with the US, and you start-run, it works just fine
+# but when you start-run from scratch with a running session in the PM, it doesn't work
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
