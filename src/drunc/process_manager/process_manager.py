@@ -16,13 +16,17 @@ from druncschema.process_manager_pb2 import (
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
+    GenericNotificationMessage,
+    PMResponseFlag,
+    PMmsg,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
     Request,
     ResponseFlag,
 )
-from google.protobuf.empty_pb2 import Empty
+
+# Note: send_msg now returns PMResponseFlag (defined in process_manager.proto)
 from google.rpc import code_pb2
 from grpc import ServicerContext
 
@@ -562,32 +566,53 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return response
 
     @abc.abstractmethod
-    def _send_random_impl(self) -> Empty:
+    def _send_msg_impl(self, msg: str | None = None) -> PMmsg:
         raise NotImplementedError
 
     @broadcasted
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )
-    def send_random(self, request: Request, context: ServicerContext) -> Empty:
-        self.log.debug(f"{self.name} running send_random")
+    def send_msg(self, request: Request, context: ServicerContext) -> PMmsg:
+        self.log.debug(f"{self.name} running send_msg")
+        # Try to extract an optional GenericNotificationMessage from request.data
+        msg_value = None
+        try:
+            if (
+                request is not None
+                and hasattr(request, "data")
+                and request.data is not None
+            ):
+                gm = GenericNotificationMessage()
+                try:
+                    request.data.Unpack(gm)
+                    msg_value = gm.message
+                except Exception:
+                    # If unpacking fails, ignore and proceed with None
+                    msg_value = None
+
+        except Exception as e:
+            self.log.debug(
+                f"Error while extracting send_msg payload: {e}", exc_info=True
+            )
 
         try:
-            response = self._send_random_impl()
+            response = self._send_msg_impl(msg_value)
         except NotImplementedError:
             raise DruncNotImplementedException(
                 message="Implementation missing",
-                domain="ProcessManager.send_random",
+                domain="ProcessManager.send_msg",
             )
         except Exception as e:
-            context_msg = f"Unhandled exception in ProcessManager.send_random: {e}"
+            context_msg = f"Unhandled exception in ProcessManager.send_msg: {e}"
             self.log.exception(context_msg)
 
             raise DruncCommandException(
                 message=context_msg,
-                domain="ProcessManager.send_random",
+                domain="ProcessManager.send_msg",
             )
 
+        # Expect a PMResponseFlag enum instance
         return response
 
     def _ensure_one_process(

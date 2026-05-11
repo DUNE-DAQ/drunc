@@ -346,7 +346,7 @@ def unified_shell(
     #! So now we have a working get_driver object that can communicate with the pm.
 
     # lets try sending a random command..
-    ctx.obj.get_driver("process_manager").send_random()
+    ctx.obj.get_driver("process_manager").send_msg("Yolo")
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):

@@ -24,6 +24,7 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
     ProcessRestriction,
 )
+from druncschema.process_manager_pb2 import GenericNotificationMessage
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -85,12 +86,20 @@ class ProcessManagerDriver:
 
     # ----- Boot workflow -----
 
-    def send_random(self):
+    def send_msg(self, msg):
         request = Request(token=copy_token(self.token))
+        # Pack provided message into the Any `data` field when present
+        if msg is not None:
+            try:
+                gm = GenericNotificationMessage(message=str(msg))
+                request.data.Pack(gm)
+            except Exception:
+                self.log.debug("Failed to pack send_msg payload", exc_info=True)
+
         timeout = 10
 
         try:
-            self.stub.send_random(request, timeout=timeout)
+            response = self.stub.send_msg(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -101,8 +110,17 @@ class ProcessManagerDriver:
                     exc_info=True,
                 )
             handle_grpc_error(e)
+        # Log the message that was sent (fall back to previous text)
+        try:
+            self.log.critical(str(msg) if msg is not None else "Hello, world!")
+        except Exception:
+            self.log.critical("Hello, world!")
 
-        self.log.critical("Hello, world!")
+        # Return the PMResponseFlag from the server (if any)
+        try:
+            return response
+        except UnboundLocalError:
+            return None
 
     def boot(
         self,
