@@ -14,6 +14,7 @@ from drunc.process_manager.interface.commands import (
     ps,
     restart,
     terminate,
+    wait,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -83,6 +84,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.call_on_close(cleanup)
 
     ctx.command.add_command(boot, "boot")
+    ctx.command.add_command(wait, "wait")
     ctx.command.add_command(terminate, "terminate")
     ctx.command.add_command(kill, "kill")
     ctx.command.add_command(flush, "flush")
