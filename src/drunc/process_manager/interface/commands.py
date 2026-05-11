@@ -171,23 +171,34 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     obj.delete_driver("controller")
 
 
+def kill_decorators(f):
+    f = click.pass_obj(f)
+    f = click.option(
+        "-w",
+        "--width",
+        type=int,
+        default=None,
+        help="Table width. Default is automatically calculated",
+    )(f)
+    f = click.option(
+        "--crash",
+        is_flag=True,
+        default=False,
+        help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
+    )(f)
+    return f
+
+
 @click.command("kill")
-@click.option(
-    "-w",
-    "--width",
-    type=int,
-    default=None,
-    help="Table width. Default is automatically calculated",
-)
 @add_query_options(at_least_one=True)
-@click.option(
-    "--crash",
-    is_flag=True,
-    default=False,
-    help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
-)
-@click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+@kill_decorators
+def kill(obj, query, width):
+    return kill_impl(obj, query, width)
+
+
+def kill_impl(
+    obj: ProcessManagerContext, query: ProcessQuery, width: int | None
+) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
     result = obj.get_driver("process_manager").kill(query)
@@ -295,6 +306,10 @@ def logs_impl(
 @add_query_options(at_least_one=True)
 @click.pass_obj
 def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+    return restart_impl(obj, query)
+
+
+def restart_impl(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
     obj.get_driver("process_manager").restart(query)
