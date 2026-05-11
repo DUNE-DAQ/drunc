@@ -1,4 +1,5 @@
 import getpass
+from time import sleep
 
 import click
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
@@ -148,6 +149,16 @@ def dummy_boot(
             )
     except InterruptedCommand:
         return
+
+
+@click.command("wait")
+@click.argument("sleep_time", type=int, default=1)
+@click.pass_obj
+def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
+    log = get_logger("process_manager.wait")
+    log.info(f"Command [green]wait[/green] running for {sleep_time} seconds.")
+    sleep(sleep_time)  # seconds
+    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
 
 
 @click.command("terminate")
