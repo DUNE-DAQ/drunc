@@ -551,6 +551,9 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").send_msg(
+            f"{getpass.getuser()} disconnected!"
+        )
         ctx.obj.get_driver("process_manager").close()
         ctx.obj.delete_driver("process_manager")
 
