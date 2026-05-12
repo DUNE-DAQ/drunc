@@ -16,6 +16,7 @@ from daqconf.utils import find_free_port
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessDescription,
@@ -24,7 +25,6 @@ from druncschema.process_manager_pb2 import (
     ProcessQuery,
     ProcessRestriction,
 )
-from druncschema.process_manager_pb2 import GenericNotificationMessage
 from druncschema.process_manager_pb2_grpc import ProcessManagerStub
 from druncschema.request_response_pb2 import Request, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -87,8 +87,6 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    # ----- Boot workflow -----
-
     def send_msg(self, msg):
         request = Request(token=copy_token(self.token))
         # Pack provided message into the Any `data` field when present
@@ -113,17 +111,22 @@ class ProcessManagerDriver:
                     exc_info=True,
                 )
             handle_grpc_error(e)
+
         # Log the message that was sent (fall back to previous text)
         try:
-            self.log.critical(str(msg) if msg is not None else "Hello, world!")
+            self.log.critical(
+                f"MSG: {msg}"
+            )  # TODO: Remove this if you dont want this here
         except Exception:
-            self.log.critical("Hello, world!")
+            self.log.critical("AN EXCEPTION! GASP")
 
         # Return the PMResponseFlag from the server (if any)
         try:
             return response
         except UnboundLocalError:
             return None
+
+    # ----- Boot workflow -----
 
     def boot(
         self,

@@ -8,6 +8,8 @@ from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
+    PMmsg,
+    PMResponseFlag,
     ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
@@ -16,7 +18,6 @@ from druncschema.process_manager_pb2 import (
     ProcessUUID,
 )
 from druncschema.request_response_pb2 import ResponseFlag
-from druncschema.process_manager_pb2 import PMResponseFlag, PMmsg
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
@@ -491,11 +492,15 @@ class SSHProcessManager(ProcessManager):
             #     self.log.warning(ret)
             return ret_fmt
 
-    def _send_msg_impl(self, msg: str | None = None) -> PMmsg:
+    def _send_msg_impl(self, msg: str | None = None, peer: str | None = None) -> PMmsg:
         # If a custom message was provided, log it. Otherwise keep legacy text.
+
+        # TODO: don't forget to do _something_ for the k8s instance as well
         try:
+            # if peer:
+            #     self.log.info(f"send_msg originated from {peer}")
             if msg:
-                self.log.critical(msg)
+                self.log.critical(f"msg: {msg}, from:{peer}")
             else:
                 self.log.critical("Hello, worldsssear!")
         except Exception:

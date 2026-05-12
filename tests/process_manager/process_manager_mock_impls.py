@@ -13,10 +13,11 @@ from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
+    PMmsg,
+    PMResponseFlag,
     ProcessInstanceList,
     ProcessQuery,
 )
-from druncschema.process_manager_pb2 import PMResponseFlag, PMmsg
 
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
@@ -104,7 +105,7 @@ class ConcreteProcessManager(ProcessManager):
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         return self._not_implemented_response()
 
-    def _send_msg_impl(self, msg: str | None = None) -> PMmsg:
+    def _send_msg_impl(self, msg: str | None = None, peer: str | None = None) -> PMmsg:
         """
         Returns an empty response to indicate communication is working.
         Accepts an optional message parameter for compatibility with new API.
