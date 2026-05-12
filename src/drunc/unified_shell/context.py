@@ -4,6 +4,7 @@ from enum import Enum
 from druncschema.token_pb2 import Token
 
 from drunc.utils.shell_utils import ShellContext
+from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class UnifiedShellMode(Enum):
@@ -28,7 +29,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):
-        self.address_pm = address_pm
+        self.address_pm = resolve_localhost_to_hostname(address_pm)
         super(UnifiedShellContext, self)._reset(name="unified_shell")
 
     def create_drivers(self, **kwargs) -> Mapping[str, object]:
