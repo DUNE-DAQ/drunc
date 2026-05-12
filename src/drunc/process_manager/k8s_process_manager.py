@@ -13,6 +13,7 @@ from time import sleep, time
 
 # Local Application Imports
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -1942,6 +1943,17 @@ class K8sProcessManager(ProcessManager):
                 uuid=ProcessUUID(uuid=uuid),
                 lines=[f"Could not retrieve logs: {e.reason}"],
             )
+
+    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
+        # If a custom message was provided, log it. Otherwise keep legacy text.
+        # TODO: don't forget to do _something_ for the k8s instance as well
+        try:
+            self.log.critical(f"{msg}; from {peer}")
+        except Exception:
+            self.log.critical("Omigosh an exception!")
+            return OutcomeStatus(flag=OutcomeFlag.FAIL)
+
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         """
