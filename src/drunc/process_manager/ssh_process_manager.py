@@ -4,12 +4,11 @@ import uuid
 from typing import List, Optional
 
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
     LogRequest,
-    PMmsg,
-    PMResponseFlag,
     ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
@@ -492,22 +491,16 @@ class SSHProcessManager(ProcessManager):
             #     self.log.warning(ret)
             return ret_fmt
 
-    def _send_msg_impl(self, msg: str | None = None, peer: str | None = None) -> PMmsg:
+    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
         # If a custom message was provided, log it. Otherwise keep legacy text.
-
         # TODO: don't forget to do _something_ for the k8s instance as well
         try:
-            # if peer:
-            #     self.log.info(f"send_msg originated from {peer}")
-            if msg:
-                self.log.critical(f"msg: {msg}, from:{peer}")
-            else:
-                self.log.critical("Hello, worldsssear!")
+            self.log.critical(f"{msg}; from {peer}")
         except Exception:
             self.log.critical("Omigosh an exception!")
-            return PMmsg(flag=PMResponseFlag.FAIL)
+            return OutcomeStatus(flag=OutcomeFlag.FAIL)
 
-        return PMmsg(flag=PMResponseFlag.SUCCESS)
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
