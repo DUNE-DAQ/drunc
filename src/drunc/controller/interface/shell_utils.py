@@ -111,6 +111,10 @@ def get_status_table(
             """
             Parses endpoint to a human readable hostname.
 
+            Args:
+                endpoint: The endpoint to parse
+                proc_name: The name of the process to parse the endpoint for
+
             Returns:
             tuple[str, str]: (display_endpoint, actual_endpoint)
                 display_endpoint: URI with human readable hostname
@@ -128,7 +132,10 @@ def get_status_table(
             port = parsed.port
 
             def make_uri(host: str) -> str:
-                return f"{scheme}://{host}:{port}" if port is not None else f"{scheme}://{host}"
+                uri = f"{scheme}://{host}"
+                if port is not None:
+                    uri = f"{uri}:{port}"
+                return uri
 
             if display_host_overrides and proc_name in display_host_overrides:
                 display_host = get_hostname_smart(display_host_overrides[proc_name])

@@ -1,8 +1,10 @@
 from collections.abc import Mapping
 from enum import Enum
 
+import grpc
 from druncschema.token_pb2 import Token
 
+from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
 
 
@@ -109,30 +111,30 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         Returns:
             dict[str, str]: Mapping from process name to preferred display hostname.
         """
+        # The PM driver may not be registered if the user connected directly to a
+        # controller without going through the process manager (e.g. standalone boot).
+        # In that case hostname overrides are unavailable and we fall back to
+        # get_hostname_smart in the endpoint rendering path.
         pm_driver = self.get_driver("process_manager", quiet_fail=True)
         if not pm_driver:
             return {}
 
         from druncschema.process_manager_pb2 import ProcessQuery
 
+        query = (
+            ProcessQuery(names=[".*"], session=self.session_name)
+            if self.session_name
+            else ProcessQuery(names=[".*"])
+        )
         try:
-            query = (
-                ProcessQuery(names=[".*"], session=self.session_name)
-                if self.session_name
-                else ProcessQuery(names=[".*"])
-            )
             proc_list = pm_driver.ps(query)
-        except Exception:
+        except (ServerUnreachable, ServerTimeout, grpc.RpcError):
             return {}
 
         overrides: dict[str, str] = {}
 
         for proc in proc_list.values:
-            try:
-                metadata = proc.process_description.metadata
-            except Exception:
-                continue
-
+            metadata = proc.process_description.metadata
             proc_name = getattr(metadata, "name", "")
             host_name = getattr(metadata, "hostname", "")
 
