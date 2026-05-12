@@ -11,14 +11,13 @@ from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    GenericNotificationMessage,
     LogLines,
     LogRequest,
+    PMmsg,
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
-    GenericNotificationMessage,
-    PMResponseFlag,
-    PMmsg,
 )
 from druncschema.process_manager_pb2_grpc import ProcessManagerServicer
 from druncschema.request_response_pb2 import (
@@ -566,7 +565,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return response
 
     @abc.abstractmethod
-    def _send_msg_impl(self, msg: str | None = None) -> PMmsg:
+    def _send_msg_impl(self, msg: str | None = None, peer: str | None = None) -> PMmsg:
         raise NotImplementedError
 
     @broadcasted
@@ -575,6 +574,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     )
     def send_msg(self, request: Request, context: ServicerContext) -> PMmsg:
         self.log.debug(f"{self.name} running send_msg")
+        peer = None
+        try:
+            peer = context.peer()
+        except Exception:
+            self.log.debug("Could not determine caller peer", exc_info=True)
+
+        if peer:
+            self.log.info(f"{self.name} send_msg called from {peer}")
+
         # Try to extract an optional GenericNotificationMessage from request.data
         msg_value = None
         try:
@@ -597,7 +605,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
 
         try:
-            response = self._send_msg_impl(msg_value)
+            response = self._send_msg_impl(msg_value, peer)
         except NotImplementedError:
             raise DruncNotImplementedException(
                 message="Implementation missing",
