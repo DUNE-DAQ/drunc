@@ -70,12 +70,19 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     help="Execute the command on all subsequent children in the path",
     default=True,
 )
+@click.option(
+    "--full",
+    is_flag=True,
+    default=False,
+    help="Show additional columns, including the actual endpoint IP address.",
+)
 @click.pass_obj
 def status(
     obj: ControllerContext,
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
+    full: bool,
 ) -> None:
     obj.print(
         render_status_table(
@@ -83,6 +90,7 @@ def status(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            show_actual_endpoint=full,
         )
     )
     obj.print_status_summary()

@@ -71,7 +71,10 @@ def match_children(
 
 
 def get_status_table(
-    status_response: StatusResponse, describe_response: DescribeResponse, display_host_overrides: dict[str, str] | None = None,
+    status_response: StatusResponse,
+    describe_response: DescribeResponse,
+    display_host_overrides: dict[str, str] | None = None,
+    show_actual_endpoint: bool = False,
 ):
     status = status_response.status
     description = describe_response.description
@@ -90,6 +93,8 @@ def get_status_table(
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
+    if show_actual_endpoint:
+        t.add_column("Actual Endpoint")
 
     def add_status_to_table(
         table: Table,
@@ -102,57 +107,55 @@ def get_status_table(
         if status is None or description is None:
             return
 
-        def update_endpoint(endpoint: str, proc_name: str) -> str:
+        def update_endpoint(endpoint: str, proc_name: str) -> tuple[str, str]:
             """
-            Parses endpoint to a human readable hostname
-
-            Args:
-            endpoint: Process URI
+            Parses endpoint to a human readable hostname.
 
             Returns:
-            str: URI with human readable hostname
+            tuple[str, str]: (display_endpoint, actual_endpoint)
+                display_endpoint: URI with human readable hostname
+                actual_endpoint: raw URI with actual IP/host (empty if same as display)
             """
             if not endpoint:
-                return ""
+                return "", ""
 
             parsed = urlparse(endpoint)
             raw_host = parsed.hostname
             if not raw_host:
-                return ""
+                return "", ""
 
             scheme = parsed.scheme
             port = parsed.port
 
+            def make_uri(host: str) -> str:
+                return f"{scheme}://{host}:{port}" if port is not None else f"{scheme}://{host}"
+
             if display_host_overrides and proc_name in display_host_overrides:
-                display_host = display_host_overrides[proc_name]
-                pretty = (
-                    f"{scheme}://{display_host}:{port}"
-                    if port is not None
-                    else f"{scheme}://{display_host}"
-                )
+                display_host = get_hostname_smart(display_host_overrides[proc_name])
+                pretty = make_uri(display_host)
                 if display_host != raw_host:
-                    return f"{pretty} [dim](actual: {raw_host})[/dim]"
-                return pretty
+                    return pretty, make_uri(raw_host)
+                return pretty, ""
 
             resolved = get_hostname_smart(raw_host)
             if resolved != raw_host:
-                return (
-                    f"{scheme}://{resolved}:{port}"
-                    if port is not None
-                    else f"{scheme}://{resolved}"
-                )
+                return make_uri(resolved), endpoint
 
-            return endpoint
+            return endpoint, ""
 
-        table.add_row(
+        display_ep, actual_ep = update_endpoint(description.endpoint, status_response.name)
+        row = [
             prefix + status_response.name,
             description.info,
             status.state,
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            update_endpoint(description.endpoint, status_response.name),
-        )
+            display_ep,
+        ]
+        if show_actual_endpoint:
+            row.append(actual_ep)
+        table.add_row(*row)
 
         children = match_children(status_response.children, describe_response.children)
         children_list = sorted(list(children.keys()))
@@ -210,6 +213,7 @@ def render_status_table(
     target: str = "",
     execute_along_path: bool = True,
     execute_on_all_subsequent_children_in_path: bool = True,
+    show_actual_endpoint: bool = False,
 ):
     statuses = ctx.get_driver("controller").status(
         target=target,
@@ -226,6 +230,7 @@ def render_status_table(
         statuses,
         descriptions,
         display_host_overrides=display_host_overrides,
+        show_actual_endpoint=show_actual_endpoint,
     )
 
 class StatusTableUpdater(Progress):
@@ -807,20 +812,26 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 @functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
-    Resolves an IP to a hostname, with optimizations:
+    Resolves an IP or hostname to a human-readable hostname, with optimizations:
     1. Caches all results.
-    2. Immediately skips private/internal IPs (like K8s).
-    3. Uses a short timeout for public IPs.
+    2. Replaces localhost/loopback with the machine's actual hostname.
+    3. Uses a short timeout for reverse DNS lookups on other IPs.
     """
 
     if not ip_or_host:
         return ""
 
+    if ip_or_host == "localhost":
+        return socket.gethostname()
+
     try:
         ip_address = ipaddress.ip_address(ip_or_host)
     except ValueError:
         return ip_or_host
-    # If public IP, try to resolve it.
+
+    if ip_address.is_loopback:
+        return socket.gethostname()
+
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)
