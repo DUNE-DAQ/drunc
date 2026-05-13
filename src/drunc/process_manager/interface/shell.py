@@ -60,6 +60,10 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         # process_manager_shell_log.error(e.message) # TODO: Keep this for production branch, remove this from dev branch
         exit(1)
 
+    ctx.obj.get_driver("process_manager").send_msg(
+        f"{getpass.getuser()} connected from PM shell"
+    )
+
     # Manually add file handler to process manager log
     # Not possible to initialise logger immediately as it requires
     # knowledge of the log path
@@ -76,6 +80,9 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
+        ctx.obj.get_driver("process_manager").send_msg(
+            f"{getpass.getuser()} disconnected from PM shell"
+        )
         ctx.obj.terminate()
         process_manager_log.warning(
             f"[green]{getpass.getuser()}[/green] disconnected from the process manager through a [green]drunc-process-manager-shell[/green]"
