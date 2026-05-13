@@ -55,6 +55,8 @@ class BadQuery(DruncCommandException):
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
+    pm_type = ProcessManagerTypes.Unknown
+
     def __init__(
         self,
         configuration: ProcessManagerConfHandler,
@@ -502,10 +504,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
     def describe(self, request: Request, context: ServicerContext) -> Description:
-        self.log.debug(f"{self.name} running describe")
+        self.log.warning(f"{self.name} running describe")
+
+        # response = self._describe_impl()
 
         response = Description(
-            type="process_manager",
+            type=self.pm_type.name,  # change the type based on what it reads as. ITS AN ENUM!
+            # try to get the superclass class name
+            # hook into the configuration, so you get the class name from the enum
+            # so we want this to be a string (has to be string)
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,

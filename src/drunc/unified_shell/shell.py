@@ -310,19 +310,22 @@ def unified_shell(
     )
 
     #! This is where the context objects connection detail
+
+    unified_shell_log.warning(f"{process_manager_address=}")
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
     ctx.obj.log.critical("Getting driver")
     try:
+        unified_shell_log.critical("About to run describe")
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
         ctx.obj.log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        ctx.obj.log.debug(f"Reason: {e}")
+        ctx.obj.log.critical(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             ctx.obj.log.error(
@@ -346,6 +349,12 @@ def unified_shell(
     #! So now we have a working get_driver object that can communicate with the pm.
 
     # lets try sending a random command..
+
+    unified_shell_log.info(
+        f"[green]unified_shell[/green] connected to the [green]process_manager"  # this is bad
+        f"[/green] at address [green]{process_manager_address}[/green]"
+    )
+
     ctx.obj.get_driver("process_manager").send_msg(
         f"{getpass.getuser()} connected from unified shell"
     )

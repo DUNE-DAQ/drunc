@@ -40,6 +40,7 @@ from drunc.k8s_exceptions import (
 from drunc.process_manager.configuration import (
     PROCESS_SHUTDOWN_ORDERING,
     ProcessManagerConfHandler,
+    ProcessManagerTypes,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
@@ -157,6 +158,8 @@ class K8sPodWatcherThread(threading.Thread):
 
 
 class K8sProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.K8s
+
     def __init__(self, configuration: ProcessManagerConfHandler, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
