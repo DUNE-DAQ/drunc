@@ -293,10 +293,6 @@ def unified_shell(
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
-        unified_shell_log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager"
-            f"[/green] at address [green]{process_manager_address}[/green]"
-        )
 
     unified_shell_log.debug(
         f"[green]process_manager[/green] started, communicating through address [green]"
@@ -304,6 +300,8 @@ def unified_shell(
     )
 
     #! This is where the context objects connection detail
+
+    unified_shell_log.warning(f"{process_manager_address=}")
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
@@ -312,13 +310,16 @@ def unified_shell(
 
     #! Here we're getting the driver!
     try:
+        unified_shell_log.critical("About to run describe")
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
         unified_shell_log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        unified_shell_log.debug(f"Reason: {e}")
+        unified_shell_log.critical(f"Reason: {e}")
+
+        #! Basically also parse out the type and log it around here as well
 
         if type(e) == ServerUnreachable:
             unified_shell_log.error(
@@ -342,6 +343,12 @@ def unified_shell(
     #! So now we have a working get_driver object that can communicate with the pm.
 
     # lets try sending a random command..
+
+    unified_shell_log.info(
+        f"[green]unified_shell[/green] connected to the [green]process_manager"  # this is bad
+        f"[/green] at address [green]{process_manager_address}[/green]"
+    )
+
     ctx.obj.get_driver("process_manager").send_msg(
         f"{getpass.getuser()} connected from unified shell"
     )

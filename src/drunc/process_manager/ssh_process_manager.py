@@ -19,11 +19,14 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
+from drunc.process_manager.configuration import ProcessManagerTypes
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 
 class SSHProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.SSH_SHELL
+
     def __init__(
         self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
     ):
@@ -225,6 +228,8 @@ class SSHProcessManager(ProcessManager):
             values=[],
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+    # def _describe_impl()
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         """
