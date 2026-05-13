@@ -72,6 +72,11 @@ class DecodedResponse:
 
 
 class ShellContext:
+    shell_id = None
+
+    def get_shell_id(self):
+        return self.shell_id
+
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
         self._token = self.create_token(**token_args)
@@ -165,3 +170,10 @@ class ShellContext:
             log.info(
                 f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
+
+
+def send_cmd_msg_pm(sc: ShellContext, cmd: str):
+    # Keep it pm for now, easy to generalise though
+    sc.get_driver("process_manager").send_msg(
+        f" {getpass.getuser()} sent {cmd} from {sc.get_shell_id()}"
+    )
