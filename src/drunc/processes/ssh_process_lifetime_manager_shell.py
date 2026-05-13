@@ -169,12 +169,9 @@ class ProcessWatcherThread(threading.Thread):
                 f"Remote process {self.uuid} (PID {remote_pid}) has exited"
             )
 
-            raw_exit_code, client_exception = self.manager._wait_and_get_exit_code(
-                self.running_process.process,
-                f"SSH client for {self.uuid}",
+            raw_exit_code = self.manager.wait_for_process_exit_code(
+                self.uuid, timeout=30.0
             )
-            if client_exception is not None and exception is None:
-                exception = client_exception
             self.logger.debug(
                 f"SSH client for {self.uuid} exited with code {raw_exit_code}"
             )
@@ -235,10 +232,28 @@ class SSHClientWatcherThread(threading.Thread):
         exception = None
         raw_exit_code = None
 
-        raw_exit_code, exception = self.manager._wait_and_get_exit_code(
-            self.running_process.process,
-            f"SSH client for {self.uuid}",
+        try:
+            self.running_process.process.wait()
+            client_exit_code = self.running_process.process.exit_code
+            self.logger.debug(
+                f"SSH client for {self.uuid} exited with code {client_exit_code}"
+            )
+        except sh.ErrorReturnCode as e:
+            self.logger.debug(f"SSH client for {self.uuid} error: {e}")
+            exception = e
+            client_exit_code = e.exit_code
+        except Exception as e:
+            self.logger.error(f"SSH client for {self.uuid} watcher error: {e}")
+            exception = e
+            client_exit_code = None
+
+        remote_exit_code = self.manager.wait_for_process_exit_code(
+            self.uuid, timeout=30.0
         )
+        if remote_exit_code is not None:
+            raw_exit_code = remote_exit_code
+        else:
+            raw_exit_code = client_exit_code
 
         default_source = ExitStatusSource.CLIENT_MONITORING
         remote_pid = self.running_process.remote_pid
@@ -1021,24 +1036,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             self.log.debug(f"Failed to read metadata for {uuid}: {e}")
             return None
 
-    def _wait_and_get_exit_code(
-        self,
-        process: sh.RunningCommand,
-        process_description: str,
-    ) -> tuple[Optional[int], Optional[Exception]]:
-        """Wait for a sh process and return its exit code plus any raised exception."""
-        try:
-            process.wait()
-            exit_code = process.exit_code
-            self.log.debug(f"{process_description} exited with code {exit_code}")
-            return exit_code, None
-        except sh.ErrorReturnCode as e:
-            self.log.debug(f"{process_description} error: {e}")
-            return e.exit_code, e
-        except Exception as e:
-            self.log.error(f"{process_description} watcher error: {e}")
-            return None, e
-
     def _handle_external_client_sigquit(
         self,
         uuid: str,
@@ -1239,7 +1236,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 f"Exception was raised when terminating SSH client process: {e}"
             )
 
-        exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+        exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
 
         if exit_code is None and signal_name == "QUIT" and not as_manual_pm_kill:
             remote_pid = metadata.pid if metadata is not None else None
@@ -1251,7 +1248,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid),
                 timeout=timeout,
             )
-            exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+            exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
 
         if exit_code is None:
             with self.lock:
@@ -1262,7 +1259,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return ExitStatus(source_for_return, exit_code)
 
-    def _wait_for_process_exit_code(self, uuid: str, timeout: float) -> Optional[int]:
+    def wait_for_process_exit_code(self, uuid: str, timeout: float) -> Optional[int]:
         """
         Wait for specified timeout to see if a process exit code is available.
 
@@ -1346,7 +1343,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 self.log.info(
                     f"Skipping killing remote process {uuid} (PID {remote_pid}). It is already dead."
                 )
-                exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+                exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
                 if exit_code is None:
@@ -1395,7 +1392,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 with self.lock:
                     running_process.pending_exit_status_source = None
             else:
-                exit_code = self._wait_for_process_exit_code(uuid, timeout=timeout)
+                exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
                 if exit_code is None:
@@ -1413,13 +1410,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         return None
 
-    def crash_process(self, uuid: str) -> None:
+    def crash_process(self, uuid: str, signal: str = "KILL") -> None:
         """
-        Simulate a process crash by sending SIGKILL without performing any cleanup.
-
-        Sends SIGKILL to the remote process identified by uuid but deliberately
-        skips all cleanup steps (metadata file removal, internal tracking cleanup,
-        SSH client termination). This leaves the process manager in the same state
+        Simulate an unexpected process crash by sending by ending the remote process without cleanup.
+        This leaves the process manager in the same state
         as if the process had crashed unexpectedly, allowing crash-recovery logic
         to be exercised in tests.
 
@@ -1437,16 +1431,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         metadata = self.metadata.get(uuid, None)
         if metadata is None or metadata.pid is None:
             self.log.warning(
-                f"No remote PID for {uuid}, cannot send SIGKILL to simulate crash."
+                f"No remote PID for {uuid}, cannot send {signal} to simulate crash."
             )
             return
 
         remote_pid = metadata.pid
         self.log.debug(
             f"Simulating crash of process {uuid} (PID {remote_pid}): "
-            f"sending SIGKILL without cleanup."
+            f"sending {signal} without cleanup."
         )
-        self._send_remote_signal(hostname, user, remote_pid, "KILL")
+        self._send_remote_signal(hostname, user, remote_pid, signal)
 
     def _cleanup_process_resources(self, uuid: str) -> None:
         """Remove all resources associated with a process UUID."""

@@ -98,10 +98,18 @@ def boot_processes_and_verify_exit_state_messages(
             expected_reported_exit_code=None,
         ),
         ExitMessageScenario(
+            name="case_remote_sigquit",
+            kill_mode="remote_sigquit",
+            expected_source=ExitStatusSource.REMOTE_MONITORING,
+            expected_message_fragment="was terminated unexpectedly through the remote pid",
+            expected_reported_exit_code=0,
+        ),
+        ExitMessageScenario(
             name="case_remote_sigkill",
             kill_mode="remote_sigkill",
             expected_source=ExitStatusSource.REMOTE_MONITORING,
             expected_message_fragment="was terminated unexpectedly through the remote pid",
+            expected_reported_exit_code=128 + 9,  # SIGKILL
         ),
         ExitMessageScenario(
             name="case_manual_remote_pid",
@@ -218,7 +226,12 @@ def boot_processes_and_verify_exit_state_messages(
                     as_manual_pm_kill=False,
                     timeout=10.0,
                 ),
-                "remote_sigkill": lambda: ssh_manager.crash_process(process_uuid),
+                "remote_sigkill": lambda: ssh_manager.crash_process(
+                    process_uuid, signal="KILL"
+                ),
+                "remote_sigquit": lambda: ssh_manager.crash_process(
+                    process_uuid, signal="QUIT"
+                ),
                 "manual_remote_pid": lambda: ssh_manager.kill_process(
                     process_uuid, timeout=10.0
                 ),

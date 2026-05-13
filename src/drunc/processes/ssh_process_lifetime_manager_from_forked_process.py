@@ -557,18 +557,19 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             timeout,
         )
 
-    def crash_process(self, uuid: str) -> None:
+    def crash_process(self, uuid: str, signal: str = "KILL") -> None:
         """
-        Simulate a process crash by sending SIGKILL without performing any cleanup.
+        Simulate a process crash by sending a signal without performing any cleanup.
 
         Delegates to the underlying SSHProcessLifetimeManagerShell running in
-        the forked worker process. Sends SIGKILL to the remote process without
+        the forked worker process. Sends the specified signal to the remote process without
         cleaning up any associated resources, simulating an unexpected crash.
 
         Args:
             uuid: Process UUID to crash
+            signal: Signal to send to simulate crash
         """
-        self._call("crash_process", uuid)
+        self._call("crash_process", uuid, signal)
 
     def kill_processes(
         self,

@@ -612,7 +612,7 @@ class SSHProcessManager(ProcessManager):
             self.log.info(
                 f"Simulating crash of process {this_uuid} (sending SIGKILL, no cleanup)."
             )
-            self.ssh_lifetime_manager.crash_process(this_uuid)
+            self.ssh_lifetime_manager.crash_process(this_uuid, signal="KILL")
 
         ret = [
             self._build_process_instance(

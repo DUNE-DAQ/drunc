@@ -179,9 +179,9 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def crash_process(self, uuid: str) -> None:
+    def crash_process(self, uuid: str, signal: str = "KILL") -> None:
         """
-        Simulate a process crash by sending SIGKILL without performing any cleanup.
+        Simulate a process crash by sending a signal without performing any cleanup.
 
         Unlike kill_process, this method only sends the kill signal to the remote
         process without waiting for termination or cleaning up associated resources
@@ -191,6 +191,7 @@ class ProcessLifetimeManager(ABC):
 
         Args:
             uuid: Process UUID to crash
+            signal: Signal to send to simulate crash
         """
         pass
 
