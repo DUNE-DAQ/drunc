@@ -108,8 +108,8 @@ def boot_processes_and_verify_exit_state_messages(
             name="case_remote_sigkill",
             kill_mode="remote_sigkill",
             expected_source=ExitStatusSource.REMOTE_MONITORING,
-            expected_message_fragment="was terminated unexpectedly through the remote pid",
-            expected_reported_exit_code=128 + 9,  # SIGKILL
+            expected_message_fragment="was terminated unexpectedly through the remote pid by a SIGKILL (error code 128 + 9)",
+            expected_reported_exit_code=None,
         ),
         ExitMessageScenario(
             name="case_manual_remote_pid",

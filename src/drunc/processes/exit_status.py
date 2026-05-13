@@ -56,6 +56,12 @@ class ExitStatus:
         )
 
     def _interpret_remote_monitoring(self) -> tuple[Optional[int], str]:
+        if self._raw_exit_code == 137:
+            return (
+                None,
+                "was terminated unexpectedly through the remote pid by a SIGKILL (error code 128 + 9)",
+            )
+
         return (
             self._raw_exit_code,
             "was terminated unexpectedly through the remote pid",
