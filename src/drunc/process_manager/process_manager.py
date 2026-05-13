@@ -1,5 +1,7 @@
 import abc
+import ipaddress
 import re
+import socket
 import sys
 import threading
 import time
@@ -583,7 +585,47 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.log.debug("Could not determine caller peer", exc_info=True)
 
         if peer:
-            self.log.info(f"{self.name} send_msg called from {peer}")
+            peer_display = peer
+            peer_match = re.match(r"^(?P<transport>[^:]+):(?P<address>.+)$", peer)
+            if peer_match:
+                # transport = peer_match.group("transport")
+                address = peer_match.group("address")
+                host = None
+                port = None
+
+                # Handle both ipv4:host:port and ipv6:[host]:port formats.
+                bracket_match = re.match(
+                    r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", address
+                )
+                if bracket_match:
+                    host = bracket_match.group("host")
+                    port = bracket_match.group("port")
+                else:
+                    host_port = address.rsplit(":", 1)
+                    if len(host_port) == 2 and host_port[1].isdigit():
+                        host, port = host_port
+
+                if host:
+                    resolved_host = host
+                    try:
+                        ip_obj = ipaddress.ip_address(host)
+                        try:
+                            resolved_host, _, _ = socket.gethostbyaddr(str(ip_obj))
+                        except (
+                            socket.herror,
+                            socket.gaierror,
+                            socket.timeout,
+                            OSError,
+                        ):
+                            resolved_host = host
+                    except ValueError:
+                        resolved_host = host
+
+                    if ":" in resolved_host and not resolved_host.startswith("["):
+                        resolved_host = f"[{resolved_host}]"
+                    peer_display = f"{resolved_host}:{port}"
+
+            # self.log.info(f"{self.name} send_msg called from {peer_display}")
 
         # Try to extract an optional GenericNotificationMessage from request.data
         msg_value = None
@@ -607,7 +649,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
 
         try:
-            response = self._send_msg_impl(msg_value, peer)
+            response = self._send_msg_impl(msg_value, peer_display)
         except NotImplementedError:
             raise DruncNotImplementedException(
                 message="Implementation missing",
