@@ -342,7 +342,9 @@ def unified_shell(
     #! So now we have a working get_driver object that can communicate with the pm.
 
     # lets try sending a random command..
-    ctx.obj.get_driver("process_manager").send_msg(f"{getpass.getuser()} connected!")
+    ctx.obj.get_driver("process_manager").send_msg(
+        f"{getpass.getuser()} connected from unified shell"
+    )
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):
@@ -547,7 +549,7 @@ def unified_shell(
 
         # Remove the connection to the process manager
         ctx.obj.get_driver("process_manager").send_msg(
-            f"{getpass.getuser()} disconnected!"
+            f"{getpass.getuser()} disconnected from unified shell"
         )
         ctx.obj.get_driver("process_manager").close()
         ctx.obj.delete_driver("process_manager")
