@@ -92,7 +92,7 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
   - [Optional] A copy of the test summary
 - [ ] Drunc integration tests pass (`scripts/drunc_integtest_bundle.sh`)
 
-Once the above boxes are checked, the PR(s) can be merged.
+Once the above boxes are checked, the PR(s) can be merged following the steps below.
 
 </details>
 
