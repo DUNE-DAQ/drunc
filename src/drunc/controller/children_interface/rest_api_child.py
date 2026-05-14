@@ -37,7 +37,7 @@ from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
-from drunc.fsm.core import FSM
+from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
 from drunc.utils.utils import ControlType, get_logger, get_new_port
@@ -412,7 +412,7 @@ class RESTAPIChildNode(ChildNode):
     def status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
         status = Status(
@@ -436,7 +436,7 @@ class RESTAPIChildNode(ChildNode):
     def describe(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
         response = DescribeResponse(
@@ -472,7 +472,7 @@ class RESTAPIChildNode(ChildNode):
     def describe_fsm(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
@@ -486,7 +486,7 @@ class RESTAPIChildNode(ChildNode):
         self,
         command: FSMCommand,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
         command_name = command.command_name
@@ -515,7 +515,31 @@ class RESTAPIChildNode(ChildNode):
         cmd_data = {"modules": [{"data": module_data, "match": ""}]}
         entry_state = self.state.get_operational_state()
         transition = self.fsm.get_transition(command_name)
-        exit_state = self.fsm.get_destination_state(entry_state, transition)
+        destination_state_result: FSMDestinationResult = self.fsm.get_destination_state(
+            entry_state, transition
+        )
+
+        if destination_state_result.destination_type == FSMDestinationType.VALID:
+            exit_state = destination_state_result.destination_state
+        elif (
+            destination_state_result.destination_type
+            == FSMDestinationType.DESTINATION_IS_SOURCE
+        ):
+            self.log.debug(
+                f"Transition {transition} is a self-loop or has no destination,"
+                f"treating it as a source -> source transition"
+            )
+            exit_state = destination_state_result.destination_state
+        else:
+            self.log.info(
+                f"The transition {transition} corresponding to the command {command_name}"
+                f" is not valid from current state '{entry_state}', or the transition was"
+                f" not found in the FSM configuration"
+            )
+            response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
+            response.flag = ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+            return response
+
         self.state.executing_command_mark()
         self.log.info(f"Sending '{command_name}' to '{self.name}'")
 
@@ -556,7 +580,7 @@ class RESTAPIChildNode(ChildNode):
         self,
         json_string: str,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
         response = ExecuteExpertCommandResponse(
@@ -645,7 +669,7 @@ class RESTAPIChildNode(ChildNode):
     def include(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
         self.state.include()
@@ -660,7 +684,7 @@ class RESTAPIChildNode(ChildNode):
     def exclude(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
         self.state.exclude()
@@ -675,7 +699,7 @@ class RESTAPIChildNode(ChildNode):
     def recompute_status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
         return RecomputeStatusResponse(
@@ -687,7 +711,7 @@ class RESTAPIChildNode(ChildNode):
     def take_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
         return TakeControlResponse(
@@ -699,7 +723,7 @@ class RESTAPIChildNode(ChildNode):
     def surrender_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SurrenderControlResponse:
         return SurrenderControlResponse(
@@ -711,7 +735,7 @@ class RESTAPIChildNode(ChildNode):
     def who_is_in_charge(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> WhoIsInChargeResponse:
         return WhoIsInChargeResponse(
@@ -723,7 +747,7 @@ class RESTAPIChildNode(ChildNode):
     def to_error(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
         self.state.to_error()

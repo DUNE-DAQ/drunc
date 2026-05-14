@@ -2,6 +2,7 @@ import socket
 import threading
 
 import confmodel_dal
+from daqpytools.logging.handlerconf import HandlerType
 from druncschema.token_pb2 import Token
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
@@ -124,6 +125,7 @@ class ControllerConfHandler(ConfHandler):
         enabled_only: bool = True,
     ) -> list[ChildNode]:
         child_nodes: list[ChildNode] = []
+        booting_errors: list[Exception] = []
 
         # 60s for applications to show on the connectivity service.
         timeout = 60
@@ -146,9 +148,8 @@ class ControllerConfHandler(ConfHandler):
                 return  # Ignore disabled segments.
 
             cmd_args = get_commandline_parameters(
-                db=self.db,
                 config_filename=self.initial_data,
-                session_id=session.id,
+                session_dal=session,
                 session_name=session_name,
                 obj=segment.controller,
             )
@@ -166,23 +167,29 @@ class ControllerConfHandler(ConfHandler):
             if enabled_only and confmodel_dal.component_disabled(
                 self.db._obj, session.id, app.id
             ):
-                return  # Ignore disabled applications.
+                return
 
-            cmd_args = get_commandline_parameters(
-                db=self.db,
-                config_filename=self.initial_data,
-                session_id=session.id,
-                session_name=session_name,
-                obj=app,
-            )
-            node = self.child_node_factory(
-                cmd_args=cmd_args,
-                name=app.id,
-                configuration=app,
-                connectivity_service=connectivity_service,
-                timeout=timeout,
-            )
-            child_nodes.append(node)
+            try:
+                cmd_args = get_commandline_parameters(
+                    config_filename=self.initial_data,
+                    session_dal=session,
+                    session_name=session_name,
+                    obj=app,
+                )
+                node = self.child_node_factory(
+                    cmd_args=cmd_args,
+                    name=app.id,
+                    configuration=app,
+                    connectivity_service=connectivity_service,
+                    timeout=timeout,
+                )
+                child_nodes.append(node)
+            except ApplicationLookupUnsuccessful as e:
+                self.log.warning(
+                    f"Application '{app.id}' lookup failed.",
+                    extra={"handlers": [HandlerType.Lstdout]},
+                )
+                booting_errors.append(e)
 
         # threading the children look up
         threads = []
@@ -199,8 +206,17 @@ class ControllerConfHandler(ConfHandler):
             threads.append(t)
             t.start()
 
+        # Wait for everyone to finish
         for t in threads:
             t.join()
+
+        # Check if any thread reported an error
+        if booting_errors:
+            self.log.error(
+                f"Failed to boot: {booting_errors}",
+                extra={"handlers": [HandlerType.Lstdout]},
+            )
+            raise booting_errors[0]
 
         return child_nodes
 

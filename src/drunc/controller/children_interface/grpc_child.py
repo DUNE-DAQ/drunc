@@ -200,7 +200,7 @@ class gRPCChildNode(ChildNode):
     def status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
         request = StatusRequest(
@@ -226,7 +226,7 @@ class gRPCChildNode(ChildNode):
     def describe(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
         request = DescribeRequest(
@@ -254,7 +254,7 @@ class gRPCChildNode(ChildNode):
     def describe_fsm(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
@@ -285,7 +285,7 @@ class gRPCChildNode(ChildNode):
         self,
         command: FSMCommand,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
         request = ExecuteFSMCommandRequest(
@@ -315,7 +315,7 @@ class gRPCChildNode(ChildNode):
         self,
         json_string: str,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
         request = ExecuteExpertCommandRequest(
@@ -344,7 +344,7 @@ class gRPCChildNode(ChildNode):
     def include(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
         request = IncludeRequest(
@@ -373,7 +373,7 @@ class gRPCChildNode(ChildNode):
     def exclude(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
         request = ExcludeRequest(
@@ -402,7 +402,7 @@ class gRPCChildNode(ChildNode):
     def recompute_status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
         request = RecomputeStatusRequest(
@@ -430,7 +430,7 @@ class gRPCChildNode(ChildNode):
     def take_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
         request = TakeControlRequest(
@@ -458,7 +458,7 @@ class gRPCChildNode(ChildNode):
     def surrender_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SurrenderControlResponse:
         request = SurrenderControlRequest(
@@ -486,7 +486,7 @@ class gRPCChildNode(ChildNode):
     def who_is_in_charge(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> WhoIsInChargeResponse:
         request = WhoIsInChargeRequest(
@@ -514,7 +514,7 @@ class gRPCChildNode(ChildNode):
     def to_error(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
         request = ToErrorRequest(

@@ -151,44 +151,75 @@ def dummy_boot(
 
 
 @click.command("terminate")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
-def terminate(obj: ProcessManagerContext) -> None:
+def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug("Terminating")
     result = obj.get_driver("process_manager").terminate()
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False)
+        tabulate_process_instance_list(result, "Terminated process", False, width=width)
     )  # rich tables require console printing
     obj.delete_driver("controller")
 
 
 @click.command("kill")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @add_query_options(at_least_one=True)
+@click.option(
+    "--crash",
+    is_flag=True,
+    default=False,
+    help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
+)
 @click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
     result = obj.get_driver("process_manager").kill(query)
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Killed process", False)
+        tabulate_process_instance_list(result, "Killed process", False, width=width)
     )  # rich tables require console printing
 
 
 @click.command("flush")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @click.pass_obj
-def flush(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def flush(
+    obj: ProcessManagerContext,
+    query: ProcessQuery,
+    width: int | None,
+) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
     result = obj.get_driver("process_manager").flush(query)
     if not result:
         return
     obj.print(
-        tabulate_process_instance_list(result, "Flushed process", False)
+        tabulate_process_instance_list(result, "Flushed process", False, width=width)
     )  # rich tables require console printing
 
 
@@ -236,7 +267,7 @@ def logs(
         if grep is not None:
             line = line.replace(grep, f"[u]{grep}[/]")
 
-        obj.print(line)
+        obj.print(line, soft_wrap=True)
     if result.name is not None:
         obj.rule(f"[yellow]{display_name}[/yellow] end")
 
@@ -260,8 +291,20 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     default=False,
     help="Whether to have a long output",
 )
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
-def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> None:
+def ps(
+    obj: ProcessManagerContext,
+    query: ProcessQuery,
+    long_format: bool,
+    width: int | None,
+) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
@@ -269,6 +312,8 @@ def ps(obj: ProcessManagerContext, query: ProcessQuery, long_format: bool) -> No
         return
     obj.print(
         tabulate_process_instance_list(
-            results, title="Processes running", long=long_format
-        )
+            results, title="Processes running", long=long_format, width=width
+        ),
+        overflow="fold",
+        soft_wrap=True,
     )

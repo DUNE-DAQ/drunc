@@ -115,7 +115,7 @@ class MockContext:
     def get_driver(self, name):
         return self.driver
 
-    def print(self, msg, justify=None):
+    def print(self, msg, justify=None, overflow=None, soft_wrap=None):
         self.output.append(str(msg))
 
 

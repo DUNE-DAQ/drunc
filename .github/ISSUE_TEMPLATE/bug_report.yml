@@ -9,7 +9,10 @@ body:
     attributes:
       label: Description
       description: Give a clear and concise description of the bug, included what you expected to happen and what the actual behavior was.
-      placeholder: "What happened?"
+      placeholder: | 
+        "What happened?"
+
+        **Do not forget to label this issue with the approriate topic!**
     validations:
       required: true
   - type: textarea
