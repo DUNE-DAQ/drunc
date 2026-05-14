@@ -72,7 +72,7 @@ class DecodedResponse:
 
 
 class ShellContext:
-    shell_id = None
+    shell_id = None  # used for logging if its a PM shell or Unified shell etc
 
     def get_shell_id(self):
         return self.shell_id
@@ -173,6 +173,20 @@ class ShellContext:
 
 
 def log_pm_cmd(obj: ShellContext):
+    """Log a process-manager shell command with only explicitly provided arguments.
+
+    The current Click command context is inspected and only parameters whose source is
+    ``COMMANDLINE`` are included in the log message. This keeps defaulted values out
+    of the message while still recording the command name, optional session name, and
+    shell identity.
+
+    These are sent over via send_msg so that it can be displayed in the process manager
+    shell
+
+    Args:
+        obj (ShellContext): Active shell context used to send the log message.
+    """
+
     ctx_cmd = click.get_current_context(silent=True)
     cmd_name = ctx_cmd.command.name if ctx_cmd else None
     parms_dict = {}

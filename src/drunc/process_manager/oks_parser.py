@@ -75,13 +75,6 @@ def get_full_db_path(db_path: str) -> str:
         err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}."
         raise DruncSetupException(err_str)
 
-    # If multiple matches are found, take the first instance that matches.
-    #! This is a horrible way of choosing it... it could have gone into the cvmfs thing
-    #! we should put in the file_is_read_only config
-    #! and loop across until you find one where its not read only
-
-    #! Also clean up this logic right here
-
     # Prefer the first writable match; if every match is read-only, fall back to the first one.
     resolved_path = unique_matched_files[0]
     for matched_file in unique_matched_files:

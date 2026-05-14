@@ -45,7 +45,6 @@ def boot(
 ) -> None:
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
-
     processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
 
     if len(processes.values) > 0:
@@ -261,7 +260,6 @@ def flush_impl(
 
 
 def logs_decorators(f):
-    # order matters: apply options from outermost to innermost
     f = click.pass_obj(f)
     f = click.option("--grep", type=str, default=None)(f)
     f = click.option(

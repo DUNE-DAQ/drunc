@@ -48,12 +48,9 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     )
     process_manager_shell_log = get_logger("process_manager.shell")
 
-    process_manager_shell_log.warning(f"{process_manager_address=}")
-
     ctx.obj.reset(address=process_manager_address)
 
     try:
-        process_manager_log.critical("About to run describe")
         desc = ctx.obj.get_driver("process_manager").describe()
     except ServerUnreachable as e:
         process_manager_shell_log.critical("Could not connect to the process manager")
@@ -64,7 +61,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         exit(1)
 
     ctx.obj.get_driver("process_manager").send_msg(
-        f"{getpass.getuser()} connected from PM shell"
+        f"{getpass.getuser()} connected from {ctx.obj.shell_id}"
     )
 
     # Manually add file handler to process manager log
@@ -79,14 +76,12 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     process_manager_shell_log.info(
         f"Connected to {process_manager_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
-
-    process_manager_shell_log.error(f"This is a test {desc.name}, {desc.type}, {desc}")
     if desc.HasField("broadcast"):
         ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
         ctx.obj.get_driver("process_manager").send_msg(
-            f"{getpass.getuser()} disconnected from PM shell"
+            f"{getpass.getuser()} disconnected from {ctx.obj.shell_id}"
         )
         ctx.obj.terminate()
         process_manager_log.warning(

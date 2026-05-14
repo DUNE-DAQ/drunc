@@ -38,10 +38,6 @@ class ProcessManagerTypes(Enum):
     SSH_PARAMIKO = 3
 
 
-# we'll probably want to leveare these types
-# and then we'll unpack to name
-
-
 class ProcessManagerConfData:
     def __init__(self):
         self.broadcaster = None

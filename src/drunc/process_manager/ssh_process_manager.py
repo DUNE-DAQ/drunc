@@ -251,8 +251,6 @@ class SSHProcessManager(ProcessManager):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    # def _describe_impl()
-
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         """
         Retrieve log output from a remote process.
@@ -525,12 +523,12 @@ class SSHProcessManager(ProcessManager):
             return ret_fmt
 
     def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
-        # If a custom message was provided, log it. Otherwise keep legacy text.
-        # TODO: don't forget to do _something_ for the k8s instance as well
         try:
+            # TODO: THIS IS CURRENTLY CRITICAL FOR EASIER TESTING
+            # DO _NOT_ MERGE UNTIL THIS IS BACK TO INFO!
             self.log.critical(f"{msg}; from {peer}")
-        except Exception:
-            self.log.critical("Omigosh an exception!")
+        except Exception as e:
+            self.log.critical(f"Failed to receive message with exception {e}")
             return OutcomeStatus(flag=OutcomeFlag.FAIL)
 
         return OutcomeStatus(flag=OutcomeFlag.SUCCESS)

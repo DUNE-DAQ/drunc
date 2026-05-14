@@ -48,29 +48,19 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
-
-# from drunc.process_manager.interface.commands import (
-# flush,
-# kill,
-# logs,
-# ps,
-# restart,
-# terminate,
-# )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.unified_shell.commands import (
-    boot,  # TODO: double check. I bet you..
+    boot,
     flush,
     kill,
     logs,
-    ps,  # TODO: double check
+    ps,
     restart,
     start_shell,
     terminate,
-    # FINISH THE REST NOW, IT SOULD BE RELATIVELYT STRAIGHTFORWARD
 )
 
-#! Note with boot
+#! Note with boot. We should discuss this
 # When you run boot in the process manager with nothing else running, it works just fine
 # however when you have a running session already, boot asks 'are you sure you want to do this?
 # i bet you this is causing the behaviour that we are seeing with the unified shell
@@ -308,17 +298,12 @@ def unified_shell(
         f"[green]process_manager[/green] started, communicating through address [green]"
         f"{process_manager_address}[/green]"
     )
-
-    #! This is where the context objects connection detail
-
-    unified_shell_log.warning(f"{process_manager_address=}")
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
     ctx.obj.log.critical("Getting driver")
     try:
-        unified_shell_log.critical("About to run describe")
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
         ctx.obj.log.error(
@@ -346,12 +331,8 @@ def unified_shell(
         sys.exit(1)
     # ctx.obj.log.critical("Process manager described successfully")
 
-    #! So now we have a working get_driver object that can communicate with the pm.
-
-    # lets try sending a random command..
-
-    unified_shell_log.info(
-        f"[green]unified_shell[/green] connected to the [green]process_manager"  # this is bad
+    ctx.obj.log.info(
+        f"[green]unified_shell[/green] connected to the [green]process_manager"
         f"[/green] at address [green]{process_manager_address}[/green]"
     )
 
