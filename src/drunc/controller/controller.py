@@ -213,7 +213,7 @@ class Controller(ControllerServicer):
                             state="disconnected",
                             sub_state="disconnected",
                             in_error=child_list[i][0].state.in_error(),
-                            included=child_list[i][0].state.included(),
+                            included=child_list[i][0].included,
                         ),
                         flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                     )
@@ -491,7 +491,7 @@ class Controller(ControllerServicer):
                 (child, "/".join(next_target_path))
                 for child in self.children_nodes
                 if child.name == next_target_path[0]
-                and (child.state.included() or include_excluded_nodes)
+                and (child.included or include_excluded_nodes)
             ]
             if not targets:
                 self.log.info(
@@ -529,7 +529,7 @@ class Controller(ControllerServicer):
         return [
             (child, child.name)
             for child in self.children_nodes
-            if child.state.included() or include_excluded_nodes
+            if child.included or include_excluded_nodes
         ]
 
     @staticmethod
@@ -677,7 +677,7 @@ class Controller(ControllerServicer):
                         state="disconnected",
                         sub_state="disconnected",
                         in_error=child_list[i][0].state.in_error(),
-                        included=child_list[i][0].state.included(),
+                        included=child_list[i][0].included,
                     ),
                     flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                 )
@@ -1121,7 +1121,7 @@ class Controller(ControllerServicer):
         # them included locally so this controller can route commands to them again.
         for i in disconnected_indices:
             child = child_list[i][0]
-            child.state.include()
+            child.included = True
             child_responses.append(
                 IncludeResponse(
                     token=None,
@@ -1187,7 +1187,7 @@ class Controller(ControllerServicer):
         # them excluded locally so this controller stops routing commands to them.
         for i in disconnected_indices:
             child = child_list[i][0]
-            child.state.exclude()
+            child.included = False
             child_responses.append(
                 ExcludeResponse(
                     token=None,
@@ -1282,7 +1282,7 @@ class Controller(ControllerServicer):
                             state="disconnected",
                             sub_state="disconnected",
                             in_error=child_list[i][0].state.in_error(),
-                            included=child_list[i][0].state.included(),
+                            included=child_list[i][0].included,
                         ),
                         flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
                     )

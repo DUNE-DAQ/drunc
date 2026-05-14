@@ -33,6 +33,7 @@ from flask_restful import Api
 
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
+from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
 from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
@@ -373,7 +374,7 @@ class RESTAPIChildNode(ChildNode):
         connectivity_service=None,
     ):
         super().__init__(name, ControlType.REST_API)
-
+        self._state = ClientSideState()
         self.configuration = configuration
         self.fsm_configuration = fsm_configuration
         self.connectivity_service = connectivity_service
@@ -405,6 +406,10 @@ class RESTAPIChildNode(ChildNode):
         )
 
         self.response_listener.register(self.name, self.commander)
+
+    @property
+    def state(self) -> ClientSideState:
+        return self._state
 
     def __str__(self) -> str:
         return f"'{self.name}@{self.app_host}:{self.app_port}' (type {self.node_type})"
@@ -504,7 +509,7 @@ class RESTAPIChildNode(ChildNode):
                 "idle" if not self.state.get_executing_command() else "executing_cmd"
             ),
             in_error=self.state.in_error(),
-            included=self.state.included(),
+            included=self.included,
         )
 
         response = StatusResponse(
@@ -755,6 +760,7 @@ class RESTAPIChildNode(ChildNode):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
+        self.included = True
         self.state.include()
         return IncludeResponse(
             token=None,
@@ -769,6 +775,7 @@ class RESTAPIChildNode(ChildNode):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
+        self.included = False
         self.state.exclude()
         return ExcludeResponse(
             token=None,
