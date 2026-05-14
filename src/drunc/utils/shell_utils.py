@@ -172,8 +172,16 @@ class ShellContext:
             )
 
 
-def send_cmd_msg_pm(sc: ShellContext, cmd: str):
-    # Keep it pm for now, easy to generalise though
-    sc.get_driver("process_manager").send_msg(
-        f" {getpass.getuser()} sent {cmd} from {sc.get_shell_id()}"
-    )
+def log_pm_cmd(obj: ShellContext):
+    ctx_cmd = click.get_current_context(silent=True)
+    cmd_name = ctx_cmd.command.name if ctx_cmd else None
+    parms_dict = {}
+    for param in ctx_cmd.command.params:
+        name = param.name
+        if ctx_cmd.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE:
+            parms_dict[name] = f"{ctx_cmd.params[name]!r}"
+
+    args = f" with arguments {parms_dict}" if parms_dict else ""
+    session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
+    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
+    obj.get_driver("process_manager").send_msg(msg)

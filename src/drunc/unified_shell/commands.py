@@ -20,15 +20,14 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand, send_cmd_msg_pm
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
 
-
-def log_cmd(obj: ProcessManagerContext):
-    ctx_test = click.get_current_context(silent=True)
-    cmd_name_test = ctx_test.command.name if ctx_test else None
-    send_cmd_msg_pm(obj, cmd_name_test)
-    #! TODO: Missing the queries!!!
+# def log_pm_cmd(obj: ProcessManagerContext):
+#     ctx_test = click.get_current_context(silent=True)
+#     cmd_name_test = ctx_test.command.name if ctx_test else None
+#     send_cmd_msg_pm(obj, cmd_name_test)
+#     #! TODO: Missing the queries!!!
 
 
 @click.command("boot")
@@ -51,7 +50,7 @@ def boot(
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
     processes = obj.get_driver("process_manager").ps(
@@ -131,7 +130,7 @@ def terminate(ctx, obj):
     """
 
     log = get_logger("unified_shell.terminate")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
     obj.get_driver("process_manager").kill(session_query)
@@ -147,7 +146,7 @@ def ps(ctx, obj):
     """
 
     log = get_logger("unified_shell.ps")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
     results = obj.get_driver("process_manager").ps(session_query)
@@ -177,7 +176,7 @@ def session_injector(f):
 def logs(obj, how_far, grep, query):
     log = get_logger("unified_shell.logs")
     log.info("getting logs")
-    log_cmd(obj)
+    log_pm_cmd(obj)
 
     return logs_impl(obj, how_far, grep, query)
 
@@ -190,7 +189,7 @@ def logs(obj, how_far, grep, query):
 def kill(obj, query, width):
     log = get_logger("unified_shell.logs")
     log.info("getting logs")
-    log_cmd(obj)
+    log_pm_cmd(obj)
 
     return kill_impl(obj, query, width)
 
@@ -201,7 +200,7 @@ def kill(obj, query, width):
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
 def flush(obj, query, width):
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return flush_impl(obj, query, width)
 
 
@@ -210,7 +209,7 @@ def flush(obj, query, width):
 @add_query_options_no_session(at_least_one=True)
 @click.pass_obj
 def restart(obj, query):
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return restart_impl(obj, query)
 
 
@@ -231,7 +230,7 @@ def start_shell(ctx, obj):
     allowing you to execute commands interactively.
     """
     log = get_logger("unified_shell.start_shell")
-    log_cmd(obj)
+    log_pm_cmd(obj)
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")

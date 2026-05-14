@@ -12,15 +12,8 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc.utils.shell_utils import InterruptedCommand, send_cmd_msg_pm
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
-
-
-def log_cmd(obj: ProcessManagerContext):
-    ctx_test = click.get_current_context(silent=True)
-    cmd_name_test = ctx_test.command.name if ctx_test else None
-    send_cmd_msg_pm(obj, cmd_name_test)
-    #! TODO: Missing the queries!!!
 
 
 @click.command("boot")
@@ -51,7 +44,7 @@ def boot(
     override_logs: bool,
 ) -> None:
     log = get_logger("process_manager.shell")
-    log_cmd(obj)
+    log_pm_cmd(obj)
 
     processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
 
@@ -139,7 +132,7 @@ def dummy_boot(
     session_name: str,
 ) -> None:
     log = get_logger("process_manager.shell")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     log.debug(
         f"Running dummy_boot with {n_processes} processes for {sleep} seconds {n_sleeps} times, requested by user {user}"
     )
@@ -182,7 +175,7 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
 @click.pass_obj
 def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     log = get_logger("process_manager.shell")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     log.debug("Terminating")
     result = obj.get_driver("process_manager").terminate()
     if not result:
@@ -215,7 +208,7 @@ def kill_decorators(f):
 @add_query_options(at_least_one=True)
 @kill_decorators
 def kill(obj, query, width):
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return kill_impl(obj, query, width)
 
 
@@ -248,7 +241,7 @@ def flush_decorators(f):
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @flush_decorators
 def flush(obj, query, width):
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return flush_impl(obj, query, width)
 
 
@@ -285,7 +278,7 @@ def logs_decorators(f):
 @add_query_options(at_least_one=True)
 @logs_decorators
 def logs(obj, how_far, grep, query):
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return logs_impl(obj, how_far, grep, query)
 
 
@@ -331,7 +324,7 @@ def logs_impl(
 @add_query_options(at_least_one=True)
 @click.pass_obj
 def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
-    log_cmd(obj)
+    log_pm_cmd(obj)
     return restart_impl(obj, query)
 
 
@@ -366,7 +359,7 @@ def ps(
     width: int | None,
 ) -> None:
     log = get_logger("process_manager.shell")
-    log_cmd(obj)
+    log_pm_cmd(obj)
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
     if not results:
