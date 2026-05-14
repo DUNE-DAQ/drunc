@@ -1,7 +1,5 @@
 import abc
-import ipaddress
 import re
-import socket
 import sys
 import threading
 import time
@@ -26,8 +24,6 @@ from druncschema.request_response_pb2 import (
     Request,
     ResponseFlag,
 )
-
-# Note: send_msg now returns PMResponseFlag (defined in process_manager.proto)
 from google.rpc import code_pb2
 from grpc import ServicerContext
 
@@ -46,7 +42,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
 )
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
 
 
 class BadQuery(DruncCommandException):
@@ -55,7 +51,7 @@ class BadQuery(DruncCommandException):
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
-    pm_type = ProcessManagerTypes.Unknown
+    pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
 
     def __init__(
         self,
@@ -504,15 +500,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
     def describe(self, request: Request, context: ServicerContext) -> Description:
-        self.log.warning(f"{self.name} running describe")
-
-        # response = self._describe_impl()
+        self.log.debug(f"{self.name} running describe")
 
         response = Description(
-            type=self.pm_type.name,  # change the type based on what it reads as. ITS AN ENUM!
-            # try to get the superclass class name
-            # hook into the configuration, so you get the class name from the enum
-            # so we want this to be a string (has to be string)
+            type=self.pm_type.name,
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
@@ -585,57 +576,15 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     )
     def send_msg(self, request: Request, context: ServicerContext) -> OutcomeStatus:
         self.log.debug(f"{self.name} running send_msg")
-        peer = None
+
         try:
             peer = context.peer()
+            peer_display = resolve_context_peer(peer)
         except Exception:
-            self.log.debug("Could not determine caller peer", exc_info=True)
-
-        if peer:
-            peer_display = peer
-            peer_match = re.match(r"^(?P<transport>[^:]+):(?P<address>.+)$", peer)
-            if peer_match:
-                # transport = peer_match.group("transport")
-                address = peer_match.group("address")
-                host = None
-                port = None
-
-                # Handle both ipv4:host:port and ipv6:[host]:port formats.
-                bracket_match = re.match(
-                    r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", address
-                )
-                if bracket_match:
-                    host = bracket_match.group("host")
-                    port = bracket_match.group("port")
-                else:
-                    host_port = address.rsplit(":", 1)
-                    if len(host_port) == 2 and host_port[1].isdigit():
-                        host, port = host_port
-
-                if host:
-                    resolved_host = host
-                    try:
-                        ip_obj = ipaddress.ip_address(host)
-                        try:
-                            resolved_host, _, _ = socket.gethostbyaddr(str(ip_obj))
-                        except (
-                            socket.herror,
-                            socket.gaierror,
-                            socket.timeout,
-                            OSError,
-                        ):
-                            resolved_host = host
-                    except ValueError:
-                        resolved_host = host
-
-                    if ":" in resolved_host and not resolved_host.startswith("["):
-                        resolved_host = f"[{resolved_host}]"
-                    peer_display = f"{resolved_host}:{port}"
-
-            # self.log.info(f"{self.name} send_msg called from {peer_display}")
+            self.log.warning("Could not determine caller peer", exc_info=True)
+            peer_display = "unknown"
 
         # Try to extract an optional GenericNotificationMessage from request.data
-        msg_value = None
         try:
             if (
                 request is not None
@@ -643,17 +592,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 and request.data is not None
             ):
                 gm = GenericNotificationMessage()
-                try:
-                    request.data.Unpack(gm)
-                    msg_value = gm.message
-                except Exception:
-                    # If unpacking fails, ignore and proceed with None
-                    msg_value = None
-
+                request.data.Unpack(gm)
+                msg_value = gm.message
         except Exception as e:
             self.log.debug(
                 f"Error while extracting send_msg payload: {e}", exc_info=True
             )
+            msg_value = "unknown payload"
 
         try:
             response = self._send_msg_impl(msg_value, peer_display)
@@ -671,7 +616,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                 domain="ProcessManager.send_msg",
             )
 
-        # Expect a PMResponseFlag enum instance
         return response
 
     def _ensure_one_process(
