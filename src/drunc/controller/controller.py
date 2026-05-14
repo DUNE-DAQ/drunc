@@ -4,7 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, TypeVar
 
-from daqpytools.logging.handlers import LogHandlerConf
+from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
@@ -50,6 +50,7 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.controller_actor import ControllerActor
@@ -86,7 +87,8 @@ class Controller(ControllerServicer):
         self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
-        self.log = get_logger(f"controller.core.{name}_ctrl", ers_kafka_handler=False)
+        self.log = get_logger(f"controller.core.{name}_ctrl")
+        setup_daq_ers_logger(self.log, session, f"drunc.{name}_ctrl")
         log_init = get_logger("controller.core.__init__")
         log_init.info(f"Initialising controller '{name}' with session '{session}'")
 
@@ -158,11 +160,19 @@ class Controller(ControllerServicer):
         log_init_controller = get_logger("controller.core.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
 
-        self.children_nodes = self.configuration.init_children(
-            session_name=self.session,
-            init_token=self.actor.get_token(),
-            connectivity_service=self.connectivity_service,
-        )
+        try:
+            log_init_controller.info("Initializing the controller children")
+            self.children_nodes = self.configuration.init_children(
+                session_name=self.session,
+                init_token=self.actor.get_token(),
+                connectivity_service=self.connectivity_service,
+            )
+        except ApplicationLookupUnsuccessful:
+            log_init_controller.error(
+                "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
+            )
+            self.stateful_node.to_error()
+            return
 
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
@@ -710,7 +720,15 @@ class Controller(ControllerServicer):
 
         command = request.command
         command_name = command.command_name
-        self.log.debug(f"FSM command: {command_name}")
+
+        fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
+        if command_name == "start" and (
+            cmd := self.stateful_node.decode_fsm_arguments(command)
+        ):
+            fsm_cmd_log += f"with arguments {cmd}"
+        elif command_name == "stop":
+            fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
+        self.log.info(fsm_cmd_log)
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
@@ -827,9 +845,11 @@ class Controller(ControllerServicer):
             for child_response in child_responses:
                 if child_response.flag not in [
                     ResponseFlag.EXECUTED_SUCCESSFULLY,
+                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
                 ] or child_response.fsm_flag not in [
                     FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
                     FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
+                    FSMResponseFlag.FSM_INVALID_TRANSITION,
                 ]:
                     response.fsm_flag = FSMResponseFlag.FSM_FAILED
                     self.stateful_node.to_error()

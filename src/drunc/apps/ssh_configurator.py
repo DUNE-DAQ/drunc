@@ -12,7 +12,7 @@ from pathlib import Path
 
 import click
 import paramiko
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 from jinja2 import Template
 
 import drunc as _drunc

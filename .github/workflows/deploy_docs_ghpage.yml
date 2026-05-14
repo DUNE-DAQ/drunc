@@ -53,12 +53,14 @@ jobs:
         run: mkdocs gh-deploy --force
 
       # Check whether the links used in the documentation are valid
-      # twiki excludes are used as they require a CERN login, leading to timeouts, and errors being thrown by this step
+      # twiki, indico, amd dunescience excludes are used as they are behind SSOs, leading to timeouts, and errors being thrown by this step
       # drunc contains a set of outdated documentation page that should be kept for reference, they contain good descriptions on e.g. configuration structure
       - name: Run Lychee link checker
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
             --exclude 'https://twiki.cern.ch/.*' 
+            --exclude 'https://indico.*' 
+            --exclude 'https://wiki.dunescience.org/wiki/.*'
             --exclude 'https://github.com/DUNE-DAQ/drunc/wiki/Archive:.*'
             docs/

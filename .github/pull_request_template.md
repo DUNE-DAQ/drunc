@@ -1,26 +1,132 @@
 # Description
-Addresses issue # 
-_Please include a summary of the change and which issue is fixed (if any). Please also
-include relevant motivation and context. List any dependencies that are required for
-this change._
+Fixes issue # _ISSUE NUMBER_
 
-Fixes # (issue)
+_WHAT DOES THIS PR CHANGE - ONE LINE._
+
+__DON'T FORGET TO LABEL THE ISSUE WITH THE APPROPRIATE TOPIC__
+
+_DOCUMENT THE CHANGE BELOW OR DELETE IT_
+
+The relevant changes in the user workflow have been documented _here_ (link URL)
+
+<!-- _Reminder - the general practice is to discuss plans for large development topics at RC technical meetings prior to developpment, to not waste developer effort. This will be further discussed at CCM/SWIT meetings if relevant._ -->
 
 ## Type of change
 
-- [ ] Documentation (non-breaking change that adds or improves the documentation)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Optimization (non-breaking, back-end change that speeds up the code)
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] Breaking change (whatever its nature)
+- [ ] New feature / enhancement
+- [ ] Optimization
+- [ ] Bug fix
+- [ ] Breaking change
+- [ ] Documentation
 
-## Key checklist
+## List of required branches from other repositories
+_WHAT PRs NEED TO BE INCLUDED TO MAKE THE CHANGE._
 
-- [ ] All tests pass (eg. `python -m pytest`)
-- [ ] Pre-commit hooks run successfully (eg. `pre-commit run --all-files`)
+## Change log
 
-## Further checks
+_WHAT HAS CHANGED._
 
-- [ ] Code is commented, particularly in hard-to-understand areas
-- [ ] Tests added or an issue has been opened to tackle that in the future.
-  (Indicate issue here: # (issue))
+## Suggested manual testing checklist 
+
+_LIST COMMANDS TO DEMONSTRATE CHANGE_
+
+<details>
+<summary>
+
+# Developer checklist
+
+</summary>
+
+## Prior to marking this as "Ready for Review"
+
+Tests ran on: _WHAT HOSTNAME_ from release _RELEASE_NAME_
+
+Unit tests - some tests can't be ran on the CI. This is [documented](https://github.com/DUNE-DAQ/drunc/wiki/Testing-prior-to-PR-merges). If this PR checks a feature that can't be tested with CI, this has been marked appropriately.
+
+Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resources, and connections to the EHN1 infrastructure. Check the [cross referenced list](https://github.com/DUNE-DAQ/drunc/wiki#users-with-access-to-clusters-for-running-daqsystemtest_integtest_bundlesh) if you can't run these. The developer needs to run at least the [.](https://github.com/DUNE-DAQ/daqsystemtest/blob/develop/integtest/minimal_system_quick_test.py)
+
+- Unit tests (`pytest --marker`) passed
+  - [ ] With relevant marker
+  - [ ] Without marker
+- Integration tests passed
+  - [ ] Only `daqsystemtest_integtest_bundle.sh -k minimal_system_quick_test.py`
+  - [ ] Full `daqsystemtest_integtest_bundle.sh`
+- [ ] Testing skipped as there are no core code changes in this PR, this only relates to documentation/CI workflows
+- [ ] Drunc integration tests pass (`./scripts/drunc_integtest_bundle.sh`)
+
+## Final checklist prior to marking this as "Ready for Review"
+
+- [ ] Code is clearly commented.
+- [ ] New unit tests have been added, or is documented in # _ISSUE NUMBER_
+- [ ] A suitable reviewer has been chosen from [this list](https://github.com/DUNE-DAQ/drunc/wiki#active-developers).
+
+</details>
+
+<details>
+<summary>
+
+# Reviewer checklist
+
+</summary>
+
+- [ ] This branch has been rebased with develop prior to testing.
+- [ ] Suggested manual tests show changes.
+- [ ] CI workflows fails documented (if present)
+- [ ] Integration tests passed
+    - Only concern yourself if failures related to `drunc` are in the log files
+    - If non-`drunc` failure appears:
+      - Validate failure in fresh working area
+      - Contact Pawel if unsure
+<!-- - [ ] Drunc integration tests pass (`pytest -m drunc_integration_tests`) Note - at the time of creating this template, these tests have not been written hence remain as a TODO. This will test all the Process Managers in a test bundle. -->
+
+Once the features are validated and both the unit and integration tests pass, the PRs is ready to be merged.
+
+</details>
+
+<details>
+<summary>
+
+# Prior to merging
+</summary>
+Choose one of the following an complete all substeps
+
+- Changes only affect the Run Control, are in a single repository, and do not affect the end user. 
+  - [ ] Changes are documented in docstrings and code comments
+  - [ ] Wiki has been updated if architectural or endpoint changes
+- Otherwise
+  - [ ] Workflow changes demonstrated in the Change Log (if necessary)
+  - [ ] Wiki has been updated (if necessary)
+  - [ ] #daq-sw-librarians Slack channel notified (see below)
+
+Once completed, the reviewer can merge the PR.
+<details>
+
+<summary>
+
+## Notification message for a Slack channel
+</summary>
+
+Note - this should be to #dunedaq-integration for general workflow that isn't during a release candidate period, and to #daq-release-prep otherwise.
+
+### For an single merge that changes the user workflow
+```
+The CCM WG has an isolated PR ready to merge that affects user workflows. The PR is:
+
+_URL_
+
+I will leave time for any comments, otherwise will merge these at the end of the work day _Insert your time zone_.
+```
+### For co-ordinated merge
+```
+The CCM WG has a set of co-ordinated merges ready to merge. The PRs are:
+
+_URL_
+
+_URL_
+
+
+I will leave time for any comments, otherwise will merge these at the end of the day.
+```
+
+</details>
+</details>

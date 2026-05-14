@@ -3,18 +3,15 @@
     "name": "K8sProcessManager",
     "command_address": "0.0.0.0:10054",
     "image": "ghcr.io/dune-daq/alma9:latest",
-
     "authoriser": {
         "type": "dummy"
     },
-
     "broadcaster": {
         "type": "kafka",
         "kafka_address": "monkafka.cern.ch:30092",
         "publish_timeout": 2
     },
     "environment": {
-        "GRPC_ENABLE_FORK_SUPPORT": "false",
         "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout",
         "DUNEDAQ_ERS_FATAL": "erstrace,lstdout",
         "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout",
@@ -24,18 +21,15 @@
         "path": "./info.json",
         "type": "file"
     },
-    "opmon_conf":{
+    "opmon_conf": {
         "level": "info",
-        "interval_s" : 10.0
+        "interval_s": 10.0
     },
     "settings": {
         "labels": {
             "drunc_label": "drunc.daq"
         },
         "home_path_base": "/nfs/home",
-        "connection_server": {
-            "name": "local-connection-server"
-        },
         "service": {
             "headless_discovery_port": 80
         },
@@ -44,29 +38,50 @@
             "pod_ready_timeout": 60
         },
         "cleanup": {
-            "restart_cleanup_time": 10,
-            "restart_cleanup_polling": 0.5
+            "restart_cleanup_time": 10, 
+            "restart_cleanup_polling": 0.5 
         },
         "checking": {
             "watcher_retry_sleep": 5,
             "pod_status_check_sleep": 1,
             "host_cache_expiry": 300,
-            "grpc_startup_timeout": 30,
-            "socket_retry_timeout": 1.0
+            "grpc_startup_timeout": 30, 
+            "socket_retry_timeout": 1.0 
+        },
+        "readout_app_selector": "runp",
+        "host_configs": {
+            "np02-srv-001": {
+                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "64", "memory": "512Gi"},
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "16", "memory": "128Gi"}
+            },
+            "np02-srv-002": {
+                "limits":   {"hugepages-2Mi": "8Gi", "cpu": "32", "memory": "512Gi"},
+                "requests": {"hugepages-2Mi": "8Gi", "cpu": "8", "memory": "128Gi"}
+            },
+            "np02-srv-003": {
+                "limits":   {"hugepages-2Mi": "8Gi", "cpu": "112", "memory": "256Gi"},
+                "requests": {"hugepages-2Mi": "8Gi", "cpu": "24", "memory": "64Gi"}
+            },
+            "np04-srv-004": {
+                "limits":   {"hugepages-2Mi": "64Gi", "cpu": "256", "memory": "2048Gi"},
+                "requests": {"hugepages-2Mi": "64Gi", "cpu": "64", "memory": "512Gi"}
+            },
+            "np02-srv-005": {
+                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "96", "memory": "768Gi"},
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "48", "memory": "384Gi"}
+            },
+            "np04-srv-031": {
+                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
+                "requests": {"hugepages-2Mi": "32Gi", "cpu": "32", "memory": "256Gi"}
+            }
         },
         "volumes": [
-            {
-                "name": "nfs",
-                "mount_path": "/nfs",
-                "host_path": "/nfs",
-                "read_only": false
-            },
-            {
-                "name": "cvmfs",
-                "mount_path": "/cvmfs",
-                "host_path": "/cvmfs",
-                "read_only": true
-            }
+            { "name": "nfs", "mount_path": "/nfs", "host_path": "/nfs", "read_only": false },
+            { "name": "cvmfs", "mount_path": "/cvmfs", "host_path": "/cvmfs", "read_only": true },
+            { "name": "tmp", "mount_path": "/tmp", "host_path": "/tmp", "read_only": false },
+            { "name": "hugepages", "mount_path": "/dev/hugepages", "host_path": "/dev/hugepages", "read_only": false },
+            { "name": "vfio", "mount_path": "/dev/vfio", "host_path": "/dev/vfio", "read_only": false },
+            { "name": "intel-firmware", "mount_path": "/lib/firmware/intel/ice", "host_path": "/lib/firmware/intel/ice", "read_only": true }
         ]
-    }
+    }   
 }

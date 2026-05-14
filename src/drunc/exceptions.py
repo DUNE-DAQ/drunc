@@ -55,6 +55,34 @@ class DruncServerSideError(
         return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
 
 
+class DruncBatchShellError(DruncException):
+    def __init__(self, msg) -> None:
+        """C'tor"""
+        err_msg = f"Batch shell error: {msg}"
+        super().__init__(err_msg)
+
+
+class DruncBatchShellArgError(DruncException):
+    # Custom error for batch shell args
+    def __init__(self, msg) -> None:
+        """C'tor"""
+        err_msg = f"Batch shell error, unknown command or argument: {msg}"
+        super().__init__(err_msg)
+
+
+class DruncBatchShellUnknownCommand(DruncException):
+    def __init__(self, msg) -> None:
+        """C'tor"""
+        err_msg = f"Batch shell error, unknown command: {msg}"
+        super().__init__(err_msg)
+
+
+class DruncBatchShellMissingArg(DruncException):
+    def __init__(self, msg1, msg2) -> None:
+        err_msg = f"Batch shell error, this optional argument is mandatory in batch mode. Failed command: {msg1}. Next input: {msg2}"
+        super().__init__(err_msg)
+
+
 class DruncNotImplementedException(DruncException):
     grpc_error_code = code_pb2.UNIMPLEMENTED
     pass

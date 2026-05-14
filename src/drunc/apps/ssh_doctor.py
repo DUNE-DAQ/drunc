@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 import conffwk
-from daqpytools.logging.levels import logging_log_levels
+from daqpytools.logging import logging_log_levels
 
 from drunc.process_manager.oks_parser import collect_apps
 from drunc.processes.ssh_process_lifetime_manager_paramiko import (
@@ -74,8 +74,7 @@ def parse_configuration(configuration: str, session_name: str) -> list[str]:
     apps = collect_apps(
         config_filename=configuration,
         session_name=session_name,
-        db=db,
-        session_obj=session_dal,
+        session_dal_obj=session_dal,
         segment_obj=session_dal.segment,
         env={},
         tree_prefix=[],

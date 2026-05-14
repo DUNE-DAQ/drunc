@@ -9,6 +9,9 @@ from drunc.grpc_testing_tools.multiprocessing_connection_manager import (
     MultiprocessingConnectionManager,
 )
 from drunc.grpc_testing_tools.port_cleaner import kill_process_on_port
+from drunc.processes.ssh_process_lifetime_manager_from_forked_process import (
+    SSHProcessLifetimeManagerShellOnForkedProcess,
+)
 from drunc.processes.ssh_process_lifetime_manager_paramiko import (
     SSHProcessLifetimeManagerParamiko,
 )
@@ -163,3 +166,52 @@ def ssh_manager_shell() -> Generator[SSHProcessLifetimeManagerShell, None, None]
     yield manager
 
     manager.kill_all_processes()
+
+
+@pytest.fixture
+def ssh_manager_forked() -> Generator[
+    SSHProcessLifetimeManagerShellOnForkedProcess, None, None
+]:
+    """
+    Fixture providing forked-process-based SSH manager with cleanup.
+
+    Creates an isolated child process running SSHProcessLifetimeManagerShell.
+    Ensures all managed processes are terminated and the child process is
+    shut down cleanly after the test completes.
+
+    Yields:
+        SSHProcessLifetimeManagerShellOnForkedProcess: Configured manager with logging
+    """
+
+    # Suppress verbose sh library logging (child process uses sh internally)
+    logging.getLogger("sh.command").setLevel(logging.WARNING)
+    logging.getLogger("sh.stream_bufferer").setLevel(logging.WARNING)
+    logging.getLogger("sh.streamreader").setLevel(logging.WARNING)
+
+    # Set up logger for the parent process (forked manager wrapper)
+    logger = logging.getLogger("test_ssh_forked")
+    logger.setLevel(logging.DEBUG)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    console_handler.setFormatter(formatter)
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+
+    manager = SSHProcessLifetimeManagerShellOnForkedProcess(
+        disable_localhost_host_key_check=True,
+        disable_host_key_check=False,
+        logger=logger,
+    )
+
+    yield manager
+
+    # Cleanup: terminate all managed processes, then shutdown the worker process
+    try:
+        manager.kill_all_processes()
+    except Exception as e:
+        logger.warning(f"Error during kill_all_processes in fixture cleanup: {e}")
+    finally:
+        manager.shutdown()

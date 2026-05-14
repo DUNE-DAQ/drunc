@@ -6,11 +6,28 @@ including process startup, monitoring, termination, and output capture.
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.processes.connection_utils import wait_for
+
+
+@dataclass
+class RemotePidResult:
+    """
+    Result of a remote PID query.
+
+    Either ``pid`` is set (success) or ``reason`` explains why it is unavailable.
+    """
+
+    pid: Optional[int] = None
+    reason: Optional[str] = None
+
+    @property
+    def successful(self) -> bool:
+        return self.pid is not None
 
 
 class ProcessLifetimeManager(ABC):
@@ -28,7 +45,7 @@ class ProcessLifetimeManager(ABC):
     # Interval to wait between checking if a process is dead after kill is called.
     KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
     # Interval to wait before concluding metadata file writing failed on remote host.
-    DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
+    DEFAULT_TIMEOUT_FOR_READING_METADATA = 10.0  # seconds
 
     def wait_for_process_to_die(
         self,
@@ -130,6 +147,22 @@ class ProcessLifetimeManager(ABC):
         Returns:
           the exit code of the process if it was able to be determined (None otherwise).
 
+        """
+        pass
+
+    @abstractmethod
+    def crash_process(self, uuid: str) -> None:
+        """
+        Simulate a process crash by sending SIGKILL without performing any cleanup.
+
+        Unlike kill_process, this method only sends the kill signal to the remote
+        process without waiting for termination or cleaning up associated resources
+        (metadata files, internal tracking structures, etc.). This is intended for
+        testing failure scenarios where the process manager should observe an
+        unexpected process death.
+
+        Args:
+            uuid: Process UUID to crash
         """
         pass
 
@@ -269,5 +302,20 @@ class ProcessLifetimeManager(ABC):
 
         Raises:
             RuntimeError: If SSH connection or command execution fails
+        """
+        pass
+
+    @abstractmethod
+    def get_remote_pid(self, uuid: str) -> "RemotePidResult":
+        """
+        Return the remote PID for the process, if available.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason`` describing
+            why the PID is unavailable (e.g. ``"no metadata"`` when the metadata
+            file has not yet been written by the remote shell wrapper).
         """
         pass
