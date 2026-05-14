@@ -23,12 +23,6 @@ from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
 
-# def log_pm_cmd(obj: ProcessManagerContext):
-#     ctx_test = click.get_current_context(silent=True)
-#     cmd_name_test = ctx_test.command.name if ctx_test else None
-#     send_cmd_msg_pm(obj, cmd_name_test)
-#     #! TODO: Missing the queries!!!
-
 
 @click.command("boot")
 @click.option(
@@ -168,33 +162,24 @@ def session_injector(f):
     return update_wrapper(wrapper, f)
 
 
-# Logs
 @click.command("logs")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @logs_decorators
 def logs(obj, how_far, grep, query):
-    log = get_logger("unified_shell.logs")
-    log.info("getting logs")
     log_pm_cmd(obj)
-
     return logs_impl(obj, how_far, grep, query)
 
 
-# kill
 @click.command("kill")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
 def kill(obj, query, width):
-    log = get_logger("unified_shell.logs")
-    log.info("getting logs")
     log_pm_cmd(obj)
-
     return kill_impl(obj, query, width)
 
 
-# # Flush
 @click.command("flush")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
@@ -211,12 +196,6 @@ def flush(obj, query, width):
 def restart(obj, query):
     log_pm_cmd(obj)
     return restart_impl(obj, query)
-
-
-# # Wait #also put it in the PM shell
-
-#! Note: i cant seem to do a start-run from no boot in the unified shell.. might have to check if this is related somehow
-#! I also cannot do ps?
 
 
 @click.command("start-shell")

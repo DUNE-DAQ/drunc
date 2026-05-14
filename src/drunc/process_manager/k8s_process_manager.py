@@ -1915,12 +1915,12 @@ class K8sProcessManager(ProcessManager):
             )
 
     def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
-        # If a custom message was provided, log it. Otherwise keep legacy text.
-        # TODO: don't forget to do _something_ for the k8s instance as well
+        # Note: currently exact same implementation as ssh manager
+        # Although there is room here to change as necessary
         try:
-            self.log.critical(f"{msg}; from {peer}")
-        except Exception:
-            self.log.critical("Omigosh an exception!")
+            self.log.info(f"{msg}; from {peer}")
+        except Exception as e:
+            self.log.critical(f"Failed to receive message with exception {e}")
             return OutcomeStatus(flag=OutcomeFlag.FAIL)
 
         return OutcomeStatus(flag=OutcomeFlag.SUCCESS)

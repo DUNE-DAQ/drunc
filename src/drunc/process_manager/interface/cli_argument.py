@@ -10,7 +10,7 @@ def validate_conf_string(ctx, param, boot_configuration):
 def add_query_options_no_session(
     at_least_one: bool, all_processes_by_default: bool = False
 ):
-    def wrapper(f1):  # -> _Wrapped[Callable[..., Any], Any, Callable[..., Any], Any]:
+    def wrapper(f1):
         f2 = click.option(
             "-n",
             "--name",
