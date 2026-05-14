@@ -1,15 +1,26 @@
 import getpass
 import sys
+from functools import update_wrapper
 
 import click
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.exceptions import DruncSetupException
+from drunc.process_manager.interface.cli_argument import add_query_options_no_session
+from drunc.process_manager.interface.commands import (
+    flush_decorators,
+    flush_impl,
+    kill_decorators,
+    kill_impl,
+    logs_decorators,
+    logs_impl,
+    restart_impl,
+)
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
 
 
@@ -33,6 +44,7 @@ def boot(
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
+    log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
     processes = obj.get_driver("process_manager").ps(
@@ -112,6 +124,7 @@ def terminate(ctx, obj):
     """
 
     log = get_logger("unified_shell.terminate")
+    log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
     obj.get_driver("process_manager").kill(session_query)
@@ -127,6 +140,7 @@ def ps(ctx, obj):
     """
 
     log = get_logger("unified_shell.ps")
+    log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
     results = obj.get_driver("process_manager").ps(session_query)
@@ -137,6 +151,51 @@ def ps(ctx, obj):
         overflow="fold",
         soft_wrap=True,
     )
+
+
+def session_injector(f):
+    @click.pass_context
+    def wrapper(ctx, *args, **kwargs):
+        kwargs["session"] = ctx.obj.session_name
+        return ctx.invoke(f, *args, **kwargs)
+
+    return update_wrapper(wrapper, f)
+
+
+@click.command("logs")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@logs_decorators
+def logs(obj, how_far, grep, query):
+    log_pm_cmd(obj)
+    return logs_impl(obj, how_far, grep, query)
+
+
+@click.command("kill")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@kill_decorators
+def kill(obj, query, width):
+    log_pm_cmd(obj)
+    return kill_impl(obj, query, width)
+
+
+@click.command("flush")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@flush_decorators
+def flush(obj, query, width):
+    log_pm_cmd(obj)
+    return flush_impl(obj, query, width)
+
+
+@click.command("restart")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@click.pass_obj
+def restart(obj, query):
+    log_pm_cmd(obj)
+    return restart_impl(obj, query)
 
 
 @click.command("start-shell")
@@ -150,6 +209,7 @@ def start_shell(ctx, obj):
     allowing you to execute commands interactively.
     """
     log = get_logger("unified_shell.start_shell")
+    log_pm_cmd(obj)
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")

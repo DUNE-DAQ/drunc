@@ -8,9 +8,11 @@ from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
+from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessInstance,
@@ -40,7 +42,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
 )
 from drunc.utils.configuration import ConfTypes
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
 
 
 class BadQuery(DruncCommandException):
@@ -49,6 +51,8 @@ class BadQuery(DruncCommandException):
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
+    pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
+
     def __init__(
         self,
         configuration: ProcessManagerConfHandler,
@@ -499,7 +503,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(f"{self.name} running describe")
 
         response = Description(
-            type="process_manager",
+            type=self.pm_type.name,
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
@@ -556,6 +560,60 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             raise DruncCommandException(
                 message=f"{context_msg}: {e}",
                 domain="ProcessManager.logs",
+            )
+
+        return response
+
+    @abc.abstractmethod
+    def _send_msg_impl(
+        self, msg: str | None = None, peer: str | None = None
+    ) -> OutcomeStatus:
+        raise NotImplementedError
+
+    @broadcasted
+    @authentified_and_authorised(
+        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
+    )
+    def send_msg(self, request: Request, context: ServicerContext) -> OutcomeStatus:
+        self.log.debug(f"{self.name} running send_msg")
+
+        try:
+            peer = context.peer()
+            peer_display = resolve_context_peer(peer)
+        except Exception:
+            self.log.warning("Could not determine caller peer", exc_info=True)
+            peer_display = "unknown"
+
+        # Try to extract an optional GenericNotificationMessage from request.data
+        try:
+            if (
+                request is not None
+                and hasattr(request, "data")
+                and request.data is not None
+            ):
+                gm = GenericNotificationMessage()
+                request.data.Unpack(gm)
+                msg_value = gm.message
+        except Exception as e:
+            self.log.debug(
+                f"Error while extracting send_msg payload: {e}", exc_info=True
+            )
+            msg_value = "unknown payload"
+
+        try:
+            response = self._send_msg_impl(msg_value, peer_display)
+        except NotImplementedError:
+            raise DruncNotImplementedException(
+                message="Implementation missing",
+                domain="ProcessManager.send_msg",
+            )
+        except Exception as e:
+            context_msg = f"Unhandled exception in ProcessManager.send_msg: {e}"
+            self.log.exception(context_msg)
+
+            raise DruncCommandException(
+                message=context_msg,
+                domain="ProcessManager.send_msg",
             )
 
         return response
@@ -620,25 +678,27 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # Filter processes based on query criteria
         processes = []
         for uuid in available_uuids:
-            accepted = False
+            accepted = True
             meta = boot_request_dict[uuid].process_description.metadata
 
             # Check UUID match
-            if uuid in uuid_selector:
-                accepted = True
+            if uuid_selector and uuid not in uuid_selector:
+                accepted = False
 
             # Check name pattern match (regex)
-            for name_reg in name_selector:
-                if re.search(name_reg, meta.name):
-                    accepted = True
+
+            if name_selector and not any(
+                re.search(reg, meta.name) for reg in name_selector
+            ):
+                accepted = False
 
             # Check session match
-            if session_selector == meta.session:
-                accepted = True
+            if session_selector and session_selector != meta.session:
+                accepted = False
 
             # Check user match
-            if user_selector == meta.user:
-                accepted = True
+            if user_selector and user_selector != meta.user:
+                accepted = False
 
             if accepted:
                 processes.append(uuid)

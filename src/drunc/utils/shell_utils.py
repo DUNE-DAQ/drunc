@@ -72,6 +72,11 @@ class DecodedResponse:
 
 
 class ShellContext:
+    shell_id = None  # used for logging if its a PM shell or Unified shell etc
+
+    def get_shell_id(self):
+        return self.shell_id
+
     def _reset(self, name: str, token_args: dict = {}, driver_args: dict = {}):
         self._console = Console()
         self._token = self.create_token(**token_args)
@@ -165,3 +170,32 @@ class ShellContext:
             log.info(
                 f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
+
+
+def log_pm_cmd(obj: ShellContext):
+    """Log a process-manager shell command with only explicitly provided arguments.
+
+    The current Click command context is inspected and only parameters whose source is
+    ``COMMANDLINE`` are included in the log message. This keeps defaulted values out
+    of the message while still recording the command name, optional session name, and
+    shell identity.
+
+    These are sent over via send_msg so that it can be displayed in the process manager
+    shell
+
+    Args:
+        obj (ShellContext): Active shell context used to send the log message.
+    """
+
+    ctx_cmd = click.get_current_context(silent=True)
+    cmd_name = ctx_cmd.command.name if ctx_cmd else None
+    parms_dict = {}
+    for param in ctx_cmd.command.params:
+        name = param.name
+        if ctx_cmd.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE:
+            parms_dict[name] = f"{ctx_cmd.params[name]!r}"
+
+    args = f" with arguments {parms_dict}" if parms_dict else ""
+    session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
+    msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
+    obj.get_driver("process_manager").send_msg(msg)

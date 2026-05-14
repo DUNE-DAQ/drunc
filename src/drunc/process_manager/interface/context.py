@@ -14,6 +14,8 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class ProcessManagerContext(ShellContext):  # boilerplatefest
+    shell_id = "process_manager_shell"
+
     def __init__(self, *args, **kwargs):
         self.status_receiver = None
         super(ProcessManagerContext, self).__init__(*args, **kwargs)

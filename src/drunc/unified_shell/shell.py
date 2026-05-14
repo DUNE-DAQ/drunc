@@ -42,16 +42,26 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
-from drunc.process_manager.interface.commands import (
+from drunc.process_manager.interface.process_manager import run_pm
+from drunc.unified_shell.commands import (
+    boot,
     flush,
     kill,
     logs,
-    # ps,
+    ps,
     restart,
-    # terminate,
+    start_shell,
+    terminate,
 )
-from drunc.process_manager.interface.process_manager import run_pm
-from drunc.unified_shell.commands import boot, ps, start_shell, terminate
+
+#! Note with boot. We should discuss this
+# When you run boot in the process manager with nothing else running, it works just fine
+# however when you have a running session already, boot asks 'are you sure you want to do this?
+# i bet you this is causing the behaviour that we are seeing with the unified shell
+# when you log into an empty PM with the US, and you start-run, it works just fine
+# but when you start-run from scratch with a running session in the PM, it doesn't work
+# Theres also a whole thing about things not flushing correctly..
+# Aha! in the pm, my terminate doesn't flush properly!
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -150,9 +160,9 @@ def unified_shell(
     unified_shell_log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
-    unified_shell_log.critical(
-        f"Parsing the process manager argument: {process_manager}"
-    )
+    # unified_shell_log.critical(
+    #     f"Parsing the process manager argument: {process_manager}"
+    # )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
@@ -172,9 +182,15 @@ def unified_shell(
     #     )
     #     sys.exit(1)
 
-    unified_shell_log.critical("TEST")
+    # unified_shell_log.critical("TEST")
     # Setup configuration related context variables
-    ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
+    # Assume oksconflibs if no framework is defined
+    ctx.obj.configuration_file = (
+        lambda path: (
+            path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
+        )
+    )(configuration_file)
+
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
 
@@ -267,10 +283,6 @@ def unified_shell(
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
-        unified_shell_log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager"
-            f"[/green] at address [green]{process_manager_address}[/green]"
-        )
 
     unified_shell_log.debug(
         f"[green]process_manager[/green] started, communicating through address [green]"
@@ -280,7 +292,8 @@ def unified_shell(
 
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
-    unified_shell_log.critical("Getting driver")
+    # unified_shell_log.critical("Getting driver")
+
     try:
         desc = ctx.obj.get_driver().describe()
     except Exception as e:
@@ -288,7 +301,7 @@ def unified_shell(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        unified_shell_log.debug(f"Reason: {e}")
+        unified_shell_log.critical(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             unified_shell_log.error(
@@ -307,7 +320,16 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
-    unified_shell_log.critical("Process manager described successfully")
+    # unified_shell_log.critical("Process manager described successfully")
+
+    unified_shell_log.info(
+        f"[green]unified_shell[/green] connected to the [green]process_manager"
+        f"[/green] at address [green]{process_manager_address}[/green]"
+    )
+
+    ctx.obj.get_driver("process_manager").send_msg(
+        f"{getpass.getuser()} connected from unified shell"
+    )
 
     # Broadcasting configuration if requested
     if desc.HasField("broadcast"):
@@ -511,6 +533,9 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").send_msg(
+            f"{getpass.getuser()} disconnected from unified shell"
+        )
         ctx.obj.get_driver("process_manager").close()
         ctx.obj.delete_driver("process_manager")
 

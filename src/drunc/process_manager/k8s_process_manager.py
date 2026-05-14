@@ -13,6 +13,7 @@ from time import sleep, time
 
 # Local Application Imports
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -39,6 +40,7 @@ from drunc.k8s_exceptions import (
 from drunc.process_manager.configuration import (
     PROCESS_SHUTDOWN_ORDERING,
     ProcessManagerConfHandler,
+    ProcessManagerTypes,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import on_parent_exit, validate_k8s_session_name
@@ -152,6 +154,8 @@ class K8sPodWatcherThread(threading.Thread):
 
 
 class K8sProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.K8s
+
     def __init__(self, configuration: ProcessManagerConfHandler, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
@@ -1910,6 +1914,17 @@ class K8sProcessManager(ProcessManager):
                 lines=[f"Could not retrieve logs: {e.reason}"],
             )
 
+    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
+        # Note: currently exact same implementation as ssh manager
+        # Although there is room here to change as necessary
+        try:
+            self.log.info(f"{msg}; from {peer}")
+        except Exception as e:
+            self.log.critical(f"Failed to receive message with exception {e}")
+            return OutcomeStatus(flag=OutcomeFlag.FAIL)
+
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
+
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         """
         Handles the 'boot' command from the gRPC interface.
@@ -2516,7 +2531,9 @@ class K8sProcessManager(ProcessManager):
                 pods_by_role[role].append(uuid)
                 if role == "segment-controller":
                     tree_id = pod.metadata.labels.get(tree_id_label_key, "")
-                    segment_controller_depths[uuid] = tree_id.count(".") if tree_id else 0
+                    segment_controller_depths[uuid] = (
+                        tree_id.count(".") if tree_id else 0
+                    )
 
         # Kill in stages using our sorted lists
         for role in PROCESS_SHUTDOWN_ORDERING:

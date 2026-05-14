@@ -14,6 +14,7 @@ from drunc.process_manager.interface.commands import (
     ps,
     restart,
     terminate,
+    wait,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
@@ -59,6 +60,10 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         # process_manager_shell_log.error(e.message) # TODO: Keep this for production branch, remove this from dev branch
         exit(1)
 
+    ctx.obj.get_driver("process_manager").send_msg(
+        f"{getpass.getuser()} connected from {ctx.obj.shell_id}"
+    )
+
     # Manually add file handler to process manager log
     # Not possible to initialise logger immediately as it requires
     # knowledge of the log path
@@ -75,6 +80,9 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
+        ctx.obj.get_driver("process_manager").send_msg(
+            f"{getpass.getuser()} disconnected from {ctx.obj.shell_id}"
+        )
         ctx.obj.terminate()
         process_manager_log.warning(
             f"[green]{getpass.getuser()}[/green] disconnected from the process manager through a [green]drunc-process-manager-shell[/green]"
@@ -83,6 +91,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.call_on_close(cleanup)
 
     ctx.command.add_command(boot, "boot")
+    ctx.command.add_command(wait, "wait")
     ctx.command.add_command(terminate, "terminate")
     ctx.command.add_command(kill, "kill")
     ctx.command.add_command(flush, "flush")

@@ -16,6 +16,7 @@ from daqconf.utils import find_free_port
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessDescription,
@@ -86,7 +87,35 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
+    def send_msg(self, msg):
+        request = Request(token=copy_token(self.token))
+
+        if msg is not None:
+            try:
+                gm = GenericNotificationMessage(message=str(msg))
+                request.data.Pack(gm)
+            except Exception:
+                self.log.critical("Failed to pack send_msg payload", exc_info=True)
+
+        timeout = 10
+
+        try:
+            response = self.stub.send_msg(request, timeout=timeout)
+        except grpc.RpcError as e:
+            try:
+                error_details = extract_grpc_rich_error(e)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.critical(
+                    f"Could not extract rich error details from gRPC error: {extraction_error}",
+                    exc_info=True,
+                )
+            handle_grpc_error(e)
+
+        return response
+
     # ----- Boot workflow -----
+
     def boot(
         self,
         conf_file: str,
@@ -102,6 +131,9 @@ class ProcessManagerDriver:
         **kwargs,
     ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
+
+        # Assume oksconflibs if no framework is defined
+        conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
 
         # Step 1 - consolidate configuration
         self._consolidate_config(session_name, conf_file)
