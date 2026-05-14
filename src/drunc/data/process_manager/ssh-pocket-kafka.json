@@ -1,22 +1,33 @@
 {
     "type": "ssh",
     "name": "SSHProcessManager",
+    "command_address": "localhost:0",
+    "kill_timeout": 0.5,
 
     "authoriser": {
         "type": "dummy"
     },
-
-
+    
     "broadcaster": {
         "type": "kafka",
         "kafka_address": "localhost:31014",
         "publish_timeout": 2
     },
-
+    
     "environment": {
+        "GRPC_ENABLE_FORK_SUPPORT": "false",
         "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_FATAL": "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"
+    },
+    
+    "opmon_uri": {
+        "path": "localhost:30092/opmon_stream",
+        "type": "stream"
+    },
+    "opmon_conf": {
+        "level": "debug",
+        "interval_s": 10.0
     }
 }
