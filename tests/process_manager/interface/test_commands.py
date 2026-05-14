@@ -102,6 +102,10 @@ class MockDriver:
         mock_result.lines = []
         return mock_result
 
+    def send_msg(self, msg: str) -> None:
+        # simulate sending a message; tests don't assert on this, so store it
+        self._last_sent_msg = msg
+
 
 class MockContext:
     """
@@ -114,6 +118,9 @@ class MockContext:
 
     def get_driver(self, name):
         return self.driver
+
+    def get_shell_id(self):
+        return "mock-shell"
 
     def print(self, msg, justify=None, overflow=None, soft_wrap=None):
         self.output.append(str(msg))

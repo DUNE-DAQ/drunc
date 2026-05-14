@@ -284,7 +284,9 @@ def logs_impl(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
     log = get_logger("process_manager.shell")
-    log.info(f"Running logs with query {query}")
+    # TODO: MOVE BACK TO DEBUG BEFORE MERGE
+    # THIS IS USEFUL FOR TESTING THOUGH
+    log.error(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
         query=query,
