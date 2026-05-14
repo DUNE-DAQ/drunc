@@ -1,4 +1,5 @@
 import ctypes
+import ipaddress
 import logging
 import os
 import random
@@ -461,6 +462,86 @@ def resolve_target_ip(host: str) -> str | None:
         # Server only has an IPv6 address
         log.error(f"Could not resolve host: {host}")
         return None
+
+
+def resolve_context_peer(peer: str) -> str:
+    """Resolve a transport-qualified peer string to a display-friendly address.
+
+    The input is expected to look like ``transport:address``. If the address contains
+    an IP literal, it is reverse-resolved where possible and IPv6 addresses are
+    re-wrapped in brackets.
+
+    Example:
+        ``ipv4:10.73.136.70:41750`` -> ``np04-srv-028.cern.ch:41750``
+
+    Args:
+        peer (str): Transport-qualified peer string.
+
+    Returns:
+        str: The original peer string, or a resolved ``host:port`` representation.
+    """
+
+    match = re.match(r"^(?P<transport>[^:]+):(?P<address>.+)$", peer)
+    if not match:
+        return peer
+
+    parsed = _parse_host_port(match.group("address"))
+    if parsed is None:
+        return peer
+
+    host, port = parsed
+    resolved_host = _resolve_host(host)
+    return f"{resolved_host}:{port}"
+
+
+def _parse_host_port(address: str) -> tuple[str, str] | None:
+    """Extract a host and port from a peer address string.
+
+    Supports bracketed IPv6 addresses such as ``[::1]:1234`` and unbracketed
+    ``host:port`` or ``ipv4:port`` forms.
+
+    Args:
+        address (str): Address portion of a transport-qualified peer string.
+
+    Returns:
+        tuple[str, str] | None: ``(host, port)`` when parsing succeeds, otherwise
+        ``None``.
+    """
+
+    bracket_match = re.match(r"^\[(?P<host>[^\]]+)\]:(?P<port>\d+)$", address)
+    if bracket_match:
+        return bracket_match.group("host"), bracket_match.group("port")
+
+    host, sep, port = address.rpartition(":")
+    if sep and port.isdigit():
+        return host, port
+
+    return None
+
+
+def _resolve_host(host: str) -> str:
+    """Reverse-resolve an IP host and keep IPv6 output bracketed.
+
+    Args:
+        host (str): Hostname or IP literal to resolve.
+
+    Returns:
+        str: The resolved hostname, or the original host if resolution fails.
+    """
+
+    try:
+        ip_obj = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+
+    try:
+        resolved_host, _, _ = socket.gethostbyaddr(str(ip_obj))
+    except (socket.herror, socket.gaierror, socket.timeout, OSError):
+        resolved_host = host
+
+    if ":" in resolved_host and not resolved_host.startswith("["):
+        return f"[{resolved_host}]"
+    return resolved_host
 
 
 def is_port_available(host: str, port: int, timeout: int = 2) -> bool:
