@@ -73,7 +73,6 @@ Integration tests - the `daqsystemtest_integtest_bundle` requires a lot of resou
 - [ ] Suggested manual tests show changes.
 - [ ] CI workflows fails documented (if present)
 - [ ] Integration tests passed (on either np0x or IC HEP clusters)
-  - If the reviewer has already ran the relevant tests, this step is optional
   - Use the following guidelines to determine which of the integration tests you need to run
     - You do not need to run any integration tests if
       - Code changes are not associated with `src/`
