@@ -9,6 +9,7 @@ import threading
 import urllib.error
 import urllib.request
 import uuid
+from dataclasses import dataclass, field
 from time import sleep, time
 
 # Local Application Imports
@@ -47,6 +48,22 @@ from drunc.process_manager.utils import (
     validate_k8s_session_name,
 )
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
+
+
+@dataclass
+class _LcsSessionState:
+    """
+    Holds all Local Connection Server (LCS) state for a single session (k8s namespace).
+
+    Using a dataclass instead of parallel dicts prevents the fields from drifting
+    out of sync and makes it obvious that they all describe the same LCS instance.
+    A session that has no LCS simply has no entry in K8sProcessManager._lcs_state.
+    """
+
+    podname: str | None = None
+    port: int | None = None
+    node_port: int | None = None
+    is_booted: bool = False
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -208,13 +225,10 @@ class K8sProcessManager(ProcessManager):
         self.uuids_pending_deletion = set()
         self.termination_complete_event = threading.Event()
         self.final_exit_codes = {}
-        # Per-session LCS state: each key is a session (k8s namespace) name.
-        # Using dicts instead of scalars allows multiple concurrent sessions,
-        # some with an LCS and some without, without cross-session interference.
-        self.local_connection_server_podname: dict[str, str | None] = {}
-        self.local_connection_server_port: dict[str, int | None] = {}
-        self.local_connection_server_node_port: dict[str, int | None] = {}
-        self.local_connection_server_is_booted: dict[str, bool] = {}
+        # Per-session LCS state. Keyed by session (k8s namespace) name.
+        # Sessions that have no LCS simply have no entry here.
+        # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
+        self._lcs_state: dict[str, _LcsSessionState] = {}
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
@@ -362,6 +376,17 @@ class K8sProcessManager(ProcessManager):
             self.log.info(end_str)
             self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
+            # If the terminated pod was the LCS for its session, mark it as down.
+            # This prevents other pods booting later from trying to resolve a
+            # localhost alias that no longer exists.
+            lcs = self._lcs_state.get(session)
+            if lcs is not None and lcs.podname == meta.name:
+                self.log.info(
+                    f"LCS pod '{meta.name}' for session '{session}' has terminated; "
+                    "clearing LCS booted state."
+                )
+                lcs.is_booted = False
+
         # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
             self.uuids_pending_deletion.remove(proc_uuid)
@@ -506,6 +531,16 @@ class K8sProcessManager(ProcessManager):
             True if the pod has the 'root-controller' role label, False otherwise.
         """
         return tree_labels.get(f"role.{self.drunc_label}") == "root-controller"
+
+    def _lcs_state_for(self, session: str) -> _LcsSessionState:
+        """
+        Return the LCS state for *session*, creating a fresh entry if absent.
+
+        Centralises dict access so callers never deal with missing-key logic.
+        """
+        if session not in self._lcs_state:
+            self._lcs_state[session] = _LcsSessionState()
+        return self._lcs_state[session]
 
     def _is_host_cached(self, host: str) -> None | bool:
         """
@@ -767,20 +802,26 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
+    def _create_nodeport_service(
+        self,
+        podname: str,
+        session: str,
+        pod_uid: str,
+        port: int,
+        node_port: int,
+    ) -> None:
         """
         Create a NodePort Kubernetes Service for external access.
 
-        Builds and creates a NodePort Service with externalTrafficPolicy=Local,
-        mapping the connection_server_port to a fixed NodePort
-        (connection_server_node_port). The service is owned by the pod via an
-        OwnerReference. Raises a DruncK8sException if the NodePort is already
-        allocated or another API error occurs.
+        Builds and creates a NodePort Service with externalTrafficPolicy=Local.
+        The service is owned by the pod via an OwnerReference.
 
         Args:
-            podname - the name of the pod (also used as the service name)
-            session - the Kubernetes namespace (session) to create the service in
-            pod_uid - the UID of the owning pod for the OwnerReference
+            podname   - the name of the pod (also used as the service name)
+            session   - the Kubernetes namespace (session) to create the service in
+            pod_uid   - the UID of the owning pod for the OwnerReference
+            port      - the container port to expose
+            node_port - the fixed NodePort to allocate on cluster nodes
 
         Raises:
             DruncK8sException - if the NodePort is already in use or another API error occurs
@@ -810,9 +851,9 @@ class K8sProcessManager(ProcessManager):
                 ports=[
                     client.V1ServicePort(
                         protocol="TCP",
-                        port=self.local_connection_server_port[session],
-                        target_port=self.local_connection_server_port[session],
-                        node_port=self.local_connection_server_node_port[session],
+                        port=port,
+                        target_port=port,
+                        node_port=node_port,
                     )
                 ],
             ),
@@ -822,8 +863,8 @@ class K8sProcessManager(ProcessManager):
                 namespace=session, body=service_manifest
             )
             self.log.info(
-                f'Created NodePort service "{session}.{podname}" on port {self.local_connection_server_port[session]} '
-                f"(NodePort: {self.local_connection_server_node_port[session]} for external access)"
+                f'Created NodePort service "{session}.{podname}" on port {port} '
+                f"(NodePort: {node_port} for external access)"
             )
 
         except self._api_error_v1_api as e:
@@ -838,9 +879,8 @@ class K8sProcessManager(ProcessManager):
                     is_port_conflict = True
 
             if is_port_conflict:
-                port = self.local_connection_server_node_port[session]
                 error_message = (
-                    f"NodePort {port} is already in use by another service. "
+                    f"NodePort {node_port} is already in use by another service. "
                     f"Cannot start '{podname}'."
                 )
                 self.log.error(error_message)
@@ -1398,7 +1438,7 @@ class K8sProcessManager(ProcessManager):
         host_aliases = None
         if (
             not self._is_local_connection_server(tree_labels, podname)
-            and self.local_connection_server_is_booted.get(session, False)
+            and self._lcs_state.get(session, _LcsSessionState()).is_booted
         ):
             connection_server_ip = None
             retry_count = 0
@@ -1626,7 +1666,9 @@ class K8sProcessManager(ProcessManager):
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
                     )
-                self._create_nodeport_service(podname, session, pod_uid)
+                self._create_nodeport_service(
+                    podname, session, pod_uid, port=lcs_port, node_port=lcs_port
+                )
 
             elif self._is_root_controller(tree_labels):
                 self.log.info(
@@ -1635,9 +1677,9 @@ class K8sProcessManager(ProcessManager):
                 port = self._extract_port_from_cmd(boot_request)
                 if port:
                     self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
-                    self.local_connection_server_port[session] = port
-                    self.local_connection_server_node_port[session] = port
-                    self._create_nodeport_service(podname, session, pod_uid)
+                    self._create_nodeport_service(
+                        podname, session, pod_uid, port=port, node_port=port
+                    )
                 else:
                     # This case should be caught by _determine_service_type,
                     # but we handle it just in case.
@@ -1670,13 +1712,14 @@ class K8sProcessManager(ProcessManager):
         """
         try:
             lcs_port = None
-            # Early Port Extraction and Per-Session State Setup for LCS
+            # Early Port Extraction and Per-Session LCS State Setup
             if self._is_local_connection_server(tree_labels, podname):
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
-                    self.local_connection_server_podname[session] = podname
-                    self.local_connection_server_port[session] = lcs_port
-                    self.local_connection_server_node_port[session] = lcs_port
+                    lcs = self._lcs_state_for(session)
+                    lcs.podname = podname
+                    lcs.port = lcs_port
+                    lcs.node_port = lcs_port
                 else:
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
@@ -1768,15 +1811,15 @@ class K8sProcessManager(ProcessManager):
         Returns:
             cluster_ip - the ClusterIP string, or None on failure
         """
-        podname = self.local_connection_server_podname.get(session)
-        if podname is None:
+        lcs = self._lcs_state.get(session)
+        if lcs is None or lcs.podname is None:
             self.log.warning(
                 f"No local connection server registered for session '{session}'"
             )
             return None
         try:
             service = self._core_v1_api.read_namespaced_service(
-                name=podname, namespace=session
+                name=lcs.podname, namespace=session
             )
             return service.spec.cluster_ip
         except self._api_error_v1_api as e:
@@ -2135,7 +2178,7 @@ class K8sProcessManager(ProcessManager):
 
         Stage 1: waits for the pod to be Running and Ready in the Kubernetes API.
         Stage 2: waits for the NodePort to be externally reachable via HTTP.
-        Sets local_connection_server_is_booted to True on success.
+        Sets _lcs_state[session].is_booted to True on success.
 
         Args:
             podname - the name of the LCS pod to wait for
@@ -2152,7 +2195,8 @@ class K8sProcessManager(ProcessManager):
         node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
 
         # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
-        url = f"http://{node_name}:{self.local_connection_server_node_port[session]}"
+        lcs = self._lcs_state_for(session)
+        url = f"http://{node_name}:{lcs.node_port}"
 
         # Calculate remaining time for stage 2, preserving original logic
         elapsed_stage1 = time() - start_time
@@ -2165,7 +2209,7 @@ class K8sProcessManager(ProcessManager):
 
         self._wait_for_nodeport_http_ready(url, remaining_time)
 
-        self.local_connection_server_is_booted[session] = True
+        lcs.is_booted = True
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
@@ -2621,6 +2665,7 @@ class K8sProcessManager(ProcessManager):
                     self.log.info(f'Session "{session}" is empty, deleting namespace.')
                     self._core_v1_api.delete_namespace(session)
                     self.managed_sessions.remove(session)
+                    self._lcs_state.pop(session, None)
 
             except self._api_error_v1_api as e:
                 self.log.warning(f"Failed during namespace cleanup: {e}")
