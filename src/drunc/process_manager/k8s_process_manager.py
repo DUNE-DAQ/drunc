@@ -208,7 +208,13 @@ class K8sProcessManager(ProcessManager):
         self.uuids_pending_deletion = set()
         self.termination_complete_event = threading.Event()
         self.final_exit_codes = {}
-        self.local_connection_server_is_booted = False
+        # Per-session LCS state: each key is a session (k8s namespace) name.
+        # Using dicts instead of scalars allows multiple concurrent sessions,
+        # some with an LCS and some without, without cross-session interference.
+        self.local_connection_server_podname: dict[str, str | None] = {}
+        self.local_connection_server_port: dict[str, int | None] = {}
+        self.local_connection_server_node_port: dict[str, int | None] = {}
+        self.local_connection_server_is_booted: dict[str, bool] = {}
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
@@ -228,10 +234,6 @@ class K8sProcessManager(ProcessManager):
 
         # Readout app selector
         self.perf_selector = settings.get("readout_app_selector", "runp").lower()
-
-        # CONFIGURATION - connection server connection port numbers
-        self.connection_server_port = None
-        self.connection_server_node_port = None
 
         # CONFIGURATION - per-pod service port number
         service = settings.get("service", {})
@@ -808,9 +810,9 @@ class K8sProcessManager(ProcessManager):
                 ports=[
                     client.V1ServicePort(
                         protocol="TCP",
-                        port=self.connection_server_port,
-                        target_port=self.connection_server_port,
-                        node_port=self.connection_server_node_port,
+                        port=self.local_connection_server_port[session],
+                        target_port=self.local_connection_server_port[session],
+                        node_port=self.local_connection_server_node_port[session],
                     )
                 ],
             ),
@@ -820,8 +822,8 @@ class K8sProcessManager(ProcessManager):
                 namespace=session, body=service_manifest
             )
             self.log.info(
-                f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
-                f"(NodePort: {self.connection_server_node_port} for external access)"
+                f'Created NodePort service "{session}.{podname}" on port {self.local_connection_server_port[session]} '
+                f"(NodePort: {self.local_connection_server_node_port[session]} for external access)"
             )
 
         except self._api_error_v1_api as e:
@@ -836,7 +838,7 @@ class K8sProcessManager(ProcessManager):
                     is_port_conflict = True
 
             if is_port_conflict:
-                port = self.connection_server_node_port
+                port = self.local_connection_server_node_port[session]
                 error_message = (
                     f"NodePort {port} is already in use by another service. "
                     f"Cannot start '{podname}'."
@@ -1318,7 +1320,6 @@ class K8sProcessManager(ProcessManager):
             self._is_local_connection_server(tree_labels, podname)
             and lcs_port is not None
         ):
-            self.connection_server_name = podname
             container_ports.append(
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
@@ -1397,7 +1398,7 @@ class K8sProcessManager(ProcessManager):
         host_aliases = None
         if (
             not self._is_local_connection_server(tree_labels, podname)
-            and self.local_connection_server_is_booted
+            and self.local_connection_server_is_booted.get(session, False)
         ):
             connection_server_ip = None
             retry_count = 0
@@ -1625,20 +1626,17 @@ class K8sProcessManager(ProcessManager):
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
                     )
-                # This call uses class variables set in _create_pod
                 self._create_nodeport_service(podname, session, pod_uid)
 
             elif self._is_root_controller(tree_labels):
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
-                # This call also relies on class variables, so we must set them
-                # here, just as the original logic did.
                 port = self._extract_port_from_cmd(boot_request)
                 if port:
                     self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
-                    self.connection_server_port = port
-                    self.connection_server_node_port = port
+                    self.local_connection_server_port[session] = port
+                    self.local_connection_server_node_port[session] = port
                     self._create_nodeport_service(podname, session, pod_uid)
                 else:
                     # This case should be caught by _determine_service_type,
@@ -1672,12 +1670,13 @@ class K8sProcessManager(ProcessManager):
         """
         try:
             lcs_port = None
-            # Early Port Extraction and Class Variable Setup for LCS
+            # Early Port Extraction and Per-Session State Setup for LCS
             if self._is_local_connection_server(tree_labels, podname):
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
-                    self.connection_server_port = lcs_port
-                    self.connection_server_node_port = lcs_port
+                    self.local_connection_server_podname[session] = podname
+                    self.local_connection_server_port[session] = lcs_port
+                    self.local_connection_server_node_port[session] = lcs_port
                 else:
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
@@ -1760,8 +1759,8 @@ class K8sProcessManager(ProcessManager):
         Get the ClusterIP of the connection server's Kubernetes Service.
 
         Reads the named service from the session namespace and returns its
-        clusterIP. Returns None if the service cannot be found or an API
-        error occurs.
+        clusterIP. Returns None if the session has no LCS, the service cannot
+        be found, or an API error occurs.
 
         Args:
             session - the Kubernetes namespace (session) containing the service
@@ -1769,9 +1768,15 @@ class K8sProcessManager(ProcessManager):
         Returns:
             cluster_ip - the ClusterIP string, or None on failure
         """
+        podname = self.local_connection_server_podname.get(session)
+        if podname is None:
+            self.log.warning(
+                f"No local connection server registered for session '{session}'"
+            )
+            return None
         try:
             service = self._core_v1_api.read_namespaced_service(
-                name=self.connection_server_name, namespace=session
+                name=podname, namespace=session
             )
             return service.spec.cluster_ip
         except self._api_error_v1_api as e:
@@ -2147,7 +2152,7 @@ class K8sProcessManager(ProcessManager):
         node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
 
         # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
-        url = f"http://{node_name}:{self.connection_server_node_port}"
+        url = f"http://{node_name}:{self.local_connection_server_node_port[session]}"
 
         # Calculate remaining time for stage 2, preserving original logic
         elapsed_stage1 = time() - start_time
@@ -2160,7 +2165,7 @@ class K8sProcessManager(ProcessManager):
 
         self._wait_for_nodeport_http_ready(url, remaining_time)
 
-        self.local_connection_server_is_booted = True
+        self.local_connection_server_is_booted[session] = True
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
