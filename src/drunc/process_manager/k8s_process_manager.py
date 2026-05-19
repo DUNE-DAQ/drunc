@@ -9,7 +9,7 @@ import threading
 import urllib.error
 import urllib.request
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from time import sleep, time
 
 # Local Application Imports
@@ -1435,32 +1435,33 @@ class K8sProcessManager(ProcessManager):
             host_aliases - a list containing a single V1HostAlias mapping localhost
                            to the connection server IP, or None if not applicable
         """
-        host_aliases = None
+        lcs = self._lcs_state.get(session)
         if (
-            not self._is_local_connection_server(tree_labels, podname)
-            and self._lcs_state.get(session, _LcsSessionState()).is_booted
+            self._is_local_connection_server(tree_labels, podname)
+            or lcs is None
+            or not lcs.is_booted
         ):
-            connection_server_ip = None
-            retry_count = 0
-            max_retries = 10
-            while not connection_server_ip and retry_count < max_retries:
-                connection_server_ip = self._get_connection_server_cluster_ip(session)
-                if not connection_server_ip:
-                    sleep(1)
-                    retry_count += 1
+            return None
 
-            if connection_server_ip:
-                host_aliases = [
-                    client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
-                ]
-                self.log.info(
-                    f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
-                )
-            else:
-                self.log.warning(
-                    f"Could not get connection server ClusterIP for pod '{podname}'"
-                )
-        return host_aliases
+        connection_server_ip = None
+        retry_count = 0
+        max_retries = 10
+        while not connection_server_ip and retry_count < max_retries:
+            connection_server_ip = self._get_connection_server_cluster_ip(session)
+            if not connection_server_ip:
+                sleep(1)
+                retry_count += 1
+
+        if connection_server_ip:
+            self.log.info(
+                f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
+            )
+            return [client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])]
+
+        self.log.warning(
+            f"Could not get connection server ClusterIP for pod '{podname}'"
+        )
+        return None
 
     def _determine_service_type(
         self, podname: str, boot_request: BootRequest, tree_labels: dict[str, str]
