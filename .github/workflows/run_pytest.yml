@@ -21,45 +21,15 @@ jobs:
           echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git
           echo https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/drunc.git
 
-      - name: Install SSH and run the daemon
-        run: |
-          dnf install -y openssh-server
-          dnf install -y openssh-clients
-          ssh-keygen -A
-          mkdir -p /root/.ssh
-          ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
-          cat /root/.ssh/id_rsa.pub >> /root/.ssh/authorized_keys
-          chmod 600 /root/.ssh/authorized_keys
-          chmod 600 /root/.ssh/id_rsa
-          
-          # Create SSH config file in the correct location
-          cat > /root/.ssh/config << 'EOF'
-          Host localhost
-              HostName 127.0.0.1
-              User root
-              IdentityFile /root/.ssh/id_rsa
-              StrictHostKeyChecking no
-              UserKnownHostsFile /dev/null
-          EOF
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
 
-          # Start SSH daemon
-          /usr/sbin/sshd
-
-          # Test SSH connection
-          ssh localhost echo "SSH is working"
+      - name: Setup SSH daemon
+        uses: ./.github/actions/setup-ssh-daemon
 
       - name: Set up dev nightly
         if: ${{ !cancelled() }}
-        run: |
-          mkdir nightly
-          cd nightly
-          source /cvmfs/dunedaq.opensciencegrid.org/setup_dunedaq.sh
-          setup_dbt latest_v5
-          dbt-create -n last_fddaq
-          cd NFD_DEV*
-          source env.sh
-          dbt-build
-          dbt-workarea-env
+        uses: ./.github/actions/setup-dev-nightly
 
       - name: Install druncschema and drunc
         if: success()
