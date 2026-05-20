@@ -209,15 +209,8 @@ def check_hardware(ip: str) -> dict:
                         grpc_future.result(timeout=2.0)
                     if hasattr(rep, "femb_power") and len(rep.femb_power) == 4:
                         final_status["fembs"] = list(rep.femb_power)
-                    else:
-                        final_status["fembs"] = [False] * 4
-                except (TimeoutError, Exception):
-                    final_status["fembs"] = [False] * 4
-            else:
-                final_status["fembs"] = [False] * 4
-        else:
-            final_status["online"] = False
-            final_status["fembs"] = [False] * 4
+                except Exception:
+                    pass
 
     except Exception:
         # Catch-all for timeouts or subprocess errors
