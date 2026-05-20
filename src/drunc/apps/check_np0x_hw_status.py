@@ -368,6 +368,25 @@ def main():
     # later reference
     futures = {executor.submit(check_hardware, ip): ip for ip in all_ips}
 
+    # If the WIB library is not available, print a warning message to the user. This is
+    # done after the main display loop to ensure it doesn't interfere with the
+    # live-updating tables. The message provides guidance on how to resolve the issue if
+    # the library is not found, or informs the user that the WIB firmware repository is
+    # not present if that's the case. The warning is styled to stand out and is enclosed
+    # in horizontal lines for emphasis.
+    if not WIB_LIB_AVAILABLE:
+        console.print("-" * 40)
+        console.print("[bold yellow]Hardware Communication Warning:[/]")
+        if WIB_FW_SW_IFACE_PATH:
+            console.print(
+                f"Modules found but not loaded. Try running [red]pip install zmq[/] and [red]make -o build/%.d python[/] in:\n[blue]{WIB_FW_SW_IFACE_PATH}[/]"
+            )
+        else:
+            console.print(
+                "Couldnt check wib status. [italic]dune-wib-firmware[/italic] repo not found."
+            )
+        console.print("-" * 40)
+
     # Use a Live context to update the display as results come in. As each future
     # completes, the corresponding IP's result is updated in the results map, and the
     # display is refreshed to show the new status. A final update is done after all
@@ -394,25 +413,6 @@ def main():
     # Print final status summary and any warnings about hardware communication if the
     # WIB library is not available.
     console.print("\n[bold green]Scan complete.[/]")
-
-    # If the WIB library is not available, print a warning message to the user. This is
-    # done after the main display loop to ensure it doesn't interfere with the
-    # live-updating tables. The message provides guidance on how to resolve the issue if
-    # the library is not found, or informs the user that the WIB firmware repository is
-    # not present if that's the case. The warning is styled to stand out and is enclosed
-    # in horizontal lines for emphasis.
-    if not WIB_LIB_AVAILABLE:
-        console.print("-" * 40)
-        console.print("[bold yellow]Hardware Communication Warning:[/]")
-        if WIB_FW_SW_IFACE_PATH:
-            console.print(
-                f"Modules found but not loaded. Try running [red]pip install zmq[/] and [red]make -o build/%.d python[/] in:\n[blue]{WIB_FW_SW_IFACE_PATH}[/]"
-            )
-        else:
-            console.print(
-                "Couldnt check wib status. [italic]dune-wib-firmware[/italic] repo not found."
-            )
-        console.print("-" * 40)
 
 
 if __name__ == "__main__":
