@@ -12,6 +12,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from datetime import datetime
 
+import click
 import pytz
 from rich import box
 from rich.columns import Columns
@@ -34,17 +35,11 @@ def setup_wib_path():
 
     Returns:
         str or None: The path to the dune-wib-firmware/sw directory if found, else None.
-
-    Raises:
-        EnvironmentError: If DBT_AREA_ROOT is not set in the environment.
     """
     # Define the root of this work area to start the search from
     work_area_root = os.getenv("DBT_AREA_ROOT", None)
     if not work_area_root:
-        raise EnvironmentError(
-            "DBT_AREA_ROOT environment variable not set, ensure you are running from a "
-            "DUNE DAQ release."
-        )
+        return None
 
     # Define potential search paths
     search_paths = [
@@ -324,6 +319,13 @@ def generate_display(results_map: dict) -> Table:
     return grid
 
 
+@click.command(
+    name="drunc-check-np04-hw",
+    help=(
+        "Check NP0x WIB reachability and FEMB power status. "
+        "Each WIB is pinged first, then queried for FEMB status when reachable."
+    ),
+)
 def main():
     """
     Prints the power status of the hardware defined in WIB_DATA.
