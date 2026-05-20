@@ -9,7 +9,7 @@ Including the AMCs is planned for the future.
 import os
 import subprocess
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from datetime import datetime
 
 import pytz
@@ -203,13 +203,15 @@ def check_hardware(ip: str) -> dict:
                     wib_inst = WIB(ip)
                     req = wibpb.GetFEMBStatus()
                     rep = wibpb.GetFEMBStatus.FEMBStatus()
-                    # We wrap this in a sub-try because gRPC can hang
-                    wib_inst.send_command(req, rep)
+                    # Run command in a short-lived worker to enforce a hard timeout
+                    with ThreadPoolExecutor(max_workers=1) as grpc_exec:
+                        grpc_future = grpc_exec.submit(wib_inst.send_command, req, rep)
+                        grpc_future.result(timeout=2.0)
                     if hasattr(rep, "femb_power") and len(rep.femb_power) == 4:
                         final_status["fembs"] = list(rep.femb_power)
                     else:
                         final_status["fembs"] = [False] * 4
-                except Exception:
+                except (TimeoutError, Exception):
                     final_status["fembs"] = [False] * 4
             else:
                 final_status["fembs"] = [False] * 4
