@@ -341,7 +341,7 @@ def main():
     # Print header with timestamp
     now = datetime.now(pytz.UTC)
     console.print(
-        "\n[bold cyan]Checking NP0x hardware status at "
+        "\n[bold cyan]Checking NP0x online status at "
         f"{now.strftime('%Y-%m-%d %H:%M:%S %Z')}[/]\n"
     )
 
@@ -383,6 +383,20 @@ def main():
                 "Couldnt check wib status. [italic]dune-wib-firmware[/italic] repo not found."
             )
         console.print("-" * 40)
+
+    # Print the key for the display icons. This is done before the live display loop so
+    # that it remains static and doesn't get overwritten by the live updates. The key
+    # explains the meaning of the colors and symbols used in the tables (green
+    # checkmarks for online/powered, red Xs for offline/unpowered).
+    console.print("-" * 40)
+    console.print(
+        "[bold cyan]Table key values[/]\n"
+        "[white]... Checking WIB online...[/]\n"
+        "[dim white]... Checking FEMB online...[/]\n"
+        "[bold green]✔ Online/Powered[/]\n"
+        "[bold red]✘ Offline/Not Powered[/]"
+    )
+    console.print("-" * 40)
 
     # Use a Live context to update the display as results come in. As each future
     # completes, the corresponding IP's result is updated in the results map, and the
