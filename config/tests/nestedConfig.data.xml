@@ -234,6 +234,7 @@
  </rel>
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+ <rel name="resource_manager" class="ResourceManagerConf" id="ResourceManagerConf_test"/>
 </obj>
 
 <obj class="Session" id="test-nested-config-failure-on-init">

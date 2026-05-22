@@ -214,3 +214,21 @@ def generate_fsm_sequence_command(
     )(cmd)
 
     return cmd, format_name_for_cli(sequence.id)
+
+
+def resource_log_tree(data, log, prefix=""):
+    items = list(data.items())
+    total = len(items)
+
+    for i, (key, value) in enumerate(items):
+        is_last = i == total - 1
+        connector = "└── " if is_last else "├── "
+
+        # Check if the value is a nested segment (resources stored as dict)
+        if isinstance(value, dict) and value:
+            extension = "    " if is_last else "│   "
+            resource_log_tree(value, prefix + extension)
+
+        else:
+            display_val = str(value)
+            log.info(f"{prefix}{connector}{key}: {display_val}")

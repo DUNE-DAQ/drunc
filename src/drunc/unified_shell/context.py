@@ -3,6 +3,7 @@ from enum import Enum
 
 from druncschema.token_pb2 import Token
 
+from drunc.resource_manager.client import ResourceManagerClient
 from drunc.utils.shell_utils import ShellContext
 
 
@@ -27,6 +28,12 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
         self.batch_commands: list(str) = []
+        self.managed_objects: dict[
+            str : list(str)
+        ] = {}  # segment: list[managed_object_identifier]
+        self.managed_objects_present: bool = False
+        self.resource_manager_client: ResourceManagerClient | None = None
+        self.session_resources: list[str] = []
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):

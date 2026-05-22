@@ -55,11 +55,11 @@ from drunc.process_manager.interface.commands import (
     logs,
     ps,
     restart,
-    terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
+from drunc.resource_manager.client import ResourceManagerClient
+from drunc.unified_shell.commands import boot, start_shell, terminate
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -183,6 +183,19 @@ def unified_shell(
     db = conffwk.Configuration(ctx.obj.configuration_file)
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
+
+    # Get the session manager URL - FOR DEV
+    resource_manager_url = getattr(session_dal, "resource_manager", None)
+    if not resource_manager_url:
+        ctx.obj.log.info("No resource manager URL found in the configuration.")
+    else:
+        resource_manager_host = resource_manager_url.address
+        resource_manager_port = resource_manager_url.port
+        resource_manager_url = f"http://{resource_manager_host}:{resource_manager_port}"
+        ctx.obj.log.info(
+            f"Resource manager URL parsed from configuration: [green]{resource_manager_url}[/green]"
+        )
+        ctx.obj.resource_manager_client = ResourceManagerClient(resource_manager_url)
 
     ctx.obj.log.info(
         f"[green]Setting up to use the process manager[/green] with configuration "
@@ -314,8 +327,10 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands: list[click.Command] = [boot, terminate]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
@@ -424,7 +439,14 @@ def unified_shell(
 
         # Attempt a stateful shutdown of the controller if possible, returning to
         # initial state before terminating
-        if ctx.obj.get_driver("controller", quiet_fail=True):
+        if (
+            len(
+                ctx.obj.get_driver("process_manager")
+                .ps(ProcessQuery(user=getpass.getuser(), session=ctx.obj.session_name))
+                .values
+            )
+            > 0
+        ) and ctx.obj.get_driver("controller", quiet_fail=True):
             try:
                 if ctx.obj.get_driver("controller").status().status.in_error:
                     ctx.obj.log.warning(
@@ -466,7 +488,11 @@ def unified_shell(
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            terminate_cmd = ctx.command.get_command(ctx, "terminate")
+            if terminate_cmd:
+                ctx.invoke(terminate_cmd)
+            else:
+                ctx.obj.log.error("Command 'terminate' not found.")
 
         # Check if any processes are still running
         if (
