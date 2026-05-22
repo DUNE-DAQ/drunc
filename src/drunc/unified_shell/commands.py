@@ -191,7 +191,7 @@ def boot(
         ]
         missing_resources = set(ctx.obj.session_resources) - set(allocated_resources)
         if missing_resources:
-            color_coded_missing_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in missing_resources])
+            color_coded_missing_resources_str = ", ".join([f"[red]{r}[/red]" for r in missing_resources])
             log.error(
                 f"After requesting resources, resources {color_coded_missing_resources_str} have not been allocated, stopping boot. Allocated resources will need to be manually released. "
             )
@@ -324,7 +324,7 @@ def terminate(ctx, obj):
 
     # Query the resources from the resource manager to check for availability
     if ctx.obj.resource_manager_client and ctx.obj.session_resources and ctx.obj.managed_objects_present:
-        released_resources_str = [f"[green]{r.strip("'")}[/]" for r in ctx.obj.session_resources]
+        released_resources_str = [f"[green]{r}[/]" for r in ctx.obj.session_resources]
 
         log.info(
             f"Releasing the requested resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {released_resources_str}"
@@ -344,14 +344,14 @@ def terminate(ctx, obj):
         ]
         missing_resources = set(ctx.obj.session_resources) - set(allocated_resources)
         if missing_resources:
-            color_coded_missing_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in missing_resources])
+            color_coded_missing_resources_str = ", ".join([f"[red]{r}[/red]" for r in missing_resources])
             log.error(
                 f"Upon terrmination, resources {color_coded_missing_resources_str} are not allocated to session {ctx.obj.session_name}, skipping resource release. Allocated resources will need to be manually released."
             )
             log.debug(f"Response: {query_resource_response}")
         else:
             # Release the requested resources from the resource manager
-            release_resource_response = ctx.obj.resource_manager_client.release_resources(
+            ctx.obj.resource_manager_client.release_resources(
                 ctx.obj.session_resources,
                 ctx.obj.configuration_id,
             )
@@ -369,7 +369,7 @@ def terminate(ctx, obj):
                 if resource.get("session_name") == ctx.obj.session_name and resource.get("user_name") == getpass.getuser()
             ]
             if remaining_session_allocated_resources:
-                color_coded_remaining_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in remaining_session_allocated_resources])
+                color_coded_remaining_resources_str = ", ".join([f"[red]{r}[/red]" for r in remaining_session_allocated_resources])
                 log.critical(f"Resources {color_coded_remaining_resources_str} were not appropriately released, manually release these prior to starting any more runs.")
                 ctx.obj.managed_objects = {}
                 ctx.obj.managed_objects_present = False
