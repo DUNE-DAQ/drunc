@@ -8,6 +8,8 @@ from drunc.grpc_testing_tools.connection_utils import wait_for
 from tests.processes.test_ssh_process_lifetime_manager_common import (
     boot_processes_and_kill_individually,
     boot_processes_and_terminate_all_same_role,
+    boot_processes_and_verify_exit_state_messages,
+    capture_process_pid_snapshots,
     create_boot_request,
     verify_all_processes_alive,
     verify_all_processes_dead,
@@ -37,6 +39,16 @@ def test_ssh_terminate_all_same_role_forked(ssh_manager_forked):
     resource cleanup.
     """
     boot_processes_and_terminate_all_same_role(ssh_manager_forked, Path(__file__))
+
+
+def test_ssh_exit_status_messages_for_kill_paths_forked(ssh_manager_forked):
+    """
+    Verify forked shell manager emits correct exit-status messages for all kill paths.
+
+    Boots one process per exit-status scenario, triggers all required kill modes
+    concurrently, and validates callback-delivered ExitStatus source and message.
+    """
+    boot_processes_and_verify_exit_state_messages(ssh_manager_forked, Path(__file__))
 
 
 def boot_processes_and_terminate_all_different_role_forked(test_file_path):
@@ -137,6 +149,8 @@ def boot_processes_and_terminate_all_different_role_forked(test_file_path):
             verify_all_processes_alive(manager, process_uuids, len(process_configs))
             verify_log_output(manager, process_uuids, process_info)
 
+            pid_snapshots = capture_process_pid_snapshots(manager, process_uuids)
+
             print("\n=== Terminating all processes (role-based shutdown, forked) ===")
             exit_codes = manager.kill_processes(
                 process_uuids,
@@ -180,7 +194,7 @@ def boot_processes_and_terminate_all_different_role_forked(test_file_path):
                 "'application' before 'segment-controller'"
             )
 
-            verify_cleanup_complete(manager)
+            verify_cleanup_complete(manager, pid_snapshots=pid_snapshots)
 
         finally:
             manager.shutdown()
@@ -280,6 +294,8 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
         )
         assert process_alive, "Process should be alive before kill"
 
+        pid_snapshots = capture_process_pid_snapshots(manager, [process_uuid])
+
         manager.kill_process(process_uuid, timeout=10.0)
 
         # Allow time for the exit event to propagate from child to parent.
@@ -294,5 +310,7 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
         assert callback_results.get("exit_code") is not None, (
             "Callback should receive a non-None exit code"
         )
+
+        verify_cleanup_complete(manager, pid_snapshots=pid_snapshots)
     finally:
         manager.shutdown()
