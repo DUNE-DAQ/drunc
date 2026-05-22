@@ -45,7 +45,9 @@ class ResourceManagerClient:
 
             # Log the successful response
             return response.json()
-
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            self.log.error(f"Failed to connect to Resource Manager at {endpoint}: {e}")
+            return None
         except requests.exceptions.HTTPError:
             self.log.warning(f"Request failed with status {response.status_code}")
             self.log.debug(f"Response content: {response.text}")
@@ -56,7 +58,7 @@ class ResourceManagerClient:
 
     def query_resources(
         self, resources: list[str], owner: str, session_id: str, session_name: str
-    ):
+    ) -> dict[str]:
         """
         Query the Resource Manager for the status of the specified resources.
 
@@ -71,14 +73,16 @@ class ResourceManagerClient:
         """
         payload = {
             "names": ",".join(resources),
+            "session_id": session_id,
+            "session_name": session_name,
+            "user_name": owner,
         }
         endpoint = f"{self.url}/api/query_resource/"
-
         return self._send_request(endpoint, payload)
 
     def request_resources(
         self, resources: list[str], owner: str, session_id: str, session_name: str
-    ):
+    ) -> dict[str]:
         """
         Request resources from the Resource Manager for isolation during the run.
 
@@ -101,7 +105,7 @@ class ResourceManagerClient:
 
         return self._send_request(endpoint, payload)
 
-    def release_resources(self, resources: list[str], session_id: str):
+    def release_resources(self, resources: list[str], session_id: str) -> dict[str]:
         """
         Release resources from the Resource Manager for other runs to use.
 

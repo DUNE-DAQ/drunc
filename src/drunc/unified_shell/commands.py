@@ -122,17 +122,83 @@ def boot(
         r for r in session_resources if not r.startswith("storage:")
     ]
 
-    # Request the resources from the resource manager
+    # Query the resources from the resource manager to check for availability
     if ctx.obj.resource_manager_client and ctx.obj.session_resources:
         log.info(
-            f"Requesting the following resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {', '.join(ctx.obj.session_resources)}"
+            f"Validating the availability of the requested resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {', '.join(ctx.obj.session_resources)}"
         )
-        ctx.obj.resource_manager_client.request_resources(
+
+        # Query the resource manager to check if the requested resources are available,
+        # and if so, request them. Note that we do this prior to booting any processes,
+        # to avoid booting processes and then having the resource manager deny the
+        # availability of the requested resources.
+        query_resources_response = ctx.obj.resource_manager_client.query_resources(
             ctx.obj.session_resources,
             getpass.getuser(),
             ctx.obj.configuration_id,
             session_name,
         )
+
+        if query_resources_response.get("missing", True):
+            log.error(
+                f"The resource manager reports that the requested resources are not available. Response: {query_resources_response}"
+            )
+            return
+
+        # Validate that the requested resources are available in the resource manager
+        query_resource_response = ctx.obj.resource_manager_client.query_resources(
+            ctx.obj.session_resources,
+            getpass.getuser(),
+            ctx.obj.configuration_id,
+            session_name,
+        )
+        unavailable_resources = [
+            resource.get("name") for resource in query_resource_response.get("query_results", []) 
+            if resource.get("session_name") != None
+        ]
+
+        # If there are any unavailable resources, log them and block booting, as 
+        # the resources required to take the run are unavailable
+        if unavailable_resources:
+            log.error(f"Resources {unavailable_resources} are not available, blocking run.")
+            return
+        else:
+            log.info(f"Resources {ctx.obj.session_resources} are available.")
+
+        # Allocate the requested resources in the resource manager
+        request_resource_response = ctx.obj.resource_manager_client.request_resources(
+            ctx.obj.session_resources,
+            getpass.getuser(),
+            ctx.obj.configuration_id,
+            session_name,
+        )
+
+        # Check that the allocated resources match the requested resources, if not,
+        # log an error and block booting to avoid potential issues with processes
+        # booting without the required resources. Note that we check the allocated
+        # resources for this session and user, to avoid issues where other
+        # sessions/users have requested the same resources. The query checks the 
+        # resources against both the session name and user name.
+        query_resource_response = ctx.obj.resource_manager_client.query_resources(
+            ctx.obj.session_resources,
+            getpass.getuser(),
+            ctx.obj.configuration_id,
+            session_name,
+        )
+        allocated_resources = [
+            resource.get("name") for resource in query_resource_response.get("query_results", []) 
+            if resource.get("session_name") == session_name and resource.get("user_name") == getpass.getuser()
+        ]
+        missing_resources = set(ctx.obj.session_resources) - set(allocated_resources)
+        if missing_resources:
+            color_coded_missing_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in missing_resources])
+            log.error(
+                f"After requesting resources, resources {color_coded_missing_resources_str} have not been allocated, stopping boot. Allocated resources will need to be manually released. "
+            )
+            log.debug(f"Response: {request_resource_response}")
+            return
+        else:
+            log.info(f"Resources {ctx.obj.session_resources} have been allocated.")
 
     processes = obj.get_driver("process_manager").ps(
         ProcessQuery(user=user, session=session_name)
@@ -255,17 +321,62 @@ def terminate(ctx, obj):
         log.info(
             f"[yellow]Empty segments (skipped):[/yellow] {', '.join(empty_segments)}"
         )
-    ctx.obj.managed_objects = {}
-    ctx.obj.managed_objects_present = False
 
-    if ctx.obj.resource_manager_client and ctx.obj.session_resources:
+    # Query the resources from the resource manager to check for availability
+    if ctx.obj.resource_manager_client and ctx.obj.session_resources and ctx.obj.managed_objects_present:
+        released_resources_str = [f"[green]{r.strip("'")}[/]" for r in ctx.obj.session_resources]
+
         log.info(
-            f"Releasing the following resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {', '.join(ctx.obj.session_resources)}"
+            f"Releasing the requested resources from the resource manager at '{ctx.obj.resource_manager_client.url}': {released_resources_str}"
         )
-        ctx.obj.resource_manager_client.release_resources(
-            ctx.obj.session_resources, getpass.getuser()
+
+        # Query the resource manager to check if the requested resources are correctly
+        # allocated prior to releasing
+        query_resource_response = ctx.obj.resource_manager_client.query_resources(
+            ctx.obj.session_resources,
+            getpass.getuser(),
+            ctx.obj.configuration_id,
+            ctx.obj.session_name,
         )
-        ctx.obj.session_resources = []
+        allocated_resources = [
+            resource.get("name") for resource in query_resource_response.get("query_results", []) 
+            if resource.get("session_name") == ctx.obj.session_name and resource.get("user_name") == getpass.getuser()
+        ]
+        missing_resources = set(ctx.obj.session_resources) - set(allocated_resources)
+        if missing_resources:
+            color_coded_missing_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in missing_resources])
+            log.error(
+                f"Upon terrmination, resources {color_coded_missing_resources_str} are not allocated to session {ctx.obj.session_name}, skipping resource release. Allocated resources will need to be manually released."
+            )
+            log.debug(f"Response: {query_resource_response}")
+        else:
+            # Release the requested resources from the resource manager
+            release_resource_response = ctx.obj.resource_manager_client.release_resources(
+                ctx.obj.session_resources,
+                ctx.obj.configuration_id,
+            )
+            query_resource_response = ctx.obj.resource_manager_client.query_resources(
+                ctx.obj.session_resources,
+                getpass.getuser(),
+                ctx.obj.configuration_id,
+                ctx.obj.session_name,
+            )
+
+            # Check that the resources have been released correctly, if not, log an 
+            # error
+            remaining_session_allocated_resources = [
+                resource.get("name") for resource in query_resource_response.get("query_results", []) 
+                if resource.get("session_name") == ctx.obj.session_name and resource.get("user_name") == getpass.getuser()
+            ]
+            if remaining_session_allocated_resources:
+                color_coded_remaining_resources_str = ", ".join([f"[red]{r.strip("'")}[/red]" for r in remaining_session_allocated_resources])
+                log.critical(f"Resources {color_coded_remaining_resources_str} were not appropriately released, manually release these prior to starting any more runs.")
+                ctx.obj.managed_objects = {}
+                ctx.obj.managed_objects_present = False
+            else:
+                log.info(f"Resources {', '.join(released_resources_str)} have been released.")
+                ctx.obj.managed_objects = {}
+                ctx.obj.managed_objects_present = False
 
     obj.get_driver("process_manager").terminate()
 
