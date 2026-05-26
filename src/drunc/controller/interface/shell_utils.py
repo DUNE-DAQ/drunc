@@ -834,7 +834,8 @@ def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     try:
         ip_address = ipaddress.ip_address(ip_or_host)
     except ValueError:
-        return ip_or_host
+        fqdn = socket.getfqdn(ip_or_host)
+        return fqdn if fqdn else ip_or_host
 
     if ip_address.is_loopback:
         return socket.gethostname()
