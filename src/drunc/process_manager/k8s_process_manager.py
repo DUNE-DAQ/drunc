@@ -42,6 +42,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
+    compute_role_from_boot_request,
     format_hostname,
     on_parent_exit,
     validate_k8s_session_name,
@@ -1049,49 +1050,14 @@ class K8sProcessManager(ProcessManager):
             A dictionary of labels containing 'tree-id.{drunc_label}' and
             'role.{drunc_label}' keys with their corresponding values.
         """
-        role = "unknown"
+        role = compute_role_from_boot_request(boot_request)
 
         labels = {f"tree-id.{self.drunc_label}": tree_id}
-
-        if not tree_id:
-            role = "unknown"
-        elif self._is_controller_executable(boot_request):
-            if tree_id == "0":
-                role = "root-controller"
-            elif tree_id.startswith("0."):
-                role = "segment-controller"
-            else:
-                role = "infrastructure-applications"  # controller outside segment tree
-
-        else:
-            if tree_id.startswith("0."):
-                role = "application"
-            else:
-                role = "infrastructure-applications"
-
         labels[f"role.{self.drunc_label}"] = role
         self.log.info(
             f"Assigning labels for '{podname}': role={role}, tree-id={tree_id}"
         )
         return labels
-
-    def _is_controller_executable(self, boot_request: BootRequest) -> bool:
-        """
-        Check whether the boot request's main executable is a drunc-controller.
-
-        Inspects all executable-and-arguments entries in the process description
-        for the 'drunc-controller' executable name.
-
-        Args:
-            boot_request: The BootRequest to inspect.
-
-        Returns:
-            True if any executable entry is 'drunc-controller', False otherwise.
-        """
-        for e_and_a in boot_request.process_description.executable_and_arguments:
-            if e_and_a.exec == "drunc-controller":
-                return True
-        return False
 
     def _build_container_env(
         self, boot_request: BootRequest, tree_labels: dict[str, str]

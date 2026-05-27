@@ -84,22 +84,20 @@ class ProcessMetadata:
         """
         Determines the role of a process based on its tree_id and executable type.
 
-        Mirrors the role mapping used by the K8s process manager:
             - empty tree_id                             -> "unknown"
-            - tree_id == "0" + is_controller            -> "root-controller"
-            - tree_id == "1"                            -> "local-connection-server"
-            - tree_id starts with "0." + is_controller  -> "segment-controller"
-            - tree_id starts with "0." + not controller -> "application" (any depth)
-            - otherwise                                 -> "infrastructure-applications"
+            - is_controller + tree_id == "0"            -> "root-controller"
+            - is_controller + tree_id starts with "0."  -> "segment-controller"
+            - is_controller + otherwise                 -> "infrastructure-applications"
+            - not controller + tree_id starts with "0." -> "application"
+            - not controller + otherwise                -> "infrastructure-applications"
 
         Args:
             tree_id: Dot-separated hierarchical identifier (e.g. "0", "0.1", "0.1.2.3").
             is_controller: True if the process executable is a drunc-controller.
 
         Returns:
-            Role string: "root-controller",
-                        "segment-controller", "application",
-                        "infrastructure-applications", or "unknown"
+            Role string: "root-controller", "segment-controller", "application",
+                         "infrastructure-applications", or "unknown"
         """
         if not tree_id:
             return "unknown"
@@ -109,7 +107,7 @@ class ProcessMetadata:
             elif tree_id.startswith("0."):
                 return "segment-controller"
             else:
-                return "infrastructure-applications"
+                return "infrastructure-applications" # controller outside segment tree
         else:
             if tree_id.startswith("0."):
                 return "application"

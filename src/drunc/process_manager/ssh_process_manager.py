@@ -236,7 +236,7 @@ class SSHProcessManager(ProcessManager):
 
             return result
 
-        self.log.info("No processes to terminate.")
+        self.log.info("No known process to kill before exiting")
 
         return ProcessInstanceList(
             name=self.name,
