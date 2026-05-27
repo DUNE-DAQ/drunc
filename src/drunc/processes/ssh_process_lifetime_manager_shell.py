@@ -687,34 +687,29 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         uuids_to_kill = []
         with self.lock:
             for uuid in candidate_uuids:
-                metadata = self.metadata.get(uuid, None)
-                if metadata and metadata.role == role:
-                    uuids_to_kill.append(uuid)
-                    if uuid not in process_timeouts:
-                        process_timeouts[uuid] = (
-                            self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
-                        )
+                metadata = self.metadata.get(uuid)
+                if metadata is None or metadata.role != role:
+                    continue
+
+                uuids_to_kill.append(uuid)
+                process_timeouts.setdefault(
+                    uuid,
+                    self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+                )
 
         if not uuids_to_kill:
-            self.log.debug(f"No processes found with role '{role}' in candidate list")
             return {}
 
-        self.log.info(
-            f"Killing {len(uuids_to_kill)} process(es) with role '{role}' "
-            f"from {len(candidate_uuids)} candidates"
-        )
+        self.log.info(f"Killing {len(uuids_to_kill)} process(es) with role '{role}'")
 
         exit_statuses: Dict[str, Optional[ExitStatus]] = {}
 
-        # Terminate processes asynchronously using thread pool
         with ThreadPoolExecutor(max_workers=len(uuids_to_kill)) as executor:
-            # Submit kill tasks for all matching processes
             future_to_uuid = {
                 executor.submit(self.kill_process, uuid, process_timeouts[uuid]): uuid
                 for uuid in uuids_to_kill
             }
 
-            # Collect results as they complete
             for future in as_completed(future_to_uuid):
                 uuid = future_to_uuid[future]
                 try:
@@ -758,20 +753,24 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 process_timeouts[uuid] = self.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
 
         all_exit_statuses: Dict[str, Optional[ExitStatus]] = {}
-        killed_uuids: set[str] = set()
+        killed_uuids = set()
 
         # Execute role-based shutdown in stages
         for role in PROCESS_SHUTDOWN_ORDERING:
-             # Only log and act when there are processes with this role
-            uuids_in_role = [
-                uuid for uuid in uuids
-                if self.metadata.get(uuid) and self.metadata[uuid].role == role
-            ]
+            with self.lock:
+                uuids_in_role = [
+                    uuid
+                    for uuid in uuids
+                    if (metadata := self.metadata.get(uuid)) is not None
+                    and metadata.role == role
+                ]
+
+            # Match k8s PM behavior: if role is absent, do not log/start/end a stage.
             if not uuids_in_role:
                 continue
 
             self.log.info(
-                f"--- Shutdown stage: Terminating role '{role}' from provided UUIDs ---"
+                f"--- Termination of role '{role}' ({len(uuids_in_role)} process(es)) ---"
             )
             role_exit_statuses = self.kill_processes_by_role(
                 role, uuids, process_timeouts=process_timeouts
@@ -1010,27 +1009,29 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             ProcessMetadata instance if file exists and is valid, None otherwise
         """
         try:
-            # Build user@host string for SSH connection
             user_host = f"{user}@{hostname}"
 
-            # Build SSH arguments including connection parameters
-            arguments = self._build_ssh_arguments(hostname, user_host)
+            # Metadata read is non-interactive and machine-readable.
+            arguments = self._build_ssh_arguments(
+                hostname,
+                user_host,
+                use_tty=False,
+            )
 
-            # Remote command: wait for file to exist, then read it
-            # Polls every 50ms, times out after specified duration
             remote_command = (
-                f"timeout {timeout} bash -c '"
-                f"while [ ! -f {metadata_file} ]; do sleep 0.05; done; "
-                f"cat {metadata_file}"
+                f"timeout {timeout} sh -c '"
+                f'metadata_file="{metadata_file}"; '
+                f'while [ ! -s "$metadata_file" ]; do sleep 0.05; done; '
+                f'cat "$metadata_file"'
                 f"'"
             )
             arguments.append(remote_command)
 
-            # Execute SSH command to wait for and read file (single round-trip)
             result = self.ssh(*arguments)
             json_content = str(result).strip()
 
-            # Parse JSON content and instantiate metadata object
+            self.log.debug(f"Metadata content for {uuid}: {json_content!r}")
+
             metadata = ProcessMetadata.from_json(json_content)
 
             with self.lock:
@@ -1041,7 +1042,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             return metadata
 
         except Exception as e:
-            self.log.debug(f"Failed to read metadata for {uuid}: {e}")
+            self.log.warning(f"Failed to read metadata for {uuid}: {e}")
             return None
 
     def _handle_external_client_sigquit(
@@ -1139,7 +1140,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 e_and_a.exec == "drunc-controller"
                 for e_and_a in boot_request.process_description.executable_and_arguments
             )
-            role = ProcessMetadata.compute_role_from_tree_id(tree_id, is_controller=is_controller)
+            role = ProcessMetadata.compute_role_from_tree_id(
+                tree_id, is_controller=is_controller
+            )
 
             remote_metadata_json = (
                 f"{{\"pid\": '$PID', "

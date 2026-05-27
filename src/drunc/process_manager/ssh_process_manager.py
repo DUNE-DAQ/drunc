@@ -222,8 +222,6 @@ class SSHProcessManager(ProcessManager):
         self.log.info("Terminating")
 
         if self.boot_request:
-            self.log.info("Killing all the known processes before exiting")
-
             # Build query to match all processes
             query = ProcessQuery(names=[".*"])
             uuids = ProcessManager._match_processes_against_query(
@@ -238,7 +236,7 @@ class SSHProcessManager(ProcessManager):
 
             return result
 
-        self.log.info("No known process to kill before exiting")
+        self.log.info("No processes to terminate.")
 
         return ProcessInstanceList(
             name=self.name,

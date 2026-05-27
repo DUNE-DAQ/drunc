@@ -2484,7 +2484,7 @@ class K8sProcessManager(ProcessManager):
             return ProcessInstanceList(values=[])
 
         self.log.info(
-            f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
+            f"Starting staged termination for {len(targeted_uuids)} process(es)..."
         )
 
         # Define the blocking kill_and_wait helper
@@ -2496,7 +2496,7 @@ class K8sProcessManager(ProcessManager):
                 if grace_period == 0
                 else "Gracefully terminating"
             )
-            self.log.info(f"{action} {len(uuids)} pod(s)...")
+            self.log.info(f"{action} {len(uuids)} process(es)...")
 
             self.termination_complete_event.clear()
             self.uuids_pending_deletion.update(uuids)
@@ -2574,19 +2574,19 @@ class K8sProcessManager(ProcessManager):
                 for depth in sorted(by_depth.keys(), reverse=True):
                     depth_uuids = by_depth[depth]
                     self.log.info(
-                        f"--- Termination Step: Shutting down role '{role}' at depth {depth} "
+                        f"--- Termination of role '{role}' at depth {depth} "
                         f"({len(depth_uuids)} pod(s)) ---"
                     )
                     kill_and_wait(depth_uuids)  # This call is blocking
                     self.log.info(
-                        f"--- Termination Step: Role '{role}' at depth {depth} complete ---"
+                        f"--- Termination of role '{role}' at depth {depth} complete ---"
                     )
             else:
                 self.log.info(
-                    f"--- Termination Step: Shutting down role '{role}' ({len(uuids_in_step)} pod(s)) ---"
+                    f"--- Termination of role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
                 kill_and_wait(uuids_in_step)  # This call is blocking
-                self.log.info(f"--- Termination Step: Role '{role}' complete ---")
+                self.log.info(f"--- Termination of role '{role}' complete ---")
 
         # Finalize and clean up
         final_ret = []
@@ -2633,7 +2633,7 @@ class K8sProcessManager(ProcessManager):
             A ProcessInstanceList containing DEAD-status entries for all terminated
             processes, or an empty list if there were no processes to terminate.
         """
-        self.log.info("Terminating all known K8s processes.")
+        self.log.info("Terminating")
         if not self.boot_request:
             self.log.info("No processes to terminate.")
             return ProcessInstanceList(values=[])
