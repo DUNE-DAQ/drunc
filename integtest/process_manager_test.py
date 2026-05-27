@@ -37,17 +37,8 @@ ignored_logfile_problems = {
     ],
 }
 
-# The next three variable declarations *must* be present as globals in the test
-# file. They're read by the "fixtures" in conftest.py to determine how
-# to run the config generation and nanorc
-
-# The arguments to pass to the config generator, excluding the json
-# output directory (the test framework handles that)
-
-# CCM includes FSM, hosts; moduleconfs includes connections
-object_databases = ["config/daqsystemtest/integrationtest-objects.data.xml"]
-
-conf_dict = data_classes.drunc_config()
+conf_dict = data_classes.integtest_params_for_generated_dunedaq_config()
+conf_dict.object_databases = ["config/daqsystemtest/integrationtest-objects.data.xml"]
 conf_dict.dro_map_config.n_streams = number_of_data_producers
 conf_dict.op_env = "integtest"
 conf_dict.session = "minimal"
@@ -58,10 +49,12 @@ conf_dict.drunc_connsvc = True
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
-substitution = data_classes.attribute_substitution(
-    obj_id="random-tc-generator",
-    obj_class="RandomTCMakerConf",
-    updates={"trigger_rate_hz": 1},
+conf_dict.config_substitutions.append(
+    data_classes.attribute_substitution(
+        obj_id="random-tc-generator",
+        obj_class="RandomTCMakerConf",
+        updates={"trigger_rate_hz": 1},
+    )
 )
 conf_dict.config_substitutions.append(
     data_classes.attribute_substitution(
@@ -73,7 +66,6 @@ conf_dict.config_substitutions.append(
         },
     )
 )
-conf_dict.config_substitutions.append(substitution)
 
 
 confgen_arguments = {"MinimalSystem": conf_dict}
@@ -147,7 +139,7 @@ UUID_RE = re.compile(
 )
 
 
-def test_nanorc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc) -> None:
     """Checks that the drunc integration command sequence completes successfully."""
     # print the name of the current test
     current_test = os.environ.get("PYTEST_CURRENT_TEST")
@@ -159,7 +151,7 @@ def test_nanorc_success(run_dunerc) -> None:
     print(current_test)
     print(banner_line)
 
-    # Check that nanorc completed correctly
+    # Check that dunerc completed correctly
     assert run_dunerc.completed_process.returncode == 0
 
 
