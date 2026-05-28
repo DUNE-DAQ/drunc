@@ -32,6 +32,9 @@ ignored_logfile_problems = {
         "Worker with pid \\d+ was terminated due to signal",
         "Connection '.*' not found on the application registry",
     ],
+    "SSH_SHELL_process_manager": [
+        "was terminated unexpectedly through the remote pid by a SIGKILL",
+    ],
     "connectivity-service": [
         "errorlog: -",
     ],
