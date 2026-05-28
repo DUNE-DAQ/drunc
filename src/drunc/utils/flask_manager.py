@@ -5,41 +5,18 @@ import signal
 import threading
 import time
 from multiprocessing import Process
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import psutil
 import requests
 from flask import Flask, jsonify, make_response, request
 
 if TYPE_CHECKING:
-
-    class _GunicornConfig(Protocol):
-        settings: dict[str, object]
-
-        def set(self, key: str, value: object) -> None: ...
-
-    class _BaseApplication:
-        cfg: _GunicornConfig
-
-        def __init__(self, *args: object, **kwargs: object) -> None: ...
-        def run(self) -> None: ...
-
-    class _Resource:
-        pass
-
-    class Api:
-        """Typing stub for flask_restful.Api."""
-
-        def __init__(self, app: Flask) -> None:
-            """Initialize the API with a Flask application."""
-            ...
-
-        def add_resource(
-            self, resource: type[_Resource], *urls: str, **kwargs: object
-        ) -> None:
-            """Register a resource class on one or more URL routes."""
-            ...
-
+    from drunc.utils.flask_typing import (
+        Api,
+        _BaseApplication,
+        _Resource,
+    )
 else:
     from flask_restful import Api
     from flask_restful import Resource as _Resource
