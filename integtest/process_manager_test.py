@@ -348,7 +348,9 @@ def test_restart_mlt_logs(run_dunerc) -> None:
 
     require_pattern_match(
         restart_text,
-        re.compile(r"Process 'mlt'.*?process exited\s+with exit code 0", re.DOTALL),
+        re.compile(
+            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.", re.DOTALL
+        ),
         error_message="Did not find the mlt exit-code log line after graceful termination.",
     )
 
