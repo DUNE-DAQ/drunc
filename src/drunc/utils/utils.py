@@ -19,6 +19,7 @@ from urllib.parse import ParseResult, urlparse
 from click import BadParameter, Context, Parameter
 from daqpytools.logging import get_daq_logger, setup_root_logger
 from requests import Response, delete, get, patch, post
+from rich.console import Console
 from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
@@ -78,7 +79,7 @@ def get_logger(
     )
 
 
-def get_shared_rich_console(logger: logging.Logger):
+def get_shared_rich_console(logger: logging.Logger) -> Console | None:
     """
     Traverses logger hierarchy to find a FormattedRichHandler's console.
 
