@@ -44,7 +44,9 @@ def compute_role_from_boot_request(boot_request: BootRequest) -> str:
         e.exec == "drunc-controller"
         for e in boot_request.process_description.executable_and_arguments
     )
-    return ProcessMetadata.compute_role_from_tree_id(tree_id, is_controller=is_controller)
+    return ProcessMetadata.compute_role_from_tree_id(
+        tree_id, is_controller=is_controller
+    )
 
 
 def generate_process_query(
@@ -347,6 +349,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
 
     return pmch.data.type
 
+
 def format_hostname(hostname: str) -> str:
     """
     Format the host name to truly reflect what the host name is, removing any extensions
@@ -376,4 +379,3 @@ def format_hostname(hostname: str) -> str:
         formatted_hostname = hostname[:-2]
 
     return formatted_hostname
-

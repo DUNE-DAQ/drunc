@@ -107,7 +107,7 @@ class ProcessMetadata:
             elif tree_id.startswith("0."):
                 return "segment-controller"
             else:
-                return "infrastructure-applications" # controller outside segment tree
+                return "infrastructure-applications"  # controller outside segment tree
         else:
             if tree_id.startswith("0."):
                 return "application"
