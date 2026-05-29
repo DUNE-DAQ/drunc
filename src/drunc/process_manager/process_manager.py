@@ -233,7 +233,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                         )
                         continue
                     pi = find_by_uuid(results, diff)
-                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi.return_code}"
+                    pi_return_code = (
+                        pi.return_code if pi.HasField("return_code") else "NONE"
+                    )
+                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi_return_code}"
                     if not self.ers_handler_initialized:
                         setup_daq_ers_logger(
                             self.log,
