@@ -13,7 +13,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_context_peer
 
 
 @click.command("boot")
@@ -45,11 +45,14 @@ def boot(
 ) -> None:
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
-    processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
+    processes = obj.get_driver("process_manager").ps(
+        ProcessQuery(user=user, session=session_name)
+    )
 
+    # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
         click.confirm(
-            f"You already have {len(processes.values)} processes running, are you sure you want to boot a session?",
+            f"You already have {len(processes.values)} processes running for {session_name}, are you sure you want to boot a session?",
             abort=True,
         )
 
@@ -78,6 +81,7 @@ def boot(
         raise e
 
     controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = resolve_context_peer(controller_address)
     if controller_address:
         obj.print(
             Panel(
@@ -286,7 +290,7 @@ def logs_impl(
     log = get_logger("process_manager.shell")
     # TODO: MOVE BACK TO DEBUG BEFORE MERGE
     # THIS IS USEFUL FOR TESTING THOUGH
-    log.error(f"Running logs with query {query}")
+    log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
         query=query,

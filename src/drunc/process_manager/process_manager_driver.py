@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from time import sleep
 from typing import Dict, List
+from urllib.parse import urlparse
 
 import conffwk
 import grpc
@@ -49,6 +50,7 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     strip_non_drunc_loggers,
+    touch_and_chmod,
 )
 
 
@@ -141,6 +143,9 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
+        # step 3.5 update localhost mapping
+        session_dal = self.resolve_localhost(session_dal)
+
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
@@ -189,6 +194,24 @@ class ProcessManagerDriver:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
+
+            # ensures users can access the opmon files (permissions)
+            # This is for the opmon files of the apps
+
+            if session_dal.opmon_uri.type == "file":
+                # For future, this should probably be taken from the metadata
+                opmon_file = (
+                    f"{request.process_description.process_execution_directory}/info."
+                    + request.process_description.metadata.session
+                    + "."
+                    + request.process_description.metadata.name
+                    + ".json"
+                )
+
+                self.log.debug(
+                    f"Touching and changing permissions for {opmon_file} because opmon is of type {session_dal.opmon_uri.type}"
+                )
+                touch_and_chmod(opmon_file)
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
@@ -287,7 +310,11 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = format_hostname(app["restriction"])
+        # Run mapping to physical hostname to enable multi host usage
+        host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+        self.log.info(f"boot resolve {host}")  # keep this until big PR gets merged
+
+        # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
         args = app["args"]
@@ -403,19 +430,29 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def update_connectivity_port_dal(
-        self,
-        env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
-        new_port: int,
-    ) -> None:
-        """Process a dal::Variable object, placing key/value pairs in a dictionary"""
-        for item in env_variables:
-            if item.className() == "VariableSet":
-                self.update_connectivity_port_dal(item.contains, new_port)
-            else:
-                if item.className() == "Variable":
-                    if item.name == "CONNECTION_PORT":
-                        item.value = new_port
+    def resolve_localhost(self, session_dal):
+        def dal_localhost_mapping(dal_host: str):
+            if dal_host != "localhost":
+                return dal_host
+
+            resolved_address = resolve_localhost_to_hostname(dal_host)
+            if "://" not in resolved_address:
+                resolved_address = "grpc://" + resolved_address
+
+            resolved_server = urlparse(resolved_address).hostname
+            self.log.debug(
+                f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+            )
+            return resolved_server
+
+        session_dal.connectivity_service.host = dal_localhost_mapping(
+            session_dal.connectivity_service.host
+        )
+        session_dal.segment.controller.runs_on.runs_on.id = dal_localhost_mapping(
+            session_dal.segment.controller.runs_on.runs_on.id
+        )
+
+        return session_dal
 
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
@@ -544,13 +581,6 @@ To debug it, close drunc and run the following command:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
-
-            if connection_server == "localhost":
-                resolved_server = resolve_localhost_to_hostname(connection_server)
-                self.log.debug(
-                    f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
-                )
-                connection_server = resolved_server
 
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"

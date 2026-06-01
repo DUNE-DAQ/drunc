@@ -7,6 +7,8 @@ If the serialisation tests fail, it is likely that the fixtures need to be updat
 to be back in line with druncschema definitions.
 """
 
+import socket
+
 import google.protobuf.any_pb2
 import pytest
 from druncschema.description_pb2 import Description
@@ -36,7 +38,7 @@ def app_data():
     Provides a mock application dictionary with required keys.
     """
     return {
-        "restriction": "localhost",
+        "restriction": socket.gethostname(),
         "name": "TestApp",
         "type": "binary",
         "args": ["--arg1"],
@@ -55,7 +57,7 @@ def bootrequest(app_data):
                 user="test_user",
                 session="session1",
                 name=app_data["name"],
-                hostname="localhost",
+                hostname=socket.gethostname(),
                 tree_id=app_data["tree_id"],
             ),
             executable_and_arguments=[{"exec": "binary", "args": ["--arg1"]}],
