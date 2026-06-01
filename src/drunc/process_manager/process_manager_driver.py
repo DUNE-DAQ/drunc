@@ -141,15 +141,18 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
+        self.log.info("step 4")
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
         )
 
+        self.log.info("step 5")
         # Step 5 - track boot timings per host
         last_boot_on_host_at = {}
         previous_host = None
 
+        self.log.info("step 6")
         # Step 6: iterate over boot requests
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
@@ -159,6 +162,8 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             **kwargs,
         ):
+            self.log.warning(request)
+
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
                 return None
@@ -169,10 +174,11 @@ class ProcessManagerDriver:
                     f"Skipping connectivity service readiness check for application {request.process_description.metadata.name}"
                 )
             else:
-                self.log.debug(
+                self.log.info(
                     f"Checking connectivity service readiness before booting application {request.process_description.metadata.name}"
                 )
                 if csc and not csc.is_ready(timeout=10):
+                    self.log.info("whoops its not ready?")
                     raise DruncSetupException(
                         "Connectivity service did not respond within timeout."
                     )
@@ -205,6 +211,7 @@ class ProcessManagerDriver:
                     )
                 handle_grpc_error(e)
 
+        self.log.info("step 7")
         # Step 7: discover segment root controller
         self._discover_controller(
             session_dal, session_name, csc, connection_server, connection_port
@@ -239,7 +246,7 @@ class ProcessManagerDriver:
 
         apps = infra_apps + apps
 
-        self.log.debug(f"{json.dumps(apps, indent=4)}")
+        self.log.info(f"{json.dumps(apps, indent=4)}")
 
         return apps
 
@@ -542,18 +549,26 @@ To debug it, close drunc and run the following command:
         self, session_dal: "conffwk.dal.Session", session_name: str
     ) -> ConnectivityServiceClient | None:
         if session_dal.connectivity_service:
+            self.log.info("we have connectivity service")
+
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
 
             if connection_server == "localhost":
+                self.log.info("Apparently its localhost?")
                 resolved_server = resolve_localhost_to_hostname(connection_server)
-                self.log.debug(
+                self.log.info(
                     f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
                 )
                 connection_server = resolved_server
 
+            connection_server = "np04-srv-029.cern.ch"
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
+            )
+
+            self.log.info(
+                f"returning {client=}, {connection_server=}, {connection_port=}"
             )
             return client, connection_server, connection_port
         return None, None, None
