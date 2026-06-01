@@ -697,10 +697,13 @@ class SSHProcessManager(ProcessManager):
                     proc_uuid, self.configuration.data.kill_timeout
                 )
 
+                pi_return_code = (
+                    pi.return_code if pi.HasField("return_code") else "NONE"
+                )
                 self.log.info(
                     f"Flushed dead process {proc_uuid} "
                     f"(name: {pi.process_description.metadata.name}, "
-                    f"exit code: {pi.return_code})."
+                    f"exit code: {pi_return_code})."
                 )
                 flushed.append(pi)
 

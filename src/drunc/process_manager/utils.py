@@ -149,7 +149,11 @@ def tabulate_process_instance_list(
                 else "[danger]False[/danger]"
             )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
-            row += [alive, f"{process.return_code}"]
+
+            process_return_code = (
+                process.return_code if process.HasField("return_code") else "NONE"
+            )
+            row += [alive, f"{process_return_code}"]
             if show_remote_pid:
                 row += [
                     process.remote_pid
@@ -322,6 +326,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
 
     return pmch.data.type
 
+
 def format_hostname(hostname: str) -> str:
     """
     Format the host name to truly reflect what the host name is, removing any extensions
@@ -351,4 +356,3 @@ def format_hostname(hostname: str) -> str:
         formatted_hostname = hostname[:-2]
 
     return formatted_hostname
-
