@@ -13,7 +13,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_context_peer
 
 
 @click.command("boot")
@@ -82,6 +82,7 @@ def boot(
         raise e
 
     controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = resolve_context_peer(controller_address)
     if controller_address:
         obj.print(
             Panel(
