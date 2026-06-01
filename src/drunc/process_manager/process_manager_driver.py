@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from time import sleep
 from typing import Dict, List
+from urllib.parse import urlparse
 
 import conffwk
 import grpc
@@ -129,6 +130,9 @@ class ProcessManagerDriver:
     ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
+        self.log.warning(
+            f"parameters: {conf_file=}, {conf_id=}, {user=}, {self.address=}"
+        )
         # Assume oksconflibs if no framework is defined
         conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
 
@@ -556,13 +560,21 @@ To debug it, close drunc and run the following command:
 
             if connection_server == "localhost":
                 self.log.info("Apparently its localhost?")
-                resolved_server = resolve_localhost_to_hostname(connection_server)
+                # resolved_server = resolve_localhost_to_hostname(connection_server)
+
+                test_address = self.address
+                if "://" not in test_address:
+                    test_address = "grpc://" + test_address
+
+                resolved_server = urlparse(test_address).hostname
                 self.log.info(
                     f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
                 )
                 connection_server = resolved_server
 
-            connection_server = "np04-srv-029.cern.ch"
+            # Funnily enough this is the minimum amount of change needed...s
+            # so basically instead of trying to resolve the localhost hostname, resolve to whatever we are connecting to?
+            # connection_server = "np04-srv-028"
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
             )

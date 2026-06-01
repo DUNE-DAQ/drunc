@@ -149,7 +149,7 @@ def get_commandline_parameters(
         Ordered list of command-line arguments for process launch.
     """
     runs_on = obj.runs_on.runs_on.id
-    runs_on = "np04-srv-029.cern.ch"
+    # runs_on = "np04-srv-029.cern.ch"
 
     control_service_port = -1
     control_service_protocol = ""
