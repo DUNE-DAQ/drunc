@@ -126,6 +126,7 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> DescribeResponse:
+        # self.log.("in describe")
         request = DescribeRequest(
             target=target,
             execute_along_path=execute_along_path,

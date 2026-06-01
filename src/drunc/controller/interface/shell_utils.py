@@ -46,7 +46,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
+from drunc.utils.utils import format_name_for_cli, get_logger
 
 log = get_logger("controller.iface.shell_utils")
 
@@ -188,7 +188,8 @@ class StatusTableUpdater(Progress):
         # Get the instance of the console that the logger is using with the rich handler
         # so that the progress bar can be rendered in the same console, and not mess up
         # the logs
-        shared_console = get_shared_rich_console(self.ctx.log)
+        # shared_console = get_shared_rich_console(self.ctx.log)
+        shared_console = None
         if shared_console:
             kwargs["console"] = shared_console
 
@@ -197,7 +198,7 @@ class StatusTableUpdater(Progress):
     def update_table(self):
         # The following debug log line will be used in an integration test to validate
         # that issue 817 does not appear again (rich table overriding the log entries)
-        self.ctx.log.debug("Updating the status table...")
+        # self.ctx.log.debug("Updating the status table...")
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
         self.table = get_status_table(statuses, descriptions)
@@ -251,6 +252,8 @@ def controller_setup(ctx, controller_address):
 
     timeout = 60
 
+    log.warning("into progrss")
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -268,22 +271,29 @@ def controller_setup(ctx, controller_address):
         start_time = time.time()
         while time.time() - start_time < timeout:
             progress.update(waiting, completed=time.time() - start_time)
+            log.warning("trying this thingy")
 
             try:
+                log.warning("getting desc")
                 desc = ctx.get_driver("controller").describe().description
+                log.warning("desc done")
                 stored_exception = None
                 break
             except ServerUnreachable as e:
+                log.warning("yee hawe")
                 stored_exception = e
                 time.sleep(1)
 
             except Exception as e:
+                log.warning("weewoo")
                 ctx.critical("Could not get the controller's status")
                 ctx.critical(e)
                 ctx.critical("Exiting.")
                 ctx.terminate()
                 raise e
+            log.warning(start_time)
 
+    log.info("survived progress")
     if stored_exception is not None:
         raise stored_exception
 
