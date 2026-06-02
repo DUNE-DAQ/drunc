@@ -394,7 +394,7 @@ class SSHProcessManager(ProcessManager):
         self.log.info(
             f"Booted '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}' "
-            f"with UUID {uuid}"
+            f"with UUID {uuid} in hosts '{boot_request.process_restriction.allowed_hosts}"
         )
 
         # Query current process status

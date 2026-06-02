@@ -17,7 +17,7 @@ class ConnectivityServiceClient:
             # assume the simplest case here
             self.address = f"http://{address}"
 
-        self.log.debug(
+        self.log.error(
             f"Connectivity service address: {self.address}, session: {self.session}"
         )
 

@@ -56,6 +56,88 @@ from drunc.utils.utils import (
 class ProcessManagerDriver:
     controller_address = ""
 
+
+    def _dump_oks_value(self, value):
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+
+        if isinstance(value, (list, tuple, set)):
+            return [self._dump_oks_value(item) for item in value]
+
+        if hasattr(value, "className"):
+            class_name = value.className()
+            if class_name == "VariableSet":
+                return {
+                    "class": class_name,
+                    "contains": self._dump_oks_value(getattr(value, "contains", [])),
+                }
+
+            if class_name == "Variable":
+                return {
+                    "class": class_name,
+                    "name": getattr(value, "name", None),
+                    "value": getattr(value, "value", None),
+                }
+
+            snapshot = {
+                "class": class_name,
+                "id": getattr(value, "id", None),
+            }
+
+            field_map = {
+                "Session": [
+                    "log_path",
+                    "rte_script",
+                    "environment",
+                    "segment",
+                    "connectivity_service",
+                    "infrastructure_applications",
+                    "disabled",
+                ],
+                "Segment": ["controller", "segments", "applications", "disabled"],
+                "Application": [
+                    "application_name",
+                    "application_environment",
+                    "runs_on",
+                    "log_path",
+                    "data_path",
+                ],
+                "Controller": [
+                    "application_name",
+                    "application_environment",
+                    "runs_on",
+                    "exposes_service",
+                    "fsm",
+                    "log_path",
+                ],
+                "ConnectivityService": ["host", "service"],
+                "Service": ["host", "port"],
+                "Resource": ["id"],
+            }
+
+            for field_name in field_map.get(class_name, ["host", "service", "port", "name", "value"]):
+                try:
+                    field_value = getattr(value, field_name)
+                except Exception:
+                    continue
+                snapshot[field_name] = self._dump_oks_value(field_value)
+
+            return snapshot
+
+        if isinstance(value, dict):
+            return {key: self._dump_oks_value(item) for key, item in value.items()}
+
+        return repr(value)
+
+    def _dump_database(self, db: conffwk.Configuration) -> str:
+        configuration_file = db.active_database
+        full_db_path = get_full_db_path(configuration_file)
+        with open(full_db_path, encoding="utf-8") as config_file:
+            return config_file.read()
+
+    def _dump_session_dal(self, session_dal: "conffwk.dal.Session") -> str:
+        return json.dumps(self._dump_oks_value(session_dal), indent=2, sort_keys=False)
+
     def __init__(self, address: str, token: Token):
         self.log = get_logger("process_manager_driver", rich_handler=True)
         self.address = address
@@ -145,13 +227,22 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
+        # Step 3.5 - modify the host mapping (explicitly!!)
+        # self.log.warning("prechange session_dal:\n%s", self._dump_session_dal(session_dal))
+
+        # session_dal = self.update_dal_host(session_dal)
+
+
+        # self.log.warning("db dump:\n%s", self._dump_database(db))
+        # self.log.warning("postchange session_dal:\n%s", self._dump_session_dal(session_dal))
+
         self.log.info("step 4")
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
         )
 
-        self.log.info("step 5")
+        self.log.info(f"step 5 + {csc.address}")
         # Step 5 - track boot timings per host
         last_boot_on_host_at = {}
         previous_host = None
@@ -250,6 +341,7 @@ class ProcessManagerDriver:
 
         apps = infra_apps + apps
 
+        self.log.warning("json jumps")
         self.log.info(f"{json.dumps(apps, indent=4)}")
 
         return apps
@@ -428,6 +520,13 @@ To debug it, close drunc and run the following command:
                     if item.name == "CONNECTION_PORT":
                         item.value = new_port
 
+
+    
+    def update_dal_host(self, session_dal):
+        session_dal.connectivity_service.host = "np04-srv-029"
+        return session_dal
+
+
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
     ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
@@ -572,6 +671,7 @@ To debug it, close drunc and run the following command:
                 )
                 connection_server = resolved_server
 
+            self.log.info(f"connectivity service: {connection_server=}")
             # Funnily enough this is the minimum amount of change needed...s
             # so basically instead of trying to resolve the localhost hostname, resolve to whatever we are connecting to?
             # connection_server = "np04-srv-028"
