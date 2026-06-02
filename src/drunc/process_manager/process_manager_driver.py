@@ -56,7 +56,6 @@ from drunc.utils.utils import (
 class ProcessManagerDriver:
     controller_address = ""
 
-
     def _dump_oks_value(self, value):
         if value is None or isinstance(value, (str, int, float, bool)):
             return value
@@ -115,7 +114,9 @@ class ProcessManagerDriver:
                 "Resource": ["id"],
             }
 
-            for field_name in field_map.get(class_name, ["host", "service", "port", "name", "value"]):
+            for field_name in field_map.get(
+                class_name, ["host", "service", "port", "name", "value"]
+            ):
                 try:
                     field_value = getattr(value, field_name)
                 except Exception:
@@ -231,7 +232,6 @@ class ProcessManagerDriver:
         # self.log.warning("prechange session_dal:\n%s", self._dump_session_dal(session_dal))
 
         # session_dal = self.update_dal_host(session_dal)
-
 
         # self.log.warning("db dump:\n%s", self._dump_database(db))
         # self.log.warning("postchange session_dal:\n%s", self._dump_session_dal(session_dal))
@@ -390,7 +390,9 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = format_hostname(app["restriction"])
+        # host = format_hostname(app["restriction"])
+        host = "np04-srv-029"  #! GOD BLESS THIS WORKSS
+        # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
         args = app["args"]
@@ -520,12 +522,9 @@ To debug it, close drunc and run the following command:
                     if item.name == "CONNECTION_PORT":
                         item.value = new_port
 
-
-    
     def update_dal_host(self, session_dal):
         session_dal.connectivity_service.host = "np04-srv-029"
         return session_dal
-
 
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
@@ -661,7 +660,9 @@ To debug it, close drunc and run the following command:
                 self.log.info("Apparently its localhost?")
                 # resolved_server = resolve_localhost_to_hostname(connection_server)
 
-                test_address = self.address
+                # test_address = self.address
+                test_address = "np04-srv-029"
+                # this is one of the two minimal changes needed to get this working in general?
                 if "://" not in test_address:
                     test_address = "grpc://" + test_address
 
