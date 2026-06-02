@@ -390,8 +390,14 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        # host = format_hostname(app["restriction"])
-        host = "np04-srv-029"  #! GOD BLESS THIS WORKSS
+        host_test = format_hostname(app["restriction"])
+        resolved_server_test = resolve_localhost_to_hostname(host_test)
+        self.log.info(f"boot resolve {resolved_server_test}")
+
+        host = resolved_server_test
+
+        # host = "np04-srv-029"  #! GOD BLESS THIS WORKSS
+
         # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
@@ -658,10 +664,13 @@ To debug it, close drunc and run the following command:
 
             if connection_server == "localhost":
                 self.log.info("Apparently its localhost?")
-                # resolved_server = resolve_localhost_to_hostname(connection_server)
+                resolved_server_test = resolve_localhost_to_hostname(connection_server)
+                self.log.info(resolved_server_test)
 
                 # test_address = self.address
-                test_address = "np04-srv-029"
+                # test_address = "np04-srv-029"
+                test_address = resolved_server_test
+
                 # this is one of the two minimal changes needed to get this working in general?
                 if "://" not in test_address:
                     test_address = "grpc://" + test_address
