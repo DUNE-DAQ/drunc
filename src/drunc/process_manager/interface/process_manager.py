@@ -4,6 +4,8 @@ import os
 import signal
 import sys
 import types
+from collections.abc import Callable
+from typing import Protocol
 
 import click
 import grpc
@@ -31,7 +33,16 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
 )
 
-_cleanup_coroutines = []
+
+class _ReadyEvent(Protocol):
+    def set(self) -> None: ...
+
+
+class _GeneratedPort(Protocol):
+    value: int
+
+
+_cleanup_coroutines: list[Callable[[], None]] = []
 
 
 def run_pm(
@@ -39,10 +50,10 @@ def run_pm(
     pm_address: str,
     log_level: str,
     override_logs: bool,
-    log_path: str = None,
-    ready_event: bool = None,
-    signal_handler: bool = None,
-    generated_port: bool = None,
+    log_path: str | None = None,
+    ready_event: _ReadyEvent | None = None,
+    signal_handler: Callable[[], None] | None = None,
+    generated_port: _GeneratedPort | None = None,
 ) -> None:
     appName = "process_manager"
     log = get_logger(logger_name=appName, rich_handler=True)
@@ -61,8 +72,10 @@ def run_pm(
 
     conf_path, conf_type = parse_conf_url(pm_conf)
 
+    pm_log_path = log_path or ""
+
     pmch = ProcessManagerConfHandler(
-        log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
+        log_path=pm_log_path, type=conf_type, data=conf_path.split(":")[1]
     )
 
     log_path = get_log_path(
@@ -70,7 +83,7 @@ def run_pm(
         session_name=pmch.data.type.name,
         application_name=appName,
         override_logs=override_logs,
-        app_log_path=log_path,
+        app_log_path=pm_log_path,
     )
 
     # Logger has been added to process_manager, so everything will be logged
@@ -131,7 +144,7 @@ def run_pm(
             server = None
         return
 
-    def handle_sigterm(signum: int, frame: types.FrameType) -> None:
+    def handle_sigterm(signum: int, frame: types.FrameType | None) -> None:
         """
         Handle the SIGTERM signal to gracefully shut down the server.
 
@@ -141,6 +154,7 @@ def run_pm(
         """
 
         log.debug("SIGTERM received, shutting down server...")
+        del signum, frame
         server_shutdown()
         return
 
@@ -184,7 +198,11 @@ def run_pm(
     help="Log path of process_manager logs.",
 )
 def process_manager_cli(
-    pm_conf: str, pm_port: int, log_level: str, override_logs: bool, log_path: str
+    pm_conf: str,
+    pm_port: int,
+    log_level: str,
+    override_logs: bool,
+    log_path: str | None,
 ) -> None:
     get_root_logger(log_level)
     pm_conf = get_process_manager_configuration(pm_conf)

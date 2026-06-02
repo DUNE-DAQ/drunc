@@ -1,7 +1,9 @@
 import copy as cp
 import os
 import re
+from collections.abc import Callable
 from functools import update_wrapper
+from typing import ParamSpec, cast
 
 import click
 from druncschema.process_manager_pb2 import (
@@ -21,12 +23,23 @@ from drunc.process_manager.configuration import (
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
+P = ParamSpec("P")
+
 
 def generate_process_query(
-    f, at_least_one: bool, all_processes_by_default: bool = False
-):
+    f: Callable[P, object],
+    at_least_one: bool,
+    all_processes_by_default: bool = False,
+) -> Callable[P, object]:
     @click.pass_context
-    def new_func(ctx, session, name, user, uuid, **kwargs):
+    def new_func(
+        ctx: click.Context,
+        session: str | None,
+        name: tuple[str, ...],
+        user: str | None,
+        uuid: tuple[str, ...],
+        **kwargs: object,
+    ) -> object:
         is_trivial_query = bool(
             (len(uuid) == 0)
             and (session is None)
@@ -39,25 +52,28 @@ def generate_process_query(
                 "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
             )
 
+        query_names = list(name)
         if all_processes_by_default and is_trivial_query:
-            name = [".*"]
+            query_names = [".*"]
 
         uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
+        crash = kwargs.pop("crash", False)
+        crash_flag = crash if isinstance(crash, bool) else False
 
         query = ProcessQuery(
-            session=session,
-            names=name,
-            user=user,
+            session=session or "",
+            names=query_names,
+            user=user or "",
             uuids=uuids,
-            crash=kwargs.pop("crash", False),
+            crash=crash_flag,
         )
         # print(query)
         return ctx.invoke(f, query=query, **kwargs)
 
-    return update_wrapper(new_func, f)
+    return cast(Callable[P, object], update_wrapper(new_func, f))
 
 
-def make_tree(values):
+def make_tree(values: list[ProcessInstance]) -> list[str]:
     lines = []
     for result in values:
         m = result.process_description.metadata
@@ -68,19 +84,19 @@ def make_tree(values):
     return lines
 
 
-def order_process_by_name(processes: list[ProcessInstance]):
+def order_process_by_name(processes: list[ProcessInstance]) -> list[ProcessInstance]:
     """Given a list of processes, perform a tiered order by the name"""
-    by_session = {}
+    by_session: dict[str, list[ProcessInstance]] = {}
     for process in processes:
         m = process.process_description.metadata
         by_session.setdefault(m.session, []).append(process)
 
-    ordered = []
+    ordered: list[ProcessInstance] = []
     for session in sorted(by_session.keys()):
         session_processes = by_session[session]
-        node_by_id = {}
-        children = {}
-        roots = []
+        node_by_id: dict[str, list[ProcessInstance]] = {}
+        children: dict[str, list[str]] = {}
+        roots: list[str] = []
 
         for process in session_processes:
             tree_id = process.process_description.metadata.tree_id or ""
@@ -102,11 +118,11 @@ def order_process_by_name(processes: list[ProcessInstance]):
             else:
                 children.setdefault(parent_id, []).append(tree_id)
 
-        def sort_key(tree_id):
+        def sort_key(tree_id: str) -> tuple[str, str]:
             m = node_by_id[tree_id][0].process_description.metadata
             return (m.name, tree_id)
 
-        def walk(tree_id):
+        def walk(tree_id: str) -> None:
             ordered.extend(node_by_id[tree_id])
             for child_id in sorted(children.get(tree_id, []), key=sort_key):
                 walk(child_id)
@@ -119,7 +135,7 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 def tabulate_process_instance_list(
     pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
-):
+) -> Table:
     t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
@@ -129,7 +145,7 @@ def tabulate_process_instance_list(
     t.add_column("alive")
     t.add_column("exit-code")
 
-    sorted_pil = order_process_by_name(pil.values)
+    sorted_pil = order_process_by_name(list(pil.values))
 
     show_remote_pid = long and any(
         process.HasField("remote_pid") for process in sorted_pil
@@ -173,7 +189,7 @@ def tabulate_process_instance_list(
     return t
 
 
-def strip_env_for_rte(env):
+def strip_env_for_rte(env: dict[str, str]) -> dict[str, str]:
     env_stripped = cp.deepcopy(env)
     for key in env.keys():
         if key in [
@@ -190,7 +206,7 @@ def strip_env_for_rte(env):
     return env_stripped
 
 
-def get_version():
+def get_version() -> str:
     version = os.getenv("DUNE_DAQ_BASE_RELEASE")
     if not version:
         raise RuntimeError(
@@ -199,7 +215,7 @@ def get_version():
     return version
 
 
-def get_releases_dir():
+def get_releases_dir() -> str:
     releases_dir = os.getenv("SPACK_RELEASES_DIR")
     if not releases_dir:
         raise RuntimeError(
@@ -208,7 +224,7 @@ def get_releases_dir():
     return releases_dir
 
 
-def release_or_dev():
+def release_or_dev() -> str:
     is_release = os.getenv("DBT_SETUP_RELEASE_SCRIPT_SOURCED")
     if is_release:
         return "rel"
@@ -218,7 +234,7 @@ def release_or_dev():
     return "rel"
 
 
-def get_rte_script():
+def get_rte_script() -> str:
     script = ""
     if release_or_dev() == "rel":
         ver = get_version()
@@ -227,6 +243,8 @@ def get_rte_script():
 
     else:
         dbt_install_dir = os.getenv("DBT_INSTALL_DIR")
+        if not dbt_install_dir:
+            raise DruncSetupException("DBT_INSTALL_DIR is not set in the environment")
         script = os.path.join(dbt_install_dir, "daq_app_rte.sh")
 
     if not os.path.exists(script):
@@ -239,9 +257,9 @@ def get_log_path(
     session_name: str,
     application_name: str,
     override_logs: bool,
-    app_log_path: str = None,
-    session_log_path: str = None,
-):
+    app_log_path: str | None = None,
+    session_log_path: str | None = None,
+) -> str:
     pwd = os.getcwd()
     if app_log_path == "./":
         app_log_path = pwd
@@ -272,12 +290,12 @@ class PrCtlError(DruncException):
     pass
 
 
-def on_parent_exit(signum):
+def on_parent_exit(signum: int) -> Callable[[], None]:
     """Return a function to be run in a child process which will trigger
     SIGNAME to be sent when the parent process dies
     """
 
-    def set_parent_exit_signal():
+    def set_parent_exit_signal() -> None:
         from ctypes import cdll
 
         # http://linux.die.net/man/2/prctl
@@ -324,7 +342,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         log_path="./", type=conf_type, data=conf_path.split(":")[1]
     )
 
-    return pmch.data.type
+    return cast(ProcessManagerTypes, pmch.data.type)
 
 
 def format_hostname(hostname: str) -> str:

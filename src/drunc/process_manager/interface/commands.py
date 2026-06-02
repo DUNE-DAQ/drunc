@@ -10,9 +10,17 @@ from drunc.process_manager.interface.cli_argument import (
     validate_conf_string,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
+
+
+def _pm_driver(obj: ProcessManagerContext) -> ProcessManagerDriver:
+    driver = obj.get_driver("process_manager")
+    if driver is None:
+        raise RuntimeError("Process manager driver is not initialized")
+    return driver
 
 
 @click.command("boot")
@@ -43,7 +51,8 @@ def boot(
     override_logs: bool,
 ) -> None:
     log = get_logger("process_manager.shell")
-    processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
+    pm_driver = _pm_driver(obj)
+    processes = pm_driver.ps(ProcessQuery(user=user))
 
     if len(processes.values) > 0:
         click.confirm(
@@ -55,7 +64,7 @@ def boot(
         f"Booting session {session_name} with boot configuration file {configuration_file} and id {configuration_id}, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = pm_driver.boot(
             conf_file=configuration_file,
             conf_id=configuration_id,
             user=user,
@@ -63,6 +72,8 @@ def boot(
             log_level="INFO",  ## Unused anyway!!
             override_logs=override_logs,
         )
+        if results is None:
+            return
         for result in results:
             if not result:
                 break
@@ -75,7 +86,7 @@ def boot(
         log.exception(e)
         raise e
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = pm_driver.controller_address
     if controller_address:
         obj.print(
             Panel(
@@ -129,11 +140,12 @@ def dummy_boot(
     session_name: str,
 ) -> None:
     log = get_logger("process_manager.shell")
+    pm_driver = _pm_driver(obj)
     log.debug(
         f"Running dummy_boot with {n_processes} processes for {sleep} seconds {n_sleeps} times, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").dummy_boot(
+        results = pm_driver.dummy_boot(
             user=user,
             session_name=session_name,
             n_processes=n_processes,
@@ -162,7 +174,7 @@ def dummy_boot(
 def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug("Terminating")
-    result = obj.get_driver("process_manager").terminate()
+    result = _pm_driver(obj).terminate()
     if not result:
         return
     obj.print(
@@ -190,7 +202,7 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
 def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
-    result = obj.get_driver("process_manager").kill(query)
+    result = _pm_driver(obj).kill(query)
     if not result:
         return
     obj.print(
@@ -215,7 +227,7 @@ def flush(
 ) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
-    result = obj.get_driver("process_manager").flush(query)
+    result = _pm_driver(obj).flush(query)
     if not result:
         return
     obj.print(
@@ -244,7 +256,7 @@ def logs(
         query=query,
     )
 
-    result = obj.get_driver("process_manager").logs(log_req)
+    result = _pm_driver(obj).logs(log_req)
     if result is None:
         return
 
@@ -278,7 +290,7 @@ def logs(
 def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
-    obj.get_driver("process_manager").restart(query)
+    _pm_driver(obj).restart(query)
 
 
 @click.command("ps")
@@ -307,7 +319,7 @@ def ps(
 ) -> None:
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
-    results = obj.get_driver("process_manager").ps(query)
+    results = _pm_driver(obj).ps(query)
     if not results:
         return
     obj.print(

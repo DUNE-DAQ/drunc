@@ -1,7 +1,7 @@
 import getpass
 import threading
 import uuid
-from typing import List, Optional
+from typing import cast
 
 from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
@@ -18,6 +18,7 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
+from drunc.process_manager.configuration import ProcessManagerConfHandler
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
@@ -25,14 +26,22 @@ from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 class SSHProcessManager(ProcessManager):
     def __init__(
-        self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
-    ):
+        self,
+        configuration: ProcessManagerConfHandler,
+        LifetimeManagerClass: type[ProcessLifetimeManager],
+        name: str = "process_manager",
+        **kwargs: object,
+    ) -> None:
         # Used to prevent races between process exit callbacks and ps/kill/flush queries
         self.boot_request_lock = threading.Lock()
-        self.ssh_lifetime_manager: Optional[ProcessLifetimeManager] = None
         self.session = getpass.getuser()  # unfortunate
 
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
+        super().__init__(
+            configuration=configuration,
+            name=name,
+            session=self.session,
+            **kwargs,
+        )
 
         self.disable_localhost_host_key_check = False
         self.disable_host_key_check = False
@@ -50,7 +59,7 @@ class SSHProcessManager(ProcessManager):
         # self.children_logs_depth = 1000
         # self.children_logs = {}
 
-        self.ssh_lifetime_manager = LifetimeManagerClass(
+        self.ssh_lifetime_manager: ProcessLifetimeManager = LifetimeManagerClass(  # type: ignore[call-arg]
             disable_host_key_check=self.disable_host_key_check,
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
@@ -62,8 +71,8 @@ class SSHProcessManager(ProcessManager):
     def _build_process_instance(
         self,
         uuid: str,
-        status_code,
-        return_code: int,
+        status_code: int,
+        return_code: int | None,
     ) -> ProcessInstance:
         """
         Construct a ProcessInstance from boot request data and runtime state.
@@ -93,14 +102,14 @@ class SSHProcessManager(ProcessManager):
         return ProcessInstance(
             process_description=pd,
             process_restriction=pr,
-            status_code=status_code,
+            status_code=cast(ProcessInstance.StatusCode.ValueType, status_code),
             return_code=return_code,
             uuid=pu,
             remote_pid="not available",
         )
 
-    def _get_process_timeouts(self, uuids: List[str]) -> dict[str, float]:
-        process_timeouts = {}
+    def _get_process_timeouts(self, uuids: list[str]) -> dict[str, float]:
+        process_timeouts: dict[str, float] = {}
         for process_uuid in uuids:
             process_timeouts[process_uuid] = self.configuration.data.kill_timeout
         return process_timeouts
@@ -108,8 +117,8 @@ class SSHProcessManager(ProcessManager):
     def _on_ssh_process_exit(
         self,
         uuid: str,
-        exit_status: Optional[ExitStatus],
-        exception: Optional[Exception],
+        exit_status: ExitStatus | None,
+        exception: Exception | None,
     ) -> None:
         if uuid not in self.boot_request:
             return
@@ -151,7 +160,7 @@ class SSHProcessManager(ProcessManager):
             exit_status=self.archived_exit_statuses[uuid],
         )
 
-    def kill_processes(self, uuids: list) -> ProcessInstanceList:
+    def kill_processes(self, uuids: list[str]) -> ProcessInstanceList:
         """
         Kill processes by their UUIDs.
 
@@ -176,18 +185,21 @@ class SSHProcessManager(ProcessManager):
                 self.archived_exit_statuses[proc_uuid] = exit_status
 
         # Build ProcessInstance objects from termination results
-        ret = [
-            self._build_process_instance(
-                uuid=uuid,
-                status_code=ProcessInstance.StatusCode.DEAD,
-                return_code=(
-                    exit_statuses[uuid].get_reported_exit_code()
-                    if exit_statuses.get(uuid) is not None
-                    else None
-                ),
+        ret: list[ProcessInstance] = []
+        for proc_uuid in uuids:
+            exit_status = exit_statuses.get(proc_uuid)
+            return_code = (
+                exit_status.get_reported_exit_code()
+                if exit_status is not None
+                else None
             )
-            for uuid in uuids
-        ]
+            ret.append(
+                self._build_process_instance(
+                    uuid=proc_uuid,
+                    status_code=ProcessInstance.StatusCode.DEAD,
+                    return_code=return_code,
+                )
+            )
 
         return ProcessInstanceList(
             name=self.name,
@@ -196,18 +208,14 @@ class SSHProcessManager(ProcessManager):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def _get_active_process_keys(self) -> list:
+    def _get_active_process_keys(self) -> list[str]:
         """
         Retrieve a list of active process UUIDs managed by the SSH process manager.
 
         Returns:
             List of active process UUID strings
         """
-        return (
-            list(self.ssh_lifetime_manager.get_active_process_keys())
-            if self.ssh_lifetime_manager is not None
-            else []
-        )
+        return list(self.ssh_lifetime_manager.get_active_process_keys())
 
     def _terminate_impl(self) -> ProcessInstanceList:
         """
@@ -318,7 +326,9 @@ class SSHProcessManager(ProcessManager):
                 flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
             )
 
-    def notify_join(self, name, session, user, exit_status: ExitStatus):
+    def notify_join(
+        self, name: str, session: str, user: str, exit_status: ExitStatus
+    ) -> None:
         self.log.debug(f"{self.name} sending broadcast after ssh process exit")
         end_str = exit_status.get_process_manager_log_message(name, session, user)
         self.log.info(end_str)
@@ -467,7 +477,7 @@ class SSHProcessManager(ProcessManager):
                     if remote_pid_result.successful:
                         pi.remote_pid = str(remote_pid_result.pid)
                     else:
-                        pi.remote_pid = remote_pid_result.reason
+                        pi.remote_pid = remote_pid_result.reason or "not available"
                     ret += [pi]
                     continue
 
@@ -490,7 +500,7 @@ class SSHProcessManager(ProcessManager):
                 if remote_pid_result.successful:
                     pi.remote_pid = str(remote_pid_result.pid)
                 else:
-                    pi.remote_pid = remote_pid_result.reason
+                    pi.remote_pid = remote_pid_result.reason or "not available"
                 ret += [pi]
 
             return ProcessInstanceList(
@@ -592,7 +602,7 @@ class SSHProcessManager(ProcessManager):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def _crash_processes(self, uuids: list) -> ProcessInstanceList:
+    def _crash_processes(self, uuids: list[str]) -> ProcessInstanceList:
         """
         Simulate crashes for processes identified by their UUIDs.
 
@@ -656,7 +666,7 @@ class SSHProcessManager(ProcessManager):
 
         # Perform liveness checks outside the lock — these may involve SSH calls
         # and must not block the publish thread for extended periods.
-        dead_uuids = []
+        dead_uuids: list[str] = []
         for proc_uuid in candidate_uuids:
             if not self.ssh_lifetime_manager.is_process_alive(proc_uuid):
                 dead_uuids.append(proc_uuid)
@@ -665,7 +675,7 @@ class SSHProcessManager(ProcessManager):
                     f"Process {proc_uuid} is still running — skipping flush."
                 )
 
-        flushed = []
+        flushed: list[ProcessInstance] = []
 
         # Perform all mutations to boot_request under the lock so ps command always sees a
         # consistent boot_request

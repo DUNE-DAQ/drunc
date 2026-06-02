@@ -14,19 +14,22 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class ProcessManagerContext(ShellContext):  # boilerplatefest
-    def __init__(self, *args, **kwargs):
-        self.status_receiver = None
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        self.status_receiver: BroadcastHandler | None = None
         super(ProcessManagerContext, self).__init__(*args, **kwargs)
 
-    def reset(self, address: str = None):
-        self.address = resolve_localhost_to_hostname(address)
+    def reset(self, **kwargs: object) -> None:
+        address = kwargs.get("address")
+        resolved_address = address if isinstance(address, str) else ""
+        self.address = resolve_localhost_to_hostname(resolved_address)
         super(ProcessManagerContext, self)._reset(
             name="process_manager_context",
             token_args={},
             driver_args={},
         )
 
-    def create_drivers(self, **kwargs) -> Mapping[str, object]:
+    def create_drivers(self, **kwargs: object) -> Mapping[str, object]:
+        del kwargs
         if not self.address:
             return {}
         return {
@@ -36,10 +39,11 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             )
         }
 
-    def create_token(self, **kwargs) -> Token:
+    def create_token(self, **kwargs: object) -> Token:
+        del kwargs
         return create_dummy_token_from_uname()
 
-    def start_listening(self, broadcaster_conf):
+    def start_listening(self, broadcaster_conf: object) -> None:
         bcch = BroadcastClientConfHandler(
             data=broadcaster_conf,
             type=ConfTypes.ProtobufAny,
@@ -49,6 +53,6 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             f":ear: Listening to the Process Manager at {self.address}"
         )
 
-    def terminate(self):
+    def terminate(self) -> None:
         if self.status_receiver:
             self.status_receiver.stop()

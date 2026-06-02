@@ -6,13 +6,17 @@ import tempfile
 import time
 from collections.abc import Iterator
 from time import sleep
-from typing import Dict, List
+from typing import NotRequired, Protocol, TypedDict, cast
 
 import conffwk
 import grpc
-from daqconf.set_connectivity_service_port import set_connectivity_service_port
-from daqconf.set_rc_controller_port import set_rc_controller_port
-from daqconf.utils import find_free_port
+from daqconf.set_connectivity_service_port import (  # type: ignore[import-untyped]
+    set_connectivity_service_port,
+)
+from daqconf.set_rc_controller_port import (  # type: ignore[import-untyped]
+    set_rc_controller_port,
+)
+from daqconf.utils import find_free_port  # type: ignore[import-untyped]
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -51,8 +55,85 @@ from drunc.utils.utils import (
 )
 
 
+class BootApp(TypedDict):
+    name: str
+    type: str
+    args: list[str]
+    env: dict[str, str]
+    log_path: str | None
+    restriction: str
+    tree_id: str
+    data_path: NotRequired[str | None]
+
+
+class _HasId(Protocol):
+    id: str
+
+
+class _RunsOnNode(Protocol):
+    id: str
+
+
+class _RunsOnRef(Protocol):
+    runs_on: _RunsOnNode
+
+
+class _ServiceRef(Protocol):
+    id: str
+    port: int
+    protocol: str
+
+
+class _ControllerRef(Protocol):
+    id: str
+    runs_on: _RunsOnRef
+    exposes_service: list[_ServiceRef]
+
+
+class _SegmentRef(Protocol):
+    controller: _ControllerRef
+
+
+class _ConnectivityEndpoint(Protocol):
+    port: int
+
+
+class _ConnectivityServiceRef(Protocol):
+    host: str
+    service: _ConnectivityEndpoint
+
+
+class SessionDalProto(Protocol):
+    id: str
+    segment: _SegmentRef
+    infrastructure_applications: list[_HasId]
+    log_path: str
+    rte_script: str | None
+    connectivity_service: _ConnectivityServiceRef | None
+    environment: object
+
+
+class _DalClassNamed(Protocol):
+    def className(self) -> str: ...
+
+
+class _DalVariable(_DalClassNamed, Protocol):
+    name: str
+    value: object
+
+
+class _DalVariableSet(_DalClassNamed, Protocol):
+    contains: list[object]
+
+
+class _ConfigurationProto(Protocol):
+    active_database: str
+
+    def get_dal(self, class_name: str, uid: str) -> object: ...
+
+
 class ProcessManagerDriver:
-    controller_address = ""
+    controller_address: str | None = None
 
     def __init__(self, address: str, token: Token):
         self.log = get_logger("process_manager_driver", rich_handler=True)
@@ -96,8 +177,8 @@ class ProcessManagerDriver:
         sleep_between_app_boot: (
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
-        **kwargs,
-    ) -> Iterator[ProcessInstanceList] | None:
+        **kwargs: object,
+    ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Step 1 - consolidate configuration
@@ -115,7 +196,7 @@ class ProcessManagerDriver:
         )
 
         # Step 5 - track boot timings per host
-        last_boot_on_host_at = {}
+        last_boot_on_host_at: dict[str, float] = {}
         previous_host = None
 
         # Step 6: iterate over boot requests
@@ -129,7 +210,7 @@ class ProcessManagerDriver:
         ):
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
-                return None
+                return
             if request.process_description.metadata.name in [
                 app.id for app in session_dal.infrastructure_applications
             ]:
@@ -181,29 +262,33 @@ class ProcessManagerDriver:
     def _collect_all_apps(
         self,
         oks_conf: str,
-        session_dal: "conffwk.dal.Session",
+        session_dal: SessionDalProto,
         session_name: str,
-    ) -> List[Dict]:
+    ) -> list[BootApp]:
         from drunc.process_manager.oks_parser import collect_apps, collect_infra_apps
 
         env = {
             "DUNEDAQ_SESSION": session_name,
         }
 
-        apps = collect_apps(
+        raw_apps = collect_apps(
             session_name=session_name,
             config_filename=oks_conf,
-            session_dal_obj=session_dal,
-            segment_obj=session_dal.segment,
+            session_dal_obj=session_dal,  # type: ignore[arg-type]
+            segment_obj=session_dal.segment,  # type: ignore[arg-type]
             env=env,
             tree_prefix=[
                 0,
             ],
         )
+        apps: list[BootApp] = [cast(BootApp, app) for app in raw_apps]
 
         # Next line gets the max of all the first number in the tree id, and adds 1 to it.
         next_tree_id = max([int(app["tree_id"].split(".")[0]) for app in apps]) + 1
-        infra_apps = collect_infra_apps(session_dal, env, tree_prefix=[next_tree_id])
+        infra_apps = cast(
+            list[BootApp],
+            collect_infra_apps(session_dal, env, tree_prefix=[next_tree_id]),  # type: ignore[arg-type]
+        )
 
         apps = infra_apps + apps
 
@@ -212,8 +297,11 @@ class ProcessManagerDriver:
         return apps
 
     def _prepare_exec_and_args(
-        self, session_dal, exe: str, args: List[str]
-    ) -> List[ProcessDescription.ExecAndArgs]:
+        self,
+        session_dal: SessionDalProto,
+        exe: str,
+        args: list[str],
+    ) -> list[ProcessDescription.ExecAndArgs]:
         """
         Prepare
         """
@@ -247,10 +335,10 @@ class ProcessManagerDriver:
 
     def _build_boot_request(
         self,
-        app: Dict,
+        app: BootApp,
         user: str,
         session_name: str,
-        session_dal,
+        session_dal: SessionDalProto,
         session_log_path: str,
         override_logs: bool,
         pwd: str,
@@ -262,8 +350,12 @@ class ProcessManagerDriver:
         env = app["env"]
         app_log_path = app["log_path"]
         data_path = app.get("data_path")
-        env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
-        env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
+        dune_base_release = os.getenv("DUNE_DAQ_BASE_RELEASE")
+        if dune_base_release is not None:
+            env["DUNE_DAQ_BASE_RELEASE"] = dune_base_release
+        spack_releases_dir = os.getenv("SPACK_RELEASES_DIR")
+        if spack_releases_dir is not None:
+            env["SPACK_RELEASES_DIR"] = spack_releases_dir
         tree_id = app["tree_id"]
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
 
@@ -318,7 +410,7 @@ class ProcessManagerDriver:
         self,
         oks_conf: str,
         user: str,
-        session_dal,
+        session_dal: SessionDalProto,
         session_name: str,
         override_logs: bool,
     ) -> Iterator[BootRequest]:
@@ -344,11 +436,11 @@ class ProcessManagerDriver:
             except DruncSetupException as e:
                 log = get_logger("utils.boot_req_generator")
                 log.error(f"[red]Caught exception in boot generator [/red]: {e}")
-                yield None
+                continue
             yield breq
 
-    def _consolidate_config(self, session_name, conf_file: str) -> str | None:
-        from daqconf.consolidate import consolidate_db
+    def _consolidate_config(self, session_name: str, conf_file: str) -> None:
+        from daqconf.consolidate import consolidate_db  # type: ignore[import-untyped]
 
         self.log.debug(f"Validating {session_name} configuration")
 
@@ -373,21 +465,26 @@ To debug it, close drunc and run the following command:
 
     def update_connectivity_port_dal(
         self,
-        env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
+        env_variables: list[object],
         new_port: int,
     ) -> None:
         """Process a dal::Variable object, placing key/value pairs in a dictionary"""
         for item in env_variables:
-            if item.className() == "VariableSet":
-                self.update_connectivity_port_dal(item.contains, new_port)
+            class_named = cast(_DalClassNamed, item)
+            if class_named.className() == "VariableSet":
+                variable_set = cast(_DalVariableSet, item)
+                self.update_connectivity_port_dal(variable_set.contains, new_port)
             else:
-                if item.className() == "Variable":
-                    if item.name == "CONNECTION_PORT":
-                        item.value = new_port
+                if class_named.className() == "Variable":
+                    variable = cast(_DalVariable, item)
+                    if variable.name == "CONNECTION_PORT":
+                        variable.value = new_port
 
     def check_port_conflicts(
-        self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
-    ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
+        self,
+        db: _ConfigurationProto,
+        session_dal: SessionDalProto,
+    ) -> tuple[_ConfigurationProto, SessionDalProto]:
         """
         Check that the ports allocated in the configuration file are available. If the
         file is editable, make the changes in the file itself. Otherwise, make the
@@ -423,7 +520,7 @@ To debug it, close drunc and run the following command:
         # Check that the address of the root controller is available, otherwise change
         # it to one that is available
         root_controller_host: str = session_dal.segment.controller.runs_on.runs_on.id
-        root_controller_service_list: int = [
+        root_controller_service_list: list[_ServiceRef] = [
             service
             for service in session_dal.segment.controller.exposes_service
             if "_control" in service.id
@@ -449,7 +546,10 @@ To debug it, close drunc and run the following command:
         # If a local connectivity service is being used, perform the same checks
         # Temporarily removed to allow integration tests to pass without restructuring
         # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
-        if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
+        if (
+            session_dal.infrastructure_applications
+            and session_dal.connectivity_service is not None
+        ):  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
             connectivity_service_host: str = session_dal.connectivity_service.host
             connectivity_service_port = session_dal.connectivity_service.service.port
             if not is_port_available(
@@ -487,9 +587,13 @@ To debug it, close drunc and run the following command:
             return db, session_dal
         else:
             # If the configuration file has been modified, instantiate a new DAL
-            updated_db = conffwk.Configuration("oksconflibs:" + configuration_file)
-            updated_session_dal = updated_db.get_dal(
-                class_name="Session", uid=configuration_id
+            updated_db = cast(
+                _ConfigurationProto,
+                conffwk.Configuration("oksconflibs:" + configuration_file),
+            )
+            updated_session_dal = cast(
+                SessionDalProto,
+                updated_db.get_dal(class_name="Session", uid=configuration_id),
             )
             self.log.info(
                 "Configuration required updates and file is writable, re-instantiating DAL to reflect changes in the file."
@@ -499,17 +603,23 @@ To debug it, close drunc and run the following command:
                 updated_session_dal,
             )
 
-    def _initialise_session(self, conf_file: str, conf_id: str) -> tuple:
+    def _initialise_session(
+        self, conf_file: str, conf_id: str
+    ) -> tuple[_ConfigurationProto, SessionDalProto]:
         import conffwk  # isort: skip
 
-        db = conffwk.Configuration(conf_file)
-        session_dal = db.get_dal(class_name="Session", uid=conf_id)
+        db = cast(_ConfigurationProto, conffwk.Configuration(conf_file))
+        session_dal = cast(
+            SessionDalProto, db.get_dal(class_name="Session", uid=conf_id)
+        )
         return db, session_dal
 
     def _connect_to_service(
-        self, session_dal: "conffwk.dal.Session", session_name: str
-    ) -> ConnectivityServiceClient | None:
-        if session_dal.connectivity_service:
+        self,
+        session_dal: SessionDalProto,
+        session_name: str,
+    ) -> tuple[ConnectivityServiceClient | None, str | None, int | None]:
+        if session_dal.connectivity_service is not None:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
 
@@ -528,12 +638,12 @@ To debug it, close drunc and run the following command:
 
     def _discover_controller(
         self,
-        session_dal: "conffwk.dal.Session",
+        session_dal: SessionDalProto,
         session_name: str,
         csc: ConnectivityServiceClient | None,
-        connection_server: str,
-        connection_port: int,
-    ):
+        connection_server: str | None,
+        connection_port: int | None,
+    ) -> None:
         """
         Attempts to discover the controller address after booting applications.
         Tries dynamic lookup via connectivity service first, then falls back
@@ -545,11 +655,13 @@ To debug it, close drunc and run the following command:
             self.log.error(f"Could not determine controller name from OKS: {e}")
             top_controller_name = "Unknown-Controller"  # Set a default
 
-        def get_controller_address(session_dal, session_name):
+        def get_controller_address(
+            session_dal: SessionDalProto, session_name: str
+        ) -> str | None:
             from drunc.process_manager.oks_parser import collect_variables
 
-            env = {}
-            collect_variables(session_dal.environment, env)
+            env: dict[str, str] = {}
+            collect_variables(session_dal.environment, env)  # type: ignore[arg-type]
 
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
@@ -583,12 +695,13 @@ To debug it, close drunc and run the following command:
                         f"Connectivity service lookup failed: Application '{top_controller_name}' not found."
                     )
                     # Log the original failure details
-                    self._log_controller_lookup_failure(
-                        session_name,
-                        top_controller_name,
-                        connection_server,
-                        connection_port,
-                    )
+                    if connection_server is not None and connection_port is not None:
+                        self._log_controller_lookup_failure(
+                            session_name,
+                            top_controller_name,
+                            connection_server,
+                            connection_port,
+                        )
                     self.log.warning(
                         "Falling back to static OKS configuration for address resolution."
                     )
@@ -714,16 +827,17 @@ To debug it, close drunc and run the following command:
             )
             return final_address
 
-        def keyboard_interrupt_on_sigint(signal, frame):
+        def keyboard_interrupt_on_sigint(_signal: object, _frame: object) -> None:
             self.log.warning("Interrupted")
             raise KeyboardInterrupt
 
         original_sigint_handler = signal.getsignal(signal.SIGINT)
         signal.signal(signal.SIGINT, keyboard_interrupt_on_sigint)
         try:
-            self.controller_address = get_controller_address(session_dal, session_name)
+            discovered_address = get_controller_address(session_dal, session_name)
+            self.controller_address = discovered_address
         except KeyboardInterrupt:
-            if session_dal.connectivity_service:
+            if session_dal.connectivity_service is not None:
                 connection_server = session_dal.connectivity_service.host
                 connection_port = session_dal.connectivity_service.service.port
                 self._log_controller_interrupt(
@@ -778,7 +892,9 @@ To debug it, close drunc and run the following command:
                     )
                 handle_grpc_error(e)
 
-    def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
+    def _prepare_exec_and_args_dummy_boot(
+        self, sleep: int, n_sleeps: int
+    ) -> list[ProcessDescription.ExecAndArgs]:
         args = [
             ProcessDescription.ExecAndArgs(exec="echo", args=["Starting dummy_boot."])
         ]
@@ -793,7 +909,12 @@ To debug it, close drunc and run the following command:
         return args
 
     def _build_boot_request_dummy_boot(
-        self, user: str, session_name: str, process: int, exec_args: list, pwd: str
+        self,
+        user: str,
+        session_name: str,
+        process: int,
+        exec_args: list[ProcessDescription.ExecAndArgs],
+        pwd: str,
     ) -> BootRequest:
         return BootRequest(
             token=copy_token(self.token),
@@ -820,7 +941,9 @@ To debug it, close drunc and run the following command:
         request = Request(token=copy_token(self.token))
 
         try:
-            response = self.stub.terminate(request, timeout=timeout)
+            response = cast(
+                ProcessInstanceList, self.stub.terminate(request, timeout=timeout)
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -840,7 +963,9 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = self.stub.kill(request, timeout=timeout)
+            response = cast(
+                ProcessInstanceList, self.stub.kill(request, timeout=timeout)
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -858,14 +983,14 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = self.stub.logs(request, timeout=timeout)
+            response = cast(LogLines, self.stub.logs(request, timeout=timeout))
 
             # Check if the response indicates a BadQuery error
             if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
-                lines = response.lines
-                if len(lines) == 1:
-                    lines = lines[0]
-                self.log.warning(f"Bad query for logs: {lines}")
+                display_lines = (
+                    response.lines[0] if len(response.lines) == 1 else response.lines
+                )
+                self.log.warning(f"Bad query for logs: {display_lines}")
                 return None
 
             # Check for other error flags
@@ -893,7 +1018,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = self.stub.ps(request, timeout=timeout)
+            response = cast(ProcessInstanceList, self.stub.ps(request, timeout=timeout))
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -914,7 +1039,9 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = self.stub.flush(request, timeout=timeout)
+            response = cast(
+                ProcessInstanceList, self.stub.flush(request, timeout=timeout)
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -935,7 +1062,9 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = self.stub.restart(request, timeout=timeout)
+            response = cast(
+                ProcessInstanceList, self.stub.restart(request, timeout=timeout)
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -954,7 +1083,7 @@ To debug it, close drunc and run the following command:
         request = Request(token=copy_token(self.token))
 
         try:
-            response = self.stub.describe(request, timeout=timeout)
+            response = cast(Description, self.stub.describe(request, timeout=timeout))
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -972,8 +1101,12 @@ To debug it, close drunc and run the following command:
     # ----- logging helpers -----
 
     def _log_controller_lookup_failure(
-        self, session_name, top_controller_name, connection_server, connection_port
-    ):
+        self,
+        session_name: str,
+        top_controller_name: str,
+        connection_server: str,
+        connection_port: int,
+    ) -> None:
         # Logs detailed troubleshooting steps
         self.log.error(
             f"""
@@ -999,8 +1132,8 @@ To debug it, close drunc and run the following command:
         )
 
     def _log_controller_interrupt(
-        self, top_controller_name, connection_server, connection_port
-    ):
+        self, top_controller_name: str, connection_server: str, connection_port: int
+    ) -> None:
         # Logs recovery instructions after user interrupts controller lookup
         self.log.warning(
             f"""This shell didn't connect to the {top_controller_name}.

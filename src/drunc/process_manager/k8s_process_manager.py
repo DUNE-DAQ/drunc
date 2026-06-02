@@ -10,6 +10,7 @@ import urllib.error
 import urllib.request
 import uuid
 from time import sleep, time
+from typing import cast
 
 # Local Application Imports
 from druncschema.broadcast_pb2 import BroadcastType
@@ -26,9 +27,11 @@ from druncschema.process_manager_pb2 import (
 )
 
 # Third-Party Imports
-from kubernetes import client, config, watch
-from kubernetes.client.rest import ApiException
-from kubernetes.config.config_exception import ConfigException
+from kubernetes import client, config, watch  # type: ignore[import-untyped]
+from kubernetes.client.rest import ApiException  # type: ignore[import-untyped]
+from kubernetes.config.config_exception import (  # type: ignore[import-untyped]
+    ConfigException,
+)
 
 from drunc.k8s_exceptions import (
     DruncK8sException,
@@ -50,7 +53,7 @@ from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
 
 
 class K8sPodWatcherThread(threading.Thread):
-    def __init__(self, pm) -> None:
+    def __init__(self, pm: "K8sProcessManager") -> None:
         """
         Initialize the pod watcher thread that monitors and notifies on pod events.
 
@@ -60,7 +63,7 @@ class K8sPodWatcherThread(threading.Thread):
         threading.Thread.__init__(self)
         self.pm = pm
         self.daemon = True
-        self.processed_uuids = set()
+        self.processed_uuids: set[str] = set()
 
     def run(self) -> None:
         """
@@ -156,7 +159,9 @@ class K8sPodWatcherThread(threading.Thread):
 
 
 class K8sProcessManager(ProcessManager):
-    def __init__(self, configuration: ProcessManagerConfHandler, **kwargs) -> None:
+    def __init__(
+        self, configuration: ProcessManagerConfHandler, **kwargs: object
+    ) -> None:
         """
         Manages processes as Kubernetes Pods.
         This ProcessManager interfaces with the Kubernetes API to start, stop, and monitor
@@ -175,7 +180,13 @@ class K8sProcessManager(ProcessManager):
         # Get the username for the session. This is needed as k8s does not pass the
         # username through to the pod
         self.session = getpass.getuser()
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
+        name = str(kwargs.pop("name", "k8s-process-manager"))
+        super().__init__(
+            configuration=configuration,
+            name=name,
+            session=self.session,
+            **kwargs,
+        )
 
         # Setup the loger
         self.log = get_logger("process_manager.k8s-process-manager")
@@ -201,17 +212,17 @@ class K8sProcessManager(ProcessManager):
         self._api_error_v1_api = client.rest.ApiException
 
         # Storage for process orchestrator parameters
-        self.managed_sessions = set()
-        self.watchers = []
+        self.managed_sessions: set[str] = set()
+        self.watchers: list[K8sPodWatcherThread] = []
         self._start_watcher()
-        self.sessions_pending_deletion = set()
-        self.uuids_pending_deletion = set()
+        self.sessions_pending_deletion: set[str] = set()
+        self.uuids_pending_deletion: set[str] = set()
         self.termination_complete_event = threading.Event()
-        self.final_exit_codes = {}
+        self.final_exit_codes: dict[str, int] = {}
         self.local_connection_server_is_booted = False
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
-        self._host_cache = {}
+        self._host_cache: dict[str, tuple[bool, float]] = {}
         self._host_cache_lock = threading.Lock()
 
         # Get settings from configuration JSON file
@@ -230,8 +241,8 @@ class K8sProcessManager(ProcessManager):
         self.perf_selector = settings.get("readout_app_selector", "runp").lower()
 
         # CONFIGURATION - connection server connection port numbers
-        self.connection_server_port = None
-        self.connection_server_node_port = None
+        self.connection_server_port: int | None = None
+        self.connection_server_node_port: int | None = None
 
         # CONFIGURATION - per-pod service port number
         service = settings.get("service", {})
@@ -307,7 +318,7 @@ class K8sProcessManager(ProcessManager):
         parent process dies unexpectedly.
         """
 
-        def signal_handler(signum, frame):
+        def signal_handler(signum: int, frame: object) -> None:
             self.log.info(f"Received signal {signum}, cleaning up all pods...")
             try:
                 self._terminate_impl()
@@ -385,7 +396,7 @@ class K8sProcessManager(ProcessManager):
         try:
             # Attempt to get the pod status, if you can the pod is alive
             pod_status = self._core_v1_api.read_namespaced_pod_status(podname, session)
-            return pod_status.status.phase == "Running"
+            return cast(bool, pod_status.status.phase == "Running")
         except self._api_error_v1_api as e:
             # Error 404 implies that if pod is not found, i.e. it is not alive
             if e.status == 404:
@@ -646,7 +657,7 @@ class K8sProcessManager(ProcessManager):
         self._add_creator_label(session, "namespace")
         self.managed_sessions.add(session)
 
-    def _prepare_namespace(self, session) -> None:
+    def _prepare_namespace(self, session: str) -> None:
         """
         If the namespace already exists and is in 'Terminating' state, waits for it to
         be fully deleted before recreating it. If the namespace exists and is active,
@@ -710,7 +721,9 @@ class K8sProcessManager(ProcessManager):
             else:
                 raise DruncK8sException(f"Failed to check namespace '{session}': {e}")
 
-    def _create_headless_service(self, podname, session, pod_uid) -> None:
+    def _create_headless_service(
+        self, podname: str, session: str, pod_uid: str
+    ) -> None:
         """
         Create a headless Kubernetes Service for inter-pod DNS discovery.
 
@@ -765,7 +778,9 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
+    def _create_nodeport_service(
+        self, podname: str, session: str, pod_uid: str
+    ) -> None:
         """
         Create a NodePort Kubernetes Service for external access.
 
@@ -851,7 +866,7 @@ class K8sProcessManager(ProcessManager):
 
     def _get_pod_volumes_and_mounts(
         self, boot_request: BootRequest
-    ) -> tuple[list[client.V1Volume], list[client.V1VolumeMount]]:
+    ) -> tuple[list[object], list[object]]:
         """
         Prepares all pod volumes and container mounts, including static
         configs, performance hardware, and dynamic data/home mounts.
@@ -1095,7 +1110,7 @@ class K8sProcessManager(ProcessManager):
 
     def _build_container_env(
         self, boot_request: BootRequest, tree_labels: dict[str, str]
-    ) -> list[client.V1EnvVar]:
+    ) -> list[object]:
         """
         Builds the list of environment variables for the container.
 
@@ -1148,7 +1163,8 @@ class K8sProcessManager(ProcessManager):
         # here to ensure that if it is used, it is set to a consistent and expected path
         # as other functions (e.g. os.expanduser) may not work as expected in the k8s
         # environment without it.
-        home_path: str = self.home_path_base + "/" + env_vars.get("USER")
+        home_path_base = str(self.home_path_base)
+        home_path: str = home_path_base + "/" + env_vars.get("USER", "")
         self.log.debug(f"Setting HOME environment variable to: {home_path}")
         if "HOME" in env_vars:
             self.log.warning(
@@ -1185,9 +1201,9 @@ class K8sProcessManager(ProcessManager):
         podname: str,
         boot_request: BootRequest,
         lcs_port: int | None,
-        container_volume_mounts: list[client.V1VolumeMount],
+        container_volume_mounts: list[object],
         tree_labels: dict[str, str],
-    ) -> client.V1Container:
+    ) -> object:
         """
         Build the primary pod container manifest from a boot request.
 
@@ -1339,7 +1355,7 @@ class K8sProcessManager(ProcessManager):
 
     def _get_pod_node_selector(
         self, podname: str, restriction: ProcessRestriction
-    ) -> dict:
+    ) -> dict[str, str]:
         """
         Build the Kubernetes node selector for a pod based on host restrictions.
 
@@ -1376,7 +1392,7 @@ class K8sProcessManager(ProcessManager):
 
     def _get_pod_host_aliases(
         self, podname: str, session: str, tree_labels: dict[str, str]
-    ) -> list[client.V1HostAlias] | None:
+    ) -> list[object] | None:
         """
         Build host aliases to redirect localhost to the connection server ClusterIP.
 
@@ -1481,13 +1497,13 @@ class K8sProcessManager(ProcessManager):
         self,
         podname: str,
         session: str,
-        main_container: client.V1Container,
-        node_selector: dict,
-        host_aliases: list[client.V1HostAlias] | None,
-        pod_volumes: list[client.V1Volume],
+        main_container: object,
+        node_selector: dict[str, str],
+        host_aliases: list[object] | None,
+        pod_volumes: list[object],
         extra_labels: dict[str, str] | None = None,
         use_host_network: bool = True,
-    ) -> client.V1Pod:
+    ) -> object:
         """
         Assemble the final V1Pod manifest from its component parts.
 
@@ -1543,7 +1559,7 @@ class K8sProcessManager(ProcessManager):
         )
 
     def _execute_pod_creation_api(
-        self, session: str, podname: str, pod_manifest: client.V1Pod
+        self, session: str, podname: str, pod_manifest: object
     ) -> str:
         """
         Attempts to create the pod via the API. If a 409 Conflict error occurs
@@ -1570,7 +1586,7 @@ class K8sProcessManager(ProcessManager):
                     session, pod_manifest
                 )
                 self.log.info(f'Creating pod "{session}.{podname}"')
-                return created_pod.metadata.uid
+                return str(created_pod.metadata.uid)
 
             except self._api_error_v1_api as e:
                 is_409_conflict = e.status == 409
@@ -1652,7 +1668,11 @@ class K8sProcessManager(ProcessManager):
             self._create_headless_service(podname, session, pod_uid)
 
     def _create_pod(
-        self, podname, session, boot_request: BootRequest, tree_labels: dict[str, str]
+        self,
+        podname: str,
+        session: str,
+        boot_request: BootRequest,
+        tree_labels: dict[str, str],
     ) -> None:
         """
         Orchestrates the full pod creation pipeline: extracts the LCS port if
@@ -1671,7 +1691,7 @@ class K8sProcessManager(ProcessManager):
             DruncK8sException - if pod or service creation fails for any reason
         """
         try:
-            lcs_port = None
+            lcs_port: int | None = None
             # Early Port Extraction and Class Variable Setup for LCS
             if self._is_local_connection_server(tree_labels, podname):
                 lcs_port = self._extract_port_from_cmd(boot_request)
@@ -1755,7 +1775,7 @@ class K8sProcessManager(ProcessManager):
                 f"Failed to create pod '{session}.{podname}': {e}"
             ) from e
 
-    def _get_connection_server_cluster_ip(self, session: str) -> str:
+    def _get_connection_server_cluster_ip(self, session: str) -> str | None:
         """
         Get the ClusterIP of the connection server's Kubernetes Service.
 
@@ -1773,12 +1793,12 @@ class K8sProcessManager(ProcessManager):
             service = self._core_v1_api.read_namespaced_service(
                 name=self.connection_server_name, namespace=session
             )
-            return service.spec.cluster_ip
+            return cast(str | None, service.spec.cluster_ip)
         except self._api_error_v1_api as e:
             self.log.error(f"Failed to get connection server service IP: {e}")
             return None
 
-    def _extract_port_from_cmd(self, boot_request) -> int | None:
+    def _extract_port_from_cmd(self, boot_request: BootRequest) -> int | None:
         """
         Parses the boot request's command arguments to find a port.
 
@@ -1863,7 +1883,12 @@ class K8sProcessManager(ProcessManager):
 
         return None
 
-    def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
+    def _get_process_uid(
+        self,
+        query: ProcessQuery,
+        in_boot_request: bool = False,
+        order_by: str = "random",
+    ) -> list[str]:
         """
         Finds process UUIDs matching a query.
 
@@ -2022,7 +2047,7 @@ class K8sProcessManager(ProcessManager):
                         self.log.info(
                             f"Stage 1: Pod '{podname}' is API Ready on node {node_name}."
                         )
-                        return node_name  # Success!
+                        return cast(str, node_name)  # Success!
 
             except self._api_error_v1_api as e:
                 if e.status == 404:
@@ -2429,7 +2454,12 @@ class K8sProcessManager(ProcessManager):
 
         return ProcessInstanceList(values=ret)
 
-    def _kill_pod(self, podname, session, grace_period_seconds=None) -> None:
+    def _kill_pod(
+        self,
+        podname: str,
+        session: str,
+        grace_period_seconds: int | None = None,
+    ) -> None:
         """
         Deletes a specific pod from a namespace.
 
@@ -2488,7 +2518,9 @@ class K8sProcessManager(ProcessManager):
         )
 
         # Define the blocking kill_and_wait helper
-        def kill_and_wait(uuids, grace_period=None) -> None:
+        def kill_and_wait(
+            uuids: set[str] | list[str], grace_period: int | None = None
+        ) -> None:
             if not uuids:
                 return
             action = (
@@ -2533,7 +2565,7 @@ class K8sProcessManager(ProcessManager):
             self.log.error(f"Could not list pods for kill operation: {e}")
 
         # Map pods by their role label
-        pods_by_role = {
+        pods_by_role: dict[str, list[str]] = {
             "unknown": [],
             "application": [],
             "segment-controller": [],
@@ -2548,13 +2580,14 @@ class K8sProcessManager(ProcessManager):
         tree_id_label_key = f"tree-id.{self.drunc_label}"
 
         for pod in all_pods:
-            uuid = pod.metadata.labels.get(uuid_label_key)
-            if uuid and uuid in targeted_uuids:
+            pod_uuid = pod.metadata.labels.get(uuid_label_key)
+            if pod_uuid and pod_uuid in targeted_uuids:
                 role = pod.metadata.labels.get(role_label_key, "unknown")
-                pods_by_role[role].append(uuid)
-                if role == "segment-controller":
+                role_key = role if role in pods_by_role else "unknown"
+                pods_by_role[role_key].append(pod_uuid)
+                if role_key == "segment-controller":
                     tree_id = pod.metadata.labels.get(tree_id_label_key, "")
-                    segment_controller_depths[uuid] = (
+                    segment_controller_depths[pod_uuid] = (
                         tree_id.count(".") if tree_id else 0
                     )
 
