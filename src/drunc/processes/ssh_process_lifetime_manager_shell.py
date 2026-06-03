@@ -439,7 +439,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         for exe_arg in boot_request.process_description.executable_and_arguments:
             cmd += exe_arg.exec
             for arg in exe_arg.args:
-                cmd += f" {arg}"
+                if arg.endswith("daq_app_rte.sh"):
+                    cmd += f" {os.getenv('DBT_AREA_ROOT')}/install/daq_app_rte.sh"
+                else:
+                    cmd += f" {arg}"
             cmd += ";"
 
         # Remove trailing semicolon if present
@@ -885,12 +888,20 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         #     self.disable_localhost_host_key_check
         #     and hostname in ("localhost", "127.0.0.1", "::1")
         # )
+        superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
+        # self.log.critical(f"Building SSH arguments for {user_host} with superuser host {superuser_host}")
+        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
+        # self.log.critical(f"SSH arguments after adding StrictHostKeyChecking for {user_host}%s", arguments)
+        # self.log.critical(f"{arguments=}")
+        # self.log.critical(f"Test list: {test_list_print}")
+        # self.log.critical(f"Test list 2: %s", test_list_print)
 
         # Base SSH arguments with user@host and strict host key checking disabled
         # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
         # the known_hosts file is not shared across hosts, so we cannot rely on it for
         # host key verification.
-        arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
+        # arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
+        # "-F /nfs/home/{user_host.split('@')[0]}/.ssh/config",
 
         if use_tty:
             arguments.append("-tt")
@@ -901,7 +912,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         arguments.extend(
             [
                 "-o",
-                "LogLevel=error",
+                "LogLevel=info",
                 "-o",
                 "GlobalKnownHostsFile=/dev/null",
                 "-o",
@@ -909,6 +920,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             ]
         )
         self.log.critical(f"SSH arguments for {user_host}: {arguments}")
+        self.log.critical(
+            f"PP: {getpass.getuser()} is running on {os.uname().nodename} with disable_host_key_check={self.disable_host_key_check} and disable_localhost_host_key_check={self.disable_localhost_host_key_check}"
+        )
 
         return arguments
 
