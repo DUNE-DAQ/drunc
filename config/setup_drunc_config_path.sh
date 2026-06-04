@@ -1,0 +1,1 @@
+export DUNEDAQ_DB_PATH=$DBT_AREA_ROOT"/pythoncode/drunc":DUNEDAQ_DB_PATH
