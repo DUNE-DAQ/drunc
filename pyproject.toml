@@ -109,9 +109,6 @@ show_error_codes = true
 
 # These overrides are because the library stubs dont exist and not on typeshed
 [[tool.mypy.overrides]]
-module = ["google.rpc.*"]
+module = "google.rpc.*,conffwk.*"
 ignore_missing_imports = true
 
-[[tool.mypy.overrides]]
-module = ["conffwk"]
-ignore_missing_imports = true

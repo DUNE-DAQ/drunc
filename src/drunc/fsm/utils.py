@@ -1,4 +1,4 @@
-from typing import MutableMapping
+from typing import MutableMapping, Optional
 
 from druncschema.controller_pb2 import (
     Argument,
@@ -7,6 +7,22 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from google.protobuf.any_pb2 import Any
+
+import drunc.fsm.exceptions as fsme
+from drunc.fsm.transition import Transition
+from drunc.utils.grpc_utils import unpack_any
+
+from typing import MutableMapping, Optional
+
+from druncschema.controller_pb2 import (
+    Argument,
+    FSMCommandDescription,
+    FSMCommandsDescription,
+)
+from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
+
+# Alias Protobuf's Any to PbAny to prevent confusion with typing.Any
+from google.protobuf.any_pb2 import Any as PbAny
 
 import drunc.fsm.exceptions as fsme
 from drunc.fsm.transition import Transition
@@ -28,7 +44,7 @@ def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescript
         None.
     """
     commands_description = FSMCommandsDescription()
-    for t in transitions: # type: Transition
+    for t in transitions:
         commands_description.commands.append(
             FSMCommandDescription(
                 name=t.name,
@@ -41,7 +57,10 @@ def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescript
     return commands_description
 
 
-def decode_fsm_arguments(arguments: MutableMapping[str, Any], arguments_format: list[Argument]) -> dict[str, str | int | float | bool]:
+def decode_fsm_arguments(
+    arguments: MutableMapping[str, PbAny], 
+    arguments_format: list[Argument]
+) -> dict[str, str | int | float | bool]:
     """
     Decodes the arguments of a FSM command.
 
@@ -50,7 +69,7 @@ def decode_fsm_arguments(arguments: MutableMapping[str, Any], arguments_format: 
     drunc operating modes.
 
     Args:
-        arguments (MutableMapping[str, Any]): The arguments to decode.
+        arguments (MutableMapping[str, PbAny]): The arguments to decode.
         arguments_format (list[Argument]): The format of the arguments.
 
     Returns:
@@ -61,15 +80,18 @@ def decode_fsm_arguments(arguments: MutableMapping[str, Any], arguments_format: 
         fsme.UnhandledArgumentType: If an argument type is not handled.
     """
 
-    def get_argument(name, arguments):
-        for n, k in arguments.items():
+    # Added explicit type hints to the nested function
+    def get_argument(name: str, args: MutableMapping[str, PbAny]) -> Optional[PbAny]:
+        for n, k in args.items():
             if n == name:
                 return k
         return None
 
-    out_dict = {}
+    # Explicitly type out_dict so Mypy doesn't infer dict[Any, Any]
+    out_dict: dict[str, str | int | float | bool] = {}
+    
     for arg in arguments_format:
-        arg_value = get_argument(arg.name, arguments)
+        arg_value: Optional[PbAny] = get_argument(arg.name, arguments)
 
         if arg.presence == Argument.Presence.MANDATORY and arg_value is None:
             raise fsme.MissingArgument(arg.name, "")
@@ -88,4 +110,5 @@ def decode_fsm_arguments(arguments: MutableMapping[str, Any], arguments_format: 
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise fsme.UnhandledArgumentType(arg.type)
+                
     return out_dict
