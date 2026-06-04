@@ -74,23 +74,40 @@ class AppState:
             drunc_testing_app_timeout_delay
             and not drunc_testing_app_timeout_delay_app_name
         ):
-            self.log.error(
+            self.log.critical(
                 "DRUNC_FAILURE_TESTING_CMD_DELAY is set but DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is not set, not delaying execution"
             )
         if (
             not drunc_testing_app_timeout_delay
             and drunc_testing_app_timeout_delay_app_name
         ):
-            self.log.error(
+            self.log.critical(
                 "DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DELAY is not set, not delaying execution"
             )
         if (
             drunc_testing_app_timeout_delay
             and drunc_testing_app_timeout_delay_app_name == self.appname
         ):
-            delay = int(os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"))
+            delay = int(os.getenv("DRUNC_PROCESS_DEATH_FSM_CMD"))
             self.log.info(f"Delaying execution by {delay} seconds for testing purposes")
             time.sleep(delay)
+
+        # Test application death on FSM command
+        drunc_testing_app_death = os.getenv("DRUNC_FAILURE_TESTING_CMD_DEATH")
+        drunc_testing_app_death_app_name = os.getenv(
+            "DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME"
+        )
+        if drunc_testing_app_death and not drunc_testing_app_timeout_delay_app_name:
+            self.log.critical(
+                "DRUNC_FAILURE_TESTING_CMD_DEATH is set but DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME is not set, not simulating death"
+            )
+        if not drunc_testing_app_death and drunc_testing_app_death_app_name:
+            self.log.critical(
+                "DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DEATH is not set, not simulating death"
+            )
+        if drunc_testing_app_death and drunc_testing_app_death_app_name == self.appname:
+            self.log.info("Simulating death for testing purposes")
+            exit(1)
 
         # The following block simulates a failure of the app while executing a stateful
         # command. Thisserves uniquely to test the robustness of the Run Control when an
@@ -241,7 +258,7 @@ def main():
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # initialize, and should not be used for any other purpose. The environment variable
     # is set in the configuration file that tests this behaviour.
-    if os.getenv("DRUNC_FAILURE_TESTING_INIT", None):
+    if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", None):
         log.info("Simulating failure during initialization")
         exit(1)
 
@@ -371,7 +388,7 @@ def main():
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # complete initialization, and should not be used for any other purpose. The
     # environment variable is set in the configuration file that tests this behaviour.
-    if os.getenv("DRUNC_FAILURE_TESTING_POST_BOOT", None):
+    if os.getenv("DRUNC_PROCESS_DEATH_POST_BOOT", None):
         log.info("Simulating failure after initialization")
         exit(1)
 
