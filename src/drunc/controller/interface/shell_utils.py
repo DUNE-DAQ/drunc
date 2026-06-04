@@ -46,7 +46,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.utils import format_name_for_cli, get_logger
+from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
 
@@ -184,9 +184,20 @@ class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
         self.ctx = ctx
         self.update_table()
+
+        # Get the instance of the console that the logger is using with the rich handler
+        # so that the progress bar can be rendered in the same console, and not mess up
+        # the logs
+        shared_console = get_shared_rich_console(self.ctx.log)
+        if shared_console:
+            kwargs["console"] = shared_console
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
+        # The following debug log line will be used in an integration test to validate
+        # that issue 817 does not appear again (rich table overriding the log entries)
+        self.ctx.log.debug("Updating the status table...")
         statuses = self.ctx.get_driver("controller").status()
         descriptions = self.ctx.get_driver("controller").describe()
         self.table = get_status_table(statuses, descriptions)
@@ -479,6 +490,20 @@ def validate_and_format_fsm_arguments(
     return out_dict
 
 
+def collect_not_ready(response, found=None):
+    if found is None:
+        found = []
+
+    if response.flag == ResponseFlag.NOT_EXECUTED_NOT_READY:
+        if response.HasField("status") and response.status.included:
+            found.append(response.name)
+
+    for child in response.children:
+        collect_not_ready(child, found)
+
+    return found
+
+
 def run_one_fsm_command(
     obj: UnifiedShellContext,
     controller_name: str,
@@ -562,6 +587,22 @@ def run_one_fsm_command(
             arguments=formated_args,
         )
 
+        resolved_target = target or controller_name
+        pre_status = obj.get_driver("controller").status(
+            target=resolved_target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        not_ready = collect_not_ready(pre_status)
+        if not_ready:
+            log.warning(
+                f"The following nodes could not be reached and will not execute '{transition_name}': {not_ready}. "
+                f"If this is expected, consider excluding them with the 'exclude' command before retrying."
+            )
+            if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
+                sys.exit(1)
+            return
+
         timeout = 60
         time_start = time.time()
         result = None
@@ -597,6 +638,7 @@ def run_one_fsm_command(
         return
     except ServerTimeout as e:
         import traceback
+
         traceback.print_exc()
         log.error(e)
         log.error(

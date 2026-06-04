@@ -59,7 +59,6 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
-
         self.log.critical(f"{req_data=}")
         self.log.critical(f"{answer_port=}")
         self.log.critical(f"{answer_host=}")
@@ -68,15 +67,39 @@ class AppState:
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
         drunc_testing_app_timeout_delay = os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY")
-        drunc_testing_app_timeout_delay_app_name = os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME")
-        if drunc_testing_app_timeout_delay and not drunc_testing_app_timeout_delay_app_name:
-            self.log.error("DRUNC_FAILURE_TESTING_CMD_DELAY is set but DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is not set, not delaying execution")
-        if not drunc_testing_app_timeout_delay and drunc_testing_app_timeout_delay_app_name:
-            self.log.error("DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DELAY is not set, not delaying execution")
-        if drunc_testing_app_timeout_delay and drunc_testing_app_timeout_delay_app_name == self.appname:
+        drunc_testing_app_timeout_delay_app_name = os.getenv(
+            "DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME"
+        )
+        if (
+            drunc_testing_app_timeout_delay
+            and not drunc_testing_app_timeout_delay_app_name
+        ):
+            self.log.error(
+                "DRUNC_FAILURE_TESTING_CMD_DELAY is set but DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is not set, not delaying execution"
+            )
+        if (
+            not drunc_testing_app_timeout_delay
+            and drunc_testing_app_timeout_delay_app_name
+        ):
+            self.log.error(
+                "DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DELAY is not set, not delaying execution"
+            )
+        if (
+            drunc_testing_app_timeout_delay
+            and drunc_testing_app_timeout_delay_app_name == self.appname
+        ):
             delay = int(os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY"))
             self.log.info(f"Delaying execution by {delay} seconds for testing purposes")
             time.sleep(delay)
+
+        # The following block simulates a failure of the app while executing a stateful
+        # command. Thisserves uniquely to test the robustness of the Run Control when an
+        # app exits upon running an applciation, and should not be used for any other
+        # purpose. The environment variable is set in the configuration file that tests
+        # this behaviour.
+        if os.getenv("DRUNC_FAILURE_TESTING_CMD", None):
+            log.info("Simulating failure during initialization")
+            exit(1)
 
         reply_address = (
             f"http://{answer_host}:{answer_port}/response"
@@ -214,6 +237,14 @@ def get_address_for_conn_srv(hostname):
 
 
 def main():
+    # The following block simulates a failure during the initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # initialize, and should not be used for any other purpose. The environment variable
+    # is set in the configuration file that tests this behaviour.
+    if os.getenv("DRUNC_FAILURE_TESTING_INIT", None):
+        log.info("Simulating failure during initialization")
+        exit(1)
+
     parser = argparse.ArgumentParser(
         prog="FakeApplication",
         description="This is a fake application that communicate in the same way with the RunControl as the DAQApplication (thru REST)",
@@ -249,7 +280,9 @@ def main():
         help="This is a dummy argument in this case",
     )
     parser.add_argument("-s", "--session", default="test", help="name of session")
-    parser.add_argument("-k", "--configurationID", default="test-config", help="ID of session")
+    parser.add_argument(
+        "-k", "--configurationID", default="test-config", help="ID of session"
+    )
 
     args = parser.parse_args()
 
@@ -323,7 +356,9 @@ def main():
         response = requests.get(flask_url + "/")
         log.info(f"Response: {response.status_code}")
         if response.status_code == 200:
-            log.critical("Fake DAQ app started successfully and is responding to requests")
+            log.critical(
+                "Fake DAQ app started successfully and is responding to requests"
+            )
             break
         if i == 9:
             log.error("Failed to start fake DAQ app")
@@ -331,6 +366,14 @@ def main():
         time.sleep(1)
 
     connectivity_service_thread.start()
+
+    # The following block simulates a failure after the initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # complete initialization, and should not be used for any other purpose. The
+    # environment variable is set in the configuration file that tests this behaviour.
+    if os.getenv("DRUNC_FAILURE_TESTING_POST_BOOT", None):
+        log.info("Simulating failure after initialization")
+        exit(1)
 
 
 if __name__ == "__main__":

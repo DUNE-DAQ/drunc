@@ -49,6 +49,7 @@ def generate_process_query(
             names=name,
             user=user,
             uuids=uuids,
+            crash=kwargs.pop("crash", False),
         )
         # print(query)
         return ctx.invoke(f, query=query, **kwargs)
@@ -117,9 +118,9 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 
 def tabulate_process_instance_list(
-    pil: ProcessInstanceList, title: str, long: bool = False
+    pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
 ):
-    t = Table(title=title)
+    t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
     t.add_column("user")
@@ -127,10 +128,17 @@ def tabulate_process_instance_list(
     t.add_column("uuid")
     t.add_column("alive")
     t.add_column("exit-code")
+
+    sorted_pil = order_process_by_name(pil.values)
+
+    show_remote_pid = long and any(
+        process.HasField("remote_pid") for process in sorted_pil
+    )
+    if show_remote_pid:
+        t.add_column("remote-pid")
     if long:
         t.add_column("executable")
 
-    sorted_pil = order_process_by_name(pil.values)
     tree_str = make_tree(sorted_pil)
     try:
         for process, line in zip(sorted_pil, tree_str):
@@ -141,12 +149,22 @@ def tabulate_process_instance_list(
                 else "[danger]False[/danger]"
             )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
+
+            process_return_code = (
+                process.return_code if process.HasField("return_code") else "NONE"
+            )
+            row += [alive, f"{process_return_code}"]
+            if show_remote_pid:
+                row += [
+                    process.remote_pid
+                    if process.HasField("remote_pid")
+                    else "Not available"
+                ]
             if long:
                 executables = [
                     e.exec for e in process.process_description.executable_and_arguments
                 ]
                 row += ["; ".join(executables)]
-            row += [alive, f"{process.return_code}"]
             t.add_row(*row)
     except TypeError:
         raise DruncCommandException(
@@ -307,3 +325,34 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     )
 
     return pmch.data.type
+
+
+def format_hostname(hostname: str) -> str:
+    """
+    Format the host name to truly reflect what the host name is, removing any extensions
+    that do not reflect the true host alias.
+
+    Args:
+        hostname (str): The hostname to format.
+
+    Returns:
+        str: The formatted hostname.
+
+    Raises:
+        DruncCommandException: If the hostname is empty or None.
+
+    Example:
+        If the input hostname is "np02-srv-005-1", the output will be "np02-srv-005".
+    """
+    # Validate that the hostname is not empty or None
+    if not hostname:
+        raise DruncCommandException("Hostname cannot be empty or None.")
+
+    # Make a copy of the hostname to modify
+    formatted_hostname = hostname
+
+    # Strip common suffixes that do not reflect the true host alias
+    if hostname.endswith("-1"):
+        formatted_hostname = hostname[:-2]
+
+    return formatted_hostname

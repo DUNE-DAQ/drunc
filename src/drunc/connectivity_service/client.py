@@ -102,7 +102,7 @@ class ConnectivityServiceClient:
                 r.raise_for_status()
                 break
 
-            except (HTTPError, ConnectionError) as e:
+            except (HTTPError, ConnectionError, ReadTimeout) as e:
                 self.log.debug(e)
                 if not fail_quickly:
                     time.sleep(0.5)
@@ -158,7 +158,7 @@ class ConnectivityServiceClient:
                 r.raise_for_status()
                 break
 
-            except (HTTPError, ConnectionError) as e:
+            except (HTTPError, ConnectionError, ReadTimeout) as e:
                 self.log.debug(e)
                 if not fail_quickly:
                     time.sleep(0.5)

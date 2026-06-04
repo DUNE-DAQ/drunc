@@ -42,10 +42,14 @@ class ChildNode(ABC):
         pass
 
     @abstractmethod
+    def check_connection(self) -> bool:
+        pass
+
+    @abstractmethod
     def status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> StatusResponse:
         pass
@@ -54,7 +58,7 @@ class ChildNode(ABC):
     def describe(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> DescribeResponse:
         pass
@@ -63,7 +67,7 @@ class ChildNode(ABC):
     def describe_fsm(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         key: str = "",
     ) -> DescribeFSMResponse:
@@ -74,7 +78,7 @@ class ChildNode(ABC):
         self,
         command: FSMCommand,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteFSMCommandResponse:
         pass
@@ -84,7 +88,7 @@ class ChildNode(ABC):
         self,
         json_string: str,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExecuteExpertCommandResponse:
         pass
@@ -93,7 +97,7 @@ class ChildNode(ABC):
     def include(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
         pass
@@ -102,7 +106,7 @@ class ChildNode(ABC):
     def exclude(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
         pass
@@ -111,7 +115,7 @@ class ChildNode(ABC):
     def recompute_status(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> RecomputeStatusResponse:
         pass
@@ -120,7 +124,7 @@ class ChildNode(ABC):
     def take_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> TakeControlResponse:
         pass
@@ -129,7 +133,7 @@ class ChildNode(ABC):
     def surrender_control(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> SurrenderControlResponse:
         pass
@@ -138,7 +142,7 @@ class ChildNode(ABC):
     def who_is_in_charge(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> WhoIsInChargeResponse:
         pass
@@ -147,7 +151,7 @@ class ChildNode(ABC):
     def to_error(
         self,
         target: str = "",
-        execute_along_path: bool = True,
+        execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
         pass

@@ -16,7 +16,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 
-from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.processes.exit_status import ExitStatus
+from drunc.processes.ssh_process_lifetime_manager import (
+    ProcessLifetimeManager,
+    RemotePidResult,
+)
 from drunc.processes.ssh_process_lifetime_manager_shell import (
     SSHProcessLifetimeManagerShell,
 )
@@ -109,7 +113,7 @@ def _worker_process_main(
     (request_id, result, error) tuples onto response_queue.
 
     Process-exit callbacks are forwarded to the parent via callback_queue as
-    (uuid, exit_code, exception_string) tuples.
+    (uuid, exit_status, exception_string) tuples.
 
     A None sentinel placed on request_queue causes a clean shutdown.
 
@@ -130,13 +134,13 @@ def _worker_process_main(
 
     def _on_process_exit(
         uuid: str,
-        exit_code: Optional[int],
+        exit_status: Optional[ExitStatus],
         exception: Optional[Exception],
     ) -> None:
         """Relay process-exit events back to the parent via the callback queue."""
         try:
             callback_queue.put_nowait(
-                (uuid, exit_code, str(exception) if exception is not None else None)
+                (uuid, exit_status, str(exception) if exception is not None else None)
             )
         except Exception:
             pass  # Never raise inside a background callback
@@ -205,7 +209,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         disable_localhost_host_key_check: bool = False,
         logger: Optional[logging.Logger] = None,
         on_process_exit: Optional[
-            Callable[[str, Optional[int], Optional[Exception]], None]
+            Callable[[str, Optional[ExitStatus], Optional[Exception]], None]
         ] = None,
     ) -> None:
         """
@@ -221,7 +225,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
                 its own independent logger.
             on_process_exit:
                 Optional callback invoked in the *parent* process when a managed
-                process exits. Signature: (uuid, exit_code, exception).
+                process exits. Signature: (uuid, exit_status, exception).
                 The exception is reconstructed as a RuntimeError from the
                 serialised message forwarded by the child process.
         """
@@ -392,7 +396,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             if message is None:
                 break
 
-            uuid, exit_code, exception_string = message
+            uuid, exit_status, exception_string = message
 
             if self._on_process_exit is not None:
                 try:
@@ -402,7 +406,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
                         if exception_string is not None
                         else None
                     )
-                    self._on_process_exit(uuid, exit_code, exception)
+                    self._on_process_exit(uuid, exit_status, exception)
                 except Exception as exc:
                     self.log.error(
                         f"Error in on_process_exit callback for process {uuid}: {exc}"
@@ -495,24 +499,24 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         """
         return self._call("is_process_alive", uuid)
 
-    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_status(self, uuid: str) -> Optional[ExitStatus]:
         """
-        Retrieve and remove the exit code of a process that exited unexpectedly.
+        Retrieve and remove the exit status of a process that exited unexpectedly.
 
         Args:
             uuid: Process UUID.
 
         Returns:
-            Exit code if the process terminated early without being explicitly killed,
+            ExitStatus if the process terminated early without being explicitly killed,
             None if still running or not found.
         """
-        return self._call("pop_early_exit_code", uuid)
+        return self._call("pop_early_exit_status", uuid)
 
     def kill_process(
         self,
         uuid: str,
         timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
-    ) -> Optional[int]:
+    ) -> Optional[ExitStatus]:
         """
         Kill a remote process and clean up its resources.
 
@@ -521,15 +525,57 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             timeout: Graceful termination timeout in seconds.
 
         Returns:
-            Exit code of the terminated process, or None if undetermined.
+            ExitStatus of the terminated process, or None if undetermined.
         """
         return self._call("kill_process", uuid, timeout)
+
+    def kill_process_without_metadata(
+        self,
+        uuid: str,
+        signal_name: str = "KILL",
+        as_manual_pm_kill: bool = True,
+        timeout: float = ProcessLifetimeManager.DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[ExitStatus]:
+        """
+        Kill a process by signalling the SSH client without using remote metadata.
+
+        Args:
+            uuid: Process UUID to terminate.
+            signal_name: Signal name to send to SSH client process group.
+            as_manual_pm_kill: If True, classify as process-manager initiated kill.
+                               If False, classify as external kill i.e. outside of process manager control
+            timeout: Graceful termination timeout in seconds.
+
+        Returns:
+            ExitStatus of the terminated process, or None if undetermined.
+        """
+        return self._call(
+            "kill_process_without_metadata",
+            uuid,
+            signal_name,
+            as_manual_pm_kill,
+            timeout,
+        )
+
+    def crash_process(self, uuid: str, signal: str = "KILL") -> None:
+        """
+        Simulate a process crash by sending a signal without performing any cleanup.
+
+        Delegates to the underlying SSHProcessLifetimeManagerShell running in
+        the forked worker process. Sends the specified signal to the remote process without
+        cleaning up any associated resources, simulating an unexpected crash.
+
+        Args:
+            uuid: Process UUID to crash
+            signal: Signal to send to simulate crash
+        """
+        self._call("crash_process", uuid, signal)
 
     def kill_processes(
         self,
         uuids: List[str],
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill multiple processes in role-based shutdown order.
 
@@ -538,14 +584,14 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             process_timeouts: Optional per-UUID timeout overrides in seconds.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes.
+            Dictionary mapping process UUIDs to their exit statuses.
         """
         return self._call("kill_processes", uuids, process_timeouts)
 
     def kill_all_processes(
         self,
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all managed processes.
 
@@ -553,7 +599,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             process_timeouts: Optional per-UUID timeout overrides in seconds.
 
         Returns:
-            Dictionary mapping all process UUIDs to their exit codes.
+            Dictionary mapping all process UUIDs to their exit statuses.
         """
         return self._call("kill_all_processes", process_timeouts)
 
@@ -562,7 +608,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         role: str,
         candidate_uuids: List[str],
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all processes with the specified role from the candidate UUID list.
 
@@ -572,7 +618,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             process_timeouts: Optional per-UUID timeout overrides in seconds.
 
         Returns:
-            Dictionary mapping terminated process UUIDs to their exit codes.
+            Dictionary mapping terminated process UUIDs to their exit statuses.
         """
         return self._call(
             "kill_processes_by_role", role, candidate_uuids, process_timeouts
@@ -641,3 +687,24 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             RuntimeError: If the SSH connection validation fails.
         """
         self._call("validate_host_connection", host, auth_method, user)
+
+    def get_remote_pid(self, uuid: str) -> RemotePidResult:
+        """
+        Retrieve the remote PID for a managed process via the child process.
+
+        Delegates to the underlying SSHProcessLifetimeManagerShell running in the
+        forked worker process. The returned RemotePidResult dataclass is picklable
+        and transmitted across the process boundary without special handling.
+
+        Args:
+            uuid: Process UUID to query.
+
+        Returns:
+            RemotePidResult with ``pid`` set on success, or ``reason`` explaining
+            why the PID is unavailable (e.g. metadata not yet written).
+        """
+        return self._call("get_remote_pid", uuid)
+
+    def get_runtime_pids(self, uuid: str) -> Dict[str, Optional[int]]:
+        """Return best-effort runtime PID snapshot from the child manager."""
+        return self._call("get_runtime_pids", uuid)

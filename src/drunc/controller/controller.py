@@ -1,7 +1,7 @@
 import multiprocessing
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
@@ -24,6 +24,7 @@ from druncschema.controller_pb2 import (
     IncludeResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
+    Status,
     StatusRequest,
     StatusResponse,
     SurrenderControlRequest,
@@ -50,6 +51,7 @@ from drunc.broadcast.server.broadcast_sender import BroadcastSender
 from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
 from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.rest_api_child import ResponseListener
 from drunc.controller.controller_actor import ControllerActor
@@ -159,11 +161,19 @@ class Controller(ControllerServicer):
         log_init_controller = get_logger("controller.core.init_controller")
         log_init_controller.info("Finishing initialisation of controller")
 
-        self.children_nodes = self.configuration.init_children(
-            session_name=self.session,
-            init_token=self.actor.get_token(),
-            connectivity_service=self.connectivity_service,
-        )
+        try:
+            log_init_controller.info("Initializing the controller children")
+            self.children_nodes = self.configuration.init_children(
+                session_name=self.session,
+                init_token=self.actor.get_token(),
+                connectivity_service=self.connectivity_service,
+            )
+        except ApplicationLookupUnsuccessful:
+            log_init_controller.error(
+                "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
+            )
+            self.stateful_node.to_error()
+            return
 
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
@@ -183,8 +193,32 @@ class Controller(ControllerServicer):
             and self.stateful_node.node_is_in_error() == False
         ):
             child_list = self.address_all()
+            connected_indices, disconnected_indices = (
+                self._partition_connected_children(
+                    child_list,
+                    operation_name="init_controller.status",
+                )
+            )
             child_responses = self.propagate_concurrently(
-                lambda child, target: child.status(target), child_list
+                lambda child, target: child.status(target),
+                child_list,
+                indices=connected_indices,
+            )
+            child_responses.extend(
+                [
+                    StatusResponse(
+                        token=None,
+                        name=child_list[i][0].name,
+                        status=Status(
+                            state="disconnected",
+                            sub_state="disconnected",
+                            in_error=child_list[i][0].state.in_error(),
+                            included=child_list[i][0].included,
+                        ),
+                        flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                    )
+                    for i in disconnected_indices
+                ]
             )
 
             children_states = {}
@@ -502,23 +536,90 @@ class Controller(ControllerServicer):
     def propagate_concurrently(
         child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
+        indices: list[int] | None = None,
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
+            maintaining the ordering of the children in the response list.
 
         Args:
             child_callable: Callable to be executed for each child, with
                 arguments (child, target).
             child_list: List of (node, target) for each addressed child.
+            indices: Optional list of indices selecting which entries from
+                ``child_list`` to execute.
 
         Returns:
             List of responses from each child.
         """
+        selected_child_list = (
+            child_list if indices is None else [child_list[i] for i in indices]
+        )
+
         with ThreadPoolExecutor() as executor:
-            futures = [
-                executor.submit(child_callable, child_node, child_target)
-                for child_node, child_target in child_list
-            ]
-            return [f.result() for f in as_completed(futures)]
+            return list(
+                executor.map(
+                    lambda child_target: child_callable(
+                        child_target[0], child_target[1]
+                    ),
+                    selected_child_list,
+                )
+            )
+
+    @staticmethod
+    def check_connections(
+        child_list: list[tuple[ChildNode, str]],
+    ) -> list[bool]:
+        """Check connectivity for each child in the provided list.
+
+        Args:
+            child_list: List of (child, target) tuples to probe.
+
+        Returns:
+            A boolean list aligned with ``child_list`` where True means the
+            corresponding child is reachable.
+        """
+        return Controller.propagate_concurrently(
+            lambda child, _target: child.check_connection(),
+            child_list,
+        )
+
+    def _partition_connected_children(
+        self,
+        child_list: list[tuple[ChildNode, str]],
+        operation_name: str,
+    ) -> tuple[list[int], list[int]]:
+        """Split addressed children into reachable and unreachable groups.
+
+        Args:
+            child_list: List of (child, target) tuples to partition.
+            operation_name: Name of the operation used in warning messages.
+
+        Returns:
+            A tuple ``(connected_indices, disconnected_indices)`` preserving
+            the original ordering of ``child_list`` in each partition.
+        """
+        if not child_list:
+            return [], []
+
+        connections = self.check_connections(child_list)
+        connected_indices: list[int] = []
+        disconnected_indices: list[int] = []
+
+        for i, is_connected in enumerate(connections):
+            if is_connected:
+                connected_indices.append(i)
+            else:
+                disconnected_indices.append(i)
+
+        if disconnected_indices:
+            disconnected_names = [child_list[i][0].name for i in disconnected_indices]
+            warning = (
+                f"Disconnected child node(s) while handling '{operation_name}': "
+                f"{', '.join(disconnected_names)}"
+            )
+            self.log.warning(warning)
+
+        return connected_indices, disconnected_indices
 
     ########################################################
     ############# Status, description commands #############
@@ -554,6 +655,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="status",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.status(
                 target,
@@ -561,6 +666,23 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                StatusResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    status=Status(
+                        state="disconnected",
+                        sub_state="disconnected",
+                        in_error=child_list[i][0].state.in_error(),
+                        included=child_list[i][0].included,
+                    ),
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -605,6 +727,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="describe",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe(
                 target,
@@ -612,6 +738,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                DescribeResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -668,6 +805,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="describe_fsm",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe_fsm(
                 target,
@@ -676,6 +817,17 @@ class Controller(ControllerServicer):
                 request.key,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                DescribeFSMResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -712,7 +864,34 @@ class Controller(ControllerServicer):
         # Extract command information.
         command = request.command
         command_name = command.command_name
-        self.log.debug(f"FSM command: {command_name}")
+
+        fsm_cmd_log = f"FSM command run: {command_name} for target {request.target} "
+        if command_name == "start" and (
+            cmd := self.stateful_node.decode_fsm_arguments(command)
+        ):
+            fsm_cmd_log += f"with arguments {cmd}"
+        elif command_name == "stop":
+            fsm_cmd_log += f"for run number {self.runinfo.get('run', 'unknown')}"
+        self.log.info(fsm_cmd_log)
+
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name=f"execute_fsm_command:{command_name}",
+        )
+        for i in disconnected_indices:
+            response.children.append(
+                ExecuteFSMCommandResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    command_name=command_name,
+                    fsm_flag=FSMResponseFlag.FSM_FAILED,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+            )
 
         # Extract FSM transition.
         transition = self.stateful_node.get_fsm_transition(command_name)
@@ -795,11 +974,6 @@ class Controller(ControllerServicer):
             child_command = FSMCommand()
             child_command.CopyFrom(command)
             child_command.data = fsm_data
-
-            child_list = self.address_target_path(
-                request.target,
-                request.execute_on_all_subsequent_children_in_path,
-            )
             child_responses = self.propagate_concurrently(
                 lambda child, target: child.execute_fsm_command(
                     child_command,
@@ -808,6 +982,7 @@ class Controller(ControllerServicer):
                     request.execute_on_all_subsequent_children_in_path,
                 ),
                 child_list,
+                indices=connected_indices,
             )
             response.children.extend(child_responses)
 
@@ -827,26 +1002,8 @@ class Controller(ControllerServicer):
                 ctx=self,
             )
 
-            # Set FSM error flag based on child responses.
-            for child_response in child_responses:
-                if child_response.flag not in [
-                    ResponseFlag.EXECUTED_SUCCESSFULLY,
-                    ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-                ] or child_response.fsm_flag not in [
-                    FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY,
-                    FSMResponseFlag.FSM_NOT_EXECUTED_EXCLUDED,
-                    FSMResponseFlag.FSM_INVALID_TRANSITION,
-                ]:
-                    response.fsm_flag = FSMResponseFlag.FSM_FAILED
-                    self.stateful_node.to_error()
-                    break
-
         # Children nodes.
         else:
-            child_list = self.address_target_path(
-                request.target,
-                request.execute_on_all_subsequent_children_in_path,
-            )
             child_responses = self.propagate_concurrently(
                 lambda child, target: child.execute_fsm_command(
                     command,
@@ -855,6 +1012,7 @@ class Controller(ControllerServicer):
                     request.execute_on_all_subsequent_children_in_path,
                 ),
                 child_list,
+                indices=connected_indices,
             )
             response.children.extend(child_responses)
 
@@ -891,6 +1049,10 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="execute_expert_command",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.execute_expert_command(
                 request.json_string,
@@ -899,6 +1061,18 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                ExecuteExpertCommandResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    fsm_flag=FSMResponseFlag.FSM_FAILED,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -926,20 +1100,15 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # This node.
-        if request.target == self.name or request.execute_along_path:
-            try:
-                self.stateful_node.include_node()
-            except CannotInclude:
-                response.text = f"'{self.name}' is already included"
-            else:
-                response.text = f"'{self.name}' included"
-
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="include",
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.include(
@@ -948,8 +1117,30 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
         )
+        # Disconnected children can't be reached via gRPC/REST, but we can still mark
+        # them included locally so this controller can route commands to them again.
+        for i in disconnected_indices:
+            child = child_list[i][0]
+            child.included = True
+            child_responses.append(
+                IncludeResponse(
+                    token=None,
+                    name=child.name,
+                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                )
+            )
         response.children.extend(child_responses)
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            try:
+                self.stateful_node.include_node()
+            except CannotInclude:
+                response.text = f"'{self.name}' is already included"
+            else:
+                response.text = f"'{self.name}' included"
 
         return response
 
@@ -975,20 +1166,15 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
-        # This node.
-        if request.target == self.name or request.execute_along_path:
-            try:
-                self.stateful_node.exclude_node()
-            except CannotExclude:
-                response.text = f"'{self.name}' is already excluded"
-            else:
-                response.text = f"'{self.name}' excluded"
-
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="exclude",
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.exclude(
@@ -997,8 +1183,30 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
         )
+        # Disconnected children can't be reached via gRPC/REST, but we can still mark
+        # them excluded locally so this controller stops routing commands to them.
+        for i in disconnected_indices:
+            child = child_list[i][0]
+            child.included = False
+            child_responses.append(
+                ExcludeResponse(
+                    token=None,
+                    name=child.name,
+                    flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+                )
+            )
         response.children.extend(child_responses)
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            try:
+                self.stateful_node.exclude_node()
+            except CannotExclude:
+                response.text = f"'{self.name}' is already excluded"
+            else:
+                response.text = f"'{self.name}' excluded"
 
         return response
 
@@ -1027,6 +1235,10 @@ class Controller(ControllerServicer):
             request.target,
             request.execute_on_all_subsequent_children_in_path,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="recompute_status",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.recompute_status(
                 target,
@@ -1034,6 +1246,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                RecomputeStatusResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -1041,9 +1264,32 @@ class Controller(ControllerServicer):
         if request.target == self.name or request.execute_along_path:
             # Query status of immediate children only (except excluded).
             child_status_list = self.address_all()
+            connected_status_indices, disconnected_status_indices = (
+                self._partition_connected_children(
+                    child_status_list,
+                    operation_name="recompute_status.status",
+                )
+            )
             child_status_responses = self.propagate_concurrently(
                 lambda child, target: child.status(target, False, False),
                 child_status_list,
+                indices=connected_status_indices,
+            )
+            child_status_responses.extend(
+                [
+                    StatusResponse(
+                        token=None,
+                        name=child_status_list[i][0].name,
+                        status=Status(
+                            state="disconnected",
+                            sub_state="disconnected",
+                            in_error=child_list[i][0].state.in_error(),
+                            included=child_list[i][0].included,
+                        ),
+                        flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                    )
+                    for i in disconnected_status_indices
+                ]
             )
 
             children_states = set()
@@ -1122,6 +1368,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="take_control",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.take_control(
                 target,
@@ -1129,6 +1379,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                TakeControlResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -1184,6 +1445,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="surrender_control",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.surrender_control(
                 target,
@@ -1191,6 +1456,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                SurrenderControlResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -1243,6 +1519,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="who_is_in_charge",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.who_is_in_charge(
                 target,
@@ -1250,6 +1530,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                WhoIsInChargeResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 
@@ -1294,6 +1585,10 @@ class Controller(ControllerServicer):
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="to_error",
+        )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.to_error(
                 target,
@@ -1301,6 +1596,17 @@ class Controller(ControllerServicer):
                 request.execute_on_all_subsequent_children_in_path,
             ),
             child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                ToErrorResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
         )
         response.children.extend(child_responses)
 

@@ -4,6 +4,7 @@ from tests.processes.test_ssh_process_lifetime_manager_common import (
     boot_processes_and_kill_individually,
     boot_processes_and_terminate_all_different_role,
     boot_processes_and_terminate_all_same_role,
+    boot_processes_and_verify_exit_state_messages,
 )
 
 
@@ -36,3 +37,17 @@ def test_ssh_terminate_all_different_role_shell(ssh_manager_shell):
     and confirms complete cleanup.
     """
     boot_processes_and_terminate_all_different_role(ssh_manager_shell, Path(__file__))
+
+
+def test_ssh_exit_status_messages_for_kill_paths_shell(ssh_manager_shell):
+    """
+    Verify shell manager emits correct exit-status messages for all kill paths.
+
+    Boots one process per exit-status scenario, triggers all required kill modes
+    concurrently, and validates callback-delivered ExitStatus source and message.
+    """
+
+    boot_processes_and_verify_exit_state_messages(
+        ssh_manager=ssh_manager_shell,
+        test_file_path=Path(__file__),
+    )
