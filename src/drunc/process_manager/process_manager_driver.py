@@ -599,6 +599,10 @@ To debug it, close drunc and run the following command:
         if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
             connectivity_service_host: str = session_dal.connectivity_service.host
             connectivity_service_port = session_dal.connectivity_service.service.port
+            self.log.critical(
+                f"{connectivity_service_host=}, {connectivity_service_port=}"
+            )
+
             if not is_port_available(
                 connectivity_service_host, connectivity_service_port
             ):
