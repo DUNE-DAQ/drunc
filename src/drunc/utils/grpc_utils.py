@@ -429,13 +429,13 @@ def abort_with_rich_error_status(
     raise Exception(f"Aborting with status: {message}")
 
 
-class RichErrorServerInterceptor:
+class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
     A gRPC server interceptor that catches exceptions and converts them into
     rich error statuses with structured error details.
     """
 
-    def intercept_service(
+    def intercept_service(  # type: ignore[override]
         self,
         continuation: Callable[
             [grpc.HandlerCallDetails],
