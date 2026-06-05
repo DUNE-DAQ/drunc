@@ -14,7 +14,6 @@ def main() -> None:
         log = get_logger("controller_shell", rich_handler=True)
         log.error("[red bold]:fire::fire: Exception thrown :fire::fire:")
         log.exception(e)
-        # raise e
         exit(1)
 
 

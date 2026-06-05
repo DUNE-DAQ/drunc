@@ -213,9 +213,6 @@ class ProcessManagerDriver:
     ) -> Iterator[ProcessInstanceList] | None:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
-        self.log.warning(
-            f"parameters: {conf_file=}, {conf_id=}, {user=}, {self.address=}"
-        )
         # Assume oksconflibs if no framework is defined
         conf_file = f"oksconflibs:{conf_file}" if ":" not in conf_file else conf_file
 
@@ -228,26 +225,15 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
-        # Step 3.5 - modify the host mapping (explicitly!!)
-        # self.log.warning("prechange session_dal:\n%s", self._dump_session_dal(session_dal))
-
-        # session_dal = self.update_dal_host(session_dal)
-
-        # self.log.warning("db dump:\n%s", self._dump_database(db))
-        # self.log.warning("postchange session_dal:\n%s", self._dump_session_dal(session_dal))
-
-        self.log.info("step 4")
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
         )
 
-        self.log.info(f"step 5 + {csc.address}")
         # Step 5 - track boot timings per host
         last_boot_on_host_at = {}
         previous_host = None
 
-        self.log.info("step 6")
         # Step 6: iterate over boot requests
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
@@ -257,8 +243,6 @@ class ProcessManagerDriver:
             override_logs=override_logs,
             **kwargs,
         ):
-            self.log.warning(request)
-
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
                 return None
@@ -269,11 +253,10 @@ class ProcessManagerDriver:
                     f"Skipping connectivity service readiness check for application {request.process_description.metadata.name}"
                 )
             else:
-                self.log.info(
+                self.log.debug(
                     f"Checking connectivity service readiness before booting application {request.process_description.metadata.name}"
                 )
                 if csc and not csc.is_ready(timeout=10):
-                    self.log.info("whoops its not ready?")
                     raise DruncSetupException(
                         "Connectivity service did not respond within timeout."
                     )
@@ -306,7 +289,6 @@ class ProcessManagerDriver:
                     )
                 handle_grpc_error(e)
 
-        self.log.info("step 7")
         # Step 7: discover segment root controller
         self._discover_controller(
             session_dal, session_name, csc, connection_server, connection_port
@@ -341,8 +323,7 @@ class ProcessManagerDriver:
 
         apps = infra_apps + apps
 
-        self.log.warning("json jumps")
-        self.log.info(f"{json.dumps(apps, indent=4)}")
+        self.log.debug(f"{json.dumps(apps, indent=4)}")
 
         return apps
 
@@ -393,11 +374,7 @@ class ProcessManagerDriver:
         host_test = format_hostname(app["restriction"])
         resolved_server_test = resolve_localhost_to_hostname(host_test)
         self.log.info(f"boot resolve {resolved_server_test}")
-
         host = resolved_server_test
-
-        # host = "np04-srv-029"  #! GOD BLESS THIS WORKSS
-
         # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
@@ -599,10 +576,6 @@ To debug it, close drunc and run the following command:
         if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
             connectivity_service_host: str = session_dal.connectivity_service.host
             connectivity_service_port = session_dal.connectivity_service.service.port
-            self.log.critical(
-                f"{connectivity_service_host=}, {connectivity_service_port=}"
-            )
-
             if not is_port_available(
                 connectivity_service_host, connectivity_service_port
             ):
@@ -661,18 +634,12 @@ To debug it, close drunc and run the following command:
         self, session_dal: "conffwk.dal.Session", session_name: str
     ) -> ConnectivityServiceClient | None:
         if session_dal.connectivity_service:
-            self.log.info("we have connectivity service")
-
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
 
             if connection_server == "localhost":
-                self.log.info("Apparently its localhost?")
                 resolved_server_test = resolve_localhost_to_hostname(connection_server)
-                self.log.info(resolved_server_test)
 
-                # test_address = self.address
-                # test_address = "np04-srv-029"
                 test_address = resolved_server_test
 
                 # this is one of the two minimal changes needed to get this working in general?
@@ -680,21 +647,13 @@ To debug it, close drunc and run the following command:
                     test_address = "grpc://" + test_address
 
                 resolved_server = urlparse(test_address).hostname
-                self.log.info(
+                self.log.debug(
                     f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
                 )
                 connection_server = resolved_server
 
-            self.log.info(f"connectivity service: {connection_server=}")
-            # Funnily enough this is the minimum amount of change needed...s
-            # so basically instead of trying to resolve the localhost hostname, resolve to whatever we are connecting to?
-            # connection_server = "np04-srv-028"
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
-            )
-
-            self.log.info(
-                f"returning {client=}, {connection_server=}, {connection_port=}"
             )
             return client, connection_server, connection_port
         return None, None, None

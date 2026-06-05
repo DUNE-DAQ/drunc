@@ -53,18 +53,16 @@ def controller_shell(ctx, controller_address: str, log_level: str) -> None:
     get_root_logger(log_level)
     controller_shell_log = get_logger("controller.iface.shell", rich_handler=True)
 
-    controller_shell_log.info("Resetting the context instance address")
+    controller_shell_log.debug("Resetting the context instance address")
     ctx.obj.reset(address=controller_address)
     ctx.call_on_close(controller_cleanup_wrapper(ctx.obj))
 
     desc = None
-    controller_shell_log.info(
+    controller_shell_log.debug(
         f"[green]{getpass.getuser()}[/green] connecting to the [green]controller[/green] through a [green]controller-shell[/green] via address [green]{controller_address}[/green]"
     )
     try:
-        controller_shell_log.info("test 1")
         desc = controller_setup(ctx.obj, controller_address)
-        controller_shell_log.info("test 2")
     except ServerUnreachable as e:
         controller_shell_log.critical("Could not connect to the controller")
         controller_shell_log.exception(
