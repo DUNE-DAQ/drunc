@@ -59,17 +59,6 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
-        # FAILURE TESTING - CMD TIMEOUT
-        # For testing purposes, we can delay the execution of the command to simulate a
-        # long running command and test timeouts in the run control
-        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
-        ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
-        if ft_fsm_timeout and ft_fsm_timeout_app_name == self.appname:
-            self.log.info(
-                f"Delaying execution of {ft_fsm_timeout_app_name} by {ft_fsm_timeout} seconds"
-            )
-            time.sleep(ft_fsm_timeout)
-
         # FAILURE TESTING - CMD PROCESS DEATH
         # The following block simulates a failure of the app while executing a stateful
         # command. Thisserves uniquely to test the robustness of the Run Control when an
@@ -122,6 +111,17 @@ class AppState:
         self.log.info(f"Executing {command_id}")
 
         self.executing_command = True
+
+        # FAILURE TESTING - CMD TIMEOUT
+        # For testing purposes, we can delay the execution of the command to simulate a
+        # long running command and test timeouts in the run control
+        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
+        if ft_fsm_timeout and ft_fsm_timeout_app_name == self.appname:
+            self.log.info(
+                f"Delaying execution of {ft_fsm_timeout_app_name} by {ft_fsm_timeout} seconds"
+            )
+            time.sleep(ft_fsm_timeout)
 
         if data.get("seg_fault"):
             time.sleep(worries)
