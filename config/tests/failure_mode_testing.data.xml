@@ -241,8 +241,6 @@
  <rel name="controller" class="RCApplication" id="top-segment-controller"/>
 </obj>
 
-
-
 <obj class="DetectorConfig" id="dummy-detector">
  <attr name="tpg_channel_map" type="string" val="PD2HDChannelMap"/>
  <attr name="clock_speed_hz" type="u32" val="62500000"/>
@@ -251,7 +249,9 @@
 </obj>
 
 
-<obj class="Session" id="test-config">
+<!-- Testing configs -->
+<!-- Applications dying on boot -->
+<obj class="Session" id="ft-death-on-boot-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -263,6 +263,8 @@
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-ft-process-death-on-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -272,8 +274,7 @@
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
 
-
-<obj class="Session" id="test-config-process-death-on-boot">
+<obj class="Session" id="ft-death-on-boot-top-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -285,7 +286,8 @@
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
-  <ref class="Variable" id="drunc-simulate-process-death-on-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-on-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -294,8 +296,10 @@
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
+<!-- End applications dying on boot -->
 
-<obj class="Session" id="test-config-process-death-post-boot">
+<!-- Applications dying post boot -->
+<obj class="Session" id="ft-death-on-boot-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -307,7 +311,8 @@
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
-  <ref class="Variable" id="drunc-simulate-process-death-post-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-post-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -317,7 +322,7 @@
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
 
-<obj class="Session" id="test-config-long-timeouts">
+<obj class="Session" id="ft-death-on-boot-top-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -329,8 +334,8 @@
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
-  <ref class="Variable" id="drunc-simulate-failure-long-command-execution"/>
-  <ref class="Variable" id="drunc-simulate-failure-long-command-execution-app-name"/>
+  <ref class="Variable" id="drunc-ft-process-death-post-boot"/>
+  <ref class="Variable" id="drunc-ft-process-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -339,8 +344,10 @@
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
+<!-- End applications dying post boot -->
 
-<obj class="Session" id="test-config-process-death-fsm-cmd">
+<!-- Applications timing out on FSM commands -->
+<obj class="Session" id="ft-fsm-cmd-timeout-nested-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -352,8 +359,8 @@
   <ref class="Variable" id="local-env-ers-error"/>
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
-  <ref class="Variable" id="drunc-simulate-process-death-fsm-cmd"/>
-  <ref class="Variable" id="drunc-simulate-process-death-fsm-cmd-app-name"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -362,5 +369,78 @@
  <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
  <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
 </obj>
+
+<obj class="Session" id="ft-fsm-cmd-timeout-top-app">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-top-app"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+<!-- End applications timing out on FSM commands -->
+
+
+<!-- Applications dying on FSM commands -->
+<obj class="Session" id="ft-fsm-cmd-death-nested-app">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death-nested-app"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
+<obj class="Session" id="ft-fsm-cmd-death-top-app">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death-nested-app"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+<!-- End applications dying on FSM commands -->
 
 </oks-data>

@@ -72,20 +72,6 @@ class AppState:
         )
         if (
             drunc_testing_app_timeout_delay
-            and not drunc_testing_app_timeout_delay_app_name
-        ):
-            self.log.critical(
-                "DRUNC_FAILURE_TESTING_CMD_DELAY is set but DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is not set, not delaying execution"
-            )
-        if (
-            not drunc_testing_app_timeout_delay
-            and drunc_testing_app_timeout_delay_app_name
-        ):
-            self.log.critical(
-                "DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DELAY is not set, not delaying execution"
-            )
-        if (
-            drunc_testing_app_timeout_delay
             and drunc_testing_app_timeout_delay_app_name == self.appname
         ):
             delay = int(os.getenv("DRUNC_PROCESS_DEATH_FSM_CMD"))
@@ -333,6 +319,19 @@ def main():
 
     interval = 2
 
+    # FAILURE TESTING LOGIC BLOCK - DEATH ON BOOT
+    # The following block simulates a failure on initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # complete initialization, and should not be used for any other purpose. The
+    # environment variable is set in the configuration file that tests this behaviour.
+    fail_on_boot: bool = (
+        os.getenv("DRUNC_FT_PROCESS_DEATH_ON_BOOT", "false").lower() == "true"
+    )
+    app_to_die_boot: str = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", None)
+    if fail_on_boot and app_to_die_boot == name:
+        log.info(f"Simulating death of {name} on boot")
+        exit(1)
+
     connectivity_service = ConnectivityServiceClient(
         session=args.session,
         address=connectivity_service_address,
@@ -367,18 +366,6 @@ def main():
         name="flask_thread",
     )
 
-    # The following block simulates a failure on initialization of the app. This
-    # serves uniquely to test the robustness of the Run Control when an app fails to
-    # complete initialization, and should not be used for any other purpose. The
-    # environment variable is set in the configuration file that tests this behaviour.
-    fail_on_boot: bool = (
-        os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", "false").lower() == "true"
-    )
-    app_to_die_boot: str = os.getenv("DRUNC_BOOT_PROCESS_DEATH_APP_NAME", None)
-    if fail_on_boot and app_to_die_boot == name:
-        log.info(f"Simulating death of {name} on boot")
-        exit(1)
-
     flask_thread.start()
 
     for i in range(10):
@@ -396,12 +383,13 @@ def main():
 
     connectivity_service_thread.start()
 
+    # FAILURE TESTING LOGIC BLOCK - DEATH POST BOOT
     # The following block simulates a failure after the initialization of the app. This
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # complete initialization, and should not be used for any other purpose. The
     # environment variable is set in the configuration file that tests this behaviour.
     fail_post_boot: bool = (
-        os.getenv("DRUNC_PROCESS_DEATH_POST_BOOT", "false").lower() == "true"
+        os.getenv("DRUNC_FT_PROCESS_DEATH_POST_BOOT", "false").lower() == "true"
     )
     if fail_post_boot and app_to_die_boot == name:
         log.info(f"Simulating death of {name} post boot")
