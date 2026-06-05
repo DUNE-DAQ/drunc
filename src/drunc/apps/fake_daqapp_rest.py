@@ -59,49 +59,29 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
-        self.log.critical(f"{req_data=}")
-        self.log.critical(f"{answer_port=}")
-        self.log.critical(f"{answer_host=}")
-        self.log.critical(f"{remote_host=}")
-
+        # FAILURE TESTING - CMD TIMEOUT
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
-        drunc_testing_app_timeout_delay = os.getenv("DRUNC_FAILURE_TESTING_CMD_DELAY")
-        drunc_testing_app_timeout_delay_app_name = os.getenv(
-            "DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME"
-        )
-        if (
-            drunc_testing_app_timeout_delay
-            and drunc_testing_app_timeout_delay_app_name == self.appname
-        ):
-            delay = int(os.getenv("DRUNC_PROCESS_DEATH_FSM_CMD"))
-            self.log.info(f"Delaying execution by {delay} seconds for testing purposes")
-            time.sleep(delay)
-
-        # Test application death on FSM command
-        drunc_testing_app_death = os.getenv("DRUNC_FAILURE_TESTING_CMD_DEATH")
-        drunc_testing_app_death_app_name = os.getenv(
-            "DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME"
-        )
-        if drunc_testing_app_death and not drunc_testing_app_timeout_delay_app_name:
-            self.log.critical(
-                "DRUNC_FAILURE_TESTING_CMD_DEATH is set but DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME is not set, not simulating death"
+        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
+        if ft_fsm_timeout and ft_fsm_timeout_app_name == self.appname:
+            self.log.info(
+                f"Delaying execution of {ft_fsm_timeout_app_name} by {ft_fsm_timeout} seconds"
             )
-        if not drunc_testing_app_death and drunc_testing_app_death_app_name:
-            self.log.critical(
-                "DRUNC_FAILURE_TESTING_CMD_DEATH_APP_NAME is set but DRUNC_FAILURE_TESTING_CMD_DEATH is not set, not simulating death"
-            )
-        if drunc_testing_app_death and drunc_testing_app_death_app_name == self.appname:
-            self.log.info("Simulating death for testing purposes")
-            exit(1)
+            time.sleep(ft_fsm_timeout)
 
+        # FAILURE TESTING - CMD PROCESS DEATH
         # The following block simulates a failure of the app while executing a stateful
         # command. Thisserves uniquely to test the robustness of the Run Control when an
         # app exits upon running an applciation, and should not be used for any other
         # purpose. The environment variable is set in the configuration file that tests
         # this behaviour.
-        if os.getenv("DRUNC_FAILURE_TESTING_CMD", None):
-            log.info("Simulating failure during initialization")
+        ft_fsm_death = os.getenv("DRUNC_FT_FSM_CMD_DEATH")
+        ft_fsm_death_app_name = os.getenv("DRUNC_FT_FSM_CMD_DEATH_APP_NAME")
+        if ft_fsm_death and ft_fsm_death_app_name == self.appname:
+            self.log.info(
+                f"Simulating death of {self.appname} during FSM cmd execution"
+            )
             exit(1)
 
         reply_address = (
@@ -319,16 +299,16 @@ def main():
 
     interval = 2
 
-    # FAILURE TESTING LOGIC BLOCK - DEATH ON BOOT
+    # FAILURE TESTING - DEATH ON BOOT
     # The following block simulates a failure on initialization of the app. This
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # complete initialization, and should not be used for any other purpose. The
     # environment variable is set in the configuration file that tests this behaviour.
-    fail_on_boot: bool = (
+    ft_die_on_boot: bool = (
         os.getenv("DRUNC_FT_PROCESS_DEATH_ON_BOOT", "false").lower() == "true"
     )
-    app_to_die_boot: str = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", None)
-    if fail_on_boot and app_to_die_boot == name:
+    ft_app_to_die_boot: str = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", None)
+    if ft_die_on_boot and ft_app_to_die_boot == name:
         log.info(f"Simulating death of {name} on boot")
         exit(1)
 
@@ -388,10 +368,10 @@ def main():
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # complete initialization, and should not be used for any other purpose. The
     # environment variable is set in the configuration file that tests this behaviour.
-    fail_post_boot: bool = (
+    ft_die_post_boot: bool = (
         os.getenv("DRUNC_FT_PROCESS_DEATH_POST_BOOT", "false").lower() == "true"
     )
-    if fail_post_boot and app_to_die_boot == name:
+    if ft_die_post_boot and ft_app_to_die_boot == name:
         log.info(f"Simulating death of {name} post boot")
         exit(1)
 

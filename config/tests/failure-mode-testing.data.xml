@@ -93,7 +93,7 @@
 <!-- Configs for apps timing out on FSM command execution -->
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT"/>
- <attr name="value" type="string" val="70"/>
+ <attr name="value" type="string" val="100"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME"/>
@@ -432,7 +432,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death"/>
-  <ref class="Variable" id="drunc-ft-fsm-cmd-death-nested-app"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
