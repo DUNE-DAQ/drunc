@@ -71,31 +71,6 @@
  <file path="config/daqsystemtest/hosts.data.xml"/>
 </include>
 
-
-<obj class="Variable" id="drunc-simulate-failure-long-command-execution">
- <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD_DELAY"/>
- <attr name="value" type="string" val="70"/>
-</obj>
-<obj class="Variable" id="drunc-simulate-failure-long-command-execution-app-name">
- <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD_DELAY_APP_NAME"/>
- <attr name="value" type="string" val="bottom-segment-2-application"/>
-</obj>
-
-<obj class="Variable" id="drunc-simulate-failure-init"/>
- <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_INIT"/>
- <attr name="value" type="string" val="True"/>
-</obj>
-
-<obj class="Variable" id="drunc-simulate-failure-post-boot">
- <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_POST_BOOT"/>
- <attr name="value" type="string" val="True"/>
-</obj>
-
-<obj class="Variable" id="drunc-simulate-failure-cmd">
- <attr name="name" type="string" val="DRUNC_FAILURE_TESTING_CMD"/>
- <attr name="value" type="string" val="True"/>
-</obj>
-
 <obj class="Service" id="controller_control">
  <attr name="protocol" type="string" val="grpc"/>
  <attr name="port" type="u16" val="0"/>
@@ -217,7 +192,6 @@
  </rel>
  <rel name="controller" class="RCApplication" id="top-segment-controller"/>
 </obj>
-
 
 
 <obj class="DetectorConfig" id="dummy-detector">
