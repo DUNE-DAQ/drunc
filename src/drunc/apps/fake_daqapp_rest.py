@@ -23,7 +23,7 @@ from drunc.utils.utils import (
 
 __version__ = "1.0.0"
 get_root_logger("info")
-log = get_logger("fake_daqapp_rest", stream_handler=True)
+log = get_logger("fake_daqapp_rest", rich_handler=True)
 
 
 class AppState:
@@ -59,15 +59,24 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
+        print(f"{req_data=}")
+        print(f"{req_data['id']=}")
+        self.log.critical(
+            f"Received command {req_data} from {remote_host}, answer_host: {answer_host}, answer_port: {answer_port}"
+        )
         # FAILURE TESTING - CMD PROCESS DEATH
         # The following block simulates a failure of the app while executing a stateful
         # command. Thisserves uniquely to test the robustness of the Run Control when an
         # app exits upon running an applciation, and should not be used for any other
-        # purpose. The environment variable is set in the configuration file that tests
-        # this behaviour.
+        # purpose.
         ft_fsm_death = os.getenv("DRUNC_FT_FSM_CMD_DEATH")
+        ft_fsm_death_cmd = os.getenv("DRUNC_FT_FSM_CMD_DEATH_CMD")
         ft_fsm_death_app_name = os.getenv("DRUNC_FT_FSM_CMD_DEATH_APP_NAME")
-        if ft_fsm_death and ft_fsm_death_app_name == self.appname:
+        if (
+            ft_fsm_death
+            and ft_fsm_death_cmd == req_data["id"]
+            and ft_fsm_death_app_name == self.appname
+        ):
             self.log.info(
                 f"Simulating death of {self.appname} during FSM cmd execution"
             )
@@ -116,8 +125,13 @@ class AppState:
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
         ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        ft_fsm_timeout_cmd = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_CMD")
         ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
-        if ft_fsm_timeout and ft_fsm_timeout_app_name == self.appname:
+        if (
+            ft_fsm_timeout
+            and ft_fsm_timeout_cmd == req_data["id"]
+            and ft_fsm_timeout_app_name == self.appname
+        ):
             self.log.info(
                 f"Delaying execution of {ft_fsm_timeout_app_name} by {ft_fsm_timeout} seconds"
             )
@@ -371,6 +385,10 @@ def main():
     ft_die_post_boot: bool = (
         os.getenv("DRUNC_FT_PROCESS_DEATH_POST_BOOT", "false").lower() == "true"
     )
+    log.critical(
+        f"ft_die_post_boot is set to {ft_die_post_boot}, ft_app_to_die_boot is set to {ft_app_to_die_boot}, app name is {name}"
+    )
+    log.critical(f"CHECK: {ft_die_post_boot} and {ft_app_to_die_boot == name}")
     if ft_die_post_boot and ft_app_to_die_boot == name:
         log.info(f"Simulating death of {name} post boot")
         exit(1)

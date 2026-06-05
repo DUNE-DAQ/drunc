@@ -81,11 +81,11 @@
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_POST_BOOT"/>
  <attr name="value" type="string" val="True"/>
 </obj>
-<obj class="Variable" id="drunc-ft-death-nested-app"/>
+<obj class="Variable" id="drunc-ft-boot-death-nested-app"/>
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME"/>
  <attr name="value" type="string" val="bottom-segment-2-application"/>
 </obj>
-<obj class="Variable" id="drunc-ft-death-top-app"/>
+<obj class="Variable" id="drunc-ft-boot-death-top-app"/>
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME"/>
  <attr name="value" type="string" val="nested-segment-application"/>
 </obj>
@@ -94,6 +94,10 @@
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT"/>
  <attr name="value" type="string" val="100"/>
+</obj>
+<obj class="Variable" id="drunc-ft-fsm-cmd-timeout-cmd">
+ <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_CMD"/>
+ <attr name="value" type="string" val="conf"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME"/>
@@ -108,6 +112,10 @@
 <obj class="Variable" id="drunc-ft-fsm-cmd-death">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH"/>
  <attr name="value" type="string" val="True"/>
+</obj>
+<obj class="Variable" id="drunc-ft-fsm-cmd-death-cmd">
+ <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_CMD"/>
+ <attr name="value" type="string" val="scrap"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_APP_NAME"/>
@@ -250,6 +258,28 @@
 
 
 <!-- Testing configs -->
+<!-- Reference -->
+<obj class="Session" id="ft-reference">
+ <attr name="data_request_timeout_ms" type="u32" val="1000"/>
+ <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
+ <attr name="controller_log_level" type="enum" val="INFO"/>
+ <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
+ <rel name="environment">
+  <ref class="Variable" id="local-env-ers-verb"/>
+  <ref class="Variable" id="local-env-ers-info"/>
+  <ref class="Variable" id="local-env-ers-warning"/>
+  <ref class="Variable" id="local-env-ers-error"/>
+  <ref class="Variable" id="local-env-ers-fatal"/>
+  <ref class="Variable" id="local-env-connectivity-port"/>
+ </rel>
+ <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="infrastructure_applications">
+  <ref class="ConnectionService" id="local-connection-server"/>
+ </rel>
+ <rel name="detector_configuration" class="DetectorConfig" id="dummy-detector"/>
+ <rel name="opmon_uri" class="OpMonURI" id="local-opmon-uri"/>
+</obj>
+
 <!-- Applications dying on boot -->
 <obj class="Session" id="ft-death-on-boot-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
@@ -264,7 +294,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-death-on-boot"/>
-  <ref class="Variable" id="drunc-ft-death-nested-app"/>
+  <ref class="Variable" id="drunc-ft-boot-death-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -287,7 +317,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-death-on-boot"/>
-  <ref class="Variable" id="drunc-ft-death-top-app"/>
+  <ref class="Variable" id="drunc-ft-boot-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -312,7 +342,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-death-post-boot"/>
-  <ref class="Variable" id="drunc-ft-death-nested-app"/>
+  <ref class="Variable" id="drunc-ft-boot-death-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -335,7 +365,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-death-post-boot"/>
-  <ref class="Variable" id="drunc-ft-death-top-app"/>
+  <ref class="Variable" id="drunc-ft-boot-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
  <rel name="infrastructure_applications">
@@ -361,6 +391,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
@@ -384,6 +415,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
@@ -409,6 +441,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-nested-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
@@ -432,6 +465,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death"/>
+  <ref class="Variable" id="drunc-ft-fsm-cmd-death-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-top-app"/>
  </rel>
  <rel name="segment" class="Segment" id="top-segment"/>
