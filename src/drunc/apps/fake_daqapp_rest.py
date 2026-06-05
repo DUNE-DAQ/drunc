@@ -367,6 +367,18 @@ def main():
         name="flask_thread",
     )
 
+    # The following block simulates a failure on initialization of the app. This
+    # serves uniquely to test the robustness of the Run Control when an app fails to
+    # complete initialization, and should not be used for any other purpose. The
+    # environment variable is set in the configuration file that tests this behaviour.
+    fail_on_boot: bool = (
+        os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", "false").lower() == "true"
+    )
+    app_to_die_boot: str = os.getenv("DRUNC_BOOT_PROCESS_DEATH_APP_NAME", None)
+    if fail_on_boot and app_to_die_boot == name:
+        log.info(f"Simulating death of {name} on boot")
+        exit(1)
+
     flask_thread.start()
 
     for i in range(10):
@@ -388,8 +400,11 @@ def main():
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # complete initialization, and should not be used for any other purpose. The
     # environment variable is set in the configuration file that tests this behaviour.
-    if os.getenv("DRUNC_PROCESS_DEATH_POST_BOOT", None):
-        log.info("Simulating failure after initialization")
+    fail_post_boot: bool = (
+        os.getenv("DRUNC_PROCESS_DEATH_POST_BOOT", "false").lower() == "true"
+    )
+    if fail_post_boot and app_to_die_boot == name:
+        log.info(f"Simulating death of {name} post boot")
         exit(1)
 
 
