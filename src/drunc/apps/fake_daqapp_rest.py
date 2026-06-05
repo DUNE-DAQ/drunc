@@ -12,6 +12,7 @@ import conffwk
 import requests
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
+from werkzeug.serving import run_simple
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
@@ -27,6 +28,11 @@ log = get_logger("fake_daqapp_rest", rich_handler=True)
 
 
 class AppState:
+    """
+    Tracks state of the apps, and simulates the behaviour of daq_applicaitons with
+    stateful commands.
+    """
+
     def __init__(self, app_name: str):
         self.appname = app_name
         self.state = "INITIAL"
@@ -124,9 +130,12 @@ class AppState:
         # FAILURE TESTING - CMD TIMEOUT
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
-        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        ft_fsm_timeout = int(os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT"))
         ft_fsm_timeout_cmd = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_CMD")
         ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
+        self.log.critical(
+            f"{ft_fsm_timeout=}, {ft_fsm_timeout_cmd=}, {ft_fsm_timeout_app_name=}"
+        )
         if (
             ft_fsm_timeout
             and ft_fsm_timeout_cmd == req_data["id"]
@@ -287,6 +296,7 @@ def main():
     print(f"Name: {name}")
     app_state = AppState(name)
 
+    # Set up and parse configuration
     conf = conffwk.Configuration(args.configurationService)
     session = conf.get_dal(
         class_name="Session",
@@ -297,10 +307,13 @@ def main():
         + ":"
         + str(session.connectivity_service.service.port)
     )
+
+    # Validate command facility argument
     if not args.commandFacility:
         log.error("No command facility passed, exiting")
         exit(1)
 
+    # Resolve the command facility URL and validate the scheme
     url = urlparse(resolve_localhost_and_127_ip_to_network_ip(args.commandFacility))
     if url.scheme != "rest":
         log.exception("DAQApplication communication scheme must be rest")
@@ -349,20 +362,46 @@ def main():
     DAQAppCMD = AppCommand.pass_daq_app(app_state)
     api.add_resource(DAQAppCMD, "/command", methods=["POST"])
     app.add_url_rule("/", "index", index)
+    server_ready = threading.Event()
 
+    def run_flask_app(app, host, port, event):
+        try:
+            print(f"DEBUG: Entering run_flask_app for {host}:{port}")
+            # The 'event' signals that we've reached the startup phase
+            event.set()
+            # use_reloader=False is mandatory for thread execution
+            run_simple(host, port, app, threaded=True, use_reloader=False)
+        except Exception as e:
+            print(f"CRITICAL: Flask app thread crashed: {e}")
+            # This will print to stderr, which should appear in your logs
+
+    log.warning("TEST: UPDATING URL")
     url = urlparse(url)
     flask_url = url.geturl().replace("rest://", "http://")
 
-    log.info(f"Starting FakeDAQ app on {flask_url}")
+    # 1. Update the thread initialization
     flask_thread = threading.Thread(
-        target=app.run,
-        kwargs={"host": url.hostname, "port": url.port, "debug": False},
+        target=run_flask_app,  # Use your new wrapper here
+        kwargs={
+            "app": app,
+            "host": url.hostname,
+            "port": url.port,
+            "event": server_ready,
+        },
         name="flask_thread",
     )
-
     flask_thread.start()
 
+    # 2. Now the wait will work because the event is set inside the thread
+    log.warning("TEST: WAITING FOR FLASK APP TO BE READY")
+    if not server_ready.wait(timeout=10):
+        log.error("Timed out waiting for FakeDAQ app to start")
+        exit(1)
+
+    time.sleep(1)
+    log.warning("TEST: CONNECTING TO FLASK APP")
     for i in range(10):
+        log.info(f"Trying to connect to Flask app, attempt {i + 1}/10")
         response = requests.get(flask_url + "/")
         log.info(f"Response: {response.status_code}")
         if response.status_code == 200:

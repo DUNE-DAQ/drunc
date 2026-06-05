@@ -647,6 +647,10 @@ def run_one_fsm_command(
         log.error(
             "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
         )
+        # Mark the controller as in error state, so that if the user tries to run another command, it will be prevented, and they will be encouraged to check the status and logs before trying again, to avoid making things worse
+        obj.get_driver("controller").to_error(
+            execute_on_all_subsequent_children_in_path=False
+        )
         return
 
     if not result:

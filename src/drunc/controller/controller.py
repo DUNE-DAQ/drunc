@@ -69,6 +69,7 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
+from drunc.utils.grpc_utils import ServerTimeout
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -974,17 +975,23 @@ class Controller(ControllerServicer):
             child_command = FSMCommand()
             child_command.CopyFrom(command)
             child_command.data = fsm_data
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.execute_fsm_command(
-                    child_command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-                indices=connected_indices,
-            )
-            response.children.extend(child_responses)
+            try:
+                child_responses = self.propagate_concurrently(
+                    lambda child, target: child.execute_fsm_command(
+                        child_command,
+                        target,
+                        request.execute_along_path,
+                        request.execute_on_all_subsequent_children_in_path,
+                    ),
+                    child_list,
+                    indices=connected_indices,
+                )
+                response.children.extend(child_responses)
+            except ServerTimeout as e:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                self.stateful_node.to_error()
+                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                return response
 
             # Finish propagating FSM transition to children.
             self.stateful_node.finish_propagating_transition_mark(transition)
