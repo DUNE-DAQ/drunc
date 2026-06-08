@@ -358,7 +358,7 @@ class ControllerDriver:
 
         return response
 
-    def log(
+    def log_on_server(
         self,
         text: str,
         target: str = "",
@@ -390,9 +390,8 @@ class ControllerDriver:
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-
         try:
-            response = self.stub.log(request, timeout=timeout)
+            response = self.stub.log_on_server(request, timeout=timeout)
         except grpc.RpcError as e:
             handle_grpc_error(e)
 

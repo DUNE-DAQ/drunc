@@ -158,7 +158,7 @@ class ChildNode(ABC):
         pass
 
     @abstractmethod
-    def log(
+    def log_on_server(
         self,
         text: str,
         target: str = "",

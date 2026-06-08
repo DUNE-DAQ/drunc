@@ -846,7 +846,7 @@ class RESTAPIChildNode(ChildNode):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def log(
+    def log_on_server(
         self,
         text: str,
         target: str = "",

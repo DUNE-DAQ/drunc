@@ -34,7 +34,7 @@ from drunc.controller.interface.commands import (
     who_is_in_charge,
 )
 from drunc.controller.interface.commands import (
-    log_cmd as log,
+    log_on_server as log,
 )
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode

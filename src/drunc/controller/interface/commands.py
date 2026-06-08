@@ -270,14 +270,14 @@ def echo(obj, text: str | None) -> None:
     default=False,
 )
 @click.pass_obj
-def log_cmd(
+def log_on_server(
     obj: ControllerContext,
     text: str,
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").log(
+    obj.get_driver("controller").log_on_server(
         text=text,
         target=target,
         execute_along_path=execute_along_path,

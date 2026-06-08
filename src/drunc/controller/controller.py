@@ -1627,11 +1627,12 @@ class Controller(ControllerServicer):
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
-    def log(
+    def log_on_server(
         self,
         request: LogRequest,
         context: ServicerContext,
     ) -> LogResponse:
+        self.log.critical("GOT TO THE SERVER")
         response = LogResponse(
             token=None,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
@@ -1655,7 +1656,7 @@ class Controller(ControllerServicer):
             operation_name="who_is_in_charge",
         )
         child_responses = self.propagate_concurrently(
-            lambda child, target: child.log(
+            lambda child, target: child.log_on_server(
                 request.text,
                 request.target,
                 request.execute_along_path,
