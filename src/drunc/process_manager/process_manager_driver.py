@@ -288,10 +288,10 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host_test = format_hostname(app["restriction"])
-        resolved_server_test = resolve_localhost_to_hostname(host_test)
-        self.log.info(f"boot resolve {resolved_server_test}")
-        host = resolved_server_test
+        # Run mapping to physical hostname to enable multi host usage
+        host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+        self.log.info(f"boot resolve {host}")  # keep this until big PR gets merged
+
         # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
         exe = app["type"]
@@ -422,10 +422,6 @@ To debug it, close drunc and run the following command:
                     if item.name == "CONNECTION_PORT":
                         item.value = new_port
 
-    def update_dal_host(self, session_dal):
-        session_dal.connectivity_service.host = "np04-srv-029"
-        return session_dal
-
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
     ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
@@ -555,15 +551,12 @@ To debug it, close drunc and run the following command:
             connection_port = session_dal.connectivity_service.service.port
 
             if connection_server == "localhost":
-                resolved_server_test = resolve_localhost_to_hostname(connection_server)
+                # resolve localhost to hostname to enable multi host
+                resolved_address = resolve_localhost_to_hostname(connection_server)
+                if "://" not in resolved_address:
+                    resolved_address = "grpc://" + resolved_address
 
-                test_address = resolved_server_test
-
-                # this is one of the two minimal changes needed to get this working in general?
-                if "://" not in test_address:
-                    test_address = "grpc://" + test_address
-
-                resolved_server = urlparse(test_address).hostname
+                resolved_server = urlparse(resolved_address).hostname
                 self.log.debug(
                     f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
                 )
