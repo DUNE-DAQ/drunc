@@ -150,7 +150,7 @@ class ProcessManagerDriver:
         # Step 5 - track boot timings per host
         last_boot_on_host_at = {}
         previous_host = None
-
+        self.log.warning("step 6")
         # Step 6: iterate over boot requests
         for request in self._convert_oks_to_boot_request(
             oks_conf=conf_file,
@@ -190,6 +190,8 @@ class ProcessManagerDriver:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
+
+            self.log.critical(request)
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
