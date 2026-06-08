@@ -334,6 +334,9 @@ class ProcessManagerDriver:
             process_restriction.data_mount = data_path
 
         self.log.debug(f"{name}'s env:\n{env}")
+        log_path = "/dev/null"
+        self.log.critical(f"LOG PATH: {log_path}")
+
         breq = BootRequest(
             token=copy_token(self.token),
             process_description=ProcessDescription(
