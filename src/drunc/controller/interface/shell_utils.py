@@ -636,21 +636,35 @@ def run_one_fsm_command(
             str(ae)
         )  # TODO: Manually raise exception, see if the str declaration is needed with rich handling
         return
-    except ServerTimeout as e:
-        import traceback
-
-        traceback.print_exc()
-        log.error(e)
+    except ServerTimeout:
         log.error(
             "The command timed out, unfortunately this means the server is in undefined state, and [red]your best option at this stage is to [bold]terminate[/bold] and [bold]boot[/bold][/]."
         )
+        # The following line is outdated, but in the future when error states and their
+        # recovery are better defined, we can provide better options to the user.
+        # log.error(
+        #     "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
+        # )
+
+        # Mark the controller as in error state, so that if the user tries to run
+        # another command, it will be prevented, and they will be encouraged to check
+        # the error application logs
         log.error(
-            "Alternatively, if you are patient, you can try to wait a bit longer and send [yellow]'status'[/yellow] to check if the command ends up being executed (you may want to check the logs of the controller and application with the [yellow]'logs'[/yellow] command)."
+            "The session did not complete the stateful transition in the specified "
+            f"time of {timeout} seconds. To investigate the cause, please check the "
+            "controller and application logs with the [yellow]'logs'[/] command."
         )
-        # Mark the controller as in error state, so that if the user tries to run another command, it will be prevented, and they will be encouraged to check the status and logs before trying again, to avoid making things worse
         obj.get_driver("controller").to_error(
             execute_on_all_subsequent_children_in_path=False
         )
+
+        statuses = obj.get_driver("controller").status()
+        descriptions = obj.get_driver("controller").describe()
+        t = get_status_table(statuses, descriptions)
+        obj.print(t)
+        obj.print_status_summary()
+
+        log.error("SHOULD HAVE THE STATUS TABLE BY NOW")
         return
 
     if not result:

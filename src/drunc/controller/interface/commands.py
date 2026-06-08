@@ -77,6 +77,7 @@ def status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
+    obj.log.warning(f"Getting status for target '{target}'...")
     statuses = obj.get_driver("controller").status(
         target=target,
         execute_along_path=execute_along_path,
