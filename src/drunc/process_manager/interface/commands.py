@@ -45,17 +45,15 @@ def boot(
 ) -> None:
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
-    processes = obj.get_driver("process_manager").ps(ProcessQuery(user=user))
+    processes = obj.get_driver("process_manager").ps(
+        ProcessQuery(user=user, session=session_name)
+    )
 
     if len(processes.values) > 0:
-        log.info(
-            f"Note that there are already {len(processes.values)} processes running."
+        click.confirm(
+            f"You already have {len(processes.values)} processes running for {session_name}, are you sure you want to boot a session?",
+            abort=True,
         )
-
-        # click.confirm(
-        #     f"You already have {len(processes.values)} processes running, are you sure you want to boot a session?",
-        #     abort=True,
-        # )
 
     log.debug(
         f"Booting session {session_name} with boot configuration file {configuration_file} and id {configuration_id}, requested by user {user}"
