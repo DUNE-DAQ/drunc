@@ -423,9 +423,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         hostname = boot_request.process_description.metadata.hostname
         user = boot_request.process_description.metadata.user
         log_file = boot_request.process_description.process_logs_path
-        # self.log.critical(
-        #     f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
-        # )
+        self.log.critical(
+            f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
+        )
 
         # Extract environment variables from boot request
         env_vars = (
@@ -450,7 +450,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             cmd = cmd[:-1]
 
         # self.log.critical(f"Built command for {uuid}: {cmd}: {boot_request}")
-
+        self.log.critical(f"{cmd=}")
         # Execute the command via SSH
         self._execute_bootrequest_via_ssh(
             uuid=uuid,
@@ -889,10 +889,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         #     and hostname in ("localhost", "127.0.0.1", "::1")
         # )
         superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
-        # self.log.critical(f"Building SSH arguments for {user_host} with superuser host {superuser_host}")
+        self.log.critical(
+            f"Building SSH arguments for {user_host} with superuser host {superuser_host}"
+        )
         arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
         # self.log.critical(f"SSH arguments after adding StrictHostKeyChecking for {user_host}%s", arguments)
-        # self.log.critical(f"{arguments=}")
+        self.log.critical(f"{arguments=}")
         # self.log.critical(f"Test list: {test_list_print}")
         # self.log.critical(f"Test list 2: %s", test_list_print)
 
@@ -919,10 +921,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 "UserKnownHostsFile=/dev/null",
             ]
         )
-        # self.log.critical(f"SSH arguments for {user_host}: {arguments}")
-        # self.log.critical(
-        #     f"PP: {getpass.getuser()} is running on {os.uname().nodename} with disable_host_key_check={self.disable_host_key_check} and disable_localhost_host_key_check={self.disable_localhost_host_key_check}"
-        # )
+        self.log.critical(f"SSH arguments for {user_host}: {arguments}")
+        self.log.critical(
+            f"PP: {getpass.getuser()} is running on {os.uname().nodename} with disable_host_key_check={self.disable_host_key_check} and disable_localhost_host_key_check={self.disable_localhost_host_key_check}"
+        )
 
         return arguments
 
@@ -1184,9 +1186,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.append(remote_cmd)
 
+            self.log.critical(f"final arguments {arguments}")
+            self.log.critical(f"remote cmd {remote_cmd}")
+
             process = self.ssh(
                 *arguments,
-                _out=self.log.debug,
+                _out=self.log.critical,
                 _err=self._ssh_client_stderr_logger,
                 _bg=True,
                 _bg_exc=False,
