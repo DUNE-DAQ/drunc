@@ -361,6 +361,7 @@ class ControllerDriver:
     def log_on_server(
         self,
         text: str,
+        severity: str = "INFO",
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
@@ -385,6 +386,7 @@ class ControllerDriver:
         request = LogRequest(
             token=self.token,
             text=text,
+            severity=severity,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,

@@ -620,6 +620,7 @@ class gRPCChildNode(ChildNode):
     def log_on_server(
         self,
         text: str,
+        severity: str = "INFO",
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
@@ -627,13 +628,14 @@ class gRPCChildNode(ChildNode):
         request = LogRequest(
             token=None,
             text=text,
+            severity=severity,
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
 
         try:
-            response = self.stub.log(request)
+            response = self.stub.log_on_server(request)
         except grpc.RpcError as e:
             try:
                 self.handle_child_grpc_error(e)

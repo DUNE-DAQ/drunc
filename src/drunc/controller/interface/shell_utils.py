@@ -655,7 +655,7 @@ def run_one_fsm_command(
             "controller and application logs with the [yellow]'logs'[/] command."
         )
         log.error(err_str)
-        obj.get_driver("controller").echo(err_str)
+        obj.get_driver("controller").log_on_server(err_str, severity="ERROR")
         obj.get_driver("controller").to_error(
             execute_on_all_subsequent_children_in_path=False
         )

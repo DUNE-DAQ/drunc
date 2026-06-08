@@ -1659,6 +1659,7 @@ class Controller(ControllerServicer):
             lambda child, target: child.log_on_server(
                 request.text,
                 request.target,
+                request.severity,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
             ),
@@ -1679,6 +1680,8 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-            self.log.info(request.text)
+            level = request.severity.lower()
+            log_method = getattr(self.log, level, self.log.info)
+            log_method(request.text)
 
         return response
