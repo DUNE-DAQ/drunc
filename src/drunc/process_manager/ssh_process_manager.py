@@ -346,7 +346,7 @@ class SSHProcessManager(ProcessManager):
         Raises:
             DruncCommandException: If no allowed hosts provided or process already exists
         """
-        self.log.debug(
+        self.log.critical(
             f"{self.name} booting '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}'"
         )
@@ -534,7 +534,7 @@ class SSHProcessManager(ProcessManager):
         return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
-        self.log.debug(f"{self.name} running boot command")
+        self.log.critical(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())
         process = self.__boot(boot_request, this_uuid)
         return ProcessInstanceList(

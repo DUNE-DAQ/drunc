@@ -296,7 +296,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def boot(
         self, request: BootRequest, context: ServicerContext
     ) -> ProcessInstanceList:
-        self.log.debug(
+        self.log.warning(
             f"{self.name} booting '{request.process_description.metadata.name}' "
             f"from session '{request.process_description.metadata.session}'"
         )
