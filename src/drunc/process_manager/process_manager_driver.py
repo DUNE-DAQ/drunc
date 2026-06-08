@@ -170,7 +170,7 @@ class ProcessManagerDriver:
                     f"Skipping connectivity service readiness check for application {request.process_description.metadata.name}"
                 )
             else:
-                self.log.debug(
+                self.log.warning(
                     f"Checking connectivity service readiness before booting application {request.process_description.metadata.name}"
                 )
                 if csc and not csc.is_ready(timeout=10):
@@ -242,7 +242,8 @@ class ProcessManagerDriver:
 
         apps = infra_apps + apps
 
-        self.log.debug(f"{json.dumps(apps, indent=4)}")
+        self.log.warning("json dumps")
+        self.log.info(f"{json.dumps(apps, indent=4)}")
 
         return apps
 

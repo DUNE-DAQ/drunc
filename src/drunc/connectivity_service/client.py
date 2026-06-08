@@ -41,8 +41,10 @@ class ConnectivityServiceClient:
             attempt += 1
             elapsed = time.time() - start
 
-            self.log.debug(f"Health check attempt {attempt} at {elapsed:.2f}s elapsed")
-            self.log.debug(f"Polling address: {self.address}")
+            self.log.warning(
+                f"Health check attempt {attempt} at {elapsed:.2f}s elapsed"
+            )
+            self.log.warning(f"Polling address: {self.address}")
             try:
                 r = get(self.address)
             except Exception as e:
@@ -50,7 +52,7 @@ class ConnectivityServiceClient:
                 r = None
             # Request failed - service is NOT ready.
             if r is None or not r.ok:
-                self.log.debug(
+                self.log.warning(
                     f"Connectivity service not ready, retrying in {delay:.2f}s"
                 )
                 time.sleep(delay)

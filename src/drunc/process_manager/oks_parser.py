@@ -183,6 +183,7 @@ def collect_apps(
     collect_variables(controller.application_environment, rc_env)
     rc_env["DUNEDAQ_APPLICATION_NAME"] = controller.id
     host = controller.runs_on.runs_on.id
+    log.info(f"main host is {host}")
 
     tree_id_str = ".".join(map(str, tree_prefix))
     apps.append(
@@ -259,6 +260,8 @@ def collect_apps(
             obj=app,
         )
         log.debug(f"Collecting app {app.id} with args {args}")
+
+        log.info(f"app host is {host}")
 
         data_path = get_writer_directory_path(app, log)
         if not data_path:
