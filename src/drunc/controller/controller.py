@@ -22,6 +22,8 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     IncludeRequest,
     IncludeResponse,
+    LogRequest,
+    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     Status,
@@ -1620,5 +1622,62 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             self.stateful_node.to_error()
+
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    @publish_command_time
+    def log(
+        self,
+        request: LogRequest,
+        context: ServicerContext,
+    ) -> LogResponse:
+        response = LogResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="who_is_in_charge",
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.log(
+                request.text,
+                request.target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                LogResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
+        )
+        response.children.extend(child_responses)
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            self.log.info(request.text)
 
         return response

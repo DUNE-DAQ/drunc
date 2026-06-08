@@ -17,6 +17,8 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     IncludeRequest,
     IncludeResponse,
+    LogRequest,
+    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -614,3 +616,33 @@ class gRPCChildNode(ChildNode):
                     self.log.error(text)
 
         raise error
+
+    def log(
+        self,
+        text: str,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> LogResponse:
+        request = LogRequest(
+            token=None,
+            text=text,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.log(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during who_is_in_charge, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.who_is_in_charge(request)
+                )
+
+        return response

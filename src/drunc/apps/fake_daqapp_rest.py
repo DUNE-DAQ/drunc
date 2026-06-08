@@ -24,7 +24,7 @@ from drunc.utils.utils import (
 
 __version__ = "1.0.0"
 get_root_logger("info")
-log = get_logger("fake_daqapp_rest", rich_handler=True)
+log = get_logger("fake_daqapp_rest", strean_handlers=True)
 
 
 class AppState:

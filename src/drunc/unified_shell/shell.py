@@ -33,6 +33,9 @@ from drunc.controller.interface.commands import (
     who_am_i,
     who_is_in_charge,
 )
+from drunc.controller.interface.commands import (
+    log_cmd as log,
+)
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import (
@@ -381,6 +384,7 @@ def unified_shell(
     controller_commands: list[click.Command] = [
         status,
         recompute_status,
+        log,
         connect,
         disconnect,
         take_control,

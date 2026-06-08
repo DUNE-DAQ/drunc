@@ -649,11 +649,13 @@ def run_one_fsm_command(
         # Mark the controller as in error state, so that if the user tries to run
         # another command, it will be prevented, and they will be encouraged to check
         # the error application logs
-        log.error(
+        err_str = (
             "The session did not complete the stateful transition in the specified "
             f"time of {timeout} seconds. To investigate the cause, please check the "
             "controller and application logs with the [yellow]'logs'[/] command."
         )
+        log.error(err_str)
+        obj.get_driver("controller").echo(err_str)
         obj.get_driver("controller").to_error(
             execute_on_all_subsequent_children_in_path=False
         )

@@ -16,6 +16,8 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     IncludeRequest,
     IncludeResponse,
+    LogRequest,
+    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -351,6 +353,46 @@ class ControllerDriver:
 
         try:
             response = self.stub.to_error(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def log(
+        self,
+        text: str,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> LogResponse:
+        """
+        Logs a message to the server's log system.
+
+        Args:
+            text (str): The message to log.
+            target (str, optional): The target node for the log message. Defaults to "".
+            execute_along_path (bool, optional): Whether to execute the log command along the path. Defaults to False.
+            execute_on_all_subsequent_children_in_path (bool, optional): Whether to execute the log command on all subsequent children in the path. Defaults to True.
+            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+
+        Returns:
+            None
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = LogRequest(
+            token=self.token,
+            text=text,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+
+        try:
+            response = self.stub.log(request, timeout=timeout)
         except grpc.RpcError as e:
             handle_grpc_error(e)
 

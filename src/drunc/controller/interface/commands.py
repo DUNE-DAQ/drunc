@@ -252,6 +252,39 @@ def echo(obj, text: str | None) -> None:
     log_echo.info(text or "")
 
 
+@click.command("log")
+@click.argument("text", required=True)
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=False,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=False,
+)
+@click.pass_obj
+def log_cmd(
+    obj: ControllerContext,
+    text: str,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    obj.get_driver("controller").log(
+        text=text,
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+
+
 @click.command("who-is-in-charge")
 @click.option("--target", type=str, help="The target to address", default="")
 @click.option(

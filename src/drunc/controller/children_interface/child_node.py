@@ -8,6 +8,7 @@ from druncschema.controller_pb2 import (
     ExecuteFSMCommandResponse,
     FSMCommand,
     IncludeResponse,
+    LogResponse,
     RecomputeStatusResponse,
     StatusResponse,
     SurrenderControlResponse,
@@ -154,4 +155,14 @@ class ChildNode(ABC):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
+        pass
+
+    @abstractmethod
+    def log(
+        self,
+        text: str,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> LogResponse:
         pass
