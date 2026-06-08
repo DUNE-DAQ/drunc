@@ -289,7 +289,7 @@ def logs_impl(
     log = get_logger("process_manager.shell")
     # TODO: MOVE BACK TO DEBUG BEFORE MERGE
     # THIS IS USEFUL FOR TESTING THOUGH
-    log.error(f"Running logs with query {query}")
+    log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
         query=query,

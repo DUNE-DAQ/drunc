@@ -237,8 +237,9 @@ def test_boot_exiting_processes_abort(boot_arguments):
     # check that 'boot' was never called
     mock_driver.boot.assert_not_called()
 
+    # conf-id-123 from session name in this file
     assert (
-        "You already have 2 processes running, are you sure you want to boot a session?"
+        "You already have 2 processes running for conf-id-123, are you sure you want to boot a session?"
         in result.output
     )
 
@@ -267,7 +268,7 @@ def test_boot_exiting_processes_user_confirm(boot_arguments):
     mock_driver.boot.assert_called()
 
     assert (
-        "You already have 2 processes running, are you sure you want to boot a session?"
+        "You already have 2 processes running for conf-id-123, are you sure you want to boot a session?"
         in result.output
     )
 
