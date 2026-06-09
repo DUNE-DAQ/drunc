@@ -145,6 +145,12 @@ class Controller(ControllerServicer):
         self.uri = ""
         if self.configuration.session.connectivity_service:
             connection_server = self.configuration.session.connectivity_service.host
+            # put the right hostname here
+
+            log_init.critical(f"{connection_server=}")
+            connection_server = "np04-srv-028"  # absolute hack probably socket get host or see the input
+            # might be easierst to parse the boot command / fix
+
             connection_port = (
                 self.configuration.session.connectivity_service.service.port
             )
