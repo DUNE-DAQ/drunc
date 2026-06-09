@@ -24,7 +24,7 @@ from drunc.utils.utils import (
 
 __version__ = "1.0.0"
 get_root_logger("info")
-log = get_logger("fake_daqapp_rest", strean_handlers=True)
+log = get_logger("fake_daqapp_rest", stream_handlers=True)
 log.setLevel("INFO")
 
 
@@ -67,8 +67,6 @@ class AppState:
     def execute_command(
         self, req_data, answer_port, answer_host, remote_host
     ) -> Response:
-        print(f"{req_data=}")
-        print(f"{req_data['id']=}")
         self.log.critical(
             f"Received command {req_data} from {remote_host}, answer_host: {answer_host}, answer_port: {answer_port}"
         )
@@ -176,7 +174,7 @@ class AppState:
             self.executing_command = False
             return
 
-        print(f"Sleeping for {time_spent} seconds")
+        log.info(f"Sleeping for {time_spent} seconds")
 
         time.sleep(time_spent)
 
@@ -297,7 +295,7 @@ def main():
     args = parser.parse_args()
 
     name = args.name
-    print(f"Name: {name}")
+    log.info(f"Starting application {name}")
     app_state = AppState(name)
 
     # Set up and parse configuration
@@ -340,7 +338,7 @@ def main():
     )
     ft_app_to_die_boot: str = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", None)
     if ft_die_on_boot and ft_app_to_die_boot == name:
-        log.info(f"Simulating death of {name} on boot")
+        log.warning(f"DEATH: Simulating death of {name} on boot")
         exit(1)
 
     connectivity_service = ConnectivityServiceClient(
@@ -370,16 +368,12 @@ def main():
 
     def run_flask_app(app, host, port, event):
         try:
-            print(f"DEBUG: Entering run_flask_app for {host}:{port}")
-            # The 'event' signals that we've reached the startup phase
+            log.debug(f"Entering run_flask_app for {host}:{port}")
             event.set()
-            # use_reloader=False is mandatory for thread execution
             run_simple(host, port, app, threaded=True, use_reloader=False)
         except Exception as e:
-            print(f"CRITICAL: Flask app thread crashed: {e}")
-            # This will print to stderr, which should appear in your logs
+            log.critical(f"Flask app thread crashed: {e}")
 
-    log.warning("TEST: UPDATING URL")
     url = urlparse(url)
     flask_url = url.geturl().replace("rest://", "http://")
 
