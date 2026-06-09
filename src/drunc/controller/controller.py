@@ -1,4 +1,5 @@
 import os
+import socket
 import multiprocessing
 import threading
 import time
@@ -152,10 +153,11 @@ class Controller(ControllerServicer):
             # put the right hostname here
 
             log_init.critical(f"old stuff: {connection_server=}, {connection_port=}")
-            connection_server = "np04-srv-028"  # absolute hack probably socket get host or see the input
+            # connection_server = "np04-srv-028"  # absolute hack probably socket get host or see the input
+            connection_server = (
+                socket.gethostname()
+            )  # this will very likely need to be fixed as well
             # might be easierst to parse the boot command / fix
-
-            
 
             log_init.warning(f"{self.configuration=}")
 
