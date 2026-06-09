@@ -1,3 +1,4 @@
+import os
 import multiprocessing
 import threading
 import time
@@ -151,9 +152,11 @@ class Controller(ControllerServicer):
             connection_server = "np04-srv-028"  # absolute hack probably socket get host or see the input
             # might be easierst to parse the boot command / fix
 
-            connection_port = (
-                self.configuration.session.connectivity_service.service.port
-            )
+            # connection_port = (
+            #     self.configuration.session.connectivity_service.service.port
+            # )
+
+            connection_port = os.getenv("CONNECTION_PORT")
             log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"
             )
