@@ -25,6 +25,7 @@ from drunc.utils.utils import (
 __version__ = "1.0.0"
 get_root_logger("info")
 log = get_logger("fake_daqapp_rest", strean_handlers=True)
+log.setLevel("INFO")
 
 
 class AppState:
@@ -38,6 +39,7 @@ class AppState:
         self.state = "INITIAL"
         self.executing_command = False
         self.log = get_logger("fake_daqapp_rest.AppState")
+        self.log.setLevel("INFO")
 
     def send_response_to_response_listener(
         self, address: str, txt: str, success: bool = True, data: dict = {}
@@ -130,7 +132,9 @@ class AppState:
         # FAILURE TESTING - CMD TIMEOUT
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
-        ft_fsm_timeout = int(os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT"))
+        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        if ft_fsm_timeout:
+            ft_fsm_timeout = int(ft_fsm_timeout)
         ft_fsm_timeout_cmd = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_CMD")
         ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
         self.log.critical(
@@ -429,8 +433,12 @@ def main():
     )
     log.critical(f"CHECK: {ft_die_post_boot} and {ft_app_to_die_boot == name}")
     if ft_die_post_boot and ft_app_to_die_boot == name:
-        log.info(f"Simulating death of {name} post boot")
+        log.critical(f"Simulating death of {name} post boot")
         exit(1)
+
+    log.info(
+        "Fake DAQ application is running and publishing to connectivity service. Press Ctrl+C to exit."
+    )
 
 
 if __name__ == "__main__":

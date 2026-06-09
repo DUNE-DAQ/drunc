@@ -378,7 +378,7 @@
 
 
 <!-- Applications timing out on FSM commands -->
-<obj class="Session" id="ft-fsm-cmd-timeout-nested-app">
+<obj class="Session" id="ft-fsm-cmd-timeout-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
@@ -428,7 +428,7 @@
 <!-- End applications timing out on FSM commands -->
 
 <!-- Applications dying on FSM commands -->
-<obj class="Session" id="ft-fsm-cmd-death-nested-app">
+<obj class="Session" id="ft-fsm-cmd-death-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
  <attr name="controller_log_level" type="enum" val="INFO"/>
