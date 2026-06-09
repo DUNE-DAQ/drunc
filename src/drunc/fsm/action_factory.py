@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING, Dict, Protocol, Type, cast
-
-import conffwk
+from typing import Dict, Type, cast
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncSetupException
+from drunc.fsm._protocols import (
+    ActionMethodProtocol,
+    ConfigurationProtocol,
+    FSMActionProtocol,
+)
 from drunc.fsm.actions.db_run_registry import DBRunRegistry
 from drunc.fsm.actions.file_logbook import FileLogbook
 from drunc.fsm.actions.file_run_registry import FileRunRegistry
@@ -17,8 +20,6 @@ from drunc.fsm.actions.trigger_rate_specifier import TriggerRateSpecifier
 from drunc.fsm.actions.user_provided_run_number import UserProvidedRunNumber
 from drunc.fsm.actions.usvc_elisa_logbook import ElisaLogbook
 from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
-
-from drunc.fsm._protocols import ActionMethodProtocol, ConfigurationProtocol, FSMActionProtocol
 
 
 class FSMActionFactory:

@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Protocol
+from typing import Dict
 
 from daqconf.consolidate import consolidate_db  # type: ignore[import-untyped]
 

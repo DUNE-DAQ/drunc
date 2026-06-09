@@ -1,13 +1,11 @@
 import getpass
-from asyncio import Protocol
 from os import environ
-from typing import Iterable, Optional
 
-import conffwk
-from drunc.fsm._protocols import ContextProtocol, InitConfigurationProtocol
+import conffwk  # ignore[import-untyped]
 from sh import Command, ErrorReturnCode  # type: ignore[import-untyped]
 
 from drunc.exceptions import DruncSetupException
+from drunc.fsm._protocols import ContextProtocol, InitConfigurationProtocol
 from drunc.fsm.core import FSMAction
 from drunc.fsm.exceptions import ThreadPinningFailed
 from drunc.process_manager.oks_parser import collect_apps

@@ -1,5 +1,6 @@
-from drunc.fsm.core import FSMAction
 from drunc.fsm._protocols import ContextProtocol
+from drunc.fsm.core import FSMAction
+
 
 class MasterSendFLCommand(FSMAction):
     def __init__(self, configuration: object) -> None:

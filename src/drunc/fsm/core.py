@@ -1,7 +1,14 @@
 from __future__ import annotations
-from typing import Optional, Union, Dict, List, Protocol
 
-from drunc.fsm._protocols import ActionMethodProtocol, FSMActionProtocol, ContextProtocol, ConfigProtocol
+from typing import TYPE_CHECKING, Dict, Optional, Union
+
+if TYPE_CHECKING:
+    from drunc.fsm._protocols import (
+        ActionMethodProtocol,
+        ConfigProtocol,
+        ContextProtocol,
+        FSMActionProtocol,
+    )
 
 # Define the abcs first to avoid circular imports
 class FSMAction:
@@ -23,7 +30,6 @@ from dataclasses import dataclass
 from enum import Enum
 from inspect import Parameter, signature
 
-import conffwk
 from druncschema.controller_pb2 import Argument, FSMSequence
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from google.protobuf import any_pb2

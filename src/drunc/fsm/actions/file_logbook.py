@@ -1,7 +1,6 @@
 from typing import Optional
 
-from drunc.fsm._protocols import ContextProtocol, ConfigurationProtocol
-
+from drunc.fsm._protocols import ConfigurationProtocol, ContextProtocol
 from drunc.fsm.core import FSMAction
 from drunc.utils.utils import now_str
 

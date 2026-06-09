@@ -1,8 +1,9 @@
-from typing import Dict, Iterable, List, Optional, Protocol
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Protocol
 
 from druncschema.controller_pb2 import FSMSequence
 
-from drunc.fsm.core import PreOrPostTransitionSequence
+if TYPE_CHECKING:
+    from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
 
 
