@@ -1185,8 +1185,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.append(remote_cmd)
-
-            self.log.critical(f"final arguments {arguments}")
+            a_list = ["hello", "trhere"]
+            self.log.critical(f"final arguments {' '.join(arguments)}")
+            self.log.critical(f"a list {a_list}")
             self.log.critical(f"remote cmd {remote_cmd}")
 
             process = self.ssh(
