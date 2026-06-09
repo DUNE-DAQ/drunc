@@ -1,21 +1,7 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Optional, Union, Dict, List, Set, Protocol, Any
+from typing import Optional, Union, Dict, List, Protocol
 
-if TYPE_CHECKING:
-    FSMaction_t = object
-else:
-    import conffwk
-    FSMaction_t = conffwk.dal.FSMAction
-
-class ActionProtocol(Protocol):
-    name: str  # Every action must have a name string
-
-class ActionMethodProtocol(Protocol):
-    __name__: str
-    __module__: str
-    __self__: object
-    def __call__(self, _input_data: Dict[str, object], _context: object, **kwargs: object) -> Dict[str, object]: ...
-
+from drunc.fsm._protocols import ActionMethodProtocol, FSMActionProtocol, ContextProtocol, ConfigProtocol
 
 # Define the abcs first to avoid circular imports
 class FSMAction:
@@ -49,9 +35,6 @@ from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger, regex_match
 
 
-class ContextProtocol(Protocol):
-    runinfo: Dict[str, object]
-
 class PreOrPostTransitionSequence:
     def __init__(self, transition: Transition, pre_or_post: str = "pre") -> None:
         self.transition: Transition = transition
@@ -66,7 +49,7 @@ class PreOrPostTransitionSequence:
         self.log = get_logger("controller.core.PreOrPostTransitionSequence")
 
     def add_callback(
-        self, action: ActionProtocol, mandatory: bool = True
+        self, action: FSMActionProtocol, mandatory: bool = True
     ) -> None:
         """
         Add a callback to the sequence. The method to be called will be determined by
@@ -274,15 +257,6 @@ class FSMDestinationType(Enum):
 class FSMDestinationResult:
     destination_state: str | None
     destination_type: FSMDestinationType
-
-
-class ConfigProtocol(Protocol):
-    def get_initial_state(self) -> str: ...
-    def get_states(self) -> List[str]: ...
-    def get_transitions(self) -> List[Transition]: ...
-    def get_sequences(self) -> List[FSMSequence]: ...
-    def get_pre_transitions_sequences(self) -> Dict[Transition, PreOrPostTransitionSequence]: ...
-    def get_post_transitions_sequences(self) -> Dict[Transition, PreOrPostTransitionSequence]: ...
 
     
 class FSM:

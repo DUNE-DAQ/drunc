@@ -1,22 +1,15 @@
 import logging
-from typing import TYPE_CHECKING, Dict, List
+from typing import Dict, List
+
 from druncschema.controller_pb2 import FSMSequence
 
+from drunc.fsm._protocols import ConfigurationProtocol
 from drunc.fsm.action_factory import FSMActionFactory, FSMActionProtocol
 from drunc.fsm.core import PreOrPostTransitionSequence
 from drunc.fsm.transition import Transition
 from drunc.utils.configuration import ConfHandler, OKSKey
 from drunc.utils.utils import get_logger
 
-if TYPE_CHECKING:
-    FSMaction_t = object
-    FSMxTransition_t = object
-    FSMSequence_t = object
-else:
-    import conffwk
-    FSMaction_t = conffwk.dal.FSMAction
-    FSMxTransition_t = conffwk.dal.FSMxTransition
-    FSMSequence_t = conffwk.dal.FSMSequence
 
 class FSMConfHandler(ConfHandler):
 
@@ -35,7 +28,7 @@ class FSMConfHandler(ConfHandler):
         self,
         prefix: str,
         transition: Transition,
-        data: List[FSMxTransition_t] | None,
+        data: List[ConfigurationProtocol] | None,
     ) -> PreOrPostTransitionSequence:
         """
         Fill the pre or post transition sequence for a given transition.
@@ -121,9 +114,10 @@ class FSMConfHandler(ConfHandler):
                 )
             )
 
-            # Add the pre and post transition sequence arguments to the transition
-            tr.arguments += pre_transitions.get_arguments()
-            tr.arguments += post_transitions.get_arguments()
+            if tr.arguments is not None:
+                # Add the pre and post transition sequence arguments to the transition
+                tr.arguments += pre_transitions.get_arguments()
+                tr.arguments += post_transitions.get_arguments()
 
             # Store the pre and post transition sequences for the transition
             self.pre_transitions[tr] = pre_transitions

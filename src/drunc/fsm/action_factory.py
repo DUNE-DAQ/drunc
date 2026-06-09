@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING, Dict, Protocol, Type
+from typing import TYPE_CHECKING, Dict, Protocol, Type, cast
 
 import conffwk
 
@@ -18,18 +18,7 @@ from drunc.fsm.actions.user_provided_run_number import UserProvidedRunNumber
 from drunc.fsm.actions.usvc_elisa_logbook import ElisaLogbook
 from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
 
-if TYPE_CHECKING:
-    # for mypy treat FSMaction_t as a local objext
-    FSMaction_t = object
-else:
-    # at runtime use the actual type from conffwk.dal
-    FSMaction_t = conffwk.dal.FSMaction
-
-class ActionMethod(Protocol):
-    def __call__(self, *args: object, **kwargs: object) -> object: ...
-
-class FSMActionProtocol(Protocol):
-    name: str
+from drunc.fsm._protocols import ActionMethodProtocol, ConfigurationProtocol, FSMActionProtocol
 
 
 class FSMActionFactory:
@@ -38,23 +27,23 @@ class FSMActionFactory:
     def __init__(self)  -> None:
         raise DruncSetupException("Call get() instead")
 
-    def _get_pre_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethod]:
-        retr: Dict[str, ActionMethod] = {}
+    def _get_pre_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethodProtocol]:
+        retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
                 if name.startswith("pre_"):
-                    retr[name] = method
+                    retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _get_post_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethod]:
-        retr: Dict[str, ActionMethod] = {}
+    def _get_post_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethodProtocol]:
+        retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
                 if name.startswith("post_"):
-                    retr[name] = method
+                    retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _validate_signature(self, name:str , method: ActionMethod, action: str) -> None:
+    def _validate_signature(self, name:str , method: ActionMethodProtocol, action: str) -> None:
         sig = inspect.signature(method)
 
         if (
@@ -85,7 +74,7 @@ class FSMActionFactory:
             self._validate_signature(k, v, action.name)
 
     def get_action(
-        self, action_name: str, action_configuration: FSMaction_t
+        self, action_name: str, action_configuration: ConfigurationProtocol
     ) -> FSMActionProtocol:
         """
         Construct the action interface for the given action name and configuration.

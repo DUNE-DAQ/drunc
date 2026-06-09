@@ -1,8 +1,11 @@
 import getpass
+from asyncio import Protocol
 from os import environ
+from typing import Iterable, Optional
 
 import conffwk
-from sh import Command, ErrorReturnCode
+from drunc.fsm._protocols import ContextProtocol, InitConfigurationProtocol
+from sh import Command, ErrorReturnCode  # type: ignore[import-untyped]
 
 from drunc.exceptions import DruncSetupException
 from drunc.fsm.core import FSMAction
@@ -13,12 +16,12 @@ from drunc.utils.utils import get_logger
 
 
 class ThreadPinning(FSMAction):
-    def __init__(self, configuration):
+    def __init__(self, configuration: InitConfigurationProtocol) -> None:
         super().__init__(name="thread-pinning")
         self.log = get_logger("controller.iface.thread-pinning")
         self.conf_dict = {p.name: p.value for p in configuration.parameters}
 
-    def pin_thread(self, thread_pinning_file, configuration, session):
+    def pin_thread(self, thread_pinning_file: str, configuration: str, session: str) -> None:
         db = conffwk.Configuration(configuration)
         session_dal = db.get_dal(class_name="Session", uid=session)
 
@@ -27,7 +30,7 @@ class ThreadPinning(FSMAction):
             session_name=session,
             session_dal_obj=session_dal,
             segment_obj=session_dal.segment,
-            env=environ,
+            env=dict(environ),
             tree_prefix=[],
         )
 
@@ -86,7 +89,7 @@ class ThreadPinning(FSMAction):
         if failed_hosts:
             raise ThreadPinningFailed(failed_hosts_error_str)
 
-    def post_conf(self, _input_data, _context, **kwargs):
+    def post_conf(self, _input_data: dict[str, object], _context: ContextProtocol, **kwargs: object) -> dict[str, object]:
         if "post_conf" in self.conf_dict:
             self.pin_thread(
                 self.conf_dict["post_conf"],
@@ -95,7 +98,7 @@ class ThreadPinning(FSMAction):
             )
         return _input_data
 
-    def post_start(self, _input_data, _context, **kwargs):
+    def post_start(self, _input_data: dict[str, object], _context: ContextProtocol, **kwargs: object) -> dict[str, object]:
         if "post_start" in self.conf_dict:
             self.pin_thread(
                 self.conf_dict["post_start"],
@@ -104,7 +107,7 @@ class ThreadPinning(FSMAction):
             )
         return _input_data
 
-    def pre_conf(self, _input_data, _context, **kwargs):
+    def pre_conf(self, _input_data: dict[str, object], _context: ContextProtocol, **kwargs: object) -> dict[str, object]:
         if "pre_conf" in self.conf_dict:
             self.pin_thread(
                 self.conf_dict["pre_conf"],

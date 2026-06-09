@@ -6,22 +6,8 @@ from druncschema.controller_pb2 import (
     FSMCommandsDescription,
 )
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-from google.protobuf.any_pb2 import Any
 
-import drunc.fsm.exceptions as fsme
-from drunc.fsm.transition import Transition
-from drunc.utils.grpc_utils import unpack_any
-
-from typing import MutableMapping, Optional
-
-from druncschema.controller_pb2 import (
-    Argument,
-    FSMCommandDescription,
-    FSMCommandsDescription,
-)
-from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
-
-# Alias Protobuf's Any to PbAny to prevent confusion with typing.Any
+# prevent confusion with typing.Any
 from google.protobuf.any_pb2 import Any as PbAny
 
 import drunc.fsm.exceptions as fsme
@@ -109,6 +95,6 @@ def decode_fsm_arguments(
             case Argument.Type.BOOL:
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
-                raise fsme.UnhandledArgumentType(arg.type)
+                raise fsme.UnhandledArgumentType(str(arg.type))
                 
     return out_dict

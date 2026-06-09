@@ -4,6 +4,7 @@ from typing import Optional
 
 import requests
 
+from drunc.fsm._protocols import ContextProtocol
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.core import FSMAction
 from drunc.fsm.exceptions import (
@@ -15,7 +16,7 @@ from drunc.utils.utils import get_logger
 
 
 class ElisaLogbook(FSMAction):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(name="elisa-logbook")
         self.log = get_logger("controller.iface.elisa-logbook")
 
@@ -65,7 +66,6 @@ class ElisaLogbook(FSMAction):
                 )
                 self.log.warning(warn_msg)
         else:
-            warn_msg: str = ""
             if default_elisa_logbook:
                 warn_msg = (
                     "You need to update your ~/.drunc.json: The default ELisA logbook "
@@ -83,10 +83,10 @@ class ElisaLogbook(FSMAction):
         self.timeout = 5
 
     def post_start(
-        self, _input_data: dict, _context, elisa_post: Optional[str] = None, **kwargs
-    ):
+        self, _input_data: dict[str, object], _context: ContextProtocol, elisa_post: Optional[str] = None, **kwargs: object
+    ) -> dict[str, object]:
         if self.elisa_hardware in self.no_publish_hardware:
-            return
+            return {}
         text = ""
         self.thread_id = None  # Clear this value here, so that if it fails stop can't reply to an old message
 
@@ -142,10 +142,10 @@ class ElisaLogbook(FSMAction):
         return _input_data
 
     def post_drain_dataflow(
-        self, _input_data, _context, elisa_post: Optional[str] = None, **kwargs
-    ):
+        self, _input_data: dict[str, object], _context: ContextProtocol, elisa_post: Optional[str] = None, **kwargs: object
+    ) -> dict[str, object]:
         if self.elisa_hardware in self.no_publish_hardware:
-            return
+            return {}
         text = ""
         if elisa_post is not None:
             self.log.info(
