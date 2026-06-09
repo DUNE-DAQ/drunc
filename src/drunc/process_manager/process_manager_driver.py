@@ -412,7 +412,7 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def update_connectivity_port_dal(
+    def update_connectivity_port_dal( # why is th9is hanging?
         self,
         env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
         new_port: int,
@@ -491,8 +491,10 @@ To debug it, close drunc and run the following command:
         # Temporarily removed to allow integration tests to pass without restructuring
         # Note - if infrastructure applications outside of the connectivity service are spawned, this will need to be adjusted.
         if session_dal.infrastructure_applications:  # Check if the own application needs to be spawned, or if an externally managed one is in use (e.g. if using ehn1 connectivity service or integration tests.)
+            
             connectivity_service_host: str = session_dal.connectivity_service.host
             connectivity_service_port = session_dal.connectivity_service.service.port
+            self.log.info(f"infrastructure apps: {connectivity_service_host=}, {connectivity_service_port=}")
             if not is_port_available(
                 connectivity_service_host, connectivity_service_port
             ):
