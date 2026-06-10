@@ -240,13 +240,20 @@
  <rel name="controller" class="RCApplication" id="nested-segment-controller"/>
 </obj>
 
+<obj class="Segment" id="fake-daqapp-segment">
+ <rel name="segments">
+  <ref class="Segment" id="nested-segment"/>
+ </rel>
+ <rel name="controller" class="RCApplication" id="top-segment-controller"/>
+</obj>
+
 <obj class="Segment" id="top-segment">
  <rel name="segments">
   <ref class="Segment" id="ru-segment"/>
   <ref class="Segment" id="df-segment"/>
   <ref class="Segment" id="trg-segment"/>
   <ref class="Segment" id="hsi-fake-segment"/>
-  <ref class="Segment" id="top-segment"/>
+  <ref class="Segment" id="fake-daqapp-segment"/>
  </rel>
  <rel name="controller" class="RCApplication" id="root-controller"/>
 </obj>
