@@ -5,7 +5,6 @@ to the run control.
 It is primarily used for the testing of the Run Control.
 """
 
-import argparse
 import copy as cp
 import os
 import random
@@ -13,6 +12,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
+import click
 import conffwk
 import requests
 from flask import Flask, Response, request
@@ -430,46 +430,47 @@ def get_address(hostname: str):
     return f"rest://{hostname}:{get_new_port()}"
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="FakeApplication",
-        description="This is a fake application that communicate in the same way with the RunControl as the DAQApplication (thru REST)",
-    )
-    parser.add_argument(
-        "-n", "--name", required=True, help="The name of the app in the response"
-    )
-    parser.add_argument(
-        "-d",
-        "--configurationService",
-        required=True,
-        help="This is a dummy argument in this case",
-    )
-    parser.add_argument(
-        "-c",
-        "--commandFacility",
-        required=False,
-        help="Where the fake app should get its command from",
-    )
-    parser.add_argument(
-        "-i",
-        "--informationService",
-        default="stdout://flat",
-        help="This is a dummy argument in this case",
-    )
-    parser.add_argument(
-        "-l", "--log_level", default="info", help="Logging level minimum threshold"
-    )
-    parser.add_argument(
-        "-p",
-        "--partition",
-        default="global",
-        help="This is a dummy argument in this case",
-    )
-    parser.add_argument("-s", "--session", default="test", help="name of session")
-    parser.add_argument(
-        "-k", "--configurationID", default="test-config", help="ID of session"
-    )
-
+@click.command()
+@click.option("-n", "--name", required=True, help="The name of the app in the response")
+@click.option(
+    "-d",
+    "--configurationservice",
+    required=True,
+    help="This is a dummy argument in this case",
+)
+@click.option(
+    "-c",
+    "--commandfacility",
+    required=False,
+    help="Where the fake app should get its command from",
+)
+@click.option(
+    "-i",
+    "--informationservice",
+    default="stdout://flat",
+    help="This is a dummy argument in this case",
+)
+@click.option(
+    "-l", "--log_level", default="info", help="Logging level minimum threshold"
+)
+@click.option(
+    "-p",
+    "--partition",
+    default="global",
+    help="This is a dummy argument in this case",
+)
+@click.option("-s", "--session", default="test", help="name of session")
+@click.option("-k", "--configurationid", default="test-config", help="ID of session")
+def main(
+    name: str,
+    configurationservice: str,
+    commandfacility: str,
+    informationservice: str,
+    log_level: str,
+    partition: str,
+    session: str,
+    configurationid: str,
+) -> None:
     # The following block simulates a failure during the initialization of the app. This
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # initialize, and should not be used for any other purpose. The environment variable
@@ -477,32 +478,28 @@ def main():
     if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", None):
         log.info("Simulating failure during initialization")
         exit(1)
-
-    args = parser.parse_args()
-
-    name = args.name
     log.info(f"Starting application {name}")
     app_state = AppState(name)
 
     # Set up and parse configuration
-    conf = conffwk.Configuration(args.configurationService)
-    session = conf.get_dal(
+    conf = conffwk.Configuration(configurationservice)
+    session_dal = conf.get_dal(
         class_name="Session",
-        uid=args.configurationID,
+        uid=configurationid,
     )
     connectivity_service_address = (
-        session.connectivity_service.host
+        session_dal.connectivity_service.host
         + ":"
-        + str(session.connectivity_service.service.port)
+        + str(session_dal.connectivity_service.service.port)
     )
 
     # Validate command facility argument
-    if not args.commandFacility:
+    if not commandfacility:
         log.critical("No command facility passed, exiting")
         exit(1)
 
     # Resolve the command facility URL and validate the scheme
-    url = urlparse(resolve_localhost_and_127_ip_to_network_ip(args.commandFacility))
+    url = urlparse(resolve_localhost_and_127_ip_to_network_ip(commandfacility))
     if url.scheme != "rest":
         log.exception("DAQApplication communication scheme must be rest")
         exit(1)
@@ -528,7 +525,7 @@ def main():
         exit(1)
 
     connectivity_service = ConnectivityServiceClient(
-        session=args.session,
+        session=session,
         address=connectivity_service_address,
     )
 
