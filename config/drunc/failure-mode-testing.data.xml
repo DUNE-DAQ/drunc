@@ -69,6 +69,11 @@
  <file path="schema/confmodel/dunedaq.schema.xml"/>
  <file path="config/daqsystemtest/ccm.data.xml"/>
  <file path="config/daqsystemtest/hosts.data.xml"/>
+ <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <file path="config/daqsystemtest/ru-segment.data.xml"/>
+ <file path="config/daqsystemtest/df-segment.data.xml"/>
+ <file path="config/daqsystemtest/hsi-fake-segment.data.xml"/>
+ <file path="config/daqsystemtest/trigger-segment.data.xml"/>
 </include>
 
 <!-- Failure Testing (ft) mode config parameters -->
@@ -127,6 +132,7 @@
 </obj>
 <!-- End of faiilure mode config parameters -->
 
+
 <obj class="Service" id="controller_control">
  <attr name="protocol" type="string" val="grpc"/>
  <attr name="port" type="u16" val="0"/>
@@ -142,7 +148,6 @@
  <rel name="modules">
  </rel>
 </obj>
-
 <obj class="DaqApplication" id="bottom-segment-2-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -163,7 +168,6 @@
  <rel name="modules">
  </rel>
 </obj>
-
 <obj class="DaqApplication" id="nested-segment-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -174,7 +178,6 @@
  <rel name="modules">
  </rel>
 </obj>
-
 <obj class="RCApplication" id="bottom-segment-2-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -184,7 +187,6 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-
 <obj class="RCApplication" id="bottom-segment-1-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -194,7 +196,6 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-
 <obj class="RCApplication" id="nested-segment-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -204,7 +205,6 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-
 <obj class="RCApplication" id="top-segment-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -222,7 +222,6 @@
  </rel>
  <rel name="controller" class="RCApplication" id="bottom-segment-1-controller"/>
 </obj>
-
 <obj class="Segment" id="bottom-segment-2">
  <rel name="applications">
   <ref class="DaqApplication" id="bottom-segment-2-application"/>
@@ -230,7 +229,6 @@
  </rel>
  <rel name="controller" class="RCApplication" id="bottom-segment-2-controller"/>
 </obj>
-
 <obj class="Segment" id="nested-segment">
  <rel name="segments"/>
   <ref class="Segment" id="bottom-segment-1"/>
@@ -244,9 +242,13 @@
 
 <obj class="Segment" id="top-segment">
  <rel name="segments">
-  <ref class="Segment" id="nested-segment"/>
+  <ref class="Segment" id="ru-segment"/>
+  <ref class="Segment" id="df-segment"/>
+  <ref class="Segment" id="trg-segment"/>
+  <ref class="Segment" id="hsi-fake-segment"/>
+  <ref class="Segment" id="top-segment"/>
  </rel>
- <rel name="controller" class="RCApplication" id="top-segment-controller"/>
+ <rel name="controller" class="RCApplication" id="root-controller"/>
 </obj>
 
 <obj class="DetectorConfig" id="dummy-detector">

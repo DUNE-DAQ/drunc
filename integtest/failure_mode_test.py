@@ -28,11 +28,11 @@ if not present:
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
 # Values that help determine the running conditions
-number_of_data_producers = 2
-data_rate_slowdown_factor = 1  # 10 for ProtoWIB/DuneWIB
-run_duration = 10  # seconds
-readout_window_time_before = 1000
-readout_window_time_after = 1001
+# number_of_data_producers = 2
+# data_rate_slowdown_factor = 1  # 10 for ProtoWIB/DuneWIB
+# run_duration = 10  # seconds
+# readout_window_time_before = 1000
+# readout_window_time_after = 1001
 
 check_for_logfile_errors = True
 
@@ -47,37 +47,37 @@ ignored_logfile_problems = {
 }
 
 conf_dict = data_classes.integtest_params_for_generated_dunedaq_config()
-conf_dict.object_databases = ["config/daqsystemtest/integrationtest-objects.data.xml"]
-conf_dict.dro_map_config.n_streams = number_of_data_producers
-conf_dict.op_env = "integtest"
-conf_dict.session = "minimal"
-conf_dict.tpg_enabled = False
+conf_dict.object_databases = ["config/drunc/failure-mode-testing.data.xml"]
+# conf_dict.dro_map_config.n_streams = number_of_data_producers
+# conf_dict.op_env = "integtest"
+conf_dict.session = "ft-death-on-boot-nest-app"
+# conf_dict.tpg_enabled = False
 
 # For testing, allow drunc to manage ConnectivityService (default is False, integrationtest manages Connectivity Service)
 conf_dict.drunc_connsvc = True
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
-conf_dict.config_substitutions.append(
-    data_classes.attribute_substitution(
-        obj_id="random-tc-generator",
-        obj_class="RandomTCMakerConf",
-        updates={"trigger_rate_hz": 1},
-    )
-)
-conf_dict.config_substitutions.append(
-    data_classes.attribute_substitution(
-        obj_class="TCReadoutMap",
-        obj_id="def-random-readout",
-        updates={
-            "time_before": readout_window_time_before,
-            "time_after": readout_window_time_after,
-        },
-    )
-)
+# conf_dict.config_substitutions.append(
+#     data_classes.attribute_substitution(
+#         obj_id="random-tc-generator",
+#         obj_class="RandomTCMakerConf",
+#         updates={"trigger_rate_hz": 1},
+#     )
+# )
+# conf_dict.config_substitutions.append(
+#     data_classes.attribute_substitution(
+#         obj_class="TCReadoutMap",
+#         obj_id="def-random-readout",
+#         updates={
+#             "time_before": readout_window_time_before,
+#             "time_after": readout_window_time_after,
+#         },
+#     )
+# )
 
 
-confgen_arguments = {"MinimalSystem": conf_dict}
+confgen_arguments = {"FailureModeTest": conf_dict}
 # The commands to run in dunerc
 dunerc_command_list = """
 echo pre_boot
@@ -102,6 +102,7 @@ def test_dunerc_success(run_dunerc) -> None:
     print(banner_line)
     print(current_test)
     print(banner_line)
+    print(f"{conf_dict=}")
 
     # Check that dunerc completed correctly
     assert run_dunerc.completed_process.returncode == 0

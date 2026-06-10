@@ -5,7 +5,7 @@
 # Based entirely of the implementation of daqsystemtest_integtest_bundle.sh
 # Original author: KAB, 10-Oct-2023
 
-integtest_list=( "process_manager_test.py" )
+integtest_list=( "process_manager_test.py" ``)
 let last_test_index=${#integtest_list[@]}-1
 
 usage() {
@@ -15,7 +15,7 @@ Usage:
 "${script_name}" [option(s)]
 
 Options:
-    -h, --help : prints out usage information
+    `-h, --help : prints out usage information`
     -f <zero-based index of the first test to be run, default=0>
     -l <zero-based index of the last test to be run, default=${last_test_index}>
     -k <pipe-delimited string to select which tests will be run ('egrep -i' match to test name)>
