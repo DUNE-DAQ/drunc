@@ -1,7 +1,7 @@
 import os
 from typing import Dict
 
-from daqconf.consolidate import consolidate_db  # type: ignore[import-untyped]
+from daqconf.consolidate import consolidate_db
 
 from drunc.fsm._protocols import ContextProtocol
 from drunc.fsm.core import FSMAction

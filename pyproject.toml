@@ -107,6 +107,9 @@ disallow_any_unimported = true
 warn_unused_configs = true
 show_error_codes = true
 
+# Tell mypy where to find stubs
+mypy_path = "src:typings"
+
 # These overrides are because the library stubs dont exist and not on typeshed
 [[tool.mypy.overrides]]
 module = "google.rpc.*,conffwk.*"

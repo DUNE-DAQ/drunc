@@ -1,7 +1,7 @@
 import getpass
 from os import environ
 
-import conffwk  # ignore[import-untyped]
+import conffwk
 from sh import Command, ErrorReturnCode  # type: ignore[import-untyped]
 
 from drunc.exceptions import DruncSetupException

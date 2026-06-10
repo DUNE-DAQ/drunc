@@ -89,7 +89,7 @@ class FSMConfHandler(ConfHandler):
 
         # Fill the actions dictionary with the FSMAction objects corresponding to the
         # action names defined in the configuration
-        for action in self.data.actions:
+        for action in self.data.actions: 
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )

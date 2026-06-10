@@ -3,9 +3,9 @@ import tarfile
 import tempfile
 
 import requests
-from daqconf.consolidate import consolidate_db  # type: ignore[import-untyped]
-from daqconf.jsonify import jsonify_xml_data  # type: ignore[import-untyped]
-from daqconf.validate import validate_session  # type: ignore[import-untyped]
+from daqconf.consolidate import consolidate_db
+from daqconf.jsonify import jsonify_xml_data
+from daqconf.validate import validate_session
 
 from drunc.fsm._protocols import ContextProtocol
 from drunc.fsm.actions.utils import get_dotdrunc_json

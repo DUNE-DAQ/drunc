@@ -10,6 +10,7 @@ if TYPE_CHECKING:
         FSMActionProtocol,
     )
 
+
 # Define the abcs first to avoid circular imports
 class FSMAction:
     """Abstract class defining a generic action"""

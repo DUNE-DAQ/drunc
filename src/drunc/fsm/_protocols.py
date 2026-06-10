@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Protocol
 
-from druncschema.controller_pb2 import FSMSequence
-
 if TYPE_CHECKING:
+    from druncschema.controller_pb2 import FSMSequence
+
     from drunc.fsm.core import PreOrPostTransitionSequence
-from drunc.fsm.transition import Transition
+    from drunc.fsm.transition import Transition
 
 
 class ParameterProtocol(Protocol):
     name: str
     value: str
+
 
 class InitConfigurationProtocol(Protocol):
     parameters: Iterable[ParameterProtocol]
@@ -22,14 +25,18 @@ class ActorProtocol(Protocol):
 class DetConfigProtocol(Protocol):
     id: str
 
+
 class DALProtocol(Protocol):
     detector_configuration: DetConfigProtocol
+
 
 class DBProtocol(Protocol):
     def get_dal(self, class_name: str, uid: str) -> DALProtocol: ...
 
+
 class OksKeyProtocol(Protocol):
     session: str
+
 
 class RuntimeConfigurationProtocol(Protocol):
     initial_data: str
@@ -63,6 +70,7 @@ class SSHCommandProtocol(Protocol):
 class ShErrorProtocol(Protocol):
     stdout: bytes
     stderr: bytes
+
 
 class ActionMethodProtocol(Protocol):
     __name__: str

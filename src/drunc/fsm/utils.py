@@ -73,7 +73,7 @@ def decode_fsm_arguments(
                 return k
         return None
 
-    # Explicitly type out_dict so Mypy doesn't infer dict[Any, Any]
+    # Explicitly type out_dict
     out_dict: dict[str, str | int | float | bool] = {}
     
     for arg in arguments_format:
