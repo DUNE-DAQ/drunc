@@ -476,7 +476,9 @@ def main(
     # initialize, and should not be used for any other purpose. The environment variable
     # is set in the configuration file that tests this behaviour.
     if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", None):
-        log.info("Simulating failure during initialization")
+        log.info("Sleeping to allow intiialization timeout")
+        time.sleep(10)
+        log.warning("Simulating failure during initialization")
         exit(1)
     log.info(f"Starting application {name}")
     app_state = AppState(name)
@@ -603,7 +605,7 @@ def main(
         log.warning(f"Simulating death of {name} post boot")
         exit(1)
 
-    log.info(
+    log.warning(
         "Fake DAQ application is running and publishing to connectivity service. Press Ctrl+C to exit."
     )
 

@@ -16,8 +16,14 @@ reported through `assert` with context-rich messages.
 
 import re
 from collections.abc import Callable
+from pathlib import PosixPath
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+# Define a regex for parsing UUIDs from the ps table in the drunc logsx
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -76,6 +82,46 @@ def require_line_index(
     line_idx = find_line_index(lines, predicate, start_idx=start_idx)
     assert line_idx is not None, error_message
     return line_idx
+
+
+def check_file_containing(
+    lines: list[str],
+    file: PosixPath,
+) -> bool:
+    """
+    For each line in `lines`, check if the file contains the line.
+
+    Example:
+        >>> file = PosixPath("test_file.txt")
+        >>> file.write_text("Hello\\nWorld\\n")
+        >>> check_file_containing(["Hello", "World"], file)
+        True
+        >>> check_file_containing(["Hello", "Missing"], file)
+        False
+
+    Args:
+        lines: List of strings to check for presence in the file.
+        file: Path to the file to read and check against the lines.
+
+    Returns:
+        True if all lines are found in the file, False otherwise.
+
+    Raises:
+        None.
+    """
+    # Read in the file and split it by lines
+    try:
+        file_lines = file.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        print(f"Error: {file} not found.")
+        return False
+
+    # Check if the passed strings are present in the file lines
+    for target in lines:
+        if not any(target in file_line for file_line in file_lines):
+            return False
+
+    return True
 
 
 def require_line_containing(
@@ -226,6 +272,44 @@ def _parse_ps_table_from_index(
     return table_rows
 
 
+def _parse_status_table_from_index(
+    lines: list[str], start_idx: int
+) -> list[dict[str, str]]:
+    """Parse a Unicode table of processes starting after `start_idx`.
+
+    The parser expects rows that start with `│` and stops at a line starting
+    with `└`. It returns dictionaries with normalized column names.
+    """
+    table_rows: list[dict[str, str]] = []
+
+    for line in lines[start_idx + 1 :]:
+        stripped = line.strip()
+
+        if stripped.startswith("└"):
+            break
+
+        if not stripped.startswith("│"):
+            continue
+
+        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
+        if len(cells) != 7:
+            continue
+
+        table_rows.append(
+            {
+                "Name": cells[0],
+                "Info": cells[1],
+                "State": cells[2],
+                "Substate": cells[3],
+                "In error": cells[4],
+                "Included": cells[5],
+                "Endpoint": cells[6],
+            }
+        )
+
+    return table_rows
+
+
 def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
     """Return parsed process-table rows found after a specific echo marker.
 
@@ -255,6 +339,37 @@ def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str
         return []
 
     return _parse_ps_table_from_index(lines, table_start_idx)
+
+
+def get_status_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
+    """Return parsed status-table rows found after a specific echo marker.
+
+    If no status table is found after the marker, returns an empty list.
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
+        ...     "unit-test status\n"
+        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
+        >>> table[0]["friendly_name"]
+        'root-controller'
+    """
+    lines = strip_ansi(stdout).splitlines()
+
+    echo_idx = require_echo_marker_index(lines, echo_marker)
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: " status" in line,
+        start_idx=echo_idx + 1,
+    )
+    if table_start_idx is None:
+        return []
+
+    return _parse_status_table_from_index(lines, table_start_idx)
 
 
 def get_column_for_friendly_name(
