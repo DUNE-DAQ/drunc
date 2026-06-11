@@ -12,7 +12,6 @@ import uuid
 from time import sleep, time
 
 # Local Application Imports
-from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -337,8 +336,8 @@ class K8sProcessManager(ProcessManager):
         """
         Callback for when a pod terminates.
 
-        Updates the final exit code, broadcasts a status update, and signals
-        the termination_complete_event when all pending deletions are confirmed.
+        Updates the final exit code and signals the termination_complete_event
+        when all pending deletions are confirmed.
 
         Args:
             proc_uuid: The UUID string of the terminated process.
@@ -359,7 +358,6 @@ class K8sProcessManager(ProcessManager):
 
             # Publish this information
             self.log.info(end_str)
-            self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
         # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
