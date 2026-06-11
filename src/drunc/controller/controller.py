@@ -121,7 +121,6 @@ class Controller(ControllerServicer):
         dach = DummyAuthoriserConfHandler(
             data=self.configuration.authoriser,
         )
-
         self.authoriser = DummyAuthoriser(dach, SystemType.CONTROLLER)
 
         self.actor = ControllerActor(token)
