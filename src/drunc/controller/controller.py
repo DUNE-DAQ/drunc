@@ -6,7 +6,6 @@ from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -47,9 +46,6 @@ from grpc import ServicerContext
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import broadcasted
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
@@ -85,7 +81,6 @@ class Controller(ControllerServicer):
         self._previous_error_state = False
         self.name = name
         self.session = session
-        self.broadcast_service = None
         self.monitoring_metrics = ControllerMonitoringMetrics()
         self.handlerconf = LogHandlerConf(init_ers=True)
         self.log = get_logger(f"controller.core.{name}_ctrl")
@@ -109,15 +104,6 @@ class Controller(ControllerServicer):
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         self.stop_event: threading.Event | None = None
         self.thread: threading.Thread | None = None
-        bsch = BroadcastSenderConfHandler(
-            data=self.configuration.data.controller.broadcaster,
-        )
-
-        self.broadcast_service = BroadcastSender(
-            name=name,
-            session=session,
-            configuration=bsch,
-        )
 
         self.fsm_config = FSMConfHandler(
             data=self.configuration.data.controller.fsm,
@@ -256,27 +242,8 @@ class Controller(ControllerServicer):
             )
             self.thread.start()
 
-        self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
         self.stateful_node.set_ready_state(True)
         log_init_controller.info("Controller ready")
-
-    """
-    A couple of simple pass-through functions to the broadcasting service
-    """
-
-    def broadcast(self, *args, **kwargs):
-        return self.broadcast_service.broadcast(*args, **kwargs)
-
-    def can_broadcast(self, *args, **kwargs):
-        if self.broadcast_service:
-            return self.broadcast_service.can_broadcast(*args, **kwargs)
-        return False
-
-    def describe_broadcast(self, *args, **kwargs):
-        return self.broadcast_service.describe_broadcast(*args, **kwargs)
-
-    def interrupt_with_exception(self, *args, **kwargs):
-        return self.broadcast_service._interrupt_with_exception(*args, **kwargs)
 
     def controller_publisher(self, message, custom_origin: dict | None = None):
         if isinstance(message, FSMStatus) and message.in_error:
@@ -393,12 +360,6 @@ class Controller(ControllerServicer):
                 self.connectivity_service_thread.join()
             self.log.info("Unregistering from the connectivity service")
             self.connectivity_service.retract(self.name + "_control", fail_quickly=True)
-
-        if self.can_broadcast():
-            self.broadcast(
-                btype=BroadcastType.SERVER_SHUTDOWN,
-                message="over_and_out",
-            )
 
         self.log.info("Stopping children")
         for child in self.children_nodes:
@@ -625,7 +586,6 @@ class Controller(ControllerServicer):
     ############# Status, description commands #############
     ########################################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def status(
@@ -688,7 +648,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe(
@@ -717,8 +676,6 @@ class Controller(ControllerServicer):
                 session=self.session,
                 commands=None,
             )
-            if broadcast_description := self.describe_broadcast():
-                description.broadcast.Pack(broadcast_description)
             response.description.CopyFrom(description)
 
         # Children nodes (ignore exclusion).
@@ -754,7 +711,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def describe_fsm(
@@ -837,7 +793,6 @@ class Controller(ControllerServicer):
     ############# FSM commands #############
     ########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1016,7 +971,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.EXPERT, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1076,7 +1030,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1142,7 +1095,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1208,7 +1160,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1337,7 +1288,6 @@ class Controller(ControllerServicer):
     ############# Actor commands #############
     ##########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @publish_command_time
     def take_control(
@@ -1413,7 +1363,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
@@ -1490,7 +1439,6 @@ class Controller(ControllerServicer):
 
         return response
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
     def who_is_in_charge(
@@ -1552,7 +1500,6 @@ class Controller(ControllerServicer):
     ####### Integration test commands ########
     ##########################################
 
-    @broadcasted
     @authentified_and_authorised(action=ActionType.UPDATE, system=SystemType.CONTROLLER)
     @in_control
     @publish_command_time
