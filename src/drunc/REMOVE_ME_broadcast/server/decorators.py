@@ -1,5 +1,3 @@
-
-
 from drunc.utils.utils import get_logger
 
 
