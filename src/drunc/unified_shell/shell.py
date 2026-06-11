@@ -12,7 +12,6 @@ import click
 import click_shell
 import conffwk
 from daqpytools.logging import logging_log_levels
-from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -277,9 +276,8 @@ def unified_shell(
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
-    desc: Description | None = None
     try:
-        desc = ctx.obj.get_driver().describe()
+        ctx.obj.get_driver().describe()
     except Exception as e:
         ctx.obj.log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
@@ -304,13 +302,6 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
-
-    # Broadcasting configuration if requested
-    if desc.HasField("broadcast"):
-        ctx.obj.log.debug("Broadcasting")
-        ctx.obj.start_listening_pm(
-            broadcaster_conf=desc.broadcast,
-        )
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
@@ -521,9 +512,9 @@ def unified_shell(
             ctx.obj.log.debug("Process manager terminated")
 
         ctx.obj.log.info("[green]unified_shell exited successfully[/green]")
-        logging.shutdown()  # Shutdown logging
-        ctx.obj.terminate()  # Terminate the broadcasters in the context
-        ctx.exit()  # Close the click context
+        logging.shutdown()
+        ctx.obj.terminate()
+        ctx.exit()
 
     ctx.call_on_close(cleanup)
 
