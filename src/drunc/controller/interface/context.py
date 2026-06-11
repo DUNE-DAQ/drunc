@@ -2,10 +2,7 @@ from collections.abc import Mapping
 
 from druncschema.token_pb2 import Token
 
-from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.controller.controller_driver import ControllerDriver
-from drunc.utils.configuration import ConfTypes
 from drunc.utils.shell_utils import (
     ShellContext,
     create_dummy_token_from_uname,
@@ -32,12 +29,6 @@ class ControllerContext(ShellContext):  # boilerplatefest
 
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
-
-    def start_listening_controller(self, broadcaster_conf):
-        bcch = BroadcastClientConfHandler(
-            data=broadcaster_conf, type=ConfTypes.ProtobufAny
-        )
-        self.status_receiver = BroadcastHandler(broadcast_configuration=bcch)
 
     def terminate(self):
         if self.status_receiver:

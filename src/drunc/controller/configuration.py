@@ -39,7 +39,6 @@ class ControllerConfData:  # the bastardised OKS
             pass
 
         self.controller = cler()
-        self.controller.broadcaster = id_able()
         self.controller.fsm = id_able()
 
 
