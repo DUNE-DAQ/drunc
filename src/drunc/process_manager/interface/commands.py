@@ -13,10 +13,18 @@ from drunc.process_manager.interface.cli_argument import (
     validate_conf_string,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
+
+
+def _pm_driver(obj: ProcessManagerContext | UnifiedShellContext) -> ProcessManagerDriver:
+    driver = obj.get_driver("process_manager")
+    if not isinstance(driver, ProcessManagerDriver):
+        raise RuntimeError("Process manager driver is not initialized")
+    return driver
 
 
 @click.command("boot")
