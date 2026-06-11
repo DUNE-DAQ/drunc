@@ -18,7 +18,7 @@ from drunc.utils.utils import get_logger
 
 def _pm_driver(obj: ProcessManagerContext) -> ProcessManagerDriver:
     driver = obj.get_driver("process_manager")
-    if driver is None:
+    if not isinstance(driver, ProcessManagerDriver):
         raise RuntimeError("Process manager driver is not initialized")
     return driver
 
