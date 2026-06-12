@@ -1183,6 +1183,33 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.append(remote_cmd)
+            cd_path = f"{boot_request.process_description.process_execution_directory}"
+            username_and_host = arguments[0]  # assume first arg is username@host
+
+            test_cmd = [
+                username_and_host,
+                f"touch {cd_path}/.write_test && rm {cd_path}/.write_test",
+            ]
+
+            access = self.ssh(
+                *test_cmd,
+                _out=self.log.warning,
+                _err=self._ssh_client_stderr_logger,
+                _bg=True,
+                _bg_exc=False,
+                _new_session=True,
+                _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
+            )
+
+            access.wait()
+            if access.exit_code == 0:
+                self.log.info(f"Access check passed for {cd_path}")
+
+            else:
+                self.log.error(
+                    f"Access check FAILED for {cd_path} (exit code {access.exit_code})"
+                )
+                raise RuntimeError(f"Add proper error message here")
 
             process = self.ssh(
                 *arguments,
