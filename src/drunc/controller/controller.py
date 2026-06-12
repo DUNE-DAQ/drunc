@@ -1,4 +1,6 @@
 import multiprocessing
+import os
+import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -144,10 +146,19 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread = None
         self.uri = ""
         if self.configuration.session.connectivity_service:
-            connection_server = self.configuration.session.connectivity_service.host
-            connection_port = (
+            connection_server_old = self.configuration.session.connectivity_service.host
+            connection_port_old = (
                 self.configuration.session.connectivity_service.service.port
             )
+
+            connection_server_new = socket.gethostname()
+            connection_port_new = os.getenv("CONNECTION_PORT")
+            connection_server = (
+                socket.gethostname()
+                if connection_server_old == "localhost"
+                else connection_server_old
+            )  # absolute hack
+            connection_port = connection_port_new
             log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"
             )
@@ -360,6 +371,8 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
+        if not self.connectivity_service.is_ready(10):
+            raise ValueError("failssss")
         self.log.info(
             f"Registering {self.name} ({address}) to the connectivity service at {self.connectivity_service.address}"
         )
