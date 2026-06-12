@@ -21,6 +21,11 @@ from drunc.utils.utils import get_logger
 if TYPE_CHECKING:
     import conffwk
 
+def touch_and_chmod(filepath, mode=0o777):
+    with open(filepath, "a"):
+        os.utime(filepath, None)
+    os.chmod(filepath, mode)
+
 
 PROCESS_SHUTDOWN_ORDERING = [
     "unknown",
@@ -110,6 +115,8 @@ class ProcessManagerConfHandler(ConfHandler):
                     self.opmon_conf,
                 )
             else:
+                touch_and_chmod(self.opmon_conf.path)
+
                 new_data.opmon_publisher = OpMonPublisher(
                     conf=self.opmon_conf, rich_handler=True
                 )

@@ -53,6 +53,11 @@ from drunc.utils.utils import (
 )
 
 
+def touch_and_chmod(filepath, mode=0o777):
+    with open(filepath, "a"):
+        os.utime(filepath, None)
+    os.chmod(filepath, mode)
+
 class ProcessManagerDriver:
     controller_address = ""
 
@@ -190,6 +195,14 @@ class ProcessManagerDriver:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
+            newfile = (
+                f"{request.process_description.process_execution_directory}/info."
+                + request.process_description.metadata.session
+                + "."
+                + request.process_description.metadata.name
+                + ".json"
+            )
+            touch_and_chmod(newfile)
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
