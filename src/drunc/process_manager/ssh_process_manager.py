@@ -230,8 +230,6 @@ class SSHProcessManager(ProcessManager):
         self.log.info("Terminating")
 
         if self.boot_request:
-            self.log.info("Killing all the known processes before exiting")
-
             # Build query to match all processes
             query = ProcessQuery(names=[".*"])
             uuids = ProcessManager._match_processes_against_query(

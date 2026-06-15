@@ -1,27 +1,51 @@
+"""Flask application manager utilities for DRUNC."""
+
 import os
 import signal
 import threading
 import time
 from multiprocessing import Process
-from typing import NoReturn
+from typing import TYPE_CHECKING
 
-import gunicorn.app.base
 import psutil
 import requests
 from flask import Flask, jsonify, make_response, request
-from flask_restful import Api, Resource
+
+if TYPE_CHECKING:
+    from drunc.utils.flask_typing import (
+        Api,
+        _BaseApplication,
+        _Resource,
+    )
+else:
+    from flask_restful import Api
+    from flask_restful import Resource as _Resource
+    from gunicorn.app.base import BaseApplication as _BaseApplication
 
 from drunc.exceptions import DruncCommandException
 from drunc.utils.utils import get_logger, get_new_port
 
 
-class GunicornStandaloneApplication(gunicorn.app.base.BaseApplication):
-    def __init__(self, app, options=None):
+class GunicornStandaloneApplication(_BaseApplication):
+    """Standalone Gunicorn application wrapper."""
+
+    def __init__(
+        self,
+        app: Flask,
+        options: dict[str, object] | None = None,
+    ) -> None:
+        """Initialize a GunicornStandaloneApplication.
+
+        Args:
+            app: The Flask application to run.
+            options: Configuration options for Gunicorn. Defaults to None.
+        """
         self.options = options or {}
         self.application = app
         super().__init__()
 
-    def load_config(self):
+    def load_config(self) -> None:
+        """Load Gunicorn configuration from options."""
         config = {
             key: value
             for key, value in self.options.items()
@@ -30,23 +54,32 @@ class GunicornStandaloneApplication(gunicorn.app.base.BaseApplication):
         for key, value in config.items():
             self.cfg.set(key.lower(), value)
 
-    def load(self):
+    def load(self) -> Flask:
+        """Load the Flask application.
+
+        Returns:
+            Flask: The Flask application.
+        """
         return self.application
 
 
 class CannotStartFlaskManager(DruncCommandException):
+    """Exception raised when the Flask manager cannot start."""
+
     pass
 
 
 class FlaskManager(threading.Thread):
-    """This class is a manager for flask.
-    It allows to have a Flask server under a thread, start and stop it.
-    Note that it creates another -trivial- endpoint accessible at the route /readystatus.
-    This is used to poll if the service is up, however the user can provide it, and
+    """Manager for Flask applications running in a separate thread.
+
+    It allows to have a Flask server under a thread,
+    start and stop it. Note that it creates another endpoint accessible at the route
+    /readystatus. This is used to poll if the service is up, however the user can
+    provide it.
 
     To use this code, one can use the following example:
 
-    <snippet>
+    ```python
     from flask import Flask
     from flask_restful import Api
     app = Flask('some-name')
@@ -66,27 +99,44 @@ class FlaskManager(threading.Thread):
     while not manager.is_ready():
         from time import sleep
         sleep(0.1)
-    </snippet>
+    ```
 
     Then, later on, to stop it:
-    <snippet>
+
+    ```python
     manager.stop()
-    </snippet>
+    ```
     """
 
-    def __init__(self, name, app, port, workers=1, host="0.0.0.0"):
+    def __init__(
+        self,
+        name: str,
+        app: Flask,
+        port: int,
+        workers: int = 1,
+        host: str = "0.0.0.0",
+    ) -> None:
+        """Initialize a FlaskManager.
+
+        Args:
+            name: The name of the Flask manager.
+            app: The Flask application to manage.
+            port: The port to run the Flask server on.
+            workers: The number of Gunicorn workers. Defaults to 1.
+            host: The host address to bind to. Defaults to "0.0.0.0".
+        """
         super(FlaskManager, self).__init__(daemon=True)
         self.log = get_logger(f"{name}-flaskmanager", stream_handlers=True)
         self.name = name
         self.app = app
-        self.prod_app = None
-        self.flask = None
+        self.prod_app: GunicornStandaloneApplication | None = None
+        self.flask: Process | None = None
 
         self.host = host
         self.port = port
 
         self.workers = workers
-        self.gunicorn_pid = None
+        self.gunicorn_pid: int | None = None
         self.ready = False
         self.joined = False
         self.ready_lock = threading.Lock()
@@ -97,7 +147,7 @@ class FlaskManager(threading.Thread):
             if "get_ready_status" in rule.endpoint:
                 need_ready = False
 
-        def get_ready_status():
+        def get_ready_status() -> str:
             return "ready"
 
         if need_ready:
@@ -112,8 +162,10 @@ class FlaskManager(threading.Thread):
                 "workers": self.workers,
             },
         )
+        prod_app = self.prod_app
+        assert prod_app is not None, "GunicornStandaloneApplication creation failed"
 
-        def run_gunicorn_with_signal_handling():
+        def run_gunicorn_with_signal_handling() -> None:
             """Run gunicorn with SIGHUP ignored to prevent reload on shutdown.
 
             This prevents gunicorn from reloading when the parent process receives SIGHUP.
@@ -127,7 +179,7 @@ class FlaskManager(threading.Thread):
                 # May fail if already in a process group or on some systems, ignore
                 pass
 
-            self.prod_app.run()
+            prod_app.run()
 
         thread_name = f"{self.name}_thread"
         flask_srv = Process(  # Indeed, we've just forked this sucker
@@ -185,21 +237,33 @@ class FlaskManager(threading.Thread):
 
         return flask_srv
 
-    def __del__(self):
+    def __del__(self) -> None:
+        """Cleanup when the FlaskManager is destroyed."""
         self.stop()
 
-    def stop(self) -> NoReturn:
-        # gunicorn is forked, so we need to now need send signal ourselves
+    def stop(self) -> None:
+        """Stop the Flask manager and terminate the Gunicorn process.
+
+        Sends SIGTERM to the Gunicorn process and joins the Flask process thread.
+        """
         if self.gunicorn_pid:
             gunicorn_proc = psutil.Process(self.gunicorn_pid)
             # https://github.com/benoitc/gunicorn/blob/ab9c8301cb9ae573ba597154ddeea16f0326fc15/docs/source/signals.rst#master-process
             # TOTAL DESTRUCTION
             gunicorn_proc.send_signal(signal.SIGTERM)
-            self.flask.terminate()
+            if self.flask is not None:
+                self.flask.terminate()
 
         self.join()
 
-    def restart_renew(self):
+    def restart_renew(self) -> "FlaskManager":
+        """Restart and renew the Flask manager.
+
+        Stops the current instance and creates a new one with the same configuration.
+
+        Returns:
+            FlaskManager: A new FlaskManager instance with the same settings.
+        """
         # well, we cannot really do that.
         # we have to hack it a bit:
         # unfortunately, this means you need to do:
@@ -217,15 +281,25 @@ class FlaskManager(threading.Thread):
             time.sleep(0.1)
         return fm
 
-    def is_ready(self):
+    def is_ready(self) -> bool:
+        """Check if the Flask manager is ready to serve requests.
+
+        Returns:
+            bool: True if ready, False otherwise.
+        """
         with self.ready_lock:
             return self.ready
 
-    def is_terminated(self):
+    def is_terminated(self) -> bool:
+        """Check if the Flask manager has been terminated.
+
+        Returns:
+            bool: True if terminated, False otherwise.
+        """
         with self.ready_lock:
             return self.joined
 
-    def _create_and_join_flask(self):
+    def _create_and_join_flask(self) -> None:
         with self.ready_lock:
             self.ready = False
             self.joined = False
@@ -238,16 +312,25 @@ class FlaskManager(threading.Thread):
 
         self.log.info(f"{self.name}-flaskmanager terminated")
 
-    def run(self) -> NoReturn:
+    def run(self) -> None:
+        """Run the Flask server in the thread.
+
+        This method is called when the thread is started.
+        """
         self._create_and_join_flask()
 
 
-def main():
-    class DummyEndpoint(Resource):
-        def post(self):
+def main() -> None:
+    """Main entry point for demonstrating the FlaskManager.
+
+    Creates a simple Flask application with a dummy endpoint and starts it.
+    """
+
+    class DummyEndpoint(_Resource):
+        def post(self) -> None:
             print(request)
 
-        def get(self):
+        def get(self) -> object:
             return make_response(jsonify({"weeeee": "wooo"}))
 
     app = Flask("test-app")

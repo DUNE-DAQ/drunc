@@ -6,6 +6,7 @@ from typing import cast
 
 import click
 from druncschema.process_manager_pb2 import (
+    BootRequest,
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
@@ -19,9 +20,33 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
     get_process_manager_configuration,
 )
+from drunc.processes.process_metadata import ProcessMetadata
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
+def compute_role_from_boot_request(boot_request: BootRequest) -> str:
+    """
+    Determine the process role from a BootRequest.
+
+    Extracts tree_id from the process metadata and checks
+    executable_and_arguments for the drunc-controller executable,
+    then delegates to ProcessMetadata.compute_role_from_tree_id.
+
+    Args:
+        boot_request: The BootRequest describing the process to launch.
+
+    Returns:
+        Role string: "root-controller", "segment-controller", "application",
+                     "infrastructure-applications", or "unknown".
+    """
+    tree_id = boot_request.process_description.metadata.tree_id
+    is_controller = any(
+        e.exec == "drunc-controller"
+        for e in boot_request.process_description.executable_and_arguments
+    )
+    return ProcessMetadata.compute_role_from_tree_id(
+        tree_id, is_controller=is_controller
+    )
 
 def build_process_query(
     session: str | None,
@@ -53,7 +78,6 @@ def build_process_query(
         uuids=uuids,
         crash=crash,
     )
-
 
 def make_tree(values: list[ProcessInstance]) -> list[str]:
     lines = []
