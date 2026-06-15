@@ -16,6 +16,8 @@ def _make_process_instance(
     name: str,
     uuid: str,
     remote_pid: str | None = None,
+    status_code: int = 0,
+    return_code: int | None = 0,
 ) -> ProcessInstance:
     pi = ProcessInstance(
         process_description=ProcessDescription(
@@ -31,12 +33,86 @@ def _make_process_instance(
             ],
         ),
         process_restriction=ProcessRestriction(),
-        status_code=ProcessInstance.StatusCode.RUNNING,
-        return_code=0,
+        status_code=status_code,
         uuid=ProcessUUID(uuid=uuid),
-        remote_pid=remote_pid if remote_pid is not None else None,
     )
+    if return_code is not None:
+        pi.return_code = return_code
+    if remote_pid is not None:
+        pi.remote_pid = remote_pid
     return pi
+
+
+def test_tabulate_short_format_uses_status_without_exit_status_when_all_alive():
+    process_list = ProcessInstanceList(
+        name="pm",
+        values=[
+            _make_process_instance("app-1", "uuid-1"),
+        ],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    table = tabulate_process_instance_list(process_list, title="test", long=False)
+
+    console = Console(record=True, width=200)
+    console.print(table)
+    rendered = console.export_text()
+
+    assert "status" in rendered
+    assert "Alive" in rendered
+    assert "alive" not in rendered
+    assert "exit-status" not in rendered
+
+
+def test_tabulate_short_format_shows_exit_status_when_any_process_not_alive():
+    process_list = ProcessInstanceList(
+        name="pm",
+        values=[
+            _make_process_instance("app-alive", "uuid-1"),
+            _make_process_instance(
+                "app-dead",
+                "uuid-2",
+                status_code=ProcessInstance.StatusCode.DEAD,
+                return_code=7,
+            ),
+        ],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    table = tabulate_process_instance_list(process_list, title="test", long=False)
+
+    console = Console(record=True, width=200)
+    console.print(table)
+    rendered = console.export_text()
+
+    assert "status" in rendered
+    assert "exit-status" in rendered
+    assert "Dead" in rendered
+    assert "7" in rendered
+
+
+def test_tabulate_short_format_shows_not_available_when_exit_status_missing():
+    process_list = ProcessInstanceList(
+        name="pm",
+        values=[
+            _make_process_instance(
+                "app-dead",
+                "uuid-1",
+                status_code=ProcessInstance.StatusCode.DEAD,
+                return_code=None,
+            ),
+        ],
+        flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+    )
+
+    table = tabulate_process_instance_list(process_list, title="test", long=False)
+
+    console = Console(record=True, width=200)
+    console.print(table)
+    rendered = console.export_text()
+
+    assert "exit-status" in rendered
+    assert "Not available" in rendered
 
 
 def test_tabulate_long_format_shows_remote_pid_column():

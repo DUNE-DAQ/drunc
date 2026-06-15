@@ -146,17 +146,21 @@ def order_process_by_name(processes: list[ProcessInstance]):
 
 def tabulate_process_instance_list(
     pil: ProcessInstanceList, title: str, long: bool = False, width: int | None = None
-):
+) -> Table:
     t = Table(title=title, width=width)
     t.add_column("session")
     t.add_column("friendly name")
     t.add_column("user")
     t.add_column("host")
     t.add_column("uuid")
-    t.add_column("alive")
-    t.add_column("exit-code")
 
-    sorted_pil = order_process_by_name(pil.values)
+    sorted_pil = order_process_by_name(list(pil.values))
+    process_statuses = [_get_process_status_label(process) for process in sorted_pil]
+
+    t.add_column("status")
+    show_exit_status = any(status != "Alive" for status in process_statuses)
+    if show_exit_status:
+        t.add_column("exit-status")
 
     show_remote_pid = long and any(
         process.HasField("remote_pid") for process in sorted_pil
@@ -168,19 +172,15 @@ def tabulate_process_instance_list(
 
     tree_str = make_tree(sorted_pil)
     try:
-        for process, line in zip(sorted_pil, tree_str):
+        for process, line, process_status in zip(
+            sorted_pil, tree_str, process_statuses
+        ):
             m = process.process_description.metadata
-            alive = (
-                "True"
-                if process.status_code == ProcessInstance.StatusCode.RUNNING
-                else "[danger]False[/danger]"
-            )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
 
-            process_return_code = (
-                process.return_code if process.HasField("return_code") else "NONE"
-            )
-            row += [alive, f"{process_return_code}"]
+            row += [process_status]
+            if show_exit_status:
+                row += [_get_process_exit_status(process, process_status)]
             if show_remote_pid:
                 row += [
                     process.remote_pid
@@ -198,6 +198,32 @@ def tabulate_process_instance_list(
             "Unable to extract the parameters for tabulate_process_instance_list, exiting."
         )
     return t
+
+
+def _get_process_status_label(process: ProcessInstance) -> str:
+    try:
+        status_name = ProcessInstance.StatusCode.Name(process.status_code)
+    except ValueError:
+        return "Unknown"
+
+    return {
+        "PENDING": "Pending",
+        "ALIVE": "Alive",
+        "RUNNING": "Alive",
+        "TERMINATING": "Terminating",
+        "DEAD": "Dead",
+        "UNKNOWN": "Unknown",
+    }.get(status_name, "Unknown")
+
+
+def _get_process_exit_status(process: ProcessInstance, process_status: str) -> str:
+    if process_status == "Alive":
+        return ""
+
+    if process.HasField("return_code"):
+        return str(process.return_code)
+
+    return "Not available"
 
 
 def strip_env_for_rte(env):
