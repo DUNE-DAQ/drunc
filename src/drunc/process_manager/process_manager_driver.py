@@ -202,7 +202,11 @@ class ProcessManagerDriver:
                 + request.process_description.metadata.name
                 + ".json"
             )
-            touch_and_chmod(newfile)
+            if session_dal.opmon_uri.type == "file":
+                self.log.warning(
+                    f"Touching {newfile} because {session_dal.opmon_uri.type}"
+                )
+                touch_and_chmod(newfile)
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
