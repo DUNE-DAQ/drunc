@@ -205,7 +205,7 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-<obj class="RCApplication" id="ft-segment-controller">
+<obj class="RCApplication" id="ft-top-segment-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -246,7 +246,7 @@
  <rel name="applications">
   <ref class="DaqApplication" id="ft-nested-segment-application"/>
  </rel>
- <rel name="controller" class="RCApplication" id="ft-segment-controller"/>
+ <rel name="controller" class="RCApplication" id="ft-top-segment-controller"/>
 </obj>
 
 <obj class="Segment" id="ft-segment">
