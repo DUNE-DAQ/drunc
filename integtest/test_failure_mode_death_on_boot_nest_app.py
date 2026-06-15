@@ -36,11 +36,7 @@ ignored_logfile_problems = {
 
 # Point to the drunc config file for this test
 conf_dict = data_classes.integtest_params_for_predefined_dunedaq_config()
-# * TODO: Note for the next lines, KAB is preparing a PR in integration test that will
-# * allow us to remove the relative path naming, and uncomment the line after it.
-conf_dict.predefined_config_db = (
-    os.path.dirname(__file__) + "/../config/drunc/failure-testing.data.xml"
-)
+conf_dict.predefined_config_db = "config/drunc/failure-testing.data.xml"
 conf_dict.config_session_name = "ft-death-on-boot-nest-app"
 
 # Define the operational environment for this test
