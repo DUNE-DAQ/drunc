@@ -81,6 +81,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.name = name
         self.session = session
 
+        self.log.critical(f"{self.name=}, {self.session=}")
+
         self._create_broadcast_service(self.name, self.session)
 
         dach = DummyAuthoriserConfHandler(
@@ -173,6 +175,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data=self.configuration.get_data_broadcaster(), type=ConfTypes.PyObject
         )
 
+        self.log.critical(f"{session=} ")
+        self.log.critical(f"{name=} ")
+        self.log.critical(f"{bsch=} ")
         self.broadcast_service = (
             BroadcastSender(
                 name=name,

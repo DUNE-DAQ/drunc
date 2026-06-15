@@ -83,6 +83,10 @@ class ProcessManagerConfHandler(ConfHandler):
                 raise UnknownProcessManagerType(data["type"])
 
         # opmon_publisher left as default None
+
+        self.log.critical(f"{new_data.type.name=}")
+        self.log.critical(f"{self.my_session_name=}")
+
         self.opmon_conf = parse_opmon_conf(
             log=self.log,
             conf=data.get("opmon_conf", None),

@@ -77,6 +77,9 @@ def run_pm(
         app_log_path=log_path,
     )
 
+    log.warning(f"{pmch.data.type.name=}")
+    log.error(f"{my_session_name=}")
+
     # Logger has been added to process_manager, so everything will be logged
     add_handler(log, HandlerType.File, True, path=log_path)
 

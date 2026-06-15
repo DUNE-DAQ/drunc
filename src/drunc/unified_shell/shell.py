@@ -206,7 +206,7 @@ def unified_shell(
             sys.exit(1)
 
         # Start the process manager as a separate process
-        ctx.obj.log.info("Starting process manager")
+        ctx.obj.log.info(f"Starting process manager, should be {ctx.obj.session_name}")
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 
