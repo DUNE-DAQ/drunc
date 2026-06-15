@@ -24,6 +24,7 @@ from drunc.processes.process_metadata import ProcessMetadata
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
+
 def compute_role_from_boot_request(boot_request: BootRequest) -> str:
     """
     Determine the process role from a BootRequest.
@@ -47,6 +48,7 @@ def compute_role_from_boot_request(boot_request: BootRequest) -> str:
     return ProcessMetadata.compute_role_from_tree_id(
         tree_id, is_controller=is_controller
     )
+
 
 def build_process_query(
     session: str | None,
@@ -78,6 +80,7 @@ def build_process_query(
         uuids=uuids,
         crash=crash,
     )
+
 
 def make_tree(values: list[ProcessInstance]) -> list[str]:
     lines = []
