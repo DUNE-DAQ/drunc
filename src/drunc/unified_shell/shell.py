@@ -117,6 +117,17 @@ from drunc.utils.utils import (
         "will be useful for hardware operations."
     ),
 )  # For production, change default to true/remove it
+@click.option(
+    "-nsb",
+    "--no-stop-error-batch-mode",
+    is_flag=True,
+    default=False,
+    help=(
+        "The default behaviour of the unified shell is to exit if the root-controller "
+        "of the sessions is in error. This option will allow the unified shell to "
+        "continue executing commands, mainly for use in testing scenarios."
+    ),
+)
 @click.pass_context
 def unified_shell(
     ctx: click.core.Context,
@@ -128,6 +139,7 @@ def unified_shell(
     override_logs: bool,
     log_path: str,
     safe_mode: bool,
+    no_stop_error_batch_mode: bool,
 ) -> None:
     """
     The unified shell is a command line interface to interact with the process manager
@@ -181,6 +193,7 @@ def unified_shell(
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
+    ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
 
     # Get the session DAL
     db = conffwk.Configuration(ctx.obj.configuration_file)

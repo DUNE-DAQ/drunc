@@ -115,11 +115,14 @@ def boot(
         # booting process, which terminates processes and immediately reboots them. The
         # current cause of this issue is unknown, and has been listed in the issue list.
         # obj.get_driver("controller").to_error()
-    elif obj.get_driver("controller").status().status.in_error:
+    elif (
+        obj.get_driver("controller").status().status.in_error
+        and not obj.no_stop_error_batch_mode
+    ):
         log.error("Booted, but the top controller is in error")
         if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
             log.error(
-                "Unified shell: Running in batch mode, and because error state is detected, exiting."
+                "Running in batch mode, and because error state is detected, exiting."
             )
             sys.exit(1)
 

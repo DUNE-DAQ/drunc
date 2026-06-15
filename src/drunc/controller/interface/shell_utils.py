@@ -536,6 +536,7 @@ def run_one_fsm_command(
     if (
         obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]
         and obj.get_driver("controller").status().status.in_error
+        and not obj.no_stop_error_batch_mode
     ):
         obj.get_driver("controller").status()
         log.error(

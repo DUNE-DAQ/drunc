@@ -27,6 +27,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
         self.batch_commands: list(str) = []
+        self.no_stop_error_batch_mode = False
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):
