@@ -51,6 +51,38 @@ def compute_role_from_boot_request(boot_request: BootRequest) -> str:
     )
 
 
+def build_process_query(
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+    at_least_one: bool,
+    all_processes_by_default: bool = False,
+    crash: bool = False,
+) -> ProcessQuery:
+    is_trivial_query = bool(
+        (len(uuid) == 0) and (session is None) and (len(name) == 0) and (user is None)
+    )
+
+    if is_trivial_query and at_least_one:
+        raise click.BadParameter(
+            "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
+        )
+
+    query_names = list(name)
+    if all_processes_by_default and is_trivial_query:
+        query_names = [".*"]
+
+    uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
+    return ProcessQuery(
+        session=session or "",
+        names=query_names,
+        user=user or "",
+        uuids=uuids,
+        crash=crash,
+    )
+
+
 def generate_process_query(
     f: FC, at_least_one: bool, all_processes_by_default: bool = False
 ) -> FC:
@@ -63,39 +95,22 @@ def generate_process_query(
         uuid: tuple[str, ...],
         **kwargs: object,
     ) -> object:
-        is_trivial_query = bool(
-            (len(uuid) == 0)
-            and (session is None)
-            and (len(name) == 0)
-            and (user is None)
-        )
-
-        if is_trivial_query and at_least_one:
-            raise click.BadParameter(
-                "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
-            )
-
-        names_list = list(name)
-        if all_processes_by_default and is_trivial_query:
-            names_list = [".*"]
-
-        uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
-
         crash = bool(kwargs.pop("crash", False))
-        query = ProcessQuery(
+        query = build_process_query(
             session=session,
-            names=names_list,
+            name=name,
             user=user,
-            uuids=uuids,
+            uuid=uuid,
+            at_least_one=at_least_one,
+            all_processes_by_default=all_processes_by_default,
             crash=crash,
         )
-
         return ctx.invoke(f, query=query, **kwargs)
 
     return cast(FC, update_wrapper(new_func, f))
 
 
-def make_tree(values):
+def make_tree(values: list[ProcessInstance]) -> list[str]:
     lines = []
     for result in values:
         m = result.process_description.metadata
