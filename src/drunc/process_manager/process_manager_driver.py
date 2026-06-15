@@ -147,6 +147,9 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
+        # step 3.5 update localhost mapping
+        session_dal = self.change_localhost(session_dal)
+
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
             session_dal, session_name
@@ -439,6 +442,45 @@ To debug it, close drunc and run the following command:
                     if item.name == "CONNECTION_PORT":
                         item.value = new_port
 
+    def change_localhost(self, session_dal):
+        # self.log.critical("in session dalling")
+
+        connectivity_service_host: str = session_dal.connectivity_service.host
+        if connectivity_service_host == "localhost":
+            # resolve localhost to hostname to enable multi host
+            resolved_address = resolve_localhost_to_hostname(connectivity_service_host)
+            if "://" not in resolved_address:
+                resolved_address = "grpc://" + resolved_address
+
+            resolved_server = urlparse(resolved_address).hostname
+            self.log.debug(
+                f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+            )
+            session_dal.connectivity_service.host = resolved_server
+
+        # output = to_dict(session_dal.connectivity_service)
+
+        # self.log.critical(pprint(output))
+
+        ###
+        # self.log.warning(f"{session_dal.segment.controller.runs_on.runs_on.id=}")
+
+        if session_dal.segment.controller.runs_on.runs_on.id == "localhost":
+            # resolve localhost to hostname to enable multi host
+            resolved_address = resolve_localhost_to_hostname(
+                session_dal.segment.controller.runs_on.runs_on.id
+            )
+            if "://" not in resolved_address:
+                resolved_address = "grpc://" + resolved_address
+
+            resolved_server = urlparse(resolved_address).hostname
+            self.log.debug(
+                f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+            )
+            session_dal.segment.controller.runs_on.runs_on.id = resolved_server
+
+        return session_dal
+
     def check_port_conflicts(
         self, db: conffwk.Configuration, session_dal: "conffwk.dal.Session"
     ) -> tuple[conffwk.Configuration, "conffwk.dal.Session"]:
@@ -567,17 +609,17 @@ To debug it, close drunc and run the following command:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
 
-            if connection_server == "localhost":
-                # resolve localhost to hostname to enable multi host
-                resolved_address = resolve_localhost_to_hostname(connection_server)
-                if "://" not in resolved_address:
-                    resolved_address = "grpc://" + resolved_address
+            # if connection_server == "localhost":
+            #     # resolve localhost to hostname to enable multi host
+            #     resolved_address = resolve_localhost_to_hostname(connection_server)
+            #     if "://" not in resolved_address:
+            #         resolved_address = "grpc://" + resolved_address
 
-                resolved_server = urlparse(resolved_address).hostname
-                self.log.debug(
-                    f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
-                )
-                connection_server = resolved_server
+            #     resolved_server = urlparse(resolved_address).hostname
+            #     self.log.debug(
+            #         f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
+            #     )
+            #     connection_server = resolved_server
 
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
