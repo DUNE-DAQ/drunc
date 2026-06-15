@@ -348,7 +348,10 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
 
     conf_path, conf_type = parse_conf_url(pm_conf_file)
     pmch = ProcessManagerConfHandler(
-        log_path="./", type=conf_type, data=conf_path.split(":")[1]
+        log_path="./",
+        type=conf_type,
+        data=conf_path.split(":")[1],
+        my_session_name="TEST_TEMP",
     )
 
     return pmch.data.type

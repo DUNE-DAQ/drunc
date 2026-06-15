@@ -39,6 +39,7 @@ def run_pm(
     pm_address: str,
     log_level: str,
     override_logs: bool,
+    my_session_name: str,
     log_path: str = None,
     ready_event: bool = None,
     signal_handler: bool = None,
@@ -62,7 +63,10 @@ def run_pm(
     conf_path, conf_type = parse_conf_url(pm_conf)
 
     pmch = ProcessManagerConfHandler(
-        log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
+        log_path=log_path,
+        type=conf_type,
+        data=conf_path.split(":")[1],
+        my_session_name=my_session_name,
     )
 
     log_path = get_log_path(
@@ -194,4 +198,5 @@ def process_manager_cli(
         log_level=log_level,
         override_logs=override_logs,
         log_path=log_path,
+        my_session_name="temp_from_PM_interface_CHANGETHIS",
     )

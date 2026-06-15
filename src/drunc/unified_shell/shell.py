@@ -224,6 +224,7 @@ def unified_shell(
                 "signal_handler": ignore_sigint_sighandler,
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
+                "my_session_name": ctx.obj.session_name,
             },
         )
         ctx.obj.pm_process.start()

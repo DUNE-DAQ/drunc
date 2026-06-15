@@ -51,7 +51,8 @@ class ProcessManagerConfData:
 
 
 class ProcessManagerConfHandler(ConfHandler):
-    def __init__(self, log_path: str, *args, **kwargs):
+    def __init__(self, log_path: str, my_session_name: str, *args, **kwargs):
+        self.my_session_name = my_session_name
         super().__init__(*args, **kwargs)
         self.log_path = log_path
         self.log = get_logger("process_manager.conf_handler")
@@ -86,7 +87,7 @@ class ProcessManagerConfHandler(ConfHandler):
             log=self.log,
             conf=data.get("opmon_conf", None),
             uri=data.get("opmon_uri", None),
-            session=new_data.type.name,
+            session=self.my_session_name,
             application="process_manager",
         )
 
