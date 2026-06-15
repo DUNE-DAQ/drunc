@@ -11,7 +11,10 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.process_manager.utils import (
+    build_process_query,
+    tabulate_process_instance_list,
+)
 from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import get_logger
 
@@ -191,7 +194,7 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     default=None,
     help="Table width. Default is automatically calculated",
 )
-@add_query_options(at_least_one=True)
+@add_query_options()
 @click.option(
     "--crash",
     is_flag=True,
@@ -199,8 +202,19 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     help="Simulate a crash: send SIGKILL without any cleanup, leaving the process manager in an unexpected-death state.",
 )
 @click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+def kill(
+    obj: ProcessManagerContext,
+    crash: bool,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+    width: int | None,
+) -> None:
     log = get_logger("process_manager.shell")
+    query = build_process_query(
+        session, name, user, uuid, at_least_one=True, crash=crash
+    )
     log.debug(f"Killing with query {query}")
     result = _pm_driver(obj).kill(query)
     if not result:
@@ -218,14 +232,20 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
     default=None,
     help="Table width. Default is automatically calculated",
 )
-@add_query_options(at_least_one=False, all_processes_by_default=True)
+@add_query_options()
 @click.pass_obj
 def flush(
     obj: ProcessManagerContext,
-    query: ProcessQuery,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
     width: int | None,
 ) -> None:
     log = get_logger("process_manager.shell")
+    query = build_process_query(
+        session, name, user, uuid, at_least_one=False, all_processes_by_default=True
+    )
     log.debug(f"Flushing with query {query}")
     result = _pm_driver(obj).flush(query)
     if not result:
@@ -236,7 +256,7 @@ def flush(
 
 
 @click.command("logs")
-@add_query_options(at_least_one=True)
+@add_query_options()
 @click.option(
     "--how-far",
     type=int,
@@ -247,9 +267,16 @@ def flush(
 @click.option("--grep", type=str, default=None)
 @click.pass_obj
 def logs(
-    obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
+    obj: ProcessManagerContext,
+    how_far: int,
+    grep: str,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
 ) -> None:
     log = get_logger("process_manager.shell")
+    query = build_process_query(session, name, user, uuid, at_least_one=True)
     log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
         how_far=how_far,
@@ -285,16 +312,23 @@ def logs(
 
 
 @click.command("restart")
-@add_query_options(at_least_one=True)
+@add_query_options()
 @click.pass_obj
-def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def restart(
+    obj: ProcessManagerContext,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+) -> None:
     log = get_logger("process_manager.shell")
+    query = build_process_query(session, name, user, uuid, at_least_one=True)
     log.debug(f"Restarting with query {query}")
     _pm_driver(obj).restart(query)
 
 
 @click.command("ps")
-@add_query_options(at_least_one=False, all_processes_by_default=True)
+@add_query_options()
 @click.option(
     "-l",
     "--long-format",
@@ -313,11 +347,17 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
 @click.pass_obj
 def ps(
     obj: ProcessManagerContext,
-    query: ProcessQuery,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
     long_format: bool,
     width: int | None,
 ) -> None:
     log = get_logger("process_manager.shell")
+    query = build_process_query(
+        session, name, user, uuid, at_least_one=False, all_processes_by_default=True
+    )
     log.debug(f"Running ps with query {query}")
     results = _pm_driver(obj).ps(query)
     if not results:

@@ -2,8 +2,7 @@ import copy as cp
 import os
 import re
 from collections.abc import Callable
-from functools import update_wrapper
-from typing import ParamSpec, cast
+from typing import cast
 
 import click
 from druncschema.process_manager_pb2 import (
@@ -23,54 +22,37 @@ from drunc.process_manager.configuration import (
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
 
-P = ParamSpec("P")
 
-
-def generate_process_query(
-    f: Callable[P, object],
+def build_process_query(
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
     at_least_one: bool,
     all_processes_by_default: bool = False,
-) -> Callable[P, object]:
-    @click.pass_context
-    def new_func(
-        ctx: click.Context,
-        session: str | None,
-        name: tuple[str, ...],
-        user: str | None,
-        uuid: tuple[str, ...],
-        **kwargs: object,
-    ) -> object:
-        is_trivial_query = bool(
-            (len(uuid) == 0)
-            and (session is None)
-            and (len(name) == 0)
-            and (user is None)
+    crash: bool = False,
+) -> ProcessQuery:
+    is_trivial_query = bool(
+        (len(uuid) == 0) and (session is None) and (len(name) == 0) and (user is None)
+    )
+
+    if is_trivial_query and at_least_one:
+        raise click.BadParameter(
+            "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
         )
 
-        if is_trivial_query and at_least_one:
-            raise click.BadParameter(
-                "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
-            )
+    query_names = list(name)
+    if all_processes_by_default and is_trivial_query:
+        query_names = [".*"]
 
-        query_names = list(name)
-        if all_processes_by_default and is_trivial_query:
-            query_names = [".*"]
-
-        uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
-        crash = kwargs.pop("crash", False)
-        crash_flag = crash if isinstance(crash, bool) else False
-
-        query = ProcessQuery(
-            session=session or "",
-            names=query_names,
-            user=user or "",
-            uuids=uuids,
-            crash=crash_flag,
-        )
-        # print(query)
-        return ctx.invoke(f, query=query, **kwargs)
-
-    return cast(Callable[P, object], update_wrapper(new_func, f))
+    uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
+    return ProcessQuery(
+        session=session or "",
+        names=query_names,
+        user=user or "",
+        uuids=uuids,
+        crash=crash,
+    )
 
 
 def make_tree(values: list[ProcessInstance]) -> list[str]:
