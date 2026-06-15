@@ -78,11 +78,7 @@ def test_dunerc_success(run_dunerc) -> None:
 
 def test_log_files_are_present(run_dunerc) -> None:
     """Checks that expected process log files exist."""
-
     generated_log_files = [str(log.name) for log in run_dunerc.log_files]
-    for g in generated_log_files:
-        print(g)
-
     for app_name in [
         "ft-root-controller",
         "ft-top-segment-controller",
