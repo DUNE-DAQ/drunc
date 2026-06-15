@@ -8,6 +8,7 @@ import integrationtest.data_classes as data_classes
 import pytest
 from integ_test_utils import (
     check_file_containing,
+    strip_ansi,
 )
 
 # Check if drunc is present in the DUNEDAQ_DB_PATH, and if not, skip all tests in this
@@ -40,7 +41,7 @@ conf_dict = data_classes.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = (
     os.path.dirname(__file__) + "/../config/drunc/failure-testing.data.xml"
 )
-conf_dict.config_session_name = "ft-death-post-boot-nest-app"
+conf_dict.config_session_name = "ft-death-on-boot-top-app"
 
 # Define the operational environment for this test
 conf_dict.op_env = "test"
@@ -54,7 +55,7 @@ conf_dict.drunc_connsvc = True
 # conf_dict.connsvc_port = 12345
 
 # Collate tthe drunc config arguments into a dict to pass to the fixture
-confgen_arguments = {"test_failure_mode_death_post_boot_nest_app": conf_dict}
+confgen_arguments = {"test_failure_mode_death_on_boot_top_app": conf_dict}
 
 # Run these commands in the run control
 dunerc_command_list = ["boot"]
@@ -76,44 +77,49 @@ def test_dunerc_success(run_dunerc) -> None:
 
 
 def test_log_files_are_present(run_dunerc) -> None:
-    """Checks that expected process-manager log files exist."""
+    """Checks that expected process log files exist."""
+
+    generated_log_files = [str(log.name) for log in run_dunerc.log_files]
+    for g in generated_log_files:
+        print(g)
+
     for app_name in [
         "ft-root-controller",
         "ft-top-segment-controller",
-        "ft-bottom-segment-1-controller",
-        "ft-bottom-segment-1-application",
-        "ft-bottom-segment-2-controller",
-        "ft-bottom-segment-2-application",
-        "ft-bottom-segment-2.1-application",
+        "ft-nested-segment-1-controller",
+        "ft-nested-segment-1-application",
+        "ft-nested-segment-2-controller",
+        "ft-nested-segment-2-application",
+        "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
         assert any(
-            f"{run_dunerc.daq_session_name}_{app_name}" in str(logname)
-            for logname in run_dunerc.log_files
+            f"{run_dunerc.daq_session_name}_{app_name}" in logfile
+            for logfile in generated_log_files
         )
 
 
 def test_boot_failure_logfile(run_dunerc) -> None:
     """
-    Checks that boot starts the session processes but the targeted application dies on
-    boot, with the simulated death message in the logfile.
+    Checks that the application that dies has a logfile, and that the defined logfile
+    contains the expected message indicating that the application died on boot.
     """
     # Retrieve the log file for the application that is configured to die on boot
     simulated_death_app_logfile = next(
         (
             log
             for log in run_dunerc.log_files
-            if "bottom-segment-2-application" in str(log)
+            if "ft-top-segment-application" in str(log)
         ),
         None,
     )
     assert simulated_death_app_logfile is not None, (
-        "Expected to find a log file for bottom-segment-2-application, but did not."
+        "Expected to find a log file for ft-top-segment-application, but did not."
     )
 
     # Check that the expected boot failure message is in the log file for the
     # application that dies on boot
-    app_death_str = ["Simulating death of bottom-segment-2-application on boot"]
+    app_death_str = ["Simulating death of ft-top-segment-application on boot"]
     line_found = check_file_containing(app_death_str, simulated_death_app_logfile)
     assert line_found == True, (
         "Expected to see the boot failure message in stdout, but did not."
@@ -122,12 +128,14 @@ def test_boot_failure_logfile(run_dunerc) -> None:
 
 def test_boot_failure_cli(run_dunerc) -> None:
     """
-    Checks that boot starts the session processes but the targeted application dies on
-    boot, with the simulated death message in the stdout and the expected boot failure
-    message in stdout.
+    Checks that the application that dies on boot causes the session to go into an error
+    state, and that the expected message is printed to stdout.
     """
-    # Check that the expected boot failure message is in the
-    stdout = run_dunerc.completed_process.stdout
-    assert "Booted, but the top controller is in error" in stdout, (
+    # Check that the session is correctly put in error state if an appliucation dies on
+    # boot.
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    search_str = "Booted, but the top controller is in error"
+    str_found = any(search_str in line for line in lines)
+    assert str_found is True, (
         "Expected to see the boot failure message in stdout, but did not."
     )

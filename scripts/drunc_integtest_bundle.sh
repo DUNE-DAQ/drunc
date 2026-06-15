@@ -5,7 +5,7 @@
 # Based entirely of the implementation of daqsystemtest_integtest_bundle.sh
 # Original author: KAB, 10-Oct-2023
 
-integtest_list=( "process_manager_test.py", "test_failure_mode_death_on_boot_nest_app.py") #, "test_failure_mode_death_post_boot_nest_app.py") # FIGURE OUT WHY BOTH MEANS ONE FAILS, AND REPOIRT THE `jq` UTILITY ERROR
+integtest_list=( "process_manager_test.py", "test_failure_mode_death_on_boot_top_app.py") #, "test_failure_mode_death_post_boot_nest_app.py") # FIGURE OUT WHY BOTH MEANS ONE FAILS, AND REPOIRT THE `jq` UTILITY ERROR
 let last_test_index=${#integtest_list[@]}-1
 
 usage() {

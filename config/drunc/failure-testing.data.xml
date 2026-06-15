@@ -92,7 +92,7 @@
 </obj>
 <obj class="Variable" id="drunc-ft-boot-death-top-app"/>
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME"/>
- <attr name="value" type="string" val="ft-nested-segment-application"/>
+ <attr name="value" type="string" val="ft-top-segment-application"/>
 </obj>
 
 <!-- Configs for apps timing out on FSM command execution -->
