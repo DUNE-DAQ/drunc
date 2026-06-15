@@ -1175,6 +1175,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
+                f"rm {log_file}; "
                 f"{command} &> {log_file} & PID=$! ; "
                 f"trap 'kill -HUP $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' HUP TERM INT QUIT ; "
                 f"echo '{remote_metadata_json}' > {metadata_file} ; "
