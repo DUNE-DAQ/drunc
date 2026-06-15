@@ -88,11 +88,11 @@
 </obj>
 <obj class="Variable" id="drunc-ft-boot-death-nested-app"/>
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME"/>
- <attr name="value" type="string" val="bottom-segment-2-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-2-application"/>
 </obj>
 <obj class="Variable" id="drunc-ft-boot-death-top-app"/>
  <attr name="name" type="string" val="DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME"/>
- <attr name="value" type="string" val="nested-segment-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-application"/>
 </obj>
 
 <!-- Configs for apps timing out on FSM command execution -->
@@ -106,11 +106,11 @@
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME"/>
- <attr name="value" type="string" val="bottom-segment-2-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-2-application"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout-top-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME"/>
- <attr name="value" type="string" val="nested-segment-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-application"/>
 </obj>
 
 <!-- Configs for apps dying on FSM command execution -->
@@ -124,11 +124,11 @@
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_APP_NAME"/>
- <attr name="value" type="string" val="bottom-segment-2-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-2-application"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-top-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_APP_NAME"/>
- <attr name="value" type="string" val="nested-segment-application"/>
+ <attr name="value" type="string" val="ft-nested-segment-application"/>
 </obj>
 <!-- End of faiilure mode config parameters -->
 
@@ -138,7 +138,7 @@
  <attr name="port" type="u16" val="0"/>
 </obj>
 
-<obj class="DaqApplication" id="bottom-segment-1-application">
+<obj class="DaqApplication" id="ft-nested-segment-1-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -148,7 +148,7 @@
  <rel name="modules">
  </rel>
 </obj>
-<obj class="DaqApplication" id="bottom-segment-2-application">
+<obj class="DaqApplication" id="ft-nested-segment-2-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -158,7 +158,7 @@
  <rel name="modules">
  </rel>
 </obj>
-<obj class="DaqApplication" id="bottom-segment-2.1-application">
+<obj class="DaqApplication" id="ft-nested-segment-2.1-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -168,7 +168,7 @@
  <rel name="modules">
  </rel>
 </obj>
-<obj class="DaqApplication" id="nested-segment-application">
+<obj class="DaqApplication" id="ft-nested-segment-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -178,7 +178,7 @@
  <rel name="modules">
  </rel>
 </obj>
-<obj class="RCApplication" id="bottom-segment-2-controller">
+<obj class="RCApplication" id="ft-nested-segment-2-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -187,7 +187,7 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-<obj class="RCApplication" id="bottom-segment-1-controller">
+<obj class="RCApplication" id="ft-nested-segment-1-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -196,7 +196,7 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-<obj class="RCApplication" id="nested-segment-controller">
+<obj class="RCApplication" id="ft-nested-segment-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -205,7 +205,16 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
 </obj>
-<obj class="RCApplication" id="top-segment-controller">
+<obj class="RCApplication" id="ft-segment-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="root-rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
+</obj>
+<obj class="RCApplication" id="ft-root-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
  <rel name="exposes_service">
@@ -216,35 +225,35 @@
 </obj>
 
 
-<obj class="Segment" id="bottom-segment-1">
+<obj class="Segment" id="ft-nested-segment-1">
  <rel name="applications">
-  <ref class="DaqApplication" id="bottom-segment-1-application"/>
+  <ref class="DaqApplication" id="ft-nested-segment-1-application"/>
  </rel>
- <rel name="controller" class="RCApplication" id="bottom-segment-1-controller"/>
+ <rel name="controller" class="RCApplication" id="ft-nested-segment-1-controller"/>
 </obj>
-<obj class="Segment" id="bottom-segment-2">
+<obj class="Segment" id="ft-nested-segment-2">
  <rel name="applications">
-  <ref class="DaqApplication" id="bottom-segment-2-application"/>
-  <ref class="DaqApplication" id="bottom-segment-2.1-application"/>
+  <ref class="DaqApplication" id="ft-nested-segment-2-application"/>
+  <ref class="DaqApplication" id="ft-nested-segment-2.1-application"/>
  </rel>
- <rel name="controller" class="RCApplication" id="bottom-segment-2-controller"/>
+ <rel name="controller" class="RCApplication" id="ft-nested-segment-2-controller"/>
 </obj>
-<obj class="Segment" id="nested-segment">
+<obj class="Segment" id="ft-nested-segment">
  <rel name="segments"/>
-  <ref class="Segment" id="bottom-segment-1"/>
-  <ref class="Segment" id="bottom-segment-2"/>
+  <ref class="Segment" id="ft-nested-segment-1"/>
+  <ref class="Segment" id="ft-nested-segment-2"/>
  </rel>
  <rel name="applications">
-  <ref class="DaqApplication" id="nested-segment-application"/>
+  <ref class="DaqApplication" id="ft-nested-segment-application"/>
  </rel>
- <rel name="controller" class="RCApplication" id="nested-segment-controller"/>
+ <rel name="controller" class="RCApplication" id="ft-segment-controller"/>
 </obj>
 
-<obj class="Segment" id="top-segment">
+<obj class="Segment" id="ft-segment">
  <rel name="segments">
-  <ref class="Segment" id="nested-segment"/>
+  <ref class="Segment" id="ft-nested-segment"/>
  </rel>
- <rel name="controller" class="RCApplication" id="root-controller"/>
+ <rel name="controller" class="RCApplication" id="ft-root-controller"/>
 </obj>
 
 <obj class="DetectorConfig" id="dummy-detector">
@@ -270,7 +279,7 @@
   <ref class="Variable" id="local-env-ers-fatal"/>
   <ref class="Variable" id="local-env-connectivity-port"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -294,7 +303,7 @@
   <ref class="Variable" id="drunc-ft-death-on-boot"/>
   <ref class="Variable" id="drunc-ft-boot-death-nested-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -317,7 +326,7 @@
   <ref class="Variable" id="drunc-ft-death-on-boot"/>
   <ref class="Variable" id="drunc-ft-boot-death-top-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -342,7 +351,7 @@
   <ref class="Variable" id="drunc-ft-death-post-boot"/>
   <ref class="Variable" id="drunc-ft-boot-death-nested-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -365,7 +374,7 @@
   <ref class="Variable" id="drunc-ft-death-post-boot"/>
   <ref class="Variable" id="drunc-ft-boot-death-top-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -392,7 +401,7 @@
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-nested-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -416,7 +425,7 @@
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-timeout-top-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -442,7 +451,7 @@
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-nested-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>
@@ -466,7 +475,7 @@
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-cmd"/>
   <ref class="Variable" id="drunc-ft-fsm-cmd-death-top-app"/>
  </rel>
- <rel name="segment" class="Segment" id="top-segment"/>
+ <rel name="segment" class="Segment" id="ft-segment"/>
  <rel name="infrastructure_applications">
   <ref class="ConnectionService" id="local-connection-server"/>
  </rel>

@@ -477,7 +477,7 @@ def main(
     # is set in the configuration file that tests this behaviour.
     if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", None):
         log.info("Sleeping to allow intiialization timeout")
-        time.sleep(10)
+        time.sleep(20)
         log.warning("Simulating failure during initialization")
         exit(1)
     log.info(f"Starting application {name}")
