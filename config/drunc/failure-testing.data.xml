@@ -138,6 +138,16 @@
  <attr name="port" type="u16" val="0"/>
 </obj>
 
+<obj class="DaqApplication" id="ft-top-segment-application">
+ <attr name="application_name" type="string" val="fake_daq_application"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="daqapp_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="modules">
+ </rel>
+</obj>
 <obj class="DaqApplication" id="ft-nested-segment-1-application">
  <attr name="application_name" type="string" val="fake_daq_application"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -244,7 +254,7 @@
   <ref class="Segment" id="ft-nested-segment-2"/>
  </rel>
  <rel name="applications">
-  <ref class="DaqApplication" id="ft-nested-segment-application"/>
+  <ref class="DaqApplication" id="ft-top-segment-application"/>
  </rel>
  <rel name="controller" class="RCApplication" id="ft-top-segment-controller"/>
 </obj>
