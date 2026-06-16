@@ -17,7 +17,7 @@ import conffwk
 import requests
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
-from werkzeug.serving import run_simple
+from werkzeug.serving import make_server
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
@@ -538,10 +538,16 @@ def main(
     )
 
     # Doesn't do what is expected, probably flask
-    # def terminate(signum, sigframe):
-    #     connectivity_service_thread.join()
-    #     log.info("Connectivity service terminated")
-    #     exit(1)
+    def terminate():
+        connectivity_service_thread.join(timeout=0.1)
+        log.info("Connectivity service terminated")
+        server_container['server'].shutdown()
+        flask_thread.join(timeout=0.1)
+        exit(1)
+
+    def terminate_signal_process(signum, sigframe):
+        log.warning(f"Received signal {signum}, terminating process")
+        terminate()
     # for sig in [signal.SIGINT, signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT]:
     #     signal.signal(sig, terminate)
     app = Flask(__name__)
@@ -551,24 +557,29 @@ def main(
     app.add_url_rule("/", "index", index)
     server_ready = threading.Event()
 
-    def run_flask_app(app, host, port, event):
+    def run_flask_app(app, host, port, event, server_container):
         try:
             log.debug(f"Entering run_flask_app for {host}:{port}")
+            # Create the server manually instead of letting run_simple do it implicitly
+            server = make_server(host, port, app)
+            server_container['server'] = server  # Store the server instance
             event.set()
-            run_simple(host, port, app, threaded=True, use_reloader=False)
+            server.serve_forever() # This blocks until shutdown() is called
         except Exception as e:
             log.error(f"Flask app thread crashed: {e}")
 
     url = urlparse(url)
     flask_url = url.geturl().replace("rest://", "http://")
 
+    server_container = {}
     flask_thread = threading.Thread(
-        target=run_flask_app,  # Use your new wrapper here
+        target=run_flask_app,
         kwargs={
             "app": app,
             "host": url.hostname,
             "port": url.port,
             "event": server_ready,
+            "server_container": server_container
         },
         name="flask_thread",
     )
@@ -603,9 +614,9 @@ def main(
     )
     if ft_die_post_boot and ft_app_to_die_boot == name:
         log.warning(f"Simulating death of {name} post boot")
-        exit(1)
+        terminate()
 
-    log.warning(
+    log.info(
         "Fake DAQ application is running and publishing to connectivity service. Press Ctrl+C to exit."
     )
 

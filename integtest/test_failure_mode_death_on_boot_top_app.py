@@ -1,3 +1,10 @@
+"""
+Run a session with the top segment application dying at the start of boot.
+
+Future developments:
+ - Use the --no-stop-error-batch-mode option to also check the ps and status tables
+"""
+
 import os
 import re
 
