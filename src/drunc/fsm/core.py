@@ -55,9 +55,7 @@ class PreOrPostTransitionSequence:
         self.sequence: list[Callback] = []
         self.log = get_logger("controller.core.PreOrPostTransitionSequence")
 
-    def add_callback(
-        self, action: FSMActionProtocol, mandatory: bool = True
-    ) -> None:
+    def add_callback(self, action: FSMActionProtocol, mandatory: bool = True) -> None:
         """
         Add a callback to the sequence. The method to be called will be determined by
         the name of the transition and the prefix (pre or post).
@@ -102,7 +100,12 @@ class PreOrPostTransitionSequence:
             ]
         )
 
-    def execute(self, transition_data: str | None, transition_args: Dict[str, object], ctx: ContextProtocol) -> str:
+    def execute(
+        self,
+        transition_data: str | None,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
+    ) -> str:
         self.log.debug(f"{transition_data=}, {transition_args=}")
         if not transition_data:
             transition_data = "{}"
@@ -265,7 +268,7 @@ class FSMDestinationResult:
     destination_state: str | None
     destination_type: FSMDestinationType
 
-    
+
 class FSM:
     def __init__(self, conf: ConfigProtocol) -> None:
         self.log = get_logger("controller.core.FSM")
@@ -310,10 +313,14 @@ class FSM:
         """Grab all the transitions"""
         return self.sequences
 
-    def is_destination_of_this_transition(self, state: str, transition: Transition) -> bool:
+    def is_destination_of_this_transition(
+        self, state: str, transition: Transition
+    ) -> bool:
         return bool(transition.destination == state)
 
-    def get_destination_state(self, source_state: str, transition: Transition) -> FSMDestinationResult:
+    def get_destination_state(
+        self, source_state: str, transition: Transition
+    ) -> FSMDestinationResult:
         """Tells us where a particular transition will take us, given the source_state"""
         right_name = [t for t in self.transitions if t == transition]
 
@@ -391,7 +398,11 @@ class FSM:
         return bool(regex_match(transition.source, source_state))
 
     def prepare_transition(
-        self, transition: Transition, transition_data: str, transition_args: Dict[str, object], ctx: ContextProtocol
+        self,
+        transition: Transition,
+        transition_data: str,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
     ) -> str:
         transition_data = self.pre_transition_sequences[transition].execute(
             transition_data, transition_args, ctx
@@ -399,7 +410,11 @@ class FSM:
         return transition_data
 
     def finalise_transition(
-        self, transition: Transition, transition_data: str, transition_args: Dict[str, object], ctx: ContextProtocol
+        self,
+        transition: Transition,
+        transition_data: str,
+        transition_args: Dict[str, object],
+        ctx: ContextProtocol,
     ) -> str:
         transition_data = self.post_transition_sequences[transition].execute(
             transition_data, transition_args, ctx

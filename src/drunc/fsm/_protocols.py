@@ -42,7 +42,7 @@ class RuntimeConfigurationProtocol(Protocol):
     initial_data: str
     oks_key: OksKeyProtocol
 
-    
+
 class ConfigurationProtocol(Protocol):
     id: str
     db: DBProtocol
@@ -76,20 +76,31 @@ class ActionMethodProtocol(Protocol):
     __name__: str
     __module__: str
     __self__: object
+
     def __call__(self, *args: object, **kwargs: object) -> object: ...
 
 
 class FSMActionProtocol(Protocol):
     name: str
-    
+
+
+class FSMxTransitionProtocol(Protocol):
+    transition: str
+    order: list[str]
+    mandatory: list[str]
+
 
 class ConfigProtocol(Protocol):
     def get_initial_state(self) -> str: ...
     def get_states(self) -> List[str]: ...
     def get_transitions(self) -> List[Transition]: ...
     def get_sequences(self) -> List[FSMSequence]: ...
-    def get_pre_transitions_sequences(self) -> Dict[Transition, PreOrPostTransitionSequence]: ...
-    def get_post_transitions_sequences(self) -> Dict[Transition, PreOrPostTransitionSequence]: ...
+    def get_pre_transitions_sequences(
+        self,
+    ) -> Dict[Transition, PreOrPostTransitionSequence]: ...
+    def get_post_transitions_sequences(
+        self,
+    ) -> Dict[Transition, PreOrPostTransitionSequence]: ...
 
 
 class ActionMethod(Protocol):

@@ -12,7 +12,12 @@ class FileRunRegistry(FSMAction):
         super().__init__(name="file-run-registry")
         self.configuration = configuration
 
-    def pre_start(self, _input_data: Dict[str, object], _context: ContextProtocol, **kwargs: object) -> Dict[str, object]:
+    def pre_start(
+        self,
+        _input_data: Dict[str, object],
+        _context: ContextProtocol,
+        **kwargs: object,
+    ) -> Dict[str, object]:
         run_number = _input_data["run"]
         dest = os.getcwd() + "/run_conf" + str(run_number) + ".data.xml"
         consolidate_db(_context.configuration.initial_data.split(":")[1], f"{dest}")

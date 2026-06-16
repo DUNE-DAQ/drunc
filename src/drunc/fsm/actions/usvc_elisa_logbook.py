@@ -83,7 +83,11 @@ class ElisaLogbook(FSMAction):
         self.timeout = 5
 
     def post_start(
-        self, _input_data: dict[str, object], _context: ContextProtocol, elisa_post: Optional[str] = None, **kwargs: object
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        elisa_post: Optional[str] = None,
+        **kwargs: object,
     ) -> dict[str, object]:
         if self.elisa_hardware in self.no_publish_hardware:
             return {}
@@ -142,7 +146,11 @@ class ElisaLogbook(FSMAction):
         return _input_data
 
     def post_drain_dataflow(
-        self, _input_data: dict[str, object], _context: ContextProtocol, elisa_post: Optional[str] = None, **kwargs: object
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        elisa_post: Optional[str] = None,
+        **kwargs: object,
     ) -> dict[str, object]:
         if self.elisa_hardware in self.no_publish_hardware:
             return {}

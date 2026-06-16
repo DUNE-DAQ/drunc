@@ -19,7 +19,7 @@ class UserProvidedRunNumber(FSMAction):
         trigger_rate: Optional[float] = None,
         **kwargs: object,
     ) -> dict[str, object]:
-        
+
         safe_run_type = run_type.upper() if run_type is not None else "TEST"
         run_type = validate_run_type(safe_run_type)
         _input_data["production_vs_test"] = run_type

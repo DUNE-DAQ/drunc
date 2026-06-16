@@ -24,7 +24,7 @@ def validate_run_type(run_type: str) -> str:
     return run_type
 
 
-def get_dotdrunc_json(path: str | None = None): # type: ignore[no-untyped-def]
+def get_dotdrunc_json(path: str | None = None):  # type: ignore[no-untyped-def]
     # Resolution order: DOTDRUNC env var -> provided path -> default path
     file_path = os.getenv("DOTDRUNC") or path or "~/.drunc.json"
     try:

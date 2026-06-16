@@ -12,11 +12,11 @@ class FileLogbook(FSMAction):
         self.file = self.conf_dict["file_name"]
 
     def post_start(
-        self, 
-        _input_data: dict[str, object], 
-        _context: ContextProtocol, 
-        file_logbook_post: Optional[str] = None, 
-        **kwargs: object
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        file_logbook_post: Optional[str] = None,
+        **kwargs: object,
     ) -> dict[str, object]:
         with open(self.file, "a") as f:
             f.write(
@@ -29,11 +29,11 @@ class FileLogbook(FSMAction):
         return _input_data
 
     def post_drain_dataflow(
-        self, 
-        _input_data: dict[str, object], 
-        _context: ContextProtocol, 
-        file_logbook_post: str = "", 
-        **kwargs: object
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        file_logbook_post: str = "",
+        **kwargs: object,
     ) -> dict[str, object]:
         with open(self.file, "a") as f:
             f.write(

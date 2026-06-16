@@ -25,10 +25,12 @@ from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
 class FSMActionFactory:
     _instance: FSMActionFactory | None = None
 
-    def __init__(self)  -> None:
+    def __init__(self) -> None:
         raise DruncSetupException("Call get() instead")
 
-    def _get_pre_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethodProtocol]:
+    def _get_pre_transitions(
+        self, action: FSMActionProtocol
+    ) -> Dict[str, ActionMethodProtocol]:
         retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
@@ -36,7 +38,9 @@ class FSMActionFactory:
                     retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _get_post_transitions(self, action: FSMActionProtocol) -> Dict[str, ActionMethodProtocol]:
+    def _get_post_transitions(
+        self, action: FSMActionProtocol
+    ) -> Dict[str, ActionMethodProtocol]:
         retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
@@ -44,7 +48,9 @@ class FSMActionFactory:
                     retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _validate_signature(self, name:str , method: ActionMethodProtocol, action: str) -> None:
+    def _validate_signature(
+        self, name: str, method: ActionMethodProtocol, action: str
+    ) -> None:
         sig = inspect.signature(method)
 
         if (
@@ -123,7 +129,6 @@ class FSMActionFactory:
             self._validate_action(iface)
 
         return iface
-
 
     @classmethod
     def get(cls: Type[FSMActionFactory]) -> FSMActionFactory:

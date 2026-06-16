@@ -318,7 +318,7 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
 
     # Fallback to simple error if no rich status
     if status is None:
-        return GrpcErrorDetails(code=code, message="No message", details=[])
+        return GrpcErrorDetails(code=code, message="No message ", details=[])
 
     # Extract all error details
     error_details = []

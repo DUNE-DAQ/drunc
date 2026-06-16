@@ -7,7 +7,11 @@ class TriggerRateSpecifier(FSMAction):
         super().__init__(name="trigger-rate-specifier")
 
     def pre_change_rate(
-        self, _input_data: dict[str, object], _context: ContextProtocol, trigger_rate: float, **kwargs: object
+        self,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
+        trigger_rate: float,
+        **kwargs: object,
     ) -> dict[str, object]:
         _input_data["trigger_rate"] = trigger_rate
         return _input_data

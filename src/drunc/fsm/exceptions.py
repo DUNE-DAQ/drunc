@@ -118,6 +118,7 @@ class CannotGetRunNumber(FSMException):
         self.message = f"Could not get Run Number because {data}"
         super().__init__(self.message)
 
+
 class DBRunRegistryConfigurationError(FSMException):
     def __init__(self, data: object) -> None:
         self.message = f"RunRegistryDB configuration error: {data}"

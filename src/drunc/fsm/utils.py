@@ -23,9 +23,9 @@ def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescript
         transitions (list[Transition]): A list of FSM transitions.
 
     Returns:
-        FSMCommandsDescription: A FSMCommandsDescription containing the converted 
+        FSMCommandsDescription: A FSMCommandsDescription containing the converted
             transitions.
-    
+
     Raises:
         None.
     """
@@ -44,13 +44,12 @@ def convert_fsm_transition(transitions: list[Transition]) -> FSMCommandsDescript
 
 
 def decode_fsm_arguments(
-    arguments: MutableMapping[str, PbAny], 
-    arguments_format: list[Argument]
+    arguments: MutableMapping[str, PbAny], arguments_format: list[Argument]
 ) -> dict[str, str | int | float | bool]:
     """
     Decodes the arguments of a FSM command.
 
-    Note there is separate logic to validate whether the required arguments are all 
+    Note there is separate logic to validate whether the required arguments are all
     present at the click.core.Command level, this is a safeguard to support the multiple
     drunc operating modes.
 
@@ -75,7 +74,7 @@ def decode_fsm_arguments(
 
     # Explicitly type out_dict
     out_dict: dict[str, str | int | float | bool] = {}
-    
+
     for arg in arguments_format:
         arg_value: Optional[PbAny] = get_argument(arg.name, arguments)
 
@@ -96,5 +95,5 @@ def decode_fsm_arguments(
                 out_dict[arg.name] = unpack_any(arg_value, bool_msg).value
             case _:
                 raise fsme.UnhandledArgumentType(str(arg.type))
-                
+
     return out_dict
