@@ -3,6 +3,8 @@ Run a session with a nested segment application dying at the end of boot.
 
 Future developments:
  - Use the --no-stop-error-batch-mode option to also check the ps and status tables
+ - Investigate why the `ps` table does not contain the fake_daq_applicaiton in a dead state.
+ - Update the status table to ensure that the `disconnecteed` application does not hold up the boot process.
  - Investigate why there are differences in the reporting of error states in sequential runs as (on boot status tables)
                                                                ft-pr status
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓

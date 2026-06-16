@@ -292,6 +292,11 @@ def unified_shell(
     )
     ctx.obj.reset(address_pm=process_manager_address)
 
+    # Keep track of whether the session uses a local connectivity service
+    ctx.obj.session_uses_local_connectivity_service = (
+        session_dal.connectivity_service.host == "localhost"
+    )
+
     # Run a simple command (describe) to check the connection with the process manager
     desc: Description | None = None
     try:

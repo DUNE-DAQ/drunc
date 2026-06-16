@@ -1,10 +1,12 @@
 import getpass
 import sys
+import time
 
 import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
 
 from drunc.controller.interface.shell_utils import controller_setup
+from drunc.controller.utils import count_processes_in_status_response, get_all_states
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.unified_shell.context import UnifiedShellMode
@@ -95,6 +97,55 @@ def boot(
 
     else:
         log.error("Could not understand where the controller is!")
+        return
+
+    # If the session applications are not found on the connectivity serivce, then the
+    # session is not booted correctly. This is a critical error, and the controller is
+    # put into error state.
+    ps_response = obj.get_driver("process_manager").ps(
+        ProcessQuery(session=session_name)
+    )
+    ps_process_count = len(ps_response.values)
+
+    status_response = obj.get_driver("controller").status()
+    status_process_count = count_processes_in_status_response(status_response)
+
+    # Local connectivity serivces are not reported in the status table, but they should
+    # be. Increment the status_process_count by 1 if using the LCS.
+    # TODO: Remove this once the LCS is reported in the status table.
+    if obj.session_uses_local_connectivity_service:
+        status_process_count += 1
+
+    if ps_process_count != status_process_count:
+        time.sleep(1)
+        log.error(
+            f"Booted, but the number of processes found in the connectivity service "
+            f"({ps_process_count}) does not match the number of processes found in the "
+            f"process manager ({status_process_count}). Please check the relevant logs "
+            "for more information."
+        )
+        log.critical("Getting the controller driver test")
+        obj.get_driver("controller")
+        log.critical("Status test")
+        obj.get_driver("controller").status()
+        log.critical("To error test")
+        obj.get_driver("controller").to_error()
+        log.critical("COMPLETE")
+        return
+
+    # Check if session booted correctly, if not put it in error state
+    log.warning("Getting the session states")
+    session_states = get_all_states(status_response)
+    if "disconnected" in session_states:
+        time.sleep(1)
+        log.error(
+            "Booted, but there are disconnected applications/controllers. Please check "
+            "the relevant logs for more information."
+        )
+        status_response = obj.get_driver("controller").status()
+        log.critical(f"{status_response=}")
+        obj.get_driver("controller").to_error()
+        log.critical("TEST")
         return
 
     # If any processes died immediately, place the controller in error.

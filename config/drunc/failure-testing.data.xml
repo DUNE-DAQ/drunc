@@ -66,14 +66,9 @@
 <info name="" type="" num-of-items="6" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T105549" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241022T175827"/>
 
 <include>
- <file path="schema/confmodel/dunedaq.schema.xml"/>
+ <!-- <file path="schema/confmodel/dunedaq.schema.xml"/> -->
  <file path="config/daqsystemtest/ccm.data.xml"/>
  <file path="config/daqsystemtest/hosts.data.xml"/>
- <file path="schema/confmodel/dunedaq.schema.xml"/>
- <file path="config/daqsystemtest/ru-segment.data.xml"/>
- <file path="config/daqsystemtest/df-segment.data.xml"/>
- <file path="config/daqsystemtest/hsi-fake-segment.data.xml"/>
- <file path="config/daqsystemtest/trigger-segment.data.xml"/>
 </include>
 
 <!-- Failure Testing (ft) mode config parameters -->
@@ -188,6 +183,15 @@
  <rel name="modules">
  </rel>
 </obj>
+<obj class="RCApplication" id="ft-root-controller">
+ <attr name="application_name" type="string" val="drunc-controller"/>
+ <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
+ <rel name="exposes_service">
+  <ref class="Service" id="rccontroller_control"/>
+ </rel>
+ <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
+ <rel name="fsm" class="FSMconfiguration" id="FSMconfiguration_noAction"/>
+</obj>
 <obj class="RCApplication" id="ft-nested-segment-2-controller">
  <attr name="application_name" type="string" val="drunc-controller"/>
  <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
@@ -224,15 +228,6 @@
  <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
  <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
 </obj>
-<obj class="RCApplication" id="ft-root-controller">
- <attr name="application_name" type="string" val="drunc-controller"/>
- <rel name="runs_on" class="VirtualHost" id="vlocalhost"/>
- <rel name="exposes_service">
-  <ref class="Service" id="root-rccontroller_control"/>
- </rel>
- <rel name="opmon_conf" class="OpMonConf" id="slow-all-monitoring"/>
- <rel name="fsm" class="FSMconfiguration" id="fsmConf-test"/>
-</obj>
 
 
 <obj class="Segment" id="ft-nested-segment-1">
@@ -248,7 +243,7 @@
  </rel>
  <rel name="controller" class="RCApplication" id="ft-nested-segment-2-controller"/>
 </obj>
-<obj class="Segment" id="ft-nested-segment">
+<obj class="Segment" id="ft-top-segment">
  <rel name="segments"/>
   <ref class="Segment" id="ft-nested-segment-1"/>
   <ref class="Segment" id="ft-nested-segment-2"/>
@@ -261,7 +256,7 @@
 
 <obj class="Segment" id="ft-segment">
  <rel name="segments">
-  <ref class="Segment" id="ft-nested-segment"/>
+  <ref class="Segment" id="ft-top-segment"/>
  </rel>
  <rel name="controller" class="RCApplication" id="ft-root-controller"/>
 </obj>

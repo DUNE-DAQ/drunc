@@ -594,6 +594,9 @@ def get_control_type_and_uri_from_connectivity_service(
                 progress.update(task, completed=elapsed)
 
                 try:
+                    logger.critical(
+                        f"Attempting to resolve '{name}_control' in the connectivity service"
+                    )
                     uris = connectivity_service.resolve(
                         name + "_control", "RunControlMessage"
                     )

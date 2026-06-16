@@ -228,6 +228,9 @@ class Controller(ControllerServicer):
             for response in child_responses:
                 children_states[response.name] = response.status.state
                 if response.status.in_error:
+                    self.log.error(
+                        f"Child {response.name} is in error state. Placing controller in error state."
+                    )
                     self.stateful_node.to_error()
 
             if any([c.lower() != "initial" for c in children_states.values()]):
@@ -238,7 +241,8 @@ class Controller(ControllerServicer):
         bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
         if bad_children:
             log_init_controller.error(
-                f"Children that did not initialise in time: {bad_children}"
+                f"Children that did not initialise in time: {bad_children}. Placing "
+                "controller in error state."
             )
             self.stateful_node.to_error()
 
@@ -634,6 +638,8 @@ class Controller(ControllerServicer):
     def status(
         self, request: StatusRequest, context: ServicerContext
     ) -> StatusResponse:
+        self.log.warning(f"Status request received for target: {request.target}")
+
         response = StatusResponse(
             token=None,
             name=self.name,
@@ -689,6 +695,7 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
+        self.log.warning(f"Returning status response: {response}")
         return response
 
     @broadcasted
@@ -1580,7 +1587,7 @@ class Controller(ControllerServicer):
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
+        self.log.critical(f"Received to_errror request with request: {request}")
         try:
             # Parse and validate target.
             request.target = self.parse_target_string(request.target)
@@ -1623,6 +1630,7 @@ class Controller(ControllerServicer):
         if request.target == self.name or request.execute_along_path:
             self.stateful_node.to_error()
 
+        self.log.critical(f"Returning to_error response: {response}")
         return response
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
