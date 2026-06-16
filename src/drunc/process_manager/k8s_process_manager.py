@@ -61,7 +61,6 @@ class _LcsSessionState:
     """
 
     podname: str | None = None
-    port: int | None = None
     node_port: int | None = None
     is_booted: bool = False
 
@@ -1726,7 +1725,6 @@ class K8sProcessManager(ProcessManager):
                 if lcs_port:
                     lcs = self._lcs_state_for(session)
                     lcs.podname = podname
-                    lcs.port = lcs_port
                     lcs.node_port = lcs_port
                 else:
                     raise DruncK8sException(
