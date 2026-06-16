@@ -376,16 +376,18 @@ class K8sProcessManager(ProcessManager):
             self.log.info(end_str)
             self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
-            # If the terminated pod was the LCS for its session, mark it as down.
-            # This prevents other pods booting later from trying to resolve a
-            # localhost alias that no longer exists.
+            # If the terminated pod was the LCS for its session, remove all LCS
+            # state for this session. A partial reset (e.g. only is_booted=False)
+            # would leave stale podname/port/node_port fields that could mislead
+            # a future LCS boot — including one that lands on a different node.
+            # Popping the entry is consistent with the invariant: "no LCS = no entry".
             lcs = self._lcs_state.get(session)
             if lcs is not None and lcs.podname == meta.name:
                 self.log.info(
                     f"LCS pod '{meta.name}' for session '{session}' has terminated; "
-                    "clearing LCS booted state."
+                    "removing LCS state so any future boot starts from a clean slate."
                 )
-                lcs.is_booted = False
+                self._lcs_state.pop(session, None)
 
         # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
