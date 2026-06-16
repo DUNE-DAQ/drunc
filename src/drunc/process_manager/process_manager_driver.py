@@ -428,20 +428,6 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def update_connectivity_port_dal(
-        self,
-        env_variables: list["conffwk.dal.Variable | conffwk.dal.VariableSet"],
-        new_port: int,
-    ) -> None:
-        """Process a dal::Variable object, placing key/value pairs in a dictionary"""
-        for item in env_variables:
-            if item.className() == "VariableSet":
-                self.update_connectivity_port_dal(item.contains, new_port)
-            else:
-                if item.className() == "Variable":
-                    if item.name == "CONNECTION_PORT":
-                        item.value = new_port
-
     def change_localhost(self, session_dal):
         # self.log.critical("in session dalling")
 
