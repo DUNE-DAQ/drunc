@@ -42,6 +42,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
+    compute_role_from_boot_request,
     format_hostname,
     on_parent_exit,
     validate_k8s_session_name,
@@ -1049,49 +1050,14 @@ class K8sProcessManager(ProcessManager):
             A dictionary of labels containing 'tree-id.{drunc_label}' and
             'role.{drunc_label}' keys with their corresponding values.
         """
-        role = "unknown"
+        role = compute_role_from_boot_request(boot_request)
 
         labels = {f"tree-id.{self.drunc_label}": tree_id}
-
-        if not tree_id:
-            role = "unknown"
-        elif self._is_controller_executable(boot_request):
-            if tree_id == "0":
-                role = "root-controller"
-            elif tree_id.startswith("0."):
-                role = "segment-controller"
-            else:
-                role = "infrastructure-applications"  # controller outside segment tree
-
-        else:
-            if tree_id.startswith("0."):
-                role = "application"
-            else:
-                role = "infrastructure-applications"
-
         labels[f"role.{self.drunc_label}"] = role
         self.log.info(
             f"Assigning labels for '{podname}': role={role}, tree-id={tree_id}"
         )
         return labels
-
-    def _is_controller_executable(self, boot_request: BootRequest) -> bool:
-        """
-        Check whether the boot request's main executable is a drunc-controller.
-
-        Inspects all executable-and-arguments entries in the process description
-        for the 'drunc-controller' executable name.
-
-        Args:
-            boot_request: The BootRequest to inspect.
-
-        Returns:
-            True if any executable entry is 'drunc-controller', False otherwise.
-        """
-        for e_and_a in boot_request.process_description.executable_and_arguments:
-            if e_and_a.exec == "drunc-controller":
-                return True
-        return False
 
     def _build_container_env(
         self, boot_request: BootRequest, tree_labels: dict[str, str]
@@ -2484,7 +2450,7 @@ class K8sProcessManager(ProcessManager):
             return ProcessInstanceList(values=[])
 
         self.log.info(
-            f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
+            f"Starting staged termination for {len(targeted_uuids)} process(es)..."
         )
 
         # Define the blocking kill_and_wait helper
@@ -2496,7 +2462,7 @@ class K8sProcessManager(ProcessManager):
                 if grace_period == 0
                 else "Gracefully terminating"
             )
-            self.log.info(f"{action} {len(uuids)} pod(s)...")
+            self.log.info(f"{action} {len(uuids)} process(es)...")
 
             self.termination_complete_event.clear()
             self.uuids_pending_deletion.update(uuids)
@@ -2574,19 +2540,19 @@ class K8sProcessManager(ProcessManager):
                 for depth in sorted(by_depth.keys(), reverse=True):
                     depth_uuids = by_depth[depth]
                     self.log.info(
-                        f"--- Termination Step: Shutting down role '{role}' at depth {depth} "
+                        f"--- Termination of role '{role}' at depth {depth} "
                         f"({len(depth_uuids)} pod(s)) ---"
                     )
                     kill_and_wait(depth_uuids)  # This call is blocking
                     self.log.info(
-                        f"--- Termination Step: Role '{role}' at depth {depth} complete ---"
+                        f"--- Termination of role '{role}' at depth {depth} complete ---"
                     )
             else:
                 self.log.info(
-                    f"--- Termination Step: Shutting down role '{role}' ({len(uuids_in_step)} pod(s)) ---"
+                    f"--- Termination of role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
                 kill_and_wait(uuids_in_step)  # This call is blocking
-                self.log.info(f"--- Termination Step: Role '{role}' complete ---")
+                self.log.info(f"--- Termination of role '{role}' complete ---")
 
         # Finalize and clean up
         final_ret = []
@@ -2633,7 +2599,7 @@ class K8sProcessManager(ProcessManager):
             A ProcessInstanceList containing DEAD-status entries for all terminated
             processes, or an empty list if there were no processes to terminate.
         """
-        self.log.info("Terminating all known K8s processes.")
+        self.log.info("Terminating")
         if not self.boot_request:
             self.log.info("No processes to terminate.")
             return ProcessInstanceList(values=[])

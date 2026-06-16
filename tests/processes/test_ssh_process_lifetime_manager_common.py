@@ -560,7 +560,7 @@ def boot_processes_and_kill_individually(ssh_manager, test_file_path):
 
             boot_request = create_boot_request(
                 process_name=process_name,
-                tree_id="this.isan.application",
+                tree_id="0.1.2",
                 log_file=log_file,
                 test_file_path=test_file_path,
             )
@@ -624,7 +624,7 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
 
             boot_request = create_boot_request(
                 process_name=process_name,
-                tree_id="this.isan.application",
+                tree_id="0.1.2",
                 log_file=log_file,
                 test_file_path=test_file_path,
             )
@@ -659,17 +659,20 @@ def boot_processes_and_terminate_all_same_role(ssh_manager, test_file_path):
         )
 
 
-def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path):
+def boot_processes_and_terminate_all_different_role_flat(
+    ssh_manager, test_file_path, process_configs_flat
+):
     """
-    Execute SSH processes with different roles and verify priority-based termination.
+    Execute SSH processes with different roles (flat structure) and verify
+    priority-based termination.
 
     Tests that the role-based shutdown mechanism correctly terminates processes
-    in the expected order according to the defined shutdown sequence. Higher-priority
-    roles (earlier in shutdown order) are killed before lower-priority roles.
+    in the expected order.
 
     Args:
         ssh_manager: SSH process lifetime manager instance
         test_file_path: Path to test file (for locating simple_process.py)
+        process_configs_flat: Fixture providing flat process configurations
     """
     import threading
     import time
@@ -677,25 +680,7 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
     with tempfile.TemporaryDirectory() as temp_dir:
         log_dir = Path(temp_dir)
 
-        # Define processes with different roles based on shutdown order
-        # "application" is terminated before "segment-controller"
-        process_configs = [
-            {
-                "name": "test_process_app_1",
-                "role": "application",
-                "tree_id": "this.isan.application",
-            },
-            {
-                "name": "test_process_app_2",
-                "role": "application",
-                "tree_id": "this.isan.application",
-            },
-            {
-                "name": "test_process_segment",
-                "role": "segment-controller",
-                "tree_id": "thisisa.segment-controller",
-            },
-        ]
+        process_configs = process_configs_flat
 
         process_uuids = []
         process_info = {}
@@ -775,10 +760,10 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
             for uuid in process_uuids
             if process_info[uuid]["role"] == "application"
         ]
-        segment_processes = [
+        infra_processes = [
             uuid
             for uuid in process_uuids
-            if process_info[uuid]["role"] == "segment-controller"
+            if process_info[uuid]["role"] == "infrastructure-applications"
         ]
 
         # Find latest termination time among higher-priority processes
@@ -788,30 +773,30 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
         latest_app_termination = max(app_termination_times)
 
         # Find earliest termination time among lower-priority processes
-        segment_termination_times = [
-            process_info[uuid]["termination_time"] for uuid in segment_processes
+        infra_termination_times = [
+            process_info[uuid]["termination_time"] for uuid in infra_processes
         ]
-        earliest_segment_termination = min(segment_termination_times)
+        earliest_infra_termination = min(infra_termination_times)
 
         print(
             f"Latest 'application' role termination: "
             f"{latest_app_termination - start_time:.3f}s"
         )
         print(
-            f"Earliest 'segment-controller' role termination: "
-            f"{earliest_segment_termination - start_time:.3f}s"
+            f"Earliest 'infrastructure-applications' role termination: "
+            f"{earliest_infra_termination - start_time:.3f}s"
         )
 
         # Verify shutdown order: all "application" processes must terminate
-        # before any "segment-controller" processes
-        assert latest_app_termination <= earliest_segment_termination, (
-            f"Application processes should terminate before segment-controller. "
+        # before any "infrastructure-applications" processes
+        assert latest_app_termination <= earliest_infra_termination, (
+            f"Application processes should terminate before infrastructure-applications. "
             f"Latest app: {latest_app_termination - start_time:.3f}s, "
-            f"Earliest segment: {earliest_segment_termination - start_time:.3f}s"
+            f"Earliest infra: {earliest_infra_termination - start_time:.3f}s"
         )
         print(
             "✓ Role-based termination order verified: "
-            "'application' before 'segment-controller'"
+            "'application' before 'infrastructure-applications'"
         )
 
         verify_cleanup_complete(ssh_manager, pid_snapshots=pid_snapshots)
@@ -819,4 +804,136 @@ def boot_processes_and_terminate_all_different_role(ssh_manager, test_file_path)
         print(
             "\n✓ Test passed: Processes with different roles executed, logged, "
             "terminated in correct order, and cleaned up successfully"
+        )
+
+
+def boot_processes_and_terminate_all_different_role_deep_nested(
+    ssh_manager, test_file_path, process_configs_deep_nested
+):
+    """
+    Execute SSH processes with deeply nested tree_ids and verify priority-based
+    termination.
+
+    Tests that the role-based shutdown mechanism correctly handles applications
+    at arbitrary depth under "0." prefix (e.g. 0.1.2.3, 0.2.3.4), terminating
+    them before infrastructure-applications processes.
+
+    Args:
+        ssh_manager: SSH process lifetime manager instance
+        test_file_path: Path to test file (for locating simple_process.py)
+        process_configs_deep_nested: Fixture providing deep nested process configurations
+    """
+    import threading
+    import time
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        log_dir = Path(temp_dir)
+
+        process_configs = process_configs_deep_nested
+
+        process_uuids = []
+        process_info = {}
+
+        print("\n=== Executing deeply nested processes ===")
+        for config in process_configs:
+            process_name = config["name"]
+            role = config["role"]
+            log_file = str(log_dir / f"{process_name}.log")
+            process_uuid = str(uuid.uuid4())
+            process_uuids.append(process_uuid)
+
+            boot_request = create_boot_request(
+                process_name=process_name,
+                tree_id=config["tree_id"],
+                log_file=log_file,
+                test_file_path=test_file_path,
+            )
+
+            ssh_manager.start_process(uuid=process_uuid, boot_request=boot_request)
+
+            process_info[process_uuid] = {
+                "name": process_name,
+                "role": role,
+                "log_file": log_file,
+                "termination_time": None,
+            }
+
+            print(
+                f"Executed {process_name} (tree_id={config['tree_id']!r}) "
+                f"with UUID {process_uuid} and role '{role}'"
+            )
+
+        verify_all_processes_alive(ssh_manager, process_uuids, len(process_configs))
+        verify_log_output(ssh_manager, process_uuids, process_info)
+
+        print("\n=== Terminating all processes (role-based shutdown, deep nested) ===")
+
+        def monitor_termination(uuid_to_monitor):
+            while ssh_manager.is_process_alive(uuid_to_monitor):
+                time.sleep(0.05)
+            process_info[uuid_to_monitor]["termination_time"] = time.time()
+
+        monitor_threads = []
+        for process_uuid in process_uuids:
+            thread = threading.Thread(
+                target=monitor_termination,
+                args=(process_uuid,),
+                daemon=True,
+            )
+            thread.start()
+            monitor_threads.append(thread)
+
+        start_time = time.time()
+        exit_codes = ssh_manager.kill_processes(
+            process_uuids, process_timeouts={uuid: 10.0 for uuid in process_uuids}
+        )
+
+        for thread in monitor_threads:
+            thread.join(timeout=15.0)
+
+        verify_all_processes_dead(ssh_manager, process_uuids, len(process_configs))
+        verify_exit_codes(exit_codes, process_uuids, process_info)
+
+        print("\n=== Verifying termination order (deep nested) ===")
+        app_processes = [
+            u for u in process_uuids if process_info[u]["role"] == "application"
+        ]
+        infra_processes = [
+            u
+            for u in process_uuids
+            if process_info[u]["role"] == "infrastructure-applications"
+        ]
+
+        latest_app_termination = max(
+            process_info[u]["termination_time"] for u in app_processes
+        )
+        earliest_infra_termination = min(
+            process_info[u]["termination_time"] for u in infra_processes
+        )
+
+        print(
+            f"Latest 'application' role termination:              "
+            f"{latest_app_termination - start_time:.3f}s"
+        )
+        print(
+            f"Earliest 'infrastructure-applications' termination: "
+            f"{earliest_infra_termination - start_time:.3f}s"
+        )
+
+        assert latest_app_termination <= earliest_infra_termination, (
+            f"Deeply nested application processes should terminate before "
+            f"infrastructure-applications. "
+            f"Latest app: {latest_app_termination - start_time:.3f}s, "
+            f"Earliest infra: {earliest_infra_termination - start_time:.3f}s"
+        )
+        print(
+            "✓ Role-based termination order verified (deep nested): "
+            "'application' before 'infrastructure-applications'"
+        )
+
+        verify_cleanup_complete(ssh_manager)
+
+        print(
+            "\n✓ Test passed: Deeply nested processes correctly classified and "
+            "terminated in correct role-based order"
         )

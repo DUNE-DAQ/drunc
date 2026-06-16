@@ -215,3 +215,62 @@ def ssh_manager_forked() -> Generator[
         logger.warning(f"Error during kill_all_processes in fixture cleanup: {e}")
     finally:
         manager.shutdown()
+
+
+@pytest.fixture
+def process_configs_flat():
+    """
+    Fixture providing process configurations for flat structure tests.
+
+    Returns:
+        List of process config dicts with 'name', 'role', and 'tree_id' keys
+    """
+    return [
+        {
+            "name": "test_process_app_1",
+            "role": "application",
+            "tree_id": "0.1.2",
+        },
+        {
+            "name": "test_process_app_2",
+            "role": "application",
+            "tree_id": "0.1.2",
+        },
+        {
+            "name": "test_process_infra",
+            "role": "infrastructure-applications",
+            "tree_id": "infra.process",
+        },
+    ]
+
+
+@pytest.fixture
+def process_configs_deep_nested():
+    """
+    Fixture providing process configurations for deeply nested structure tests.
+
+    Returns:
+        List of process config dicts with 'name', 'role', and 'tree_id' keys
+    """
+    return [
+        {
+            "name": "bottom-segment-1-application",
+            "role": "application",
+            "tree_id": "0.1.2.3",
+        },
+        {
+            "name": "bottom-segment-2-application",
+            "role": "application",
+            "tree_id": "0.2.3.4",
+        },
+        {
+            "name": "nested-segment-application",
+            "role": "application",
+            "tree_id": "0.1.2",
+        },
+        {
+            "name": "local-connection-server",
+            "role": "infrastructure-applications",
+            "tree_id": "1",
+        },
+    ]

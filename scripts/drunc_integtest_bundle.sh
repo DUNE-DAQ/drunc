@@ -21,6 +21,7 @@ Options:
     -k <pipe-delimited string to select which tests will be run ('egrep -i' match to test name)>
     -n <number of times to run each individual test, default=1>
     -N <number of times to run the full set of selected tests, default=1>
+    --verbosity <integer verbosity level to pass through to pytest>
     --stop-on-failure : causes the script to stop when one of the integtests reports a failure
     --concise-output : suppresses run control and DAQApp messages in order to focus on test results
     --tmpdir : specifies a root directory to use for test output, e.g. a directory instead of '/tmp'
@@ -49,7 +50,7 @@ CaptureOutput() {
     tee -a $1
 }
 
-GETOPT_TEMP=`getopt -o hs:f:l:k:n:N: --long help,stop-on-failure,concise-output,tmpdir: -- "$@"`
+GETOPT_TEMP=`getopt -o hs:f:l:k:n:N: --long help,verbosity:,stop-on-failure,concise-output,tmpdir: -- "$@"`
 eval set -- "$GETOPT_TEMP"
 
 let first_test_index=0
@@ -57,6 +58,7 @@ let individual_test_requested_iterations=1
 let full_set_requested_interations=1
 let stop_on_failure=0
 requested_test_names=
+verbosity_level=
 PYTEST_COMMAND="pytest -c /dev/null -s --tb=short"  # our core pytest command, with DAQ printout included and short pytest traceback
 
 while true; do
@@ -85,6 +87,10 @@ while true; do
             let full_set_requested_interations=$2
             shift 2
             ;;
+        --verbosity)
+            verbosity_level=$2
+            shift 2
+            ;;
         --stop-on-failure)
             let stop_on_failure=1
             PYTEST_COMMAND="${PYTEST_COMMAND} -x"  # add the -x option to our pytest command to have it exit on first error
@@ -105,6 +111,10 @@ while true; do
             ;;
     esac
 done
+
+if [[ "${verbosity_level}" != "" ]]; then
+    PYTEST_COMMAND="$PYTEST_COMMAND --integtest-verbosity ${verbosity_level}"
+fi
 
 # check if the numad daemon is running
 numad_grep_output=`ps -ef | grep numad | grep -v grep`
