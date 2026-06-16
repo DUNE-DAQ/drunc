@@ -16,15 +16,10 @@ from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
     import conffwk
-
-def touch_and_chmod(filepath, mode=0o777):
-    with open(filepath, "a"):
-        os.utime(filepath, None)
-    os.chmod(filepath, mode)
 
 
 PROCESS_SHUTDOWN_ORDERING = [
@@ -115,8 +110,9 @@ class ProcessManagerConfHandler(ConfHandler):
                     self.opmon_conf,
                 )
             else:
+                # ensures users can access the opmon files (permissions)
+                # This is for the PM opmon file
                 touch_and_chmod(self.opmon_conf.path)
-
                 new_data.opmon_publisher = OpMonPublisher(
                     conf=self.opmon_conf, rich_handler=True
                 )

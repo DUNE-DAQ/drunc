@@ -146,19 +146,18 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread = None
         self.uri = ""
         if self.configuration.session.connectivity_service:
-            connection_server_old = self.configuration.session.connectivity_service.host
-            connection_port_old = (
-                self.configuration.session.connectivity_service.service.port
-            )
+            # Remaps the localhost into the correct server
+            # and also grabs the correct port from the right environment from the config
 
-            connection_server_new = socket.gethostname()
-            connection_port_new = os.getenv("CONNECTION_PORT")
+            connection_server_config = (
+                self.configuration.session.connectivity_service.host
+            )
+            connection_port = os.getenv("CONNECTION_PORT")
             connection_server = (
                 socket.gethostname()
-                if connection_server_old == "localhost"
-                else connection_server_old
-            )  # absolute hack
-            connection_port = connection_port_new
+                if connection_server_config == "localhost"
+                else connection_server_config
+            )
             log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"
             )
@@ -371,8 +370,10 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
-        if not self.connectivity_service.is_ready(10):
-            raise ValueError("failssss")
+        if not self.connectivity_service.is_ready(timeout=10):
+            raise ValueError(
+                "Connectivity service unavailable for control address advertising."
+            )
         self.log.info(
             f"Registering {self.name} ({address}) to the connectivity service at {self.connectivity_service.address}"
         )

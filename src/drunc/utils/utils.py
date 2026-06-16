@@ -280,6 +280,15 @@ def parent_death_pact(signal=signal.SIGHUP):
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
 
 
+def touch_and_chmod(filepath: str, mode=0o777):
+    """Makes and sets the permissions of a file.
+    This is used to ensure multiuser support when accessing files etc."""
+
+    with open(filepath, "a"):
+        os.utime(filepath, None)
+    os.chmod(filepath, mode)
+
+
 class IncorrectAddress(DruncException):
     pass
 

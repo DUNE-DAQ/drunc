@@ -50,13 +50,9 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     strip_non_drunc_loggers,
+    touch_and_chmod,
 )
 
-
-def touch_and_chmod(filepath, mode=0o777):
-    with open(filepath, "a"):
-        os.utime(filepath, None)
-    os.chmod(filepath, mode)
 
 class ProcessManagerDriver:
     controller_address = ""
@@ -198,18 +194,24 @@ class ProcessManagerDriver:
 
             previous_host = this_host
             last_boot_on_host_at[this_host] = time.time()
-            newfile = (
-                f"{request.process_description.process_execution_directory}/info."
-                + request.process_description.metadata.session
-                + "."
-                + request.process_description.metadata.name
-                + ".json"
-            )
+
+            # ensures users can access the opmon files (permissions)
+            # This is for the opmon files of the apps
+
             if session_dal.opmon_uri.type == "file":
-                self.log.warning(
-                    f"Touching {newfile} because {session_dal.opmon_uri.type}"
+                # For future, this should probably be taken from the metadata
+                opmon_file = (
+                    f"{request.process_description.process_execution_directory}/info."
+                    + request.process_description.metadata.session
+                    + "."
+                    + request.process_description.metadata.name
+                    + ".json"
                 )
-                touch_and_chmod(newfile)
+
+                self.log.debug(
+                    f"Touching and changing permissions for {opmon_file} because opmon is of type {session_dal.opmon_uri.type}"
+                )
+                touch_and_chmod(opmon_file)
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
@@ -429,12 +431,11 @@ To debug it, close drunc and run the following command:
                 return
 
     def change_localhost(self, session_dal):
-        # self.log.critical("in session dalling")
+        def dal_localhost_mapping(dal_host: str):
+            if dal_host != "localhost":
+                return dal_host
 
-        connectivity_service_host: str = session_dal.connectivity_service.host
-        if connectivity_service_host == "localhost":
-            # resolve localhost to hostname to enable multi host
-            resolved_address = resolve_localhost_to_hostname(connectivity_service_host)
+            resolved_address = resolve_localhost_to_hostname(dal_host)
             if "://" not in resolved_address:
                 resolved_address = "grpc://" + resolved_address
 
@@ -442,28 +443,14 @@ To debug it, close drunc and run the following command:
             self.log.debug(
                 f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
             )
-            session_dal.connectivity_service.host = resolved_server
+            return resolved_server
 
-        # output = to_dict(session_dal.connectivity_service)
-
-        # self.log.critical(pprint(output))
-
-        ###
-        # self.log.warning(f"{session_dal.segment.controller.runs_on.runs_on.id=}")
-
-        if session_dal.segment.controller.runs_on.runs_on.id == "localhost":
-            # resolve localhost to hostname to enable multi host
-            resolved_address = resolve_localhost_to_hostname(
-                session_dal.segment.controller.runs_on.runs_on.id
-            )
-            if "://" not in resolved_address:
-                resolved_address = "grpc://" + resolved_address
-
-            resolved_server = urlparse(resolved_address).hostname
-            self.log.debug(
-                f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
-            )
-            session_dal.segment.controller.runs_on.runs_on.id = resolved_server
+        session_dal.connectivity_service.host = dal_localhost_mapping(
+            session_dal.connectivity_service.host
+        )
+        session_dal.segment.controller.runs_on.runs_on.id = dal_localhost_mapping(
+            session_dal.segment.controller.runs_on.runs_on.id
+        )
 
         return session_dal
 
@@ -594,18 +581,6 @@ To debug it, close drunc and run the following command:
         if session_dal.connectivity_service:
             connection_server = session_dal.connectivity_service.host
             connection_port = session_dal.connectivity_service.service.port
-
-            # if connection_server == "localhost":
-            #     # resolve localhost to hostname to enable multi host
-            #     resolved_address = resolve_localhost_to_hostname(connection_server)
-            #     if "://" not in resolved_address:
-            #         resolved_address = "grpc://" + resolved_address
-
-            #     resolved_server = urlparse(resolved_address).hostname
-            #     self.log.debug(
-            #         f"Resolved connection server 'localhost' to '{resolved_server}' to avoid K8s hairpinning."
-            #     )
-            #     connection_server = resolved_server
 
             client = ConnectivityServiceClient(
                 session_name, f"{connection_server}:{connection_port}"
