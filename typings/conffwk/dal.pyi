@@ -11,7 +11,6 @@ class FSMParameter(ParameterProtocol):
     name: str
     value: str
 
-
 class FSMAction(ConfigurationProtocol):
     id: str
     name: str
@@ -20,27 +19,22 @@ class FSMAction(ConfigurationProtocol):
     oks_key: OksKeyProtocol
     initial_data: str
 
-
 class FSMxTransition:
     transition: str
     order: List[str]
     mandatory: List[str]
-
 
 class FSMTransitionConfig:
     id: str
     source: str
     dest: str
 
-
 class FSMCommand:
     id: str
-
 
 class FSMCommandSequence:
     id: str
     sequence: List[FSMCommand]
-
 
 class FSMData:
     states: List[str]

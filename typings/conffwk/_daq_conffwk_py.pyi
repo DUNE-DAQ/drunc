@@ -1,20 +1,22 @@
 """
 Python interface to the conffwk package
 """
+
 from __future__ import annotations
+
 import typing
+
 __all__: list[str] = list()
+
 class _ConfigObject:
     def UID(self) -> str:
         """
         Return object identity
         """
     @typing.overload
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
     @typing.overload
-    def __init__(self, arg0: _ConfigObject) -> None:
-        ...
+    def __init__(self, arg0: _ConfigObject) -> None: ...
     def class_name(self) -> str:
         """
         Return object's class name
@@ -183,11 +185,15 @@ class _ConfigObject:
         """
         Setter function for list
         """
-    def set_obj(self, name: str, o: _ConfigObject, skip_non_null_check: bool = False) -> None:
+    def set_obj(
+        self, name: str, o: _ConfigObject, skip_non_null_check: bool = False
+    ) -> None:
         """
         Set relationship single-value
         """
-    def set_objs(self, name: str, o: list[_ConfigObject], skip_non_null_check: bool = False) -> None:
+    def set_objs(
+        self, name: str, o: list[_ConfigObject], skip_non_null_check: bool = False
+    ) -> None:
         """
         Set relationship multi-value.
         """
@@ -271,13 +277,12 @@ class _ConfigObject:
         """
         Setter function for list
         """
+
 class _Configuration:
     @typing.overload
-    def __init__(self) -> None:
-        ...
+    def __init__(self) -> None: ...
     @typing.overload
-    def __init__(self, arg0: str) -> None:
-        ...
+    def __init__(self, arg0: str) -> None: ...
     def add_include(self, db_name: str, include: str) -> None:
         """
         Add include file to existing database.
@@ -290,7 +295,7 @@ class _Configuration:
         """
         Get the names of the superclasses for each class
         """
-    def commit(self, log_message: str = '') -> None:
+    def commit(self, log_message: str = "") -> None:
         """
         Commit database changes.
         """
@@ -328,7 +333,7 @@ class _Configuration:
         """
         Create a configuration object containing the desired entity from the database
         """
-    def get_objs(self, class_name: str, query: str = '') -> list[...]:
+    def get_objs(self, class_name: str, query: str = "") -> list[...]:
         """
         Create a list of configuration objects of a given class from the database
         """
@@ -360,7 +365,9 @@ class _Configuration:
         """
         Get the superclasses of a single class
         """
-    def test_object(self, class_name: str, id: str, rlevel: int, rclasses: list[str]) -> bool:
+    def test_object(
+        self, class_name: str, id: str, rlevel: int, rclasses: list[str]
+    ) -> bool:
         """
         Test the existence of the object
         """
