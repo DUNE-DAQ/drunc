@@ -229,6 +229,7 @@ class K8sProcessManager(ProcessManager):
         # Sessions that have no LCS simply have no entry here.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
         self._lcs_state: dict[str, _LcsSessionState] = {}
+        self._lcs_state_lock = threading.Lock()
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
@@ -381,13 +382,14 @@ class K8sProcessManager(ProcessManager):
             # would leave stale podname/port/node_port fields that could mislead
             # a future LCS boot — including one that lands on a different node.
             # Popping the entry is consistent with the invariant: "no LCS = no entry".
-            lcs = self._lcs_state.get(session)
-            if lcs is not None and lcs.podname == meta.name:
-                self.log.info(
-                    f"LCS pod '{meta.name}' for session '{session}' has terminated; "
-                    "removing LCS state so any future boot starts from a clean slate."
-                )
-                self._lcs_state.pop(session, None)
+            with self._lcs_state_lock:
+                lcs = self._lcs_state.get(session)
+                if lcs is not None and lcs.podname == meta.name:
+                    self.log.info(
+                        f"LCS pod '{meta.name}' for session '{session}' has terminated; "
+                        "removing LCS state so any future boot starts from a clean slate."
+                    )
+                    self._lcs_state.pop(session, None)
 
         # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
@@ -539,10 +541,12 @@ class K8sProcessManager(ProcessManager):
         Return the LCS state for *session*, creating a fresh entry if absent.
 
         Centralises dict access so callers never deal with missing-key logic.
+        Thread-safe: the check-then-create is performed under _lcs_state_lock.
         """
-        if session not in self._lcs_state:
-            self._lcs_state[session] = _LcsSessionState()
-        return self._lcs_state[session]
+        with self._lcs_state_lock:
+            if session not in self._lcs_state:
+                self._lcs_state[session] = _LcsSessionState()
+            return self._lcs_state[session]
 
     def _is_host_cached(self, host: str) -> None | bool:
         """
@@ -1437,7 +1441,8 @@ class K8sProcessManager(ProcessManager):
             host_aliases - a list containing a single V1HostAlias mapping localhost
                            to the connection server IP, or None if not applicable
         """
-        lcs = self._lcs_state.get(session)
+        with self._lcs_state_lock:
+            lcs = self._lcs_state.get(session)
         if (
             self._is_local_connection_server(tree_labels, podname)
             or lcs is None
@@ -1814,7 +1819,8 @@ class K8sProcessManager(ProcessManager):
         Returns:
             cluster_ip - the ClusterIP string, or None on failure
         """
-        lcs = self._lcs_state.get(session)
+        with self._lcs_state_lock:
+            lcs = self._lcs_state.get(session)
         if lcs is None or lcs.podname is None:
             self.log.warning(
                 f"No local connection server registered for session '{session}'"
@@ -2212,7 +2218,12 @@ class K8sProcessManager(ProcessManager):
 
         self._wait_for_nodeport_http_ready(url, remaining_time)
 
-        lcs.is_booted = True
+        with self._lcs_state_lock:
+            # Re-check the entry still exists: the watcher may have popped it
+            # if the pod died in the narrow window between stage 2 succeeding
+            # and this assignment.
+            if self._lcs_state.get(session) is lcs:
+                lcs.is_booted = True
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
@@ -2668,7 +2679,8 @@ class K8sProcessManager(ProcessManager):
                     self.log.info(f'Session "{session}" is empty, deleting namespace.')
                     self._core_v1_api.delete_namespace(session)
                     self.managed_sessions.remove(session)
-                    self._lcs_state.pop(session, None)
+                    with self._lcs_state_lock:
+                        self._lcs_state.pop(session, None)
 
             except self._api_error_v1_api as e:
                 self.log.warning(f"Failed during namespace cleanup: {e}")
