@@ -5,7 +5,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Generic, Protocol, Self, TypeVar, cast
+from typing import Generic, Type, TypeVar, cast
 
 import conffwk
 
@@ -112,16 +112,6 @@ class OKSKey:
         self.session = session
 
 
-class _DataTypeName(Protocol):
-    _name_: str
-
-
-class _ConfigurationData(Protocol):
-    type: _DataTypeName
-    broadcaster: object
-    authoriser: object
-
-
 class ConfData(ABC):
     """Base class for configuration wrapper objects that populate from raw sources."""
 
@@ -160,7 +150,7 @@ class ConfHandler(Generic[ConfDataType]):
     Supports multiple configuration sources via from_* classmethods.
     """
 
-    confdata_cls: type[ConfDataType]
+    confdata_cls: Type[ConfDataType]
     data: ConfDataType
     type: ConfTypes
     oks_key: OKSKey | None
@@ -176,17 +166,12 @@ class ConfHandler(Generic[ConfDataType]):
     db: object
 
     @classmethod
-    def from_pyobject(cls, data: object, session_name: str | None = None) -> Self:
-        """Create handler from a Python object.
-
-        Args:
-            data: The configuration object (typically OKS DAL).
-            session_name: Optional session name.
-
-        Returns:
-            Self: Initialized handler instance.
-        """
-        instance = cls.__new__(cls)
+    def from_pyobject(
+        cls, data: object, session_name: str | None = None
+    ) -> "ConfHandler[ConfDataType]":
+        instance: ConfHandler[ConfDataType] = cast(
+            ConfHandler[ConfDataType], cls.__new__(cls)
+        )
         instance._init_common(session_name)
         instance.initial_data = data
         instance.data = cast(ConfDataType, data)
@@ -195,55 +180,38 @@ class ConfHandler(Generic[ConfDataType]):
         return instance
 
     @classmethod
-    def from_pbany(cls, data: object, session_name: str | None = None) -> Self:
-        """Create handler from a Protobuf Any message.
-
-        Args:
-            data: The Protobuf Any message.
-            session_name: Optional session name.
-
-        Returns:
-            Self: Initialized handler instance.
-
-        Raises:
-            ConfTypeNotSupported: If subclass doesn't override parsing.
-        """
-        instance = cls.__new__(cls)
+    def from_pbany(
+        cls, data: object, session_name: str | None = None
+    ) -> "ConfHandler[ConfDataType]":
+        instance: ConfHandler[ConfDataType] = cast(
+            ConfHandler[ConfDataType], cls.__new__(cls)
+        )
         instance._init_common(session_name)
         instance.initial_data = data
-        instance.data = instance._new_conf_data()
+        instance.data = cls.confdata_cls()
         instance.data.populate_from_pbany(data)
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
 
     @classmethod
-    def from_json(cls, path: str, session_name: str | None = None) -> Self:
-        """Create handler from a JSON file.
-
-        Args:
-            path: Path to JSON configuration file.
-            session_name: Optional session name.
-
-        Returns:
-            Self: Initialized handler instance.
-
-        Raises:
-            DruncSetupException: If file not found.
-            ConfTypeNotSupported: If subclass doesn't override parsing.
-        """
-        instance = cls.__new__(cls)
+    def from_json(
+        cls, path: str, session_name: str | None = None
+    ) -> "ConfHandler[ConfDataType]":
+        instance: ConfHandler[ConfDataType] = cast(
+            ConfHandler[ConfDataType], cls.__new__(cls)
+        )
         instance._init_common(session_name)
         instance.initial_data = path
         resolved = expand_path(path, True)
         if not os.path.exists(expand_path(path)):
             raise DruncSetupException(f"Location {resolved} ({path}) is empty!")
         with open(resolved) as f:
-            json_data = json.loads(f.read())
-            instance.data = instance._new_conf_data()
-            instance.data.populate_from_dict(cast(dict[str, object], json_data))
-            instance.type = ConfTypes.PyObject
-            instance._post_process_oks()
+            json_data = json.load(f)
+        instance.data = cls.confdata_cls()
+        instance.data.populate_from_dict(cast(dict[str, object], json_data))
+        instance.type = ConfTypes.PyObject
+        instance._post_process_oks()
         return instance
 
     @classmethod
@@ -252,18 +220,10 @@ class ConfHandler(Generic[ConfDataType]):
         url: str,
         oks_key: OKSKey,
         session_name: str | None = None,
-    ) -> Self:
-        """Create handler from OKS configuration.
-
-        Args:
-            url: OKS database path.
-            oks_key: Key to identify the object in OKS.
-            session_name: Optional session name.
-
-        Returns:
-            Self: Initialized handler instance.
-        """
-        instance = cls.__new__(cls)
+    ) -> "ConfHandler[ConfDataType]":
+        instance: ConfHandler[ConfDataType] = cast(
+            ConfHandler[ConfDataType], cls.__new__(cls)
+        )
         instance._init_common(session_name)
         instance.initial_data = url
         instance.oks_key = oks_key
@@ -287,38 +247,6 @@ class ConfHandler(Generic[ConfDataType]):
         self.session_name = session_name
         self.oks_key = None
         self.type = ConfTypes.Unknown
-
-    def get_data(self) -> ConfDataType:
-        """Get the configuration data.
-
-        Returns:
-            ConfDataType: The stored configuration data.
-        """
-        return self.data
-
-    def get_data_type_name(self) -> str:
-        """Get the type name of the configuration data.
-
-        Returns:
-            str: The name of the data type.
-        """
-        return str(cast(_ConfigurationData, self.get_data()).type._name_)
-
-    def get_data_broadcaster(self) -> object:
-        """Get the broadcaster from the configuration data.
-
-        Returns:
-            object: The broadcaster object.
-        """
-        return cast(_ConfigurationData, self.get_data()).broadcaster
-
-    def get_data_authoriser(self) -> object:
-        """Get the authoriser from the configuration data.
-
-        Returns:
-            object: The authoriser object.
-        """
-        return cast(_ConfigurationData, self.get_data()).authoriser
 
     def copy_oks_key(self) -> OKSKey | None:
         """Get a copy of the OKS key if one exists.
@@ -365,13 +293,3 @@ class ConfHandler(Generic[ConfDataType]):
         Override in subclasses to perform custom initialization.
         """
         pass
-
-    def _new_conf_data(self) -> ConfDataType:
-        """Create a new instance of the configuration data wrapper.
-
-        Must be overridden by subclasses that use from_json or from_pbany.
-
-        Returns:
-            ConfDataType: A new empty instance ready for population.
-        """
-        return self.confdata_cls()

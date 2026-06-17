@@ -60,7 +60,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         super().__init__()
 
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager",
+            f"process_manager.{configuration.data.type.name}_process_manager",
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -83,13 +83,11 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self._create_broadcast_service(self.name, self.session)
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
-            data=self.configuration.get_data_authoriser()
+            data=self.configuration.data.authoriser
         )
 
-        self.opmon_publisher = getattr(
-            self.configuration.get_data(), "opmon_publisher", None
-        )
-        interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
+        self.opmon_publisher = getattr(self.configuration.data, "opmon_publisher", None)
+        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
@@ -169,7 +167,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     def _create_broadcast_service(self, name, session):
         bsch = BroadcastSenderConfHandler.from_pyobject(
-            data=self.configuration.get_data_broadcaster()
+            data=self.configuration.data.broadcaster
         )
 
         self.broadcast_service = (
