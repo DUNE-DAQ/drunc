@@ -41,7 +41,7 @@ ignored_logfile_problems = {
 # Point to the drunc config file for this test
 conf_dict = data_classes.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = "config/drunc/failure-testing.data.xml"
-conf_dict.config_session_name = "ft-death-post-boot-nest-app"
+conf_dict.config_session_name = "ft-death-post-boot-top-app"
 
 # Define the operational environment for this test
 conf_dict.op_env = "test"
@@ -55,7 +55,7 @@ conf_dict.drunc_connsvc = True
 # conf_dict.connsvc_port = 12345
 
 # Collate tthe drunc config arguments into a dict to pass to the fixture
-confgen_arguments = {"test_failure_mode_death_post_boot_nest_app": conf_dict}
+confgen_arguments = {"test_failure_mode_death_post_boot_top_app": conf_dict}
 
 # Run these commands in the run control
 dunerc_command_list = ["boot"]

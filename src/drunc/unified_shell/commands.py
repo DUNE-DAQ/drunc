@@ -99,9 +99,12 @@ def boot(
         log.error("Could not understand where the controller is!")
         return
 
+    # Determine whether the session should be placed into an error state
+    put_in_error_state: bool = False
+
     # If the session applications are not found on the connectivity serivce, then the
-    # session is not booted correctly. This is a critical error, and the controller is
-    # put into error state.
+    # session is not booted correctly. This is a critical error, the user should be
+    # informed, and the session should be placed in error state.
     ps_response = obj.get_driver("process_manager").ps(
         ProcessQuery(session=session_name)
     )
@@ -126,6 +129,7 @@ def boot(
             "the connectivity service by comparing against the status table, and the "
             "[yellow]logs[/] command to find out more about this failure."
         )
+        put_in_error_state = True
 
     # Check if session booted correctly, if not put it in error state
     log.warning("Getting the session states")
@@ -136,35 +140,49 @@ def boot(
             "Booted, but there are disconnected applications/controllers. Use the "
             "[yellow]logs[/] command to find out more about this failure."
         )
+        put_in_error_state = True
 
     # If any processes died immediately, place the controller in error.
     alive_process_count = len(
         [p for p in processes.values if p.status_code == ProcessInstance.RUNNING]
     )
-
     dead_process_count = expected_booted_processes - alive_process_count
+    if dead_process_count > 0:
+        time.sleep(1)
+        log.error(
+            f"Booted, but {dead_process_count} processes died. Use the [yellow]ps[/] "
+            "command to find out which applications are dead, and [yellow]logs[/] "
+            "command to find out more about this failure on a per-application basis."
+        )
+        put_in_error_state = True
 
-    if (
-        not obj.get_driver("controller").status().status.in_error
-        and dead_process_count == 0
-    ):
+    in_error_state = obj.get_driver("controller").status().status.in_error
+    if not in_error_state and not put_in_error_state:
         log.info("Booted successfully")
-    elif dead_process_count != 0:
-        log.error(f"Booted, but {dead_process_count} processes died after booting.")
-        # The following line has been commented out as there are issues with the k8s PM
-        # booting process, which terminates processes and immediately reboots them. The
-        # current cause of this issue is unknown, and has been listed in the issue list.
-        # obj.get_driver("controller").to_error()
-    elif (
-        obj.get_driver("controller").status().status.in_error
+    else:
+        if put_in_error_state:
+            log.critical(
+                "Placing the session into an error state due to boot issues"
+            )  # TODO: put this in debug
+            # obj.get_driver("controller").to_error()
+            # in_error_state = obj.get_driver("controller").status().status.in_error
+            in_error_state = True
+            log.error("Booted, but placed the session into an error state")
+        else:
+            log.info("Booted, but the session was already in an error state.")
+
+    log.critical(f"{in_error_state=}")
+    log.critical(f"{obj.running_mode=}")
+    log.critical(f"{obj.no_stop_error_batch_mode=}")
+    if (
+        in_error_state
+        and obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]
         and not obj.no_stop_error_batch_mode
     ):
-        log.error("Booted, but the top controller is in error")
-        if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
-            log.error(
-                "Running in batch mode, and because error state is detected, exiting."
-            )
-            sys.exit(1)
+        log.error(
+            "Running in batch mode, and because error state is detected, exiting."
+        )
+        sys.exit(1)
 
 
 @click.command("start-shell")
