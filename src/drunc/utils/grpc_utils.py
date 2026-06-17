@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, NoReturn, Optional
+from urllib import response
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -17,6 +18,9 @@ from drunc.exceptions import (
     DruncNotImplementedException,
     DruncSetupException,
 )
+
+from drunc.utils.utils import get_logger
+
 
 
 class UnpackingError(DruncCommandException):
@@ -445,3 +449,26 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 response_serializer=handler.response_serializer,
             )
         return handler
+
+
+class RichErrorClientInterceptor(grpc.UnaryUnaryClientInterceptor):
+    """
+    A gRPC client interceptor that handles outgoing unary gRPC calls, catches RpcErrors, 
+    and automatically extracts and logs rich error metadata.
+    """
+    def __init__(self, logger):
+        self.log = logger
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        try:
+            return continuation(client_call_details, request)
+            
+        except grpc.RpcError as rpc_error:
+            self.log.error(f"gRPC Call Failed on method: {client_call_details.method}")
+            
+            try:
+                error_details = extract_grpc_rich_error(rpc_error)
+                self.log.error(error_details)
+            except Exception as extraction_error:
+                self.log.debug(f"Could not extract rich error details from gRPC error: {extraction_error}", exc_info=True)
+            handle_grpc_error(rpc_error)

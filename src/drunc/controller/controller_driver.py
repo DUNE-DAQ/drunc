@@ -42,6 +42,7 @@ from drunc.utils.grpc_utils import (
 )
 from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
+from drunc.utils.grpc_utils import RichErrorClientInterceptor
 
 
 class ControllerDriver:
@@ -93,7 +94,9 @@ class ControllerDriver:
             raise e
 
         target_address = f"ipv4:{resolved_address}"
-        self.channel = grpc.insecure_channel(target_address, options=options)
+        raw_channel = grpc.insecure_channel(target_address, options=options)
+        rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+        self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = ControllerStub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
@@ -112,10 +115,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.status(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.status(request, timeout=timeout)
 
         return response
 
@@ -133,10 +133,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.describe(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.describe(request, timeout=timeout)
 
         return response
 
@@ -156,10 +153,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.describe_fsm(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.describe_fsm(request, timeout=timeout)
 
         return response
 
@@ -179,10 +173,7 @@ class ControllerDriver:
         request.token.CopyFrom(self.token)
         request.command.CopyFrom(command)
 
-        try:
-            response = self.stub.execute_fsm_command(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.execute_fsm_command(request, timeout=timeout)
 
         return response
 
@@ -202,10 +193,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.execute_expert_command(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.execute_expert_command(request, timeout=timeout)
 
         return response
 
@@ -223,10 +211,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.include(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.include(request, timeout=timeout)
 
         return response
 
@@ -244,10 +229,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.exclude(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.exclude(request, timeout=timeout)
 
         return response
 
@@ -265,10 +247,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.recompute_status(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.recompute_status(request, timeout=timeout)
 
         return response
 
@@ -286,10 +265,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.take_control(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.take_control(request, timeout=timeout)
 
         return response
 
@@ -307,10 +283,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.surrender_control(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.surrender_control(request, timeout=timeout)
 
         return response
 
@@ -328,10 +301,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.who_is_in_charge(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.who_is_in_charge(request, timeout=timeout)
 
         return response
 
@@ -349,10 +319,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.to_error(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.to_error(request, timeout=timeout)
 
         return response
 
