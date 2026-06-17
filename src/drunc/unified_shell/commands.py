@@ -135,7 +135,6 @@ def boot(
             "Booted, but there are disconnected applications/controllers. Please check "
             "the relevant logs for more information."
         )
-        status_response = obj.get_driver("controller").status()
         return
 
     # If any processes died immediately, place the controller in error.

@@ -553,14 +553,14 @@ To debug it, close drunc and run the following command:
 
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
-                self.log.critical(
-                    f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
+                self.log.info(
+                    f"Looking for top controller '{top_controller_name}' in the connectivity service at {connection_server}:{connection_port}"
                 )
                 try:
                     timeout = (
                         get_segment_lookup_timeout(session_dal.segment, 60) + 60
                     )  # root-controller timeout to find all its children + 60s for the root controller to start itself
-                    self.log.critical(
+                    self.log.debug(
                         f"Using a timeout of {timeout}s to find the [green]{top_controller_name}[/] on the connectivity service"
                     )
                     _, uri = get_control_type_and_uri_from_connectivity_service(
@@ -613,7 +613,7 @@ To debug it, close drunc and run the following command:
             service_found = None
 
             try:
-                self.log.critical(
+                self.log.debug(
                     f"Top controller name from OKS config: '{top_controller_name}'"
                 )
 
