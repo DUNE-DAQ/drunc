@@ -121,10 +121,11 @@ def boot(
         log.error(
             f"Booted, but the number of processes found in the connectivity service "
             f"({ps_process_count}) does not match the number of processes found in the "
-            f"process manager ({status_process_count}). Please check the relevant logs "
-            "for more information."
+            f"process manager ({status_process_count}). Use the [yellow]ps[/] command "
+            "to determine which applications did not correctly register theemselves on "
+            "the connectivity service by comparing against the status table, and the "
+            "[yellow]logs[/] command to find out more about this failure."
         )
-        return
 
     # Check if session booted correctly, if not put it in error state
     log.warning("Getting the session states")
@@ -132,10 +133,9 @@ def boot(
     if "disconnected" in session_states:
         time.sleep(1)
         log.error(
-            "Booted, but there are disconnected applications/controllers. Please check "
-            "the relevant logs for more information."
+            "Booted, but there are disconnected applications/controllers. Use the "
+            "[yellow]logs[/] command to find out more about this failure."
         )
-        return
 
     # If any processes died immediately, place the controller in error.
     alive_process_count = len(
