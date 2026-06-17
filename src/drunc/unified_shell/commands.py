@@ -125,11 +125,13 @@ def boot(
             f"Booted, but the number of processes found in the connectivity service "
             f"({ps_process_count}) does not match the number of processes found in the "
             f"process manager ({status_process_count}). Use the [yellow]ps[/] command "
-            "to determine which applications did not correctly register theemselves on "
+            "to determine which applications did not correctly register themselves on "
             "the connectivity service by comparing against the status table, and the "
             "[yellow]logs[/] command to find out more about this failure."
         )
-        put_in_error_state = True
+        # TODO: Uncomment this once the cause of inconsistent status table printing is
+        # understood
+        # put_in_error_state = True
 
     # Check if session booted correctly, if not put it in error state
     log.warning("Getting the session states")

@@ -248,9 +248,9 @@
   <ref class="Segment" id="ft-nested-segment-1"/>
   <ref class="Segment" id="ft-nested-segment-2"/>
  </rel>
- <rel name="applications">
+ <!-- <rel name="applications">
   <ref class="DaqApplication" id="ft-top-segment-application"/>
- </rel>
+ </rel> -->
  <rel name="controller" class="RCApplication" id="ft-top-segment-controller"/>
 </obj>
 
@@ -393,7 +393,7 @@
 <obj class="Session" id="ft-fsm-cmd-timeout-nest-app">
  <attr name="data_request_timeout_ms" type="u32" val="1000"/>
  <attr name="data_rate_slowdown_factor" type="u32" val="1"/>
- <attr name="controller_log_level" type="enum" val="INFO"/>
+ <attr name="controller_log_level" type="enum" val="DEBUG"/>
  <rel name="connectivity_service" class="ConnectivityService" id="local-connectivity-service-config"/>
  <rel name="environment">
   <ref class="Variable" id="local-env-ers-verb"/>

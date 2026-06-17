@@ -653,7 +653,7 @@ def run_one_fsm_command(
         err_str = (
             "The session did not complete the stateful transition in the specified "
             f"time of {timeout} seconds. To investigate the cause, please check the "
-            "controller and application logs with the [yellow]'logs'[/] command."
+            "controller and application logs with the [yellow]logs[/] command."
         )
         log.error(err_str)
         obj.get_driver("controller").log_on_server(err_str, severity="ERROR")

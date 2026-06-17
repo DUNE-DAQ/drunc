@@ -56,13 +56,10 @@ conf_dict.drunc_connsvc = True
 # conf_dict.connsvc_port = 12345
 
 # Collate tthe drunc config arguments into a dict to pass to the fixture
-confgen_arguments = {"test_failure_mode_fsm_cmd_timeout_nest_app": conf_dict}
+confgen_arguments = {"test": conf_dict}
 
 # Run these commands in the run control
-dunerc_command_list = """
-boot
-conf
-""".split()
+dunerc_command_list = ["boot", "conf"]
 
 
 def test_dunerc_success(run_dunerc) -> None:
