@@ -9,6 +9,7 @@ from json import JSONDecodeError
 
 import requests
 import socks
+from druncschema.common_pb2 import LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
@@ -18,7 +19,6 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     FSMResponseFlag,
     IncludeResponse,
-    LogResponse,
     RecomputeStatusResponse,
     Status,
     StatusResponse,
@@ -853,8 +853,8 @@ class RESTAPIChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> LogResponse:
-        return LogResponse(
+    ) -> LogOnServerResponse:
+        return LogOnServerResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,

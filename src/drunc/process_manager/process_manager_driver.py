@@ -13,6 +13,7 @@ import grpc
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -1008,3 +1009,44 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
 """
         )
+
+    def log_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> LogOnServerResponse:
+        """
+        Logs a message to the server's log system.
+
+        Args:
+            text (str): The message to log.
+            target (str, optional): The target node for the log message. Defaults to "".
+            execute_along_path (bool, optional): Whether to execute the log command along the path. Defaults to False.
+            execute_on_all_subsequent_children_in_path (bool, optional): Whether to execute the log command on all subsequent children in the path. Defaults to True.
+            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+
+        Returns:
+            None
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = LogOnServerRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+        try:
+            response = self.stub.log_on_server(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response

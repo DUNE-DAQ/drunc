@@ -3,6 +3,7 @@ import time
 from typing import NoReturn, cast
 
 import grpc
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -17,8 +18,6 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     IncludeRequest,
     IncludeResponse,
-    LogRequest,
-    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -624,8 +623,8 @@ class gRPCChildNode(ChildNode):
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> LogResponse:
-        request = LogRequest(
+    ) -> LogOnServerResponse:
+        request = LogOnServerRequest(
             token=None,
             text=text,
             severity=severity,

@@ -246,7 +246,8 @@ class AppState:
             and ft_fsm_timeout_app_name == self.appname
         ):
             self.log.warning(
-                f"Delaying execution of {ft_fsm_timeout_app_name} by {ft_fsm_timeout} seconds"
+                f"Delaying execution of {command_id} in {ft_fsm_timeout_app_name} by "
+                f"{ft_fsm_timeout} seconds"
             )
             time.sleep(ft_fsm_timeout)
 

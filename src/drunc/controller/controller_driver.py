@@ -2,6 +2,7 @@ import ipaddress
 import socket
 
 import grpc
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -16,8 +17,6 @@ from druncschema.controller_pb2 import (
     FSMCommand,
     IncludeRequest,
     IncludeResponse,
-    LogRequest,
-    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     StatusRequest,
@@ -373,7 +372,7 @@ class ControllerDriver:
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> LogResponse:
+    ) -> LogOnServerResponse:
         """
         Logs a message to the server's log system.
 
@@ -390,7 +389,7 @@ class ControllerDriver:
         Raises:
             grpc.RpcError: If the gRPC request fails.
         """
-        request = LogRequest(
+        request = LogOnServerRequest(
             token=self.token,
             text=text,
             severity=severity,

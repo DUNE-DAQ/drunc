@@ -7,6 +7,7 @@ from typing import Callable, List, TypeVar
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.broadcast_pb2 import BroadcastType
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -22,8 +23,6 @@ from druncschema.controller_pb2 import (
     FSMResponseFlag,
     IncludeRequest,
     IncludeResponse,
-    LogRequest,
-    LogResponse,
     RecomputeStatusRequest,
     RecomputeStatusResponse,
     Status,
@@ -1654,11 +1653,11 @@ class Controller(ControllerServicer):
     @publish_command_time
     def log_on_server(
         self,
-        request: LogRequest,
+        request: LogOnServerRequest,
         context: ServicerContext,
-    ) -> LogResponse:
+    ) -> LogOnServerResponse:
         self.log.critical("GOT TO THE SERVER")
-        response = LogResponse(
+        response = LogOnServerResponse(
             token=None,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
@@ -1693,7 +1692,7 @@ class Controller(ControllerServicer):
         )
         child_responses.extend(
             [
-                LogResponse(
+                LogOnServerResponse(
                     token=None,
                     name=child_list[i][0].name,
                     flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
