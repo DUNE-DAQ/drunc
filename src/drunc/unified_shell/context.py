@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from enum import Enum
 
 import grpc
+from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
@@ -99,7 +100,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         )
         self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
 
-
     def get_endpoint_display_host_overrides(self) -> dict[str, str]:
         """
         Return a mapping of process name -> preferred display hostname for endpoint
@@ -119,13 +119,9 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         if not pm_driver:
             return {}
 
-        from druncschema.process_manager_pb2 import ProcessQuery
-
-        query = (
-            ProcessQuery(names=[".*"], session=self.session_name)
-            if self.session_name
-            else ProcessQuery(names=[".*"])
-        )
+        if not self.session_name:
+            raise RuntimeError("session name must be set before querying process list")
+        query = ProcessQuery(names=[".*"], session=self.session_name)
         try:
             proc_list = pm_driver.ps(query)
         except (ServerUnreachable, ServerTimeout, grpc.RpcError):

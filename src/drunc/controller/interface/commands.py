@@ -71,10 +71,10 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     default=True,
 )
 @click.option(
-    "--full",
+    "--extended",
     is_flag=True,
     default=False,
-    help="Show additional columns, including the actual endpoint IP address.",
+    help="Show additional columns, including the IP address of each endpoint.",
 )
 @click.pass_obj
 def status(
@@ -82,7 +82,7 @@ def status(
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
-    full: bool,
+    extended: bool,
 ) -> None:
     obj.print(
         render_status_table(
@@ -90,7 +90,7 @@ def status(
             target=target,
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-            show_actual_endpoint=full,
+            show_ip_address=extended,
         )
     )
     obj.print_status_summary()

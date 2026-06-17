@@ -41,11 +41,15 @@ class ControllerContext(ShellContext):  # boilerplatefest
 
     def get_endpoint_display_host_overrides(self) -> dict[str, str]:
         """
-        Return UI-only endpoint host overrides.
+        Return display hostname overrides for status-table rendering.
 
-        The controller's advertised endpoint remains the authoritative connect
-        address. This method only provides cosmetic host substitutions for
-        status-table rendering.
+        Returns an empty dict because this context connects directly to a
+        controller without a process manager, so no per-process hostname
+        metadata is available.
+
+        Returns:
+            dict[str, str]: Mapping of {process_name: hostname}.
+                            Always empty for this context.
         """
         return {}
 

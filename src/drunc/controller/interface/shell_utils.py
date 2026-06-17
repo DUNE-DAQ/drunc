@@ -38,6 +38,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from drunc.controller.interface.context import ControllerContext
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
@@ -74,7 +75,7 @@ def get_status_table(
     status_response: StatusResponse,
     describe_response: DescribeResponse,
     display_host_overrides: dict[str, str] | None = None,
-    show_actual_endpoint: bool = False,
+    show_ip_address: bool = False,
 ):
     status = status_response.status
     description = describe_response.description
@@ -93,8 +94,8 @@ def get_status_table(
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
-    if show_actual_endpoint:
-        t.add_column("Actual Endpoint")
+    if show_ip_address:
+        t.add_column("IP Address")
 
     def add_status_to_table(
         table: Table,
@@ -150,7 +151,9 @@ def get_status_table(
 
             return endpoint, ""
 
-        display_ep, actual_ep = update_endpoint(description.endpoint, status_response.name)
+        display_ep, actual_ep = update_endpoint(
+            description.endpoint, status_response.name
+        )
         row = [
             prefix + status_response.name,
             description.info,
@@ -160,7 +163,7 @@ def get_status_table(
             format_bool(status.included),
             display_ep,
         ]
-        if show_actual_endpoint:
+        if show_ip_address:
             row.append(actual_ep)
         table.add_row(*row)
 
@@ -212,15 +215,13 @@ def get_status_table(
 
     return t
 
-from drunc.controller.interface.context import ControllerContext
-
 
 def render_status_table(
     ctx: ControllerContext,
     target: str = "",
     execute_along_path: bool = True,
     execute_on_all_subsequent_children_in_path: bool = True,
-    show_actual_endpoint: bool = False,
+    show_ip_address: bool = False,
 ):
     statuses = ctx.get_driver("controller").status(
         target=target,
@@ -237,8 +238,9 @@ def render_status_table(
         statuses,
         descriptions,
         display_host_overrides=display_host_overrides,
-        show_actual_endpoint=show_actual_endpoint,
+        show_ip_address=show_ip_address,
     )
+
 
 class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
