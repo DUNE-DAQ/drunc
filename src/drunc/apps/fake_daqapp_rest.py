@@ -8,6 +8,7 @@ It is primarily used for the testing of the Run Control.
 import copy as cp
 import os
 import random
+import signal
 import threading
 import time
 from urllib.parse import urlparse
@@ -535,10 +536,12 @@ def main(
         target=update_connectivity_service,
         args=(name, connectivity_service, interval, url),
         name="connectivity_service_updating_thread",
-        daemon=True,
     )
 
     def terminate(*args):  # Accept args for signal handlers
+        for s in [signal.SIGTERM, signal.SIGQUIT]:
+            if signal.getsignal(s) in args:
+                log.warning(f"Received termination signal {s}, shutting down {name}...")
         log.info(f"Terminating application {name}...")
         shutdown_event.set()
 
@@ -560,8 +563,8 @@ def main(
         log.warning(f"Received signal {signum}, terminating process")
         terminate()
 
-    # for sig in [signal.SIGINT, signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT]:
-    #     signal.signal(sig, terminate)
+    for sig in [signal.SIGTERM, signal.SIGQUIT]:
+        signal.signal(sig, terminate)
     app = Flask(__name__)
     api = Api(app)
     DAQAppCMD = AppCommand.pass_daq_app(app_state)
