@@ -156,24 +156,29 @@ def boot(
         )
         put_in_error_state = True
 
+    # Check if there is or should be an error state. If not, then the boot was
+    # successful and we can return, otherwise, we will log the error and place the
+    # session in an error state if required.
     in_error_state = obj.get_driver("controller").status().status.in_error
     if not in_error_state and not put_in_error_state:
         log.info("Booted successfully")
-    else:
-        if put_in_error_state:
-            log.critical(
-                "Placing the session into an error state due to boot issues"
-            )  # TODO: put this in debug
-            # obj.get_driver("controller").to_error()
-            # in_error_state = obj.get_driver("controller").status().status.in_error
-            in_error_state = True
-            log.error("Booted, but placed the session into an error state")
-        else:
-            log.info("Booted, but the session was already in an error state.")
+        return
 
-    log.critical(f"{in_error_state=}")
-    log.critical(f"{obj.running_mode=}")
-    log.critical(f"{obj.no_stop_error_batch_mode=}")
+    # An error state has been detected, or should be placed. Log the error and place the
+    # session in an error state if required.
+    log.info(
+        "Booted, but the session is in an error state. Use the [yellow]status[/] "
+        "command to find out more about this failure, and check the logs of the "
+        "applications that are in an error state with the [yellow]logs[/] command."
+    )
+    if put_in_error_state and not in_error_state:
+        log.error("Placing the session into an error state due to boot issues")
+        obj.get_driver("controller").to_error()
+        in_error_state = obj.get_driver("controller").status().status.in_error
+
+    # If the unified shell is running in batch or semibatch mode, exit with a non-zero
+    # exit code unless bypassed with the --no-stop-error-batch-mode option in the
+    # unified shell.
     if (
         in_error_state
         and obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]

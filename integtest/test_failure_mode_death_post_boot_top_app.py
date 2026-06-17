@@ -105,17 +105,17 @@ def test_boot_failure_logfile(run_dunerc) -> None:
         (
             log
             for log in run_dunerc.log_files
-            if "ft-nested-segment-2-application" in str(log)
+            if "ft-top-segment-application" in str(log)
         ),
         None,
     )
     assert simulated_death_app_logfile is not None, (
-        "Expected to find a log file for ft-nested-segment-2-application, but did not."
+        "Expected to find a log file for ft-top-segment-application, but did not."
     )
 
     # Check that the expected boot failure message is in the log file for the
     # application that dies on boot
-    app_death_str = ["Simulating death of ft-nested-segment-2-application post boot"]
+    app_death_str = ["Simulating death of ft-top-segment-application post boot"]
     line_found = check_file_containing(app_death_str, simulated_death_app_logfile)
     assert line_found == True, (
         "Expected to see the boot failure message in stdout, but did not."
@@ -130,7 +130,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
     # Check that the session is correctly put in error state if an appliucation dies on
     # boot.
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
-    search_str = "Booted, but the top controller is in error"
+    search_str = "Running in batch mode, and because error state is detected, exiting."
     str_found = any(search_str in line for line in lines)
     assert str_found is True, (
         "Expected to see the boot failure message in stdout, but did not."

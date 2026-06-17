@@ -344,6 +344,7 @@ class ControllerDriver:
         execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> ToErrorResponse:
+        self.log.critical(f"TEST: Starting to_error on target '{target}'")
         request = ToErrorRequest(
             target=target,
             execute_along_path=execute_along_path,
@@ -352,7 +353,13 @@ class ControllerDriver:
         request.token.CopyFrom(self.token)
 
         try:
+            self.log.critical(
+                f"TEST: Sending to_error request to server for target '{target}'"
+            )
             response = self.stub.to_error(request, timeout=timeout)
+            self.log.critical(
+                f"TEST: Received to_error response from server for target '{target}'"
+            )
         except grpc.RpcError as e:
             handle_grpc_error(e)
 

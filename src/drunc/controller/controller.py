@@ -638,8 +638,6 @@ class Controller(ControllerServicer):
     def status(
         self, request: StatusRequest, context: ServicerContext
     ) -> StatusResponse:
-        self.log.warning(f"Status request received for target: {request.target}")
-
         response = StatusResponse(
             token=None,
             name=self.name,
@@ -695,7 +693,6 @@ class Controller(ControllerServicer):
         )
         response.children.extend(child_responses)
 
-        self.log.warning(f"Returning status response: {response}")
         return response
 
     @broadcasted
@@ -1582,12 +1579,16 @@ class Controller(ControllerServicer):
         """
         Transitions the stateful node to an error state. Used for testing purposes.
         """
+        self.log.critical(f"Received to_errror request with request: {request}")
+        self.log.critical(
+            f"Error state for this node: {self.stateful_node.node_is_in_error()}"
+        )
         response = ToErrorResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-        self.log.critical(f"Received to_errror request with request: {request}")
+        self.log.critical(f"Created to_error response: {response}")
         try:
             # Parse and validate target.
             request.target = self.parse_target_string(request.target)
@@ -1595,15 +1596,20 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        self.log.critical(f"Parsed target string: {request.target}")
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
             include_excluded_nodes=True,
         )
+        self.log.critical(f"Addressed target path: {child_list}")
         connected_indices, disconnected_indices = self._partition_connected_children(
             child_list,
             operation_name="to_error",
+        )
+        self.log.critical(
+            f"Partitioned connected children: {connected_indices}, disconnected children: {disconnected_indices}"
         )
         child_responses = self.propagate_concurrently(
             lambda child, target: child.to_error(
@@ -1613,6 +1619,9 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
+        )
+        self.log.critical(
+            f"Propagated to_error to children, got responses: {child_responses}"
         )
         child_responses.extend(
             [
@@ -1625,10 +1634,18 @@ class Controller(ControllerServicer):
             ]
         )
         response.children.extend(child_responses)
-
+        self.log.critical(
+            f"Extended child responses with disconnected children, final child responses: {response.children}"
+        )
+        self.log.critical(
+            f"Error state for this node: {self.stateful_node.node_is_in_error()}"
+        )
         # This node.
         if request.target == self.name or request.execute_along_path:
             self.stateful_node.to_error()
+        self.log.critical(
+            f"Error state for this node: {self.stateful_node.node_is_in_error()}"
+        )
 
         self.log.critical(f"Returning to_error response: {response}")
         return response

@@ -130,7 +130,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
     # Check that the session is correctly put in error state if an appliucation dies on
     # boot.
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
-    search_str = "Booted, but the top controller is in error"
+    search_str = "Running in batch mode, and because error state is detected, exiting."
     str_found = any(search_str in line for line in lines)
     assert str_found is True, (
         "Expected to see the boot failure message in stdout, but did not."
