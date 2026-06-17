@@ -535,15 +535,26 @@ def main(
         target=update_connectivity_service,
         args=(name, connectivity_service, interval, url),
         name="connectivity_service_updating_thread",
+        daemon=True,
     )
 
-    # Doesn't do what is expected, probably flask
-    def terminate():
-        connectivity_service_thread.join(timeout=0.1)
-        log.info("Connectivity service terminated")
-        server_container["server"].shutdown()
-        flask_thread.join(timeout=0.1)
-        exit(1)
+    def terminate(*args):  # Accept args for signal handlers
+        log.info(f"Terminating application {name}...")
+        shutdown_event.set()
+
+        # 2. Close connections explicitly
+        if "server" in server_container:
+            try:
+                server_container["server"].server_close()
+            except:
+                pass
+
+        # 3. Give threads a tiny buffer to stop gracefully
+        time.sleep(0.1)
+
+        # 4. Final hard exit
+        log.info("Shutdown complete. Exiting.")
+        os._exit(1)
 
     def terminate_signal_process(signum, sigframe):
         log.warning(f"Received signal {signum}, terminating process")
@@ -557,17 +568,20 @@ def main(
     api.add_resource(DAQAppCMD, "/command", methods=["POST"])
     app.add_url_rule("/", "index", index)
     server_ready = threading.Event()
+    shutdown_event = threading.Event()
 
     def run_flask_app(app, host, port, event, server_container):
-        try:
-            log.debug(f"Entering run_flask_app for {host}:{port}")
-            # Create the server manually instead of letting run_simple do it implicitly
-            server = make_server(host, port, app)
-            server_container["server"] = server  # Store the server instance
-            event.set()
-            server.serve_forever()  # This blocks until shutdown() is called
-        except Exception as e:
-            log.error(f"Flask app thread crashed: {e}")
+        server = make_server(host, port, app)
+        server.timeout = 0.5
+        event.set()
+
+        # Don't use serve_forever() directly if you need external control
+        # Use a loop that checks the shutdown event
+        while not shutdown_event.is_set():
+            server.handle_request()  # Handles one request at a time
+
+        server.shutdown()
+        server.server_close()
 
     url = urlparse(url)
     flask_url = url.geturl().replace("rest://", "http://")

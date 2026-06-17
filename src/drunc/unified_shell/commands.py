@@ -136,7 +136,6 @@ def boot(
             "the relevant logs for more information."
         )
         status_response = obj.get_driver("controller").status()
-        # obj.get_driver("controller").to_error()
         return
 
     # If any processes died immediately, place the controller in error.
