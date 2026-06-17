@@ -1,35 +1,5 @@
 """
 Run a session with a nested segment application dying at the end of boot.
-
-Future developments:
- - Use the --no-stop-error-batch-mode option to also check the ps and status tables
- - Investigate why the `ps` table does not contain the fake_daq_applicaiton in a dead state.
- - Update the status table to ensure that the `disconnecteed` application does not hold up the boot process.
- - Investigate why there are differences in the reporting of error states in sequential runs as (on boot status tables)
-                                                               ft-pr status
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Name                                    ┃ Info ┃ State        ┃ Substate     ┃ In error ┃ Included ┃ Endpoint                          ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ ft-root-controller                      │      │ initialising │ initialising │ No       │ Yes      │ grpc://np04-srv-029.cern.ch:30006 │
-│   ft-top-segment-controller             │      │ initialising │ initialising │ No       │ Yes      │ grpc://np04-srv-029.cern.ch:30006 │
-│     ft-nested-segment-1-controller      │      │ initial      │ initial      │ No       │ Yes      │ grpc://np04-srv-029.cern.ch:35475 │
-│       ft-nested-segment-1-application   │      │ initial      │ idle         │ No       │ Yes      │ rest://np04-srv-029.cern.ch:55721 │
-│     ft-nested-segment-2-controller      │      │ initialising │ initialising │ No       │ Yes      │ grpc://np04-srv-029.cern.ch:32983 │
-│       ft-nested-segment-2-application   │      │ disconnected │ disconnected │ No       │ Yes      │                                   │
-│       ft-nested-segment-2.1-application │      │ initial      │ idle         │ No       │ Yes      │ rest://np04-srv-029.cern.ch:53457 │
-│     ft-top-segment-application          │      │ initial      │ idle         │ No       │ Yes      │ rest://np04-srv-029.cern.ch:50957 │
-└─────────────────────────────────────────┴──────┴──────────────┴──────────────┴──────────┴──────────┴───────────────────────────────────┘
-Next run (taken straight after above run)
-                                                     ft-pr status
-┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Name                 ┃ Info ┃ State        ┃ Substate     ┃ In error ┃ Included ┃ Endpoint                          ┃
-┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ ft-root-controller   │      │ initialising │ initialising │ No       │ Yes      │ grpc://np04-srv-029.cern.ch:30006 │
-│   ft-root-controller │      │              │              │ No       │ No       │                                   │
-└──────────────────────┴──────┴──────────────┴──────────────┴──────────┴──────────┴───────────────────────────────────┘
-Waiting on tree initialisation... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸ 100% 0:00:01
-Controller did not initialise in time
-[2026/06/16 08:29:04 UTC] INFO       commands.py:111                          drunc.unified_shell.boot                           Booted successfully
 """
 
 import os

@@ -541,13 +541,14 @@ def main(
     def terminate():
         connectivity_service_thread.join(timeout=0.1)
         log.info("Connectivity service terminated")
-        server_container['server'].shutdown()
+        server_container["server"].shutdown()
         flask_thread.join(timeout=0.1)
         exit(1)
 
     def terminate_signal_process(signum, sigframe):
         log.warning(f"Received signal {signum}, terminating process")
         terminate()
+
     # for sig in [signal.SIGINT, signal.SIGHUP, signal.SIGTERM, signal.SIGQUIT]:
     #     signal.signal(sig, terminate)
     app = Flask(__name__)
@@ -562,9 +563,9 @@ def main(
             log.debug(f"Entering run_flask_app for {host}:{port}")
             # Create the server manually instead of letting run_simple do it implicitly
             server = make_server(host, port, app)
-            server_container['server'] = server  # Store the server instance
+            server_container["server"] = server  # Store the server instance
             event.set()
-            server.serve_forever() # This blocks until shutdown() is called
+            server.serve_forever()  # This blocks until shutdown() is called
         except Exception as e:
             log.error(f"Flask app thread crashed: {e}")
 
@@ -579,9 +580,10 @@ def main(
             "host": url.hostname,
             "port": url.port,
             "event": server_ready,
-            "server_container": server_container
+            "server_container": server_container,
         },
         name="flask_thread",
+        daemon=True,  # Ensure the thread exits when the main program exits
     )
     flask_thread.start()
 

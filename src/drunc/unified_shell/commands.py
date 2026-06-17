@@ -124,13 +124,6 @@ def boot(
             f"process manager ({status_process_count}). Please check the relevant logs "
             "for more information."
         )
-        log.critical("Getting the controller driver test")
-        obj.get_driver("controller")
-        log.critical("Status test")
-        obj.get_driver("controller").status()
-        log.critical("To error test")
-        obj.get_driver("controller").to_error()
-        log.critical("COMPLETE")
         return
 
     # Check if session booted correctly, if not put it in error state
@@ -143,9 +136,7 @@ def boot(
             "the relevant logs for more information."
         )
         status_response = obj.get_driver("controller").status()
-        log.critical(f"{status_response=}")
-        obj.get_driver("controller").to_error()
-        log.critical("TEST")
+        # obj.get_driver("controller").to_error()
         return
 
     # If any processes died immediately, place the controller in error.

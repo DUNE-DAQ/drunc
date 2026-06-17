@@ -667,7 +667,6 @@ def run_one_fsm_command(
         obj.print(t)
         obj.print_status_summary()
 
-        log.error("SHOULD HAVE THE STATUS TABLE BY NOW")
         return
 
     if not result:
