@@ -39,7 +39,6 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
-from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -83,8 +82,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         self._create_broadcast_service(self.name, self.session)
 
-        dach = DummyAuthoriserConfHandler(
-            data=self.configuration.get_data_authoriser(), type=ConfTypes.PyObject
+        dach = DummyAuthoriserConfHandler.from_pyobject(
+            data=self.configuration.get_data_authoriser()
         )
 
         self.opmon_publisher = getattr(
@@ -169,8 +168,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return self.configuration.get_log_path()
 
     def _create_broadcast_service(self, name, session):
-        bsch = BroadcastSenderConfHandler(
-            data=self.configuration.get_data_broadcaster(), type=ConfTypes.PyObject
+        bsch = BroadcastSenderConfHandler.from_pyobject(
+            data=self.configuration.get_data_broadcaster()
         )
 
         self.broadcast_service = (

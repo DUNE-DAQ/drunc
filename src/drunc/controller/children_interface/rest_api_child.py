@@ -39,7 +39,12 @@ from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
-from drunc.utils.configuration import ConfHandler
+from drunc.utils.configuration import (
+    ConfData,
+    ConfHandler,
+    ConfTypeNotSupported,
+    ConfTypes,
+)
 from drunc.utils.flask_manager import FlaskManager
 from drunc.utils.utils import (
     ControlType,
@@ -354,7 +359,33 @@ and hence cannot be figured from there
 """
 
 
-class RESTAPIChildNodeConfHandler(ConfHandler):
+class RESTAPIChildNodeConfData(ConfData):
+    """Wrapper for REST API child node configuration."""
+
+    def __init__(self) -> None:
+        self.id = None
+        self.exposes_service = []
+
+        class runs_on_obj:
+            id = None
+
+        self.runs_on = runs_on_obj()
+        self.runs_on.runs_on = runs_on_obj()
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        """Populate from dictionary data."""
+        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
+
+    def populate_from_pbany(self, pbany_data: object) -> None:
+        """Populate from Protobuf Any message."""
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
+
+
+class RESTAPIChildNodeConfHandler(ConfHandler[RESTAPIChildNodeConfData]):
+    """Handler for REST API child node configuration."""
+
+    confdata_cls = RESTAPIChildNodeConfData
+
     def get_host_port(self):
         for service in self.data.exposes_service:
             if self.data.id + "_control" in service.id:
@@ -379,7 +410,7 @@ class RESTAPIChildNode(ChildNode):
         self.fsm_configuration = fsm_configuration
         self.connectivity_service = connectivity_service
         if fsm_configuration:
-            fsmch = FSMConfHandler(fsm_configuration)
+            fsmch = FSMConfHandler.from_pyobject(data=fsm_configuration)
             self.fsm = FSM(conf=fsmch)
 
         response_listener_host = socket.gethostname()

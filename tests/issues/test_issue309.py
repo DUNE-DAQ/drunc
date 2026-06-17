@@ -6,14 +6,13 @@ from drunc.utils.utils import get_root_logger
 
 def test_issue309(load_test_config):
     get_root_logger("INFO")
-    from drunc.utils.configuration import OKSKey, parse_conf_url
+    from drunc.utils.configuration import OKSKey
 
-    conf_path, conf_type = parse_conf_url("oksconflibs:deep-segments-config.data.xml")
+    conf_path = "oksconflibs:deep-segments-config.data.xml"
     controller_id = "controller-3"
 
-    controller_configuration = ControllerConfHandler(
-        type=conf_type,
-        data=conf_path,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=conf_path,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",

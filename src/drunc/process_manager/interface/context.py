@@ -5,7 +5,6 @@ from druncschema.token_pb2 import Token
 from drunc.broadcast.client.broadcast_handler import BroadcastHandler
 from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.utils.configuration import ConfTypes
 from drunc.utils.shell_utils import (
     ShellContext,
     create_dummy_token_from_uname,
@@ -40,10 +39,7 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
         return create_dummy_token_from_uname()
 
     def start_listening(self, broadcaster_conf):
-        bcch = BroadcastClientConfHandler(
-            data=broadcaster_conf,
-            type=ConfTypes.ProtobufAny,
-        )
+        bcch = BroadcastClientConfHandler.from_pbany(data=broadcaster_conf)
         self.status_receiver = BroadcastHandler(bcch)
         get_logger("process_manager.shell").info(
             f":ear: Listening to the Process Manager at {self.address}"

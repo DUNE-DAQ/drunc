@@ -1,9 +1,11 @@
 """Configuration utilities for DRUNC."""
 
 import json
+import logging
 import os
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Protocol, cast
+from typing import Generic, Protocol, Self, TypeVar, cast
 
 import conffwk
 
@@ -120,54 +122,177 @@ class _ConfigurationData(Protocol):
     authoriser: object
 
 
-class ConfHandler:
-    """Handler for loading and parsing DRUNC configurations.
+class ConfData(ABC):
+    """Base class for configuration wrapper objects that populate from raw sources."""
 
-    Supports multiple configuration types including JSON files, Protobuf messages,
-    and OKS.
-    """
-
-    def __init__(
-        self,
-        data: object = None,
-        type: ConfTypes = ConfTypes.PyObject,
-        oks_key: OKSKey | None = None,
-        *args: object,
-        **kwargs: object,
-    ) -> None:
-        """Initialize a ConfHandler.
+    @abstractmethod
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        """Populate from a dictionary (JSON source).
 
         Args:
-            data: The configuration data. Defaults to None.
-            type: The configuration type. Defaults to PyObject.
-            oks_key: OKS key if using OKS configuration. Defaults to None.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
+            data: Dictionary data from JSON configuration file.
 
         Raises:
-            DruncSetupException: If OKS type is used without an OKS key.
+            ConfTypeNotSupported: If this handler doesn't support JSON sources.
+        """
+        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
+
+    @abstractmethod
+    def populate_from_pbany(self, pbany_data: object) -> None:
+        """Populate from a Protobuf Any message.
+
+        Args:
+            pbany_data: Protobuf Any message.
+
+        Raises:
+            ConfTypeNotSupported: If this handler doesn't support Protobuf sources.
+        """
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
+
+
+ConfDataType = TypeVar("ConfDataType", bound=ConfData)
+
+
+class ConfHandler(Generic[ConfDataType]):
+    """Handler for loading and parsing DRUNC configurations.
+
+    Generic over a ConfDataType that wraps the parsed configuration.
+    Supports multiple configuration sources via from_* classmethods.
+    """
+
+    confdata_cls: type[ConfDataType]
+    data: ConfDataType
+    type: ConfTypes
+    oks_key: OKSKey | None
+    class_name: str
+    log: logging.Logger
+    root_id: int
+    controller_id: int
+    process_id: int
+    process_id_infra: int
+    session_name: str | None
+    initial_data: object
+    oks_path: str
+    db: object
+
+    @classmethod
+    def from_pyobject(cls, data: object, session_name: str | None = None) -> Self:
+        """Create handler from a Python object.
+
+        Args:
+            data: The configuration object (typically OKS DAL).
+            session_name: Optional session name.
+
+        Returns:
+            Self: Initialized handler instance.
+        """
+        instance = cls.__new__(cls)
+        instance._init_common(session_name)
+        instance.initial_data = data
+        instance.data = cast(ConfDataType, data)
+        instance.type = ConfTypes.PyObject
+        instance._post_process_oks()
+        return instance
+
+    @classmethod
+    def from_pbany(cls, data: object, session_name: str | None = None) -> Self:
+        """Create handler from a Protobuf Any message.
+
+        Args:
+            data: The Protobuf Any message.
+            session_name: Optional session name.
+
+        Returns:
+            Self: Initialized handler instance.
+
+        Raises:
+            ConfTypeNotSupported: If subclass doesn't override parsing.
+        """
+        instance = cls.__new__(cls)
+        instance._init_common(session_name)
+        instance.initial_data = data
+        instance.data = instance._new_conf_data()
+        instance.data.populate_from_pbany(data)
+        instance.type = ConfTypes.PyObject
+        instance._post_process_oks()
+        return instance
+
+    @classmethod
+    def from_json(cls, path: str, session_name: str | None = None) -> Self:
+        """Create handler from a JSON file.
+
+        Args:
+            path: Path to JSON configuration file.
+            session_name: Optional session name.
+
+        Returns:
+            Self: Initialized handler instance.
+
+        Raises:
+            DruncSetupException: If file not found.
+            ConfTypeNotSupported: If subclass doesn't override parsing.
+        """
+        instance = cls.__new__(cls)
+        instance._init_common(session_name)
+        instance.initial_data = path
+        resolved = expand_path(path, True)
+        if not os.path.exists(expand_path(path)):
+            raise DruncSetupException(f"Location {resolved} ({path}) is empty!")
+        with open(resolved) as f:
+            json_data = json.loads(f.read())
+            instance.data = instance._new_conf_data()
+            instance.data.populate_from_dict(cast(dict[str, object], json_data))
+            instance.type = ConfTypes.PyObject
+            instance._post_process_oks()
+        return instance
+
+    @classmethod
+    def from_oks(
+        cls,
+        url: str,
+        oks_key: OKSKey,
+        session_name: str | None = None,
+    ) -> Self:
+        """Create handler from OKS configuration.
+
+        Args:
+            url: OKS database path.
+            oks_key: Key to identify the object in OKS.
+            session_name: Optional session name.
+
+        Returns:
+            Self: Initialized handler instance.
+        """
+        instance = cls.__new__(cls)
+        instance._init_common(session_name)
+        instance.initial_data = url
+        instance.oks_key = oks_key
+        instance.data = cast(ConfDataType, instance._parse_oks_file(url))
+        instance.type = ConfTypes.PyObject
+        instance._post_process_oks()
+        return instance
+
+    def _init_common(self, session_name: str | None = None) -> None:
+        """Initialize common attributes.
+
+        Args:
+            session_name: Optional session name.
         """
         self.class_name = self.__class__.__name__
         self.log = get_logger("utils." + self.class_name)
-        self.initial_type = type
-        self.initial_data = data
         self.root_id = 0
         self.controller_id = 0
         self.process_id = 0
         self.process_id_infra = 0
-        self.session_name = kwargs.get("session_name")
+        self.session_name = session_name
+        self.oks_key = None
+        self.type = ConfTypes.Unknown
 
-        if type == ConfTypes.OKSFileName and oks_key is None:
-            raise DruncSetupException("Need to provide a key for the OKS file")
-
-        self.oks_key = oks_key
-        self.validate_and_parse_configuration_location(*args, **kwargs)
-
-    def get_data(self) -> object:
+    def get_data(self) -> ConfDataType:
         """Get the configuration data.
 
         Returns:
-            Any: The stored configuration data.
+            ConfDataType: The stored configuration data.
         """
         return self.data
 
@@ -183,7 +308,7 @@ class ConfHandler:
         """Get the broadcaster from the configuration data.
 
         Returns:
-            Any: The broadcaster object.
+            object: The broadcaster object.
         """
         return cast(_ConfigurationData, self.get_data()).broadcaster
 
@@ -191,7 +316,7 @@ class ConfHandler:
         """Get the authoriser from the configuration data.
 
         Returns:
-            Any: The authoriser object.
+            object: The authoriser object.
         """
         return cast(_ConfigurationData, self.get_data()).authoriser
 
@@ -204,6 +329,17 @@ class ConfHandler:
         return self.oks_key
 
     def _parse_oks_file(self, oks_path: str) -> object:
+        """Parse OKS configuration file.
+
+        Args:
+            oks_path: Path to OKS database.
+
+        Returns:
+            object: The parsed DAL object.
+
+        Raises:
+            DruncSetupException: If OKS setup or parameters are missing.
+        """
         try:
             self.oks_path = oks_path
             self.log.debug(f"Using {self.oks_path} to configure")
@@ -223,54 +359,19 @@ class ConfHandler:
                 "OKS params where not passed to this ConfigurationHandler, cannot parse OKS configurations"
             ) from e
 
-    def _post_process_oks(self, *args: object, **kwargs: object) -> None:
+    def _post_process_oks(self) -> None:
+        """Post-process configuration after loading.
+
+        Override in subclasses to perform custom initialization.
+        """
         pass
 
-    def _parse_pbany(self, pbany_data: object) -> object:
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.class_name)
+    def _new_conf_data(self) -> ConfDataType:
+        """Create a new instance of the configuration data wrapper.
 
-    def _parse_dict(self, data: dict[str, object]) -> object:
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.class_name)
+        Must be overridden by subclasses that use from_json or from_pbany.
 
-    def validate_and_parse_configuration_location(
-        self, *args: object, **kwargs: object
-    ) -> None:
-        """Validate and parse the configuration from the provided location.
-
-        Supports JsonFileName, OKSFileName, and PyObject types.
-
-        Args:
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
+        Returns:
+            ConfDataType: A new empty instance ready for population.
         """
-        match self.initial_type:
-            case ConfTypes.PyObject:
-                self.data = self.initial_data
-                self.type = self.initial_type
-                self._post_process_oks(*args, **kwargs)
-
-            case ConfTypes.JsonFileName:
-                resolved = expand_path(cast(str, self.initial_data), True)
-                if not os.path.exists(expand_path(cast(str, self.initial_data))):
-                    raise DruncSetupException(
-                        f"Location {resolved} ({self.initial_data}) is empty!"
-                    )
-
-                with open(resolved) as f:
-                    data = json.loads(f.read())
-                    self.data = self._parse_dict(data)
-                    self.type = ConfTypes.PyObject
-                    self._post_process_oks(*args, **kwargs)
-
-            case ConfTypes.OKSFileName:
-                self.data = self._parse_oks_file(cast(str, self.initial_data))
-                self.type = ConfTypes.PyObject
-                self._post_process_oks(*args, **kwargs)
-
-            case ConfTypes.ProtobufAny:
-                self.data = self._parse_pbany(self.initial_data)
-                self.type = ConfTypes.PyObject
-                self._post_process_oks(*args, **kwargs)
-
-            case _:
-                raise ConfTypeNotSupported(self.initial_type, self.class_name)
+        return self.confdata_cls()

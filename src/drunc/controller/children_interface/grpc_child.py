@@ -43,7 +43,12 @@ from drunc.connectivity_service.exceptions import (
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
-from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.configuration import (
+    ConfData,
+    ConfHandler,
+    ConfTypeNotSupported,
+    ConfTypes,
+)
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
     rethrow_if_unreachable_server,
@@ -55,7 +60,40 @@ from drunc.utils.utils import (
 )
 
 
-class gRCPChildConfHandler(ConfHandler):
+class gRCPChildConfData(ConfData):
+    """Wrapper for gRPC child node configuration."""
+
+    def __init__(self) -> None:
+        class id_able:
+            id = None
+
+        class cler:
+            pass
+
+        self.controller = cler()
+        self.controller.id = None
+        self.controller.exposes_service = []
+
+        class runs_on_obj:
+            id = None
+
+        self.controller.runs_on = runs_on_obj()
+        self.controller.runs_on.runs_on = runs_on_obj()
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        """Populate from dictionary data."""
+        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
+
+    def populate_from_pbany(self, pbany_data: object) -> None:
+        """Populate from Protobuf Any message."""
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
+
+
+class gRCPChildConfHandler(ConfHandler[gRCPChildConfData]):
+    """Handler for gRPC child node configuration."""
+
+    confdata_cls = gRCPChildConfData
+
     def get_uri(self):
         for service in self.data.controller.exposes_service:
             if self.data.controller.id + "_control" in service.id:
@@ -235,10 +273,7 @@ class gRPCChildNode(ChildNode):
 
     def start_listening(self, bdesc):
         self.broadcast = BroadcastHandler(
-            BroadcastClientConfHandler(
-                data=bdesc,
-                type=ConfTypes.ProtobufAny,
-            )
+            BroadcastClientConfHandler.from_pbany(data=bdesc)
         )
 
     def status(

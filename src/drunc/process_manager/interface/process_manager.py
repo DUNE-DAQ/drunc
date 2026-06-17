@@ -22,7 +22,7 @@ from drunc.process_manager.configuration import (
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import get_log_path
-from drunc.utils.configuration import parse_conf_url
+from drunc.utils.configuration import ConfTypes, parse_conf_url
 from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import (
     get_logger,
@@ -60,10 +60,12 @@ def run_pm(
     log.debug("Process manager configuration is valid.")
 
     conf_path, conf_type = parse_conf_url(pm_conf)
+    path_or_url = conf_path.split(":")[1]
 
-    pmch = ProcessManagerConfHandler(
-        log_path=log_path, type=conf_type, data=conf_path.split(":")[1]
-    )
+    if conf_type == ConfTypes.JsonFileName:
+        pmch = ProcessManagerConfHandler.from_json(path=path_or_url, log_path=log_path)
+    else:
+        pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
     log_path = get_log_path(
         user=getpass.getuser(),

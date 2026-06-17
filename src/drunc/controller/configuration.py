@@ -21,7 +21,12 @@ from drunc.controller.children_interface.rest_api_child import (
 )
 from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.configuration import (
+    ConfData,
+    ConfHandler,
+    ConfTypeNotSupported,
+    ConfTypes,
+)
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
@@ -30,8 +35,10 @@ from drunc.utils.utils import (
 )
 
 
-class ControllerConfData:  # the bastardised OKS
-    def __init__(self):
+class ControllerConfData(ConfData):
+    """Wrapper for controller configuration data from OKS segment."""
+
+    def __init__(self) -> None:
         class id_able:
             id = None
 
@@ -41,9 +48,22 @@ class ControllerConfData:  # the bastardised OKS
         self.controller = cler()
         self.controller.broadcaster = id_able()
         self.controller.fsm = id_able()
+        self.segments = []
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        """Populate from dictionary data."""
+        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
+
+    def populate_from_pbany(self, pbany_data: object) -> None:
+        """Populate from Protobuf Any message."""
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
 
 
-class ControllerConfHandler(ConfHandler):
+class ControllerConfHandler(ConfHandler[ControllerConfData]):
+    """Handler for controller configuration."""
+
+    confdata_cls = ControllerConfData
+
     @staticmethod
     def find_segment(segment, id_):
         if segment.controller.id == id_:
@@ -67,7 +87,7 @@ class ControllerConfHandler(ConfHandler):
             )
         return this_segment
 
-    def _post_process_oks(self, *args, **kwargs):
+    def _post_process_oks(self) -> None:
         self.authoriser = None
         self.data = self._grab_segment_conf_from_controller(self.data)
 
@@ -252,16 +272,16 @@ class ControllerConfHandler(ConfHandler):
 
         match ctype:
             case ControlType.gRPC:
-                grpc_conf_handler = gRCPChildConfHandler(
-                    configuration, ConfTypes.PyObject
+                grpc_conf_handler = gRCPChildConfHandler.from_pyobject(
+                    data=configuration
                 )
                 return gRPCChildNode(
                     name, grpc_conf_handler, uri, connectivity_service, init_token
                 )
 
             case ControlType.REST_API:
-                restapi_conf_handler = RESTAPIChildNodeConfHandler(
-                    configuration, ConfTypes.PyObject
+                restapi_conf_handler = RESTAPIChildNodeConfHandler.from_pyobject(
+                    data=configuration
                 )
                 return RESTAPIChildNode(
                     name,

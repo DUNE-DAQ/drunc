@@ -109,7 +109,7 @@ class Controller(ControllerServicer):
         self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
         self.stop_event: threading.Event | None = None
         self.thread: threading.Thread | None = None
-        bsch = BroadcastSenderConfHandler(
+        bsch = BroadcastSenderConfHandler.from_pyobject(
             data=self.configuration.data.controller.broadcaster,
         )
 
@@ -119,7 +119,7 @@ class Controller(ControllerServicer):
             configuration=bsch,
         )
 
-        self.fsm_config = FSMConfHandler(
+        self.fsm_config = FSMConfHandler.from_pyobject(
             data=self.configuration.data.controller.fsm,
         )
 
@@ -132,7 +132,7 @@ class Controller(ControllerServicer):
             top_segment_controller=self.top_segment_controller,
         )
 
-        dach = DummyAuthoriserConfHandler(
+        dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser,
         )
 
