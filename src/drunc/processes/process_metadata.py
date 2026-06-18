@@ -80,27 +80,36 @@ class ProcessMetadata:
         return cls.from_dict(json.loads(json_str))
 
     @staticmethod
-    def compute_role_from_tree_id(tree_id: str) -> str:
+    def compute_role_from_tree_id(tree_id: str, is_controller: bool = False) -> str:
         """
-        Determines the role of a process based on its tree_id.
+        Determines the role of a process based on its tree_id and executable type.
+
+            - empty tree_id                             -> "unknown"
+            - is_controller + tree_id == "0"            -> "root-controller"
+            - is_controller + tree_id starts with "0."  -> "segment-controller"
+            - is_controller + otherwise                 -> "infrastructure-applications"
+            - not controller + tree_id starts with "0." -> "application"
+            - not controller + otherwise                -> "infrastructure-applications"
 
         Args:
-            tree_id: Hierarchical identifier in format session.segment.application
+            tree_id: Dot-separated hierarchical identifier (e.g. "0", "0.1", "0.1.2.3").
+            is_controller: True if the process executable is a drunc-controller.
 
         Returns:
-            Role string: "root-controller", "local-connection-server",
-                        "segment-controller", "application", or "unknown"
+            Role string: "root-controller", "segment-controller", "application",
+                         "infrastructure-applications", or "unknown"
         """
         if not tree_id:
             return "unknown"
-        elif tree_id == "0":
-            return "root-controller"
-        elif tree_id == "1":
-            return "local-connection-server"
-        else:
-            depth = tree_id.count(".")
-            if depth == 1:
+        elif is_controller:
+            if tree_id == "0":
+                return "root-controller"
+            elif tree_id.startswith("0."):
                 return "segment-controller"
-            elif depth == 2:
+            else:
+                return "infrastructure-applications"  # controller outside segment tree
+        else:
+            if tree_id.startswith("0."):
                 return "application"
-        return "unknown"
+            else:
+                return "infrastructure-applications"

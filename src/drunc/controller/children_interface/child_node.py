@@ -42,6 +42,10 @@ class ChildNode(ABC):
         pass
 
     @abstractmethod
+    def check_connection(self) -> bool:
+        pass
+
+    @abstractmethod
     def status(
         self,
         target: str = "",

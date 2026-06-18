@@ -38,20 +38,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
 
 
 @click.command()
-# @click.option(
-#     '--log-level',
-#     type=click.Choice(list(logging_log_levels.keys()), case_sensitive=False),
-#     default="INFO",
-#     help="Verbosity of the session manager logger.",
-# )
-# @click.option(
-#     '--log-path',
-#     type=str,
-#     default=None,
-#     help="Path of the session manager log file.",
-# )
-# def session_manager_cli(log_level: str, log_path: str):
-def session_manager_cli():
+def session_manager_cli()-> None:
     """CLI interface for the Drunc session manager.
 
     This command starts the session manager service, which allows clients to manage

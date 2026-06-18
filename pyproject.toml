@@ -49,6 +49,7 @@ drunc-fsm-tests = "drunc.tests.fsm:main"
 application-registry-service = "drunc.apps.app_connectivity_server:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
 drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
+drunc-check-np0x-hw = "drunc.apps.check_np0x_hw_status:main"
 drunc-check-np0x-cluster = "drunc.apps.check_np0x_cluster:main"
 
 
@@ -84,3 +85,33 @@ select = [
 ignore = [
     "E501", # Don't enforce line lengths within a linting context
 ]
+
+
+[tool.mypy]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_return_any = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+strict_equality = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+
+disallow_any_explicit = true
+disallow_any_expr = false
+disallow_any_decorated = true
+disallow_any_unimported = true
+
+warn_unused_configs = true
+show_error_codes = true
+
+# These overrides are because the library stubs dont exist and not on typeshed
+[[tool.mypy.overrides]]
+module = ["google.rpc.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["conffwk"]
+ignore_missing_imports = true

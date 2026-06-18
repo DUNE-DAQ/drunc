@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from druncschema.process_manager_pb2 import BootRequest
 
 from drunc.processes.connection_utils import wait_for
+from drunc.processes.exit_status import ExitStatus
 
 
 @dataclass
@@ -45,7 +46,7 @@ class ProcessLifetimeManager(ABC):
     # Interval to wait between checking if a process is dead after kill is called.
     KILLING_PROCESS_POLL_INTERVAL = 0.1  # seconds
     # Interval to wait before concluding metadata file writing failed on remote host.
-    DEFAULT_TIMEOUT_FOR_READING_METADATA = 10.0  # seconds
+    DEFAULT_TIMEOUT_FOR_READING_METADATA = 5.0  # seconds
 
     def wait_for_process_to_die(
         self,
@@ -116,24 +117,24 @@ class ProcessLifetimeManager(ABC):
         pass
 
     @abstractmethod
-    def pop_early_exit_code(self, uuid: str) -> Optional[int]:
+    def pop_early_exit_status(self, uuid: str) -> Optional[ExitStatus]:
         """
         If a process was killed before kill_process was called. This method
-        retrieves and removes the exit code from internal storage. Otherwise
+        retrieves and removes the exit status from internal storage. Otherwise
         it will return None.
 
         Args:
             uuid: Process UUID
 
         Returns:
-            Exit code if process is dead, None if still running or not found
+            ExitStatus if process is dead, None if still running or not found
         """
         pass
 
     @abstractmethod
     def kill_process(
         self, uuid: str, timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS
-    ) -> Optional[int]:
+    ) -> Optional[ExitStatus]:
         """
         Kill a remote process and clean up associated resources upon successful termination.
         Sends termination signals to the remote process and waits for it to die.
@@ -145,15 +146,42 @@ class ProcessLifetimeManager(ABC):
             timeout: Timeout for graceful termination in seconds
 
         Returns:
-          the exit code of the process if it was able to be determined (None otherwise).
+                    the interpreted exit status of the process if it was able to be determined
+                    (None otherwise).
 
         """
         pass
 
     @abstractmethod
-    def crash_process(self, uuid: str) -> None:
+    def kill_process_without_metadata(
+        self,
+        uuid: str,
+        signal_name: str = "KILL",
+        as_manual_pm_kill: bool = True,
+        timeout: float = DEFAULT_TIMEOUT_FOR_KILLING_PROCESS,
+    ) -> Optional[ExitStatus]:
         """
-        Simulate a process crash by sending SIGKILL without performing any cleanup.
+        Terminate a process via the given signal without having access to metadata or remote PID
+        Generally this should only be used as a fallback or for testing purposes, kill_process
+        should be preferred.
+
+        Args:
+            uuid: Process UUID to terminate.
+            signal_name: Signal to send to the local SSH client process group
+                (e.g. "KILL" or "QUIT"). Defaults to "KILL".
+            as_manual_pm_kill: If True, classify as process-manager initiated kill.
+                               If False, classify as external kill i.e. outside of process manager control
+            timeout: Maximum time to wait for process termination in seconds.
+
+        Returns:
+            ExitStatus if termination state can be determined, None otherwise.
+        """
+        pass
+
+    @abstractmethod
+    def crash_process(self, uuid: str, signal: str = "KILL") -> None:
+        """
+        Simulate a process crash by sending a signal without performing any cleanup.
 
         Unlike kill_process, this method only sends the kill signal to the remote
         process without waiting for termination or cleaning up associated resources
@@ -163,13 +191,14 @@ class ProcessLifetimeManager(ABC):
 
         Args:
             uuid: Process UUID to crash
+            signal: Signal to send to simulate crash
         """
         pass
 
     @abstractmethod
     def kill_processes(
         self, uuids: List[str], process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill multiple processes by their UUIDs in role-based shutdown order.
 
@@ -185,7 +214,7 @@ class ProcessLifetimeManager(ABC):
                             timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes. None indicates
+            Dictionary mapping process UUIDs to their exit statuses. None indicates
             exit code could not be determined.
         """
         pass
@@ -193,7 +222,7 @@ class ProcessLifetimeManager(ABC):
     @abstractmethod
     def kill_all_processes(
         self, process_timeouts: Optional[Dict[str, float]] = None
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all managed processes and clean up resources.
 
@@ -205,7 +234,7 @@ class ProcessLifetimeManager(ABC):
                               If not specified a default timeout will be used for all processes.
 
         Returns:
-            Dictionary mapping process UUIDs to their exit codes (None if not determined)
+            Dictionary mapping process UUIDs to their exit statuses (None if not determined)
         """
         pass
 
@@ -215,7 +244,7 @@ class ProcessLifetimeManager(ABC):
         role: str,
         candidate_uuids: List[str],
         process_timeouts: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Optional[int]]:
+    ) -> Dict[str, Optional[ExitStatus]]:
         """
         Kill all processes with the specified role from candidate UUID list.
 
@@ -229,7 +258,7 @@ class ProcessLifetimeManager(ABC):
                             in seconds. Uses default timeout for unmapped UUIDs.
 
         Returns:
-            Dictionary mapping terminated process UUIDs to their exit codes.
+            Dictionary mapping terminated process UUIDs to their exit statuses.
             Only includes processes matching the specified role.
         """
         pass

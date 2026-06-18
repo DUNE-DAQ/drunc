@@ -19,6 +19,7 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 
@@ -55,8 +56,8 @@ class SSHProcessManager(ProcessManager):
             logger=self.log,
             on_process_exit=self._on_ssh_process_exit,
         )
-        # stores the exit codes for all dead processes by uuid
-        self.archived_exit_codes: dict[str, int] = {}
+        # stores the exit statuses for all dead processes by uuid
+        self.archived_exit_statuses: dict[str, ExitStatus] = {}
 
     def _build_process_instance(
         self,
@@ -105,7 +106,10 @@ class SSHProcessManager(ProcessManager):
         return process_timeouts
 
     def _on_ssh_process_exit(
-        self, uuid: str, exit_code: Optional[int], exception: Optional[Exception]
+        self,
+        uuid: str,
+        exit_status: Optional[ExitStatus],
+        exception: Optional[Exception],
     ) -> None:
         if uuid not in self.boot_request:
             return
@@ -115,16 +119,23 @@ class SSHProcessManager(ProcessManager):
                 f"Process with UUID {uuid} threw an exception when we tried to kill it: {exception!s}"
             )
 
-        if exit_code is None:
+        if exit_status is None:
             self.log.error(
                 f"Process with UUID {uuid} is still running but on_ssh_process_exit was called."
             )
             return
         else:
-            self.log.debug(f"Process with UUID {uuid} exited with code {exit_code}.")
+            self.log.debug(
+                f"Process with UUID {uuid} exited with status {exit_status!r} triggering on_ssh_process_exit."
+            )
 
-        if uuid not in self.archived_exit_codes:
-            self.archived_exit_codes[uuid] = exit_code
+        # Processes killed cleanly via the kill endpoint will already
+        # have their exit code and dead status recorded, so there is no benefit from
+        # overwriting it asynchronously here. This is only used to
+        # record exit codes for processes that were killed unexpectedly
+        # (e.g. due to a crash or external kill signal)
+        if uuid not in self.archived_exit_statuses:
+            self.archived_exit_statuses[uuid] = exit_status
         if uuid not in self.expected_dead_applications:
             self.add_process_to_expected_dead_processes(uuid)
 
@@ -133,7 +144,12 @@ class SSHProcessManager(ProcessManager):
         session = boot_req.process_description.metadata.session
         user = boot_req.process_description.metadata.user
 
-        self.notify_join(name=name, session=session, user=user, exit_code=exit_code)
+        self.notify_join(
+            name=name,
+            session=session,
+            user=user,
+            exit_status=self.archived_exit_statuses[uuid],
+        )
 
     def kill_processes(self, uuids: list) -> ProcessInstanceList:
         """
@@ -148,21 +164,27 @@ class SSHProcessManager(ProcessManager):
         Returns:
             ProcessInstanceList containing status of terminated processes
         """
-        # Delegate shutdown to lifetime manager and retrieve exit codes
-        exit_codes = self.ssh_lifetime_manager.kill_processes(
+        # Delegate shutdown to lifetime manager and retrieve exit statuses
+        exit_statuses = self.ssh_lifetime_manager.kill_processes(
             uuids, self._get_process_timeouts(uuids)
         )
 
         for proc_uuid in uuids:
             self.add_process_to_expected_dead_processes(proc_uuid)
-        self.archived_exit_codes.update(exit_codes)
+        for proc_uuid, exit_status in exit_statuses.items():
+            if exit_status is not None:
+                self.archived_exit_statuses[proc_uuid] = exit_status
 
         # Build ProcessInstance objects from termination results
         ret = [
             self._build_process_instance(
                 uuid=uuid,
                 status_code=ProcessInstance.StatusCode.DEAD,
-                return_code=exit_codes.get(uuid),
+                return_code=(
+                    exit_statuses[uuid].get_reported_exit_code()
+                    if exit_statuses.get(uuid) is not None
+                    else None
+                ),
             )
             for uuid in uuids
         ]
@@ -200,8 +222,6 @@ class SSHProcessManager(ProcessManager):
         self.log.info("Terminating")
 
         if self.boot_request:
-            self.log.info("Killing all the known processes before exiting")
-
             # Build query to match all processes
             query = ProcessQuery(names=[".*"])
             uuids = ProcessManager._match_processes_against_query(
@@ -296,9 +316,9 @@ class SSHProcessManager(ProcessManager):
                 flag=ResponseFlag.UNHANDLED_EXCEPTION_THROWN,
             )
 
-    def notify_join(self, name, session, user, exit_code):
+    def notify_join(self, name, session, user, exit_status: ExitStatus):
         self.log.debug(f"{self.name} sending broadcast after ssh process exit")
-        end_str = f"Process '{name}' (session: '{session}', user: '{user}') process exited with exit code {exit_code}"
+        end_str = exit_status.get_process_manager_log_message(name, session, user)
         self.log.info(end_str)
         self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
@@ -370,12 +390,14 @@ class SSHProcessManager(ProcessManager):
 
         # Query current process status
         alive = self.ssh_lifetime_manager.is_process_alive(uuid)
-        return_code = self.ssh_lifetime_manager.pop_early_exit_code(uuid)
+        return_status = self.ssh_lifetime_manager.pop_early_exit_status(uuid)
 
         # Archive exit code if process exited early
-        if return_code is not None:
-            self.log.debug(f"Process {uuid} exited early with exit code: {return_code}")
-            self.archived_exit_codes[uuid] = return_code
+        if return_status is not None:
+            self.log.debug(
+                f"Process {uuid} exited early with exit status: {return_status!r}"
+            )
+            self.archived_exit_statuses[uuid] = return_status
 
         # Determine status code based on liveness
         status_code = (
@@ -388,7 +410,11 @@ class SSHProcessManager(ProcessManager):
         pi = self._build_process_instance(
             uuid=uuid,
             status_code=status_code,
-            return_code=return_code,
+            return_code=(
+                return_status.get_reported_exit_code()
+                if return_status is not None
+                else None
+            ),
         )
 
         return pi
@@ -443,13 +469,13 @@ class SSHProcessManager(ProcessManager):
                     ret += [pi]
                     continue
 
-                exit_code = self.archived_exit_codes.get(proc_uuid, None)
+                exit_status = self.archived_exit_statuses.get(proc_uuid, None)
 
-                if exit_code is not None:
+                if exit_status is not None:
                     pi = self._build_process_instance(
                         uuid=proc_uuid,
                         status_code=ProcessInstance.StatusCode.DEAD,
-                        return_code=exit_code,
+                        return_code=exit_status.get_reported_exit_code(),
                     )
                 else:
                     pi = self._build_process_instance(
@@ -501,9 +527,11 @@ class SSHProcessManager(ProcessManager):
         # reported as unexpectedly dead
         self.add_process_to_expected_dead_processes(uuid)
 
-        self.archived_exit_codes[uuid] = self.ssh_lifetime_manager.kill_process(
+        exit_status = self.ssh_lifetime_manager.kill_process(
             uuid, self.configuration.data.kill_timeout
         )
+        if exit_status is not None:
+            self.archived_exit_statuses[uuid] = exit_status
 
         del self.boot_request[uuid]
 
@@ -512,7 +540,7 @@ class SSHProcessManager(ProcessManager):
         # Remove the application from the list of dead applications
         self.remove_process_from_expected_dead_processes(uuid)
 
-        del self.archived_exit_codes[uuid]
+        self.archived_exit_statuses.pop(uuid, None)
         del uuid
         del same_uuid_br
         del same_uuid
@@ -582,7 +610,7 @@ class SSHProcessManager(ProcessManager):
             self.log.info(
                 f"Simulating crash of process {this_uuid} (sending SIGKILL, no cleanup)."
             )
-            self.ssh_lifetime_manager.crash_process(this_uuid)
+            self.ssh_lifetime_manager.crash_process(this_uuid, signal="KILL")
 
         ret = [
             self._build_process_instance(
@@ -605,7 +633,7 @@ class SSHProcessManager(ProcessManager):
 
         Matches processes against the query, checks each for liveness via the
         SSH lifetime manager, and removes any dead ones from boot_request and
-        archived_exit_codes. Only dead processes are affected by this command.
+        archived_exit_statuses. Only dead processes are affected by this command.
 
         Args:
             query: ProcessQuery specifying which processes to consider for flushing.
@@ -649,12 +677,16 @@ class SSHProcessManager(ProcessManager):
                     )
                     continue
 
-                return_code = self.archived_exit_codes.pop(proc_uuid, None)
+                exit_status = self.archived_exit_statuses.pop(proc_uuid, None)
 
                 pi = self._build_process_instance(
                     uuid=proc_uuid,
                     status_code=ProcessInstance.StatusCode.DEAD,
-                    return_code=return_code,
+                    return_code=(
+                        exit_status.get_reported_exit_code()
+                        if exit_status is not None
+                        else None
+                    ),
                 )
 
                 del self.boot_request[proc_uuid]
@@ -663,10 +695,13 @@ class SSHProcessManager(ProcessManager):
                     proc_uuid, self.configuration.data.kill_timeout
                 )
 
+                pi_return_code = (
+                    pi.return_code if pi.HasField("return_code") else "NONE"
+                )
                 self.log.info(
                     f"Flushed dead process {proc_uuid} "
                     f"(name: {pi.process_description.metadata.name}, "
-                    f"exit code: {return_code})."
+                    f"exit code: {pi_return_code})."
                 )
                 flushed.append(pi)
 

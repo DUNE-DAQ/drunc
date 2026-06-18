@@ -8,6 +8,7 @@ from drunc.grpc_testing_tools.connection_utils import wait_for
 from tests.processes.test_ssh_process_lifetime_manager_common import (
     boot_processes_and_kill_individually,
     boot_processes_and_terminate_all_same_role,
+    capture_process_pid_snapshots,
     create_boot_request,
     verify_all_processes_alive,
     verify_all_processes_dead,
@@ -39,14 +40,18 @@ def test_ssh_terminate_all_same_role_forked(ssh_manager_forked):
     boot_processes_and_terminate_all_same_role(ssh_manager_forked, Path(__file__))
 
 
-def boot_processes_and_terminate_all_different_role_forked(test_file_path):
+def boot_processes_and_terminate_all_different_role_flat_forked(
+    test_file_path, process_configs_flat
+):
     """
-    Execute SSH processes with different roles via the forked manager and verify
-    priority-based termination order.
+    Execute SSH processes with different roles (flat structure) via the forked manager
+    and verify priority-based termination order.
+
+    Uses flat process configurations with termination order enforcement via callbacks.
 
     Args:
-        ssh_manager_forked: Forked SSH process lifetime manager instance
         test_file_path: Path to the test file (used to locate simple_process.py)
+        process_configs_flat: Fixture providing flat process configurations
     """
     import threading
     import time
@@ -63,23 +68,7 @@ def boot_processes_and_terminate_all_different_role_forked(test_file_path):
         termination_times: dict = {}
         callback_events: dict = {}
 
-        process_configs = [
-            {
-                "name": "test_process_app_1",
-                "role": "application",
-                "tree_id": "this.isan.application",
-            },
-            {
-                "name": "test_process_app_2",
-                "role": "application",
-                "tree_id": "this.isan.application",
-            },
-            {
-                "name": "test_process_segment",
-                "role": "segment-controller",
-                "tree_id": "thisisa.segment-controller",
-            },
-        ]
+        process_configs = process_configs_flat
 
         process_uuids = []
         process_info = {}
@@ -137,6 +126,8 @@ def boot_processes_and_terminate_all_different_role_forked(test_file_path):
             verify_all_processes_alive(manager, process_uuids, len(process_configs))
             verify_log_output(manager, process_uuids, process_info)
 
+            pid_snapshots = capture_process_pid_snapshots(manager, process_uuids)
+
             print("\n=== Terminating all processes (role-based shutdown, forked) ===")
             exit_codes = manager.kill_processes(
                 process_uuids,
@@ -159,31 +150,195 @@ def boot_processes_and_terminate_all_different_role_forked(test_file_path):
             app_processes = [
                 u for u in process_uuids if process_info[u]["role"] == "application"
             ]
-            segment_processes = [
+            infra_processes = [
                 u
                 for u in process_uuids
-                if process_info[u]["role"] == "segment-controller"
+                if process_info[u]["role"] == "infrastructure-applications"
             ]
 
             latest_app = max(termination_times[u] for u in app_processes)
-            earliest_segment = min(termination_times[u] for u in segment_processes)
+            earliest_infra = min(termination_times[u] for u in infra_processes)
 
-            print(f"Latest 'application' callback:        {latest_app:.6f}")
-            print(f"Earliest 'segment-controller' callback: {earliest_segment:.6f}")
+            print(f"Latest 'application' callback:              {latest_app:.6f}")
+            print(
+                f"Earliest 'infrastructure-applications' callback: {earliest_infra:.6f}"
+            )
 
-            assert latest_app <= earliest_segment, (
-                f"Application processes should terminate before segment-controller "
-                f"(delta: {earliest_segment - latest_app:.6f}s)"
+            assert latest_app <= earliest_infra, (
+                f"Application processes should terminate before infrastructure-applications "
+                f"(delta: {earliest_infra - latest_app:.6f}s)"
             )
             print(
                 "✓ Role-based termination order verified via callbacks: "
-                "'application' before 'segment-controller'"
+                "'application' before 'infrastructure-applications'"
             )
 
-            verify_cleanup_complete(manager)
+            verify_cleanup_complete(manager, pid_snapshots=pid_snapshots)
 
         finally:
             manager.shutdown()
+
+
+def test_ssh_terminate_all_different_role_flat_forked(process_configs_flat):
+    """
+    Test priority-based termination of flat-structure processes using the forked manager.
+
+    Executes processes with varying role priorities, verifies callback-based
+    termination ordering, and confirms cleanup.
+    """
+    boot_processes_and_terminate_all_different_role_flat_forked(
+        Path(__file__), process_configs_flat
+    )
+
+
+def boot_processes_and_terminate_all_different_role_deep_nested_forked(
+    test_file_path, process_configs_deep_nested
+):
+    """
+    Execute SSH processes with deeply nested tree_ids via the forked manager and verify
+    priority-based termination order.
+
+    Tests that the role-based shutdown mechanism correctly handles applications
+    at arbitrary depth under "0." prefix, terminating them before
+    infrastructure-applications processes.
+
+    Args:
+        test_file_path: Path to the test file (used to locate simple_process.py)
+        process_configs_deep_nested: Fixture providing deep nested process configurations
+    """
+    import threading
+    import time
+
+    from drunc.processes.ssh_process_lifetime_manager_from_forked_process import (
+        SSHProcessLifetimeManagerShellOnForkedProcess,
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        log_dir = Path(temp_dir)
+
+        termination_times: dict = {}
+        callback_events: dict = {}
+
+        process_configs = process_configs_deep_nested
+
+        process_uuids = []
+        process_info = {}
+
+        callback_lock = threading.Lock()
+
+        def on_exit(cb_uuid: str, exit_code, exception):
+            with callback_lock:
+                termination_times[cb_uuid] = time.monotonic()
+            if cb_uuid in callback_events:
+                callback_events[cb_uuid].set()
+
+        manager = SSHProcessLifetimeManagerShellOnForkedProcess(
+            disable_localhost_host_key_check=True,
+            on_process_exit=on_exit,
+        )
+
+        try:
+            print("\n=== Executing deeply nested processes (forked) ===")
+            for config in process_configs:
+                process_name = config["name"]
+                role = config["role"]
+                log_file = str(log_dir / f"{process_name}.log")
+                process_uuid = str(uuid.uuid4())
+                process_uuids.append(process_uuid)
+                callback_events[process_uuid] = threading.Event()
+
+                boot_request = create_boot_request(
+                    process_name=process_name,
+                    tree_id=config["tree_id"],
+                    log_file=log_file,
+                    test_file_path=test_file_path,
+                )
+
+                manager.start_process(uuid=process_uuid, boot_request=boot_request)
+
+                process_info[process_uuid] = {
+                    "name": process_name,
+                    "role": role,
+                    "log_file": log_file,
+                }
+
+                print(
+                    f"Executed {process_name} (tree_id={config['tree_id']!r}) "
+                    f"with UUID {process_uuid} and role '{role}'"
+                )
+
+            verify_all_processes_alive(manager, process_uuids, len(process_configs))
+            verify_log_output(manager, process_uuids, process_info)
+
+            pid_snapshots = capture_process_pid_snapshots(manager, process_uuids)
+
+            print(
+                "\n=== Terminating all processes "
+                "(role-based shutdown, deep nested, forked) ==="
+            )
+            exit_codes = manager.kill_processes(
+                process_uuids,
+                process_timeouts={u: 10.0 for u in process_uuids},
+            )
+
+            for process_uuid in process_uuids:
+                fired = callback_events[process_uuid].wait(timeout=15.0)
+                assert fired, (
+                    f"on_process_exit callback never fired for "
+                    f"{process_info[process_uuid]['name']}"
+                )
+
+            verify_all_processes_dead(manager, process_uuids, len(process_configs))
+            verify_exit_codes(exit_codes, process_uuids, process_info)
+
+            print("\n=== Verifying termination order (deep nested, forked) ===")
+
+            app_processes = [
+                u for u in process_uuids if process_info[u]["role"] == "application"
+            ]
+            infra_processes = [
+                u
+                for u in process_uuids
+                if process_info[u]["role"] == "infrastructure-applications"
+            ]
+
+            latest_app = max(termination_times[u] for u in app_processes)
+            earliest_infra = min(termination_times[u] for u in infra_processes)
+
+            print(f"Latest 'application' callback:              {latest_app:.6f}")
+            print(
+                f"Earliest 'infrastructure-applications' callback: {earliest_infra:.6f}"
+            )
+
+            assert latest_app <= earliest_infra, (
+                f"Deeply nested application processes should terminate before "
+                f"infrastructure-applications "
+                f"(delta: {earliest_infra - latest_app:.6f}s)"
+            )
+            print(
+                "✓ Role-based termination order verified (deep nested, forked): "
+                "'application' before 'infrastructure-applications'"
+            )
+
+            verify_cleanup_complete(manager, pid_snapshots=pid_snapshots)
+
+        finally:
+            manager.shutdown()
+
+
+def test_ssh_terminate_all_different_role_deep_nested_forked(
+    process_configs_deep_nested,
+):
+    """
+    Test role classification and priority-based termination for deeply nested processes
+    using the forked manager.
+
+    Tests that applications at arbitrary depth under "0." prefix are correctly
+    handled and terminate before infrastructure-applications processes.
+    """
+    boot_processes_and_terminate_all_different_role_deep_nested_forked(
+        Path(__file__), process_configs_deep_nested
+    )
 
 
 def test_forked_manager_worker_process_is_alive(ssh_manager_forked):
@@ -264,7 +419,7 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
 
         boot_request = create_boot_request(
             process_name="callback_test_process",
-            tree_id="this.isan.application",
+            tree_id="0.1.2",
             log_file=log_file,
             test_file_path=Path(__file__),
         )
@@ -280,10 +435,12 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
         )
         assert process_alive, "Process should be alive before kill"
 
+        pid_snapshots = capture_process_pid_snapshots(manager, [process_uuid])
+
         manager.kill_process(process_uuid, timeout=10.0)
 
         # Allow time for the exit event to propagate from child to parent.
-        callback_fired = callback_event.wait(timeout=10.0)
+        callback_fired = callback_event.wait(timeout=15.0)
 
         assert callback_fired, (
             "on_process_exit callback was not invoked within the timeout after killing the process"
@@ -294,5 +451,7 @@ def test_forked_manager_on_process_exit_callback(tmp_path):
         assert callback_results.get("exit_code") is not None, (
             "Callback should receive a non-None exit code"
         )
+
+        verify_cleanup_complete(manager, pid_snapshots=pid_snapshots)
     finally:
         manager.shutdown()

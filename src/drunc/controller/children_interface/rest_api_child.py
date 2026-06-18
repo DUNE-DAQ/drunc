@@ -31,6 +31,7 @@ from druncschema.request_response_pb2 import ResponseFlag
 from flask import Flask, request
 from flask_restful import Api
 
+from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.controller.children_interface.client_side_state import ClientSideState
 from drunc.controller.exceptions import ChildError, ExpertCommandException
@@ -40,7 +41,12 @@ from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
-from drunc.utils.utils import ControlType, get_logger, get_new_port
+from drunc.utils.utils import (
+    ControlType,
+    get_logger,
+    get_new_port,
+    resolve_localhost_and_127_ip_to_network_ip,
+)
 
 
 class ResponseTimeout(ChildError):
@@ -365,12 +371,13 @@ class RESTAPIChildNode(ChildNode):
         configuration: RESTAPIChildNodeConfHandler,
         uri: str,
         fsm_configuration: FSMConfHandler,
+        connectivity_service=None,
     ):
         super().__init__(name, ControlType.REST_API)
-
-        self.state = ClientSideState()
+        self._state = ClientSideState()
         self.configuration = configuration
         self.fsm_configuration = fsm_configuration
+        self.connectivity_service = connectivity_service
         if fsm_configuration:
             fsmch = FSMConfHandler(fsm_configuration)
             self.fsm = FSM(conf=fsmch)
@@ -400,6 +407,10 @@ class RESTAPIChildNode(ChildNode):
 
         self.response_listener.register(self.name, self.commander)
 
+    @property
+    def state(self) -> ClientSideState:
+        return self._state
+
     def __str__(self) -> str:
         return f"'{self.name}@{self.app_host}:{self.app_port}' (type {self.node_type})"
 
@@ -408,6 +419,83 @@ class RESTAPIChildNode(ChildNode):
 
     def terminate(self) -> None:
         pass
+
+    def _resolve_rest_uri_from_connectivity_service(self) -> str | None:
+        """Resolve REST child control URI with a single quick connectivity lookup."""
+        if not self.connectivity_service:
+            return None
+
+        try:
+            uris = self.connectivity_service.resolve(
+                self.name + "_control",
+                "RunControlMessage",
+                ntries=1,
+            )
+        except ApplicationLookupUnsuccessful as e:
+            self.log.warning(
+                f"Could not resolve REST URI for '{self.name}' from connectivity service: {e}"
+            )
+            return None
+        except Exception as e:
+            self.log.warning(
+                f"Unexpected error while resolving REST URI for '{self.name}': {e}"
+            )
+            return None
+
+        if len(uris) != 1:
+            self.log.warning(
+                f"Could not resolve unique REST URI for '{self.name}', got response {uris}"
+            )
+            return None
+
+        uri = uris[0].get("uri", "")
+        if not isinstance(uri, str) or not uri.startswith("rest://"):
+            self.log.warning(
+                f"Connectivity service reported non-REST URI for '{self.name}': {uri}"
+            )
+            return None
+
+        return resolve_localhost_and_127_ip_to_network_ip(uri.removeprefix("rest://"))
+
+    def _refresh_endpoint_from_connectivity_service(self) -> bool:
+        if not self.connectivity_service:
+            return False
+
+        uri = self._resolve_rest_uri_from_connectivity_service()
+        if not uri:
+            return False
+
+        if uri == f"{self.app_host}:{self.app_port}":
+            return False
+
+        try:
+            app_host, app_port_str = uri.split(":")
+            app_port = int(app_port_str)
+        except (TypeError, ValueError) as e:
+            self.log.warning(
+                f"Invalid REST endpoint '{uri}' for '{self.name}' from connectivity service: {e}"
+            )
+            return False
+
+        self.log.info(
+            f"Updating REST endpoint for '{self.name}' from {self.app_host}:{self.app_port} to {app_host}:{app_port}"
+        )
+        self.app_host = app_host
+        self.app_port = app_port
+        self.commander.app_host = app_host
+        self.commander.app_port = app_port
+        self.commander.app_url = f"http://{app_host}:{app_port}/command"
+        return True
+
+    def check_connection(self) -> bool:
+        if bool(self.commander.ping()):
+            return True
+
+        # REST apps can restart on a different dynamic port; refresh endpoint and retry.
+        if not self._refresh_endpoint_from_connectivity_service():
+            return False
+
+        return bool(self.commander.ping())
 
     def status(
         self,
@@ -420,8 +508,8 @@ class RESTAPIChildNode(ChildNode):
             sub_state=(
                 "idle" if not self.state.get_executing_command() else "executing_cmd"
             ),
-            in_error=self.state.in_error() or not self.commander.ping(),
-            included=self.state.included(),
+            in_error=self.state.in_error(),
+            included=self.included,
         )
 
         response = StatusResponse(
@@ -672,8 +760,8 @@ class RESTAPIChildNode(ChildNode):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> IncludeResponse:
-        self.state.include()
         self.included = True
+        self.state.include()
         return IncludeResponse(
             token=None,
             name=self.name,
@@ -687,8 +775,8 @@ class RESTAPIChildNode(ChildNode):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ExcludeResponse:
-        self.state.exclude()
         self.included = False
+        self.state.exclude()
         return ExcludeResponse(
             token=None,
             name=self.name,

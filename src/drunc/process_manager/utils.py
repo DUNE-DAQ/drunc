@@ -5,6 +5,7 @@ from functools import update_wrapper
 
 import click
 from druncschema.process_manager_pb2 import (
+    BootRequest,
     ProcessInstance,
     ProcessInstanceList,
     ProcessQuery,
@@ -18,8 +19,34 @@ from drunc.process_manager.configuration import (
     ProcessManagerTypes,
     get_process_manager_configuration,
 )
+from drunc.processes.process_metadata import ProcessMetadata
 from drunc.utils.configuration import parse_conf_url
 from drunc.utils.utils import now_str
+
+
+def compute_role_from_boot_request(boot_request: BootRequest) -> str:
+    """
+    Determine the process role from a BootRequest.
+
+    Extracts tree_id from the process metadata and checks
+    executable_and_arguments for the drunc-controller executable,
+    then delegates to ProcessMetadata.compute_role_from_tree_id.
+
+    Args:
+        boot_request: The BootRequest describing the process to launch.
+
+    Returns:
+        Role string: "root-controller", "segment-controller", "application",
+                     "infrastructure-applications", or "unknown".
+    """
+    tree_id = boot_request.process_description.metadata.tree_id
+    is_controller = any(
+        e.exec == "drunc-controller"
+        for e in boot_request.process_description.executable_and_arguments
+    )
+    return ProcessMetadata.compute_role_from_tree_id(
+        tree_id, is_controller=is_controller
+    )
 
 
 def generate_process_query(
@@ -149,7 +176,11 @@ def tabulate_process_instance_list(
                 else "[danger]False[/danger]"
             )
             row = [m.session, line, m.user, m.hostname, process.uuid.uuid]
-            row += [alive, f"{process.return_code}"]
+
+            process_return_code = (
+                process.return_code if process.HasField("return_code") else "NONE"
+            )
+            row += [alive, f"{process_return_code}"]
             if show_remote_pid:
                 row += [
                     process.remote_pid
@@ -322,6 +353,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
 
     return pmch.data.type
 
+
 def format_hostname(hostname: str) -> str:
     """
     Format the host name to truly reflect what the host name is, removing any extensions
@@ -351,4 +383,3 @@ def format_hostname(hostname: str) -> str:
         formatted_hostname = hostname[:-2]
 
     return formatted_hostname
-
