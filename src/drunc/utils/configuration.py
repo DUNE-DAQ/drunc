@@ -116,7 +116,6 @@ class _DataTypeName(Protocol):
 
 class _ConfigurationData(Protocol):
     type: _DataTypeName
-    broadcaster: object
     authoriser: object
 
 
@@ -178,14 +177,6 @@ class ConfHandler:
             str: The name of the data type.
         """
         return str(cast(_ConfigurationData, self.get_data()).type._name_)
-
-    def get_data_broadcaster(self) -> object:
-        """Get the broadcaster from the configuration data.
-
-        Returns:
-            Any: The broadcaster object.
-        """
-        return cast(_ConfigurationData, self.get_data()).broadcaster
 
     def get_data_authoriser(self) -> object:
         """Get the authoriser from the configuration data.

@@ -55,9 +55,6 @@ class ConcreteProcessManager(ProcessManager):
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
 
-    def _create_broadcast_service(self, name, session):
-        self.broadcast_service = None
-
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         """
         Returns default not implemented response to indicate communication is working

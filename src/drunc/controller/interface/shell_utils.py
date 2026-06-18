@@ -267,7 +267,6 @@ class StatusTableUpdater(Progress):
 def controller_cleanup_wrapper(ctx):
     def controller_cleanup():
         log = logging.getLogger("controller.shell_utils")
-        # remove the shell from the controller broadcast list
         dead = False
         who = ""
 
@@ -348,8 +347,6 @@ def controller_setup(ctx, controller_address):
         f"{controller_address} is '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
     ctx.get_driver("controller").name = f"{desc.name}.{desc.session}"
-    if desc.HasField("broadcast"):
-        ctx.start_listening_controller(desc.broadcast)
 
     log.debug("Connected to the controller")
 
