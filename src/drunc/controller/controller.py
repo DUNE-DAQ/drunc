@@ -149,14 +149,14 @@ class Controller(ControllerServicer):
             # Remaps the localhost into the correct server
             # and also grabs the correct port from the right environment from the config
 
-            connection_server_config = (
+            connection_server_host = (
                 self.configuration.session.connectivity_service.host
             )
             connection_port = os.getenv("CONNECTION_PORT")
             connection_server = (
                 socket.gethostname()
-                if connection_server_config == "localhost"
-                else connection_server_config
+                if connection_server_host == "localhost"
+                else connection_server_host
             )
             log_init.info(
                 f"Connectivity server {connection_server}:{connection_port} is enabled"

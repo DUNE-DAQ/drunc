@@ -280,6 +280,9 @@ def parent_death_pact(signal=signal.SIGHUP):
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
 
 
+# 777 PERMISSIONS ARE COMPLETELY TEMPORARY
+# An established procedure for multi users will need to be discussed with sysadmins
+# will be removed when done
 def touch_and_chmod(filepath: str, mode=0o777):
     """Makes and sets the permissions of a file.
     This is used to ensure multiuser support when accessing files etc."""

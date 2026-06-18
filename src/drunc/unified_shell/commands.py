@@ -58,6 +58,7 @@ def boot(
         override_logs_boot = obj.override_logs
     else:
         override_logs_boot = override_logs
+    # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
         log.error(
             f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "

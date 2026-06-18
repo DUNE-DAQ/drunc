@@ -144,7 +144,7 @@ class ProcessManagerDriver:
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
         # step 3.5 update localhost mapping
-        session_dal = self.change_localhost(session_dal)
+        session_dal = self.resolve_localhost(session_dal)
 
         # Step 4 - connect to the connection service
         csc, connection_server, connection_port = self._connect_to_service(
@@ -430,7 +430,7 @@ To debug it, close drunc and run the following command:
                 )
                 return
 
-    def change_localhost(self, session_dal):
+    def resolve_localhost(self, session_dal):
         def dal_localhost_mapping(dal_host: str):
             if dal_host != "localhost":
                 return dal_host

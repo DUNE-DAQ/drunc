@@ -49,6 +49,7 @@ def boot(
         ProcessQuery(user=user, session=session_name)
     )
 
+    # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
         click.confirm(
             f"You already have {len(processes.values)} processes running for {session_name}, are you sure you want to boot a session?",
