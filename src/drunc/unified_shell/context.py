@@ -1,8 +1,11 @@
 from collections.abc import Mapping
 from enum import Enum
 
+import grpc
+from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
 
+from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
 
 
@@ -71,6 +74,69 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
 
         token = create_dummy_token_from_uname()
         return token
+
+    def start_listening_pm(self, broadcaster_conf) -> None:
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.utils.configuration import ConfTypes
+
+        bcch = BroadcastClientConfHandler(
+            type=ConfTypes.ProtobufAny,
+            data=broadcaster_conf,
+        )
+        self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
+
+    def start_listening_controller(self, broadcaster_conf) -> None:
+        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
+        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
+        from drunc.utils.configuration import ConfTypes
+
+        bcch = BroadcastClientConfHandler(
+            type=ConfTypes.ProtobufAny,
+            data=broadcaster_conf,
+        )
+        self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
+
+    def get_endpoint_display_host_overrides(self) -> dict[str, str]:
+        """
+        Return a mapping of process name -> preferred display hostname for endpoint
+        rendering in the UI.
+
+        These values are cosmetic only. The controller's advertised endpoint remains
+        the authoritative connect address.
+
+        Returns:
+            dict[str, str]: Mapping from process name to preferred display hostname.
+        """
+        # The PM driver may not be registered if the user connected directly to a
+        # controller without going through the process manager (e.g. standalone boot).
+        # In that case hostname overrides are unavailable and we fall back to
+        # get_hostname_smart in the endpoint rendering path.
+        pm_driver = self.get_driver("process_manager", quiet_fail=True)
+        if not pm_driver:
+            return {}
+
+        if not self.session_name:
+            raise RuntimeError("session name must be set before querying process list")
+        query = ProcessQuery(names=[".*"], session=self.session_name)
+        try:
+            proc_list = pm_driver.ps(query)
+        except (ServerUnreachable, ServerTimeout, grpc.RpcError):
+            return {}
+
+        overrides: dict[str, str] = {}
+
+        for proc in proc_list.values:
+            metadata = proc.process_description.metadata
+            proc_name = getattr(metadata, "name", "")
+            host_name = getattr(metadata, "hostname", "")
+
+            if not proc_name or not host_name:
+                continue
+
+            overrides[proc_name] = host_name
+
+        return overrides
 
     def terminate(self) -> None:
         if self.status_receiver_pm:

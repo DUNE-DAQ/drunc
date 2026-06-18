@@ -38,6 +38,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from drunc.controller.interface.context import ControllerContext
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
@@ -71,7 +72,10 @@ def match_children(
 
 
 def get_status_table(
-    status_response: StatusResponse, describe_response: DescribeResponse
+    status_response: StatusResponse,
+    describe_response: DescribeResponse,
+    display_host_overrides: dict[str, str] | None = None,
+    show_ip_address: bool = False,
 ):
     status = status_response.status
     description = describe_response.description
@@ -90,6 +94,8 @@ def get_status_table(
     t.add_column("In error")
     t.add_column("Included")
     t.add_column("Endpoint")
+    if show_ip_address:
+        t.add_column("IP Address")
 
     def add_status_to_table(
         table: Table,
@@ -102,34 +108,64 @@ def get_status_table(
         if status is None or description is None:
             return
 
-        def update_endpoint(endpoint: str) -> str:
+        def update_endpoint(endpoint: str, proc_name: str) -> tuple[str, str]:
             """
-            Parses endpoint to a human readable hostname
+            Parses endpoint to a human readable hostname.
 
             Args:
-            endpoint: Process URI
+                endpoint: The endpoint to parse
+                proc_name: The name of the process to parse the endpoint for
 
             Returns:
-            str: URI with human readable hostname
+            tuple[str, str]: (display_endpoint, actual_endpoint)
+                display_endpoint: URI with human readable hostname
+                actual_endpoint: raw URI with actual IP/host (empty if same as display)
             """
             if not endpoint:
-                return ""
+                return "", ""
 
-            ip_address = urlparse(endpoint).hostname
-            if not ip_address:
-                return ""
-            resolved_host = get_hostname_smart(ip_address)
-            return endpoint.replace(ip_address, resolved_host)
+            parsed = urlparse(endpoint)
+            raw_host = parsed.hostname
+            if not raw_host:
+                return "", ""
 
-        table.add_row(
+            scheme = parsed.scheme
+            port = parsed.port
+
+            def make_uri(host: str) -> str:
+                uri = f"{scheme}://{host}"
+                if port is not None:
+                    uri = f"{uri}:{port}"
+                return uri
+
+            if display_host_overrides and proc_name in display_host_overrides:
+                display_host = get_hostname_smart(display_host_overrides[proc_name])
+                pretty = make_uri(display_host)
+                if display_host != raw_host:
+                    return pretty, make_uri(raw_host)
+                return pretty, ""
+
+            resolved = get_hostname_smart(raw_host)
+            if resolved != raw_host:
+                return make_uri(resolved), endpoint
+
+            return endpoint, ""
+
+        display_ep, actual_ep = update_endpoint(
+            description.endpoint, status_response.name
+        )
+        row = [
             prefix + status_response.name,
             description.info,
             status.state,
             status.sub_state,
             format_bool(status.in_error, false_is_good=True),
             format_bool(status.included),
-            update_endpoint(description.endpoint),
-        )
+            display_ep,
+        ]
+        if show_ip_address:
+            row.append(actual_ep)
+        table.add_row(*row)
 
         children = match_children(status_response.children, describe_response.children)
         children_list = sorted(list(children.keys()))
@@ -180,6 +216,32 @@ def get_status_table(
     return t
 
 
+def render_status_table(
+    ctx: ControllerContext,
+    target: str = "",
+    execute_along_path: bool = True,
+    execute_on_all_subsequent_children_in_path: bool = True,
+    show_ip_address: bool = False,
+):
+    statuses = ctx.get_driver("controller").status(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    descriptions = ctx.get_driver("controller").describe(
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
+    display_host_overrides = ctx.get_endpoint_display_host_overrides()
+    return get_status_table(
+        statuses,
+        descriptions,
+        display_host_overrides=display_host_overrides,
+        show_ip_address=show_ip_address,
+    )
+
+
 class StatusTableUpdater(Progress):
     def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
         self.ctx = ctx
@@ -195,12 +257,7 @@ class StatusTableUpdater(Progress):
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
     def update_table(self):
-        # The following debug log line will be used in an integration test to validate
-        # that issue 817 does not appear again (rich table overriding the log entries)
-        self.ctx.log.debug("Updating the status table...")
-        statuses = self.ctx.get_driver("controller").status()
-        descriptions = self.ctx.get_driver("controller").describe()
-        self.table = get_status_table(statuses, descriptions)
+        self.table = render_status_table(self.ctx)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
         renderable = Group(self.table, *self.get_renderables())
@@ -686,10 +743,7 @@ def run_one_fsm_command(
     add_to_table(t, result)
     obj.print(t)  # rich tables require console printing
 
-    statuses = obj.get_driver("controller").status()
-    descriptions = obj.get_driver("controller").describe()
-    t = get_status_table(statuses, descriptions)
-    obj.print(t)
+    obj.print(render_status_table(obj))
     obj.print_status_summary()
 
 
@@ -794,20 +848,27 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 @functools.lru_cache(maxsize=4096)
 def get_hostname_smart(ip_or_host: str, timeout_seconds: float = 0.2) -> str:
     """
-    Resolves an IP to a hostname, with optimizations:
+    Resolves an IP or hostname to a human-readable hostname, with optimizations:
     1. Caches all results.
-    2. Immediately skips private/internal IPs (like K8s).
-    3. Uses a short timeout for public IPs.
+    2. Replaces localhost/loopback with the machine's actual hostname.
+    3. Uses a short timeout for reverse DNS lookups on other IPs.
     """
 
     if not ip_or_host:
         return ""
 
+    if ip_or_host == "localhost":
+        return socket.getfqdn()
+
     try:
         ip_address = ipaddress.ip_address(ip_or_host)
     except ValueError:
-        return ip_or_host
-    # If public IP, try to resolve it.
+        fqdn = socket.getfqdn(ip_or_host)
+        return fqdn if fqdn else ip_or_host
+
+    if ip_address.is_loopback:
+        return socket.getfqdn()
+
     original_timeout = socket.getdefaulttimeout()
     try:
         socket.setdefaulttimeout(timeout_seconds)
