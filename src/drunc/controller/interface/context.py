@@ -30,12 +30,6 @@ class ControllerContext(ShellContext):  # boilerplatefest
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
 
-    def start_listening_controller(self, broadcaster_conf):
-        bcch = BroadcastClientConfHandler(
-            data=broadcaster_conf, type=ConfTypes.ProtobufAny
-        )
-        self.status_receiver = BroadcastHandler(broadcast_configuration=bcch)
-
     def get_endpoint_display_host_overrides(self) -> dict[str, str]:
         """
         Return display hostname overrides for status-table rendering.
