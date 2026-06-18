@@ -66,36 +66,11 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             self._token,
         )
 
-        # This will raise an exception if the driver already exists
-        # self.set_driver("controller", driver)
-
     def create_token(self, **kwargs) -> Token:
         from drunc.utils.shell_utils import create_dummy_token_from_uname
 
         token = create_dummy_token_from_uname()
         return token
-
-    def start_listening_pm(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
-
-        bcch = BroadcastClientConfHandler(
-            type=ConfTypes.ProtobufAny,
-            data=broadcaster_conf,
-        )
-        self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
-
-    def start_listening_controller(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
-
-        bcch = BroadcastClientConfHandler(
-            type=ConfTypes.ProtobufAny,
-            data=broadcaster_conf,
-        )
-        self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
 
     def terminate(self) -> None:
         if self.status_receiver_pm:
