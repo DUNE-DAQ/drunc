@@ -46,7 +46,11 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         """
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
-        self.log = logger if logger else get_logger(__name__)
+        self.log = (
+            logger
+            if logger
+            else get_logger("ssh_process_lifetime_manager", rich_handler=True)
+        )
         self.log.warning(
             "The paramiko-based SSH process manager is NOT actively maintatined. Consider using the shell-based SSH process manager instead."
         )

@@ -229,7 +229,11 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
                 The exception is reconstructed as a RuntimeError from the
                 serialised message forwarded by the child process.
         """
-        self.log = logger if logger is not None else get_logger(__name__)
+        self.log = (
+            logger
+            if logger is not None
+            else get_logger("ssh_process_lifetime_manager", rich_handler=True)
+        )
         self._on_process_exit = on_process_exit
 
         # Queues for IPC between parent and child.
