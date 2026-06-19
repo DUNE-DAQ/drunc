@@ -64,3 +64,14 @@ jobs:
           else
             echo "No integtest bundle log file found under /tmp"
           fi
+
+      - name: Direct pytest on failure (for diagnostics)
+        if: failure()
+        run: |
+          cd nightly/NFD_DEV* || true
+          source env.sh
+          echo "=== Relevant environment ==="
+          env | grep -E 'DAQSYSTEMTEST|DRUNC|DBT|DUNEDAQ|PYTHONPATH|PATH|USER' | sort
+          echo "=== Direct pytest run ==="
+          python -m pytest -s -v --tb=long \
+            "${DAQSYSTEMTEST_SHARE}/integtest/small_footprint_quick_test.py" 2>&1 || true
