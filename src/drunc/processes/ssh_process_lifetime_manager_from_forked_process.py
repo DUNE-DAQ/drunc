@@ -232,7 +232,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         self.log = (
             logger
             if logger is not None
-            else get_logger("ssh_process_lifetime_manager", rich_handler=True)
+            else get_logger("ssh_process_lifetime_manager_forked", rich_handler=True)
         )
         self._on_process_exit = on_process_exit
 

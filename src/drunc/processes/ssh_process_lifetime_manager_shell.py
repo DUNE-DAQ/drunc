@@ -321,7 +321,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self.log = (
             logger
             if logger
-            else get_logger("ssh_process_lifetime_manager", rich_handler=True)
+            else get_logger("ssh_process_lifetime_manager_shell", rich_handler=True)
         )
         self._on_process_exit = on_process_exit
 

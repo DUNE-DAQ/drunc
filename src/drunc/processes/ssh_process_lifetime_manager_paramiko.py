@@ -49,7 +49,7 @@ class SSHProcessLifetimeManagerParamiko(ProcessLifetimeManager):
         self.log = (
             logger
             if logger
-            else get_logger("ssh_process_lifetime_manager", rich_handler=True)
+            else get_logger("ssh_process_lifetime_manager_paramiko", rich_handler=True)
         )
         self.log.warning(
             "The paramiko-based SSH process manager is NOT actively maintatined. Consider using the shell-based SSH process manager instead."
