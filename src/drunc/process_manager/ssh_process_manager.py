@@ -3,8 +3,6 @@ import threading
 import uuid
 from typing import List, Optional
 
-from druncschema.broadcast_pb2 import BroadcastType
-from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -226,8 +224,6 @@ class SSHProcessManager(ProcessManager):
         self.log.info("Terminating")
 
         if self.boot_request:
-            self.log.info("Killing all the known processes before exiting")
-
             # Build query to match all processes
             query = ProcessQuery(names=[".*"])
             uuids = ProcessManager._match_processes_against_query(
@@ -323,10 +319,8 @@ class SSHProcessManager(ProcessManager):
             )
 
     def notify_join(self, name, session, user, exit_status: ExitStatus):
-        self.log.debug(f"{self.name} sending broadcast after ssh process exit")
         end_str = exit_status.get_process_manager_log_message(name, session, user)
         self.log.info(end_str)
-        self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
 
     def __boot(self, boot_request: BootRequest, uuid: str) -> ProcessInstance:
         """
@@ -730,10 +724,13 @@ class SSHProcessManager(ProcessManager):
                     proc_uuid, self.configuration.data.kill_timeout
                 )
 
+                pi_return_code = (
+                    pi.return_code if pi.HasField("return_code") else "NONE"
+                )
                 self.log.info(
                     f"Flushed dead process {proc_uuid} "
                     f"(name: {pi.process_description.metadata.name}, "
-                    f"exit code: {pi.return_code})."
+                    f"exit code: {pi_return_code})."
                 )
                 flushed.append(pi)
 
