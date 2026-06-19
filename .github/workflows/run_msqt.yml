@@ -53,3 +53,14 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           daqsystemtest_integtest_bundle.sh --stop-on-failure -k small_footprint_quick_test.py
+
+      - name: Print test log
+        if: always()
+        run: |
+          log=$(find /tmp -name "dunedaq_integtest_bundle_*.log" 2>/dev/null | sort | tail -1)
+          if [[ -n "$log" ]]; then
+            echo "=== Test log: $log ==="
+            cat "$log"
+          else
+            echo "No integtest bundle log file found under /tmp"
+          fi
