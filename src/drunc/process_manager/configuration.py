@@ -15,7 +15,7 @@ from opmonlib.utils import parse_opmon_conf
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
     import conffwk
@@ -104,6 +104,9 @@ class ProcessManagerConfHandler(ConfHandler):
                     self.opmon_conf,
                 )
             else:
+                # ensures users can access the opmon files (permissions)
+                # This is for the PM opmon file
+                touch_and_chmod(self.opmon_conf.path)
                 new_data.opmon_publisher = OpMonPublisher(
                     conf=self.opmon_conf, rich_handler=True
                 )
