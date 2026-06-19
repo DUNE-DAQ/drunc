@@ -13,7 +13,7 @@ class BroadcastHandler:
         self.configuration = broadcast_configuration
         self.implementation = None
 
-        match self.configuration.data.type:
+        match self.configuration.type:
             # Being a bit sloppy here, having a Kafka sender doesn't mean we want to dump everything to stdout
             # There could be cases where we want to do other things.
             # For now, 1 server type <-> 1 client type...

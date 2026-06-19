@@ -3,9 +3,8 @@
 import json
 import logging
 import os
-from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Generic, Type, TypeVar, cast
+from typing import cast
 
 import conffwk
 
@@ -112,46 +111,15 @@ class OKSKey:
         self.session = session
 
 
-class ConfData(ABC):
-    """Base class for configuration wrapper objects that populate from raw sources."""
-
-    @abstractmethod
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from a dictionary (JSON source).
-
-        Args:
-            data: Dictionary data from JSON configuration file.
-
-        Raises:
-            ConfTypeNotSupported: If this handler doesn't support JSON sources.
-        """
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
-
-    @abstractmethod
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from a Protobuf Any message.
-
-        Args:
-            pbany_data: Protobuf Any message.
-
-        Raises:
-            ConfTypeNotSupported: If this handler doesn't support Protobuf sources.
-        """
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-ConfDataType = TypeVar("ConfDataType", bound=ConfData)
-
-
-class ConfHandler(Generic[ConfDataType]):
+class ConfHandler:
     """Handler for loading and parsing DRUNC configurations.
 
-    Generic over a ConfDataType that wraps the parsed configuration.
     Supports multiple configuration sources via from_* classmethods.
+    Subclasses override populate_from_dict / populate_from_pbany to handle
+    JSON and protobuf sources, and _post_process_oks to handle OKS/pyobject
+    sources (via self._raw_data).
     """
 
-    confdata_cls: Type[ConfDataType]
-    data: ConfDataType
     type: ConfTypes
     oks_key: OKSKey | None
     class_name: str
@@ -164,43 +132,34 @@ class ConfHandler(Generic[ConfDataType]):
     initial_data: object
     oks_path: str
     db: object
+    _raw_data: object  # raw OKS/pyobject data, available during _post_process_oks
 
     @classmethod
     def from_pyobject(
         cls, data: object, session_name: str | None = None
-    ) -> "ConfHandler[ConfDataType]":
-        instance: ConfHandler[ConfDataType] = cast(
-            ConfHandler[ConfDataType], cls.__new__(cls)
-        )
+    ) -> "ConfHandler":
+        instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
-        instance.data = cast(ConfDataType, data)
+        instance._raw_data = data
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
 
     @classmethod
-    def from_pbany(
-        cls, data: object, session_name: str | None = None
-    ) -> "ConfHandler[ConfDataType]":
-        instance: ConfHandler[ConfDataType] = cast(
-            ConfHandler[ConfDataType], cls.__new__(cls)
-        )
+    def from_pbany(cls, data: object, session_name: str | None = None) -> "ConfHandler":
+        instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
-        instance.data = cls.confdata_cls()
-        instance.data.populate_from_pbany(data)
+        instance._raw_data = None
+        instance.populate_from_pbany(data)
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
 
     @classmethod
-    def from_json(
-        cls, path: str, session_name: str | None = None
-    ) -> "ConfHandler[ConfDataType]":
-        instance: ConfHandler[ConfDataType] = cast(
-            ConfHandler[ConfDataType], cls.__new__(cls)
-        )
+    def from_json(cls, path: str, session_name: str | None = None) -> "ConfHandler":
+        instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = path
         resolved = expand_path(path, True)
@@ -208,8 +167,8 @@ class ConfHandler(Generic[ConfDataType]):
             raise DruncSetupException(f"Location {resolved} ({path}) is empty!")
         with open(resolved) as f:
             json_data = json.load(f)
-        instance.data = cls.confdata_cls()
-        instance.data.populate_from_dict(cast(dict[str, object], json_data))
+        instance._raw_data = None
+        instance.populate_from_dict(cast(dict[str, object], json_data))
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
@@ -220,17 +179,29 @@ class ConfHandler(Generic[ConfDataType]):
         url: str,
         oks_key: OKSKey,
         session_name: str | None = None,
-    ) -> "ConfHandler[ConfDataType]":
-        instance: ConfHandler[ConfDataType] = cast(
-            ConfHandler[ConfDataType], cls.__new__(cls)
-        )
+    ) -> "ConfHandler":
+        instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = url
         instance.oks_key = oks_key
-        instance.data = cast(ConfDataType, instance._parse_oks_file(url))
+        instance._raw_data = instance._parse_oks_file(url)
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        """Populate from a dictionary (JSON source).
+
+        Override in subclasses that support JSON configuration.
+        """
+        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
+
+    def populate_from_pbany(self, pbany_data: object) -> None:
+        """Populate from a Protobuf Any message.
+
+        Override in subclasses that support protobuf configuration.
+        """
+        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
 
     def _init_common(self, session_name: str | None = None) -> None:
         """Initialize common attributes.
@@ -291,5 +262,6 @@ class ConfHandler(Generic[ConfDataType]):
         """Post-process configuration after loading.
 
         Override in subclasses to perform custom initialization.
+        For OKS/pyobject sources, self._raw_data holds the raw object.
         """
         pass

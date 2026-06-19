@@ -11,10 +11,7 @@ from drunc.grpc_settings import (
     MANAGER_SERVER_GRPC_CONFIG,
     MANAGER_SERVER_GRPC_MAX_WORKERS,
 )
-from drunc.session_manager.configuration import (
-    SessionManagerConfData,
-    SessionManagerConfHandler,
-)
+from drunc.session_manager.configuration import SessionManagerConfHandler
 from drunc.session_manager.session_manager import SessionManager
 from drunc.utils.grpc_utils import RichErrorServerInterceptor
 from drunc.utils.utils import get_logger, get_root_logger
@@ -54,7 +51,7 @@ def session_manager_cli() -> None:
     logger = get_logger(app_name, rich_handler=True)
 
     # Load the configuration for the session manager.
-    config = SessionManagerConfHandler.from_pyobject(data=SessionManagerConfData())
+    config = SessionManagerConfHandler.from_pyobject(data=None)
     logger.info(f"Using '{config}' as the SessionManager configuration.")
 
     # Load the session manager.

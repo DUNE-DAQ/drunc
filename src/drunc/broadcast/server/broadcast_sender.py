@@ -46,8 +46,8 @@ class BroadcastSender:
                 from drunc.broadcast.server.kafka_sender import KafkaSender
 
                 self.implementation = KafkaSender(
-                    self.configuration.data.address,
-                    self.configuration.data.publish_timeout,
+                    self.configuration.address,
+                    self.configuration.publish_timeout,
                     topic=f"control.{self.identifier}",
                 )
             case _:

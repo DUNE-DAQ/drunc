@@ -20,6 +20,6 @@ def test_issue363(load_test_config):
         ),
         session_name="test",
     )
-    ids = [segment.id for segment in controller_configuration.data.segments]
+    ids = [segment.id for segment in controller_configuration.segments]
     assert ids == ["bottom-segment-1", "bottom-segment-2"]
-    assert controller_configuration.data.controller.id == controller_id
+    assert controller_configuration.controller.id == controller_id

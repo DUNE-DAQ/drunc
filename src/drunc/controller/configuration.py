@@ -21,12 +21,7 @@ from drunc.controller.children_interface.rest_api_child import (
 )
 from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.configuration import (
-    ConfData,
-    ConfHandler,
-    ConfTypeNotSupported,
-    ConfTypes,
-)
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
@@ -35,34 +30,8 @@ from drunc.utils.utils import (
 )
 
 
-class ControllerConfData(ConfData):
-    """Wrapper for controller configuration data from OKS segment."""
-
-    def __init__(self) -> None:
-        class id_able:
-            id = None
-
-        class cler:
-            pass
-
-        self.controller = cler()
-        self.controller.broadcaster = id_able()
-        self.controller.fsm = id_able()
-        self.segments = []
-
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from dictionary data."""
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
-
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from Protobuf Any message."""
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-class ControllerConfHandler(ConfHandler[ControllerConfData]):
+class ControllerConfHandler(ConfHandler):
     """Handler for controller configuration."""
-
-    confdata_cls = ControllerConfData
 
     @staticmethod
     def find_segment(segment, id_):
@@ -89,28 +58,27 @@ class ControllerConfHandler(ConfHandler[ControllerConfData]):
 
     def _post_process_oks(self) -> None:
         self.authoriser = None
-        self.data = self._grab_segment_conf_from_controller(self.data)
+        segment = self._grab_segment_conf_from_controller(self._raw_data)
+        self.controller = segment.controller
+        self.segments = segment.segments
+        self.applications = segment.applications
 
-        self.this_host = self.data.controller.runs_on.runs_on.id
+        self.this_host = self.controller.runs_on.runs_on.id
         if self.this_host in ["localhost"] or self.this_host.startswith("127."):
             self.this_host = socket.gethostname()
 
         self.opmon_publisher = None
         self.opmon_conf = parse_opmon_conf(
             log=self.log,
-            conf=self.data.controller.opmon_conf,
+            conf=self.controller.opmon_conf,
             uri=self.session.opmon_uri,
             session=self.session_name,
-            application=self.data.controller.id,
+            application=self.controller.id,
         )
 
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = (
-                "./info."
-                + self.opmon_conf.session
-                + "."
-                + self.data.controller.id
-                + ".json"
+                "./info." + self.opmon_conf.session + "." + self.controller.id + ".json"
             )
 
         self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
@@ -214,13 +182,13 @@ class ControllerConfHandler(ConfHandler[ControllerConfData]):
         # threading the children look up
         threads = []
 
-        for segment in self.data.segments:
+        for segment in self.segments:
             self.log.debug(segment)
             t = threading.Thread(target=process_segment, args=(segment,))
             threads.append(t)
             t.start()
 
-        for app in self.data.applications:
+        for app in self.applications:
             self.log.debug(app)
             t = threading.Thread(target=process_application, args=(app,))
             threads.append(t)
@@ -287,7 +255,7 @@ class ControllerConfHandler(ConfHandler[ControllerConfData]):
                     name,
                     restapi_conf_handler,
                     uri,
-                    self.data.controller.fsm,
+                    self.controller.fsm,
                     connectivity_service=connectivity_service,
                 )
 

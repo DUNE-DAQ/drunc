@@ -69,7 +69,7 @@ def run_pm(
 
     log_path = get_log_path(
         user=getpass.getuser(),
-        session_name=pmch.data.type.name,
+        session_name=getattr(pmch, "pm_type", pmch.type).name,
         application_name=appName,
         override_logs=override_logs,
         app_log_path=log_path,
@@ -78,7 +78,7 @@ def run_pm(
     # Logger has been added to process_manager, so everything will be logged
     add_handler(log, HandlerType.File, True, path=log_path)
 
-    for key, value in pmch.data.environment.items():
+    for key, value in pmch.environment.items():
         os.environ[key] = value
 
     pm = ProcessManager.get(pmch, name="process_manager")

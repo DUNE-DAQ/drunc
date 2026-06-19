@@ -21,8 +21,8 @@ class KafkaStdoutBroadcastHandler(BroadcastHandlerImplementation):
         #         if 'broadcast_types_loglevels' in self.global_kafka_stdout_conf:
         #             self.broadcast_types_loglevels.update(self.global_kafka_stdout_conf['broadcast_types_loglevels'])
 
-        self.kafka_address = self.conf.data.address
-        self.topic = self.conf.data.topic
+        self.kafka_address = self.conf.address
+        self.topic = self.conf.topic
 
         # self.broadcast_types_loglevels.update(conf.data.get('broadcast_types_loglevels', {}))
 

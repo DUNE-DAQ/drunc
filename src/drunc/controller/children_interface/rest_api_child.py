@@ -39,12 +39,7 @@ from drunc.controller.utils import get_detector_name
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.core import FSM, FSMDestinationResult, FSMDestinationType
-from drunc.utils.configuration import (
-    ConfData,
-    ConfHandler,
-    ConfTypeNotSupported,
-    ConfTypes,
-)
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.flask_manager import FlaskManager
 from drunc.utils.utils import (
     ControlType,
@@ -359,39 +354,25 @@ and hence cannot be figured from there
 """
 
 
-class RESTAPIChildNodeConfData(ConfData):
-    """Wrapper for REST API child node configuration."""
-
-    def __init__(self) -> None:
-        self.id = None
-        self.exposes_service = []
-
-        class runs_on_obj:
-            id = None
-
-        self.runs_on = runs_on_obj()
-        self.runs_on.runs_on = runs_on_obj()
-
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from dictionary data."""
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
-
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from Protobuf Any message."""
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-class RESTAPIChildNodeConfHandler(ConfHandler[RESTAPIChildNodeConfData]):
+class RESTAPIChildNodeConfHandler(ConfHandler):
     """Handler for REST API child node configuration."""
 
-    confdata_cls = RESTAPIChildNodeConfData
+    def _post_process_oks(self) -> None:
+        raw = self._raw_data
+        # Flatten attributes that are always accessed from outside
+        self.id = getattr(raw, "id", None)
+        self.exposes_service = getattr(raw, "exposes_service", [])
+        self.runs_on = getattr(raw, "runs_on", None)
+        self.proxy = getattr(raw, "proxy", [None, None])
+        # Pass through any other attributes callers may inspect dynamically
+        self._raw = raw
 
     def get_host_port(self):
-        for service in self.data.exposes_service:
-            if self.data.id + "_control" in service.id:
-                return self.data.runs_on.runs_on.id, service.port
+        for service in self.exposes_service:
+            if self.id + "_control" in service.id:
+                return self.runs_on.runs_on.id, service.port
         raise DruncSetupException(
-            f"REST API child node {self.data.id} does not expose a control service"
+            f"REST API child node {self.id} does not expose a control service"
         )
 
 
@@ -423,7 +404,7 @@ class RESTAPIChildNode(ChildNode):
                 f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable."
             )
 
-        proxy_host, proxy_port = getattr(self.configuration.data, "proxy", [None, None])
+        proxy_host, proxy_port = self.configuration.proxy
         proxy_port = int(proxy_port) if proxy_port is not None else None
 
         self.commander = AppCommander(
@@ -573,16 +554,15 @@ class RESTAPIChildNode(ChildNode):
         if self.configuration is not None:
             if detector_name := get_detector_name(self.configuration):
                 description.info = detector_name
-            if hasattr(
-                self.configuration.data, "application_name"
-            ):  # Application nodes.
-                description.type = self.configuration.data.application_name
-                description.name = self.configuration.data.id
-            elif hasattr(self.configuration.data, "controller") and hasattr(
-                self.configuration.data.controller, "application_name"
+            raw = self.configuration._raw
+            if hasattr(raw, "application_name"):  # Application nodes.
+                description.type = raw.application_name
+                description.name = raw.id
+            elif hasattr(raw, "controller") and hasattr(
+                raw.controller, "application_name"
             ):  # Controller nodes.
-                description.type = self.configuration.data.controller.application_name
-                description.name = self.configuration.data.controller.id
+                description.type = raw.controller.application_name
+                description.name = raw.controller.id
 
         response.description.CopyFrom(description)
 

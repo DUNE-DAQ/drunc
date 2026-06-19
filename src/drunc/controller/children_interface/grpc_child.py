@@ -43,12 +43,7 @@ from drunc.connectivity_service.exceptions import (
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
-from drunc.utils.configuration import (
-    ConfData,
-    ConfHandler,
-    ConfTypeNotSupported,
-    ConfTypes,
-)
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
     rethrow_if_unreachable_server,
@@ -60,46 +55,18 @@ from drunc.utils.utils import (
 )
 
 
-class gRCPChildConfData(ConfData):
-    """Wrapper for gRPC child node configuration."""
-
-    def __init__(self) -> None:
-        class id_able:
-            id = None
-
-        class cler:
-            pass
-
-        self.controller = cler()
-        self.controller.id = None
-        self.controller.exposes_service = []
-
-        class runs_on_obj:
-            id = None
-
-        self.controller.runs_on = runs_on_obj()
-        self.controller.runs_on.runs_on = runs_on_obj()
-
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from dictionary data."""
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
-
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from Protobuf Any message."""
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-class gRCPChildConfHandler(ConfHandler[gRCPChildConfData]):
+class gRCPChildConfHandler(ConfHandler):
     """Handler for gRPC child node configuration."""
 
-    confdata_cls = gRCPChildConfData
+    def _post_process_oks(self) -> None:
+        self.controller = self._raw_data.controller
 
     def get_uri(self):
-        for service in self.data.controller.exposes_service:
-            if self.data.controller.id + "_control" in service.id:
-                return f"{service.protocol}://{self.data.controller.runs_on.runs_on.id}:{service.port}"
+        for service in self.controller.exposes_service:
+            if self.controller.id + "_control" in service.id:
+                return f"{service.protocol}://{self.controller.runs_on.runs_on.id}:{service.port}"
         raise DruncSetupException(
-            f"gRPC API child node {self.data.controller.id} does not expose a control service"
+            f"gRPC API child node {self.controller.id} does not expose a control service"
         )
 
 

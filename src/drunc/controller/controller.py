@@ -110,7 +110,7 @@ class Controller(ControllerServicer):
         self.stop_event: threading.Event | None = None
         self.thread: threading.Thread | None = None
         bsch = BroadcastSenderConfHandler.from_pyobject(
-            data=self.configuration.data.controller.broadcaster,
+            data=self.configuration.controller.broadcaster,
         )
 
         self.broadcast_service = BroadcastSender(
@@ -120,7 +120,7 @@ class Controller(ControllerServicer):
         )
 
         self.fsm_config = FSMConfHandler.from_pyobject(
-            data=self.configuration.data.controller.fsm,
+            data=self.configuration.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
@@ -245,7 +245,7 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.take_control(execute_on_all_subsequent_children_in_path=True)
 
-        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+        interval_s = getattr(self.configuration, "interval_s", 10.0)
 
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()

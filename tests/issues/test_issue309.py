@@ -22,4 +22,4 @@ def test_issue309(load_test_config):
         session_name="test",
     )
 
-    assert controller_configuration.data.controller.id == controller_id
+    assert controller_configuration.controller.id == controller_id

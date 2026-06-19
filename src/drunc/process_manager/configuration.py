@@ -15,12 +15,7 @@ from opmonlib.utils import parse_opmon_conf
 from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
-from drunc.utils.configuration import (
-    ConfData,
-    ConfHandler,
-    ConfTypeNotSupported,
-    ConfTypes,
-)
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger
 
 if TYPE_CHECKING:
@@ -43,13 +38,15 @@ class ProcessManagerTypes(Enum):
     SSH_PARAMIKO = 3
 
 
-class ProcessManagerConfData(ConfData):
-    """Wrapper for process manager configuration data."""
+class ProcessManagerConfHandler(ConfHandler):
+    """Handler for process manager configuration."""
 
-    def __init__(self):
+    log_path: str = "./"
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
         self.broadcaster = None
         self.authoriser = None
-        self.type = ProcessManagerTypes.Unknown
+        self.pm_type = ProcessManagerTypes.Unknown
         self.command_address = ""
         self.environment = {}
         self.settings = {}
@@ -57,8 +54,6 @@ class ProcessManagerConfData(ConfData):
         self.opmon_uri = None
         self.opmon_publisher = None
 
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from dictionary data."""
         if data.get("broadcaster"):
             self.broadcaster = KafkaBroadcastSenderConfData.from_dict(
                 data.get("broadcaster")
@@ -70,27 +65,16 @@ class ProcessManagerConfData(ConfData):
 
         match data["type"].lower():
             case "ssh":
-                self.type = ProcessManagerTypes.SSH_SHELL
+                self.pm_type = ProcessManagerTypes.SSH_SHELL
                 self.kill_timeout = data.get("kill_timeout", 0.5)
             case "ssh-paramiko":
-                self.type = ProcessManagerTypes.SSH_PARAMIKO
+                self.pm_type = ProcessManagerTypes.SSH_PARAMIKO
                 self.kill_timeout = data.get("kill_timeout", 0.5)
             case "k8s":
-                self.type = ProcessManagerTypes.K8s
+                self.pm_type = ProcessManagerTypes.K8s
                 self.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
             case _:
                 raise UnknownProcessManagerType(data["type"])
-
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from Protobuf Any message."""
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-class ProcessManagerConfHandler(ConfHandler[ProcessManagerConfData]):
-    """Handler for process manager configuration."""
-
-    confdata_cls = ProcessManagerConfData
-    log_path: str = "./"
 
     @classmethod
     def from_json(
@@ -109,9 +93,9 @@ class ProcessManagerConfHandler(ConfHandler[ProcessManagerConfData]):
         """Post-process to handle OpMon configuration."""
         opmon_conf = parse_opmon_conf(
             log=self.log,
-            conf=getattr(self.data, "opmon_conf", None),
-            uri=getattr(self.data, "opmon_uri", None),
-            session=self.data.type.name,
+            conf=getattr(self, "opmon_conf", None),
+            uri=getattr(self, "opmon_uri", None),
+            session=getattr(self, "pm_type", ProcessManagerTypes.Unknown).name,
             application="process_manager",
         )
 
@@ -125,13 +109,13 @@ class ProcessManagerConfHandler(ConfHandler[ProcessManagerConfData]):
         )
         try:
             if opmon_conf.opmon_type == "stream":
-                self.data.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
+                self.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
                 self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
                     opmon_conf,
                 )
             else:
-                self.data.opmon_publisher = OpMonPublisher(
+                self.opmon_publisher = OpMonPublisher(
                     conf=opmon_conf, rich_handler=True
                 )
                 self.log.debug(

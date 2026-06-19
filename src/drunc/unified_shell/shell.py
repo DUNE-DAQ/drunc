@@ -355,9 +355,7 @@ def unified_shell(
     # live with it. At least until controller.core uses file handler instead of stream
     get_logger("controller.core.FSM", log_level="CRITICAL")
 
-    fsmch = FSMConfHandler.from_pyobject(
-        data=controller_configuration.data.controller.fsm
-    )
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
 
     ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)

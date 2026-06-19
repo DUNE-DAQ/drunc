@@ -1,9 +1,4 @@
-from drunc.utils.configuration import (
-    ConfData,
-    ConfHandler,
-    ConfTypeNotSupported,
-    ConfTypes,
-)
+from drunc.utils.configuration import ConfHandler
 
 
 class KafkaBroadcastSenderConfData:
@@ -22,38 +17,33 @@ class KafkaBroadcastSenderConfData:
         )
 
 
-class BroadcastSenderConfData(ConfData):
-    """Wrapper for broadcast sender configuration data."""
-
-    def __init__(self):
-        self.kafka_data = None
-
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from dictionary data."""
-        if data == {}:
-            self.kafka_data = None
-        else:
-            self.kafka_data = KafkaBroadcastSenderConfData.from_dict(data)
-
-    def populate_from_pbany(self, pbany_data: object) -> None:
-        """Populate from Protobuf Any message."""
-        raise ConfTypeNotSupported(ConfTypes.ProtobufAny, self.__class__.__name__)
-
-
-class BroadcastSenderConfHandler(ConfHandler[BroadcastSenderConfData]):
+class BroadcastSenderConfHandler(ConfHandler):
     """Handler for broadcast sender configuration."""
 
-    confdata_cls = BroadcastSenderConfData
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        if data == {}:
+            self.address = None
+            self.publish_timeout = None
+        else:
+            kafka_data = KafkaBroadcastSenderConfData.from_dict(data)
+            self.address = kafka_data.address
+            self.publish_timeout = kafka_data.publish_timeout
 
-    def _post_process_oks(self):
+    def _post_process_oks(self) -> None:
         from drunc.broadcast.types import BroadcastTypes
 
-        # Normalize wrapped JSON-loaded data to the runtime shape used by sender code.
-        if hasattr(self.data, "kafka_data"):
-            self.data = self.data.kafka_data
+        raw = self._raw_data
+        if raw is not None:
+            # OKS/pyobject path: raw is the broadcaster OKS object (or None if no broadcaster)
+            self.address = getattr(raw, "address", None)
+            self.publish_timeout = getattr(raw, "publish_timeout", None)
+        elif not hasattr(self, "address"):
+            # Neither OKS nor JSON populated — should not happen in practice
+            self.address = None
+            self.publish_timeout = None
 
-        self.impl_technology = BroadcastTypes.Kafka if self.data else None
-        self.log.debug(self.data)
+        self.impl_technology = BroadcastTypes.Kafka if self.address else None
+        self.log.debug(self.address)
 
     def get_impl_technology(self):
         return self.impl_technology
