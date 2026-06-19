@@ -364,6 +364,18 @@ def parent_death_pact(signal: int = signal.SIGHUP) -> None:
         raise Exception("prctl() returned nonzero retcode %d" % retcode)
 
 
+# 777 PERMISSIONS ARE COMPLETELY TEMPORARY
+# An established procedure for multi users will need to be discussed with sysadmins
+# will be removed when done
+def touch_and_chmod(filepath: str, mode=0o777):
+    """Makes and sets the permissions of a file.
+    This is used to ensure multiuser support when accessing files etc."""
+
+    with open(filepath, "a"):
+        os.utime(filepath, None)
+    os.chmod(filepath, mode)
+
+
 class IncorrectAddress(DruncException):
     """Exception raised when an address is invalid."""
 
@@ -723,6 +735,18 @@ def resolve_context_peer(peer: str) -> str:
     Returns:
         str: The original peer string, or a resolved ``host:port`` representation.
     """
+
+    if not peer:
+        return peer
+
+    # Some callers pass a plain host:port string without a transport prefix.
+    # Handle those directly instead of assuming the first token is always a transport.
+    if peer.startswith("[") or peer.count(":") == 1:
+        parsed = _parse_host_port(peer)
+        if parsed is not None:
+            host, port = parsed
+            resolved_host = _resolve_host(host)
+            return f"{resolved_host}:{port}"
 
     match = re.match(r"^(?P<transport>[^:]+):(?P<address>.+)$", peer)
     if not match:
