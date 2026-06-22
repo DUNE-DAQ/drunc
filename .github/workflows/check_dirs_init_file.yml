@@ -5,6 +5,7 @@ name: Check for __init__.py files
 
 on: 
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check-init:
