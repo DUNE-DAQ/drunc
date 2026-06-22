@@ -3,6 +3,7 @@ import re
 import sys
 import threading
 import time
+from collections import Counter
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -172,35 +173,48 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     return pi
             return None
 
+        tech_name = self.configuration.data.type.name
+
+        #! Evaluate code for these with the dead check down below
         n_dead_prev = 0
         dead_processes_prev = set()
+
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
-            n_running = sum(
-                1
-                for process in results.values
-                if process.status_code == ProcessInstance.StatusCode.RUNNING
-            )
-            dead_processes = {
-                process.uuid.uuid
-                for process in results.values
-                if process.status_code == ProcessInstance.StatusCode.DEAD
-            }
+            session_running = Counter()
+            session_dead = Counter()
+            dead_processes = set()
+
+            for process in results.values:
+                session = f"{tech_name}_{process.process_description.metadata.session}"
+                status = process.status_code
+
+                if status == ProcessInstance.StatusCode.RUNNING:
+                    session_running[session] += 1
+
+                elif status == ProcessInstance.StatusCode.DEAD:
+                    session_dead[session] += 1
+                    dead_processes.add(process.uuid.uuid)
+
+            # merge all known sessions from both counters
+            all_sessions = session_running.keys() | session_dead.keys()
+
+            # For future developers, if this is still slow consider using async.
+            for sesh in all_sessions:
+                self.opmon_publisher.publish(
+                    message=ProcessStatus(
+                        n_running=session_running[sesh],
+                        n_dead=session_dead[sesh],
+                        n_session=1,  #! Can we change the schema? will it affect the influxdb?
+                    ),
+                    custom_origin={"drunc_session": sesh},
+                )
+
             n_dead = len(dead_processes)
-            n_session = len(
-                {
-                    process.process_description.metadata.session
-                    for process in results.values
-                }
-            )
-            self.opmon_publisher.publish(
-                message=ProcessStatus(
-                    n_running=n_running, n_dead=n_dead, n_session=n_session
-                ),
-            )
             if n_dead_prev < n_dead:
                 n_dead_prev = n_dead
+                #! Ask pawel whats going on with the dead process check
                 diff_set = dead_processes - dead_processes_prev
                 for diff in diff_set:
                     if diff in self.expected_dead_applications:
@@ -220,6 +234,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                             "drunc.process_manager",
                         )
                     self.log.critical(err_msg, extra=self.handlerconf.ERS)
+                    self.log.warning(err_msg)
 
             time.sleep(interval_s)
 
