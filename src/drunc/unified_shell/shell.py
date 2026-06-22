@@ -226,7 +226,9 @@ def unified_shell(
             sys.exit(1)
 
         # Start the process manager as a separate process
-        ctx.obj.log.info("Starting process manager")
+        ctx.obj.log.info(
+            f"Starting process manager with session name {ctx.obj.session_name}"
+        )
         ready_event = mp.Event()
         port = mp.Value("i", 0)
 
@@ -244,6 +246,7 @@ def unified_shell(
                 "signal_handler": ignore_sigint_sighandler,
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
+                "drunc_session": ctx.obj.session_name,
             },
         )
         ctx.obj.pm_process.start()
