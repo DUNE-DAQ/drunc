@@ -334,6 +334,9 @@ def validate_k8s_session_name(session: str) -> bool:
     return True
 
 
+#! Note for future developers
+# This can probably be removed since we've added the
+# pm_type attribute in each of the process managers
 def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     """
     Get the ProcessManagerTypes enum value from a string name.
