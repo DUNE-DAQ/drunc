@@ -45,12 +45,12 @@ def boot(
         override_logs_boot = obj.override_logs
     else:
         override_logs_boot = override_logs
-    if len(processes.values) > 0:
-        log.error(
-            f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
-            "Please terminate the existing session first."
-        )
-        return
+    # if len(processes.values) > 0:
+    #     log.error(
+    #         f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
+    #         "Please terminate the existing session first."
+    #     )
+    #     return
 
     try:
         results = obj.get_driver("process_manager").boot(

@@ -439,7 +439,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         for exe_arg in boot_request.process_description.executable_and_arguments:
             cmd += exe_arg.exec
             for arg in exe_arg.args:
-                cmd += f" {arg}"
+                if arg.endswith("daq_app_rte.sh"):
+                    cmd += f" {os.getenv('DBT_AREA_ROOT')}/install/daq_app_rte.sh"
+                else:
+                    cmd += f" {arg}"
             cmd += ";"
 
         # Remove trailing semicolon if present
@@ -888,33 +891,45 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         # Determine if host key checking should be disabled based on configuration and
         # target host
-        disable_host_key_check = self.disable_host_key_check or (
-            self.disable_localhost_host_key_check
-            and hostname in ("localhost", "127.0.0.1", "::1")
-        )
+        # disable_host_key_check = self.disable_host_key_check or (
+        #     self.disable_localhost_host_key_check
+        #     and hostname in ("localhost", "127.0.0.1", "::1")
+        # )
+        superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
+        # self.log.critical(f"Building SSH arguments for {user_host} with superuser host {superuser_host}")
+        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
+        # self.log.critical(f"SSH arguments after adding StrictHostKeyChecking for {user_host}%s", arguments)
+        # self.log.critical(f"{arguments=}")
+        # self.log.critical(f"Test list: {test_list_print}")
+        # self.log.critical(f"Test list 2: %s", test_list_print)
 
         # Base SSH arguments with user@host and strict host key checking disabled
         # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
         # the known_hosts file is not shared across hosts, so we cannot rely on it for
         # host key verification.
-        arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
+        # arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
+        # "-F /nfs/home/{user_host.split('@')[0]}/.ssh/config",
 
         if use_tty:
             arguments.append("-tt")
 
         # If host key checking is disabled, also disable known hosts file usage and
         # reduce log level to avoid cluttering logs with warnings about host key verification
-        if disable_host_key_check:
-            arguments.extend(
-                [
-                    "-o",
-                    "LogLevel=error",
-                    "-o",
-                    "GlobalKnownHostsFile=/dev/null",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
-                ]
-            )
+        # if disable_host_key_check:
+        arguments.extend(
+            [
+                "-o",
+                "LogLevel=info",
+                "-o",
+                "GlobalKnownHostsFile=/dev/null",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
+        self.log.critical(f"SSH arguments for {user_host}: {arguments}")
+        self.log.critical(
+            f"PP: {getpass.getuser()} is running on {os.uname().nodename} with disable_host_key_check={self.disable_host_key_check} and disable_localhost_host_key_check={self.disable_localhost_host_key_check}"
+        )
 
         return arguments
 
@@ -1133,6 +1148,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         try:
             platform = os.uname().sysname.lower()
             is_macos = "darwin" in platform
+            hostname_for_gssapi = hostname
+            if hostname_for_gssapi == "localhost":
+                hostname_for_gssapi = os.uname().nodename
             user_host = f"{user}@{hostname}"
 
             # Build remote command with metadata file writing
