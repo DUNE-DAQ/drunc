@@ -157,10 +157,16 @@ def unified_shell(
     ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
+    ctx.obj.log.critical(
+        f"Parsing the process manager argument: {process_manager}"
+    )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
+    ctx.obj.log.critical(
+        f"Process manager argument parsed, internal_pm set to {internal_pm}"
+    )
 
     # If using a k8s process manager, validate the session name before proceeding
     if get_pm_type_from_name(
@@ -173,6 +179,7 @@ def unified_shell(
         )
         sys.exit(1)
 
+    ctx.obj.log.critical("TEST")
     # Setup configuration related context variables
     ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
     ctx.obj.configuration_id = configuration_id
@@ -261,6 +268,9 @@ def unified_shell(
         )
 
     else:  # Connect to an existing process manager at the provided address
+        ctx.obj.log.critical(
+            "Connecting to an existing process manager at the provided address"
+        )
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
@@ -276,6 +286,7 @@ def unified_shell(
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
+    ctx.obj.log.critical("Getting driver")
     try:
         ctx.obj.get_driver().describe()
     except Exception as e:
@@ -302,6 +313,7 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
+    ctx.obj.log.critical("Process manager described successfully")
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
