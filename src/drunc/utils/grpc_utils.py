@@ -3,6 +3,7 @@ from typing import List, NoReturn, Optional
 from urllib import response
 
 import grpc
+from build.lib.drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -379,6 +380,40 @@ def abort_with_rich_error_status(
     raise Exception(f"Aborting with status: {message}")
 
 
+def generate_base_error_info(e) -> error_details_pb2.ErrorInfo:
+    """Automatically build an ErrorInfo from any DruncException."""
+    reason = getattr(e, "reason", e.__class__.__name__)
+    domain = getattr(e, "domain", "drunc")
+    
+    kwargs = getattr(e, "detail_kwargs", {})
+    metadata = {k: str(v) for k, v in kwargs.items() if k not in ["reason", "domain"]}
+    
+    return error_details_pb2.ErrorInfo(
+        reason=reason,
+        domain=domain,
+        metadata=metadata
+    )
+
+
+def abort_with_multiple_rich_details(context, grpc_error_code: int, message: str, error_objs: list):
+    """Pack a list of detail objects into a single gRPC Status."""
+    any_details = []
+    for obj in error_objs:
+        detail_any = any_pb2.Any()
+        detail_any.Pack(obj)
+        any_details.append(detail_any)
+        
+    rich_status = status_pb2.Status(
+        code=grpc_error_code,
+        message=message,
+        details=any_details, 
+    )
+    context.abort_with_status(rpc_status.to_status(rich_status))
+
+    raise Exception(f"Aborting with status: {message}")
+
+
+
 class RichErrorServerInterceptor(grpc.ServerInterceptor):
     """
     A gRPC server interceptor that catches exceptions and converts them into
@@ -396,7 +431,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 return handler.unary_unary(request, context)
 
             except DruncSetupException as e:
-                detail_obj = error_details_pb2.PreconditionFailure(
+                details_obj = error_details_pb2.PreconditionFailure(
                     violations=[
                         error_details_pb2.PreconditionFailure.Violation(
                             type="MISSING OR INVALID",
@@ -405,8 +440,11 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                         )
                     ]
                 )
-                abort_with_rich_error_status(
-                    context, e.grpc_error_code, str(e), detail_obj
+                base_info_obj = generate_base_error_info(e)
+
+                abort_with_multiple_rich_details(
+                    context, e.grpc_error_code, str(e), 
+                    [base_info_obj, details_obj]
                 )
             except DruncNotImplementedException as e:
                 detail_obj = error_details_pb2.ErrorInfo(
@@ -428,6 +466,20 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 )
                 abort_with_rich_error_status(
                     context, e.grpc_error_code, str(e), detail_obj
+                )
+
+            ############### Controller Exceptions ###############
+
+            ############### Connectivity Service Exceptions ###############
+
+            except ApplicationLookupUnsuccessful as e:
+                detail_obj = error_details_pb2.ResourceInfo(
+                    resource_type="ChildApplication",
+                    owner="ConnectivityService",
+                    description=f"Failed to find all child applications on the connectivity service {e}. "
+                )
+                abort_with_rich_error_status(
+                    context, code_pb2.NOT_FOUND, str(e), detail_obj
                 )
 
             except Exception as e:

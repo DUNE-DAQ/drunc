@@ -167,12 +167,13 @@ class Controller(ControllerServicer):
                 init_token=self.actor.get_token(),
                 connectivity_service=self.connectivity_service,
             )
-        except ApplicationLookupUnsuccessful:
+        except ApplicationLookupUnsuccessful as e:
             log_init_controller.error(
                 "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
             )
             self.stateful_node.to_error()
-            return
+
+            raise e
 
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
