@@ -44,7 +44,6 @@ from drunc.exceptions import (
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
-    ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
 )
@@ -52,13 +51,12 @@ from drunc.process_manager.interface.commands import (
     flush,
     kill,
     logs,
-    ps,
+    # ps,
     restart,
-    terminate,
+    # terminate,
 )
 from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.commands import boot, ps, start_shell, terminate
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -317,18 +315,20 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands = [boot, ps, terminate]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
     process_manager_commands: list[click.Command] = [
         kill,
-        terminate,
+        # terminate,
         flush,
         logs,
         restart,
-        ps,
+        # ps,
     ]
     for cmd in process_manager_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
@@ -469,7 +469,8 @@ def unified_shell(
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            session_processes = ProcessQuery(session=ctx.obj.session_name)
+            ctx.obj.get_driver("process_manager").kill(session_processes)
 
         # Check if any processes are still running
         if (
