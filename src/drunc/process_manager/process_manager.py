@@ -490,7 +490,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     ) -> OutcomeStatus:
         raise NotImplementedError
 
-    @broadcasted
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )
