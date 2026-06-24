@@ -188,45 +188,77 @@ def require_pattern_match(
     return match
 
 
-def _parse_ps_table_from_index(
-    lines: list[str], start_idx: int
-) -> list[dict[str, str]]:
-    """Parse a Unicode table of processes starting after `start_idx`.
+# ── Table parsing ──────────────────────────────────────────────────────────────
 
-    The parser expects rows that start with `│` and stops at a line starting
-    with `└`. It returns dictionaries with normalized column names.
+
+def _parse_table_from_index(
+    lines: list[str], start_idx: int, columns: list[str]
+) -> list[dict[str, str]]:
+    """Parse a Unicode box table starting after `start_idx`, mapping cells to `columns`.
+
+    Expects rows that start with `│` and stops at a line starting with `└`.
+    Rows with fewer cells than `columns` are silently skipped.
     """
-    table_rows: list[dict[str, str]] = []
+    rows: list[dict[str, str]] = []
 
     for line in lines[start_idx + 1 :]:
         stripped = line.strip()
-
         if stripped.startswith("└"):
             break
-
         if not stripped.startswith("│"):
             continue
-
         cells = [cell.strip() for cell in stripped.strip("│").split("│")]
-        if len(cells) < 7:
+        if len(cells) < len(columns):
             continue
+        rows.append(dict(zip(columns, cells)))
 
-        table_rows.append(
-            {
-                "session": cells[0],
-                "friendly_name": cells[1],
-                "user": cells[2],
-                "host": cells[3],
-                "uuid": cells[4],
-                "alive": cells[5],
-                "exit_code": cells[6],
-            }
-        )
-
-    return table_rows
+    return rows
 
 
-def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
+def _get_table_after_echo(
+    lines: list[str],
+    echo_marker: str,
+    header_keyword: str,
+    columns: list[str],
+) -> list[dict[str, str]]:
+    """Return parsed table rows found after `echo_marker`, anchored by `header_keyword`.
+
+    Args:
+        stdout:          Raw stdout string (ANSI stripping is handled internally).
+        echo_marker:     The drunc.echo marker to anchor the search.
+        header_keyword:  Substring identifying the table header line.
+        columns:         Ordered column names to map to each cell.
+
+    Returns:
+        Parsed rows as a list of dicts. Empty list if no table is found.
+    """
+    echo_idx = require_echo_marker_index(lines, echo_marker)
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: header_keyword in line,
+        start_idx=echo_idx + 1,
+    )
+    if table_start_idx is None:
+        return []
+
+    return _parse_table_from_index(lines, table_start_idx, columns)
+
+
+_PS_COLUMNS = ["session", "friendly_name", "user", "host", "uuid", "alive", "exit_code"]
+_STATUS_COLUMNS = [
+    "name",
+    "info",
+    "state",
+    "substate",
+    "in_error",
+    "included",
+    "endpoint",
+]
+_EXEC_REPORT_COLUMNS = ["name", "command_execution", "fsm_transition"]
+
+
+def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str, str]]:
     """Return parsed process-table rows found after a specific echo marker.
 
     If no process table is found after the marker, returns an empty list.
@@ -242,19 +274,38 @@ def get_ps_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str
         >>> table[0]["friendly_name"]
         'root-controller'
     """
-    lines = strip_ansi(stdout).splitlines()
+    return _get_table_after_echo(lines, echo_marker, "Processes running", _PS_COLUMNS)
 
-    echo_idx = require_echo_marker_index(lines, echo_marker)
 
-    table_start_idx = find_line_index(
-        lines,
-        lambda line: "Processes running" in line,
-        start_idx=echo_idx + 1,
+def get_status_table_after_echo(
+    lines: list[str], echo_marker: str
+) -> list[dict[str, str]]:
+    """Return parsed status-table rows found after a specific echo marker.
+
+    If no status table is found after the marker, returns an empty list.
+
+    Returns:
+        Parsed rows with keys: name, info, state, substate, in_error, included, endpoint.
+    """
+    return _get_table_after_echo(lines, echo_marker, "status", _STATUS_COLUMNS)
+
+
+def get_execution_report_after_echo(
+    lines: list[str], echo_marker: str
+) -> list[dict[str, str]]:
+    """Return parsed execution-report rows found after a specific echo marker.
+
+    If no execution report is found after the marker, returns an empty list.
+
+    Returns:
+        Parsed rows with keys: name, command_execution, fsm_transition.
+    """
+    return _get_table_after_echo(
+        lines, echo_marker, "execution report", _EXEC_REPORT_COLUMNS
     )
-    if table_start_idx is None:
-        return []
 
-    return _parse_ps_table_from_index(lines, table_start_idx)
+
+# ── Process table helpers ──────────────────────────────────────────────────────
 
 
 def get_column_for_friendly_name(
@@ -334,3 +385,77 @@ def assert_process_presence(
     assert not matching_rows, (
         f"Expected '{friendly_name}' to be absent from ps table {context}, but it is still present."
     )
+
+
+# ── Status table assertion helpers ────────────────────────────────────────────
+
+
+def check_execution_report_success(report: list[dict[str, str]]) -> None:
+    """Assert every row in an execution report shows success for both columns.
+
+    Raises:
+        AssertionError: On the first row that fails either check,
+                        with the process name and actual values reported.
+    """
+    assert report, "Execution report is empty — nothing to check."
+
+    for row in report:
+        name = row["name"]
+        assert row["command_execution"] == "Executed Successfully", (
+            f"Process '{name}': expected command_execution='Executed Successfully', "
+            f"got '{row['command_execution']}'."
+        )
+        assert row["fsm_transition"] == "Fsm Executed Successfully", (
+            f"Process '{name}': expected fsm_transition='Fsm Executed Successfully', "
+            f"got '{row['fsm_transition']}'."
+        )
+
+
+def check_status_table_states(
+    status_table: list[dict[str, str]],
+    expected_state: str,
+) -> None:
+    """Assert that every row in a status table has the expected `state`.
+
+    Raises:
+        AssertionError: Lists all rows whose state does not match.
+    """
+    assert status_table, "Status table is empty — nothing to check."
+
+    failures = [
+        f"  '{row['name']}': state='{row['state']}'"
+        for row in status_table
+        if row["state"] != expected_state
+    ]
+    assert not failures, (
+        f"Expected all processes to have state='{expected_state}', "
+        f"but the following did not:\n" + "\n".join(failures)
+    )
+
+
+def check_status_table_substates(
+    status_table: list[dict[str, str]],
+    controller_substate: str,
+    non_controller_substate: str,
+) -> None:
+    """Assert substates based on whether a process name contains 'controller'.
+
+    - Rows whose `name` contains 'controller' must match `controller_substate`.
+    - All other rows must match `non_controller_substate`.
+
+    Raises:
+        AssertionError: Lists all rows whose substate does not match the rule.
+    """
+    assert status_table, "Status table is empty — nothing to check."
+
+    failures: list[str] = []
+    for row in status_table:
+        name = row["name"]
+        is_controller = "controller" in name
+        expected = controller_substate if is_controller else non_controller_substate
+        if row["substate"] != expected:
+            failures.append(
+                f"  '{name}': expected substate='{expected}', got '{row['substate']}'"
+            )
+
+    assert not failures, "Substate mismatch(es) found:\n" + "\n".join(failures)

@@ -194,10 +194,10 @@ def test_log_files(run_dunerc) -> None:
 
 def test_boot(run_dunerc) -> None:
     """Checks that boot starts the managed processes and exposes UUIDs in ps."""
-    stdout = run_dunerc.completed_process.stdout
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
-    ps_pre_boot = get_ps_table_after_echo(stdout, "pre_boot")
-    ps_post_boot = get_ps_table_after_echo(stdout, "post_boot")
+    ps_pre_boot = get_ps_table_after_echo(lines, "pre_boot")
+    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
 
     assert not ps_pre_boot, (
         f"Expected ps table before boot to be empty, but found {len(ps_pre_boot)} row(s): "
@@ -325,8 +325,7 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
 
 def test_restart_mlt_logs(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
-    stdout = run_dunerc.completed_process.stdout
-    lines = strip_ansi(stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
     echo_idx = require_echo_marker_index(lines, "pre_restart_mlt")
 
@@ -349,7 +348,8 @@ def test_restart_mlt_logs(run_dunerc) -> None:
     require_pattern_match(
         restart_text,
         re.compile(
-            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.", re.DOTALL
+            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.",
+            re.DOTALL,
         ),
         error_message="Did not find the mlt exit-code log line after graceful termination.",
     )
@@ -368,10 +368,10 @@ def test_restart_mlt_logs(run_dunerc) -> None:
 
 def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
     """Checks that killing mlt removes it from the subsequent ps table."""
-    stdout = run_dunerc.completed_process.stdout
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
-    ps_before_kill = get_ps_table_after_echo(stdout, "test_kill_mlt")
-    ps_after_kill = get_ps_table_after_echo(stdout, "test_kill_mlt_post")
+    ps_before_kill = get_ps_table_after_echo(lines, "test_kill_mlt")
+    ps_after_kill = get_ps_table_after_echo(lines, "test_kill_mlt_post")
 
     assert_process_presence(ps_before_kill, "mlt", context="before kill")
     assert_process_presence(
@@ -381,8 +381,8 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
 
 def test_mlt_recovers_after_kill(run_dunerc) -> None:
     """Checks that mlt is present again after the recovery restart sequence."""
-    stdout = run_dunerc.completed_process.stdout
-    ps_after_recovery = get_ps_table_after_echo(stdout, "test_recovery_post")
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    ps_after_recovery = get_ps_table_after_echo(lines, "test_recovery_post")
     assert_process_presence(ps_after_recovery, "mlt", context="after recovery")
 
 
@@ -390,15 +390,15 @@ def test_flush(run_dunerc) -> None:
     """Checks that flush work by crashing mlt, seeing that the process exists,
     and then flushing to show its gone"""
 
-    stdout = run_dunerc.completed_process.stdout
-    ps_initial = get_ps_table_after_echo(stdout, "test_flush")
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    ps_initial = get_ps_table_after_echo(lines, "test_flush")
     assert_process_presence(ps_initial, "mlt", context="before crash")
 
-    ps_after_crash = get_ps_table_after_echo(stdout, "after_crash")
+    ps_after_crash = get_ps_table_after_echo(lines, "after_crash")
     mlt_alive = get_column_for_friendly_name(ps_after_crash, "mlt", "alive")
     assert mlt_alive == "False", "The mlt should have crashed"
 
-    ps_after_flash = get_ps_table_after_echo(stdout, "after_flush")
+    ps_after_flash = get_ps_table_after_echo(lines, "after_flush")
     assert_process_presence(
         ps_after_flash, "mlt", context="after crash", expected_present=False
     )
