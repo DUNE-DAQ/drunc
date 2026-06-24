@@ -459,3 +459,16 @@ def check_status_table_substates(
             )
 
     assert not failures, "Substate mismatch(es) found:\n" + "\n".join(failures)
+
+
+_RUN_INFO_COLUMNS = ["key", "value"]
+
+
+def get_run_info_after_echo(lines: list[str], echo_marker: str) -> dict[str, str]:
+    """Return parsed Run Info key-value pairs found after `echo_marker`.
+
+    The Run Info table is a two-column │key│value│ table anchored by 'Run Info'.
+    Returns a dict mapping stripped key → stripped value.
+    """
+    rows = _get_table_after_echo(lines, echo_marker, "Run Info", _RUN_INFO_COLUMNS)
+    return {row["key"]: row["value"] for row in rows}
