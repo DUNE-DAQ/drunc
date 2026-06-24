@@ -117,6 +117,18 @@ _FSM_COMMANDS = [
     FsmCommandParams("test_scrap", "scrap", "initial"),
 ]
 
+_FSM_SEQUENCES = {
+    "test_start_run": FsmCommandParams(
+        "test_start_run",
+        "start-run",
+        "running",
+        command_args=["--run-number", "2"],
+        run_number=2,
+    ),
+    "test_shutdown": FsmCommandParams("test_shutdown", "shutdown", "initial"),
+    "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
+}
+
 # ── Command list ───────────────────────────────────────────────────────────────
 
 dunerc_command_list = (
@@ -127,9 +139,12 @@ status
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + _FSM_SEQUENCES["test_start_run"].to_command_block()
+    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + "start-run --run-number 3"
+    + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "\nterminate"
 ).split()
-
 
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
