@@ -426,9 +426,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         hostname = boot_request.process_description.metadata.hostname
         user = boot_request.process_description.metadata.user
         log_file = boot_request.process_description.process_logs_path
-        # self.log.critical(
-        #     f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
-        # )
+        self.log.debug(
+            f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
+        )
 
         # Extract environment variables from boot request
         env_vars = (
@@ -452,7 +452,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         if cmd.endswith(";"):
             cmd = cmd[:-1]
 
-        # self.log.critical(f"Built command for {uuid}: {cmd}: {boot_request}")
+        self.log.debug(f"Built command for {uuid}: {cmd}: {boot_request}")
 
         # Execute the command via SSH
         self._execute_bootrequest_via_ssh(
@@ -894,45 +894,37 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         # Determine if host key checking should be disabled based on configuration and
         # target host
-        # disable_host_key_check = self.disable_host_key_check or (
-        #     self.disable_localhost_host_key_check
-        #     and hostname in ("localhost", "127.0.0.1", "::1")
-        # )
         superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
-        # self.log.critical(f"Building SSH arguments for {user_host} with superuser host {superuser_host}")
-        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
-        # self.log.critical(f"SSH arguments after adding StrictHostKeyChecking for {user_host}%s", arguments)
-        # self.log.critical(f"{arguments=}")
-        # self.log.critical(f"Test list: {test_list_print}")
-        # self.log.critical(f"Test list 2: %s", test_list_print)
+        self.log.debug(
+            f"Building SSH arguments for {user_host} with superuser host {superuser_host}"
+        )
 
         # Base SSH arguments with user@host and strict host key checking disabled
         # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
         # the known_hosts file is not shared across hosts, so we cannot rely on it for
         # host key verification.
-        # arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
-        # "-F /nfs/home/{user_host.split('@')[0]}/.ssh/config",
+        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
 
+        # If TTY allocation is requested, add the -tt flag to force allocation. This is
+        # needed as SSH permissions are different for general users and for np04daq
         if use_tty:
             arguments.append("-tt")
 
         # If host key checking is disabled, also disable known hosts file usage and
-        # reduce log level to avoid cluttering logs with warnings about host key verification
-        # if disable_host_key_check:
+        # reduce log level to avoid cluttering logs with warnings about host key
+        # verification
         arguments.extend(
             [
                 "-o",
-                "LogLevel=info",
+                "LogLevel=error",
                 "-o",
                 "GlobalKnownHostsFile=/dev/null",
                 "-o",
                 "UserKnownHostsFile=/dev/null",
             ]
         )
-        # self.log.critical(f"SSH arguments for {user_host}: {arguments}")
-        # self.log.critical(
-        #     f"PP: {getpass.getuser()} is running on {os.uname().nodename} with disable_host_key_check={self.disable_host_key_check} and disable_localhost_host_key_check={self.disable_localhost_host_key_check}"
-        # )
+
+        self.log.debug(f"SSH arguments for {user_host}: {arguments}")
 
         return arguments
 
@@ -1052,15 +1044,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             arguments.append(remote_command)
 
             # Execute SSH command to wait for and read file (single round-trip)
-            # self.log.critical(
-            #     f"Attempting to read metadata for {uuid} from {hostname} with timeout {timeout}s"
-            # )
+            self.log.debug(
+                f"Attempting to read metadata for {uuid} from {hostname} with timeout {timeout}s"
+            )
             result = self.ssh(*arguments)
-            # self.log.critical(
-            #     f"DEBUG - Raw metadata content for {uuid} from {hostname}: {result}"
-            # )
+            self.log.debug(f"Raw metadata content for {uuid} from {hostname}: {result}")
             json_content = str(result).strip()
-            # self.log.critical("Attempt successful?|???")
 
             self.log.debug(f"Metadata content for {uuid}: {json_content!r}")
 

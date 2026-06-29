@@ -1430,7 +1430,9 @@ class K8sProcessManager(ProcessManager):
             self.log.info(
                 f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
             )
-            return [client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])]
+            return [
+                client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+            ]
 
         self.log.warning(
             f"Could not get connection server ClusterIP for pod '{podname}'"
@@ -1972,7 +1974,7 @@ class K8sProcessManager(ProcessManager):
         try:
             self.log.info(f"{msg}; from {peer}")
         except Exception as e:
-            self.log.critical(f"Failed to receive message with exception {e}")
+            self.log.error(f"Failed to receive message with exception {e}")
             return OutcomeStatus(flag=OutcomeFlag.FAIL)
 
         return OutcomeStatus(flag=OutcomeFlag.SUCCESS)

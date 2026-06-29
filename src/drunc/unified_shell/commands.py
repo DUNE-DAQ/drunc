@@ -168,13 +168,19 @@ def ps(ctx, obj):
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
     results = obj.get_driver("process_manager").ps(session_query)
-    obj.print(
-        tabulate_process_instance_list(
-            results, title=f"Processes running in session {ctx.obj.session_name}"
-        ),
-        overflow="fold",
-        soft_wrap=True,
-    )
+
+    # If there are processes running, tabulate them, otherwise log that there are no
+    # processes running.
+    if results.values:
+        obj.print(
+            tabulate_process_instance_list(
+                results, title=f"Processes running in session {ctx.obj.session_name}"
+            ),
+            overflow="fold",
+            soft_wrap=True,
+        )
+    else:
+        log.info(f"No processes running in session [green]{ctx.obj.session_name}[/]")
 
 
 def session_injector(f):

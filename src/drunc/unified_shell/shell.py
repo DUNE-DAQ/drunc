@@ -58,15 +58,6 @@ from drunc.unified_shell.commands import (
     start_shell,
     terminate,
 )
-
-#! Note with boot. We should discuss this
-# When you run boot in the process manager with nothing else running, it works just fine
-# however when you have a running session already, boot asks 'are you sure you want to do this?
-# i bet you this is causing the behaviour that we are seeing with the unified shell
-# when you log into an empty PM with the US, and you start-run, it works just fine
-# but when you start-run from scratch with a running session in the PM, it doesn't work
-# Theres also a whole thing about things not flushing correctly..
-# Aha! in the pm, my terminate doesn't flush properly!
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import ConfTypes, OKSKey
@@ -165,17 +156,15 @@ def unified_shell(
     ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
 
     # Parse the process manager argument to determine if it's a config or an address
-    # ctx.obj.log.critical(
-    #     f"Parsing the process manager argument: {process_manager}"
-    # )
     process_manager_url: ParseResult = urlparse(process_manager)
     internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
-    ctx.obj.log.critical(
+    ctx.obj.log.debug(
         f"Process manager argument parsed, internal_pm set to {internal_pm}"
     )
 
+    #! TODO - reintroduce this before this PR is merged.
     # If using a k8s process manager, validate the session name before proceeding
     # if get_pm_type_from_name(
     #     process_manager
@@ -300,7 +289,6 @@ def unified_shell(
     ctx.obj.reset(address_pm=process_manager_address)
 
     # Run a simple command (describe) to check the connection with the process manager
-    ctx.obj.log.critical("Getting driver")
     try:
         ctx.obj.get_driver().describe()
     except Exception as e:
@@ -349,11 +337,9 @@ def unified_shell(
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
     process_manager_commands: list[click.Command] = [
         kill,
-        # terminate,
         flush,
         logs,
         restart,
-        # ps,
     ]
     for cmd in process_manager_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))

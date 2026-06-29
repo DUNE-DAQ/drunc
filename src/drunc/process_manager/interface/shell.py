@@ -79,10 +79,10 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     def cleanup():
         ctx.obj.get_driver("process_manager").send_msg(
-            f"{getpass.getuser()} disconnected from {ctx.obj.shell_id}"
+            f"{getpass.getuser()} disconnecting from {ctx.obj.shell_id}"
         )
         ctx.obj.terminate()
-        process_manager_log.warning(
+        process_manager_log.info(
             f"[green]{getpass.getuser()}[/green] disconnected from the process manager through a [green]drunc-process-manager-shell[/green]"
         )
 
