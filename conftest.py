@@ -1,3 +1,5 @@
+import os
+
 """
 Pytest configuration for the drunc project.
 Registers custom command-line options and test markers.
@@ -71,3 +73,18 @@ def pytest_collection_modifyitems(config, items):
     skip_if_no_option(
         "paramiko", "--test-paramiko", "Use --test-paramiko to run Paramiko tests"
     )
+
+def pytest_configure(config):
+    """
+    Automatically disable the cache provider if the current
+    directory is not writable.
+    """
+
+    # Check if we have write access to the directory where we are running
+    if not os.access('.', os.W_OK):
+        # We explicitly block the 'cacheprovider' plugin
+        # This prevents the PermissionError in read-only environments
+        config.pluginmanager.set_blocked("cacheprovider")
+
+        # Print a note so users know why it's disabled
+        print("\n[Config] Read-only directory detected. Cache provider disabled.")
