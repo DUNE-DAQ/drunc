@@ -1378,9 +1378,10 @@ class K8sProcessManager(ProcessManager):
 
             self._verify_host_in_cluster(target_host)
 
-            node_selector = {"kubernetes.io/hostname": target_host}
+            physical_host = format_hostname(target_host)
+            node_selector = {"kubernetes.io/hostname": physical_host}
             self.log.info(
-                f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
+                f"Pod '{podname}' will be scheduled on node '{physical_host}' (from boot request)"
             )
         return node_selector
 
@@ -2250,10 +2251,6 @@ class K8sProcessManager(ProcessManager):
         tree_labels = self._get_tree_labels(
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
-
-        # Format the hostname for safety
-        hostname = format_hostname(boot_request.process_description.metadata.hostname)
-        boot_request.process_description.metadata.hostname = hostname
 
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
