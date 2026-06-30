@@ -312,7 +312,6 @@ class ProcessManagerDriver:
     ) -> BootRequest:
         # Run mapping to physical hostname to enable multi host usage
         host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
-        self.log.info(f"boot resolve {host}")  # keep this until big PR gets merged
 
         # this is one of the two minimal changes needed to get this working in general?
         name = app["name"]
@@ -324,6 +323,13 @@ class ProcessManagerDriver:
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
         tree_id = app["tree_id"]
+
+        # The following line is required to provide an independent method of injecting
+        # the hostname into the environment for applications that need it. This is the
+        # case for containerized applications, for which the hostname is not
+        # automatically injected into the environment, and standard methods like
+        # socket.gethostname() do not return the expected value.
+        env["DRUNC_HOST_NAME"] = host
         self.log.debug(f"{name}:\n{json.dumps(app, indent=4)}")
 
         try:

@@ -153,6 +153,10 @@ def terminate(ctx, obj):
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
     obj.get_driver("process_manager").kill(session_query)
 
+    # As the session is now terminated, we can delete the controller driver, as it is no
+    # longer needed.
+    obj.delete_driver("controller")
+
 
 @click.command("ps")
 @click.pass_obj

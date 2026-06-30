@@ -44,10 +44,12 @@ from drunc.exceptions import (
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
+    ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
 )
 from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import (
     boot,
     flush,
@@ -166,17 +168,16 @@ def unified_shell(
 
     #! TODO - reintroduce this before this PR is merged.
     # If using a k8s process manager, validate the session name before proceeding
-    # if get_pm_type_from_name(
-    #     process_manager
-    # ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
-    #     ctx.obj.log.error(
-    #         f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
-    #         "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
-    #         "alphanumeric, max 63 chars."
-    #     )
-    #     sys.exit(1)
+    if get_pm_type_from_name(
+        process_manager
+    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+        ctx.obj.log.error(
+            f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
+            "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
+            "alphanumeric, max 63 chars."
+        )
+        sys.exit(1)
 
-    # ctx.obj.log.critical("TEST")
     # Setup configuration related context variables
     # Assume oksconflibs if no framework is defined
     ctx.obj.configuration_file = (
@@ -476,7 +477,6 @@ def unified_shell(
                 ctx.obj.log.error(
                     f"Could not retrieve the controller status, reason: {e}"
                 )
-            ctx.obj.delete_driver("controller")
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):

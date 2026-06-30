@@ -1,6 +1,5 @@
 import multiprocessing
 import os
-import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -138,18 +137,22 @@ class Controller(ControllerServicer):
                 self.configuration.session.connectivity_service.host
             )
             connection_port = os.getenv("CONNECTION_PORT")
-            connection_server = (
-                socket.gethostname()
-                if connection_server_host == "localhost"
-                else connection_server_host
-            )
+            if connection_server_host == "localhost":
+                injected_hostname = os.getenv("DRUNC_HOST_NAME")
+                if not injected_hostname:
+                    raise ValueError("DRUNC_HOST_NAME environment variable is not set.")
+                self.log.debug(
+                    f"Remapping connectivity service host from 'localhost' to '{injected_hostname}'"
+                )
+                connection_server_host = injected_hostname
+
             log_init.info(
-                f"Connectivity server {connection_server}:{connection_port} is enabled"
+                f"Connectivity server {connection_server_host}:{connection_port} is enabled"
             )
 
             self.connectivity_service = ConnectivityServiceClient(
                 session=self.session,
-                address=f"{connection_server}:{connection_port}",
+                address=f"{connection_server_host}:{connection_port}",
             )
 
     def init_controller(self) -> None:
@@ -336,7 +339,10 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
-        if not self.connectivity_service.is_ready(timeout=10):
+        self.log.debug(
+            f"Looking for connectivity service at address {self.connectivity_service.address}"
+        )
+        if not self.connectivity_service.is_ready(timeout=20):
             raise ValueError(
                 "Connectivity service unavailable for control address advertising."
             )
