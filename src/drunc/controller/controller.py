@@ -1,4 +1,3 @@
-import multiprocessing
 import os
 import threading
 import time
@@ -403,14 +402,6 @@ class Controller(ControllerServicer):
                         self.log.debug("opmon publisher stopped")
             except Exception as e:
                 self.log.warning(f"Error stopping opmon publisher: {e}")
-
-        self.log.debug("Threading threads")
-        for t in threading.enumerate():
-            self.log.debug(f"{t.name} TID: {t.native_id} is_alive: {t.is_alive}")
-
-        with multiprocessing.Manager() as manager:
-            self.log.debug("Multiprocess threads")
-            self.log.debug(manager.list())
 
     def __del__(self):
         self.terminate()

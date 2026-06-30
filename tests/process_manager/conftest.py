@@ -65,6 +65,7 @@ def bootrequest(app_data):
                 **app_data["env"],
                 "DUNE_DAQ_BASE_RELEASE": "release1",
                 "SPACK_RELEASES_DIR": "spack_release",
+                "DRUNC_HOST_NAME": socket.gethostname(),
             },
             process_execution_directory="/pwd",
             process_logs_path=app_data["log_path"],
