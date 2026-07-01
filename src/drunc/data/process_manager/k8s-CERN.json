@@ -68,7 +68,7 @@
             },
             "np02-srv-005-1": {
                 "limits":   {"hugepages-2Mi": "16Gi", "cpu": "48", "memory": "384Gi"},
-                "requests": {"hugepages-2Mi": "16Gi", "cpu": "8", "memory": "384Gi"}
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "384Gi"}
             },
             "np04-srv-031": {
                 "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
