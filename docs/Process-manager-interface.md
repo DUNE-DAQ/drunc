@@ -193,7 +193,7 @@ message ExceptionNotification {
 Each RPC call is described here.
 
 ### `describe`
-Returns metadata about the process manager, including available commands, session info, and broadcast description.
+Returns metadata about the process manager, including available commands, and session info.
 * input: `Request`
 * output: [Description](https://dune-daq-sw.readthedocs.io/en/latest/packages/drunc/Messaging-format)
 
