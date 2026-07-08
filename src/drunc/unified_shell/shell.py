@@ -155,16 +155,19 @@ def unified_shell(
     # Set up the drunc and unified_shell loggers
     get_root_logger(log_level)
     ctx.obj.log = get_logger("unified_shell", rich_handler=True)
-    ctx.obj.log.info(f"[green]{getpass.getuser()} starting the unified_shell[/green]")
+    ctx.obj.log.info(f"User {getpass.getuser()} [green]starting the unified_shell[/green]")
 
     # Parse the process manager argument to determine if it's a config or an address
+    # If the process manager is already running, connect to it.
     process_manager_url: ParseResult = urlparse(process_manager)
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
+        ctx.obj.log.info(f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}")
         internal_pm = False
         ctx.obj.reset(address_pm=process_manager_url.netloc)
         pm_type = ProcessManagerTypes[
             ctx.obj.get_driver("process_manager").describe().type
         ]
+        ctx.obj.log.info(f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}")
     else:
         internal_pm = True
         pm_type = get_pm_type_from_name(process_manager)
@@ -198,9 +201,9 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    # Establish communication with the process manager, spawning it if needed
+    # Start the process manager if it's an internal one
     if internal_pm:  # Spawn the Process Manager
-        ctx.obj.log.info(f"[green]Setting up the {pm_type.name} process manager[/]")
+        ctx.obj.log.info(f"[green]Setting up the {pm_type.name} process manager[/] with configuration [green]{process_manager}[/green]")
         ctx.obj.log.debug(
             f"Spawning process_manager with configuration {process_manager}"
         )
@@ -275,16 +278,7 @@ def unified_shell(
             f"{process_manager_address}[/green]"
         )
 
-    else:  # Connect to an existing process manager at the provided address
-        ctx.obj.log.info(
-            f"[green]Connecting to the up the {pm_type.name} process manager[/] at "
-            f"address [green]{process_manager}[/]"
-        )
-        process_manager_address = process_manager.replace(
-            "grpc://", ""
-        )  # remove the grpc scheme
-
-    ctx.obj.log.info("[green]Setting up the controller interface[/green]")
+    ctx.obj.log.info("Setting up the controller interface")
 
     # Run a simple command (describe) to check the connection with the process manager
     try:
