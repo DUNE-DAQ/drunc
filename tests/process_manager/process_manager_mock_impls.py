@@ -38,7 +38,8 @@ class ConcreteProcessManager(ProcessManager):
         """
         all-default constructor for testing purposes.
         """
-        configuration.get_data().opmon_publisher = None
+        configuration.opmon_conf = {"level": "info", "interval_s": 10.0}
+        configuration.opmon_publisher = None
         super().__init__(configuration, name, session, **kwargs)
 
     def _not_implemented_response(self):
