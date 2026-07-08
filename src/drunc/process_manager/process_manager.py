@@ -76,10 +76,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             data=self.configuration.authoriser
         )
 
-        self.opmon_publisher = getattr(
-            self.configuration.get_data(), "opmon_publisher", None
-        )
-        interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
+        self.opmon_publisher = self.configuration.opmon_publisher
+        interval_s = self.configuration.opmon_conf["interval_s"]
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
