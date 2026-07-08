@@ -12,7 +12,6 @@ from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
-from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
@@ -40,7 +39,6 @@ class ProcessManagerTypes(Enum):
 
 class ProcessManagerConfData:
     def __init__(self):
-        self.broadcaster = None
         self.authoriser = None
         self.type = ProcessManagerTypes.Unknown
         self.command_address = ""
@@ -61,10 +59,6 @@ class ProcessManagerConfHandler(ConfHandler):
 
     def _parse_dict(self, data):
         new_data = ProcessManagerConfData()
-        if data.get("broadcaster"):
-            new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(
-                data.get("broadcaster")
-            )
         new_data.environment = data.get("environment", {})
         new_data.settings = data.get("settings", {})
 

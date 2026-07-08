@@ -36,15 +36,13 @@ from druncschema.generic_pb2 import PlainText, Stacktrace
 from druncschema.token_pb2 import Token
 from grpc_status import rpc_status
 
-from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-from drunc.broadcast.client.configuration import BroadcastClientConfHandler
 from drunc.connectivity_service.exceptions import (
     ApplicationLookupUnsuccessful,
 )
 from drunc.controller.children_interface.child_node import ChildNode
 from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
-from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.grpc_utils import (
     ServerUnreachable,
     rethrow_if_unreachable_server,
@@ -117,7 +115,7 @@ class gRPCChildNode(ChildNode):
             tries_remaining -= 1
 
             try:
-                response = self.stub.describe(request)
+                self.stub.describe(request)
 
             except grpc.RpcError as error:
                 if tries_remaining == 0:
@@ -132,7 +130,6 @@ class gRPCChildNode(ChildNode):
 
             else:
                 self.log.info(f"Connected to the controller ({self.uri})!")
-                self.start_listening(response.description.broadcast)
                 break
 
     def _attempt_reconnection(self, retry_call):
@@ -186,9 +183,7 @@ class gRPCChildNode(ChildNode):
             del self.channel
         if self.stub:
             del self.stub
-
         self.channel = None
-        self.broadcast.stop()
 
     def check_connection(self) -> bool:
         """Probe child connectivity and retry once after reconnecting if needed.
@@ -233,14 +228,6 @@ class gRPCChildNode(ChildNode):
                 return False
 
         return False
-
-    def start_listening(self, bdesc):
-        self.broadcast = BroadcastHandler(
-            BroadcastClientConfHandler(
-                data=bdesc,
-                type=ConfTypes.ProtobufAny,
-            )
-        )
 
     def status(
         self,
