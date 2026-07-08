@@ -274,6 +274,9 @@ def unified_shell(
         f"{process_manager_address}[/green]"
     )
     ctx.obj.reset(address_pm=process_manager_address)
+    ctx.obj.log.critical(
+        f"Investigating the session DAL's connectivity service: {session_dal.connectivity_service}"
+    )
 
     # Run a simple command (describe) to check the connection with the process manager
     try:
@@ -478,7 +481,10 @@ def unified_shell(
         # all the processes. During this time the non-terminated processes will continue
         # to publish to the connectivity service, and this stale information needs to be
         # cleaned up by retracting the session (again).
-        if session_dal.connectivity_service.host != "localhost":
+        if (
+            session_dal.connectivity_service
+            and session_dal.connectivity_service.getattr("host") != "localhost"
+        ):
             connectivity_service_address: str = (
                 f"{session_dal.connectivity_service.host}:"
                 f"{session_dal.connectivity_service.service.port}"
