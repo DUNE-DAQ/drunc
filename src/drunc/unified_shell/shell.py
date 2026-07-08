@@ -155,29 +155,33 @@ def unified_shell(
     # Set up the drunc and unified_shell loggers
     get_root_logger(log_level)
     ctx.obj.log = get_logger("unified_shell", rich_handler=True)
-    ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
+    ctx.obj.log.info(f"[green]{getpass.getuser()} starting the unified_shell[/green]")
 
     # Parse the process manager argument to determine if it's a config or an address
     process_manager_url: ParseResult = urlparse(process_manager)
-    internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
         internal_pm = False
+        ctx.obj.reset(address_pm=process_manager_url.netloc)
+        pm_type = ProcessManagerTypes[
+            ctx.obj.get_driver("process_manager").describe().type
+        ]
+    else:
+        internal_pm = True
+        pm_type = get_pm_type_from_name(process_manager)
+
     ctx.obj.log.debug(
         f"Process manager argument parsed, internal_pm set to {internal_pm}"
     )
 
-    #! TODO - reintroduce this before this PR is merged.
     # If using a k8s process manager, validate the session name before proceeding
-    if get_pm_type_from_name(
-        process_manager
-    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+    if not validate_k8s_session_name(session_name) and (pm_type == ProcessManagerTypes.K8s):
         ctx.obj.log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
             "alphanumeric, max 63 chars."
         )
         sys.exit(1)
-
+    
     # Setup configuration related context variables
     # Assume oksconflibs if no framework is defined
     ctx.obj.configuration_file = (
@@ -194,14 +198,9 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    ctx.obj.log.info(
-        f"[green]Setting up to use the process manager[/green] with configuration "
-        f"[green]{process_manager}[/green] and configuration id [green]"
-        f'"{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
-    )
-
     # Establish communication with the process manager, spawning it if needed
     if internal_pm:  # Spawn the Process Manager
+        ctx.obj.log.info(f"[green]Setting up the {pm_type.name} process manager[/]")
         ctx.obj.log.debug(
             f"Spawning process_manager with configuration {process_manager}"
         )
@@ -270,24 +269,22 @@ def unified_shell(
         process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
             f"localhost:{port.value}"
         )
+        ctx.obj.reset(address_pm=process_manager_address)
+        ctx.obj.log.debug(
+            f"[green]process_manager[/green] started at address [green]"
+            f"{process_manager_address}[/green]"
+        )
 
     else:  # Connect to an existing process manager at the provided address
-        ctx.obj.log.critical(
-            "Connecting to an existing process manager at the provided address"
+        ctx.obj.log.info(
+            f"[green]Connecting to the up the {pm_type.name} process manager[/] at "
+            f"address [green]{process_manager}[/]"
         )
         process_manager_address = process_manager.replace(
             "grpc://", ""
         )  # remove the grpc scheme
-        ctx.obj.log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager"
-            f"[/green] at address [green]{process_manager_address}[/green]"
-        )
 
-    ctx.obj.log.debug(
-        f"[green]process_manager[/green] started, communicating through address [green]"
-        f"{process_manager_address}[/green]"
-    )
-    ctx.obj.reset(address_pm=process_manager_address)
+    ctx.obj.log.info("[green]Setting up the controller interface[/green]")
 
     # Run a simple command (describe) to check the connection with the process manager
     try:
@@ -316,12 +313,7 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
-    # ctx.obj.log.critical("Process manager described successfully")
-
-    ctx.obj.log.info(
-        f"[green]unified_shell[/green] connected to the [green]process_manager"
-        f"[/green] at address [green]{process_manager_address}[/green]"
-    )
+    ctx.obj.log.debug("Communication with the process manager verified successfully")
 
     ctx.obj.get_driver("process_manager").send_msg(
         f"{getpass.getuser()} connected from unified shell"
