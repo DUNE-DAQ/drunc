@@ -6,7 +6,6 @@ import time
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.description_pb2 import CommandDescription, Description
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
@@ -28,9 +27,6 @@ from grpc import ServicerContext
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
 from drunc.authoriser.decorators import authentified_and_authorised
 from drunc.authoriser.dummy_authoriser import DummyAuthoriser
-from drunc.broadcast.server.broadcast_sender import BroadcastSender
-from drunc.broadcast.server.configuration import BroadcastSenderConfHandler
-from drunc.broadcast.server.decorators import broadcasted
 from drunc.exceptions import (
     DruncCommandException,
     DruncNotImplementedException,
@@ -49,11 +45,7 @@ class BadQuery(DruncCommandException):
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     def __init__(
-        self,
-        configuration: ProcessManagerConfHandler,
-        name: str,
-        session: str = None,
-        **kwargs,
+        self, configuration: ProcessManagerConfHandler, name: str, session: str
     ):
         """C'tor. Note that this takes the ERS env variables from the
         json files defined in data/process_manager!"""
@@ -80,14 +72,14 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.name = name
         self.session = session
 
-        self._create_broadcast_service(self.name, self.session)
-
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser
         )
 
-        self.opmon_publisher = getattr(self.configuration, "opmon_publisher", None)
-        interval_s = getattr(self.configuration, "interval_s", 10.0)
+        self.opmon_publisher = getattr(
+            self.configuration.get_data(), "opmon_publisher", None
+        )
+        interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
@@ -151,8 +143,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             ),
         ]
 
-        self.broadcast(message="ready", btype=BroadcastType.SERVER_READY)
-
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
             self.thread = threading.Thread(
@@ -164,21 +154,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
     def get_log_path(self):
         return self.configuration.get_log_path()
-
-    def _create_broadcast_service(self, name, session):
-        bsch = BroadcastSenderConfHandler.from_pyobject(
-            data=self.configuration.broadcaster
-        )
-
-        self.broadcast_service = (
-            BroadcastSender(
-                name=name,
-                session=session,
-                configuration=bsch,
-            )
-            if bsch.impl_technology is not None
-            else None
-        )
 
     def __del__(self):
         if hasattr(self, "opmon_publisher") and self.opmon_publisher is not None:
@@ -244,48 +219,10 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
             time.sleep(interval_s)
 
-    """
-    A couple of simple pass-through functions to the broadcasting service
-    """
-
-    def broadcast(self, *args, **kwargs):
-        self.log.debug(f"{self.name} broadcasting")
-        return (
-            self.broadcast_service.broadcast(*args, **kwargs)
-            if self.broadcast_service
-            else None
-        )
-
-    def can_broadcast(self, *args, **kwargs):
-        self.log.debug(f"Checking if {self.name} can broadcast")
-        return (
-            self.broadcast_service.can_broadcast(*args, **kwargs)
-            if self.broadcast_service
-            else False
-        )
-
-    def describe_broadcast(self, *args, **kwargs):
-        self.log.debug(f"Describing {self.name} broadcast")
-        return (
-            self.broadcast_service.describe_broadcast(*args, **kwargs)
-            if self.broadcast_service
-            else None
-        )
-
-    def interrupt_with_exception(self, *args, **kwargs):
-        self.log.debug(f"Interrupting {self.name} broadcast with exception")
-        return (
-            self.broadcast_service._interrupt_with_exception(*args, **kwargs)
-            if self.broadcast_service
-            else None
-        )
-
     @abc.abstractmethod
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  #  outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -318,8 +255,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _terminate_impl(self) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -353,8 +288,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _restart_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -385,8 +318,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -417,8 +348,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _ps_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -449,8 +378,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -490,8 +417,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
@@ -508,17 +433,12 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             token=None,
         )
 
-        if broadcast_description := self.describe_broadcast():
-            response.broadcast.Pack(broadcast_description)
-
         return response
 
     @abc.abstractmethod
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         raise NotImplementedError
 
-    # ORDER MATTERS!
-    @broadcasted  # outer most wrapper 1st step
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step

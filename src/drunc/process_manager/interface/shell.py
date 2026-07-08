@@ -71,8 +71,6 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     process_manager_shell_log.info(
         f"Connected to {process_manager_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
-    if desc.HasField("broadcast"):
-        ctx.obj.start_listening(desc.broadcast)
 
     def cleanup():
         ctx.obj.terminate()
