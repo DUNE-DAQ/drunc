@@ -72,6 +72,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.name = name
         self.session = session
 
+        self.log.debug("Setting up dummy authoriser")
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser
         )
