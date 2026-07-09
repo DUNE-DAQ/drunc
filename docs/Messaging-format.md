@@ -79,14 +79,12 @@ message Description {
   string name = 2;
   optional string session = 3;
   repeated CommandDescription commands = 4;
-  optional google.protobuf.Any broadcast = 5;
 }
 ```
 * `type` can be `process_manager` or `controller` right now it is a string.
 * `name` is the name of the server.
 * `session` is the (optional) session name.
 * `commands` is a vector of acceptable commands to send to the endpoint.
-* `broadcast` is a description of the broadcast service.
 
 `CommandDescription` is used to describe all the commands, it has the following format:
 ```
@@ -102,58 +100,3 @@ message CommandDescription {
 * `help` is a string providing help
 * `return_type` is the format of the `data` field that should be expected inside the `Response` if the command execution was successful.
 
-For broadcasting, there is right now only one format that the `describe` command can fill, with a description of the Kafka service that is used to broadcast the log messages:
-```
-message KafkaBroadcastHandlerConfiguration{
-  string kafka_address = 1;
-  string topic = 2;
-}
-```
-* `kafka_address` is a bootstrap server
-* `topic` is the Kafka topic on which this service is logging.
-
-More formats of broadcasting may be added in the future (potentially using [ERS's python binding](https://github.com/DUNE-DAQ/erskafka/tree/develop/python/erskafka)).
-
-# Broadcasting
-As mentioned earlier, the only working solution for broadcasting is Kafka. All messages feed to Kafka by drunc have the [form](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/broadcast.proto#L51):
-```
-message BroadcastMessage{
-  Emitter emitter = 1;
-  BroadcastType type = 2;
-  google.protobuf.Any data = 3;
-}
-```
-Where:
-```
-message Emitter {
-  string process = 1;
-  string session = 2;
-}
-```
-and
-```
-enum BroadcastType {
-  ACK                             = 0;
-  RECEIVER_REMOVED                = 1;
-  RECEIVER_ADDED                  = 2;
-  SERVER_READY                    = 3;
-  SERVER_SHUTDOWN                 = 4;
-  TEXT_MESSAGE                    = 15;
-  COMMAND_EXECUTION_START         = 5;
-  COMMAND_RECEIVED                = 16;
-  COMMAND_EXECUTION_SUCCESS       = 6;
-  EXCEPTION_RAISED                = 7;
-  UNHANDLED_EXCEPTION_RAISED      = 8;
-  STATUS_UPDATE                   = 9;
-  SUBPROCESS_STATUS_UPDATE        = 10;
-  DEBUG                           = 11;
-  CHILD_COMMAND_EXECUTION_START   = 12;
-  CHILD_COMMAND_EXECUTION_SUCCESS = 13;
-  CHILD_COMMAND_EXECUTION_FAILED  = 14;
-  FSM_STATUS_UPDATE               = 17;
-}
-```
-
-Note that for now, the `data` field is only filled with [PlainText](https://github.com/DUNE-DAQ/druncschema/blob/develop/schema/druncschema/generic.proto#L7C1-L9C2) messages.
-
-In the future, this may change.
