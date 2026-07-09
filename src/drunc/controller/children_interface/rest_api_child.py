@@ -356,12 +356,24 @@ and hence cannot be figured from there
 
 
 class RESTAPIChildNodeConfHandler(ConfHandler):
+    """Handler for REST API child node configuration."""
+
+    def _post_process_oks(self) -> None:
+        raw = self._raw_data
+        # Flatten attributes that are always accessed from outside
+        self.id = getattr(raw, "id", None)
+        self.exposes_service = getattr(raw, "exposes_service", [])
+        self.runs_on = getattr(raw, "runs_on", None)
+        self.proxy = getattr(raw, "proxy", [None, None])
+        # Pass through any other attributes callers may inspect dynamically
+        self._raw = raw
+
     def get_host_port(self):
-        for service in self.data.exposes_service:
-            if self.data.id + "_control" in service.id:
-                return self.data.runs_on.runs_on.id, service.port
+        for service in self.exposes_service:
+            if self.id + "_control" in service.id:
+                return self.runs_on.runs_on.id, service.port
         raise DruncSetupException(
-            f"REST API child node {self.data.id} does not expose a control service"
+            f"REST API child node {self.id} does not expose a control service"
         )
 
 
@@ -380,7 +392,7 @@ class RESTAPIChildNode(ChildNode):
         self.fsm_configuration = fsm_configuration
         self.connectivity_service = connectivity_service
         if fsm_configuration:
-            fsmch = FSMConfHandler(fsm_configuration)
+            fsmch = FSMConfHandler.from_pyobject(data=fsm_configuration)
             self.fsm = FSM(conf=fsmch)
 
         response_listener_host = socket.gethostname()
@@ -393,7 +405,7 @@ class RESTAPIChildNode(ChildNode):
                 f"Application {name} does not expose a control service in the configuration, or has not advertised itself to the application registry service, or the application registry service is not reachable."
             )
 
-        proxy_host, proxy_port = getattr(self.configuration.data, "proxy", [None, None])
+        proxy_host, proxy_port = self.configuration.proxy
         proxy_port = int(proxy_port) if proxy_port is not None else None
 
         self.commander = AppCommander(
@@ -543,16 +555,15 @@ class RESTAPIChildNode(ChildNode):
         if self.configuration is not None:
             if detector_name := get_detector_name(self.configuration):
                 description.info = detector_name
-            if hasattr(
-                self.configuration.data, "application_name"
-            ):  # Application nodes.
-                description.type = self.configuration.data.application_name
-                description.name = self.configuration.data.id
-            elif hasattr(self.configuration.data, "controller") and hasattr(
-                self.configuration.data.controller, "application_name"
+            raw = self.configuration._raw
+            if hasattr(raw, "application_name"):  # Application nodes.
+                description.type = raw.application_name
+                description.name = raw.id
+            elif hasattr(raw, "controller") and hasattr(
+                raw.controller, "application_name"
             ):  # Controller nodes.
-                description.type = self.configuration.data.controller.application_name
-                description.name = self.configuration.data.controller.id
+                description.type = raw.controller.application_name
+                description.name = raw.controller.id
 
         response.description.CopyFrom(description)
 

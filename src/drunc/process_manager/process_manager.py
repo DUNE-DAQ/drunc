@@ -36,7 +36,6 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
-from drunc.utils.configuration import ConfTypes
 from drunc.utils.utils import get_logger, pid_info_str
 
 
@@ -54,7 +53,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         super().__init__()
 
         self.log = get_logger(
-            f"process_manager.{configuration.get_data_type_name()}_process_manager",
+            f"process_manager.{configuration.pm_type.name}_process_manager",
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -73,14 +72,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.configuration = configuration
         self.name = name
         self.session = session
-        self.opmon_publisher = getattr(
-            self.configuration.get_data(), "opmon_publisher", None
-        )
-        interval_s = getattr(self.configuration.get_data(), "interval_s", 10.0)
 
-        dach = DummyAuthoriserConfHandler(
-            data=self.configuration.get_data_authoriser(), type=ConfTypes.PyObject
+        dach = DummyAuthoriserConfHandler.from_pyobject(
+            data=self.configuration.authoriser
         )
+
+        self.opmon_publisher = self.configuration.opmon_publisher
+        interval_s = self.configuration.opmon_conf["interval_s"]
         self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
 
         self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
@@ -761,19 +759,19 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def get(conf, **kwargs):
         log = get_logger("process_manager.get")
 
-        if conf.data.type == ProcessManagerTypes.SSH_SHELL:
+        if conf.pm_type == ProcessManagerTypes.SSH_SHELL:
             from drunc.process_manager.ssh_process_manager_shell import (
                 SSHProcessManagerShell,
             )
 
             log.debug("Starting [green]SSH Shell process_manager[/green]")
             return SSHProcessManagerShell(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.K8s:
+        elif conf.pm_type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
             return K8sProcessManager(conf, **kwargs)
-        elif conf.data.type == ProcessManagerTypes.SSH_PARAMIKO:
+        elif conf.pm_type == ProcessManagerTypes.SSH_PARAMIKO:
             from drunc.process_manager.ssh_process_manager_paramiko_client import (
                 SSHProcessManagerParamikoClient,
             )
@@ -781,7 +779,5 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             log.debug("Starting [green]SSH Paramiko process_manager[/green]")
             return SSHProcessManagerParamikoClient(conf, **kwargs)
         else:
-            log.error(f"ProcessManager type {conf.get('type')} is unsupported!")
-            raise RuntimeError(
-                f"ProcessManager type {conf.get('type')} is unsupported!"
-            )
+            log.error(f"ProcessManager type {conf.pm_type} is unsupported!")
+            raise RuntimeError(f"ProcessManager type {conf.pm_type} is unsupported!")

@@ -92,17 +92,16 @@ def get_all_states(response: StatusResponse):
 def get_detector_name(configuration) -> str:
     detector_name = None
     log = get_logger("controller.core.get_detector_name")
-    if hasattr(configuration.data, "contains") and len(configuration.data.contains) > 0:
-        if len(configuration.data.contains) > 0:
+    raw = getattr(configuration, "_raw", None)
+    if raw is not None and hasattr(raw, "contains") and len(raw.contains) > 0:
+        if len(raw.contains) > 0:
             log.debug(
-                f"Application {configuration.data.id} has multiple contains, using the first one"
+                f"Application {raw.id} has multiple contains, using the first one"
             )
-        detector_name = (
-            configuration.data.contains[0].id.replace("-", "_").replace("_", " ")
-        )
+        detector_name = raw.contains[0].id.replace("-", "_").replace("_", " ")
     else:
         log.debug(
-            f'Application {configuration.data.id} has no "contains" relation, hence no detector'
+            f'Application {getattr(raw, "id", "?")} has no "contains" relation, hence no detector'
         )
     return detector_name
 

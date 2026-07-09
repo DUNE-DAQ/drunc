@@ -38,7 +38,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
 
 
 @click.command()
-def session_manager_cli()-> None:
+def session_manager_cli() -> None:
     """CLI interface for the Drunc session manager.
 
     This command starts the session manager service, which allows clients to manage
@@ -51,7 +51,7 @@ def session_manager_cli()-> None:
     logger = get_logger(app_name, rich_handler=True)
 
     # Load the configuration for the session manager.
-    config = SessionManagerConfHandler()
+    config = SessionManagerConfHandler.from_pyobject(data=None)
     logger.info(f"Using '{config}' as the SessionManager configuration.")
 
     # Load the session manager.
