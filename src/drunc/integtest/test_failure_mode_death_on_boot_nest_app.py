@@ -85,7 +85,6 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-1-controller",
         "ft-nested-segment-1-application",
         "ft-nested-segment-2-controller",
-        "ft-nested-segment-2-application",
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:

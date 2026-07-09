@@ -248,9 +248,9 @@
   <ref class="Segment" id="ft-nested-segment-1"/>
   <ref class="Segment" id="ft-nested-segment-2"/>
  </rel>
- <!-- <rel name="applications">
+ <rel name="applications">
   <ref class="DaqApplication" id="ft-top-segment-application"/>
- </rel> -->
+ </rel>
  <rel name="controller" class="RCApplication" id="ft-top-segment-controller"/>
 </obj>
 
