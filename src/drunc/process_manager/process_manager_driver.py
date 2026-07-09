@@ -555,7 +555,7 @@ To debug it, close drunc and run the following command:
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
                 self.log.info(
-                    f"Looking for top controller '{top_controller_name}' in the connectivity service at {connection_server}:{connection_port}"
+                    f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
                 try:
                     timeout = (

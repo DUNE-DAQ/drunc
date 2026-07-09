@@ -134,7 +134,9 @@ class gRPCChildNode(ChildNode):
                 time.sleep(5)
 
             else:
-                self.log.info(f"Connected to the controller ({self.uri})!")
+                self.log.info(
+                    f"Application {self.name} connected to the parnet application ({self.uri})!"
+                )
                 break
 
     def _attempt_reconnection(self, retry_call):

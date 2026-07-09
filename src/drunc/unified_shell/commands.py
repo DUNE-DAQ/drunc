@@ -134,7 +134,6 @@ def boot(
         # put_in_error_state = True
 
     # Check if session booted correctly, if not put it in error state
-    log.warning("Getting the session states")
     session_states = get_all_states(status_response)
     if "disconnected" in session_states:
         time.sleep(1)

@@ -225,7 +225,7 @@ class Controller(ControllerServicer):
         bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
         if bad_children:
             log_init_controller.error(
-                f"Children that did not initialise in time: {bad_children}. Placing "
+                f"Children that did not initialise in time: [red]{', '.join(bad_children).rstrip(', ')}[/]. Placing "
                 "controller in error state."
             )
             self.stateful_node.to_error()
