@@ -119,7 +119,7 @@
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-top-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_APP_NAME"/>
- <attr name="value" type="string" val="ft-nested-segment-application"/>
+ <attr name="value" type="string" val="ft-top-segment-application"/>
 </obj>
 <!-- End of faiilure mode config parameters -->
 
