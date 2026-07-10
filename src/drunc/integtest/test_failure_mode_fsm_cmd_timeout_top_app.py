@@ -49,7 +49,7 @@ ignored_logfile_problems = {
 # Point to the drunc config file for this test
 conf_dict = data_classes.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = "config/drunc/failure-testing.data.xml"
-conf_dict.config_session_name = "ft-fsm-cmd-timeout-nest-app"
+conf_dict.config_session_name = "ft-fsm-cmd-timeout-top-app"
 conf_dict.dunerc_cmd_args = ["--no-stop-error-batch-mode"]
 
 # Define the operational environment for this test
@@ -64,7 +64,7 @@ conf_dict.drunc_connsvc = True
 # conf_dict.connsvc_port = 12345
 
 # Collate tthe drunc config arguments into a dict to pass to the fixture
-confgen_arguments = {"test_failure_mode_fsm_cmd_timeout_nest_app": conf_dict}
+confgen_arguments = {"test_failure_mode_fsm_cmd_timeout_top_app": conf_dict}
 
 # Run these commands in the run control
 dunerc_command_list = """
@@ -172,18 +172,18 @@ def test_fsm_cmd_timeout_logfile(run_dunerc) -> None:
         (
             log
             for log in run_dunerc.log_files
-            if "ft-nested-segment-2-application" in str(log)
+            if "ft-top-segment-application" in str(log)
         ),
         None,
     )
     assert simulated_fsm_cmd_delay_logfile is not None, (
-        "Expected to find a log file for ft-nested-segment-2-application, but did not."
+        "Expected to find a log file for ft-top-segment-application, but did not."
     )
 
     # Check that the expected boot failure message is in the log file for the
     # application that dies on boot
     fsm_cmd_delay_str = [
-        "Delaying execution of conf in ft-nested-segment-2-application by 100 seconds"
+        "Delaying execution of conf in ft-top-segment-application by 100 seconds"
     ]
     line_found = check_file_containing(
         fsm_cmd_delay_str, simulated_fsm_cmd_delay_logfile

@@ -256,13 +256,11 @@ class AppState:
         # command. Thisserves uniquely to test the robustness of the Run Control when an
         # app exits upon running an applciation, and should not be used for any other
         # purpose.
-        ft_fsm_death: bool = os.getenv("DRUNC_FT_FSM_CMD_DEATH", False)
-        if ft_fsm_death:
-            ft_fsm_death = ft_fsm_death.lower() == "true"
-
         ft_fsm_death_cmd: bool = os.getenv("DRUNC_FT_FSM_CMD_DEATH_CMD", False)
         if ft_fsm_death_cmd:
             ft_fsm_death_cmd = ft_fsm_death_cmd.strip('"').strip("'") == req_data["id"]
+        self.log.debug(f"{ft_fsm_death_cmd=}")
+
         ft_fsm_death_app_name: bool = os.getenv(
             "DRUNC_FT_FSM_CMD_DEATH_APP_NAME", False
         )
@@ -270,13 +268,17 @@ class AppState:
             ft_fsm_death_app_name = (
                 ft_fsm_death_app_name.strip('"').strip("'") == self.appname
             )
-        if ft_fsm_death and ft_fsm_death_cmd and ft_fsm_death_app_name:
+        self.log.debug(f"{ft_fsm_death_app_name=}")
+
+        if ft_fsm_death_cmd and ft_fsm_death_app_name:
             self.log.debug("'Worries' sleeping prior to simulating process death")
             time.sleep(worries)
             self.log.warning(
                 f"Simulating death of {self.appname} during FSM cmd execution"
             )
-            exit(1)
+            # This requires a more agressive exit than sys.exit(), as this process is
+            # running in a separate thread.
+            os._exit(1)
 
         # "Execute" the command by sleeping for the determined time
         self.log.info(f"Sleeping for {cmd_exec_time} seconds")

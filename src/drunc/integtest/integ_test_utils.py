@@ -346,6 +346,9 @@ def get_status_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str,
 
     If no status table is found after the marker, returns an empty list.
 
+    If an entry is found, the table is structured as
+    | Name | Info | State | Substate | In error | Included | Endpoint |
+
     Example:
         >>> stdout = (
         ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
@@ -354,8 +357,17 @@ def get_status_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str,
         ...     "└"
         ... )
         >>> table = get_status_table_after_echo(stdout, "test_status_marker")
-        >>> table[0]["friendly_name"]
-        'root-controller'
+        >>> expected_row = {
+        ...     "Name": "root-controller",
+        ...     "Info": "",
+        ...     "State": "initial",
+        ...     "Substate": "initial",
+        ...     "In error": "No",
+        ...     "Included": "Yes",
+        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
+        ... }
+        >>> table[0] == expected_row
+        True
     """
     lines = strip_ansi(stdout).splitlines()
 
@@ -396,6 +408,13 @@ def get_rows_for_friendly_name(
 ) -> list[dict[str, str]]:
     """Return all rows whose `friendly_name` matches exactly after stripping."""
     return [row for row in ps_table if row["friendly_name"].strip() == friendly_name]
+
+
+def get_rows_for_status_name(
+    status_table: list[dict[str, str]], name: str
+) -> list[dict[str, str]]:
+    """Return all rows whose `Name` matches exactly after stripping."""
+    return [row for row in status_table if row["Name"].strip() == name]
 
 
 def assert_process_presence(

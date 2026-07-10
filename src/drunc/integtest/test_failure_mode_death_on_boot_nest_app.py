@@ -19,12 +19,16 @@ from integ_test_utils import (
 
 # Check if drunc is present in the DUNEDAQ_DB_PATH, and if not, skip all tests in this
 # file with an appropriate message
-present = any(["drunc" in i for i in os.getenv("DUNEDAQ_DB_PATH").split(":")])
-if not present:
-    pytest.skip(
-        "drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
-        allow_module_level=True,
-    )
+db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
+drunc_missing = not any(
+    "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
+)
+
+# Apply globally to all tests in this file
+pytestmark = pytest.mark.skipif(
+    drunc_missing,
+    reason="drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
+)
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
@@ -45,6 +49,7 @@ conf_dict = data_classes.integtest_params_for_predefined_dunedaq_config()
 conf_dict.predefined_config_db = "config/drunc/failure-testing.data.xml"
 conf_dict.config_session_name = "ft-death-on-boot-nest-app"
 conf_dict.dunerc_cmd_args = ["--no-stop-error-batch-mode"]
+
 # Define the operational environment for this test
 conf_dict.op_env = "test"
 

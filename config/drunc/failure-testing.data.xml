@@ -105,17 +105,13 @@
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-timeout-top-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME"/>
- <attr name="value" type="string" val="ft-nested-segment-application"/>
+ <attr name="value" type="string" val="ft-top-segment-application"/>
 </obj>
 
 <!-- Configs for apps dying on FSM command execution -->
-<obj class="Variable" id="drunc-ft-fsm-cmd-death">
- <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH"/>
- <attr name="value" type="string" val="True"/>
-</obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-cmd">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_CMD"/>
- <attr name="value" type="string" val="scrap"/>
+ <attr name="value" type="string" val="conf"/>
 </obj>
 <obj class="Variable" id="drunc-ft-fsm-cmd-death-nested-app">
  <attr name="name" type="string" val="DRUNC_FT_FSM_CMD_DEATH_APP_NAME"/>
