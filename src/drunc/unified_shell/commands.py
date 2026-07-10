@@ -115,22 +115,23 @@ def boot(
 
     # Local connectivity serivces are not reported in the status table, but they should
     # be. Increment the status_process_count by 1 if using the LCS.
-    # TODO: Remove this once the LCS is reported in the status table.
+    # TODO: Remove this once the LCS is reported in the status table (issue 745).
     if obj.session_uses_local_connectivity_service:
         status_process_count += 1
 
     if ps_process_count != status_process_count:
         time.sleep(1)
-        log.error(
-            f"Booted, but the number of processes found in the connectivity service "
-            f"({ps_process_count}) does not match the number of processes found in the "
-            f"process manager ({status_process_count}). Use the [yellow]ps[/] command "
-            "to determine which applications did not correctly register themselves on "
-            "the connectivity service by comparing against the status table, and the "
-            "[yellow]logs[/] command to find out more about this failure."
+        log.info(  # TODO - once issue 793 is resolved, this should be a log.error
+            f"Booted, but the number of processes registered with the process manager "
+            f"({ps_process_count}) does not match the number of processes registered "
+            f"with the top segment (root) controller ({status_process_count}). Use the "
+            "[yellow]ps[/] command to determine which applications did not correctly "
+            "register themselves on the connectivity service by comparing against the "
+            "status table, and the [yellow]logs[/] command to find out more about this "
+            "failure."
         )
         # TODO: Uncomment this once the cause of inconsistent status table printing is
-        # understood
+        # understood (issue 793)
         # put_in_error_state = True
 
     # Check if session booted correctly, if not put it in error state
