@@ -109,8 +109,8 @@ def test_get_all_states():
 
     # Test get_all_states function, assert that it returns the expected unique states
     # from the constructed StatusResponse object
-    top_segment_states = list(set(get_all_states(test_status_response_fttsc)))
-    assert top_segment_states == ["initialising", "disconnected", "initial"]
+    top_segment_states = set(get_all_states(test_status_response_fttsc))
+    assert top_segment_states == {"initialising", "disconnected", "initial"}
 
 
 def test_count_processes_in_status_response():

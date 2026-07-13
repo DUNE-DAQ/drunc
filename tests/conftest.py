@@ -32,7 +32,7 @@ def load_test_config() -> None:
 
     # Determine the path to the test configurations
     cwd = Path(os.path.abspath(__file__))
-    test_configs = cwd.parent / ".." / "config" / "tests"
+    test_configs = cwd.parent / ".." / "config" / "drunc"
     test_configs = test_configs.resolve()
     print(f"{test_configs=}")
 
