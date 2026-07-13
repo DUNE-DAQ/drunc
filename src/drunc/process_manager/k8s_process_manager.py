@@ -9,10 +9,10 @@ import threading
 import urllib.error
 import urllib.request
 import uuid
+from dataclasses import dataclass
 from time import sleep, time
 
 # Local Application Imports
-from druncschema.broadcast_pb2 import BroadcastType
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -42,11 +42,27 @@ from drunc.process_manager.configuration import (
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
+    compute_role_from_boot_request,
     format_hostname,
     on_parent_exit,
     validate_k8s_session_name,
 )
 from drunc.utils.utils import get_logger, resolve_localhost_to_hostname
+
+
+@dataclass
+class _LcsSessionState:
+    """
+    Holds all Local Connection Server (LCS) state for a single session (k8s namespace).
+
+    Using a dataclass instead of parallel dicts prevents the fields from drifting
+    out of sync and makes it obvious that they all describe the same LCS instance.
+    A session that has no LCS simply has no entry in K8sProcessManager._lcs_state.
+    """
+
+    podname: str | None = None
+    node_port: int | None = None
+    is_booted: bool = False
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -208,7 +224,11 @@ class K8sProcessManager(ProcessManager):
         self.uuids_pending_deletion = set()
         self.termination_complete_event = threading.Event()
         self.final_exit_codes = {}
-        self.local_connection_server_is_booted = False
+        # Per-session LCS state. Keyed by session (k8s namespace) name.
+        # Sessions that have no LCS simply have no entry here.
+        # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
+        self._lcs_state: dict[str, _LcsSessionState] = {}
+        self._lcs_state_lock = threading.Lock()
 
         # Host verification cache: {hostname: (is_valid, timestamp)}
         self._host_cache = {}
@@ -217,7 +237,7 @@ class K8sProcessManager(ProcessManager):
         # Get settings from configuration JSON file
         # Any comments following this one will relate to the parameters retrieved from
         # the configuration file if the comment starts as "CONFIGURATION -"
-        settings = getattr(self.configuration.data, "settings", {})
+        settings = getattr(self.configuration, "settings", {})
 
         # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
@@ -228,10 +248,6 @@ class K8sProcessManager(ProcessManager):
 
         # Readout app selector
         self.perf_selector = settings.get("readout_app_selector", "runp").lower()
-
-        # CONFIGURATION - connection server connection port numbers
-        self.connection_server_port = None
-        self.connection_server_node_port = None
 
         # CONFIGURATION - per-pod service port number
         service = settings.get("service", {})
@@ -336,8 +352,8 @@ class K8sProcessManager(ProcessManager):
         """
         Callback for when a pod terminates.
 
-        Updates the final exit code, broadcasts a status update, and signals
-        the termination_complete_event when all pending deletions are confirmed.
+        Updates the final exit code and signals the termination_complete_event
+        when all pending deletions are confirmed.
 
         Args:
             proc_uuid: The UUID string of the terminated process.
@@ -358,7 +374,20 @@ class K8sProcessManager(ProcessManager):
 
             # Publish this information
             self.log.info(end_str)
-            self.broadcast(end_str, BroadcastType.SUBPROCESS_STATUS_UPDATE)
+
+            # If the terminated pod was the LCS for its session, remove all LCS
+            # state for this session. A partial reset (e.g. only is_booted=False)
+            # would leave stale podname/port/node_port fields that could mislead
+            # a future LCS boot — including one that lands on a different node.
+            # Popping the entry is consistent with the invariant: "no LCS = no entry".
+            with self._lcs_state_lock:
+                lcs = self._lcs_state.get(session)
+                if lcs is not None and lcs.podname == meta.name:
+                    self.log.info(
+                        f"LCS pod '{meta.name}' for session '{session}' has terminated; "
+                        "removing LCS state so any future boot starts from a clean slate."
+                    )
+                    self._lcs_state.pop(session, None)
 
         # Clear the list of processes being removed
         if proc_uuid in self.uuids_pending_deletion:
@@ -504,6 +533,18 @@ class K8sProcessManager(ProcessManager):
             True if the pod has the 'root-controller' role label, False otherwise.
         """
         return tree_labels.get(f"role.{self.drunc_label}") == "root-controller"
+
+    def _lcs_state_for(self, session: str) -> _LcsSessionState:
+        """
+        Return the LCS state for *session*, creating a fresh entry if absent.
+
+        Centralises dict access so callers never deal with missing-key logic.
+        Thread-safe: the check-then-create is performed under _lcs_state_lock.
+        """
+        with self._lcs_state_lock:
+            if session not in self._lcs_state:
+                self._lcs_state[session] = _LcsSessionState()
+            return self._lcs_state[session]
 
     def _is_host_cached(self, host: str) -> None | bool:
         """
@@ -765,20 +806,26 @@ class K8sProcessManager(ProcessManager):
             if e.status != 409:
                 self.log.error(f"Failed to create headless service for {podname}: {e}")
 
-    def _create_nodeport_service(self, podname, session, pod_uid) -> None:
+    def _create_nodeport_service(
+        self,
+        podname: str,
+        session: str,
+        pod_uid: str,
+        port: int,
+        node_port: int,
+    ) -> None:
         """
         Create a NodePort Kubernetes Service for external access.
 
-        Builds and creates a NodePort Service with externalTrafficPolicy=Local,
-        mapping the connection_server_port to a fixed NodePort
-        (connection_server_node_port). The service is owned by the pod via an
-        OwnerReference. Raises a DruncK8sException if the NodePort is already
-        allocated or another API error occurs.
+        Builds and creates a NodePort Service with externalTrafficPolicy=Local.
+        The service is owned by the pod via an OwnerReference.
 
         Args:
-            podname - the name of the pod (also used as the service name)
-            session - the Kubernetes namespace (session) to create the service in
-            pod_uid - the UID of the owning pod for the OwnerReference
+            podname   - the name of the pod (also used as the service name)
+            session   - the Kubernetes namespace (session) to create the service in
+            pod_uid   - the UID of the owning pod for the OwnerReference
+            port      - the container port to expose
+            node_port - the fixed NodePort to allocate on cluster nodes
 
         Raises:
             DruncK8sException - if the NodePort is already in use or another API error occurs
@@ -808,9 +855,9 @@ class K8sProcessManager(ProcessManager):
                 ports=[
                     client.V1ServicePort(
                         protocol="TCP",
-                        port=self.connection_server_port,
-                        target_port=self.connection_server_port,
-                        node_port=self.connection_server_node_port,
+                        port=port,
+                        target_port=port,
+                        node_port=node_port,
                     )
                 ],
             ),
@@ -820,8 +867,8 @@ class K8sProcessManager(ProcessManager):
                 namespace=session, body=service_manifest
             )
             self.log.info(
-                f'Created NodePort service "{session}.{podname}" on port {self.connection_server_port} '
-                f"(NodePort: {self.connection_server_node_port} for external access)"
+                f'Created NodePort service "{session}.{podname}" on port {port} '
+                f"(NodePort: {node_port} for external access)"
             )
 
         except self._api_error_v1_api as e:
@@ -836,9 +883,8 @@ class K8sProcessManager(ProcessManager):
                     is_port_conflict = True
 
             if is_port_conflict:
-                port = self.connection_server_node_port
                 error_message = (
-                    f"NodePort {port} is already in use by another service. "
+                    f"NodePort {node_port} is already in use by another service. "
                     f"Cannot start '{podname}'."
                 )
                 self.log.error(error_message)
@@ -1049,49 +1095,14 @@ class K8sProcessManager(ProcessManager):
             A dictionary of labels containing 'tree-id.{drunc_label}' and
             'role.{drunc_label}' keys with their corresponding values.
         """
-        role = "unknown"
+        role = compute_role_from_boot_request(boot_request)
 
         labels = {f"tree-id.{self.drunc_label}": tree_id}
-
-        if not tree_id:
-            role = "unknown"
-        elif self._is_controller_executable(boot_request):
-            if tree_id == "0":
-                role = "root-controller"
-            elif tree_id.startswith("0."):
-                role = "segment-controller"
-            else:
-                role = "infrastructure-applications"  # controller outside segment tree
-
-        else:
-            if tree_id.startswith("0."):
-                role = "application"
-            else:
-                role = "infrastructure-applications"
-
         labels[f"role.{self.drunc_label}"] = role
         self.log.info(
             f"Assigning labels for '{podname}': role={role}, tree-id={tree_id}"
         )
         return labels
-
-    def _is_controller_executable(self, boot_request: BootRequest) -> bool:
-        """
-        Check whether the boot request's main executable is a drunc-controller.
-
-        Inspects all executable-and-arguments entries in the process description
-        for the 'drunc-controller' executable name.
-
-        Args:
-            boot_request: The BootRequest to inspect.
-
-        Returns:
-            True if any executable entry is 'drunc-controller', False otherwise.
-        """
-        for e_and_a in boot_request.process_description.executable_and_arguments:
-            if e_and_a.exec == "drunc-controller":
-                return True
-        return False
 
     def _build_container_env(
         self, boot_request: BootRequest, tree_labels: dict[str, str]
@@ -1210,7 +1221,7 @@ class K8sProcessManager(ProcessManager):
             main_container - the fully configured V1Container object
         """
 
-        pod_image = self.configuration.data.image
+        pod_image = self.configuration.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
         # Build command to exec
@@ -1255,7 +1266,7 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = getattr(self.configuration.data, "settings", {})
+            settings = getattr(self.configuration, "settings", {})
             host_configs = settings.get("host_configs", {})
 
             if not target_host or target_host not in host_configs:
@@ -1318,7 +1329,6 @@ class K8sProcessManager(ProcessManager):
             self._is_local_connection_server(tree_labels, podname)
             and lcs_port is not None
         ):
-            self.connection_server_name = podname
             container_ports.append(
                 client.V1ContainerPort(container_port=lcs_port, name="http-port")
             )
@@ -1394,32 +1404,36 @@ class K8sProcessManager(ProcessManager):
             host_aliases - a list containing a single V1HostAlias mapping localhost
                            to the connection server IP, or None if not applicable
         """
-        host_aliases = None
+        with self._lcs_state_lock:
+            lcs = self._lcs_state.get(session)
         if (
-            not self._is_local_connection_server(tree_labels, podname)
-            and self.local_connection_server_is_booted
+            self._is_local_connection_server(tree_labels, podname)
+            or lcs is None
+            or not lcs.is_booted
         ):
-            connection_server_ip = None
-            retry_count = 0
-            max_retries = 10
-            while not connection_server_ip and retry_count < max_retries:
-                connection_server_ip = self._get_connection_server_cluster_ip(session)
-                if not connection_server_ip:
-                    sleep(1)
-                    retry_count += 1
+            return None
 
-            if connection_server_ip:
-                host_aliases = [
-                    client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
-                ]
-                self.log.info(
-                    f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
-                )
-            else:
-                self.log.warning(
-                    f"Could not get connection server ClusterIP for pod '{podname}'"
-                )
-        return host_aliases
+        connection_server_ip = None
+        retry_count = 0
+        max_retries = 10
+        while not connection_server_ip and retry_count < max_retries:
+            connection_server_ip = self._get_connection_server_cluster_ip(session)
+            if not connection_server_ip:
+                sleep(1)
+                retry_count += 1
+
+        if connection_server_ip:
+            self.log.info(
+                f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
+            )
+            return [
+                client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+            ]
+
+        self.log.warning(
+            f"Could not get connection server ClusterIP for pod '{podname}'"
+        )
+        return None
 
     def _determine_service_type(
         self, podname: str, boot_request: BootRequest, tree_labels: dict[str, str]
@@ -1625,21 +1639,20 @@ class K8sProcessManager(ProcessManager):
                     raise DruncK8sException(
                         "LCS service creation failed: port was not extracted."
                     )
-                # This call uses class variables set in _create_pod
-                self._create_nodeport_service(podname, session, pod_uid)
+                self._create_nodeport_service(
+                    podname, session, pod_uid, port=lcs_port, node_port=lcs_port
+                )
 
             elif self._is_root_controller(tree_labels):
                 self.log.info(
                     f"'{podname}' is the root controller, checking for NodePort service."
                 )
-                # This call also relies on class variables, so we must set them
-                # here, just as the original logic did.
                 port = self._extract_port_from_cmd(boot_request)
                 if port:
                     self.log.info(f"Extracted port {port} for '{podname}' NodePort.")
-                    self.connection_server_port = port
-                    self.connection_server_node_port = port
-                    self._create_nodeport_service(podname, session, pod_uid)
+                    self._create_nodeport_service(
+                        podname, session, pod_uid, port=port, node_port=port
+                    )
                 else:
                     # This case should be caught by _determine_service_type,
                     # but we handle it just in case.
@@ -1672,12 +1685,13 @@ class K8sProcessManager(ProcessManager):
         """
         try:
             lcs_port = None
-            # Early Port Extraction and Class Variable Setup for LCS
+            # Early Port Extraction and Per-Session LCS State Setup
             if self._is_local_connection_server(tree_labels, podname):
                 lcs_port = self._extract_port_from_cmd(boot_request)
                 if lcs_port:
-                    self.connection_server_port = lcs_port
-                    self.connection_server_node_port = lcs_port
+                    lcs = self._lcs_state_for(session)
+                    lcs.podname = podname
+                    lcs.node_port = lcs_port
                 else:
                     raise DruncK8sException(
                         f"Could not extract port for LCS '{podname}'."
@@ -1760,8 +1774,8 @@ class K8sProcessManager(ProcessManager):
         Get the ClusterIP of the connection server's Kubernetes Service.
 
         Reads the named service from the session namespace and returns its
-        clusterIP. Returns None if the service cannot be found or an API
-        error occurs.
+        clusterIP. Returns None if the session has no LCS, the service cannot
+        be found, or an API error occurs.
 
         Args:
             session - the Kubernetes namespace (session) containing the service
@@ -1769,9 +1783,16 @@ class K8sProcessManager(ProcessManager):
         Returns:
             cluster_ip - the ClusterIP string, or None on failure
         """
+        with self._lcs_state_lock:
+            lcs = self._lcs_state.get(session)
+        if lcs is None or lcs.podname is None:
+            self.log.warning(
+                f"No local connection server registered for session '{session}'"
+            )
+            return None
         try:
             service = self._core_v1_api.read_namespaced_service(
-                name=self.connection_server_name, namespace=session
+                name=lcs.podname, namespace=session
             )
             return service.spec.cluster_ip
         except self._api_error_v1_api as e:
@@ -2130,7 +2151,7 @@ class K8sProcessManager(ProcessManager):
 
         Stage 1: waits for the pod to be Running and Ready in the Kubernetes API.
         Stage 2: waits for the NodePort to be externally reachable via HTTP.
-        Sets local_connection_server_is_booted to True on success.
+        Sets _lcs_state[session].is_booted to True on success.
 
         Args:
             podname - the name of the LCS pod to wait for
@@ -2147,7 +2168,8 @@ class K8sProcessManager(ProcessManager):
         node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
 
         # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
-        url = f"http://{node_name}:{self.connection_server_node_port}"
+        lcs = self._lcs_state_for(session)
+        url = f"http://{node_name}:{lcs.node_port}"
 
         # Calculate remaining time for stage 2, preserving original logic
         elapsed_stage1 = time() - start_time
@@ -2160,7 +2182,12 @@ class K8sProcessManager(ProcessManager):
 
         self._wait_for_nodeport_http_ready(url, remaining_time)
 
-        self.local_connection_server_is_booted = True
+        with self._lcs_state_lock:
+            # Re-check the entry still exists: the watcher may have popped it
+            # if the pod died in the narrow window between stage 2 succeeding
+            # and this assignment.
+            if self._lcs_state.get(session) is lcs:
+                lcs.is_booted = True
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
@@ -2484,7 +2511,7 @@ class K8sProcessManager(ProcessManager):
             return ProcessInstanceList(values=[])
 
         self.log.info(
-            f"Starting staged termination for {len(targeted_uuids)} pod(s)..."
+            f"Starting staged termination for {len(targeted_uuids)} process(es)..."
         )
 
         # Define the blocking kill_and_wait helper
@@ -2496,7 +2523,7 @@ class K8sProcessManager(ProcessManager):
                 if grace_period == 0
                 else "Gracefully terminating"
             )
-            self.log.info(f"{action} {len(uuids)} pod(s)...")
+            self.log.info(f"{action} {len(uuids)} process(es)...")
 
             self.termination_complete_event.clear()
             self.uuids_pending_deletion.update(uuids)
@@ -2574,19 +2601,19 @@ class K8sProcessManager(ProcessManager):
                 for depth in sorted(by_depth.keys(), reverse=True):
                     depth_uuids = by_depth[depth]
                     self.log.info(
-                        f"--- Termination Step: Shutting down role '{role}' at depth {depth} "
+                        f"--- Termination of role '{role}' at depth {depth} "
                         f"({len(depth_uuids)} pod(s)) ---"
                     )
                     kill_and_wait(depth_uuids)  # This call is blocking
                     self.log.info(
-                        f"--- Termination Step: Role '{role}' at depth {depth} complete ---"
+                        f"--- Termination of role '{role}' at depth {depth} complete ---"
                     )
             else:
                 self.log.info(
-                    f"--- Termination Step: Shutting down role '{role}' ({len(uuids_in_step)} pod(s)) ---"
+                    f"--- Termination of role '{role}' ({len(uuids_in_step)} pod(s)) ---"
                 )
                 kill_and_wait(uuids_in_step)  # This call is blocking
-                self.log.info(f"--- Termination Step: Role '{role}' complete ---")
+                self.log.info(f"--- Termination of role '{role}' complete ---")
 
         # Finalize and clean up
         final_ret = []
@@ -2616,6 +2643,8 @@ class K8sProcessManager(ProcessManager):
                     self.log.info(f'Session "{session}" is empty, deleting namespace.')
                     self._core_v1_api.delete_namespace(session)
                     self.managed_sessions.remove(session)
+                    with self._lcs_state_lock:
+                        self._lcs_state.pop(session, None)
 
             except self._api_error_v1_api as e:
                 self.log.warning(f"Failed during namespace cleanup: {e}")
@@ -2633,7 +2662,7 @@ class K8sProcessManager(ProcessManager):
             A ProcessInstanceList containing DEAD-status entries for all terminated
             processes, or an empty list if there were no processes to terminate.
         """
-        self.log.info("Terminating all known K8s processes.")
+        self.log.info("Terminating")
         if not self.boot_request:
             self.log.info("No processes to terminate.")
             return ProcessInstanceList(values=[])

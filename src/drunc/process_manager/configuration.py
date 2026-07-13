@@ -3,7 +3,7 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Union
+from typing import TYPE_CHECKING, Any, Dict, Self, Union
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -12,7 +12,6 @@ from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
-from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
@@ -38,92 +37,91 @@ class ProcessManagerTypes(Enum):
     SSH_PARAMIKO = 3
 
 
-class ProcessManagerConfData:
-    def __init__(self):
+class ProcessManagerConfHandler(ConfHandler):
+    """Handler for process manager configuration."""
+
+    log_path: str = "./"
+
+    def populate_from_dict(self, data: dict[str, object]) -> None:
         self.broadcaster = None
         self.authoriser = None
-        self.type = ProcessManagerTypes.Unknown
+        self.pm_type = ProcessManagerTypes.Unknown
         self.command_address = ""
         self.environment = {}
         self.settings = {}
+        self.opmon_conf = None
         self.opmon_uri = None
         self.opmon_publisher = None
 
+        self.environment = data.get("environment", {})
+        self.settings = data.get("settings", {})
+        self.opmon_conf = data.get("opmon_conf")
+        self.opmon_uri = data.get("opmon_uri")
 
-class ProcessManagerConfHandler(ConfHandler):
-    def __init__(self, log_path: str, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.log_path = log_path
-        self.log = get_logger("process_manager.conf_handler")
+        match data["type"].lower():
+            case "ssh":
+                self.pm_type = ProcessManagerTypes.SSH_SHELL
+                self.kill_timeout = data.get("kill_timeout", 0.5)
+            case "ssh-paramiko":
+                self.pm_type = ProcessManagerTypes.SSH_PARAMIKO
+                self.kill_timeout = data.get("kill_timeout", 0.5)
+            case "k8s":
+                self.pm_type = ProcessManagerTypes.K8s
+                self.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
+            case _:
+                raise UnknownProcessManagerType(data["type"])
+
+    @classmethod
+    def from_json(
+        cls, path: str, session_name: str | None = None, log_path: str = "./"
+    ) -> Self:
+        """Create handler from JSON file with optional log path."""
+        instance = super().from_json(path, session_name)
+        instance.log_path = log_path
+        instance.log = get_logger("process_manager.conf_handler")
+        return instance
 
     def get_log_path(self):
         return self.log_path
 
-    def _parse_dict(self, data):
-        new_data = ProcessManagerConfData()
-        if data.get("broadcaster"):
-            new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(
-                data.get("broadcaster")
-            )
-        new_data.environment = data.get("environment", {})
-        new_data.settings = data.get("settings", {})
-
-        match data["type"].lower():
-            case "ssh":
-                new_data.type = ProcessManagerTypes.SSH_SHELL
-                new_data.kill_timeout = data.get("kill_timeout", 0.5)
-            case "ssh-paramiko":
-                new_data.type = ProcessManagerTypes.SSH_PARAMIKO
-                new_data.kill_timeout = data.get("kill_timeout", 0.5)
-            case "k8s":
-                new_data.type = ProcessManagerTypes.K8s
-                new_data.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
-            case _:
-                raise UnknownProcessManagerType(data["type"])
-
-        # opmon_publisher left as default None
-        self.opmon_conf = parse_opmon_conf(
+    def _post_process_oks(self) -> None:
+        """Post-process to handle OpMon configuration."""
+        opmon_conf = parse_opmon_conf(
             log=self.log,
-            conf=data.get("opmon_conf", None),
-            uri=data.get("opmon_uri", None),
-            session=new_data.type.name,
+            conf=getattr(self, "opmon_conf", None),
+            uri=getattr(self, "opmon_uri", None),
+            session=getattr(self, "pm_type", ProcessManagerTypes.Unknown).name,
             application="process_manager",
         )
 
-        if self.opmon_conf.path == "./info.json":
-            self.opmon_conf.path = (
-                "./info."
-                + self.opmon_conf.session
-                + "."
-                + self.opmon_conf.application
-                + ".json"
+        if opmon_conf.path == "./info.json":
+            opmon_conf.path = (
+                "./info." + opmon_conf.session + "." + opmon_conf.application + ".json"
             )
 
         self.log.debug(
-            "Initializing process manager OpMon with configuration %s", self.opmon_conf
+            "Initializing process manager OpMon with configuration %s", opmon_conf
         )
         try:
-            if self.opmon_conf.opmon_type == "stream":
-                new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
+            if opmon_conf.opmon_type == "stream":
+                self.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
                 self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
-                    self.opmon_conf,
+                    opmon_conf,
                 )
             else:
-                new_data.opmon_publisher = OpMonPublisher(
-                    conf=self.opmon_conf, rich_handler=True
+                self.opmon_publisher = OpMonPublisher(
+                    conf=opmon_conf, rich_handler=True
                 )
                 self.log.debug(
                     "%s OpMonPublisher initialized with configuration %s",
-                    self.opmon_conf.opmon_type,
-                    self.opmon_conf,
+                    opmon_conf.opmon_type,
+                    opmon_conf,
                 )
 
         except Exception as e:
             self.log.error("Failed to initialize OpMonPublisher: %s", e)
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
-
-        return new_data
 
 
 def get_commandline_parameters(
