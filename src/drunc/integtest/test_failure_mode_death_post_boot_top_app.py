@@ -13,8 +13,8 @@ import pytest
 from integ_test_utils import (
     check_file_containing,
     get_ps_table_after_echo,
-    get_rows_for_friendly_name,
-    get_rows_for_status_name,
+    get_rows_by_friendly_name_from_ps_table,
+    get_rows_by_name_from_status_table,
     get_status_table_after_echo,
     strip_ansi,
 )
@@ -166,7 +166,9 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
         run_dunerc.completed_process.stdout, "ps-post-boot"
     )
     dead_app_name = "ft-top-segment-application"
-    ps_table_dead_app_entry = get_rows_for_friendly_name(ps_table, dead_app_name)
+    ps_table_dead_app_entry = get_rows_by_friendly_name_from_ps_table(
+        ps_table, dead_app_name
+    )
     assert ps_table_dead_app_entry, (
         f"Expected to see {dead_app_name} in the ps table, but it was not found"
     )
@@ -190,7 +192,9 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
         run_dunerc.completed_process.stdout, "status-post-boot"
     )
     dead_app_name = "ft-top-segment-application"
-    status_table_dead_app_entry = get_rows_for_status_name(status_table, dead_app_name)
+    status_table_dead_app_entry = get_rows_by_name_from_status_table(
+        status_table, dead_app_name
+    )
     assert status_table_dead_app_entry, (
         f"Expected to see {dead_app_name} in the ps table, but it was not found"
     )
@@ -232,7 +236,7 @@ def test_fsm_in_error_status_table(run_dunerc) -> None:
     status_table = get_status_table_after_echo(
         run_dunerc.completed_process.stdout, "status-post-boot"
     )
-    root_controller_status = get_rows_for_status_name(
+    root_controller_status = get_rows_by_name_from_status_table(
         status_table, "ft-root-controller"
     )
     assert root_controller_status, (

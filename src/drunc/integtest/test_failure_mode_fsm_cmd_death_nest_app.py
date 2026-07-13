@@ -12,8 +12,8 @@ import integrationtest.data_classes as data_classes
 import pytest
 from integ_test_utils import (
     get_ps_table_after_echo,
-    get_rows_for_friendly_name,
-    get_rows_for_status_name,
+    get_rows_by_friendly_name_from_ps_table,
+    get_rows_by_name_from_status_table,
     get_status_table_after_echo,
     strip_ansi,
 )
@@ -85,24 +85,32 @@ echo ps-post-conf
 ps
 """.split()
 
+dead_app_name = "ft-nested-segment-2-application"
+
 
 def test_dunerc_success(run_dunerc) -> None:
-    """Checks that the drunc integration command sequence completes successfully."""
+    """
+    Checks that the drunc integration command sequence completes successfully without
+    any unexpected failures.
+    """
+
     # print the name of the current test
     current_test = os.environ.get("PYTEST_CURRENT_TEST")
     match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
     if match_obj:
         current_test = match_obj.group(1)
+
     banner_line = re.sub(".", "=", current_test)
     print(banner_line)
     print(current_test)
     print(banner_line)
+
     # Check that dunerc completed correctly
     assert run_dunerc.completed_process.returncode == 0
 
 
 def test_log_files_are_present(run_dunerc) -> None:
-    """Checks that expected process log files exist."""
+    """Checks that expected session log files exist."""
     generated_log_files = [str(log.name) for log in run_dunerc.log_files]
     for app_name in [
         "ft-root-controller",
@@ -114,6 +122,7 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
+        print(f"Checking for log file for {app_name}...")
         assert any(
             f"{run_dunerc.daq_session_name}_{app_name}" in logfile
             for logfile in generated_log_files
@@ -121,7 +130,9 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
-    """Checks that all expected applications are alive after boot."""
+    """Checks that all expected applications are alive after boot, and that no errors are encountered."""
+
+    # Get the ps table
     ps_table_post_boot = get_ps_table_after_echo(
         run_dunerc.completed_process.stdout, "ps-post-boot"
     )
@@ -145,12 +156,14 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
             f"Expected {app_name} to be alive after boot, but it was not."
         )
 
+    # Get the status table
     status_table_post_boot = get_status_table_after_echo(
         run_dunerc.completed_process.stdout, "status-post-boot"
     )
     assert status_table_post_boot, (
         "Expected status table after boot, but did not find it."
     )
+
     # Check that the session is not in an error state after boot
     all_application_error_state_query = [
         app["In error"] for app in status_table_post_boot
@@ -164,23 +177,21 @@ def test_fsm_cmd_application_death_log_file(run_dunerc) -> None:
     """
     Checks that the application that dies on fsm cmd execution logs the expected message to its log file.
     """
-    # Check that the session is correctly put in error state if an appliucation dies
-    # on a stateful command execution
+    # Get the dead application name log file
     simulated_death_app_logfile = next(
-        (
-            log
-            for log in run_dunerc.log_files
-            if "ft-nested-segment-2-application" in str(log)
-        ),
+        (log for log in run_dunerc.log_files if dead_app_name in str(log)),
         None,
     )
     assert simulated_death_app_logfile is not None, (
         "Expected to find a log file for ft-nested-segment-2-application, but did not."
     )
+
+    # Check the logfile for the entry about the simulated death of the application during FSM command execution
     search_str = (
         "Simulating death of ft-nested-segment-2-application during FSM cmd execution"
     )
     lines = strip_ansi(simulated_death_app_logfile.read_text()).splitlines()
+
     str_found = any(search_str in line for line in lines)
     assert str_found is True, (
         "Expected to see the error message in stdout, but did not."
@@ -189,22 +200,25 @@ def test_fsm_cmd_application_death_log_file(run_dunerc) -> None:
 
 def test_fsm_cmd_application_death_ps_table(run_dunerc) -> None:
     """
-    Checks that the application that dies on fsm cmd execution logs the expected message to its log file.
+    Checks that the application that dies on fsm cmd execution is marked as dead in the ps table.
     """
-    # Check that the session is correctly put in error state if an appliucation dies
-    # on a stateful command execution
+    # Get the ps table after the fsm cmd execution
     ps_table_post_conf = get_ps_table_after_echo(
         run_dunerc.completed_process.stdout, "ps-post-conf"
     )
     assert ps_table_post_conf, "Expected ps table after conf, but did not find it."
-    nested_segment_2_application_row = get_rows_for_friendly_name(
-        ps_table_post_conf, "ft-nested-segment-2-application"
+
+    # Get te row for the dead application
+    dead_app_ps_row = get_rows_by_friendly_name_from_ps_table(
+        ps_table_post_conf, dead_app_name
     )
-    assert nested_segment_2_application_row, (
-        "Expected to find a row for the nested segment 2 application in the ps table, but did not."
+    assert dead_app_ps_row, (
+        f"Expected to find a row for the application {dead_app_name} in the ps table, but did not."
     )
-    assert nested_segment_2_application_row[0]["alive"] == "False", (
-        "Expected nested segment 2 application to be dead after fsm cmd execution, but found it alive."
+
+    # Ensure the app is marked as dead in the ps table
+    assert dead_app_ps_row[0]["alive"] == "False", (
+        f"Expected application {dead_app_name} to be dead after fsm cmd execution, but found it alive."
     )
 
 
@@ -213,23 +227,25 @@ def test_session_in_error_cli(run_dunerc) -> None:
     Checks that the application that dies on fsm cmd execution causes the session
     to go into an error state, and that the expected message is printed to stdout.
     """
-    # Get the status table shown during the command execution
+    # Get the status table after the command execution
     stdout = run_dunerc.completed_process.stdout
     status_table_post_conf = get_status_table_after_echo(stdout, "status-post-conf")
 
-    # Check the substate of the root controller has not made it to the target state
-    root_controller_row = get_rows_for_status_name(
+    # Get the root controller row
+    root_controller_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-root-controller"
     )
     assert root_controller_row, (
         "Expected to find a row for the root controller in the status table, but did not."
     )
+
+    # Check the substate never made it to the target state.
     assert root_controller_row[0]["Substate"] == "propagating-conf", (
         f"Expected root controller substate to be 'propagating-conf', but found '{root_controller_row[0]['Substate']}'."
     )
 
     # Check the state of a segment controller which does not time out reaches the target state
-    nested_segment_controller_row = get_rows_for_status_name(
+    nested_segment_controller_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-nested-segment-1-controller"
     )
     assert nested_segment_controller_row, (
@@ -240,7 +256,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
     )
 
     # Check the state of a segment application which does not time out reaches the target state
-    nested_segment_application_row = get_rows_for_status_name(
+    nested_segment_application_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-nested-segment-1-application"
     )
     assert nested_segment_application_row, (
@@ -256,7 +272,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
         "Expected to find the timeout message in stdout, but did not."
     )
 
-    # Checked that this is explicitly logged too
+    # Checked that the error state is explicitly logged
     search_str = "FSM is in error"
     lines = strip_ansi(stdout).splitlines()
     str_found = any(search_str in line for line in lines)

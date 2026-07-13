@@ -403,14 +403,14 @@ def get_column_for_friendly_name(
     )
 
 
-def get_rows_for_friendly_name(
+def get_rows_by_friendly_name_from_ps_table(
     ps_table: list[dict[str, str]], friendly_name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `friendly_name` matches exactly after stripping."""
     return [row for row in ps_table if row["friendly_name"].strip() == friendly_name]
 
 
-def get_rows_for_status_name(
+def get_rows_by_name_from_status_table(
     status_table: list[dict[str, str]], name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `Name` matches exactly after stripping."""
@@ -457,7 +457,7 @@ def assert_process_presence(
         ...     expected_present=False,
         ... )
     """
-    matching_rows = get_rows_for_friendly_name(ps_table, friendly_name)
+    matching_rows = get_rows_by_friendly_name_from_ps_table(ps_table, friendly_name)
 
     if expected_present:
         assert matching_rows, (

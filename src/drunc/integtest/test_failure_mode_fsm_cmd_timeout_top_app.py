@@ -13,7 +13,7 @@ import pytest
 from integ_test_utils import (
     check_file_containing,
     get_ps_table_after_echo,
-    get_rows_for_status_name,
+    get_rows_by_name_from_status_table,
     get_status_table_after_echo,
     strip_ansi,
 )
@@ -81,29 +81,34 @@ conf
 
 echo status-post-conf
 status
-
-echo ps-post-conf
-ps
 """.split()
+
+timeout_app_name = "ft-nested-segment-2-application"
 
 
 def test_dunerc_success(run_dunerc) -> None:
-    """Checks that the drunc integration command sequence completes successfully."""
+    """
+    Checks that the drunc integration command sequence completes successfully without
+    any unexpected failures.
+    """
+
     # print the name of the current test
     current_test = os.environ.get("PYTEST_CURRENT_TEST")
     match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
     if match_obj:
         current_test = match_obj.group(1)
+
     banner_line = re.sub(".", "=", current_test)
     print(banner_line)
     print(current_test)
     print(banner_line)
+
     # Check that dunerc completed correctly
     assert run_dunerc.completed_process.returncode == 0
 
 
 def test_log_files_are_present(run_dunerc) -> None:
-    """Checks that expected process log files exist."""
+    """Checks that expected session log files exist."""
     generated_log_files = [str(log.name) for log in run_dunerc.log_files]
     for app_name in [
         "ft-root-controller",
@@ -115,6 +120,7 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
+        print(f"Checking for log file for {app_name}...")
         assert any(
             f"{run_dunerc.daq_session_name}_{app_name}" in logfile
             for logfile in generated_log_files
@@ -123,6 +129,8 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
     """Checks that all expected applications are alive after boot."""
+
+    # Get the ps table
     ps_table_post_boot = get_ps_table_after_echo(
         run_dunerc.completed_process.stdout, "ps-post-boot"
     )
@@ -146,12 +154,14 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
             f"Expected {app_name} to be alive after boot, but it was not."
         )
 
+    # Get the status table
     status_table_post_boot = get_status_table_after_echo(
         run_dunerc.completed_process.stdout, "status-post-boot"
     )
     assert status_table_post_boot, (
         "Expected status table after boot, but did not find it."
     )
+
     # Check that the session is not in an error state after boot
     all_application_error_state_query = [
         app["In error"] for app in status_table_post_boot
@@ -167,23 +177,18 @@ def test_fsm_cmd_timeout_logfile(run_dunerc) -> None:
     logfile, and that the defined logfile contains the expected message indicating that
     the stateful command induced delay is being simulated.
     """
-    # Retrieve the log file for the application that is configured to die on boot
+    # Retrieve the log file for the application that is configured to timeout on fsm command execution
     simulated_fsm_cmd_delay_logfile = next(
-        (
-            log
-            for log in run_dunerc.log_files
-            if "ft-top-segment-application" in str(log)
-        ),
+        (log for log in run_dunerc.log_files if timeout_app_name in str(log)),
         None,
     )
     assert simulated_fsm_cmd_delay_logfile is not None, (
-        "Expected to find a log file for ft-top-segment-application, but did not."
+        f"Expected to find a log file for {timeout_app_name}, but did not."
     )
 
-    # Check that the expected boot failure message is in the log file for the
-    # application that dies on boot
+    # Check that the expected delay message is present in the log file
     fsm_cmd_delay_str = [
-        "Delaying execution of conf in ft-top-segment-application by 100 seconds"
+        f"Delaying execution of conf in {timeout_app_name} by 100 seconds"
     ]
     line_found = check_file_containing(
         fsm_cmd_delay_str, simulated_fsm_cmd_delay_logfile
@@ -202,19 +207,21 @@ def test_session_in_error_cli(run_dunerc) -> None:
     stdout = run_dunerc.completed_process.stdout
     status_table_post_conf = get_status_table_after_echo(stdout, "status-post-conf")
 
-    # Check the substate of the root controller has not made it to the target state
-    root_controller_row = get_rows_for_status_name(
+    # Get the root contorller row in the status table
+    root_controller_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-root-controller"
     )
     assert root_controller_row, (
         "Expected to find a row for the root controller in the status table, but did not."
     )
+
+    # Check that the root controller did not reach the target state
     assert root_controller_row[0]["Substate"] == "propagating-conf", (
         f"Expected root controller substate to be 'propagating-conf', but found '{root_controller_row[0]['Substate']}'."
     )
 
     # Check the state of a segment controller which does not time out reaches the target state
-    nested_segment_controller_row = get_rows_for_status_name(
+    nested_segment_controller_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-nested-segment-1-controller"
     )
     assert nested_segment_controller_row, (
@@ -225,7 +232,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
     )
 
     # Check the state of a segment application which does not time out reaches the target state
-    nested_segment_application_row = get_rows_for_status_name(
+    nested_segment_application_row = get_rows_by_name_from_status_table(
         status_table_post_conf, "ft-nested-segment-1-application"
     )
     assert nested_segment_application_row, (
