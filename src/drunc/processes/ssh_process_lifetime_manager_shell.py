@@ -1158,9 +1158,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
             metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
-            # self.log.critical(
-            #     f"Metadata file for {uuid} will be written to {metadata_file} on remote host"
-            # )
             tree_id = boot_request.process_description.metadata.tree_id
             name = boot_request.process_description.metadata.name
             is_controller = any(
