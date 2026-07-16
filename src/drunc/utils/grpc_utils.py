@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, NoReturn, cast
+from typing import Callable, List, NoReturn, cast
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -13,13 +13,11 @@ from google.protobuf import any_pb2, json_format
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2, status_pb2
-from grpc_status import rpc_status
+from grpc_status import rpc_status  # type: ignore[import-untyped]
 
 from drunc.exceptions import (
     DruncCommandException,
     DruncException,
-    DruncNotImplementedException,
-    DruncSetupException,
 )
 
 
@@ -394,38 +392,38 @@ def extract_grpc_rich_error(grpc_error: grpc.RpcError) -> GrpcErrorDetails:
     )
 
 
-def abort_with_rich_error_status(
+def abort_with_rich_details(
     context: grpc.ServicerContext,
     grpc_error_code: int,
     message: str,
-    error_obj: object,
+    error_objs: list[Message],
 ) -> NoReturn:
     """
-    Aborts the current gRPC call with a rich error status containing
-    structured error details.
+    Pack a list of detail objects into a single gRPC Status.
 
     Args:
         context (grpc.ServicerContext): The gRPC context used to abort the RPC
         grpc_error_code (code_pb2.Code): A gRPC status code from `google.rpc.code_pb2`
             (e.g., `code_pb2.INTERNAL`, `code_pb2.INVALID_ARGUMENT`)
         message (str): Quick description of the error
-        error_obj (Message): A protobuf message providing additional structured
+        error_objs (List): A list of protobuf messages providing additional structured
             error details. It will be packed into a google.protobuf.Any
     Raises:
-        grpc.RpcError: Terminate the RPC with the constructed error status
-    """
+        grpc.RpcError: Terminate the RPC with the constructed error status"""
+    any_details: List[any_pb2.Any] = []
 
-    detail_any = any_pb2.Any()
-    detail_any.Pack(error_obj)
+    for obj in error_objs:
+        detail_any = any_pb2.Any()
+        detail_any.Pack(obj)
+        any_details.append(detail_any)
 
     rich_status = status_pb2.Status(
         code=grpc_error_code,
         message=message,
-        details=[detail_any],
+        details=any_details,
     )
 
     context.abort_with_status(rpc_status.to_status(rich_status))
-
     raise Exception(f"Aborting with status: {message}")
 
 
@@ -458,59 +456,9 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     return handler
                 return unary_unary(request, context)
 
-            except DruncSetupException as e:
-                detail_obj_precondition = error_details_pb2.PreconditionFailure(
-                    violations=[
-                        error_details_pb2.PreconditionFailure.Violation(
-                            type="MISSING OR INVALID",
-                            subject=str(e),
-                            description=str(e.details),
-                        )
-                    ]
-                )
-                abort_with_rich_error_status(
-                    context,
-                    int(e.grpc_error_code),
-                    str(e),
-                    detail_obj_precondition,
-                )
-            except DruncNotImplementedException as e:
-                detail_obj_not_implemented = error_details_pb2.ErrorInfo(
-                    reason="NOT_IMPLEMENTED",
-                    domain="server",
-                    metadata={},
-                )
-                abort_with_rich_error_status(
-                    context,
-                    int(e.grpc_error_code),
-                    str(e),
-                    detail_obj_not_implemented,
-                )
-
-            except DruncCommandException as e:
-                exception_data = e.detail_kwargs
-                detail_obj_command = error_details_pb2.ErrorInfo(
-                    reason=str(e.message),
-                    domain=str(
-                        exception_data.get("domain", ""),
-                    ),
-                )
-                abort_with_rich_error_status(
-                    context,
-                    int(e.grpc_error_code),
-                    str(e),
-                    detail_obj_command,
-                )
-
-            except Exception as e:
-                # Fallback
-                detail_obj_fallback = error_details_pb2.ErrorInfo(
-                    reason="Unexpected error",
-                    domain="server",
-                    metadata={"original_error": str(type(e))},
-                )
-                abort_with_rich_error_status(
-                    context, int(code_pb2.INTERNAL), str(e), detail_obj_fallback
+            except DruncException as e:
+                abort_with_rich_details(
+                    context, int(e.grpc_error_code), str(e), e.rich_details
                 )
 
         if handler.unary_unary:

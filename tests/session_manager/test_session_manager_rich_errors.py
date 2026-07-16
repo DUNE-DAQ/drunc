@@ -100,10 +100,27 @@ def test_list_all_configs_no_config_files_rich_error(
         if key == "grpc-status-details-bin":
             status.ParseFromString(value)
 
-            # There should be a PreconditionFailure detail
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+            precond = None
+            base_error = None
 
+            for detail in status.details:
+                # ErrorInfo - the base_error_info
+                if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                    base_error = error_details_pb2.ErrorInfo()
+                    detail.Unpack(base_error)
+
+                #  PreconditionFailure - the specialised error
+                elif detail.Is(error_details_pb2.PreconditionFailure.DESCRIPTOR):
+                    precond = error_details_pb2.PreconditionFailure()
+                    detail.Unpack(precond)
+
+            assert base_error is not None
+
+            assert base_error.reason == "DruncSetupException"
+            assert base_error.domain == "drunc"
+
+            assert precond is not None
+            assert len(precond.violations) > 0
             violation = precond.violations[0]
             assert violation.type == "MISSING OR INVALID"
             assert "DUNEDAQ_DB_PATH env variable not set" in violation.description
@@ -131,12 +148,31 @@ def test_no_config_files_rich_error(
         if key == "grpc-status-details-bin":
             status.ParseFromString(value)
 
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+            precond = None
+            base_error = None
 
+            for detail in status.details:
+                # ErrorInfo - the base_error_info
+                if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                    base_error = error_details_pb2.ErrorInfo()
+                    detail.Unpack(base_error)
+
+                #  PreconditionFailure - the specialised error
+                elif detail.Is(error_details_pb2.PreconditionFailure.DESCRIPTOR):
+                    precond = error_details_pb2.PreconditionFailure()
+                    detail.Unpack(precond)
+
+            assert base_error is not None
+
+            assert base_error.reason == "DruncSetupException"
+            assert base_error.domain == "drunc"
+
+            assert precond is not None
+            assert len(precond.violations) > 0
             violation = precond.violations[0]
             assert violation.type == "MISSING OR INVALID"
             assert "No configuration files found in /fake_path" in violation.description
+            assert "Config files" in violation.subject
 
 
 def test_config_parse_failure(
@@ -168,13 +204,33 @@ def test_config_parse_failure(
     for key, value in err.trailing_metadata():
         if key == "grpc-status-details-bin":
             status.ParseFromString(value)
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
 
+            precond = None
+            base_error = None
+
+            for detail in status.details:
+                # ErrorInfo - the base_error_info
+                if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                    base_error = error_details_pb2.ErrorInfo()
+                    detail.Unpack(base_error)
+
+                #  PreconditionFailure - the specialised error
+                elif detail.Is(error_details_pb2.PreconditionFailure.DESCRIPTOR):
+                    precond = error_details_pb2.PreconditionFailure()
+                    detail.Unpack(precond)
+
+            assert base_error is not None
+
+            assert base_error.reason == "DruncSetupException"
+            assert base_error.domain == "drunc"
+
+            assert precond is not None
+            assert len(precond.violations) > 0
             violation = precond.violations[0]
             assert violation.type == "MISSING OR INVALID"
             assert "Config files" in violation.subject
             assert "Failed to parse configuration file" in violation.description
+            assert "Services could not start" in violation.subject
 
 
 def test_dals_missing_or_invalid(
@@ -207,10 +263,29 @@ def test_dals_missing_or_invalid(
     for key, value in err.trailing_metadata():
         if key == "grpc-status-details-bin":
             status.ParseFromString(value)
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
 
+            precond = None
+            base_error = None
+
+            for detail in status.details:
+                # ErrorInfo - the base_error_info
+                if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                    base_error = error_details_pb2.ErrorInfo()
+                    detail.Unpack(base_error)
+
+                #  PreconditionFailure - the specialised error
+                elif detail.Is(error_details_pb2.PreconditionFailure.DESCRIPTOR):
+                    precond = error_details_pb2.PreconditionFailure()
+                    detail.Unpack(precond)
+
+            assert base_error is not None
+
+            assert base_error.reason == "DruncSetupException"
+            assert base_error.domain == "drunc"
+
+            assert precond is not None
+            assert len(precond.violations) > 0
             violation = precond.violations[0]
-            assert violation.type == "MISSING OR INVALID"
             assert "Session DALs" in violation.subject
+            assert violation.type == "MISSING OR INVALID"
             assert "DALs missing or invalid" in violation.description
