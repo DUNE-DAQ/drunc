@@ -192,6 +192,86 @@ def boot(
         sys.exit(1)
 
 
+@click.command("log")
+@click.argument("text", required=True)
+@click.option(
+    "--target-server",
+    type=str,
+    default="",
+    help="Server to use the log command on. Default value of '' will send the log message to all the servers, e.g. the process manager and the root controller.",
+)
+@click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.option("--target", type=str, help="The session target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the session application path",
+    default=False,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the session application path",
+    default=True,
+)
+@click.pass_obj
+def log_on_server(
+    obj: ProcessManagerContext,
+    text: str,
+    target_server: str,
+    severity: str,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    """
+    Log a message to the specified server.
+
+    This command allows you to send a log message to a specific server or to all servers
+    in the system. You can specify the severity level of the log message.
+
+    Args:
+        obj (ProcessManagerContext): The context object containing session information.
+        text (str): The log message text.
+        target_server (str): The server to send the log message to. Default is '' (all servers).
+        severity (str): The severity level of the log message. Default is 'INFO'.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
+    log = get_logger("unified_shell.log_on_server")
+    log.info("Logging message to server(s)...")
+
+    if target_server in ["", "process_manager"]:
+        obj.get_driver("process_manager").log_on_server(
+            text=text,
+            severity=severity,
+        )
+
+    if target_server in ["", "controller"] and obj.has_driver("controller"):
+        obj.get_driver("controller").log_on_server(
+            text=text,
+            severity=severity,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+
 @click.command("start-shell")
 @click.pass_obj
 @click.pass_context

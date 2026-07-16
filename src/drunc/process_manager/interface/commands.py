@@ -317,3 +317,20 @@ def ps(
         overflow="fold",
         soft_wrap=True,
     )
+
+
+@click.command("log")
+@click.argument("text", required=True)
+@click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.pass_obj
+def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
+    obj.get_driver("process_manager").log_on_server(text=text, severity=severity)

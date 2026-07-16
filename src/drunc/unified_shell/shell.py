@@ -32,9 +32,6 @@ from drunc.controller.interface.commands import (
     who_am_i,
     who_is_in_charge,
 )
-from drunc.controller.interface.commands import (
-    log_on_server as log,
-)
 from drunc.controller.interface.shell_utils import generate_fsm_command
 from drunc.controller.stateful_node import StatefulNode
 from drunc.exceptions import (
@@ -61,7 +58,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
+from drunc.unified_shell.commands import boot, log_on_server, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import OKSKey
@@ -326,8 +323,10 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands: list[click.Command] = [boot, log_on_server]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
@@ -392,7 +391,6 @@ def unified_shell(
     controller_commands: list[click.Command] = [
         status,
         recompute_status,
-        log,
         connect,
         disconnect,
         take_control,

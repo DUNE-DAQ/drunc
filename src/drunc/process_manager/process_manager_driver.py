@@ -1014,9 +1014,6 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         self,
         text: str,
         severity: str = "INFO",
-        target: str = "",
-        execute_along_path: bool = False,
-        execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
     ) -> LogOnServerResponse:
         """
@@ -1024,9 +1021,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 
         Args:
             text (str): The message to log.
-            target (str, optional): The target node for the log message. Defaults to "".
-            execute_along_path (bool, optional): Whether to execute the log command along the path. Defaults to False.
-            execute_on_all_subsequent_children_in_path (bool, optional): Whether to execute the log command on all subsequent children in the path. Defaults to True.
+            severity (str, optional): The severity level of the log message. Defaults to "INFO".
             timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
 
         Returns:
@@ -1039,9 +1034,9 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             token=self.token,
             text=text,
             severity=severity,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+            target="",
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=False,
         )
         request.token.CopyFrom(self.token)
         try:
