@@ -126,8 +126,8 @@ class FSMConfHandler(ConfHandler):
                 tr.arguments += post_transitions.get_arguments()
 
             # Store the pre and post transition sequences for the transition
-            self._pre_transitions[tr] = pre_transitions
-            self._post_transitions[tr] = post_transitions
+            self.pre_transitions[tr] = pre_transitions
+            self.post_transitions[tr] = post_transitions
 
             # Add the transition to the list of transitions
             self.transitions += [tr]
@@ -142,10 +142,10 @@ class FSMConfHandler(ConfHandler):
         return self.actions
 
     def get_initial_state(self) -> str:
-        return self.data.initial_state
+        return self.initial_state
 
     def get_states(self) -> list[str]:
-        return self.data.states
+        return self.states
 
     def get_transitions(self) -> list[Transition]:
         return self.transitions
