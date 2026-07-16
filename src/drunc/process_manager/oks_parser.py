@@ -5,7 +5,7 @@ import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
     import conffwk
@@ -75,8 +75,13 @@ def get_full_db_path(db_path: str) -> str:
         err_str = f"No files found in DUNEDAQ_DB_PATH matching {db_path}."
         raise DruncSetupException(err_str)
 
-    # If multiple matches are found, take the first instance that matches.
+    # Prefer the first writable match; if every match is read-only, fall back to the first one.
     resolved_path = unique_matched_files[0]
+    for matched_file in unique_matched_files:
+        if not file_is_read_only(matched_file):
+            resolved_path = matched_file
+            break
+
     log.debug(f"Path {db_path} resolved to {resolved_path}")
     return resolved_path
 
