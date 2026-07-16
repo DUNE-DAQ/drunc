@@ -228,22 +228,11 @@ def test_dunerc_success(run_dunerc) -> None:
 
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
-    assert any(
-        f"{run_dunerc.daq_session_name}_df-01" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_dfo" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_mlt" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_ru" in str(logname)
-        for logname in run_dunerc.log_files
-    )
+    for app_exension in ["_df-01", "_dfo", "_mlt", "_ru"]:
+        assert any(
+            f"{run_dunerc.daq_session_name}{app_exension}" in str(logname)
+            for logname in run_dunerc.log_files
+        ), f"Expected log file with extension '{app_exension}' not found."
 
     if check_for_logfile_errors:
         assert log_file_checks.logs_are_error_free(
