@@ -62,7 +62,7 @@ from drunc.unified_shell.commands import (
 )
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
-from drunc.utils.configuration import ConfTypes, OKSKey
+from drunc.utils.configuration import OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
@@ -155,19 +155,25 @@ def unified_shell(
     # Set up the drunc and unified_shell loggers
     get_root_logger(log_level)
     ctx.obj.log = get_logger("unified_shell", rich_handler=True)
-    ctx.obj.log.info(f"User {getpass.getuser()} [green]starting the unified_shell[/green]")
+    ctx.obj.log.info(
+        f"User {getpass.getuser()} [green]starting the unified_shell[/green]"
+    )
 
     # Parse the process manager argument to determine if it's a config or an address
     # If the process manager is already running, connect to it.
     process_manager_url: ParseResult = urlparse(process_manager)
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
-        ctx.obj.log.info(f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}")
+        ctx.obj.log.info(
+            f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
+        )
         internal_pm = False
         ctx.obj.reset(address_pm=process_manager_url.netloc)
         pm_type = ProcessManagerTypes[
             ctx.obj.get_driver("process_manager").describe().type
         ]
-        ctx.obj.log.info(f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}")
+        ctx.obj.log.info(
+            f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
+        )
     else:
         internal_pm = True
         pm_type = get_pm_type_from_name(process_manager)
@@ -177,14 +183,16 @@ def unified_shell(
     )
 
     # If using a k8s process manager, validate the session name before proceeding
-    if not validate_k8s_session_name(session_name) and (pm_type == ProcessManagerTypes.K8s):
+    if not validate_k8s_session_name(session_name) and (
+        pm_type == ProcessManagerTypes.K8s
+    ):
         ctx.obj.log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
             "alphanumeric, max 63 chars."
         )
         sys.exit(1)
-    
+
     # Setup configuration related context variables
     # Assume oksconflibs if no framework is defined
     ctx.obj.configuration_file = (
@@ -203,7 +211,9 @@ def unified_shell(
 
     # Start the process manager if it's an internal one
     if internal_pm:  # Spawn the Process Manager
-        ctx.obj.log.info(f"[green]Setting up the {pm_type.name} process manager[/] with configuration [green]{process_manager}[/green]")
+        ctx.obj.log.info(
+            f"[green]Setting up the {pm_type.name} process manager[/] with configuration [green]{process_manager}[/green]"
+        )
         ctx.obj.log.debug(
             f"Spawning process_manager with configuration {process_manager}"
         )
@@ -336,9 +346,8 @@ def unified_shell(
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
-    controller_configuration = ControllerConfHandler(
-        type=ConfTypes.OKSFileName,
-        data=ctx.obj.configuration_file,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=ctx.obj.configuration_file,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
@@ -357,7 +366,7 @@ def unified_shell(
     # live with it. At least until controller.core uses file handler instead of stream
     get_logger("controller.core.FSM", log_level="CRITICAL")
 
-    fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
 
     ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)

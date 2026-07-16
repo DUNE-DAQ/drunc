@@ -20,7 +20,7 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
 )
 from drunc.processes.process_metadata import ProcessMetadata
-from drunc.utils.configuration import parse_conf_url
+from drunc.utils.configuration import ConfTypes, parse_conf_url
 from drunc.utils.utils import now_str
 
 
@@ -350,11 +350,15 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
     pm_conf_file = get_process_manager_configuration(pm_name)
 
     conf_path, conf_type = parse_conf_url(pm_conf_file)
-    pmch = ProcessManagerConfHandler(
-        log_path="./", type=conf_type, data=conf_path.split(":")[1]
-    )
+    path_or_url = conf_path.split(":")[1]
 
-    return pmch.data.type
+    if conf_type == ConfTypes.JsonFileName:
+        pmch = ProcessManagerConfHandler.from_json(path=path_or_url)
+    else:
+        # OKS or other types - fallback to from_pyobject
+        pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
+
+    return getattr(pmch, "pm_type", pmch.type)
 
 
 def format_hostname(hostname: str) -> str:

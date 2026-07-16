@@ -54,12 +54,17 @@ from drunc.utils.utils import (
 
 
 class gRCPChildConfHandler(ConfHandler):
+    """Handler for gRPC child node configuration."""
+
+    def _post_process_oks(self) -> None:
+        self.controller = self._raw_data.controller
+
     def get_uri(self):
-        for service in self.data.controller.exposes_service:
-            if self.data.controller.id + "_control" in service.id:
-                return f"{service.protocol}://{self.data.controller.runs_on.runs_on.id}:{service.port}"
+        for service in self.controller.exposes_service:
+            if self.controller.id + "_control" in service.id:
+                return f"{service.protocol}://{self.controller.runs_on.runs_on.id}:{service.port}"
         raise DruncSetupException(
-            f"gRPC API child node {self.data.controller.id} does not expose a control service"
+            f"gRPC API child node {self.controller.id} does not expose a control service"
         )
 
 

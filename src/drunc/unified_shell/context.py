@@ -78,28 +78,6 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         token = create_dummy_token_from_uname()
         return token
 
-    def start_listening_pm(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
-
-        bcch = BroadcastClientConfHandler(
-            type=ConfTypes.ProtobufAny,
-            data=broadcaster_conf,
-        )
-        self.status_receiver_pm = BroadcastHandler(broadcast_configuration=bcch)
-
-    def start_listening_controller(self, broadcaster_conf) -> None:
-        from drunc.broadcast.client.broadcast_handler import BroadcastHandler
-        from drunc.broadcast.client.configuration import BroadcastClientConfHandler
-        from drunc.utils.configuration import ConfTypes
-
-        bcch = BroadcastClientConfHandler(
-            type=ConfTypes.ProtobufAny,
-            data=broadcaster_conf,
-        )
-        self.status_receiver_controller = BroadcastHandler(broadcast_configuration=bcch)
-
     def get_endpoint_display_host_overrides(self) -> dict[str, str]:
         """
         Return a mapping of process name -> preferred display hostname for endpoint
