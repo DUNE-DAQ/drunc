@@ -1609,6 +1609,10 @@ class Controller(ControllerServicer):
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            request.target = ""
+
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
             request.target,
@@ -1643,7 +1647,7 @@ class Controller(ControllerServicer):
         response.children.extend(child_responses)
 
         # This node.
-        if request.target == self.name or request.execute_along_path:
+        if request.target in [self.name, ""] or request.execute_along_path:
             level = request.severity.lower()
             log_method = getattr(self.log, level, self.log.info)
             log_method(request.text)

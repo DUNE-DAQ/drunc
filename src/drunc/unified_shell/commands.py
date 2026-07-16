@@ -254,7 +254,7 @@ def log_on_server(
         None
     """
     log = get_logger("unified_shell.log_on_server")
-    log.info("Logging message to server(s)...")
+    log.debug("Logging message to server(s)...")
 
     if target_server in ["", "process_manager"]:
         obj.get_driver("process_manager").log_on_server(
