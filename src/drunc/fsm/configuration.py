@@ -14,6 +14,8 @@ from drunc.utils.utils import get_logger
 
 
 class FSMConfHandler(ConfHandler):
+    """Handler for FSM configuration."""
+
     data: conffwk.dal.FSMData
 
     def _fill_pre_post_transition_sequence_oks(
@@ -77,6 +79,8 @@ class FSMConfHandler(ConfHandler):
         Raises:
             None
         """
+        raw = self._raw_data
+
         # Define the data structures to store the FSM configuration
         self.log.debug("_post_process_oks configuration")
         self.pre_transitions: dict[Transition, PreOrPostTransitionSequence] = {}
@@ -86,17 +90,17 @@ class FSMConfHandler(ConfHandler):
         ] = {}  # (e.g. "thread_pinning": thread_pinning FSM action object)
         self.transitions: list[Transition] = []
         self.sequences: list[FSMSequence] = []
-        self.states: list[str] = self.data.states
-        self.initial_state: str = self.data.initial_state
+        self.states: list[str] = raw.states
+        self.initial_state: str = raw.initial_state
 
         # Fill the actions dictionary with the FSMAction objects corresponding to the
         # action names defined in the configuration
-        for action in self.data.actions:
+        for action in raw.actions:  # type: 'conffwk.dal.FSMAction'
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )
 
-        for transition in self.data.transitions:
+        for transition in raw.transitions:  # type: 'conffwk.dal.FSMTransition'
             tr = Transition(
                 name=transition.id,
                 source=transition.source,
@@ -107,12 +111,12 @@ class FSMConfHandler(ConfHandler):
             # Get the pre and post transition sequences for the transition
             pre_transitions: PreOrPostTransitionSequence = (
                 self._fill_pre_post_transition_sequence_oks(
-                    "pre", tr, self.data.pre_transitions
+                    "pre", tr, raw.pre_transitions
                 )
             )
             post_transitions: PreOrPostTransitionSequence = (
                 self._fill_pre_post_transition_sequence_oks(
-                    "post", tr, self.data.post_transitions
+                    "post", tr, raw.post_transitions
                 )
             )
 
@@ -122,14 +126,14 @@ class FSMConfHandler(ConfHandler):
                 tr.arguments += post_transitions.get_arguments()
 
             # Store the pre and post transition sequences for the transition
-            self.pre_transitions[tr] = pre_transitions
-            self.post_transitions[tr] = post_transitions
+            self._pre_transitions[tr] = pre_transitions
+            self._post_transitions[tr] = post_transitions
 
             # Add the transition to the list of transitions
             self.transitions += [tr]
 
         # Fill the sequences of commands to execute for each transition
-        for sequence in self.data.command_sequences:
+        for sequence in raw.command_sequences:
             seq_id = sequence.id
             cmd_ids = [cmd.id for cmd in sequence.sequence]
             self.sequences.append(FSMSequence(id=seq_id, command_ids=cmd_ids))

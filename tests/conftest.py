@@ -1,6 +1,7 @@
 import getpass
 import logging
 import os
+import socket
 import time
 from pathlib import Path
 from subprocess import Popen
@@ -103,6 +104,9 @@ def boot_session(
     # Prepare environment variables
     env = os.environ.copy()
     env["DUNEDAQ_SESSION"] = session_name
+    env["DRUNC_HOST_NAME"] = (
+        socket.gethostname()
+    )  # This works as the process is a subprocess that does not run in a container.
 
     # Load the configuration, get the DAL
     configuration_consolidated_file = f"oksconflibs:{configuration_consolidated_file}"

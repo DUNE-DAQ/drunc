@@ -7,6 +7,7 @@ from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
+from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class UnifiedShellMode(Enum):
@@ -16,6 +17,8 @@ class UnifiedShellMode(Enum):
 
 
 class UnifiedShellContext(ShellContext):  # boilerplatefest
+    shell_id = "unified_shell"
+
     def __init__(self):
         self.log = None
         self.status_receiver_pm = None
@@ -33,7 +36,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         super(UnifiedShellContext, self).__init__()
 
     def reset(self, address_pm: str = ""):
-        self.address_pm = address_pm
+        self.address_pm = resolve_localhost_to_hostname(address_pm)
         super(UnifiedShellContext, self)._reset(name="unified_shell")
 
     def create_drivers(self, **kwargs) -> Mapping[str, object]:
