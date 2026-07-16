@@ -61,7 +61,7 @@ from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_sess
 from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
-from drunc.utils.configuration import ConfTypes, OKSKey
+from drunc.utils.configuration import OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
@@ -326,9 +326,8 @@ def unified_shell(
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
-    controller_configuration = ControllerConfHandler(
-        type=ConfTypes.OKSFileName,
-        data=ctx.obj.configuration_file,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=ctx.obj.configuration_file,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
@@ -347,7 +346,7 @@ def unified_shell(
     # live with it. At least until controller.core uses file handler instead of stream
     get_logger("controller.core.FSM", log_level="CRITICAL")
 
-    fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
 
     ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)

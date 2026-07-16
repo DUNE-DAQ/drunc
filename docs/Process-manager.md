@@ -7,7 +7,7 @@ For a standalone `process_manager` you will need two shells - one shell to run t
 To boot a `process_manager`, you will need to choose the most appropriate configuration that applies to the use case. The configurations that are packaged with `drunc` are defined in `drunc/src/data/process_manager/`, which are
 * `ssh-standalone.json`: `ssh` based implementation without a `kafka` feed. Uses remote shell client processes to manage ssh connections.
 * `ssh-standalone-paramiko-client.json`: `ssh` based implementation without a `kafka` feed. Uses paramiko library to manage ssh connections from the python process. Currently NOT maintained but may be revisited in future - use `ssh-standalone` only for now.
-* `ssh-pocket-kafka.json`: `ssh` based implementation with `pocket`'s `kafka` for message broadcasting.
+* `ssh-pocket-kafka.json`: `ssh` based implementation with `pocket`'s `kafka`.
 * `ssh-CERN-kafka.json`: `ssh` based implementation with `kafka` service running at ENH1.
 * `ssh-CERN-kafka-OpMon.json`: `ssh` based implementation with `kafka` service running at ENH1, and with Opmon.
 * `k8s.json`: `kubernetes` implementation (not recommended nor working, so don't use this unless you are an working on getting it to work).
@@ -26,8 +26,6 @@ To start the ssh version without kafka:
 drunc-process-manager ssh-standalone
 Using 'file://src/drunc/data/process_manager/ssh-standalone.json' as the ProcessManager configuration
 Starting 'SSHProcessManager'
-[12:43:26] INFO     "BroadcastSenderConfHandler": None                                                                                                                                                  configuration.py:25
-           INFO     "Controller": DummyAuthoriser ready                                                                                                                                              dummy_authoriser.py:13
 ProcessManager was started on np04-srv-019:10054
 ```
 Once this is done, you will not be able to send commands to the process from the current shell with the `process_manager` acting in the foreground. To interact with a standalone instance of `process_manager` you will need to connect to it (see below).
