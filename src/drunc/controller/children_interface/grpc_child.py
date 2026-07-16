@@ -135,7 +135,7 @@ class gRPCChildNode(ChildNode):
 
             else:
                 self.log.info(
-                    f"Application {self.name} connected to the parnet application ({self.uri})!"
+                    f"Application {self.name} connected to the parent application ({self.uri})!"
                 )
                 break
 
@@ -634,10 +634,10 @@ class gRPCChildNode(ChildNode):
                 self.handle_child_grpc_error(e)
             except ServerUnreachable:
                 self.log.info(
-                    f"Connection to {self.name} at {self.uri} failed during who_is_in_charge, attempting to reconnect..."
+                    f"Connection to {self.name} at {self.uri} failed during log_on_server, attempting to reconnect..."
                 )
                 response = self._attempt_reconnection(
-                    lambda: self.stub.who_is_in_charge(request)
+                    lambda: self.stub.log_on_server(request)
                 )
 
         return response
