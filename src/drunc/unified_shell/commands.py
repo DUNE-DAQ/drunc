@@ -120,8 +120,8 @@ def boot(
         status_process_count += 1
 
     if ps_process_count != status_process_count:
-        time.sleep(1)
-        log.info(  # TODO - once issue 793 is resolved, this should be a log.error
+        # time.sleep(1)
+        log.debug(  # TODO - once issue 793 is resolved, this should be a log.error
             f"Booted, but the number of processes registered with the process manager "
             f"({ps_process_count}) does not match the number of processes registered "
             f"with the top segment (root) controller ({status_process_count}). Use the "
