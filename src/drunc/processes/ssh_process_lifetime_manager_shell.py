@@ -892,18 +892,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             List of SSH command arguments
         """
 
-        # Determine if host key checking should be disabled based on configuration and
-        # target host
-        superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
-        self.log.debug(
-            f"Building SSH arguments for {user_host} with superuser host {superuser_host}"
-        )
-
         # Base SSH arguments with user@host and strict host key checking disabled
         # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
         # the known_hosts file is not shared across hosts, so we cannot rely on it for
         # host key verification.
-        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
+        arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
 
         # If TTY allocation is requested, add the -tt flag to force allocation. This is
         # needed as SSH permissions are different for general users and for np04daq
