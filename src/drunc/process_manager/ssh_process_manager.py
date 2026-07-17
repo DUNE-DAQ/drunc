@@ -3,6 +3,7 @@ import threading
 import uuid
 from typing import List, Optional
 
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -17,12 +18,15 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
+from drunc.process_manager.configuration import ProcessManagerTypes
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 
 
 class SSHProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.SSH_SHELL
+
     def __init__(
         self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
     ):
@@ -360,6 +364,9 @@ class SSHProcessManager(ProcessManager):
                 # Update hostname in boot request for this attempt
                 self.boot_request[uuid].process_description.metadata.hostname = host
 
+                self.log.debug(
+                    f"Attempting to start process {uuid} on host {host} via SSH lifetime manager"
+                )
                 # Start the process via SSH manager
                 self.ssh_lifetime_manager.start_process(
                     uuid=uuid, boot_request=self.boot_request[uuid]
@@ -380,7 +387,7 @@ class SSHProcessManager(ProcessManager):
         self.log.info(
             f"Booted '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}' "
-            f"with UUID {uuid}"
+            f"with UUID {uuid} on host {hostname}"
         )
 
         # Query current process status
@@ -485,13 +492,25 @@ class SSHProcessManager(ProcessManager):
                 else:
                     pi.remote_pid = remote_pid_result.reason
                 ret += [pi]
-
-            return ProcessInstanceList(
+            ret_fmt = ProcessInstanceList(
                 name=self.name,
                 token=None,
                 values=ret,
                 flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
             )
+            self.log.debug(
+                f"{self.name} returning {len(ret)} processes from ps query {query}"
+            )
+            return ret_fmt
+
+    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
+        try:
+            self.log.info(f"{msg}; from {peer}")
+        except Exception as e:
+            self.log.error(f"Failed to receive message with exception {e}")
+            return OutcomeStatus(flag=OutcomeFlag.FAIL)
+
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")

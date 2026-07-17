@@ -20,6 +20,7 @@ from drunc.utils.utils import (
     now_str,
     parent_death_pact,
     regex_match,
+    resolve_context_peer,
     resolve_localhost_and_127_ip_to_network_ip,
     resolve_localhost_to_hostname,
     validate_command_facility,
@@ -155,6 +156,12 @@ def test_resolve_localhost_and_127_ip_to_network_ip():
 
     resolved = resolve_localhost_and_127_ip_to_network_ip(generate_address("0.1.90.0"))
     assert resolved == generate_address(this_ip)
+
+
+def test_resolve_context_peer():
+    assert resolve_context_peer("grpc:np04-srv-028:50000") == "np04-srv-028:50000"
+    assert resolve_context_peer("np04-srv-028:50000") == "np04-srv-028:50000"
+    assert resolve_context_peer("") == ""
 
 
 def test_host_is_local():

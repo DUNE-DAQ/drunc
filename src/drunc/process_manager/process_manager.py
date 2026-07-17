@@ -8,9 +8,11 @@ from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import CommandDescription, Description
+from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
+    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessInstance,
@@ -36,7 +38,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str
+from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
 
 
 class BadQuery(DruncCommandException):
@@ -45,6 +47,8 @@ class BadQuery(DruncCommandException):
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
+    pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
+
     def __init__(
         self, configuration: ProcessManagerConfHandler, name: str, session: str
     ):
@@ -423,7 +427,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.log.debug(f"{self.name} running describe")
 
         response = Description(
-            type="process_manager",
+            type=self.pm_type.name,
             name=self.name,
             info=self.get_log_path(),
             session="no_session" if not self.session else self.session,
@@ -571,25 +575,27 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # Filter processes based on query criteria
         processes = []
         for uuid in available_uuids:
-            accepted = False
+            accepted = True
             meta = boot_request_dict[uuid].process_description.metadata
 
             # Check UUID match
-            if uuid in uuid_selector:
-                accepted = True
+            if uuid_selector and uuid not in uuid_selector:
+                accepted = False
 
             # Check name pattern match (regex)
-            for name_reg in name_selector:
-                if re.search(name_reg, meta.name):
-                    accepted = True
+
+            if name_selector and not any(
+                re.search(reg, meta.name) for reg in name_selector
+            ):
+                accepted = False
 
             # Check session match
-            if session_selector == meta.session:
-                accepted = True
+            if session_selector and session_selector != meta.session:
+                accepted = False
 
             # Check user match
-            if user_selector == meta.user:
-                accepted = True
+            if user_selector and user_selector != meta.user:
+                accepted = False
 
             if accepted:
                 processes.append(uuid)

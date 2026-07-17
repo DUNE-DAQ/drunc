@@ -1,6 +1,7 @@
 import getpass
 import sys
 import time
+from functools import update_wrapper
 
 import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
@@ -8,9 +9,20 @@ from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.controller.utils import count_processes_in_status_response, get_all_states
 from drunc.exceptions import DruncSetupException
+from drunc.process_manager.interface.cli_argument import add_query_options_no_session
+from drunc.process_manager.interface.commands import (
+    flush_decorators,
+    flush_impl,
+    kill_decorators,
+    kill_impl,
+    logs_decorators,
+    logs_impl,
+    restart_impl,
+)
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
 
 
@@ -34,6 +46,7 @@ def boot(
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
+    log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
     processes = obj.get_driver("process_manager").ps(
@@ -47,6 +60,7 @@ def boot(
         override_logs_boot = obj.override_logs
     else:
         override_logs_boot = override_logs
+    # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
         log.error(
             f"Cannot boot: session {session_name} already has {len(processes.values)} processes running. "
@@ -272,6 +286,100 @@ def log_on_server(
         )
 
 
+@click.command("terminate")
+@click.pass_obj
+@click.pass_context
+def terminate(ctx, obj):
+    """
+    Execute the process manager terminate command, but only do this for the current
+    session
+    """
+
+    log = get_logger("unified_shell.terminate")
+    log_pm_cmd(obj)
+    session_query = ProcessQuery(session=ctx.obj.session_name)
+    log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
+    obj.get_driver("process_manager").kill(session_query)
+
+    # As the session is now terminated, we can delete the controller driver, as it is no
+    # longer needed.
+    obj.delete_driver("controller")
+
+
+@click.command("ps")
+@click.pass_obj
+@click.pass_context
+def ps(ctx, obj):
+    """
+    Execute the process manager terminate command, but only do this for the current
+    session
+    """
+
+    log = get_logger("unified_shell.ps")
+    log_pm_cmd(obj)
+    session_query = ProcessQuery(session=ctx.obj.session_name)
+    log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
+    results = obj.get_driver("process_manager").ps(session_query)
+
+    # If there are processes running, tabulate them, otherwise log that there are no
+    # processes running.
+    if results.values:
+        obj.print(
+            tabulate_process_instance_list(
+                results, title=f"Processes running in session {ctx.obj.session_name}"
+            ),
+            overflow="fold",
+            soft_wrap=True,
+        )
+    else:
+        log.info(f"No processes running in session [green]{ctx.obj.session_name}[/]")
+
+
+def session_injector(f):
+    @click.pass_context
+    def wrapper(ctx, *args, **kwargs):
+        kwargs["session"] = ctx.obj.session_name
+        return ctx.invoke(f, *args, **kwargs)
+
+    return update_wrapper(wrapper, f)
+
+
+@click.command("logs")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@logs_decorators
+def logs(obj, how_far, grep, query):
+    log_pm_cmd(obj)
+    return logs_impl(obj, how_far, grep, query)
+
+
+@click.command("kill")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@kill_decorators
+def kill(obj, query, width):
+    log_pm_cmd(obj)
+    return kill_impl(obj, query, width)
+
+
+@click.command("flush")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@flush_decorators
+def flush(obj, query, width):
+    log_pm_cmd(obj)
+    return flush_impl(obj, query, width)
+
+
+@click.command("restart")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@click.pass_obj
+def restart(obj, query):
+    log_pm_cmd(obj)
+    return restart_impl(obj, query)
+
+
 @click.command("start-shell")
 @click.pass_obj
 @click.pass_context
@@ -283,6 +391,7 @@ def start_shell(ctx, obj):
     allowing you to execute commands interactively.
     """
     log = get_logger("unified_shell.start_shell")
+    log_pm_cmd(obj)
 
     obj.running_mode = UnifiedShellMode.SEMIBATCH
     log.info("Switching to interactive mode...")
