@@ -135,7 +135,8 @@ class Controller(ControllerServicer):
             connection_server_host = (
                 self.configuration.session.connectivity_service.host
             )
-            connection_port = os.getenv("CONNECTION_PORT")
+            # connection_port = os.getenv("CONNECTION_PORT")
+            connection_server_port = self.configuration.session.connectivity_service.port
             if connection_server_host == "localhost":
                 injected_hostname = os.getenv("DRUNC_HOST_NAME")
                 if not injected_hostname:
