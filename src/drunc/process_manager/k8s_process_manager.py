@@ -1968,15 +1968,6 @@ class K8sProcessManager(ProcessManager):
                 lines=[f"Could not retrieve logs: {e.reason}"],
             )
 
-    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
-        # Note: currently exact same implementation as ssh manager
-        # Although there is room here to change as necessary
-        try:
-            self.log.info(f"{msg}; from {peer}")
-        except Exception as e:
-            self.log.error(f"Failed to receive message with exception {e}")
-            return OutcomeStatus(flag=OutcomeFlag.FAIL)
-
         return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:

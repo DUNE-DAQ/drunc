@@ -54,15 +54,13 @@ from drunc.unified_shell.commands import (
     boot,
     flush,
     kill,
+    log_on_server,
     logs,
     ps,
     restart,
     start_shell,
     terminate,
 )
-from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, log_on_server, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
 from drunc.utils.configuration import OKSKey
@@ -340,7 +338,7 @@ def unified_shell(
         sys.exit(1)
     ctx.obj.log.debug("Communication with the process manager verified successfully")
 
-    ctx.obj.get_driver("process_manager").send_msg(
+    ctx.obj.get_driver("process_manager").log_on_server(
         f"{getpass.getuser()} connected from unified shell"
     )
 
@@ -536,7 +534,7 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
-        ctx.obj.get_driver("process_manager").send_msg(
+        ctx.obj.get_driver("process_manager").log_on_server(
             f"{getpass.getuser()} disconnected from unified shell"
         )
         ctx.obj.get_driver("process_manager").close()

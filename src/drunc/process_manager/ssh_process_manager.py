@@ -503,15 +503,6 @@ class SSHProcessManager(ProcessManager):
             )
             return ret_fmt
 
-    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
-        try:
-            self.log.info(f"{msg}; from {peer}")
-        except Exception as e:
-            self.log.error(f"Failed to receive message with exception {e}")
-            return OutcomeStatus(flag=OutcomeFlag.FAIL)
-
-        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
-
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")
         this_uuid = str(uuid.uuid4())

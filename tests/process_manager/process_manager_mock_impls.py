@@ -101,12 +101,3 @@ class ConcreteProcessManager(ProcessManager):
 
     def _flush_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         return self._not_implemented_response()
-
-    def _send_msg_impl(
-        self, msg: str | None = None, peer: str | None = None
-    ) -> OutcomeStatus:
-        """
-        Returns an empty response to indicate communication is working.
-        Accepts an optional message parameter for compatibility with new API.
-        """
-        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)

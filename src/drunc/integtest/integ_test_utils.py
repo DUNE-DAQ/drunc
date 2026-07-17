@@ -406,8 +406,34 @@ def get_status_table_after_echo(
 
     If no status table is found after the marker, returns an empty list.
 
+    The table is structured as
+    | Name | Info | State | Substate | In error | Included | Endpoint |
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
+        ...     "unit-test status\n"
+        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
+        >>> expected_row = {
+        ...     "Name": "root-controller",
+        ...     "Info": "",
+        ...     "State": "initial",
+        ...     "Substate": "initial",
+        ...     "In error": "No",
+        ...     "Included": "Yes",
+        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
+        ... }
+        >>> table[0] == expected_row
+        True
+
     Returns:
         Parsed rows with keys: name, info, state, substate, in_error, included, endpoint.
+
+    Raises:
+        None
     """
     return _get_table_after_echo(lines, echo_marker, "status", _STATUS_COLUMNS)
 
@@ -431,33 +457,6 @@ def get_execution_report_after_echo(
 
 
 def get_status_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
-    """Return parsed status-table rows found after a specific echo marker.
-
-    If no status table is found after the marker, returns an empty list.
-
-    If an entry is found, the table is structured as
-    | Name | Info | State | Substate | In error | Included | Endpoint |
-
-    Example:
-        >>> stdout = (
-        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
-        ...     "unit-test status\n"
-        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
-        ...     "└"
-        ... )
-        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
-        >>> expected_row = {
-        ...     "Name": "root-controller",
-        ...     "Info": "",
-        ...     "State": "initial",
-        ...     "Substate": "initial",
-        ...     "In error": "No",
-        ...     "Included": "Yes",
-        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
-        ... }
-        >>> table[0] == expected_row
-        True
-    """
     lines = strip_ansi(stdout).splitlines()
 
     echo_idx = require_echo_marker_index(lines, echo_marker)
