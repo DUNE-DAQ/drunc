@@ -9,7 +9,6 @@ base class, allowing for testing serialisation/deserialisation. The request-hand
 from typing import Optional
 from unittest.mock import Mock
 
-from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,

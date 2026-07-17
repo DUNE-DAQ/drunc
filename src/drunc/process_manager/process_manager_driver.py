@@ -18,7 +18,6 @@ from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessDescription,

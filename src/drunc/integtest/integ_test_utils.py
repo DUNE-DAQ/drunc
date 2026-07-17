@@ -455,23 +455,6 @@ def get_execution_report_after_echo(
 
 # ── Process table helpers ──────────────────────────────────────────────────────
 
-
-def get_status_table_after_echo(stdout: str, echo_marker: str) -> list[dict[str, str]]:
-    lines = strip_ansi(stdout).splitlines()
-
-    echo_idx = require_echo_marker_index(lines, echo_marker)
-
-    table_start_idx = find_line_index(
-        lines,
-        lambda line: " status" in line,
-        start_idx=echo_idx + 1,
-    )
-    if table_start_idx is None:
-        return []
-
-    return _parse_status_table_from_index(lines, table_start_idx)
-
-
 def get_column_for_friendly_name(
     ps_table: list[dict[str, str]], friendly_name: str, column: str
 ) -> str:

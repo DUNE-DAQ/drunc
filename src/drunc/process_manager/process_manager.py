@@ -8,11 +8,9 @@ from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessInstance,
@@ -38,7 +36,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
+from drunc.utils.utils import get_logger, pid_info_str
 
 
 class BadQuery(DruncCommandException):

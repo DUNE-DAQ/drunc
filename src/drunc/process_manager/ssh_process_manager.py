@@ -3,7 +3,6 @@ import threading
 import uuid
 from typing import List, Optional
 
-from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
