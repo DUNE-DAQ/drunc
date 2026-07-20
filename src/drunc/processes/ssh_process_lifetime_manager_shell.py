@@ -442,10 +442,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         for exe_arg in boot_request.process_description.executable_and_arguments:
             cmd += exe_arg.exec
             for arg in exe_arg.args:
-                if arg.endswith("daq_app_rte.sh"):
-                    cmd += f" {os.getenv('DBT_AREA_ROOT')}/install/daq_app_rte.sh"
-                else:
-                    cmd += f" {arg}"
+                cmd += f" {arg}"
             cmd += ";"
 
         # Remove trailing semicolon if present
