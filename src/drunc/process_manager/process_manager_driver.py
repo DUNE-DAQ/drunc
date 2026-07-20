@@ -322,6 +322,9 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
+        # Some edge cases throw issues with DISPLAY being set, so we remove it from the 
+        # environment
+        env.pop('DISPLAY', None)
         tree_id = app["tree_id"]
 
         # The following line is required to provide an independent method of injecting
