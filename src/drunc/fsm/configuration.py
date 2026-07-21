@@ -95,12 +95,12 @@ class FSMConfHandler(ConfHandler):
 
         # Fill the actions dictionary with the FSMAction objects corresponding to the
         # action names defined in the configuration
-        for action in raw.actions:  # type: 'FSMAction'
+        for action in raw.actions:
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )
 
-        for transition in raw.transitions:  # type: 'FSMTransition'
+        for transition in raw.transitions:
             tr = Transition(
                 name=transition.id,
                 source=transition.source,
