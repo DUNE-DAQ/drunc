@@ -2251,6 +2251,9 @@ class K8sProcessManager(ProcessManager):
         tree_labels = self._get_tree_labels(
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
+        # Format the hostname for safety
+        #hostname = format_hostname(boot_request.process_description.metadata.hostname)
+        #boot_request.process_description.metadata.hostname = hostname
 
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)

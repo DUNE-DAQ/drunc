@@ -255,7 +255,7 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = app["restriction"]
+        host = resolve_localhost_to_hostname(app["restriction"]) # Format the hostname for safety: host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
         name = app["name"]
         exe = app["type"]
         args = app["args"]
