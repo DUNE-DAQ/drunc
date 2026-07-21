@@ -196,14 +196,25 @@ def test_boot(run_dunerc) -> None:
     """Checks that boot starts the managed processes and exposes UUIDs in ps."""
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
-    ps_pre_boot = get_ps_table_after_echo(lines, "pre_boot")
-    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
-
-    assert not ps_pre_boot, (
-        f"Expected ps table before boot to be empty, but found {len(ps_pre_boot)} row(s): "
-        + ", ".join(row["friendly_name"] for row in ps_pre_boot)
+    # Check if no processes running in session works
+    pre_boot_idx = require_line_containing(
+        lines,
+        "pre_boot",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+    post_boot_idx = require_line_containing(
+        lines,
+        "post_boot",
+        error_message="Did not find the 'pos_boot' footer line in stdout.",
+    )
+    between = lines[pre_boot_idx + 1 : post_boot_idx]
+    no_boot_re = "No processes running in session"
+    assert any(no_boot_re in line for line in between), (
+        f"Did not find '{no_boot_re}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(between)
     )
 
+    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
     assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
