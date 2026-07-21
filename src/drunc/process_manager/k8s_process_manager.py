@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from time import sleep, time
 
 # Local Application Imports
+from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -39,6 +40,7 @@ from drunc.k8s_exceptions import (
 from drunc.process_manager.configuration import (
     PROCESS_SHUTDOWN_ORDERING,
     ProcessManagerConfHandler,
+    ProcessManagerTypes,
 )
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
@@ -172,6 +174,8 @@ class K8sPodWatcherThread(threading.Thread):
 
 
 class K8sProcessManager(ProcessManager):
+    pm_type = ProcessManagerTypes.K8s
+
     def __init__(self, configuration: ProcessManagerConfHandler, **kwargs) -> None:
         """
         Manages processes as Kubernetes Pods.
@@ -237,7 +241,7 @@ class K8sProcessManager(ProcessManager):
         # Get settings from configuration JSON file
         # Any comments following this one will relate to the parameters retrieved from
         # the configuration file if the comment starts as "CONFIGURATION -"
-        settings = getattr(self.configuration.data, "settings", {})
+        settings = getattr(self.configuration, "settings", {})
 
         # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
@@ -1221,7 +1225,7 @@ class K8sProcessManager(ProcessManager):
             main_container - the fully configured V1Container object
         """
 
-        pod_image = self.configuration.data.image
+        pod_image = self.configuration.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
         # Build command to exec
@@ -1266,7 +1270,7 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = getattr(self.configuration.data, "settings", {})
+            settings = getattr(self.configuration, "settings", {})
             host_configs = settings.get("host_configs", {})
 
             if not target_host or target_host not in host_configs:
@@ -1427,7 +1431,9 @@ class K8sProcessManager(ProcessManager):
             self.log.info(
                 f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
             )
-            return [client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])]
+            return [
+                client.V1HostAlias(ip=connection_server_ip, hostnames=["localhost"])
+            ]
 
         self.log.warning(
             f"Could not get connection server ClusterIP for pod '{podname}'"
@@ -1962,6 +1968,17 @@ class K8sProcessManager(ProcessManager):
                 uuid=ProcessUUID(uuid=uuid),
                 lines=[f"Could not retrieve logs: {e.reason}"],
             )
+
+    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
+        # Note: currently exact same implementation as ssh manager
+        # Although there is room here to change as necessary
+        try:
+            self.log.info(f"{msg}; from {peer}")
+        except Exception as e:
+            self.log.error(f"Failed to receive message with exception {e}")
+            return OutcomeStatus(flag=OutcomeFlag.FAIL)
+
+        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         """

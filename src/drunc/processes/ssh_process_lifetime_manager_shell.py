@@ -426,6 +426,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         hostname = boot_request.process_description.metadata.hostname
         user = boot_request.process_description.metadata.user
         log_file = boot_request.process_description.process_logs_path
+        self.log.debug(
+            f"Starting process {uuid} on {hostname} as {user} with log file {log_file}"
+        )
 
         # Extract environment variables from boot request
         env_vars = (
@@ -445,6 +448,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # Remove trailing semicolon if present
         if cmd.endswith(";"):
             cmd = cmd[:-1]
+
+        self.log.debug(f"Built command for {uuid}: {cmd}: {boot_request}")
 
         # Execute the command via SSH
         self._execute_bootrequest_via_ssh(
@@ -886,33 +891,37 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         # Determine if host key checking should be disabled based on configuration and
         # target host
-        disable_host_key_check = self.disable_host_key_check or (
-            self.disable_localhost_host_key_check
-            and hostname in ("localhost", "127.0.0.1", "::1")
+        superuser_host = getpass.getuser() + "@" + user_host.split("@")[1]
+        self.log.debug(
+            f"Building SSH arguments for {user_host} with superuser host {superuser_host}"
         )
 
         # Base SSH arguments with user@host and strict host key checking disabled
         # StrictHostKeyChecking=no is set to as we have an nfs backed home directory and
         # the known_hosts file is not shared across hosts, so we cannot rely on it for
         # host key verification.
-        arguments = [user_host, "-o", "StrictHostKeyChecking=no"]
+        arguments = [superuser_host, "-o", "StrictHostKeyChecking=no"]
 
+        # If TTY allocation is requested, add the -tt flag to force allocation. This is
+        # needed as SSH permissions are different for general users and for np04daq
         if use_tty:
             arguments.append("-tt")
 
         # If host key checking is disabled, also disable known hosts file usage and
-        # reduce log level to avoid cluttering logs with warnings about host key verification
-        if disable_host_key_check:
-            arguments.extend(
-                [
-                    "-o",
-                    "LogLevel=error",
-                    "-o",
-                    "GlobalKnownHostsFile=/dev/null",
-                    "-o",
-                    "UserKnownHostsFile=/dev/null",
-                ]
-            )
+        # reduce log level to avoid cluttering logs with warnings about host key
+        # verification
+        arguments.extend(
+            [
+                "-o",
+                "LogLevel=error",
+                "-o",
+                "GlobalKnownHostsFile=/dev/null",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
+
+        self.log.debug(f"SSH arguments for {user_host}: {arguments}")
 
         return arguments
 
@@ -1031,7 +1040,12 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             )
             arguments.append(remote_command)
 
+            # Execute SSH command to wait for and read file (single round-trip)
+            self.log.debug(
+                f"Attempting to read metadata for {uuid} from {hostname} with timeout {timeout}s"
+            )
             result = self.ssh(*arguments)
+            self.log.debug(f"Raw metadata content for {uuid} from {hostname}: {result}")
             json_content = str(result).strip()
 
             self.log.debug(f"Metadata content for {uuid}: {json_content!r}")
@@ -1123,6 +1137,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         try:
             platform = os.uname().sysname.lower()
             is_macos = "darwin" in platform
+            hostname_for_gssapi = hostname
+            if hostname_for_gssapi == "localhost":
+                hostname_for_gssapi = os.uname().nodename
             user_host = f"{user}@{hostname}"
 
             # Build remote command with metadata file writing
@@ -1160,6 +1177,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
+                f"rm {log_file}; "  # delete log file so no issues on ovewriting in th next line
                 f"{command} &> {log_file} & PID=$! ; "
                 f"trap 'kill -HUP $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' HUP TERM INT QUIT ; "
                 f"echo '{remote_metadata_json}' > {metadata_file} ; "
@@ -1168,6 +1186,39 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             arguments = self._build_ssh_arguments(hostname, user_host)
             arguments.append(remote_cmd)
+
+            # Test access to CMD
+            cd_path = f"{boot_request.process_description.process_execution_directory}"
+            touch_cmd = [
+                arguments[0],  # assume first arg is username@host
+                f"touch {cd_path}/.write_test && rm {cd_path}/.write_test",
+            ]
+            self.log.debug(f"running {touch_cmd} for CMD access test")
+            try:
+                access = self.ssh(
+                    *touch_cmd,
+                    _out=self.log.warning,
+                    _err=self.log.error,
+                    _bg=True,
+                    _bg_exc=False,
+                    _new_session=True,
+                    _preexec_fn=on_parent_exit(signal.SIGTERM)
+                    if not is_macos
+                    else None,
+                )
+
+                access.wait()
+                if access.exit_code != 0:
+                    raise RuntimeError("SSH error fails to finish successfully")
+            except Exception as e:
+                err_msg = (
+                    f"No access to {cd_path}"
+                    "for multiusers to work, the above path needs elevated permissions for"
+                    " the PM superuser to cd and write into. "
+                    "Please change the permissions to allow for this."
+                )
+                self.log.error(err_msg)
+                raise RuntimeError from e
 
             process = self.ssh(
                 *arguments,

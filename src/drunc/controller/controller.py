@@ -1,4 +1,4 @@
-import multiprocessing
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -105,8 +105,8 @@ class Controller(ControllerServicer):
         self.stop_event: threading.Event | None = None
         self.thread: threading.Thread | None = None
 
-        self.fsm_config = FSMConfHandler(
-            data=self.configuration.data.controller.fsm,
+        self.fsm_config = FSMConfHandler.from_pyobject(
+            data=self.configuration.controller.fsm,
         )
 
         self.stateful_node = StatefulNode(
@@ -118,7 +118,7 @@ class Controller(ControllerServicer):
             top_segment_controller=self.top_segment_controller,
         )
 
-        dach = DummyAuthoriserConfHandler(
+        dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser,
         )
         self.authoriser = DummyAuthoriser(dach, SystemType.CONTROLLER)
@@ -129,17 +129,29 @@ class Controller(ControllerServicer):
         self.connectivity_service_thread = None
         self.uri = ""
         if self.configuration.session.connectivity_service:
-            connection_server = self.configuration.session.connectivity_service.host
-            connection_port = (
-                self.configuration.session.connectivity_service.service.port
+            # Remaps the localhost into the correct server
+            # and also grabs the correct port from the right environment from the config
+
+            connection_server_host = (
+                self.configuration.session.connectivity_service.host
             )
+            connection_port = os.getenv("CONNECTION_PORT")
+            if connection_server_host == "localhost":
+                injected_hostname = os.getenv("DRUNC_HOST_NAME")
+                if not injected_hostname:
+                    raise ValueError("DRUNC_HOST_NAME environment variable is not set.")
+                self.log.debug(
+                    f"Remapping connectivity service host from 'localhost' to '{injected_hostname}'"
+                )
+                connection_server_host = injected_hostname
+
             log_init.info(
-                f"Connectivity server {connection_server}:{connection_port} is enabled"
+                f"Connectivity server {connection_server_host}:{connection_port} is enabled"
             )
 
             self.connectivity_service = ConnectivityServiceClient(
                 session=self.session,
-                address=f"{connection_server}:{connection_port}",
+                address=f"{connection_server_host}:{connection_port}",
             )
 
     def init_controller(self) -> None:
@@ -230,7 +242,7 @@ class Controller(ControllerServicer):
             log_init_controller.info(f"Taking control of {child.name}")
             child.take_control(execute_on_all_subsequent_children_in_path=True)
 
-        interval_s = getattr(self.configuration.data, "interval_s", 10.0)
+        interval_s = getattr(self.configuration, "interval_s", 10.0)
 
         if self.opmon_publisher is not None:
             self.stop_event = threading.Event()
@@ -326,6 +338,13 @@ class Controller(ControllerServicer):
         if not self.connectivity_service:
             return
 
+        self.log.debug(
+            f"Looking for connectivity service at address {self.connectivity_service.address}"
+        )
+        if not self.connectivity_service.is_ready(timeout=20):
+            raise ValueError(
+                "Connectivity service unavailable for control address advertising."
+            )
         self.log.info(
             f"Registering {self.name} ({address}) to the connectivity service at {self.connectivity_service.address}"
         )
@@ -383,14 +402,6 @@ class Controller(ControllerServicer):
                         self.log.debug("opmon publisher stopped")
             except Exception as e:
                 self.log.warning(f"Error stopping opmon publisher: {e}")
-
-        self.log.debug("Threading threads")
-        for t in threading.enumerate():
-            self.log.debug(f"{t.name} TID: {t.native_id} is_alive: {t.is_alive}")
-
-        with multiprocessing.Manager() as manager:
-            self.log.debug("Multiprocess threads")
-            self.log.debug(manager.list())
 
     def __del__(self):
         self.terminate()

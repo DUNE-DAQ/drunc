@@ -21,7 +21,7 @@ from drunc.controller.children_interface.rest_api_child import (
 )
 from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
-from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import (
     ControlType,
     get_control_type_and_uri_from_cli,
@@ -30,19 +30,9 @@ from drunc.utils.utils import (
 )
 
 
-class ControllerConfData:  # the bastardised OKS
-    def __init__(self):
-        class id_able:
-            id = None
-
-        class cler:
-            pass
-
-        self.controller = cler()
-        self.controller.fsm = id_able()
-
-
 class ControllerConfHandler(ConfHandler):
+    """Handler for controller configuration."""
+
     @staticmethod
     def find_segment(segment, id_):
         if segment.controller.id == id_:
@@ -66,30 +56,29 @@ class ControllerConfHandler(ConfHandler):
             )
         return this_segment
 
-    def _post_process_oks(self, *args, **kwargs):
+    def _post_process_oks(self) -> None:
         self.authoriser = None
-        self.data = self._grab_segment_conf_from_controller(self.data)
+        segment = self._grab_segment_conf_from_controller(self._raw_data)
+        self.controller = segment.controller
+        self.segments = segment.segments
+        self.applications = segment.applications
 
-        self.this_host = self.data.controller.runs_on.runs_on.id
+        self.this_host = self.controller.runs_on.runs_on.id
         if self.this_host in ["localhost"] or self.this_host.startswith("127."):
             self.this_host = socket.gethostname()
 
         self.opmon_publisher = None
         self.opmon_conf = parse_opmon_conf(
             log=self.log,
-            conf=self.data.controller.opmon_conf,
+            conf=self.controller.opmon_conf,
             uri=self.session.opmon_uri,
             session=self.session_name,
-            application=self.data.controller.id,
+            application=self.controller.id,
         )
 
         if self.opmon_conf.path == "./info.json":
             self.opmon_conf.path = (
-                "./info."
-                + self.opmon_conf.session
-                + "."
-                + self.data.controller.id
-                + ".json"
+                "./info." + self.opmon_conf.session + "." + self.controller.id + ".json"
             )
 
         self.log.debug("Initializing OpMon with configuration %s", self.opmon_conf)
@@ -193,13 +182,13 @@ class ControllerConfHandler(ConfHandler):
         # threading the children look up
         threads = []
 
-        for segment in self.data.segments:
+        for segment in self.segments:
             self.log.debug(segment)
             t = threading.Thread(target=process_segment, args=(segment,))
             threads.append(t)
             t.start()
 
-        for app in self.data.applications:
+        for app in self.applications:
             self.log.debug(app)
             t = threading.Thread(target=process_application, args=(app,))
             threads.append(t)
@@ -251,22 +240,22 @@ class ControllerConfHandler(ConfHandler):
 
         match ctype:
             case ControlType.gRPC:
-                grpc_conf_handler = gRCPChildConfHandler(
-                    configuration, ConfTypes.PyObject
+                grpc_conf_handler = gRCPChildConfHandler.from_pyobject(
+                    data=configuration
                 )
                 return gRPCChildNode(
                     name, grpc_conf_handler, uri, connectivity_service, init_token
                 )
 
             case ControlType.REST_API:
-                restapi_conf_handler = RESTAPIChildNodeConfHandler(
-                    configuration, ConfTypes.PyObject
+                restapi_conf_handler = RESTAPIChildNodeConfHandler.from_pyobject(
+                    data=configuration
                 )
                 return RESTAPIChildNode(
                     name,
                     restapi_conf_handler,
                     uri,
-                    self.data.controller.fsm,
+                    self.controller.fsm,
                     connectivity_service=connectivity_service,
                 )
 
