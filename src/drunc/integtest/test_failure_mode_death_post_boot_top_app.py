@@ -162,9 +162,9 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     """
     # Check that the application that dies on boot is not present in the ps table after
     # boot.
-    ps_table = get_ps_table_after_echo(
-        run_dunerc.completed_process.stdout, "ps-post-boot"
-    )
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+
+    ps_table = get_ps_table_after_echo(lines, "ps-post-boot")
     dead_app_name = "ft-top-segment-application"
     ps_table_dead_app_entry = get_rows_by_friendly_name_from_ps_table(
         ps_table, dead_app_name
@@ -188,9 +188,9 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
     """
     # Check that the application that dies on boot is not present in the ps table after
     # boot.
-    status_table = get_status_table_after_echo(
-        run_dunerc.completed_process.stdout, "status-post-boot"
-    )
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+
+    status_table = get_status_table_after_echo(lines, "status-post-boot")
     dead_app_name = "ft-top-segment-application"
     status_table_dead_app_entry = get_rows_by_name_from_status_table(
         status_table, dead_app_name
@@ -201,11 +201,11 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
     assert dead_app_name not in status_table, (
         f"Expected to see {dead_app_name} missing from the ps table, but it was found."
     )
-    status_table_state = status_table_dead_app_entry[0]["State"]
+    status_table_state = status_table_dead_app_entry[0]["state"]
     assert status_table_state == "disconnected", (
         f"Expected to see {dead_app_name} marked with state 'disconnected' in the status table, but it was not."
     )
-    status_table_state = status_table_dead_app_entry[0]["Substate"]
+    status_table_state = status_table_dead_app_entry[0]["substate"]
     assert status_table_state == "disconnected", (
         f"Expected to see {dead_app_name} marked with substate 'disconnected' in the status table, but it was not."
     )
@@ -233,16 +233,16 @@ def test_fsm_in_error_status_table(run_dunerc) -> None:
     """
     # Check that the session FSM is correctly put in error state if an appliucation dies
     # on boot.
-    status_table = get_status_table_after_echo(
-        run_dunerc.completed_process.stdout, "status-post-boot"
-    )
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+
+    status_table = get_status_table_after_echo(lines, "status-post-boot")
     root_controller_status = get_rows_by_name_from_status_table(
         status_table, "ft-root-controller"
     )
     assert root_controller_status, (
         "Expected to see the ft-root-controller in the status table, but it was not found"
     )
-    error_state = root_controller_status[0]["In error"]
+    error_state = root_controller_status[0]["in_error"]
     assert error_state == "Yes", (
         "Expected to see the session FSM marked as in error in the status table, but it was not."
     )

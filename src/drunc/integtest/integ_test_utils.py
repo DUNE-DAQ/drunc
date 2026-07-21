@@ -455,6 +455,7 @@ def get_execution_report_after_echo(
 
 # ── Process table helpers ──────────────────────────────────────────────────────
 
+
 def get_column_for_friendly_name(
     ps_table: list[dict[str, str]], friendly_name: str, column: str
 ) -> str:
@@ -485,7 +486,7 @@ def get_rows_by_name_from_status_table(
     status_table: list[dict[str, str]], name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `Name` matches exactly after stripping."""
-    return [row for row in status_table if row["Name"].strip() == name]
+    return [row for row in status_table if row["name"].strip() == name]
 
 
 def assert_process_presence(
