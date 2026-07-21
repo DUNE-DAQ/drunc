@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import TYPE_CHECKING, Dict, Optional, Union, cast
 
 if TYPE_CHECKING:
     from drunc.fsm._protocols import (
@@ -111,20 +111,23 @@ class PreOrPostTransitionSequence:
             transition_data = "{}"
 
         try:
-            input_data = json.loads(transition_data)
+            input_data = cast(dict[str, object], json.loads(transition_data))
         except:
             raise fsme.TransitionDataOfIncorrectFormat(transition_data)
 
         for callback in self.sequence:
             try:
-                self.log.debug(f"data before callback: {input_data}")
-                self.log.debug(
+                self.log.critical(f"data before callback: {input_data}")
+                self.log.critical(
                     f"executing the callback: {callback.method.__name__} from {callback.method.__module__}"
                 )
-                input_data = callback.method(
-                    _input_data=input_data, _context=ctx, **transition_args
+                input_data = cast(
+                    dict[str, object],
+                    callback.method(
+                        _input_data=input_data, _context=ctx, **transition_args
+                    ),
                 )
-                self.log.debug(f"data after callback: {input_data}")
+                self.log.critical(f"data after callback: {input_data}")
                 if input_data:
                     ctx.runinfo.update(input_data)
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, cast
 
-import conffwk
+from conffwk.dal import FSMData, FSMxTransition
 from druncschema.controller_pb2 import FSMSequence
 
 from drunc.fsm._protocols import FSMActionProtocol
@@ -16,13 +16,13 @@ from drunc.utils.utils import get_logger
 class FSMConfHandler(ConfHandler):
     """Handler for FSM configuration."""
 
-    data: conffwk.dal.FSMData
+    data: FSMData
 
     def _fill_pre_post_transition_sequence_oks(
         self,
         prefix: str,
         transition: Transition,
-        data: List[conffwk.dal.FSMxTransition] | None,
+        data: List[FSMxTransition] | None,
     ) -> PreOrPostTransitionSequence:
         """
         Fill the pre or post transition sequence for a given transition.
@@ -79,7 +79,7 @@ class FSMConfHandler(ConfHandler):
         Raises:
             None
         """
-        raw = self._raw_data
+        raw = cast(FSMData, self._raw_data)
 
         # Define the data structures to store the FSM configuration
         self.log.debug("_post_process_oks configuration")
@@ -95,12 +95,12 @@ class FSMConfHandler(ConfHandler):
 
         # Fill the actions dictionary with the FSMAction objects corresponding to the
         # action names defined in the configuration
-        for action in raw.actions:  # type: 'conffwk.dal.FSMAction'
+        for action in raw.actions:  # type: 'FSMAction'
             self.actions[action.id] = FSMActionFactory.get().get_action(
                 action.id, action
             )
 
-        for transition in raw.transitions:  # type: 'conffwk.dal.FSMTransition'
+        for transition in raw.transitions:  # type: 'FSMTransition'
             tr = Transition(
                 name=transition.id,
                 source=transition.source,
