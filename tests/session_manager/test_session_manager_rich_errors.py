@@ -8,10 +8,12 @@ from druncschema.session_manager_pb2_grpc import (
     SessionManagerStub,
     add_SessionManagerServicer_to_server,
 )
-from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import RichErrorServerInterceptor
+from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
+    RichErrorServerInterceptor,
+)
 
 
 class SessionManagerRichErrorTestSuite:
@@ -49,8 +51,12 @@ class SessionManagerRichErrorTestSuite:
         self.server.add_insecure_port(listen_addr)
         self.server.start()
 
+        self.mock_client_logger = MagicMock()
+        client_interceptor = RichErrorClientInterceptor(logger=self.mock_client_logger)
+
         # Create client channel and stub
-        self.channel = grpc.insecure_channel(self.server_address)
+        raw_channel = grpc.insecure_channel(self.server_address)
+        self.channel = grpc.intercept_channel(raw_channel, client_interceptor)
         self.stub = SessionManagerStub(self.channel)
 
     def teardown_server_and_client(self):
@@ -82,6 +88,7 @@ def test_list_all_configs_no_config_files_rich_error(
 
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
+    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     # Remove the DUNEDAQ_DB_PATH from the environment to simulate it's not set
     monkeypatch.delenv("DUNEDAQ_DB_PATH", raising=False)
@@ -94,19 +101,21 @@ def test_list_all_configs_no_config_files_rich_error(
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     assert "DUNEDAQ_DB_PATH" in err.details()
 
-    # Unpack rich error metadata
-    status = status_pb2.Status()
-    for key, value in err.trailing_metadata():
-        if key == "grpc-status-details-bin":
-            status.ParseFromString(value)
+    # The interceptor calls log.error twice (once for the method, once for the details)
+    assert mock_logger.error.call_count == 2
 
-            # There should be a PreconditionFailure detail
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+    # Extract the GrpcErrorDetails object that the interceptor logged
+    logged_error_details = mock_logger.error.call_args_list[1][0][0]
 
-            violation = precond.violations[0]
-            assert violation.type == "MISSING OR INVALID"
-            assert "DUNEDAQ_DB_PATH env variable not set" in violation.description
+    assert logged_error_details.code == "FAILED_PRECONDITION"
+
+    # Access the PreconditionFailure detail object directly from the list
+    precond_detail = logged_error_details.details[0]
+    assert precond_detail.violations[0].type == "MISSING OR INVALID"
+    assert (
+        "DUNEDAQ_DB_PATH env variable not set"
+        in precond_detail.violations[0].description
+    )
 
 
 def test_no_config_files_rich_error(
@@ -114,6 +123,7 @@ def test_no_config_files_rich_error(
 ):
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
+    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "/fake_path")
 
@@ -125,18 +135,21 @@ def test_no_config_files_rich_error(
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     assert "Config files" in err.details()
 
-    # Unpack rich error metadata
-    status = status_pb2.Status()
-    for key, value in err.trailing_metadata():
-        if key == "grpc-status-details-bin":
-            status.ParseFromString(value)
+    # The interceptor calls log.error twice (once for the method, once for the details)
+    assert mock_logger.error.call_count == 2
 
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+    # Extract the GrpcErrorDetails object that the interceptor logged
+    logged_error_details = mock_logger.error.call_args_list[1][0][0]
 
-            violation = precond.violations[0]
-            assert violation.type == "MISSING OR INVALID"
-            assert "No configuration files found in /fake_path" in violation.description
+    assert logged_error_details.code == "FAILED_PRECONDITION"
+
+    # Access the PreconditionFailure detail object directly from the list
+    precond_detail = logged_error_details.details[0]
+    assert precond_detail.violations[0].type == "MISSING OR INVALID"
+    assert (
+        "No configuration files found in /fake_path"
+        in precond_detail.violations[0].description
+    )
 
 
 def test_config_parse_failure(
@@ -144,6 +157,7 @@ def test_config_parse_failure(
 ):
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
+    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     # Set env var so search_paths is non-empty
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
@@ -163,18 +177,19 @@ def test_config_parse_failure(
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
 
-    # Unpack rich error metadata
-    status = status_pb2.Status()
-    for key, value in err.trailing_metadata():
-        if key == "grpc-status-details-bin":
-            status.ParseFromString(value)
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+    # The interceptor calls log.error twice (once for the method, once for the details)
+    assert mock_logger.error.call_count == 2
 
-            violation = precond.violations[0]
-            assert violation.type == "MISSING OR INVALID"
-            assert "Config files" in violation.subject
-            assert "Failed to parse configuration file" in violation.description
+    # Extract the GrpcErrorDetails object that the interceptor logged
+    logged_error_details = mock_logger.error.call_args_list[1][0][0]
+
+    # Access the PreconditionFailure detail object directly from the list
+    precond_detail = logged_error_details.details[0]
+    assert precond_detail.violations[0].type == "MISSING OR INVALID"
+    assert "Config files" in precond_detail.violations[0].subject
+    assert (
+        "Failed to parse configuration file" in precond_detail.violations[0].description
+    )
 
 
 def test_dals_missing_or_invalid(
@@ -182,6 +197,7 @@ def test_dals_missing_or_invalid(
 ):
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
+    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     # Set env var so search_paths is non-empty
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
@@ -201,16 +217,13 @@ def test_dals_missing_or_invalid(
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
+    assert mock_logger.error.call_count == 2
 
-    # Unpack rich error metadata
-    status = status_pb2.Status()
-    for key, value in err.trailing_metadata():
-        if key == "grpc-status-details-bin":
-            status.ParseFromString(value)
-            precond = error_details_pb2.PreconditionFailure()
-            status.details[0].Unpack(precond)
+    # Extract the GrpcErrorDetails object that the interceptor logged
+    logged_error_details = mock_logger.error.call_args_list[1][0][0]
 
-            violation = precond.violations[0]
-            assert violation.type == "MISSING OR INVALID"
-            assert "Session DALs" in violation.subject
-            assert "DALs missing or invalid" in violation.description
+    # Access the PreconditionFailure detail object directly from the list
+    precond_detail = logged_error_details.details[0]
+    assert precond_detail.violations[0].type == "MISSING OR INVALID"
+    assert "Session DALs" in precond_detail.violations[0].subject
+    assert "DALs missing or invalid" in precond_detail.violations[0].description

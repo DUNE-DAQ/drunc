@@ -521,3 +521,62 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                 response_serializer=handler.response_serializer,
             )
         return handler
+
+
+class _CallWrapper:
+    """Wraps the gRPC Call/Future object to catch exceptions."""
+
+    def __init__(self, call, method, logger):
+        self._call = call
+        self._method = method
+        self._logger = logger
+
+    def _handle_error(self, exception):
+        if isinstance(exception, grpc.RpcError):
+            self._logger.error(f"gRPC Call Failed on method: {self._method}")
+            try:
+                error_details = extract_grpc_rich_error(exception)
+                self._logger.error(error_details)
+            except Exception as extraction_error:
+                self._logger.debug(
+                    f"Could not extract rich error details: {extraction_error}",
+                    exc_info=True,
+                )
+            handle_grpc_error(exception)
+
+    def __getattr__(self, attr):
+        # intercept the .result() call and process the error
+        # to be used in tests if a mock passes an exception directly
+        if attr == "result" and isinstance(self._call, Exception):
+
+            def handle_mocked_error(*args, **kwargs):
+                self._handle_error(self._call)
+                raise self._call
+
+            return handle_mocked_error
+
+        # Wrap the Future's methods to catch the error when it resolves.
+        val = getattr(self._call, attr)
+        if attr in ("result", "exception"):
+
+            def wrapper(*args, **kwargs):
+                try:
+                    res = val(*args, **kwargs)
+                    if attr == "exception" and res is not None:
+                        self._handle_error(res)
+                    return res
+                except Exception as e:
+                    self._handle_error(e)
+                    raise
+
+            return wrapper
+        return val
+
+
+class RichErrorClientInterceptor(grpc.UnaryUnaryClientInterceptor):
+    def __init__(self, logger):
+        self.log = logger
+
+    def intercept_unary_unary(self, continuation, client_call_details, request):
+        response_call = continuation(client_call_details, request)
+        return _CallWrapper(response_call, client_call_details.method, self.log)
