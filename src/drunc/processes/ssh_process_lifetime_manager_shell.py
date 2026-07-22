@@ -1152,8 +1152,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_vars.items()])
                 remote_cmd += cmd_env + ";"
 
-            remote_cmd += "unset DISPLAY;"
-
             if hasattr(boot_request.process_description, "process_execution_directory"):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
@@ -1181,7 +1179,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             remote_cmd += (
                 f"mkdir -p ${{XDG_RUNTIME_DIR:-/tmp}}/drunc ; "
                 f"rm {log_file}; "  # delete log file so no issues on ovewriting in th next line
-                "unset DISPLAY; "
                 f"{command} &> {log_file} & PID=$! ; "
                 f"trap 'kill -HUP $PID 2>/dev/null || true; wait $PID 2>/dev/null || true' HUP TERM INT QUIT ; "
                 f"echo '{remote_metadata_json}' > {metadata_file} ; "
