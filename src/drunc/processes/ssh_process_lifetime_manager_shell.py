@@ -918,6 +918,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 "GlobalKnownHostsFile=/dev/null",
                 "-o",
                 "UserKnownHostsFile=/dev/null",
+                "-o",
+                "ForwardX11=no",
             ]
         )
 
