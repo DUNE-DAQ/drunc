@@ -912,14 +912,13 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # verification
         arguments.extend(
             [
+                "-x",
                 "-o",
                 "LogLevel=error",
                 "-o",
                 "GlobalKnownHostsFile=/dev/null",
                 "-o",
                 "UserKnownHostsFile=/dev/null",
-                "-o",
-                "ForwardX11=no",
             ]
         )
 
