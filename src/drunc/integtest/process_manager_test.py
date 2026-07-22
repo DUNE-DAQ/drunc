@@ -205,7 +205,7 @@ def test_boot(run_dunerc) -> None:
     post_boot_idx = require_line_containing(
         lines,
         "post_boot",
-        error_message="Did not find the 'pos_boot' footer line in stdout.",
+        error_message="Did not find the 'post_boot' footer line in stdout.",
     )
     between = lines[pre_boot_idx + 1 : post_boot_idx]
     no_boot_re = "No processes running in session"
