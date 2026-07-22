@@ -1152,6 +1152,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 cmd_env = ";".join([f'export {n}="{v}"' for n, v in env_vars.items()])
                 remote_cmd += cmd_env + ";"
 
+            remote_cmd += "unset DISPLAY;"
+
             if hasattr(boot_request.process_description, "process_execution_directory"):
                 remote_cmd += f"cd {boot_request.process_description.process_execution_directory} ; "
 
