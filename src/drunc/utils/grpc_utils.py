@@ -580,3 +580,7 @@ class RichErrorClientInterceptor(grpc.UnaryUnaryClientInterceptor):
     def intercept_unary_unary(self, continuation, client_call_details, request):
         response_call = continuation(client_call_details, request)
         return _CallWrapper(response_call, client_call_details.method, self.log)
+
+    def intercept_unary_stream(self, continuation, client_call_details, request):
+        response_iterator = continuation(client_call_details, request)
+        return _CallWrapper(response_iterator, client_call_details.method, self.log)

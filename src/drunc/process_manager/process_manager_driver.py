@@ -37,9 +37,8 @@ from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.oks_parser import get_full_db_path
 from drunc.process_manager.utils import format_hostname, get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
     copy_token,
-    extract_grpc_rich_error,
-    handle_grpc_error,
 )
 from drunc.utils.utils import (
     file_is_read_only,
@@ -63,7 +62,9 @@ class ProcessManagerDriver:
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        self.channel = grpc.insecure_channel(self.address, options=options)
+        raw_channel = grpc.insecure_channel(self.address, options=options)
+        rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+        self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = ProcessManagerStub(self.channel)
         self.token = copy_token(token)
 
@@ -98,19 +99,7 @@ class ProcessManagerDriver:
 
         timeout = 10
 
-        try:
-            response = self.stub.send_msg(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.critical(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
-
+        response = self.stub.send_msg(request, timeout=timeout)
         return response
 
     # ----- Boot workflow -----
@@ -213,20 +202,8 @@ class ProcessManagerDriver:
                 )
                 touch_and_chmod(opmon_file)
 
-            try:
-                response = self.stub.boot(request, timeout=timeout)
-                yield response
-
-            except grpc.RpcError as e:
-                try:
-                    error_details = extract_grpc_rich_error(e)
-                    self.log.error(error_details)
-                except Exception as extraction_error:
-                    self.log.debug(
-                        f"Could not extract rich error details from gRPC error: {extraction_error}",
-                        exc_info=True,
-                    )
-                handle_grpc_error(e)
+            response = self.stub.boot(request, timeout=timeout)
+            yield response
 
         # Step 7: discover segment root controller
         self._discover_controller(
@@ -322,9 +299,9 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
-        # Some edge cases throw issues with DISPLAY being set, so we remove it from the 
+        # Some edge cases throw issues with DISPLAY being set, so we remove it from the
         # environment
-        env.pop('DISPLAY', None)
+        env.pop("DISPLAY", None)
         tree_id = app["tree_id"]
 
         # The following line is required to provide an independent method of injecting
@@ -834,20 +811,8 @@ To debug it, close drunc and run the following command:
             )
             self.log.debug(f"{request=}\n\n")
 
-            try:
-                response = self.stub.boot(request, timeout=timeout)
-                yield response
-
-            except grpc.RpcError as e:
-                try:
-                    error_details = extract_grpc_rich_error(e)
-                    self.log.error(error_details)
-                except Exception as extraction_error:
-                    self.log.debug(
-                        f"Could not extract rich error details from gRPC error: {extraction_error}",
-                        exc_info=True,
-                    )
-                handle_grpc_error(e)
+            response = self.stub.boot(request, timeout=timeout)
+            yield response
 
     def _prepare_exec_and_args_dummy_boot(self, sleep: int, n_sleeps: int) -> list:
         args = [
@@ -890,18 +855,7 @@ To debug it, close drunc and run the following command:
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
 
-        try:
-            response = self.stub.terminate(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
+        response = self.stub.terminate(request, timeout=timeout)
 
         return response
 
@@ -910,72 +864,36 @@ To debug it, close drunc and run the following command:
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.kill(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
+        response = self.stub.kill(request, timeout=timeout)
 
         return response
 
     def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.logs(request, timeout=timeout)
+        response = self.stub.logs(request, timeout=timeout)
 
-            # Check if the response indicates a BadQuery error
-            if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
-                lines = response.lines
-                if len(lines) == 1:
-                    lines = lines[0]
-                self.log.warning(f"Bad query for logs: {lines}")
-                return None
-
-            # Check for other error flags
-            if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
-                self.log.error(f"Exception occurred on server: {response.lines}")
-                return None
-
-            return response
-
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-            handle_grpc_error(e)
+        # Check if the response indicates a BadQuery error
+        if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
+            lines = response.lines
+            if len(lines) == 1:
+                lines = lines[0]
+            self.log.warning(f"Bad query for logs: {lines}")
             return None
+
+        # Check for other error flags
+        if response.flag == ResponseFlag.DRUNC_EXCEPTION_THROWN:
+            self.log.error(f"Exception occurred on server: {response.lines}")
+            return None
+
+        return response
 
     def ps(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.ps(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response = self.stub.ps(request, timeout=timeout)
 
         return response
 
@@ -984,19 +902,7 @@ To debug it, close drunc and run the following command:
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.flush(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response = self.stub.flush(request, timeout=timeout)
 
         return response
 
@@ -1005,38 +911,14 @@ To debug it, close drunc and run the following command:
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.restart(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response = self.stub.restart(request, timeout=timeout)
 
         return response
 
     def describe(self, timeout: int | float = 60) -> Description:
         request = Request(token=copy_token(self.token))
 
-        try:
-            response = self.stub.describe(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response = self.stub.describe(request, timeout=timeout)
 
         return response
 
