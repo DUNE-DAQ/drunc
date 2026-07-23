@@ -180,12 +180,12 @@ def test_fsm_cmd_application_death_log_file(run_dunerc) -> None:
         None,
     )
     assert simulated_death_app_logfile is not None, (
-        "Expected to find a log file for ft-nested-segment-2-application, but did not."
+        "Expected to find a log file for ft-top-segment-application, but did not."
     )
 
     # Check the logfile for the entry about the simulated death of the application during FSM command execution
     search_str = (
-        "Simulating death of ft-nested-segment-2-application during FSM cmd execution"
+        "Simulating death of ft-top-segment-application during FSM cmd execution"
     )
     lines = strip_ansi(simulated_death_app_logfile.read_text()).splitlines()
 

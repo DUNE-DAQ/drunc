@@ -71,7 +71,7 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps
+ps -w 200
 
 echo status-post-boot
 status
@@ -83,7 +83,7 @@ echo status-post-conf
 status
 """.split()
 
-timeout_app_name = "ft-nested-segment-2-application"
+timeout_app_name = "ft-top-segment-application"
 
 
 def test_dunerc_success(run_dunerc) -> None:

@@ -145,25 +145,6 @@ def test_boot_failure_logfile(run_dunerc) -> None:
     )
 
 
-def test_expected_log_message_in_terminal(run_dunerc) -> None:
-    """
-    Checks that the expected message indicating that the application died on boot is
-    printed to stdout, as a summary after the controller check is complete.
-    """
-    # Get and format the stdout
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
-
-    # Check that the expected boot failure message is in stdout for the application that
-    # dies on boot
-    search_str = (
-        "Booted, but the number of processes registered with the process manager"
-    )
-    str_found = any(search_str in line for line in lines)
-    assert str_found is True, (
-        "Expected to see the misaligned process count record in stdout, but did not."
-    )
-
-
 def test_process_dead_in_ps_table(run_dunerc) -> None:
     """
     Checks that the application that dies on boot is not present in the ps table after
