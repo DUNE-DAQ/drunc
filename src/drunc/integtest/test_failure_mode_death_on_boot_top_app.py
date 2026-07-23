@@ -177,10 +177,10 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     Checks that the application that dies on boot is not present in the ps table after
     boot.
     """
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+
     # Get the ps table
-    ps_table = get_ps_table_after_echo(
-        run_dunerc.completed_process.stdout, "ps-post-boot"
-    )
+    ps_table = get_ps_table_after_echo(lines, "ps-post-boot")
 
     # Format the entry rows into a parsable list of dicts, and check that the dead
     # application is not present in the ps
@@ -206,8 +206,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
     state, and that the expected message is printed to stdout.
     """
     # Get the stdout and format it
-    stdout = run_dunerc.completed_process.stdout
-    lines = strip_ansi(stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
     # Check the stdout for the expected error message.
     search_str = "Booted, but the session is in an error state."
@@ -218,7 +217,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
 
     # Check the status table for the root controller error state
     # Get the status table
-    status_table_post_boot = get_status_table_after_echo(stdout, "status-post-boot")
+    status_table_post_boot = get_status_table_after_echo(lines, "status-post-boot")
 
     # Get the entry for the root controller, and make sure it exists
     root_controller_row = get_rows_by_name_from_status_table(
@@ -229,6 +228,6 @@ def test_boot_failure_cli(run_dunerc) -> None:
     )
 
     # Check that the root controller is in an error state
-    assert root_controller_row[0]["In error"] == "Yes", (
+    assert root_controller_row[0]["in_error"] == "Yes", (
         "Expected root controller to be in error, but it is not."
     )

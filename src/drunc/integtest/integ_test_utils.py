@@ -304,82 +304,6 @@ _STATUS_COLUMNS = [
 _EXEC_REPORT_COLUMNS = ["name", "command_execution", "fsm_transition"]
 
 
-def _parse_status_table_from_index(
-    lines: list[str], start_idx: int
-) -> list[dict[str, str]]:
-    """Parse a Unicode table of processes starting after `start_idx`.
-
-    The parser expects rows that start with `│` and stops at a line starting
-    with `└`. It returns dictionaries with normalized column names.
-    """
-    table_rows: list[dict[str, str]] = []
-
-    for line in lines[start_idx + 1 :]:
-        stripped = line.strip()
-
-        if stripped.startswith("└"):
-            break
-
-        if not stripped.startswith("│"):
-            continue
-
-        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
-        if len(cells) != 7:
-            continue
-
-        table_rows.append(
-            {
-                "Name": cells[0],
-                "Info": cells[1],
-                "State": cells[2],
-                "Substate": cells[3],
-                "In error": cells[4],
-                "Included": cells[5],
-                "Endpoint": cells[6],
-            }
-        )
-
-    return table_rows
-
-
-def _parse_status_table_from_index(
-    lines: list[str], start_idx: int
-) -> list[dict[str, str]]:
-    """Parse a Unicode table of processes starting after `start_idx`.
-
-    The parser expects rows that start with `│` and stops at a line starting
-    with `└`. It returns dictionaries with normalized column names.
-    """
-    table_rows: list[dict[str, str]] = []
-
-    for line in lines[start_idx + 1 :]:
-        stripped = line.strip()
-
-        if stripped.startswith("└"):
-            break
-
-        if not stripped.startswith("│"):
-            continue
-
-        cells = [cell.strip() for cell in stripped.strip("│").split("│")]
-        if len(cells) != 7:
-            continue
-
-        table_rows.append(
-            {
-                "Name": cells[0],
-                "Info": cells[1],
-                "State": cells[2],
-                "Substate": cells[3],
-                "In error": cells[4],
-                "Included": cells[5],
-                "Endpoint": cells[6],
-            }
-        )
-
-    return table_rows
-
-
 def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str, str]]:
     """Return parsed process-table rows found after a specific echo marker.
 
@@ -475,6 +399,7 @@ def get_column_for_friendly_name(
     )
 
 
+#! Replace this with a generic one
 def get_rows_by_friendly_name_from_ps_table(
     ps_table: list[dict[str, str]], friendly_name: str
 ) -> list[dict[str, str]]:

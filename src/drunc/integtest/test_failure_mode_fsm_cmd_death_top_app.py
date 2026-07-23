@@ -131,10 +131,10 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
     """Checks that all expected session applications are alive after boot in both the ps and status tables."""
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+
     # Get the ps table after boot
-    ps_table_post_boot = get_ps_table_after_echo(
-        run_dunerc.completed_process.stdout, "ps-post-boot"
-    )
+    ps_table_post_boot = get_ps_table_after_echo(lines, "ps-post-boot")
     assert ps_table_post_boot, "Expected ps table after boot, but did not find it."
 
     # Check that all expected applications are alive after boot
@@ -156,16 +156,14 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
         )
 
     # Get the status table after boot
-    status_table_post_boot = get_status_table_after_echo(
-        run_dunerc.completed_process.stdout, "status-post-boot"
-    )
+    status_table_post_boot = get_status_table_after_echo(lines, "status-post-boot")
     assert status_table_post_boot, (
         "Expected status table after boot, but did not find it."
     )
 
     # Check that the session is not in an error state after boot
     all_application_error_state_query = [
-        app["In error"] for app in status_table_post_boot
+        app["in_error"] for app in status_table_post_boot
     ]
     assert all(state == "No" for state in all_application_error_state_query), (
         "Expected all applications to not be in error state after boot, but found some in error state."
@@ -202,9 +200,8 @@ def test_fsm_cmd_application_death_ps_table(run_dunerc) -> None:
     Checks that the application that dies on fsm cmd execution is marked as dead in the ps table.
     """
     # Get the ps table after the fsm cmd execution
-    ps_table_post_conf = get_ps_table_after_echo(
-        run_dunerc.completed_process.stdout, "ps-post-conf"
-    )
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    ps_table_post_conf = get_ps_table_after_echo(lines, "ps-post-conf")
     assert ps_table_post_conf, "Expected ps table after conf, but did not find it."
 
     # Get te row for the dead application
@@ -228,7 +225,8 @@ def test_session_in_error_cli(run_dunerc) -> None:
     """
     # Get the status table after the command execution
     stdout = run_dunerc.completed_process.stdout
-    status_table_post_conf = get_status_table_after_echo(stdout, "status-post-conf")
+    lines = strip_ansi(stdout).splitlines()
+    status_table_post_conf = get_status_table_after_echo(lines, "status-post-conf")
 
     # Get the root controller row
     root_controller_row = get_rows_by_name_from_status_table(
@@ -239,8 +237,8 @@ def test_session_in_error_cli(run_dunerc) -> None:
     )
 
     # Check the substate never made it to the target state.
-    assert root_controller_row[0]["Substate"] == "propagating-conf", (
-        f"Expected root controller substate to be 'propagating-conf', but found '{root_controller_row[0]['Substate']}'."
+    assert root_controller_row[0]["substate"] == "propagating-conf", (
+        f"Expected root controller substate to be 'propagating-conf', but found '{root_controller_row[0]['substate']}'."
     )
 
     # Check the state of a segment controller which does not time out reaches the target state
@@ -250,8 +248,8 @@ def test_session_in_error_cli(run_dunerc) -> None:
     assert nested_segment_controller_row, (
         "Expected to find a row for the nested segment controller in the status table, but did not."
     )
-    assert nested_segment_controller_row[0]["Substate"] == "configured", (
-        f"Expected nested segment controller state to be 'configured', but found '{nested_segment_controller_row[0]['State']}'."
+    assert nested_segment_controller_row[0]["substate"] == "configured", (
+        f"Expected nested segment controller state to be 'configured', but found '{nested_segment_controller_row[0]['state']}'."
     )
 
     # Check the state of a segment application which does not time out reaches the target state
@@ -261,8 +259,8 @@ def test_session_in_error_cli(run_dunerc) -> None:
     assert nested_segment_application_row, (
         "Expected to find a row for the nested segment application in the status table, but did not."
     )
-    assert nested_segment_application_row[0]["Substate"] == "idle", (
-        f"Expected nested segment application state to be 'idle', but found '{nested_segment_application_row[0]['State']}'."
+    assert nested_segment_application_row[0]["substate"] == "idle", (
+        f"Expected nested segment application state to be 'idle', but found '{nested_segment_application_row[0]['state']}'."
     )
 
     # Check the stdout for the cmd timeout message
