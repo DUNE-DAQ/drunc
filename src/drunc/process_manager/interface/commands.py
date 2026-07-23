@@ -336,43 +336,60 @@ def restart_impl(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     obj.get_driver("process_manager").restart(query)
 
 
+def ps_decorators(f):
+    f = click.pass_obj(f)
+    f = click.option(
+        "-w",
+        "--width",
+        type=int,
+        default=None,
+        help="Table width. Default is automatically calculated",
+    )(f)
+    f = click.option(
+        "-l",
+        "--long-format",
+        is_flag=True,
+        type=bool,
+        default=False,
+        help="Whether to have a long output",
+    )(f)
+
+    return f
+
+
 @click.command("ps")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
-@click.option(
-    "-l",
-    "--long-format",
-    is_flag=True,
-    type=bool,
-    default=False,
-    help="Whether to have a long output",
-)
-@click.option(
-    "-w",
-    "--width",
-    type=int,
-    default=None,
-    help="Table width. Default is automatically calculated",
-)
-@click.pass_obj
-def ps(
+@ps_decorators
+def ps(obj, query, long_format, width):
+    log_pm_cmd(obj)
+    return ps_impl(obj, query, long_format, width)
+
+
+def ps_impl(
     obj: ProcessManagerContext,
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
 ) -> None:
     log = get_logger("process_manager.shell")
-    log_pm_cmd(obj)
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
-    if not results:
-        return
-    obj.print(
-        tabulate_process_instance_list(
-            results, title="Processes running", long=long_format, width=width
-        ),
-        overflow="fold",
-        soft_wrap=True,
-    )
+
+    # If there are processes running, tabulate them, otherwise log that there are no
+    # processes running.
+    if results.values:
+        obj.print(
+            tabulate_process_instance_list(
+                results,
+                title=f"Processes running in session {obj.session_name}",
+                long=long_format,
+                width=width,
+            ),
+            overflow="fold",
+            soft_wrap=True,
+        )
+    else:
+        log.info(f"No processes running in session [green]{obj.session_name}[/]")
 
 
 @click.command("log")
