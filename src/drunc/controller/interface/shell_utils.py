@@ -39,6 +39,7 @@ from rich.progress import (
 from rich.table import Table
 
 from drunc.controller.interface.context import ControllerContext
+from drunc.controller.utils import get_all_apps_with_named_substate
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.grpc_utils import (
@@ -704,12 +705,18 @@ def run_one_fsm_command(
         # Mark the controller as in error state, so that if the user tries to run
         # another command, it will be prevented, and they will be encouraged to check
         # the error application logs
+        status_response = obj.get_driver("controller").status()
+        apps_that_timed_out = get_all_apps_with_named_substate(
+            status_response, "executing_cmd"
+        )
         err_str = (
             "The session did not complete the stateful transition in the specified "
             f"time of {timeout} seconds. To investigate the cause, please check the "
-            "controller and application logs with the [yellow]logs[/] command."
+            f"logs of {apps_that_timed_out} with the [yellow]logs[/] command as:"
         )
         log.error(err_str)
+        for app in apps_that_timed_out:
+            log.error(f"\t[yellow]logs -n {app}[/]")
         obj.get_driver("controller").log_on_server(err_str, severity="ERROR")
         obj.get_driver("controller").to_error(
             execute_on_all_subsequent_children_in_path=False

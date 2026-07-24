@@ -72,7 +72,7 @@ def count_processes_in_status_response(response: StatusResponse) -> int:
     return processes_found
 
 
-def get_all_states(response: StatusResponse):
+def get_all_states(response: StatusResponse) -> list[str]:
     """
     Recursively extracts 'state' from StatusResponse and its children.
     """
@@ -87,6 +87,24 @@ def get_all_states(response: StatusResponse):
         states.extend(get_all_states(child))
 
     return states
+
+
+def get_all_apps_with_named_substate(
+    response: StatusResponse, substate_query: str
+) -> list[str]:
+    """
+    Recursively searches for app names with a specific substate in StatusResponse and its children.
+    """
+    matching_apps = []
+
+    if response.status and response.status.sub_state == substate_query:
+        if response.name:
+            matching_apps.append(response.name)
+
+    for child in response.children:
+        matching_apps.extend(get_all_apps_with_named_substate(child, substate_query))
+
+    return matching_apps
 
 
 def get_detector_name(configuration) -> str:
