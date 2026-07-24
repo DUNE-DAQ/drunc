@@ -253,3 +253,17 @@ def test_session_in_error_cli(run_dunerc) -> None:
     assert str_found is True, (
         "Expected to see the FSM error report message in stdout, but did not."
     )
+
+
+def test_suggestion_to_check_logs_is_present(run_dunerc) -> None:
+    """
+    Checks that the suggestion to check the log files is present in stdout.
+    """
+    stdout = run_dunerc.completed_process.stdout
+    lines = strip_ansi(stdout).splitlines()
+
+    expected_suggestion = f"logs -n {timeout_app_name}"
+    suggestion_found = any(expected_suggestion in line for line in lines)
+    assert suggestion_found, (
+        "Expected to find the suggestion to check log files in stdout, but did not."
+    )

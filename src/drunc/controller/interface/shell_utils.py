@@ -709,10 +709,11 @@ def run_one_fsm_command(
         apps_that_timed_out = get_all_apps_with_named_substate(
             status_response, "executing_cmd"
         )
+        apps_that_timed_out_str = ", ".join(apps_that_timed_out)
         err_str = (
             "The session did not complete the stateful transition in the specified "
-            f"time of {timeout} seconds. To investigate the cause, please check the "
-            f"logs of {apps_that_timed_out} with the [yellow]logs[/] command as:"
+            f"time of {timeout} seconds. To investigate the cause, [yellow]check the "
+            f"logs of {apps_that_timed_out_str} with the logs command[/] as:"
         )
         log.error(err_str)
         for app in apps_that_timed_out:
