@@ -33,6 +33,12 @@ from drunc.utils.utils import get_logger
     help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
 )
 @click.option(
+    "-cl",
+    "--controller-log-level",
+    default=None,
+    help="Overrides the config-defined log level of the controller",
+)
+@click.option(
     "--sleep-between-app-boot",
     type=float,
     default=0.1,
@@ -42,6 +48,7 @@ from drunc.utils.utils import get_logger
 def boot(
     obj: ProcessManagerContext,
     override_logs: bool | None,
+    controller_log_level: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
@@ -73,7 +80,7 @@ def boot(
             conf_id=obj.configuration_id,
             user=user,
             session_name=session_name,
-            log_level="INFO",  # Unused anyway !!
+            log_level=controller_log_level,
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )

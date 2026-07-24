@@ -31,6 +31,12 @@ from drunc.utils.utils import get_logger, resolve_context_peer
     default=True,
     help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
 )
+@click.option(
+    "-cl",
+    "--controller-log-level",
+    default=None,
+    help="Overrides the config-defined log level of the controller",
+)
 @click.argument("configuration-file", type=str, callback=validate_conf_string)
 @click.argument("configuration-id", type=str)
 @click.argument("session-name", type=str)
@@ -42,6 +48,7 @@ def boot(
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
+    controller_log_level: bool | None,
 ) -> None:
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
@@ -65,7 +72,7 @@ def boot(
             conf_id=configuration_id,
             user=user,
             session_name=session_name,
-            log_level="INFO",  ## Unused anyway!!
+            log_level=controller_log_level,
             override_logs=override_logs,
         )
         for result in results:

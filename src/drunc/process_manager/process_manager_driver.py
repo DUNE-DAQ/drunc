@@ -112,6 +112,9 @@ class ProcessManagerDriver:
             handle_grpc_error(e)
 
         return response
+    def update_controller_logs(self, ctrl_dal, level):
+        ctrl_dal.controller_log_level = level
+        return ctrl_dal
 
     # ----- Boot workflow -----
 
@@ -121,7 +124,7 @@ class ProcessManagerDriver:
         conf_id: str,
         user: str,
         session_name: str,
-        log_level: str,
+        log_level: str | None = None,
         override_logs: bool = True,
         timeout: int | float = 60,
         sleep_between_app_boot: (
@@ -143,6 +146,10 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
+        # Step 3.25 - Update controller dal 
+        if log_level:
+            session_dal = self.update_controller_logs(session_dal, log_level)
+        
         # step 3.5 update localhost mapping
         session_dal = self.resolve_localhost(session_dal)
 
