@@ -36,8 +36,8 @@ jobs:
         run: |
           cd nightly/NFD_DEV* || true
           source env.sh
-          python -m pip install --upgrade pip
           cd sourcecode
+          echo "Checking part of the git clone resolution path: ${{ github.event.pull_request.head.repo.owner.login }}"
           git clone https://github.com/${{ github.event.pull_request.head.repo.owner.login }}/druncschema.git -b ${{ github.head_ref }} || git clone https://github.com/DUNE-DAQ/druncschema.git
           cd druncschema
           pip install .[test]
@@ -53,7 +53,7 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           echo "Check the permissions of the path used for testing"
-          ls -ld /tmp
+          ls -lahrt .
           echo "Run the tests as the current user: $(whoami)"
           echo "Test command: dunedaq_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks" -k small_footprint_quick_test.py --verbosity 5 --tmpdir . 2>&1"
           dunedaq_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks" -k small_footprint_quick_test.py --verbosity 5 --tmpdir . 2>&1
