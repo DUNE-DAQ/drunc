@@ -488,7 +488,7 @@ def test_connect_to_service_success(mock_client_class, mock_driver):
     pytest_hostname = socket.gethostname()
 
     mock_session_dal = MagicMock()
-    mock_session_dal.connectivity_service.host = "localhost"
+    mock_session_dal.connectivity_service.host = socket.gethostname()
     mock_session_dal.connectivity_service.service.port = 1234
 
     result_localhost = mock_driver._connect_to_service(mock_session_dal, "session1")

@@ -12,7 +12,6 @@ import click
 import click_shell
 import conffwk
 from daqpytools.logging import logging_log_levels
-from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import ProcessQuery
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
@@ -49,20 +48,21 @@ from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
-from drunc.process_manager.interface.commands import (
+from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
+from drunc.unified_shell.commands import (
+    boot,
     flush,
     kill,
     logs,
     ps,
     restart,
+    start_shell,
     terminate,
 )
-from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
-from drunc.unified_shell.commands import boot, start_shell
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.unified_shell.shell_utils import generate_fsm_sequence_command
-from drunc.utils.configuration import ConfTypes, OKSKey
+from drunc.utils.configuration import OKSKey
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     format_name_for_cli,
@@ -155,18 +155,37 @@ def unified_shell(
     # Set up the drunc and unified_shell loggers
     get_root_logger(log_level)
     ctx.obj.log = get_logger("unified_shell", rich_handler=True)
-    ctx.obj.log.debug("Setting up the [green]unified_shell[/green] logger")
+    ctx.obj.log.info(
+        f"User {getpass.getuser()} [green]starting the unified_shell[/green]"
+    )
 
     # Parse the process manager argument to determine if it's a config or an address
+    # If the process manager is already running, connect to it.
     process_manager_url: ParseResult = urlparse(process_manager)
-    internal_pm: bool = True
     if process_manager_url.scheme == "grpc":  # i.e. if it's an address
+        ctx.obj.log.info(
+            f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
+        )
         internal_pm = False
+        ctx.obj.reset(address_pm=process_manager_url.netloc)
+        pm_type = ProcessManagerTypes[
+            ctx.obj.get_driver("process_manager").describe().type
+        ]
+        ctx.obj.log.info(
+            f"[green]Connected to the {pm_type.name} process manager[/] running at address {process_manager_url.netloc}"
+        )
+    else:
+        internal_pm = True
+        pm_type = get_pm_type_from_name(process_manager)
+
+    ctx.obj.log.debug(
+        f"Process manager argument parsed, internal_pm set to {internal_pm}"
+    )
 
     # If using a k8s process manager, validate the session name before proceeding
-    if get_pm_type_from_name(
-        process_manager
-    ) == ProcessManagerTypes.K8s and not validate_k8s_session_name(session_name):
+    if not validate_k8s_session_name(session_name) and (
+        pm_type == ProcessManagerTypes.K8s
+    ):
         ctx.obj.log.error(
             f"[red]Invalid session/namespace name [bold]({session_name})[/bold][/red]. "
             "Must match RFC1123 label: lowercase alphanumeric or '-', start/end with "
@@ -175,7 +194,13 @@ def unified_shell(
         sys.exit(1)
 
     # Setup configuration related context variables
-    ctx.obj.configuration_file = f"oksconflibs:{configuration_file}"
+    # Assume oksconflibs if no framework is defined
+    ctx.obj.configuration_file = (
+        lambda path: (
+            path if path.startswith("oksconflibs:") else f"oksconflibs:{path}"
+        )
+    )(configuration_file)
+
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
 
@@ -184,14 +209,11 @@ def unified_shell(
     session_dal = db.get_dal(class_name="Session", uid=ctx.obj.configuration_id)
     app_log_path = session_dal.log_path
 
-    ctx.obj.log.info(
-        f"[green]Setting up to use the process manager[/green] with configuration "
-        f"[green]{process_manager}[/green] and configuration id [green]"
-        f'"{configuration_id}"[/green] from [green]{ctx.obj.configuration_file}[/green]'
-    )
-
-    # Establish communication with the process manager, spawning it if needed
+    # Start the process manager if it's an internal one
     if internal_pm:  # Spawn the Process Manager
+        ctx.obj.log.info(
+            f"[green]Setting up the {pm_type.name} process manager[/] with configuration [green]{process_manager}[/green]"
+        )
         ctx.obj.log.debug(
             f"Spawning process_manager with configuration {process_manager}"
         )
@@ -260,32 +282,23 @@ def unified_shell(
         process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
             f"localhost:{port.value}"
         )
-
-    else:  # Connect to an existing process manager at the provided address
-        process_manager_address = process_manager.replace(
-            "grpc://", ""
-        )  # remove the grpc scheme
-        ctx.obj.log.info(
-            f"[green]unified_shell[/green] connected to the [green]process_manager"
-            f"[/green] at address [green]{process_manager_address}[/green]"
+        ctx.obj.reset(address_pm=process_manager_address)
+        ctx.obj.log.debug(
+            f"[green]process_manager[/green] started at address [green]"
+            f"{process_manager_address}[/green]"
         )
 
-    ctx.obj.log.debug(
-        f"[green]process_manager[/green] started, communicating through address [green]"
-        f"{process_manager_address}[/green]"
-    )
-    ctx.obj.reset(address_pm=process_manager_address)
+    ctx.obj.log.info("Setting up the controller interface")
 
     # Run a simple command (describe) to check the connection with the process manager
-    desc: Description | None = None
     try:
-        desc = ctx.obj.get_driver().describe()
+        ctx.obj.get_driver().describe()
     except Exception as e:
         ctx.obj.log.error(
             f"[red]Could not connect to the process manager at the address: [/red]"
             f"[green]{process_manager_address}[/green]"
         )
-        ctx.obj.log.debug(f"Reason: {e}")
+        ctx.obj.log.critical(f"Reason: {e}")
 
         if type(e) == ServerUnreachable:
             ctx.obj.log.error(
@@ -304,28 +317,26 @@ def unified_shell(
             ctx.obj.pm_process.join()
 
         sys.exit(1)
+    ctx.obj.log.debug("Communication with the process manager verified successfully")
 
-    # Broadcasting configuration if requested
-    if desc.HasField("broadcast"):
-        ctx.obj.log.debug("Broadcasting")
-        ctx.obj.start_listening_pm(
-            broadcaster_conf=desc.broadcast,
-        )
+    ctx.obj.get_driver("process_manager").send_msg(
+        f"{getpass.getuser()} connected from unified shell"
+    )
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    ctx.command.add_command(boot, "boot")
-    ctx.obj.dynamic_commands.add("boot")
+    unified_shell_commands = [boot, ps, terminate]
+    for cmd in unified_shell_commands:
+        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     # Add the process manager Click commands to the CLI
     ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
     process_manager_commands: list[click.Command] = [
         kill,
-        terminate,
         flush,
         logs,
         restart,
-        ps,
     ]
     for cmd in process_manager_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
@@ -335,9 +346,8 @@ def unified_shell(
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
-    controller_configuration = ControllerConfHandler(
-        type=ConfTypes.OKSFileName,
-        data=ctx.obj.configuration_file,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=ctx.obj.configuration_file,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
@@ -356,7 +366,7 @@ def unified_shell(
     # live with it. At least until controller.core uses file handler instead of stream
     get_logger("controller.core.FSM", log_level="CRITICAL")
 
-    fsmch = FSMConfHandler(data=controller_configuration.data.controller.fsm)
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
 
     ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
     stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
@@ -462,11 +472,11 @@ def unified_shell(
                 ctx.obj.log.error(
                     f"Could not retrieve the controller status, reason: {e}"
                 )
-            ctx.obj.delete_driver("controller")
 
         # Terminate any residual processes
         if ctx.obj.get_driver("process_manager"):
-            ctx.obj.get_driver("process_manager").terminate()
+            session_processes = ProcessQuery(session=ctx.obj.session_name)
+            ctx.obj.get_driver("process_manager").kill(session_processes)
 
         # Check if any processes are still running
         if (
@@ -505,6 +515,9 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
+        ctx.obj.get_driver("process_manager").send_msg(
+            f"{getpass.getuser()} disconnected from unified shell"
+        )
         ctx.obj.get_driver("process_manager").close()
         ctx.obj.delete_driver("process_manager")
 
@@ -521,9 +534,9 @@ def unified_shell(
             ctx.obj.log.debug("Process manager terminated")
 
         ctx.obj.log.info("[green]unified_shell exited successfully[/green]")
-        logging.shutdown()  # Shutdown logging
-        ctx.obj.terminate()  # Terminate the broadcasters in the context
-        ctx.exit()  # Close the click context
+        logging.shutdown()
+        ctx.obj.terminate()
+        ctx.exit()
 
     ctx.call_on_close(cleanup)
 
