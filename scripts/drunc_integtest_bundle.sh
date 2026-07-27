@@ -5,7 +5,7 @@
 # Based entirely of the implementation of daqsystemtest_integtest_bundle.sh
 # Original author: KAB, 10-Oct-2023
 
-integtest_list=( "process_manager_test.py" )
+integtest_list=( "process_manager_test.py" "controller_test.py" )
 let last_test_index=${#integtest_list[@]}-1
 
 usage() {

@@ -52,3 +52,19 @@ def add_query_options() -> Callable[[Callable[P, R]], Callable[P, R]]:
         return f4
 
     return wrapper
+
+
+def add_query_options_no_session(
+    at_least_one: bool, all_processes_by_default: bool = False
+):
+    def wrapper(f0):
+        f1 = click.option(
+            "-s",
+            "--session",
+            type=str,
+            default=None,
+            help="Select the processes on a particular session",
+        )(f0)
+        return add_query_options()(f1)
+
+    return wrapper

@@ -14,7 +14,7 @@ from drunc.grpc_settings import (
     CONTROLLER_SERVER_GRPC_CONFIG,
     CONTROLLER_SERVER_GRPC_MAX_WORKERS,
 )
-from drunc.utils.configuration import ConfTypes, OKSKey
+from drunc.utils.configuration import OKSKey
 from drunc.utils.utils import (
     get_logger,
     get_root_logger,
@@ -86,9 +86,8 @@ def controller_cli(
         token="",
     )
 
-    controller_configuration = ControllerConfHandler(
-        type=ConfTypes.OKSFileName,
-        data=configurationservice,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=configurationservice,
         oks_key=OKSKey(
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",

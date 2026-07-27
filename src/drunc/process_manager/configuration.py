@@ -6,19 +6,18 @@ from importlib import resources
 from typing import Protocol, cast
 from urllib.parse import unquote, urlparse
 
-from jsonschema import ValidationError  # type: ignore[import-untyped]
+from jsonschema import ValidationError
 from jsonschema import validate as js_validate
-from kafkaopmon.OpMonPublisher import (  # type: ignore[import-untyped]
+from kafkaopmon.OpMonPublisher import (
     OpMonPublisher as KafkaOpMonPublisher,
 )
-from opmonlib.publisher import OpMonPublisher  # type: ignore[import-untyped]
-from opmonlib.utils import parse_opmon_conf  # type: ignore[import-untyped]
+from opmonlib.publisher import OpMonPublisher
+from opmonlib.utils import parse_opmon_conf
 
-from drunc.broadcast.server.configuration import KafkaBroadcastSenderConfData
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, touch_and_chmod
 
 
 class _RunsOnInner(Protocol):
@@ -73,16 +72,13 @@ class ProcessManagerTypes(Enum):
 
 class ProcessManagerConfData:
     def __init__(self) -> None:
-        self.broadcaster: KafkaBroadcastSenderConfData | None = None
         self.authoriser: object | None = None
         self.type = ProcessManagerTypes.Unknown
         self.command_address = ""
-        self.environment: dict[str, str] = {}
-        self.settings: dict[str, object] = {}
-        self.opmon_uri: str | None = None
-        self.opmon_publisher: object | None = None
-        self.kill_timeout: float = 0.5
-        self.image: str = ""
+        self.environment = {}
+        self.settings = {}
+        self.opmon_uri = None
+        self.opmon_publisher = None
 
 
 class ProcessManagerConfHandler(ConfHandler):
@@ -107,10 +103,6 @@ class ProcessManagerConfHandler(ConfHandler):
 
     def _parse_dict(self, data: dict[str, object]) -> ProcessManagerConfData:
         new_data = ProcessManagerConfData()
-        if data.get("broadcaster"):
-            new_data.broadcaster = KafkaBroadcastSenderConfData.from_dict(
-                cast(dict[str, object], data.get("broadcaster"))
-            )
         new_data.environment = cast(dict[str, str], data.get("environment", {}))
         new_data.settings = cast(dict[str, object], data.get("settings", {}))
 
@@ -159,13 +151,14 @@ class ProcessManagerConfHandler(ConfHandler):
         )
         try:
             if self.opmon_conf.opmon_type == "stream":
-                new_data.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
+                self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
                 self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
                     self.opmon_conf,
                 )
             else:
-                new_data.opmon_publisher = OpMonPublisher(
+                touch_and_chmod(self.opmon_conf.path)
+                self.opmon_publisher = OpMonPublisher(
                     conf=self.opmon_conf, rich_handler=True
                 )
                 self.log.debug(
@@ -177,8 +170,6 @@ class ProcessManagerConfHandler(ConfHandler):
         except Exception as e:
             self.log.error("Failed to initialize OpMonPublisher: %s", e)
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
-
-        return new_data
 
 
 def get_commandline_parameters(

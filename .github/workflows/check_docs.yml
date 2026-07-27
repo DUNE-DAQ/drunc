@@ -2,16 +2,16 @@ name: Check Links In Docs
 
 on:
   pull_request:
-    paths:
-      - 'docs/**'
-    workflow_dispatch: 
-    workflow_call:
-    schedule:
-      - cron: "0 0 * * 6" # midnight every Saturday
+  workflow_dispatch:
+  workflow_call:
+  schedule:
+    - cron: "0 0 * * 6" # Runs every Saturday at midnight
   
 jobs:
   check-links:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -19,5 +19,9 @@ jobs:
       - name: Run Lychee link checker
         uses: lycheeverse/lychee-action@v2
         with:
-          args: docs/
-          
+          args: >
+            --exclude 'https://twiki.cern.ch/.*'
+            --exclude 'https://indico.*'
+            --exclude 'https://wiki.dunescience.org/wiki/.*'
+            --exclude 'https://github.com/DUNE-DAQ/drunc/wiki/Archive:.*'
+            docs/
