@@ -61,10 +61,10 @@ def boot(
     override_logs: bool,
     controller_log_level: bool | None,
 ) -> None:
-    log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
     pm_driver = _pm_driver(obj)
     processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
+    log = get_logger("process_manager.shell")
 
     # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
@@ -153,9 +153,9 @@ def dummy_boot(
     n_sleeps: int,
     session_name: str,
 ) -> None:
-    log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
     pm_driver = _pm_driver(obj)
+    log = get_logger("process_manager.shell")
     log.debug(
         f"Running dummy_boot with {n_processes} processes for {sleep} seconds {n_sleeps} times, requested by user {user}"
     )
@@ -197,8 +197,8 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
 )
 @click.pass_obj
 def terminate(obj: ProcessManagerContext, width: int | None) -> None:
-    log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
+    log = get_logger("process_manager.shell")
     log.debug("Terminating")
     result = _pm_driver(obj).terminate()
     if not result:
@@ -210,7 +210,7 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
 
 
 def kill_decorators(f):
-    f = click.pass_obj(f)
+    # f = click.pass_obj(f)
     f = click.option(
         "-w",
         "--width",
@@ -228,18 +228,22 @@ def kill_decorators(f):
 
 
 @click.command("kill")
-@add_query_options(at_least_one=True)
+@add_query_options()
 @kill_decorators
-def kill(obj, query, width):
-    log_pm_cmd(obj)
-    return kill_impl(obj, query, width)
-
-
-def kill_impl(
-    obj: ProcessManagerContext, query: ProcessQuery, width: int | None
+@click.pass_obj
+def kill(
+    obj: ProcessManagerContext,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+    width: int | None,
+    crash: bool,
 ) -> None:
-    log = get_logger("process_manager.shell")
-    log.debug(f"Killing with query {query}")
+    log_pm_cmd(obj)
+    query = build_process_query(
+        session, name, user, uuid, at_least_one=True, crash=crash
+    )
     result = _pm_driver(obj).kill(query)
     if not result:
         return
@@ -261,14 +265,16 @@ def flush_decorators(f):
 
 
 @click.command("flush")
-@add_query_options(at_least_one=False, all_processes_by_default=True)
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
+@add_query_options()
 @flush_decorators
-def flush(obj, query, width):
-    log_pm_cmd(obj)
-    return flush_impl(obj, query, width)
-
-
-def flush_impl(
+def flush(
     obj: ProcessManagerContext,
     session: str | None,
     name: tuple[str, ...],
@@ -276,17 +282,17 @@ def flush_impl(
     uuid: tuple[str, ...],
     width: int | None,
 ) -> None:
-    log = get_logger("process_manager.shell")
     query = build_process_query(
         session, name, user, uuid, at_least_one=False, all_processes_by_default=True
     )
+    log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
     result = _pm_driver(obj).flush(query)
     if not result:
         return
     obj.print(
         tabulate_process_instance_list(result, "Flushed process", False, width=width)
-    )  # rich tables require console printing
+    )
 
 
 def logs_decorators(f):
@@ -303,16 +309,26 @@ def logs_decorators(f):
 
 
 @click.command("logs")
-@add_query_options(at_least_one=True)
-@logs_decorators
-def logs(obj, how_far, grep, query):
-    log_pm_cmd(obj)
-    return logs_impl(obj, how_far, grep, query)
-
-
-def logs_impl(
-    obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
+@add_query_options()
+@click.option(
+    "--how-far",
+    type=int,
+    show_default=True,
+    default=100,
+    help="How many lines one wants",
+)
+@click.option("--grep", type=str, default=None)
+@click.pass_obj
+def logs(
+    obj: ProcessManagerContext,
+    how_far: int,
+    grep: str,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
 ) -> None:
+    query = build_process_query(session, name, user, uuid, at_least_one=True)
     log = get_logger("process_manager.shell")
     log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
@@ -351,12 +367,14 @@ def logs_impl(
 @click.command("restart")
 @add_query_options()
 @click.pass_obj
-def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
-    log_pm_cmd(obj)
-    return restart_impl(obj, query)
-
-
-def restart_impl(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def restart(
+    obj: ProcessManagerContext,
+    session: str | None,
+    name: tuple[str, ...],
+    user: str | None,
+    uuid: tuple[str, ...],
+) -> None:
+    query = build_process_query(session, name, user, uuid, at_least_one=True)
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
     _pm_driver(obj).restart(query)
@@ -384,14 +402,9 @@ def ps_decorators(f):
 
 
 @click.command("ps")
-@add_query_options(at_least_one=False, all_processes_by_default=True)
+@add_query_options()
 @ps_decorators
-def ps(obj, query, long_format, width):
-    log_pm_cmd(obj)
-    return ps_impl(obj, query, long_format, width)
-
-
-def ps_impl(
+def ps(
     obj: ProcessManagerContext,
     session: str | None,
     name: tuple[str, ...],
@@ -400,10 +413,11 @@ def ps_impl(
     long_format: bool,
     width: int | None,
 ) -> None:
-    log = get_logger("process_manager.shell")
+    log_pm_cmd(obj)
     query = build_process_query(
         session, name, user, uuid, at_least_one=False, all_processes_by_default=True
     )
+    log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
 
