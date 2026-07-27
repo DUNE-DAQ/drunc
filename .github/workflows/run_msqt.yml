@@ -53,7 +53,7 @@ jobs:
           cd nightly/NFD_DEV* || true
           source env.sh
           daqsystemtest_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks" -k small_footprint_quick_test.py --verbosity 5 --tmpdir . 2>&1
-          cat dunedaq_integtest_bundle*.log
+          cat pytest-of-*/dunedaq_integtest_bundle*.log
 
       - name: Print test log
         if: always()
