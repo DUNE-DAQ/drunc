@@ -55,7 +55,8 @@ jobs:
           echo "Check the permissions of the path used for testing"
           ls -lahrt .
           echo "Check the repo structure before running tests"
-          tree -L 3
+          ls -lahrt sourcecode
+          ls -lahrt pythoncode
           echo "Run the tests as the current user: $(whoami)"
           echo 'Test command: dunedaq_integtest_bundle.sh --stop-on-failure --pytest-options "--skip-resource-checks" -k small_footprint_quick_test.py --verbosity 5 --tmpdir . 2>&1'
           dunedaq_integtest_bundle.sh --stop-on-failure --pytest-options '--skip-resource-checks' -k small_footprint_quick_test.py --verbosity 5 --tmpdir . 2>&1
