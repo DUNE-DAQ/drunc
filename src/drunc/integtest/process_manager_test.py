@@ -155,7 +155,7 @@ def test_dunerc_success(run_dunerc) -> None:
     print(banner_line)
 
     # Check that dunerc completed correctly
-    assert run_dunerc.completed_process.returncode == 0
+    assert run_dunerc.completed_processes["drunc"].returncode == 0
 
 
 def test_log_files(run_dunerc) -> None:
@@ -194,7 +194,7 @@ def test_log_files(run_dunerc) -> None:
 
 def test_boot(run_dunerc) -> None:
     """Checks that boot starts the managed processes and exposes UUIDs in ps."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Check if no processes running in session works
     pre_boot_idx = require_line_containing(
@@ -229,7 +229,7 @@ def test_unknown_log_command(run_dunerc) -> None:
     test_str = (
         "Bad query for logs: The process corresponding to the query doesn't exist"
     )
-    assert test_str in run_dunerc.completed_process.stdout
+    assert test_str in run_dunerc.completed_processes["drunc"].stdout
 
 
 def test_root_controller_logs(run_dunerc) -> None:
@@ -239,7 +239,7 @@ def test_root_controller_logs(run_dunerc) -> None:
     - there are exactly 5 lines between those two lines
     - among those 5 lines, the one from "drunc.controller.core.init_controller" ends with "Controller ready"
     """
-    lines = run_dunerc.completed_process.stdout.splitlines()
+    lines = run_dunerc.completed_processes["drunc"].stdout.splitlines()
 
     # 1) Find the header/footer lines
     header_idx = require_line_containing(
@@ -277,7 +277,7 @@ def test_root_controller_logs(run_dunerc) -> None:
 
 def test_wait_command_duration_from_logs(run_dunerc) -> None:
     """Checks that the wait command logs the expected duration and elapsed time."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     echo_idx = require_echo_marker_index(lines, "test_wait")
 
@@ -336,7 +336,7 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
 
 def test_restart_mlt_logs(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     echo_idx = require_echo_marker_index(lines, "pre_restart_mlt")
 
@@ -379,7 +379,7 @@ def test_restart_mlt_logs(run_dunerc) -> None:
 
 def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
     """Checks that killing mlt removes it from the subsequent ps table."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     ps_before_kill = get_ps_table_after_echo(lines, "test_kill_mlt")
     ps_after_kill = get_ps_table_after_echo(lines, "test_kill_mlt_post")
@@ -392,7 +392,7 @@ def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
 
 def test_mlt_recovers_after_kill(run_dunerc) -> None:
     """Checks that mlt is present again after the recovery restart sequence."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     ps_after_recovery = get_ps_table_after_echo(lines, "test_recovery_post")
     assert_process_presence(ps_after_recovery, "mlt", context="after recovery")
 
@@ -401,7 +401,7 @@ def test_flush(run_dunerc) -> None:
     """Checks that flush work by crashing mlt, seeing that the process exists,
     and then flushing to show its gone"""
 
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     ps_initial = get_ps_table_after_echo(lines, "test_flush")
     assert_process_presence(ps_initial, "mlt", context="before crash")
 
