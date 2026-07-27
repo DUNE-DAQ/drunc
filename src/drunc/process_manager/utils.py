@@ -358,7 +358,7 @@ def get_pm_type_from_name(pm_name: str) -> ProcessManagerTypes:
         # OKS or other types - fallback to from_pyobject
         pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
-    return cast(ProcessManagerTypes, pmch.data.type)
+    return cast(ProcessManagerTypes, pmch.type)
 
 
 def format_hostname(hostname: str) -> str:

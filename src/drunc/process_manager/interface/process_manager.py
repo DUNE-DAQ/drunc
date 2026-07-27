@@ -74,9 +74,11 @@ def run_pm(
     path_or_url = conf_path.split(":")[1]
 
     if conf_type == ConfTypes.JsonFileName:
-        pmch = ProcessManagerConfHandler.from_json(path=path_or_url, log_path=log_path)
+        pmch = ProcessManagerConfHandler.from_json(path=path_or_url)
     else:
         pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
+
+    pmch.log_path = log_path
 
     log_path = get_log_path(
         user=getpass.getuser(),

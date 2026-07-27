@@ -93,15 +93,15 @@ class ProcessManagerConfHandler(ConfHandler):
                 return default
         return default
 
-    def __init__(self, log_path: str, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+    def __init__(self, log_path: str | None, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
         self.log_path = log_path
         self.log = get_logger("process_manager.conf_handler")
 
     def get_log_path(self) -> str:
         return self.log_path
 
-    def _parse_dict(self, data: dict[str, object]) -> ProcessManagerConfData:
+    def populate_from_dict(self, data: dict[str, object]) -> ProcessManagerConfData:
         new_data = ProcessManagerConfData()
         new_data.environment = cast(dict[str, str], data.get("environment", {}))
         new_data.settings = cast(dict[str, object], data.get("settings", {}))
