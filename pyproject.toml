@@ -48,11 +48,7 @@ dev = [
   "types-psutil",
   "types-click-shell",
   "types-paramiko",
-  "types-grpcio-status",
-  "types-pytz",
-  "types-psutil",
-  "types-click-shell",
-  "types-paramiko",
+  "types-jsonschema",
 ]
 prod = ["paramiko[gssapi]"]
 test = [
