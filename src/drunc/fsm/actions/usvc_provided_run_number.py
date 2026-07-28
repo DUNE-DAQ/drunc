@@ -1,8 +1,9 @@
 import time
-from typing import Optional
+from typing import Optional, cast
 
 import requests
 
+from drunc.fsm._protocols import ContextProtocol
 from drunc.fsm.actions.utils import get_dotdrunc_json, validate_run_type
 from drunc.fsm.core import FSMAction
 from drunc.fsm.exceptions import CannotGetRunNumber, DotDruncJsonIncorrectFormat
@@ -10,7 +11,7 @@ from drunc.utils.utils import get_logger
 
 
 class UsvcProvidedRunNumber(FSMAction):
-    def __init__(self, configuration):
+    def __init__(self, configuration: object) -> None:
         self.log = get_logger("controller.iface.usvc_run_number")
         super().__init__(name="usvc-provided-run-number")
         dotdrunc = get_dotdrunc_json()
@@ -27,13 +28,13 @@ class UsvcProvidedRunNumber(FSMAction):
 
     def pre_start(
         self,
-        _input_data: dict,
-        _context,
+        _input_data: dict[str, object],
+        _context: ContextProtocol,
         run_type: str,
         disable_data_storage: bool = False,
         trigger_rate: Optional[float] = None,
-        **kwargs,
-    ):
+        **kwargs: object,
+    ) -> dict[str, object]:
         run_type = validate_run_type(run_type.upper())
         _input_data["production_vs_test"] = run_type
         _input_data["run"] = self._getnew_run_number()
@@ -45,7 +46,7 @@ class UsvcProvidedRunNumber(FSMAction):
 
         return _input_data
 
-    def _getnew_run_number(self):
+    def _getnew_run_number(self) -> int:
         try:
             req = requests.get(
                 self.API_SOCKET + "/runnumber/getnew",
@@ -68,5 +69,6 @@ class UsvcProvidedRunNumber(FSMAction):
             self.log.error(error)
             raise CannotGetRunNumber(error) from exc
 
-        self.run = req.json()[0][0][0]
+        self.run = cast(int, req.json()[0][0][0])
+
         return self.run

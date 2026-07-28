@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, NoReturn, cast
+from typing import Callable, NoReturn, TypeVar, cast
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -76,7 +76,10 @@ def pack_to_any(data: Message) -> any_pb2.Any:
     return any
 
 
-def unpack_any(data: any_pb2.Any, format: type[Message]) -> Message:
+T = TypeVar("T")
+
+
+def unpack_any(data: any_pb2.Any, format: type[T]) -> T:
     """Unpack an Any message into a specific protobuf format.
 
     Args:
