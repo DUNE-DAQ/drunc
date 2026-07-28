@@ -242,8 +242,9 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Get settings from configuration JSON file. Uses the `configuration`
-        # parameter directly, not self.configuration
+        # Get settings from the configuration object; this is the API used by the
+        # current process-manager configuration handler and keeps the k8s manager
+        # aligned with the rest of the PM stack.
         settings = getattr(configuration, "settings", {})
 
         # CONFIGURATION - label defaults
@@ -1182,7 +1183,7 @@ class K8sProcessManager(ProcessManager):
             main_container - the fully configured V1Container object
         """
 
-        pod_image = self.configuration.image
+        pod_image = self.configuration.conf_data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
         # Build command to exec
@@ -1227,7 +1228,7 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = getattr(self.configuration, "settings", {})
+            settings = getattr(self.configuration.conf_data, "settings", {})
             host_configs = settings.get("host_configs", {})
 
             if not target_host or target_host not in host_configs:
