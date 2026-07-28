@@ -24,29 +24,33 @@ from drunc.process_manager.configuration import (
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.utils.utils import get_logger
 
 
 class SSHProcessManager(ProcessManager):
     pm_type = ProcessManagerTypes.SSH_SHELL
 
     def __init__(
-        self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
+        self,
+        configuration,
+        LifetimeManagerClass: type[ProcessLifetimeManager],
+        name: str = "process_manager",
+        **kwargs,
     ):
         # Used to prevent races between process exit callbacks and ps/kill/flush queries
         self.boot_request_lock = threading.Lock()
         self.ssh_lifetime_manager: Optional[ProcessLifetimeManager] = None
         self.session = getpass.getuser()  # unfortunate
-
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
+        self.log = get_logger("process_manager.ssh_process_manager")
 
         self.disable_localhost_host_key_check = False
         self.disable_host_key_check = False
 
-        if self.configuration.settings:
-            self.disable_localhost_host_key_check = self.configuration.settings.get(
-                "disable_localhost_host_key_check", False
+        if getattr(configuration, "settings", None):
+            self.disable_localhost_host_key_check = (
+                configuration.settings.get("disable_localhost_host_key_check", False)
             )
-            self.disable_host_key_check = self.configuration.settings.get(
+            self.disable_host_key_check = configuration.settings.get(
                 "disable_host_key_check", False
             )
 
@@ -58,6 +62,13 @@ class SSHProcessManager(ProcessManager):
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
             on_process_exit=self._on_ssh_process_exit,
+        )
+
+        super().__init__(
+            configuration=configuration,
+            name=name,
+            session=self.session,
+            **kwargs,
         )
         # stores the exit statuses for all dead processes by uuid
         self.archived_exit_statuses: dict[str, ExitStatus] = {}
@@ -105,7 +116,7 @@ class SSHProcessManager(ProcessManager):
     def _get_process_timeouts(self, uuids: List[str]) -> dict[str, float]:
         process_timeouts = {}
         for process_uuid in uuids:
-            process_timeouts[process_uuid] = self.configuration.kill_timeout
+            process_timeouts[process_uuid] = self.configuration.conf_data.kill_timeout
         return process_timeouts
 
     def _on_ssh_process_exit(
@@ -539,7 +550,7 @@ class SSHProcessManager(ProcessManager):
         self.add_process_to_expected_dead_processes(uuid)
 
         exit_status = self.ssh_lifetime_manager.kill_process(
-            uuid, self.configuration.kill_timeout
+            uuid, self.configuration.conf_data.kill_timeout
         )
         if exit_status is not None:
             self.archived_exit_statuses[uuid] = exit_status
@@ -703,7 +714,7 @@ class SSHProcessManager(ProcessManager):
                 del self.boot_request[proc_uuid]
                 # Clean data associated with the process from the lifetime manager
                 self.ssh_lifetime_manager.kill_process(
-                    proc_uuid, self.configuration.kill_timeout
+                    proc_uuid, self.configuration.conf_data.kill_timeout
                 )
 
                 pi_return_code = (

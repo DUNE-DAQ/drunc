@@ -130,6 +130,8 @@ class ProcessManagerConfHandler(ConfHandler):
             self.log.error("Failed to initialize OpMonPublisher: %s", e)
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
+        self.conf_data = self
+
 
 def get_commandline_parameters(
     config_filename: str,
