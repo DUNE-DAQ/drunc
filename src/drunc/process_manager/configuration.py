@@ -3,12 +3,15 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Self, Union
+from typing import Protocol, cast
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
 from jsonschema import validate as js_validate
-from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
+from kafkaopmon.OpMonPublisher import (
+    OpMonPublisher as KafkaOpMonPublisher,
+)
+from opmonlib.conf import OpMonConf
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
@@ -17,8 +20,32 @@ from drunc.process_manager.exceptions import UnknownProcessManagerType
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.utils import get_logger, touch_and_chmod
 
-if TYPE_CHECKING:
-    import conffwk
+
+class _RunsOnInner(Protocol):
+    id: str
+
+
+class _RunsOn(Protocol):
+    runs_on: _RunsOnInner
+
+
+class _Service(Protocol):
+    id: str
+    port: int
+    protocol: str
+
+
+class _SessionDal(Protocol):
+    id: str
+    controller_log_level: str
+
+
+class _AppLike(Protocol):
+    id: str
+    runs_on: _RunsOn
+    exposes_service: list[_Service]
+
+    def oksTypes(self) -> list[str]: ...
 
 
 PROCESS_SHUTDOWN_ORDERING = [
@@ -37,99 +64,115 @@ class ProcessManagerTypes(Enum):
     SSH_PARAMIKO = 3
 
 
+class ProcessManagerConfData:
+    def __init__(self) -> None:
+        self.authoriser: object | None = None
+        self.type: ProcessManagerTypes = ProcessManagerTypes.Unknown
+        self.command_address: str = ""
+        self.environment: dict[str, str] = {}
+        self.settings: dict[str, object] = {}
+        self.opmon_uri: str | None = None
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
+        self.kill_timeout: float = 0.5
+        self.image: str = "ghcr.io/dune-daq/alma9:latest"
+
+
 class ProcessManagerConfHandler(ConfHandler):
-    """Handler for process manager configuration."""
+    @staticmethod
+    def _coerce_timeout(value: object, default: float = 0.5) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return default
+        return default
 
-    log_path: str = "./"
+    def __init__(self, log_path: str | None, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.log_path: str | None = log_path
+        self.log = get_logger("process_manager.conf_handler")
 
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        self.broadcaster = None
-        self.authoriser = None
-        self.pm_type = ProcessManagerTypes.Unknown
-        self.command_address = ""
-        self.environment = {}
-        self.settings = {}
-        self.opmon_conf = None
-        self.opmon_uri = None
-        self.opmon_publisher = None
-
-        self.environment = data.get("environment", {})
-        self.settings = data.get("settings", {})
-        self.opmon_conf = data.get("opmon_conf")
-        self.opmon_uri = data.get("opmon_uri")
-
-        match data["type"].lower():
-            case "ssh":
-                self.pm_type = ProcessManagerTypes.SSH_SHELL
-                self.kill_timeout = data.get("kill_timeout", 0.5)
-            case "ssh-paramiko":
-                self.pm_type = ProcessManagerTypes.SSH_PARAMIKO
-                self.kill_timeout = data.get("kill_timeout", 0.5)
-            case "k8s":
-                self.pm_type = ProcessManagerTypes.K8s
-                self.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
-            case _:
-                raise UnknownProcessManagerType(data["type"])
-
-    @classmethod
-    def from_json(
-        cls, path: str, session_name: str | None = None, log_path: str = "./"
-    ) -> Self:
-        """Create handler from JSON file with optional log path."""
-        instance = super().from_json(path, session_name)
-        instance.log_path = log_path
-        instance.log = get_logger("process_manager.conf_handler")
-        return instance
-
-    def get_log_path(self):
+    def get_log_path(self) -> str | None:
         return self.log_path
 
-    def _post_process_oks(self) -> None:
-        """Post-process to handle OpMon configuration."""
-        opmon_conf = parse_opmon_conf(
+    def populate_from_dict(self, data: dict[str, object]) -> None:
+        new_data = ProcessManagerConfData()
+        new_data.environment = cast(dict[str, str], data.get("environment", {}))
+        new_data.settings = cast(dict[str, object], data.get("settings", {}))
+
+        conf_type = str(data["type"]).lower()
+
+        match conf_type:
+            case "ssh":
+                new_data.type = ProcessManagerTypes.SSH_SHELL
+                new_data.kill_timeout = self._coerce_timeout(
+                    data.get("kill_timeout", 0.5)
+                )
+            case "ssh-paramiko":
+                new_data.type = ProcessManagerTypes.SSH_PARAMIKO
+                new_data.kill_timeout = self._coerce_timeout(
+                    data.get("kill_timeout", 0.5)
+                )
+            case "k8s":
+                new_data.type = ProcessManagerTypes.K8s
+                new_data.image = str(data.get("image", "ghcr.io/dune-daq/alma9:latest"))
+            case _:
+                raise UnknownProcessManagerType(str(data["type"]))
+
+        # opmon_publisher left as default None
+        self.opmon_conf: OpMonConf = parse_opmon_conf(
             log=self.log,
-            conf=getattr(self, "opmon_conf", None),
-            uri=getattr(self, "opmon_uri", None),
-            session=getattr(self, "pm_type", ProcessManagerTypes.Unknown).name,
+            conf=data.get("opmon_conf", None),
+            uri=data.get("opmon_uri", None),
+            session=new_data.type.name,
             application="process_manager",
         )
 
-        if opmon_conf.path == "./info.json":
-            opmon_conf.path = (
-                "./info." + opmon_conf.session + "." + opmon_conf.application + ".json"
+        if self.opmon_conf.path == "./info.json":
+            self.opmon_conf.path = (
+                "./info."
+                + self.opmon_conf.session
+                + "."
+                + self.opmon_conf.application
+                + ".json"
             )
 
         self.log.debug(
-            "Initializing process manager OpMon with configuration %s", opmon_conf
+            "Initializing process manager OpMon with configuration %s", self.opmon_conf
         )
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
         try:
-            if opmon_conf.opmon_type == "stream":
-                self.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
+            if self.opmon_conf.opmon_type == "stream":
+                self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)
                 self.log.debug(
                     "KafkaOpMonPublisher initialized with configuration %s",
-                    opmon_conf,
+                    self.opmon_conf,
                 )
             else:
-                touch_and_chmod(opmon_conf.path)
+                touch_and_chmod(self.opmon_conf.path)
                 self.opmon_publisher = OpMonPublisher(
-                    conf=opmon_conf, rich_handler=True
+                    conf=self.opmon_conf, rich_handler=True
                 )
                 self.log.debug(
                     "%s OpMonPublisher initialized with configuration %s",
-                    opmon_conf.opmon_type,
-                    opmon_conf,
+                    self.opmon_conf.opmon_type,
+                    self.opmon_conf,
                 )
 
         except Exception as e:
             self.log.error("Failed to initialize OpMonPublisher: %s", e)
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
+        self.conf_data = new_data
+
 
 def get_commandline_parameters(
     config_filename: str,
-    session_dal: "conffwk.dal.Session",
+    session_dal: _SessionDal,
     session_name: str,
-    obj: Any,
+    obj: _AppLike,
 ) -> list[str]:
     """
     Build CLI arguments used to launch a process manager application.
@@ -204,7 +247,7 @@ def get_process_manager_configuration(process_manager_conf_filename: str) -> str
     return process_manager_conf_filename
 
 
-def _load_pm_schema_from_package() -> Dict[str, Any]:
+def _load_pm_schema_from_package() -> dict[str, object]:
     """Load JSON Schema from packaged file; raise if missing or unreadable."""
     try:
         # Package path for schema JSON: drunc/data/process_manager/schema/process_manager.schema.json
@@ -215,7 +258,7 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
         if not hasattr(schema_resource, "open"):
             raise FileNotFoundError("process_manager.schema.json resource not found")
         with schema_resource.open("r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast(dict[str, object], json.load(f))
     except Exception as e:
         logger = get_logger("process_manager.config_validation")
         logger.error(f"Failed to load packaged schema: {e}")
@@ -224,7 +267,7 @@ def _load_pm_schema_from_package() -> Dict[str, Any]:
         )
 
 
-def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+def _load_config_from_source(source: str | dict[str, object]) -> dict[str, object]:
     """
     Accepts:
       - file URLs (file:///...),
@@ -236,7 +279,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
         s = source.lstrip()
         # Raw JSON text
         if s.startswith("{") or s.startswith("["):
-            return json.loads(source)
+            return cast(dict[str, object], json.loads(source))
 
         # URL?
         if "://" in source:
@@ -244,7 +287,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
             if u.scheme == "file":
                 path = unquote(u.path)
                 with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    return cast(dict[str, object], json.load(f))
             raise FileNotFoundError(f"Unsupported URL scheme: {u.scheme}")
 
         # Name or filesystem path: resolve and then load
@@ -252,7 +295,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
         u = urlparse(resolved_url)
         path = unquote(u.path)
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return cast(dict[str, object], json.load(f))
 
     # Already a dict
     elif isinstance(source, dict):
@@ -261,7 +304,7 @@ def _load_config_from_source(source: Union[str, Dict[str, Any]]) -> Dict[str, An
     raise TypeError("validate_config() expects dict, path, URL, or raw JSON text")
 
 
-def validate_pm_config(config_or_source: Union[str, Dict[str, Any]]) -> bool:
+def validate_pm_config(config_or_source: str | dict[str, object]) -> bool:
     try:
         pm_conf = _load_config_from_source(config_or_source)
         schema = _load_pm_schema_from_package()

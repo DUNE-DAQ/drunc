@@ -2,7 +2,7 @@ import getpass
 import os
 
 import click
-import click_shell
+import click_shell  # type: ignore[import-untyped]
 from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 
 from drunc.process_manager.interface.commands import (
@@ -40,7 +40,9 @@ from drunc.utils.utils import (
 )
 @click.argument("process-manager-address", type=str, callback=validate_command_facility)
 @click.pass_context
-def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
+def process_manager_shell(  # type: ignore[misc]
+    ctx: click.Context, process_manager_address: str, log_level: str
+) -> None:
     get_root_logger(log_level)
     process_manager_log = get_logger(
         logger_name="process_manager",
@@ -77,7 +79,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         f"Connected to {process_manager_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
 
-    def cleanup():
+    def cleanup() -> None:
         ctx.obj.get_driver("process_manager").send_msg(
             f"{getpass.getuser()} disconnecting from {ctx.obj.shell_id}"
         )
@@ -88,14 +90,15 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     ctx.call_on_close(cleanup)
 
-    ctx.command.add_command(boot, "boot")
-    ctx.command.add_command(wait, "wait")
-    ctx.command.add_command(terminate, "terminate")
-    ctx.command.add_command(kill, "kill")
-    ctx.command.add_command(flush, "flush")
-    ctx.command.add_command(logs, "logs")
-    ctx.command.add_command(restart, "restart")
-    ctx.command.add_command(ps, "ps")
-    ctx.command.add_command(dummy_boot, "dummy_boot")
+    if isinstance(ctx.command, click.Group):
+        ctx.command.add_command(boot, "boot")
+        ctx.command.add_command(wait, "wait")
+        ctx.command.add_command(terminate, "terminate")
+        ctx.command.add_command(kill, "kill")
+        ctx.command.add_command(flush, "flush")
+        ctx.command.add_command(logs, "logs")
+        ctx.command.add_command(restart, "restart")
+        ctx.command.add_command(ps, "ps")
+        ctx.command.add_command(dummy_boot, "dummy_boot")
 
     process_manager_shell_log.info("Ready")

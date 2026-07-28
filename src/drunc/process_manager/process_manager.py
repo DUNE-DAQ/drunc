@@ -3,6 +3,7 @@ import re
 import sys
 import threading
 import time
+from typing import Protocol, cast
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -41,22 +42,31 @@ from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
 
 
 class BadQuery(DruncCommandException):
-    def __init__(self, txt):
+    def __init__(self, txt: str) -> None:
         super(BadQuery, self).__init__(txt, code_pb2.INVALID_ARGUMENT)
+
+
+class _OpMonPublisher(Protocol):
+    def publish(self, *, message: ProcessStatus) -> None: ...
 
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
 
     def __init__(
-        self, configuration: ProcessManagerConfHandler, name: str, session: str
-    ):
+        self,
+        configuration: ProcessManagerConfHandler,
+        name: str,
+        session: str | None = None,
+        **kwargs: object,
+    ) -> None:
         """C'tor. Note that this takes the ERS env variables from the
-        json files defined in data/process_manager!"""
+        json files defined in data/process_manager!
+        """
         super().__init__()
 
         self.log = get_logger(
-            f"process_manager.{configuration.pm_type.name}_process_manager",
+            f"process_manager.{configuration.conf_data.type.name}_process_manager",
         )
         self.log.debug(pid_info_str())
         self.log.debug("Initialized ProcessManager")
@@ -77,19 +87,28 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.session = session
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
-            data=self.configuration.authoriser
+            data=self.configuration.conf_data.authoriser
         )
 
-        self.opmon_publisher = self.configuration.opmon_publisher
-        interval_s = self.configuration.opmon_conf["interval_s"]
-        self.authoriser = DummyAuthoriser(dach, SystemType.PROCESS_MANAGER)
+        self.opmon_publisher = cast(
+            _OpMonPublisher | None,
+            getattr(self.configuration, "opmon_publisher", None),
+        )
+        interval_raw = getattr(self.configuration.conf_data, "interval_s", 10.0)
+        try:
+            interval_s = float(interval_raw)
+        except (TypeError, ValueError):
+            interval_s = 10.0
+        self.authoriser = DummyAuthoriser(
+            cast(SystemType, SystemType.PROCESS_MANAGER), dach
+        )
 
-        self.process_store = {}  # dict[str, sh.RunningCommand] # str = uuid
-        self.boot_request = {}  # dict[str, BootRequest] # str = uuid
+        self.process_store: dict[str, object] = {}  # str = uuid
+        self.boot_request: dict[str, BootRequest] = {}  # str = uuid
 
         # Define a list of applications that we expect to die, and a lock to read the memory
         self.dead_process_lock = threading.Lock()
-        self.expected_dead_applications = {}  # dict[str, BootRequest] # str == uuid
+        self.expected_dead_applications: dict[str, BootRequest] = {}  # str == uuid
 
         # TODO, probably need to think of a better way to do this?
         # Maybe I should "bind" the commands to their methods, and have something looping over this list to generate the gRPC functions
@@ -154,7 +173,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             )
             self.thread.start()
 
-    def get_log_path(self):
+    def get_log_path(self) -> str:
         return self.configuration.get_log_path()
 
     def __del__(self):
@@ -162,8 +181,13 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.stop_event.set()
             self.thread.join()
 
-    def publish(self, q: ProcessQuery, interval_s: float = 10.0):
-        def find_by_uuid(pi_list, target_uuid: str):
+    def publish(self, q: ProcessQuery, interval_s: float = 10.0) -> None:
+        if self.opmon_publisher is None:
+            return
+
+        def find_by_uuid(
+            pi_list: ProcessInstanceList, target_uuid: str
+        ) -> ProcessInstance | None:
             """Identifies the process from a list by uuid"""
             for pi in pi_list.values:
                 if pi.uuid.uuid == target_uuid:
@@ -171,7 +195,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             return None
 
         n_dead_prev = 0
-        dead_processes_prev = set()
+        dead_processes_prev: set[str] = set()
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -207,6 +231,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                         )
                         continue
                     pi = find_by_uuid(results, diff)
+                    if pi is None:
+                        continue
                     pi_return_code = (
                         pi.return_code if pi.HasField("return_code") else "NONE"
                     )
@@ -228,7 +254,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.CREATE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def boot(
+    def boot(  # type: ignore[misc]
         self, request: BootRequest, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(
@@ -260,7 +286,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def terminate(
+    def terminate(  # type: ignore[misc]
         self, request: Request, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running terminate")
@@ -293,7 +319,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def restart(
+    def restart(  # type: ignore[misc]
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running restart")
@@ -323,7 +349,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def kill(
+    def kill(  # type: ignore[misc]
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running kill")
@@ -353,7 +379,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def ps(
+    def ps(  # type: ignore[misc]
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running ps")
@@ -383,7 +409,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.DELETE, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def flush(
+    def flush(  # type: ignore[misc]
         self, request: ProcessQuery, context: ServicerContext
     ) -> ProcessInstanceList:
         """Remove dead processes from tracking so they no longer appear in ps.
@@ -422,7 +448,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def describe(self, request: Request, context: ServicerContext) -> Description:
+    def describe(  # type: ignore[misc]
+        self, request: Request, context: ServicerContext
+    ) -> Description:
         self.log.debug(f"{self.name} running describe")
 
         response = Description(
@@ -444,7 +472,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     @authentified_and_authorised(
         action=ActionType.READ, system=SystemType.PROCESS_MANAGER
     )  # 2nd step
-    def logs(self, request: LogRequest, context: ServicerContext) -> LogLines:
+    def logs(  # type: ignore[misc]
+        self, request: LogRequest, context: ServicerContext
+    ) -> LogLines:
         """Fetch logs for a process.
 
         Args:
@@ -559,7 +589,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
     def _match_processes_against_query(
         query: ProcessQuery,
         available_uuids: list[str],
-        boot_request_dict: dict,
+        boot_request_dict: dict[str, BootRequest],
         order_by: str = "random",
     ) -> list[str]:
         """
@@ -593,7 +623,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # relevent reading here: https://github.com/protocolbuffers/protobuf/blob/main/docs/field_presence.md
 
         # Filter processes based on query criteria
-        processes = []
+        processes: list[str] = []
         for uuid in available_uuids:
             accepted = True
             meta = boot_request_dict[uuid].process_description.metadata
@@ -755,28 +785,32 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         return matched_processes
 
     @staticmethod
-    def get(conf, **kwargs):
+    def get(conf: ProcessManagerConfHandler, **kwargs: object) -> "ProcessManager":
         log = get_logger("process_manager.get")
+        name = str(kwargs.get("name", "process_manager"))
+        forwarded_kwargs = {k: v for k, v in kwargs.items() if k != "name"}
 
-        if conf.pm_type == ProcessManagerTypes.SSH_SHELL:
+        if conf.conf_data.type == ProcessManagerTypes.SSH_SHELL:
             from drunc.process_manager.ssh_process_manager_shell import (
                 SSHProcessManagerShell,
             )
 
             log.debug("Starting [green]SSH Shell process_manager[/green]")
-            return SSHProcessManagerShell(conf, **kwargs)
-        elif conf.pm_type == ProcessManagerTypes.K8s:
+            return SSHProcessManagerShell(conf, name=name, **forwarded_kwargs)
+        elif conf.conf_data.type == ProcessManagerTypes.K8s:
             from drunc.process_manager.k8s_process_manager import K8sProcessManager
 
             log.debug("Starting [green]K8s process_manager[/green]")
-            return K8sProcessManager(conf, **kwargs)
-        elif conf.pm_type == ProcessManagerTypes.SSH_PARAMIKO:
+            return K8sProcessManager(conf, name=name, **forwarded_kwargs)
+        elif conf.conf_data.type == ProcessManagerTypes.SSH_PARAMIKO:
             from drunc.process_manager.ssh_process_manager_paramiko_client import (
                 SSHProcessManagerParamikoClient,
             )
 
             log.debug("Starting [green]SSH Paramiko process_manager[/green]")
-            return SSHProcessManagerParamikoClient(conf, **kwargs)
+            return SSHProcessManagerParamikoClient(conf, name=name, **forwarded_kwargs)
         else:
-            log.error(f"ProcessManager type {conf.pm_type} is unsupported!")
-            raise RuntimeError(f"ProcessManager type {conf.pm_type} is unsupported!")
+            log.error(f"ProcessManager type {conf.conf_data.type} is unsupported!")
+            raise RuntimeError(
+                f"ProcessManager type {conf.conf_data.type} is unsupported!"
+            )

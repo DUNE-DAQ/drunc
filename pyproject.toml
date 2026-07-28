@@ -34,7 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 prod = ["paramiko[gssapi]"]
-dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
+dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75", "types-jsonschema", "types-requests"]
 test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
 
 [project.scripts]
@@ -110,8 +110,4 @@ show_error_codes = true
 # These overrides are because the library stubs dont exist and not on typeshed
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["conffwk"]
 ignore_missing_imports = true

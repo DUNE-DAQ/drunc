@@ -1,14 +1,83 @@
 import os
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import Protocol, cast
 
-import confmodel_dal
+import confmodel_dal  # type: ignore[import-untyped]
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
-if TYPE_CHECKING:
-    import conffwk
+
+class _VariableLike(Protocol):
+    name: str
+    value: str
+    contains: list["_VariableLike"]
+
+    def className(self) -> str: ...
+
+
+class _RunsOnInner(Protocol):
+    id: str
+
+
+class _RunsOn(Protocol):
+    runs_on: _RunsOnInner
+
+
+class _ServiceLike(Protocol):
+    id: str
+    port: int
+    protocol: str
+
+
+class _WriterParams(Protocol):
+    directory_path: str
+
+
+class _Writer(Protocol):
+    data_store_params: _WriterParams
+
+
+class _AppLike(Protocol):
+    id: str
+    application_name: str
+    commandline_parameters: list[str]
+    log_path: str
+    runs_on: _RunsOn
+    application_environment: list[_VariableLike]
+    exposes_service: list[_ServiceLike]
+    data_writers: list[_Writer]
+    tp_writer: _Writer
+
+    def oksTypes(self) -> list[str]: ...
+
+
+class _SegmentLike(Protocol):
+    id: str
+    controller: _AppLike
+    segments: list["_SegmentLike"]
+    applications: list[_AppLike]
+
+
+class _SessionLike(Protocol):
+    id: str
+    environment: list[_VariableLike]
+    controller_log_level: str
+    segment: _SegmentLike
+    disabled: list["_HasId"]
+    infrastructure_applications: list[_AppLike]
+
+
+class _DbLike(Protocol):
+    _obj: object
+
+
+class _HasId(Protocol):
+    id: str
+
+
+class _LoggerLike(Protocol):
+    def debug(self, msg: str) -> None: ...
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -32,7 +101,7 @@ def get_full_db_path(db_path: str) -> str:
 
     # Get the env var that points to the configuration files. If it doesn't exist, raise
     # an exception
-    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", None)
+    search_path_str = os.environ.get("DUNEDAQ_DB_PATH")
     if not search_path_str:
         err_str = "DUNEDAQ_DB_PATH not set, exiting."
         raise DruncSetupException(err_str)
@@ -86,7 +155,7 @@ def get_full_db_path(db_path: str) -> str:
     return resolved_path
 
 
-def collect_variables(variables, env_dict: Dict[str, str]) -> None:
+def collect_variables(variables: list[_VariableLike], env_dict: dict[str, str]) -> None:
     """!Process a dal::Variable object, placing key/value pairs in a dictionary
 
     @param variables  A Variable/VariableSet object
@@ -106,7 +175,7 @@ class EnvironmentVariableCannotBeSet(DruncException):
 
 
 def component_disabled_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", component_id: str
+    session_dal_obj: _SessionLike, component_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
@@ -147,13 +216,13 @@ def component_disabled_from_session_dal(
 def collect_apps(
     config_filename: str,
     session_name: str,
-    session_dal_obj: "conffwk.dal.Session",
-    segment_obj: "conffwk.dal.Segment",
-    env: Dict[str, str],
-    tree_prefix: List[int] = [
+    session_dal_obj: _SessionLike,
+    segment_obj: _SegmentLike,
+    env: dict[str, str],
+    tree_prefix: list[int] = [
         0,
     ],
-) -> List[Dict]:
+) -> list[dict[str, object]]:
     """! Recustively collect (daq) application belonging to segment and its subsegments
 
     @param session_dal_obj  The session the segment belongs to
@@ -175,7 +244,7 @@ def collect_apps(
 
     collect_variables(session_dal_obj.environment, defenv)
 
-    apps = []
+    apps: list[dict[str, object]] = []
 
     # Add controller for this segment to list of apps
     controller = segment_obj.controller
@@ -224,56 +293,58 @@ def collect_apps(
         except Exception as e:
             log.exception(e)
             raise e
-        for app in sub_apps:
-            apps.append(app)
+        for sub_app in sub_apps:
+            apps.append(sub_app)
 
     # Get all the enabled applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
     app_index = len(segment_obj.segments)
-    for app in segment_obj.applications:
-        log.debug(f"Considering app {app.id}")
-        if "Resource" in app.oksTypes():
-            enabled = not component_disabled_from_session_dal(session_dal_obj, app.id)
-            log.debug(f"{app.id} {enabled=}")
+    for segment_app in segment_obj.applications:
+        log.debug(f"Considering app {segment_app.id}")
+        if "Resource" in segment_app.oksTypes():
+            enabled = not component_disabled_from_session_dal(
+                session_dal_obj, segment_app.id
+            )
+            log.debug(f"{segment_app.id} {enabled=}")
         else:
             enabled = True
-            log.debug(f"{app.id} {enabled=}")
+            log.debug(f"{segment_app.id} {enabled=}")
 
         if not enabled:
-            log.debug(f"Ignoring disabled app {app.id}")
+            log.debug(f"Ignoring disabled app {segment_app.id}")
             continue
 
         app_env = defenv.copy()
 
         # Override with any app specific environment from Application
-        collect_variables(app.application_environment, app_env)
-        app_env["DUNEDAQ_APPLICATION_NAME"] = app.id
+        collect_variables(segment_app.application_environment, app_env)
+        app_env["DUNEDAQ_APPLICATION_NAME"] = segment_app.id
 
         app_tree_id_str = ".".join(map(str, tree_prefix + [app_index]))
 
-        host = app.runs_on.runs_on.id
+        host = segment_app.runs_on.runs_on.id
         args = get_commandline_parameters(
             config_filename=config_filename,
             session_dal=session_dal_obj,
             session_name=session_name,
-            obj=app,
+            obj=segment_app,
         )
-        log.debug(f"Collecting app {app.id} with args {args}")
+        log.debug(f"Collecting app {segment_app.id} with args {args}")
 
-        data_path = get_writer_directory_path(app, log)
+        data_path = get_writer_directory_path(segment_app, log)
         if not data_path:
-            log.debug(f"No data path found for app {app.id}")
+            log.debug(f"No data path found for app {segment_app.id}")
 
         apps.append(
             {
-                "name": app.id,
-                "type": app.application_name,
+                "name": segment_app.id,
+                "type": segment_app.application_name,
                 "args": args,
                 "restriction": host,
                 "host": host,
                 "env": app_env,
                 "tree_id": app_tree_id_str,
-                "log_path": app.log_path,
+                "log_path": segment_app.log_path,
                 "data_path": data_path,
             }
         )
@@ -282,7 +353,7 @@ def collect_apps(
     return apps
 
 
-def get_writer_directory_path(app, log) -> str | None:
+def get_writer_directory_path(app: _AppLike, log: _LoggerLike) -> str | None:
     # Map known OKS types to their specific writer attribute
     APP_TYPE_TO_WRITER_ATTR = {
         "DFApplication": "data_writers",
@@ -312,7 +383,7 @@ def get_writer_directory_path(app, log) -> str | None:
     writer = writers[0]
     params = getattr(writer, "data_store_params", None)
     if params and getattr(params, "directory_path", None):
-        directory_path = params.directory_path
+        directory_path = cast(str, params.directory_path)
         log.debug(f"data path for app {app.id}: {directory_path}")
         return directory_path
 
@@ -320,10 +391,10 @@ def get_writer_directory_path(app, log) -> str | None:
 
 
 def collect_infra_apps(
-    session: "conffwk.dal.Session",
-    env: Dict[str, str],
-    tree_prefix: List[int],
-) -> List[Dict[str, Any]]:
+    session: _SessionLike,
+    env: dict[str, str],
+    tree_prefix: list[int],
+) -> list[dict[str, object]]:
     """! Collect infrastructure applications
 
     @param session  The session
@@ -342,7 +413,7 @@ def collect_infra_apps(
 
     collect_variables(session.environment, defenv)
 
-    apps = []
+    apps: list[dict[str, object]] = []
 
     for app_index, app in enumerate(session.infrastructure_applications):
         # Skip applications that do not define an application name
@@ -375,9 +446,14 @@ def collect_infra_apps(
 
 # Search segment and all contained segments for apps controlled by
 # given controller. Return separate lists of apps and sub-controllers
-def find_controlled_apps(db, session, mycontroller, segment):
-    apps = []
-    controllers = []
+def find_controlled_apps(
+    db: _DbLike,
+    session: _SessionLike,
+    mycontroller: str,
+    segment: _SegmentLike,
+) -> tuple[list[str], list[str]]:
+    apps: list[str] = []
+    controllers: list[str] = []
     if segment.controller.id == mycontroller:
         for app in segment.applications:
             apps.append(app.id)
