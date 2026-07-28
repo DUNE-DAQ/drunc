@@ -249,7 +249,7 @@ class K8sProcessManager(ProcessManager):
         # Get settings from configuration JSON file
         # Any comments following this one will relate to the parameters retrieved from
         # the configuration file if the comment starts as "CONFIGURATION -"
-        settings = getattr(self.configuration, "settings", {})
+        settings = getattr(self.configuration.conf_data, "settings", {})
 
         # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
@@ -1240,7 +1240,7 @@ class K8sProcessManager(ProcessManager):
             main_container - the fully configured V1Container object
         """
 
-        pod_image = self.configuration.image
+        pod_image = self.configuration.conf_data.image
         exec_and_args_list = boot_request.process_description.executable_and_arguments
 
         # Build command to exec
@@ -1285,7 +1285,7 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = getattr(self.configuration, "settings", {})
+            settings = getattr(self.configuration.conf_data, "settings", {})
             host_configs = settings.get("host_configs", {})
 
             if not target_host or target_host not in host_configs:
