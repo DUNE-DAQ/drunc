@@ -100,7 +100,6 @@ pmapp = DAQSessionApp("pm", procmsg_startup_commands)
 pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
 pmshellapp = DAQSessionApp("pmshell", pmshell_startup_commands)
 
-#drunc_startup_commands = ["drunc-unified-shell", "<drunc_command_options>", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
 drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
 druncapp = DAQSessionApp("drunc", drunc_startup_commands)
 
