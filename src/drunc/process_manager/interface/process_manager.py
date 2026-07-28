@@ -91,7 +91,7 @@ def run_pm(
     # Logger has been added to process_manager, so everything will be logged
     add_handler(log, HandlerType.File, True, path=log_path)
 
-    for key, value in pmch.environment.items():
+    for key, value in pmch.conf_data.environment.items():
         os.environ[key] = value
 
     pm = ProcessManager.get(pmch, name="process_manager")
