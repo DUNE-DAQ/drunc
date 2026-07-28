@@ -3,12 +3,13 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Self, Union
+from typing import TYPE_CHECKING, Any, Dict, Protocol, Self, Union, cast
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
 from jsonschema import validate as js_validate
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
+from opmonlib.conf import OpMonConf
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
@@ -19,6 +20,33 @@ from drunc.utils.utils import get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
     import conffwk
+
+
+class _RunsOnInner(Protocol):
+    id: str
+
+
+class _RunsOn(Protocol):
+    runs_on: _RunsOnInner
+
+
+class _Service(Protocol):
+    id: str
+    port: int
+    protocol: str
+
+
+class _SessionDal(Protocol):
+    id: str
+    controller_log_level: str
+
+
+class _AppLike(Protocol):
+    id: str
+    runs_on: _RunsOn
+    exposes_service: list[_Service]
+
+    def oksTypes(self) -> list[str]: ...
 
 
 PROCESS_SHUTDOWN_ORDERING = [
@@ -43,6 +71,19 @@ class ProcessManagerRunningMode(Enum):
     Subprocess = 2
 
 
+class ProcessManagerConfData:
+    def __init__(self) -> None:
+        self.authoriser: object | None = None
+        self.type: ProcessManagerTypes = ProcessManagerTypes.Unknown
+        self.command_address: str = ""
+        self.environment: dict[str, str] = {}
+        self.settings: dict[str, object] = {}
+        self.opmon_uri: str | None = None
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
+        self.kill_timeout: float = 0.5
+        self.image: str = "ghcr.io/dune-daq/alma9:latest"
+
+
 class ProcessManagerConfHandler(ConfHandler):
     """Handler for process manager configuration."""
 
@@ -55,27 +96,40 @@ class ProcessManagerConfHandler(ConfHandler):
         self.command_address = ""
         self.environment = {}
         self.settings = {}
-        self.opmon_conf = None
+        self.opmon_conf: OpMonConf | None = None
         self.opmon_uri = None
         self.opmon_publisher = None
 
-        self.environment = data.get("environment", {})
-        self.settings = data.get("settings", {})
+        self.environment = cast(dict[str, str], data.get("environment", {}))
+        self.settings = cast(dict[str, object], data.get("settings", {}))
         self.opmon_conf = data.get("opmon_conf")
         self.opmon_uri = data.get("opmon_uri")
 
-        match data["type"].lower():
+        self.conf_data = ProcessManagerConfData()
+        self.conf_data.environment = self.environment
+        self.conf_data.settings = self.settings
+        self.conf_data.authoriser = self.authoriser
+        self.conf_data.command_address = self.command_address
+
+        conf_type = str(data["type"]).lower()
+        match conf_type:
             case "ssh":
                 self.pm_type = ProcessManagerTypes.SSH_SHELL
-                self.kill_timeout = data.get("kill_timeout", 0.5)
+                self.kill_timeout = float(data.get("kill_timeout", 0.5))
+                self.conf_data.type = ProcessManagerTypes.SSH_SHELL
+                self.conf_data.kill_timeout = self.kill_timeout
             case "ssh-paramiko":
                 self.pm_type = ProcessManagerTypes.SSH_PARAMIKO
-                self.kill_timeout = data.get("kill_timeout", 0.5)
+                self.kill_timeout = float(data.get("kill_timeout", 0.5))
+                self.conf_data.type = ProcessManagerTypes.SSH_PARAMIKO
+                self.conf_data.kill_timeout = self.kill_timeout
             case "k8s":
                 self.pm_type = ProcessManagerTypes.K8s
-                self.image = data.get("image", "ghcr.io/dune-daq/alma9:latest")
+                self.image = str(data.get("image", "ghcr.io/dune-daq/alma9:latest"))
+                self.conf_data.type = ProcessManagerTypes.K8s
+                self.conf_data.image = self.image
             case _:
-                raise UnknownProcessManagerType(data["type"])
+                raise UnknownProcessManagerType(str(data["type"]))
 
     @classmethod
     def from_json(
@@ -108,6 +162,7 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log.debug(
             "Initializing process manager OpMon with configuration %s", opmon_conf
         )
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
         try:
             if opmon_conf.opmon_type == "stream":
                 self.opmon_publisher = KafkaOpMonPublisher(opmon_conf)
@@ -130,6 +185,15 @@ class ProcessManagerConfHandler(ConfHandler):
             self.log.error("Failed to initialize OpMonPublisher: %s", e)
             raise DruncCommandException("Failed to initialize OpMonPublisher.")
 
+        self.conf_data.opmon_uri = self.opmon_uri
+        self.conf_data.opmon_publisher = self.opmon_publisher
+        self.conf_data.type = self.pm_type
+        self.conf_data.command_address = self.command_address
+        self.conf_data.environment = self.environment
+        self.conf_data.settings = self.settings
+        self.conf_data.authoriser = self.authoriser
+        self.conf_data.kill_timeout = getattr(self, "kill_timeout", 0.5)
+        self.conf_data.image = getattr(self, "image", "ghcr.io/dune-daq/alma9:latest")
         self.conf_data = self
 
 
