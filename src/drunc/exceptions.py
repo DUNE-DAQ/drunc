@@ -1,5 +1,3 @@
-from typing import Dict, List, Optional
-
 from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2
 
@@ -7,36 +5,41 @@ from google.rpc import code_pb2, error_details_pb2
 class DruncException(Exception):
     def __init__(
         self,
-        message: str = "An error occurred in Drunc.",
-        grpc_error_code: Optional[int] = None,
-        details: Optional[str] = None,
-        reason: Optional[str] = None,
-        domain: Optional[str] = None,
+        message: str | None = "An error occurred in Drunc.",
+        grpc_error_code: int | None = None,
+        details: str | None = None,
+        reason: str | None = None,
+        domain: str | None = None,
         **detail_kwargs: object,
     ) -> None:
         super().__init__(message)
 
-        self.message = message if message is not None else "An error occurred in Drunc."
-
-        self.grpc_error_code = grpc_error_code or getattr(
-            self.__class__, "grpc_error_code", code_pb2.INTERNAL
+        self.message: str = (
+            message if message is not None else "An error occurred in Drunc."
         )
 
-        self.reason = (
+        self.grpc_error_code: int = (
+            grpc_error_code
+            if grpc_error_code is not None
+            else int(getattr(self.__class__, "grpc_error_code", code_pb2.INTERNAL))
+        )
+
+        self.reason: str = (
             reason
             if reason is not None
             else str(getattr(self.__class__, "reason", self.__class__.__name__))
         )
-        self.domain = (
+
+        self.domain: str = (
             domain
             if domain is not None
             else str(getattr(self.__class__, "domain", "drunc"))
         )
 
-        self.details: Optional[str] = details
-        self.detail_kwargs: Dict[str, object] = detail_kwargs
+        self.details: str | None = details
+        self.detail_kwargs: dict[str, object] = detail_kwargs
 
-        error_metadata: Dict[str, str] = {"message": self.message}
+        error_metadata: dict[str, str] = {"message": self.message}
         for key, value in self.detail_kwargs.items():
             error_metadata[key] = str(value)
 
@@ -45,12 +48,12 @@ class DruncException(Exception):
         )
 
     @property
-    def specialised_details(self) -> List[Message]:
+    def specialised_details(self) -> list[Message]:
         return []
 
     @property
-    def rich_details(self) -> List[Message]:
-        details_list: List[Message] = [self.base_error_info]
+    def rich_details(self) -> list[Message]:
+        details_list: list[Message] = [self.base_error_info]
 
         if self.specialised_details:
             details_list.extend(self.specialised_details)
@@ -66,7 +69,7 @@ class DruncSetupException(DruncException):
     grpc_error_code: int = code_pb2.FAILED_PRECONDITION
 
     @property
-    def specialised_details(self) -> List[Message]:
+    def specialised_details(self) -> list[Message]:
         precond = error_details_pb2.PreconditionFailure(
             violations=[
                 error_details_pb2.PreconditionFailure.Violation(

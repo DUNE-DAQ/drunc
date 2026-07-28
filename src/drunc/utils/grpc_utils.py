@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, List, NoReturn, cast
+from typing import Callable, NoReturn, cast
 
 import grpc
 from druncschema.generic_pb2 import PlainText
@@ -406,11 +406,11 @@ def abort_with_rich_details(
         grpc_error_code (code_pb2.Code): A gRPC status code from `google.rpc.code_pb2`
             (e.g., `code_pb2.INTERNAL`, `code_pb2.INVALID_ARGUMENT`)
         message (str): Quick description of the error
-        error_objs (List): A list of protobuf messages providing additional structured
+        error_objs (list): A list of protobuf messages providing additional structured
             error details. It will be packed into a google.protobuf.Any
     Raises:
         grpc.RpcError: Terminate the RPC with the constructed error status"""
-    any_details: List[any_pb2.Any] = []
+    any_details: list[any_pb2.Any] = []
 
     for obj in error_objs:
         detail_any = any_pb2.Any()
