@@ -11,6 +11,7 @@ from jsonschema import validate as js_validate
 from kafkaopmon.OpMonPublisher import (
     OpMonPublisher as KafkaOpMonPublisher,
 )
+from opmonlib.conf import OpMonConf
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
@@ -47,13 +48,6 @@ class _AppLike(Protocol):
     def oksTypes(self) -> list[str]: ...
 
 
-class _OpMonConf(Protocol):
-    path: str
-    session: str
-    application: str
-    opmon_type: str
-
-
 PROCESS_SHUTDOWN_ORDERING = [
     "unknown",
     "application",
@@ -73,12 +67,14 @@ class ProcessManagerTypes(Enum):
 class ProcessManagerConfData:
     def __init__(self) -> None:
         self.authoriser: object | None = None
-        self.type = ProcessManagerTypes.Unknown
-        self.command_address = ""
-        self.environment = {}
-        self.settings = {}
-        self.opmon_uri = None
-        self.opmon_publisher = None
+        self.type: ProcessManagerTypes = ProcessManagerTypes.Unknown
+        self.command_address: str = ""
+        self.environment: dict[str, str] = {}
+        self.settings: dict[str, object] = {}
+        self.opmon_uri: str | None = None
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
+        self.kill_timeout: float = 0.5
+        self.image: str = "ghcr.io/dune-daq/alma9:latest"
 
 
 class ProcessManagerConfHandler(ConfHandler):
@@ -95,13 +91,13 @@ class ProcessManagerConfHandler(ConfHandler):
 
     def __init__(self, log_path: str | None, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
-        self.log_path = log_path
+        self.log_path: str | None = log_path
         self.log = get_logger("process_manager.conf_handler")
 
-    def get_log_path(self) -> str:
+    def get_log_path(self) -> str | None:
         return self.log_path
 
-    def populate_from_dict(self, data: dict[str, object]) -> ProcessManagerConfData:
+    def populate_from_dict(self, data: dict[str, object]) -> None:
         new_data = ProcessManagerConfData()
         new_data.environment = cast(dict[str, str], data.get("environment", {}))
         new_data.settings = cast(dict[str, object], data.get("settings", {}))
@@ -126,15 +122,12 @@ class ProcessManagerConfHandler(ConfHandler):
                 raise UnknownProcessManagerType(str(data["type"]))
 
         # opmon_publisher left as default None
-        self.opmon_conf = cast(
-            _OpMonConf,
-            parse_opmon_conf(
-                log=self.log,
-                conf=data.get("opmon_conf", None),
-                uri=data.get("opmon_uri", None),
-                session=new_data.type.name,
-                application="process_manager",
-            ),
+        self.opmon_conf: OpMonConf = parse_opmon_conf(
+            log=self.log,
+            conf=data.get("opmon_conf", None),
+            uri=data.get("opmon_uri", None),
+            session=new_data.type.name,
+            application="process_manager",
         )
 
         if self.opmon_conf.path == "./info.json":
@@ -149,6 +142,7 @@ class ProcessManagerConfHandler(ConfHandler):
         self.log.debug(
             "Initializing process manager OpMon with configuration %s", self.opmon_conf
         )
+        self.opmon_publisher: OpMonPublisher | KafkaOpMonPublisher | None = None
         try:
             if self.opmon_conf.opmon_type == "stream":
                 self.opmon_publisher = KafkaOpMonPublisher(self.opmon_conf)

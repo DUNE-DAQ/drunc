@@ -111,7 +111,3 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["google.rpc.*"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = ["conffwk"]
-ignore_missing_imports = true

@@ -11,14 +11,15 @@ from urllib.parse import urlparse
 
 import conffwk
 import grpc
-from daqconf.set_connectivity_service_port import (  # type: ignore[import-untyped]
+from daqconf.set_connectivity_service_port import (
     set_connectivity_service_port,
 )
-from daqconf.set_rc_controller_port import (  # type: ignore[import-untyped]
+from daqconf.set_rc_controller_port import (
     set_rc_controller_port,
 )
-from daqconf.utils import find_free_port  # type: ignore[import-untyped]
+from daqconf.utils import find_free_port
 from druncschema.description_pb2 import Description
+from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     GenericNotificationMessage,
@@ -167,7 +168,7 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def send_msg(self, msg):
+    def send_msg(self, msg: str) -> OutcomeStatus:
         request = Request(token=copy_token(self.token))
 
         if msg is not None:
@@ -194,7 +195,22 @@ class ProcessManagerDriver:
 
         return response
 
-    def update_controller_logs(self, ctrl_dal, level):
+    def update_controller_logs(
+        self, ctrl_dal: conffwk.dal.SessionDal, level: str
+    ) -> conffwk.dal.SessionDal:
+        """
+        Update the log level of the controller in the DAL.
+
+        Args:
+            ctrl_dal: The controller DAL object to update.
+            level: The new log level to set.
+
+        Returns:
+            The updated controller DAL object with the new log level.
+
+        Raises:
+            None
+        """
         ctrl_dal.controller_log_level = level
         return ctrl_dal
 
@@ -337,8 +353,8 @@ class ProcessManagerDriver:
         raw_apps = collect_apps(
             session_name=session_name,
             config_filename=oks_conf,
-            session_dal_obj=session_dal,  # type: ignore[arg-type]
-            segment_obj=session_dal.segment,  # type: ignore[arg-type]
+            session_dal_obj=session_dal,
+            segment_obj=session_dal.segment,
             env=env,
             tree_prefix=[
                 0,
@@ -350,7 +366,7 @@ class ProcessManagerDriver:
         next_tree_id = max([int(app["tree_id"].split(".")[0]) for app in apps]) + 1
         infra_apps = cast(
             list[BootApp],
-            collect_infra_apps(session_dal, env, tree_prefix=[next_tree_id]),  # type: ignore[arg-type]
+            collect_infra_apps(session_dal, env, tree_prefix=[next_tree_id]),
         )
 
         apps = infra_apps + apps
@@ -516,7 +532,7 @@ class ProcessManagerDriver:
             yield breq
 
     def _consolidate_config(self, session_name: str, conf_file: str) -> None:
-        from daqconf.consolidate import consolidate_db  # type: ignore[import-untyped]
+        from daqconf.consolidate import consolidate_db
 
         self.log.debug(f"Validating {session_name} configuration")
 
@@ -706,8 +722,6 @@ To debug it, close drunc and run the following command:
     def _initialise_session(
         self, conf_file: str, conf_id: str
     ) -> tuple[_ConfigurationProto, SessionDalProto]:
-        import conffwk  # isort: skip
-
         db = cast(_ConfigurationProto, conffwk.Configuration(conf_file))
         session_dal = cast(
             SessionDalProto, db.get_dal(class_name="Session", uid=conf_id)
@@ -754,7 +768,7 @@ To debug it, close drunc and run the following command:
             from drunc.process_manager.oks_parser import collect_variables
 
             env: dict[str, str] = {}
-            collect_variables(session_dal.environment, env)  # type: ignore[arg-type]
+            collect_variables(session_dal.environment, env)
 
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
@@ -1034,9 +1048,7 @@ To debug it, close drunc and run the following command:
         request = Request(token=copy_token(self.token))
 
         try:
-            response = cast(
-                ProcessInstanceList, self.stub.terminate(request, timeout=timeout)
-            )
+            response = self.stub.terminate(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -1056,9 +1068,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = cast(
-                ProcessInstanceList, self.stub.kill(request, timeout=timeout)
-            )
+            response = self.stub.kill(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -1076,7 +1086,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = cast(LogLines, self.stub.logs(request, timeout=timeout))
+            response = self.stub.logs(request, timeout=timeout)
 
             # Check if the response indicates a BadQuery error
             if response.flag == ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT:
@@ -1111,7 +1121,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = cast(ProcessInstanceList, self.stub.ps(request, timeout=timeout))
+            response = self.stub.ps(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -1132,9 +1142,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = cast(
-                ProcessInstanceList, self.stub.flush(request, timeout=timeout)
-            )
+            response = self.stub.flush(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -1155,9 +1163,7 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         try:
-            response = cast(
-                ProcessInstanceList, self.stub.restart(request, timeout=timeout)
-            )
+            response = self.stub.restart(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -1176,7 +1182,7 @@ To debug it, close drunc and run the following command:
         request = Request(token=copy_token(self.token))
 
         try:
-            response = cast(Description, self.stub.describe(request, timeout=timeout))
+            response = self.stub.describe(request, timeout=timeout)
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
