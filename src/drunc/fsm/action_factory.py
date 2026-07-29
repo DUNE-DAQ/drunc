@@ -1,9 +1,15 @@
-import inspect
+from __future__ import annotations
 
-import conffwk
+import inspect
+from typing import Dict, Type, cast
 
 import drunc.fsm.exceptions as fsme
 from drunc.exceptions import DruncSetupException
+from drunc.fsm._protocols import (
+    ActionMethodProtocol,
+    ConfigurationProtocol,
+    FSMActionProtocol,
+)
 from drunc.fsm.actions.db_run_registry import DBRunRegistry
 from drunc.fsm.actions.file_logbook import FileLogbook
 from drunc.fsm.actions.file_run_registry import FileRunRegistry
@@ -17,26 +23,34 @@ from drunc.fsm.actions.usvc_provided_run_number import UsvcProvidedRunNumber
 
 
 class FSMActionFactory:
-    def __init__(self):
+    _instance: FSMActionFactory | None = None
+
+    def __init__(self) -> None:
         raise DruncSetupException("Call get() instead")
 
-    def _get_pre_transitions(self, action):
-        retr = {}
+    def _get_pre_transitions(
+        self, action: FSMActionProtocol
+    ) -> Dict[str, ActionMethodProtocol]:
+        retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
                 if name.startswith("pre_"):
-                    retr[name] = method
+                    retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _get_post_transitions(self, action):
-        retr = {}
+    def _get_post_transitions(
+        self, action: FSMActionProtocol
+    ) -> Dict[str, ActionMethodProtocol]:
+        retr: Dict[str, ActionMethodProtocol] = {}
         for name, method in inspect.getmembers(action):
             if inspect.ismethod(method):
                 if name.startswith("post_"):
-                    retr[name] = method
+                    retr[name] = cast(ActionMethodProtocol, method)
         return retr
 
-    def _validate_signature(self, name, method, action):
+    def _validate_signature(
+        self, name: str, method: ActionMethodProtocol, action: str
+    ) -> None:
         sig = inspect.signature(method)
 
         if (
@@ -53,7 +67,7 @@ class FSMActionFactory:
             if p.annotation is inspect._empty:
                 raise fsme.MethodSignatureMissingAnnotation(action, name, pname)
 
-    def _validate_action(self, action):
+    def _validate_action(self, action: FSMActionProtocol) -> None:
         pre_transition = self._get_pre_transitions(action)
         post_transition = self._get_post_transitions(action)
 
@@ -67,8 +81,8 @@ class FSMActionFactory:
             self._validate_signature(k, v, action.name)
 
     def get_action(
-        self, action_name: str, action_configuration: "conffwk.dal.FSMaction"
-    ):
+        self, action_name: str, action_configuration: ConfigurationProtocol
+    ) -> FSMActionProtocol:
         """
         Construct the action interface for the given action name and configuration.
 
@@ -84,7 +98,7 @@ class FSMActionFactory:
             fsme.InvalidAction: If the constructed action does not have valid pre/post
                 transition methods.
         """
-        iface = None
+        iface: FSMActionProtocol | None = None
         match action_name:
             case "user-provided-run-number":
                 iface = UserProvidedRunNumber(action_configuration)
@@ -116,10 +130,8 @@ class FSMActionFactory:
 
         return iface
 
-    _instance = None
-
     @classmethod
-    def get(cls):
+    def get(cls: Type[FSMActionFactory]) -> FSMActionFactory:
         if cls._instance is None:
             cls._instance = cls.__new__(cls)
 
