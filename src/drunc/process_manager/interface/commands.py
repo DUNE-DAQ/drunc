@@ -382,13 +382,23 @@ def ps_impl(
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
 
+    # Inject session name if exits
+    ## Session name can come from either the process manager shell with --session
+    ## Or in the unified shell, where the session name is injected automatically
+
+    session_name = (
+        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
+    )
+    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
+    log_msg = f"No processes running{f' in session [green]{session_name}[/]' if session_name else ''}"
+
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
         obj.print(
             tabulate_process_instance_list(
                 results,
-                title=f"Processes running in session {obj.session_name}",
+                title=title,
                 long=long_format,
                 width=width,
             ),
@@ -396,4 +406,4 @@ def ps_impl(
             soft_wrap=True,
         )
     else:
-        log.info(f"No processes running in session [green]{obj.session_name}[/]")
+        log.info(log_msg)
