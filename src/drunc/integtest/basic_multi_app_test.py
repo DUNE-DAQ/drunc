@@ -85,10 +85,10 @@ confgen_arguments = {"SmallFootprint": conf_dict}
 # The commands to run in dunerc and the process manager shell
 dunerc_commands_1 = (
     "boot conf start --run-number 101 wait 1 enable-triggers wait ".split()
-    + [str(run_duration)]
+    + [str(run_duration)] + ["disable-triggers"]
 )
 dunerc_commands_2 = (
-    "disable-triggers wait 2 drain-dataflow stop-trigger-sources stop wait 2 scrap terminate".split()
+    "drain-dataflow stop-trigger-sources stop wait 2 scrap terminate".split()
 )
 pmshell_command = ["ps"]
 
