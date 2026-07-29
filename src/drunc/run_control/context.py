@@ -2,7 +2,7 @@ from collections.abc import MutableMapping
 
 from druncschema.token_pb2 import Token
 
-from drunc.process_manager.process_manager_driver import RunControlDriver
+from drunc.run_control.run_control_driver import RunControlDriver
 from drunc.utils.shell_utils import (
     ShellContext,
     create_dummy_token_from_uname,

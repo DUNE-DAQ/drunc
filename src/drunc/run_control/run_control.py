@@ -8,13 +8,13 @@ from druncschema.run_control_pb2 import (
 )
 from druncschema.run_control_pb2_grpc import RunControlServicer
 
-from drunc.utils.utils import get_logger, setup_root_logger
+from drunc.utils.utils import get_logger
 
 
 class RunControl(RunControlServicer):
-    def __init__(self):
-        setup_root_logger()
+    def __init__(self, config: dict[str, str | int | float | bool]):
         self.log = get_logger(__name__)
+        self.config = config
 
     def start_session(
         self, request: StartSessionRequest, context

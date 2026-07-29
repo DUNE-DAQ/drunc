@@ -36,9 +36,9 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
     """
     # Setup logging for the run control server
     log = get_logger(
-        logger_name=conf["run_control_server"]["name"],
+        logger_name=f"run_control_{conf['name']}",
         rich_handler=True,
-        file_handler_path=conf["run_control_server"]["log_path"],
+        # file_handler_path=conf["log_path"],
     )
     log.debug("Running [green]deploy_run_control_server[/green]")
 
@@ -47,7 +47,7 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
     # Set environment variables from the configuration
     # This is done to ensure that the run control server has access to the necessary
     # environment settings, including those useful for debugging and logging.
-    for key, value in conf["run_control_server"]["environment"].items():
+    for key, value in conf["environment"].items():
         os.environ[key] = value
 
     # Setup the Run Control instance
@@ -71,8 +71,8 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
             DruncSetupException: if the address is not specified.
         """
         # Resolve hostname to network IP if it's localhost
-        host = conf["run_control_server"]["host"]
-        port = conf["run_control_server"]["port"]
+        host = conf["host"]
+        port = conf["port"]
         address = resolve_localhost_and_127_ip_to_network_ip(f"{host}:{port}")
         log.debug("[blue]serve[/] called")
 
@@ -80,9 +80,9 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
         nonlocal server
         server = grpc.server(
             concurrent.futures.ThreadPoolExecutor(
-                max_workers=conf["run_control_server"]["grpc_config"]["max_workers"]
+                max_workers=conf["grpc_config"]["max_workers"]
             ),
-            options=conf["run_control_server"]["grpc_config"]["options"],
+            options=conf["grpc_config"]["options"],
             # interceptors=[RichErrorServerInterceptor()], # TODO: Implement me later!
         )
 
@@ -149,33 +149,26 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
 @click.option(
     "-c",
     "--configuration",
-    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
-    default=None,
+    type=str,
+    default="standalone.json",
     help=(
         "Specify the path to the configuration file for the run control server. If not "
-        "provided, the default configuration will be used.",
+        "provided, the default configuration `standalone.json` will be used."
     ),
 )
 @click.option(
     "-p",
-    "--port-override",
+    "--port",
     type=int,
     default=None,
     help="Override the endpoint port number from the configuration. If a port is specified in the configuration file, the use of this parameter will override the port specified.",
 )
 @click.option(
     "-lp",
-    "--log-path-override",
+    "--log-path",
     type=str,
     default=None,
     help="Override the path to the log file from the configuration. If a log path is specified in the configuration file, the use of this parameter will override the log path specified.",
-)
-@click.option(
-    "-l",
-    "--log-level",
-    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
-    default="INFO",
-    help="Set the log level",
 )
 @click.option(
     "-o/-no",
@@ -184,10 +177,17 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
     default=True,
     help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
 )
+@click.option(
+    "-l",
+    "--log-level",
+    type=click.Choice(logging_log_levels.keys(), case_sensitive=False),
+    default="INFO",
+    help="Set the log level",
+)
 def run_control_server_cli(
-    configuration: click.Path | None,
-    port_overrride: int | None,
-    log_path_override: str | None,
+    configuration: str,
+    port: int | None,
+    log_path: str | None,
     override_logs: bool,
     log_level: str | None,
 ) -> None:
@@ -196,7 +196,7 @@ def run_control_server_cli(
 
     Args:
         configuration (click.Path | None): Path to the configuration file.
-        port_overrride (int | None): Port number to override the configuration.
+        port_override (int | None): Port number to override the configuration.
         log_path_override (str | None): Path to the log file to override the configuration.
         override_logs (bool): Flag to determine if logs should be overridden.
         log_level (str | None): Log level for the server.
@@ -211,9 +211,9 @@ def run_control_server_cli(
     get_root_logger(log_level)
     conf = get_run_control_server_configuration(
         configuration,
-        port_override=port_overrride,
-        log_path_override=log_path_override,
+        port_override=port,
+        log_path_override=log_path,
         override_logs=override_logs,
-        log_level=log_level,
+        log_level_override=log_level,
     )
     deploy_run_control_server(conf)

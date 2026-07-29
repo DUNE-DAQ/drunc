@@ -1,0 +1,39 @@
+{
+    "name": "standalone",
+    "establish_connection": {
+        "timeout": 10.0
+    },
+    "log_path": ".",
+    "log_level": "INFO",
+    "override_logs": false,
+    "port": 50051,
+    "host": "localhost",
+    "grpc_config": {
+        "max_workers": 10,
+        "options": {}
+    },
+    "environment": {
+        "DUNEDAQ_ERS_ERROR": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_FATAL": "erstrace,lstdout",
+        "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout",
+        "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout"
+    },
+    "notification_uri": {
+        "path": "./info.json",
+        "type": "file"
+    },
+    "notification_conf": {
+        "level": "info",
+        "interval_s": 10.0
+    },
+    "process_manager_interface": {
+        "establish_connection": {
+            "timeout": 10.0
+        }
+    },
+    "controller_interface": {
+        "establish_connection": {
+            "timeout": 10.0
+        }
+    }
+}
