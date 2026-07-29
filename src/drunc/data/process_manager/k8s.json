@@ -70,7 +70,7 @@
                 "requests": {"hugepages-1Gi": "8Gi", "cpu": "24", "memory": "384Gi"}
             },
             "np04-srv-031": {
-                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "96", "memory": "471Gi"},
+                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "96", "memory": "471Gi"},
                 "requests": {"hugepages-2Mi": "16Gi", "cpu": "32", "memory": "256Gi"}
             }
         },
