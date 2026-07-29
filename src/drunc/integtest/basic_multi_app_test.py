@@ -108,8 +108,7 @@ cmd_set_2 = DAQCommandSet("pmshell", pmshell_command, CommandWaitParameters(styl
 cmd_set_3 = DAQCommandSet("drunc", dunerc_commands_2, CommandWaitParameters(style=CommandWaitStyle.ECHO))
 
 app_list = [ pmapp, pmshellapp, druncapp ]
-cmd_set_list = [ cmd_set_1, cmd_set_3 ]
-#cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3 ]
+cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3 ]
 dse = DAQSessionIngredients(app_list, cmd_set_list)
 daq_session_ingredients = {"MultiRCAppSession": dse}
 
