@@ -62,16 +62,16 @@
                 "requests": {"hugepages-2Mi": "64Gi", "cpu": "64", "memory": "512Gi"}
             },
             "np02-srv-005": {
-                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "96", "memory": "768Gi"},
-                "requests": {"hugepages-2Mi": "32Gi", "cpu": "24", "memory": "384Gi"}
+                "limits":   {"hugepages-1Gi": "16Gi", "cpu": "96", "memory": "768Gi"},
+                "requests": {"hugepages-1Gi": "16Gi", "cpu": "24", "memory": "384Gi"}
             },
             "np02-srv-005-1": {
-                "limits":   {"hugepages-2Mi": "16Gi", "cpu": "48", "memory": "384Gi"},
-                "requests": {"hugepages-2Mi": "16Gi", "cpu": "24", "memory": "384Gi"}
+                "limits":   {"hugepages-1Gi": "8Gi", "cpu": "48", "memory": "384Gi"},
+                "requests": {"hugepages-1Gi": "8Gi", "cpu": "24", "memory": "384Gi"}
             },
             "np04-srv-031": {
-                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "128", "memory": "1024Gi"},
-                "requests": {"hugepages-2Mi": "32Gi", "cpu": "32", "memory": "256Gi"}
+                "limits":   {"hugepages-2Mi": "32Gi", "cpu": "96", "memory": "471Gi"},
+                "requests": {"hugepages-2Mi": "16Gi", "cpu": "32", "memory": "256Gi"}
             }
         },
         "volumes": [
