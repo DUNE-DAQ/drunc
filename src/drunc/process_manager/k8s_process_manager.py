@@ -1732,7 +1732,14 @@ class K8sProcessManager(ProcessManager):
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
             )
-            host_aliases = self._get_pod_host_aliases(podname, session, tree_labels)
+            # hostAliases is only valid for non-hostNetwork pods (Kubernetes constraint).
+            # When use_host_network=True (Headless service pods), skip host_aliases to
+            # avoid a 422 Unprocessable Entity error from the Kubernetes API.
+            host_aliases = (
+                None
+                if use_host_network
+                else self._get_pod_host_aliases(podname, session, tree_labels)
+            )
             pod_manifest = self._build_pod_manifest(
                 podname,
                 session,
