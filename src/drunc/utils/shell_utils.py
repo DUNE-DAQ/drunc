@@ -3,7 +3,16 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from typing import Callable, ParamSpec, Protocol, TypeVar, cast
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Literal,
+    ParamSpec,
+    Protocol,
+    TypeVar,
+    cast,
+    overload,
+)
 
 import click
 from druncschema.token_pb2 import Token
@@ -11,6 +20,10 @@ from rich.console import Console
 
 from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
+
+if TYPE_CHECKING:
+    from drunc.controller.controller_driver import ControllerDriver
+    from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 
 
 class CommandLike(Protocol):
@@ -185,17 +198,23 @@ class DecodedResponse:
 class ShellContext:
     """Base class for shell contexts."""
 
-    shell_id = None  # used for logging if its a PM shell or Unified shell etc
+    shell_id: str | None = (
+        None  # used for logging if its a PM shell or Unified shell etc
+    )
 
-    def get_shell_id(self):
+    def get_shell_id(self) -> str | None:
         return self.shell_id
 
     def _reset(
         self,
         name: str,
-        token_args: dict[str, object] = {},
-        driver_args: dict[str, object] = {},
+        token_args: dict[str, object] | None = None,
+        driver_args: dict[str, object] | None = None,
     ) -> None:
+        if token_args is None:
+            token_args = {}
+        if driver_args is None:
+            driver_args = {}
         self._console = Console()
         self._token = self.create_token(**token_args)
         self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
@@ -216,10 +235,11 @@ class ShellContext:
             exit(1)
 
     @abc.abstractmethod
-    def reset(self, **kwargs: object) -> None:
+    def reset(self, *args: object, **kwargs: object) -> None:
         """Reset the shell context.
 
         Args:
+            *args: Additional positional arguments.
             **kwargs: Additional keyword arguments.
         """
         pass
@@ -267,7 +287,45 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    def get_driver(self, name: str | None = None, quiet_fail: bool = False) -> object:
+    @overload
+    def get_driver(
+        self, name: Literal["controller"], quiet_fail: Literal[False] = False
+    ) -> "ControllerDriver": ...
+
+    @overload
+    def get_driver(
+        self, name: Literal["controller"], quiet_fail: Literal[True]
+    ) -> "ControllerDriver | None": ...
+
+    @overload
+    def get_driver(
+        self, name: Literal["process_manager"], quiet_fail: Literal[False] = False
+    ) -> "ProcessManagerDriver": ...
+
+    @overload
+    def get_driver(
+        self, name: Literal["process_manager"], quiet_fail: Literal[True]
+    ) -> "ProcessManagerDriver | None": ...
+
+    @overload
+    def get_driver(self, name: str, quiet_fail: Literal[False] = False) -> object: ...
+
+    @overload
+    def get_driver(self, name: str, quiet_fail: Literal[True]) -> object | None: ...
+
+    @overload
+    def get_driver(
+        self, name: None = None, quiet_fail: Literal[False] = False
+    ) -> object: ...
+
+    @overload
+    def get_driver(
+        self, name: None = None, quiet_fail: Literal[True] = True
+    ) -> object | None: ...
+
+    def get_driver(
+        self, name: str | None = None, quiet_fail: bool = False
+    ) -> object | None:
         """Get a driver from the context.
 
         Args:
@@ -372,7 +430,7 @@ class ShellContext:
             )
 
 
-def log_pm_cmd(obj: ShellContext):
+def log_pm_cmd(obj: ShellContext) -> None:
     """Log a process-manager shell command with only explicitly provided arguments.
 
     The current Click command context is inspected and only parameters whose source is
@@ -388,12 +446,18 @@ def log_pm_cmd(obj: ShellContext):
     """
 
     ctx_cmd = click.get_current_context(silent=True)
-    cmd_name = ctx_cmd.command.name if ctx_cmd else None
-    parms_dict = {}
-    for param in ctx_cmd.command.params:
-        name = param.name
-        if ctx_cmd.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE:
-            parms_dict[name] = f"{ctx_cmd.params[name]!r}"
+    cmd_name = ctx_cmd.command.name if ctx_cmd and ctx_cmd.command else None
+    parms_dict: dict[str, str] = {}
+    if ctx_cmd and ctx_cmd.command:
+        for param in ctx_cmd.command.params:
+            name = param.name
+            if name is None:
+                continue
+            if (
+                ctx_cmd.get_parameter_source(name)
+                == click.core.ParameterSource.COMMANDLINE
+            ):
+                parms_dict[name] = f"{ctx_cmd.params[name]!r}"
 
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""

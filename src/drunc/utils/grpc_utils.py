@@ -13,7 +13,7 @@ from google.protobuf import any_pb2, json_format
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.message import Message
 from google.rpc import code_pb2, error_details_pb2, status_pb2
-from grpc_status import rpc_status  # type: ignore[import-untyped]
+from grpc_status import rpc_status
 
 from drunc.exceptions import (
     DruncCommandException,
@@ -74,7 +74,7 @@ def pack_to_any(data: Message) -> any_pb2.Any:
     return any
 
 
-T = TypeVar("T")
+T = TypeVar("T", bound=Message)
 
 
 def unpack_any(data: any_pb2.Any, format: type[T]) -> T:
@@ -90,9 +90,9 @@ def unpack_any(data: any_pb2.Any, format: type[T]) -> T:
     Raises:
         UnpackingError: If the message cannot be unpacked into the specified format.
     """
-    if not data.Is(format.DESCRIPTOR):
-        raise UnpackingError(data, format)
     req = format()
+    if not data.Is(req.DESCRIPTOR):
+        raise UnpackingError(data, type(req))
     data.Unpack(req)
     return req
 

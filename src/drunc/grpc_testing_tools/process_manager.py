@@ -11,20 +11,12 @@ import os
 import signal
 import threading
 import time
-from typing import Dict
+from typing import Protocol, cast
 
+import grpc
 from grpc import RpcError, StatusCode, insecure_channel
 
-from drunc.grpc_testing_tools.test_services_pb2 import (
-    BootRequest,
-    DummyResponse,
-    KillRequest,
-    KillResponse,
-    ProcessDescription,
-    ProcessInstance,
-    ProcessInstanceList,
-    ResponseFlag,
-)
+from drunc.grpc_testing_tools import test_services_pb2 as pb2
 from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ManagerServiceServicer,
     ManagerServiceStub,
@@ -41,6 +33,57 @@ from drunc.processes.ssh_process_lifetime_manager_shell import (
 )
 
 
+class _SshManagerProtocol(Protocol):
+    def start_process(self, uuid: str, boot_request: object) -> object: ...
+
+    def is_process_alive(self, uuid: str) -> bool: ...
+
+    def kill_process(self, uuid: str) -> int | None: ...
+
+
+class _ExecArgsProtocol(Protocol):
+    exec: str
+    args: list[str]
+
+
+class _UuidProtocol(Protocol):
+    uuid: str
+
+
+class _MetadataProtocol(Protocol):
+    uuid: _UuidProtocol
+    name: str
+    hostname: str
+
+
+class _ProcessDescriptionProtocol(Protocol):
+    metadata: _MetadataProtocol
+    executable_and_arguments: list[_ExecArgsProtocol]
+
+
+class _BootRequestProtocol(Protocol):
+    token: object
+    process_description: _ProcessDescriptionProtocol
+    process_restriction: object
+
+
+class _Pb2ModuleProtocol(Protocol):
+    def DummyResponse(self, *args: object, **kwargs: object) -> object: ...
+
+    def ProcessInstanceList(self, *args: object, **kwargs: object) -> object: ...
+
+    def ResponseFlag(self, *args: object, **kwargs: object) -> object: ...
+
+    def ProcessInstance(self, *args: object, **kwargs: object) -> object: ...
+
+    def KillRequest(self, *args: object, **kwargs: object) -> object: ...
+
+    def KillResponse(self, *args: object, **kwargs: object) -> object: ...
+
+
+PB2 = cast(_Pb2ModuleProtocol, pb2)
+
+
 class ManagerServiceImpl(ManagerServiceServicer):
     """
     Implementation of Manager gRPC service compatible with druncschema components.
@@ -49,28 +92,37 @@ class ManagerServiceImpl(ManagerServiceServicer):
     SSHProcessLifetimeManager for SSH-based process execution.
     """
 
-    def __init__(self, lifetime_manager_type=ProcessManagerTypes.SSH_SHELL):
+    def __init__(
+        self,
+        lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_SHELL,
+    ) -> None:
         """Initialise the Manager service implementation."""
         if lifetime_manager_type == ProcessManagerTypes.SSH_PARAMIKO:
-            self.ssh_manager = SSHProcessLifetimeManagerParamiko(
-                disable_host_key_check=True,
-                disable_localhost_host_key_check=True,
-                logger=logging.getLogger(__name__),
+            self.ssh_manager: _SshManagerProtocol = cast(
+                _SshManagerProtocol,
+                SSHProcessLifetimeManagerParamiko(  # type: ignore[abstract]
+                    disable_host_key_check=True,
+                    disable_localhost_host_key_check=True,
+                    logger=logging.getLogger(__name__),
+                ),
             )
         elif lifetime_manager_type == ProcessManagerTypes.SSH_SHELL:
-            self.ssh_manager = SSHProcessLifetimeManagerShell(
-                disable_host_key_check=True,
-                disable_localhost_host_key_check=True,
-                logger=logging.getLogger(__name__),
+            self.ssh_manager = cast(
+                _SshManagerProtocol,
+                SSHProcessLifetimeManagerShell(
+                    disable_host_key_check=True,
+                    disable_localhost_host_key_check=True,
+                    logger=logging.getLogger(__name__),
+                ),
             )
         else:
             raise ValueError(f"Unknown lifetime_manager_type: {lifetime_manager_type}")
 
         # Track booted processes
-        self.booted_servers: Dict[str, Dict] = {}
+        self.booted_servers: dict[str, dict[str, object]] = {}
         self.boot_lock = threading.Lock()
 
-    def MakeRequest(self, request, context):
+    def MakeRequest(self, request: object, context: grpc.ServicerContext) -> object:
         """
         Handle incoming connectivity test requests.
 
@@ -81,9 +133,10 @@ class ManagerServiceImpl(ManagerServiceServicer):
         Returns:
             DummyResponse with echoed message confirming Manager is responsive
         """
-        return DummyResponse(reply=f"Manager server response: {request.message}")
+        message = getattr(request, "message", "")
+        return PB2.DummyResponse(reply=f"Manager server response: {message}")
 
-    def boot(self, request: BootRequest, context) -> ProcessInstanceList:
+    def boot(self, request: object, context: grpc.ServicerContext) -> object:
         """
         Boot a new gRPC server process via SSH using BootRequest.
 
@@ -95,16 +148,17 @@ class ManagerServiceImpl(ManagerServiceServicer):
             ProcessInstanceList indicating success/failure and providing server details
         """
         with self.boot_lock:
-            process_uuid = request.process_description.metadata.uuid.uuid
-            process_name = request.process_description.metadata.name
+            typed_request = cast(_BootRequestProtocol, request)
+            process_uuid = typed_request.process_description.metadata.uuid.uuid
+            process_name = typed_request.process_description.metadata.name
 
             # Validate process UUID is unique
             if process_uuid in self.booted_servers:
-                return ProcessInstanceList(
+                return PB2.ProcessInstanceList(
                     name="boot_error",
-                    token=request.token,
+                    token=typed_request.token,
                     values=[],
-                    flag=ResponseFlag(
+                    flag=PB2.ResponseFlag(
                         success=False,
                         message=f"Process UUID '{process_uuid}' already exists",
                     ),
@@ -112,54 +166,54 @@ class ManagerServiceImpl(ManagerServiceServicer):
 
             try:
                 # Extract connection details from process metadata
-                hostname = request.process_description.metadata.hostname
+                hostname = typed_request.process_description.metadata.hostname
 
                 # Start process via SSH using start_process method
                 self.ssh_manager.start_process(
                     uuid=process_uuid,
-                    boot_request=request,
+                    boot_request=typed_request,
                 )
 
                 # Store server info
                 self.booted_servers[process_uuid] = {
                     "request": request,
                     "command": self._build_server_command_from_description(
-                        request.process_description
+                        typed_request.process_description
                     ),
                 }
 
                 # Create successful process instance
-                process_instance = ProcessInstance(
-                    process_description=request.process_description,
-                    process_restriction=request.process_restriction,
-                    status_code=ProcessInstance.StatusCode.RUNNING,
+                process_instance = PB2.ProcessInstance(
+                    process_description=typed_request.process_description,
+                    process_restriction=typed_request.process_restriction,
+                    status_code=1,
                     return_code=0,
-                    uuid=request.process_description.metadata.uuid,
+                    uuid=typed_request.process_description.metadata.uuid,
                 )
 
-                return ProcessInstanceList(
+                return PB2.ProcessInstanceList(
                     name=process_name,
-                    token=request.token,
+                    token=typed_request.token,
                     values=[process_instance],
-                    flag=ResponseFlag(
+                    flag=PB2.ResponseFlag(
                         success=True,
                         message=f"Successfully booted {process_name} on {hostname}",
                     ),
                 )
 
             except Exception as e:
-                return ProcessInstanceList(
+                return PB2.ProcessInstanceList(
                     name=process_name,
-                    token=request.token,
+                    token=typed_request.token,
                     values=[],
-                    flag=ResponseFlag(
+                    flag=PB2.ResponseFlag(
                         success=False,
                         message=f"Boot failed: {str(e)}",
                     ),
                 )
 
     def _build_server_command_from_description(
-        self, process_desc: ProcessDescription
+        self, process_desc: _ProcessDescriptionProtocol
     ) -> str:
         """
         Build the command to execute from ProcessDescription.
@@ -209,20 +263,25 @@ class ManagerServiceImpl(ManagerServiceServicer):
 
             # Create appropriate stub based on server type
             if server_type == "MANAGER":
-                stub = ManagerServiceStub(channel)
+                kill_response = ManagerServiceStub(channel).Kill(
+                    PB2.KillRequest(
+                        reason="Killed by Manager during shutdown",
+                        grace_period_seconds=grace_period,
+                    ),
+                    timeout=5.0,
+                )
             elif server_type == "ROOT_CONTROLLER" or server_type == "RootController":
-                stub = RootControllerServiceStub(channel)
+                kill_response = RootControllerServiceStub(channel).Kill(
+                    PB2.KillRequest(
+                        reason="Killed by Manager during shutdown",
+                        grace_period_seconds=grace_period,
+                    ),
+                    timeout=5.0,
+                )
             else:
                 channel.close()
                 return False, f"Unknown server type: {server_type}"
 
-            # Send Kill request
-            kill_request = KillRequest(
-                reason="Killed by Manager during shutdown",
-                grace_period_seconds=grace_period,
-            )
-
-            kill_response = stub.Kill(kill_request, timeout=5.0)
             channel.close()
 
             if kill_response.shutdown_initiated:
@@ -244,7 +303,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
         except Exception as e:
             return False, f"Error sending Kill request: {str(e)}"
 
-    def Kill(self, request: KillRequest, context) -> KillResponse:
+    def Kill(self, request: object, context: grpc.ServicerContext) -> object:
         """
         Handle graceful shutdown requests for the Manager service.
 
@@ -259,12 +318,12 @@ class ManagerServiceImpl(ManagerServiceServicer):
             KillResponse indicating shutdown status
         """
         grace_period = (
-            max(request.grace_period_seconds, 1)
-            if request.grace_period_seconds > 0
+            max(getattr(request, "grace_period_seconds", 0), 1)
+            if getattr(request, "grace_period_seconds", 0) > 0
             else 2
         )
 
-        reason = request.reason or "No reason provided"
+        reason = getattr(request, "reason", None) or "No reason provided"
 
         # Kill all booted servers first
         kill_failures = []
@@ -276,7 +335,9 @@ class ManagerServiceImpl(ManagerServiceServicer):
 
                 for process_uuid, server_info in list(self.booted_servers.items()):
                     try:
-                        boot_request = server_info["request"]
+                        boot_request = cast(
+                            _BootRequestProtocol, server_info["request"]
+                        )
                         process_desc = boot_request.process_description
 
                         print(f"Stopping booted server: {process_uuid}")
@@ -349,7 +410,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
                 f"Manager Kill incomplete - failed to terminate {len(kill_failures)} "
                 f"booted server(s): {failure_details}"
             )
-            return KillResponse(shutdown_initiated=False, message=response_message)
+            return PB2.KillResponse(shutdown_initiated=False, message=response_message)
 
         # All children terminated successfully, now shutdown Manager
         booted_count = len(self.booted_servers) if self.booted_servers else 0
@@ -364,7 +425,7 @@ class ManagerServiceImpl(ManagerServiceServicer):
             "Shutdown thread starting...",
         ]
 
-        def delayed_shutdown():
+        def delayed_shutdown() -> None:
             """Send SIGTERM to this process after a brief delay."""
             time.sleep(0.5)  # Allow response to be sent
             os.kill(os.getpid(), signal.SIGTERM)
@@ -374,11 +435,11 @@ class ManagerServiceImpl(ManagerServiceServicer):
         shutdown_thread.daemon = True
         shutdown_thread.start()
 
-        return KillResponse(
+        return PB2.KillResponse(
             shutdown_initiated=True, message=" | ".join(response_details)
         )
 
-    def _extract_port_from_args(self, process_desc: ProcessDescription) -> int:
+    def _extract_port_from_args(self, process_desc: _ProcessDescriptionProtocol) -> int:
         """
         Extract port number from process arguments.
 

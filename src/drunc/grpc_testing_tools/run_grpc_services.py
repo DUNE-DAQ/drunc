@@ -1,7 +1,7 @@
 import signal
 import time
 from concurrent import futures
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Protocol, Tuple, cast
 
 from drunc.grpc_testing_tools.grpc_log_util import (
     stderr_observer,
@@ -9,20 +9,35 @@ from drunc.grpc_testing_tools.grpc_log_util import (
 )
 from drunc.process_manager.configuration import ProcessManagerTypes
 
+
+class _GrpcServerProtocol(Protocol):
+    def add_insecure_port(self, addr: str) -> int: ...
+
+
+class _GrpcServicerAddFunc(Protocol):
+    def __call__(self, servicer: object, server: _GrpcServerProtocol) -> object: ...
+
+
+class _EventLike(Protocol):
+    def set(self) -> object: ...
+
+    def is_set(self) -> bool: ...
+
+
 SERVER_GRACE_PERIOD = 2
 
 
 def run_grpc_server(
     server_name: str,
-    servicer_instance: Any,
-    add_servicer_func: Any,
+    servicer_instance: object,
+    add_servicer_func: _GrpcServicerAddFunc,
     max_workers: int,
     server_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, Any]]] = None,
-    upstream_connection: Optional[Dict[str, Any]] = None,
-    ready_event=None,
-    stop_event=None,
+    server_options: Optional[List[Tuple[str, object]]] = None,
+    upstream_connection: Optional[dict[str, object]] = None,
+    ready_event: _EventLike | None = None,
+    stop_event: _EventLike | None = None,
 ) -> None:
     """Generic gRPC server runner that handles the common server lifecycle."""
 
@@ -34,7 +49,7 @@ def run_grpc_server(
 
     shutdown_requested = False
 
-    def signal_handler(signum: int, frame) -> None:
+    def signal_handler(signum: int, frame: object) -> None:
         """Handle SIGTERM and SIGINT for graceful server shutdown."""
         nonlocal shutdown_requested
         shutdown_requested = True
@@ -58,9 +73,11 @@ def run_grpc_server(
         server.start()
 
         if upstream_connection:
-            upstream_host = upstream_connection["host"]
-            upstream_port = upstream_connection["port"]
-            client_options = upstream_connection.get("options", [])
+            upstream_host = str(upstream_connection["host"])
+            upstream_port = cast(int, upstream_connection["port"])
+            client_options = cast(
+                list[tuple[str, object]], upstream_connection.get("options", [])
+            )
 
             upstream_channel = insecure_channel(
                 f"{upstream_host}:{upstream_port}", options=client_options
@@ -94,9 +111,9 @@ def run_process_manager_server(
     manager_max_workers: int,
     server_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, Any]]] = None,
-    ready_event=None,
-    stop_event=None,
+    server_options: Optional[List[Tuple[str, object]]] = None,
+    ready_event: _EventLike | None = None,
+    stop_event: _EventLike | None = None,
     lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_SHELL,
 ) -> None:
     """Run Manager server process with output logging."""
@@ -126,10 +143,10 @@ def run_root_controller_server(
     server_port: int,
     manager_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, Any]]] = None,
-    client_options: Optional[List[Tuple[str, Any]]] = None,
-    ready_event=None,
-    stop_event=None,
+    server_options: Optional[List[Tuple[str, object]]] = None,
+    client_options: Optional[List[Tuple[str, object]]] = None,
+    ready_event: _EventLike | None = None,
+    stop_event: _EventLike | None = None,
 ) -> None:
     """Run RootController server with Manager client connection."""
     from drunc.grpc_testing_tools.root_controller import RootControllerServiceImpl
@@ -161,10 +178,10 @@ def run_child_controller_server(
     root_port: int,
     child_name: str,
     log_file: str,
-    server_options: Optional[List[Tuple[str, Any]]] = None,
-    client_options: Optional[List[Tuple[str, Any]]] = None,
-    ready_event=None,
-    stop_event=None,
+    server_options: Optional[List[Tuple[str, object]]] = None,
+    client_options: Optional[List[Tuple[str, object]]] = None,
+    ready_event: _EventLike | None = None,
+    stop_event: _EventLike | None = None,
 ) -> None:
     """Run ChildController server with RootController client connection."""
     from drunc.grpc_testing_tools.child_controller import (

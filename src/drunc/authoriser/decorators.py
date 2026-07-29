@@ -1,17 +1,49 @@
 import functools
+from typing import Callable, Protocol
 
+import grpc
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger
 
 
-def authentified_and_authorised(action, system):
-    def decor(cmd):
+class _AuthoriserProtocol(Protocol):
+    def is_authorised(
+        self,
+        token: Token,
+        action: int,
+        system: str,
+        command_name: str,
+    ) -> bool: ...
+
+
+class _RequestProtocol(Protocol):
+    token: Token
+
+
+class _ObjectProtocol(Protocol):
+    name: str
+    authoriser: _AuthoriserProtocol
+
+
+_Command = Callable[[_ObjectProtocol, _RequestProtocol, grpc.ServicerContext], Response]
+
+
+def authentified_and_authorised(
+    action: int, system: str
+) -> Callable[[_Command], _Command]:
+    def decor(cmd: _Command) -> _Command:
         @functools.wraps(
             cmd
         )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        def check_token(obj, request, context):
+        def check_token(
+            obj: _ObjectProtocol,
+            request: _RequestProtocol,
+            context: grpc.ServicerContext,
+        ) -> Response:
             log = get_logger("utils.authentified_and_authorised_decorator")
             log.debug("Entering")
             if not obj.authoriser.is_authorised(
@@ -20,11 +52,13 @@ def authentified_and_authorised(action, system):
                 return Response(
                     name=obj.name,
                     token=request.token,
-                    data=PlainText(
-                        text=f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
+                    data=pack_to_any(
+                        PlainText(
+                            text=f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
+                        )
                     ),
                     flag=ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
-                    responses=[],
+                    children=[],
                 )
 
                 # raise Unauthorised(

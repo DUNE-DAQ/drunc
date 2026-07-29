@@ -5,7 +5,9 @@ from drunc.exceptions import DruncCommandException
 
 
 class Unauthorised(DruncCommandException):
-    def __init__(self, user, action, command, drunc_system):
+    def __init__(
+        self, user: str, action: ActionType.ValueType, command: str, drunc_system: str
+    ) -> None:
         self.user = user
         self.action = action
         self.action_name = ActionType.Name(action)

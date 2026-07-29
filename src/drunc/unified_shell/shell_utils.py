@@ -1,22 +1,44 @@
 import functools
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Protocol, cast
 
 import click
-import conffwk
 from druncschema.controller_pb2 import DescribeFSMResponse
 from druncschema.process_manager_pb2 import ProcessInstanceList, ProcessQuery
 
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncException, DruncSetupException
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.utils import format_name_for_cli, get_logger
+
+if TYPE_CHECKING:
+    pass
+
+
+class SequenceEntryLike(Protocol):
+    id: str
+
+
+class SequenceOptionLike(Protocol):
+    name: str | None
+    default: str | int | float | bool | None
+    show_default: bool
+    required: bool
+    help: str | None
+    type: object
+
+
+class FSMSequenceLike(Protocol):
+    id: str
+    sequence: Sequence[SequenceEntryLike]
 
 
 def run_fsm_sequence(
     sequence_commands: list[str],
     sequence_command_opts_and_args: dict[str, list[str]],
     ctx: click.core.Context,
-    obj: click.core.Context,
-    **kwargs,
+    obj: UnifiedShellContext,
+    **kwargs: str | int | float | bool | None,
 ) -> None:
     """
     Execute a command sequence by invoking individual commands in order.
@@ -37,19 +59,25 @@ def run_fsm_sequence(
     """
     logger = get_logger("unified_shell.shell_utils")
     logger.info(f"Running sequence: {sequence_commands}")
+    command_group = cast(click.Group, ctx.command)
 
     # Check all required parameters for all commands in the sequence before executing
     # any command
     for cmd_name in sequence_commands:
         # Get the sub-command to check its parameters
-        sub_cmd: click.core.Command = ctx.command.commands[cmd_name]
+        check_cmd: click.Command = command_group.commands[cmd_name]
 
         # Check if all required parameters for the sub-command are provided in kwargs
         # If any required parameter is missing, log an error and exit
-        for param in sub_cmd.get_params(ctx):  # type: click.core.Option
+        for param in check_cmd.get_params(ctx):
             # If the parameter is required and not provided, log an error and return
+            if param.name is None:
+                continue
             if param.required and kwargs.get(param.name) is None:
-                flag_display = param.opts[0] if param.opts else param.name
+                if isinstance(param, click.Option):
+                    flag_display = param.opts[0] if param.opts else param.name
+                else:
+                    flag_display = param.name
                 logger.error(
                     f"Aborting sequence! Command '{cmd_name}' requires "
                     f"'{flag_display}' but it was not provided."
@@ -64,18 +92,17 @@ def run_fsm_sequence(
 
         # These commands are not stateful. If they are a part of the sequence, they
         # should be run regardless of their position in the sequence
-        pmd: ProcessManagerDriver | None = obj.get_driver(
-            "process_manager", quiet_fail=True
-        )
+        pmd = obj.get_driver("process_manager", quiet_fail=True)
+        process_list: ProcessInstanceList | None = None
         if command == "boot":
-            process_list: ProcessInstanceList = pmd.ps(ProcessQuery(names=[".*"]))
-            if not process_list.values:  # We haven't started anything yet
+            if pmd is not None:
+                process_list = pmd.ps(ProcessQuery(names=[".*"]))
+            if process_list is not None and not process_list.values:
                 accepted_command.append("boot")
         elif command == "terminate":
-            process_list: ProcessInstanceList = pmd.ps(ProcessQuery(names=[".*"]))
-            if (
-                process_list.values
-            ):  # We have started something that needs to be terminated
+            if pmd is not None:
+                process_list = pmd.ps(ProcessQuery(names=[".*"]))
+            if process_list is not None and process_list.values:
                 accepted_command.append("terminate")
 
         # Get the FSM commands that can be ran from the current state
@@ -98,27 +125,29 @@ def run_fsm_sequence(
             continue
 
         # Get the sub-command to invoke
-        sub_cmd: click.core.Command = ctx.command.commands[command]
+        invoke_cmd: click.Command = command_group.commands[command]
 
         # Build command kwargs
-        cmd_kwargs: dict(str, bool | str | int | float | None) = {
+        cmd_kwargs: dict[str, bool | str | int | float | None] = {
             param.name: kwargs[param.name]
-            for param in sub_cmd.get_params(ctx)
-            if param.name in kwargs
+            for param in invoke_cmd.get_params(ctx)
+            if param.name is not None and param.name in kwargs
         }
 
         # Invoke the command with the appropriate kwargs
         try:
             logger.info(f"Running command: '{command}'")
-            ctx.invoke(sub_cmd, **cmd_kwargs)
-        except DruncException as e:
+            ctx.invoke(invoke_cmd, **cmd_kwargs)
+        except DruncException:
             logger.error(f"Error running command: '{command}'")
-            raise e
+            raise
 
 
 def generate_fsm_sequence_command(
-    ctx: click.core.Context, sequence: "conffwk.dal.FSMsequence", controller_name: str
-):
+    ctx: click.core.Context,
+    sequence: FSMSequenceLike,
+    controller_name: str,
+) -> tuple[click.Command, str]:
     """
     Parse a FSM sequence and generate a Click command to run it.
 
@@ -145,7 +174,8 @@ def generate_fsm_sequence_command(
         str, list[str]
     ] = {}  # {sequence_command: [sequence_command_option_name]}
 
-    sequence_options: dict[str, conffwk.dal.FSMParameter] = {}  # {option_name: option}
+    sequence_options: dict[str, SequenceOptionLike] = {}
+    command_group = cast(click.Group, ctx.command)
 
     command_ids: list[str] = [command.id for command in sequence.sequence]
 
@@ -163,7 +193,7 @@ def generate_fsm_sequence_command(
     for command_id in command_ids:  # type: str
         # Parse the sequence command id to match the Click command name
         command_name: str = format_name_for_cli(command_id)
-        if command_name not in ctx.command.commands.keys():
+        if command_name not in command_group.commands.keys():
             raise DruncSetupException(
                 f"Command {command_name} required by sequence {sequence.id} not found in the command list!"
             )
@@ -173,44 +203,44 @@ def generate_fsm_sequence_command(
         sequence_str += f"{command_name} {middle_text}"
 
         # Gather the command parameters, add them to the command options and args
-        params: list(click.core.Option) = ctx.command.commands[command_name].get_params(
-            ctx
-        )
+        params = command_group.commands[command_name].get_params(ctx)
         sequence_command_options[command_name] = []
-        for param in params:  #  type: click.core.Option
-            if param.name == "help":
+        for param in params:
+            if not isinstance(param, click.Option):
+                continue
+            if param.name in (None, "help"):
                 continue
             sequence_command_options[command_name].append(param.name)
-            sequence_options[param.name] = param
+            sequence_options[param.name] = cast(SequenceOptionLike, param)
 
     # Construct the sequence function
-    cmd: functools.partial = functools.partial(
+    base_cmd_fn = functools.partial(
         run_fsm_sequence, sequence_commands, sequence_command_options, ctx
     )
-    cmd = click.pass_obj(cmd)
+    cmd_fn_with_obj = click.pass_obj(base_cmd_fn)
 
     # Add click options to the function
-    for param_name, param in sequence_options.items():  # type: str, conffwk.dal.FSMParameter
-        if param.name == "help":
+    for option_name, option in sequence_options.items():
+        if option.name == "help":
             continue
 
-        param_name: str = format_name_for_cli(param_name)
-        param_default: str | int | float | bool | None = (
-            param.default if param.default is not None else None
+        option_name_cli = format_name_for_cli(option_name)
+        option_default: str | int | float | bool | None = (
+            option.default if option.default is not None else None
         )
-        cmd = click.option(
-            f"--{param_name}",
-            type=param.type,
-            default=param_default,
-            show_default=param.show_default,
-            required=param.required,
-            help=param.help,
-        )(cmd)
+        cmd_fn_with_obj = click.option(
+            f"--{option_name_cli}",
+            type=option.type,
+            default=option_default,
+            show_default=option.show_default,
+            required=option.required,
+            help=option.help,
+        )(cmd_fn_with_obj)
 
     # Transform the function into a Click command
-    cmd: click.core.Command = click.command(
+    cmd = click.command(
         name=format_name_for_cli(sequence.id),
         help=f"Run the sequence {sequence.id}: {sequence_str}",
-    )(cmd)
+    )(cmd_fn_with_obj)
 
     return cmd, format_name_for_cli(sequence.id)

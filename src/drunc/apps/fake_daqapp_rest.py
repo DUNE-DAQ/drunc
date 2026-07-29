@@ -11,14 +11,15 @@ import random
 import signal
 import threading
 import time
+from typing import NotRequired, TypedDict, cast
 from urllib.parse import urlparse
-from wsgiref.simple_server import make_server
+from wsgiref.simple_server import WSGIServer, make_server
 
 import click
 import conffwk
 import requests
 from flask import Flask, Response, request
-from flask_restful import Api, Resource
+from flask_restful import Api, Resource  # type: ignore[import-untyped]
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
@@ -27,6 +28,30 @@ from drunc.utils.utils import (
     get_root_logger,
     resolve_localhost_and_127_ip_to_network_ip,
 )
+
+# TypedDicts for execute_command request structure
+_CmdData = TypedDict(
+    "_CmdData",
+    {
+        "execution-time": int,
+        "seg_fault": int,
+        "throw": bool,
+    },
+    total=False,
+)
+
+
+class CommandRequest(TypedDict):
+    """Expected structure for incoming DAQ application command requests."""
+
+    entry_state: str
+    exit_state: str
+    id: str
+    data: NotRequired[_CmdData]
+
+
+_CommandResult = tuple[str, int]
+
 
 __version__ = "1.0.0"
 
@@ -60,8 +85,12 @@ class AppState:
         self.log = get_logger("fake_daqapp_rest.AppState", log_level="INFO")
 
     def send_response_to_response_listener(
-        self, address: str, txt: str, success: bool = True, data: dict = {}
-    ):
+        self,
+        address: str,
+        txt: str,
+        success: bool = True,
+        data: dict[str, object] | None = None,
+    ) -> None:
         """
         Send a response to the response listener.
 
@@ -84,7 +113,7 @@ class AppState:
             "success": success,
             "result": txt,
             "appname": self.appname,
-            "data": data,
+            "data": data or {},
         }
 
         self.log.info(f"Sending RESPONSE to {address}, data: {data_to_send}")
@@ -103,10 +132,10 @@ class AppState:
 
     def execute_command(
         self,
-        req_data: dict[str, str | dict],
+        req_data: CommandRequest,
         answer_port: str,
         answer_host: str | None,
-        remote_host: str,
+        remote_host: str | None,
     ) -> Response:
         """
         Execute a command received from the command facility.
@@ -147,14 +176,15 @@ class AppState:
         reply_address = (
             f"http://{answer_host}:{answer_port}/response"
             if answer_host
-            else f"{remote_host}:{answer_port}/response"
+            else f"{remote_host or 'localhost'}:{answer_port}/response"
         )
 
         # Extract the relevant information from the command data
         entry_state = req_data["entry_state"]
         exit_state = req_data["exit_state"]
         command_id = req_data["id"]
-        data = req_data.get("data", {})
+        raw_data = req_data.get("data")
+        data: _CmdData = raw_data if raw_data is not None else {}
 
         # If the app is already executing a command, it should not execute another one.
         # Send a response to the response listener indicating that it is busy
@@ -169,7 +199,7 @@ class AppState:
                 txt=response_txt,
                 success=False,
             )
-            return
+            return Response("Already executing a command!\n", status=202)
 
         # Determine the time the command should take to execute. If not specified in the
         # data, it will be a random time between 1 and 5 seconds. We also determine a
@@ -195,7 +225,7 @@ class AppState:
                 address=reply_address,
                 txt=info,
             )
-            return
+            return Response(f"{info}\n", status=202)
 
         # Execute the command, and mark the app as busy executing a command to prevent
         # concurrent executions.
@@ -219,7 +249,7 @@ class AppState:
             time.sleep(worries)
             app_execution_info = (
                 "This is an eRrOr, YoU hAvE bEeN vErY nAuGhTy (aka task failed "
-                "successfully)",
+                "successfully)"
             )
             self.log.info(app_execution_info)
             self.send_response_to_response_listener(
@@ -228,14 +258,13 @@ class AppState:
                 txt=app_execution_info,
             )
             self.executing_command = False
-            return
+            return Response(f"{app_execution_info}\n", status=202)
 
         # FAILURE TESTING - CMD TIMEOUT
         # For testing purposes, we can delay the execution of the command to simulate a
         # long running command and test timeouts in the run control
-        ft_fsm_timeout = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
-        if ft_fsm_timeout:
-            ft_fsm_timeout = int(ft_fsm_timeout)
+        ft_fsm_timeout_raw = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT")
+        ft_fsm_timeout = int(ft_fsm_timeout_raw) if ft_fsm_timeout_raw else None
         ft_fsm_timeout_cmd = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_CMD")
         ft_fsm_timeout_app_name = os.getenv("DRUNC_FT_FSM_CMD_TIMEOUT_APP_NAME")
         if (
@@ -254,17 +283,19 @@ class AppState:
         # command. Thisserves uniquely to test the robustness of the Run Control when an
         # app exits upon running an applciation, and should not be used for any other
         # purpose.
-        ft_fsm_death_cmd: bool = os.getenv("DRUNC_FT_FSM_CMD_DEATH_CMD", False)
-        if ft_fsm_death_cmd:
-            ft_fsm_death_cmd = ft_fsm_death_cmd.strip('"').strip("'") == req_data["id"]
+        ft_fsm_death_cmd_raw = os.getenv("DRUNC_FT_FSM_CMD_DEATH_CMD", "")
+        ft_fsm_death_cmd = False
+        if ft_fsm_death_cmd_raw:
+            ft_fsm_death_cmd = (
+                ft_fsm_death_cmd_raw.strip('"').strip("'") == req_data["id"]
+            )
         self.log.debug(f"{ft_fsm_death_cmd=}")
 
-        ft_fsm_death_app_name: bool = os.getenv(
-            "DRUNC_FT_FSM_CMD_DEATH_APP_NAME", False
-        )
-        if ft_fsm_death_app_name:
+        ft_fsm_death_app_name_raw = os.getenv("DRUNC_FT_FSM_CMD_DEATH_APP_NAME", "")
+        ft_fsm_death_app_name = False
+        if ft_fsm_death_app_name_raw:
             ft_fsm_death_app_name = (
-                ft_fsm_death_app_name.strip('"').strip("'") == self.appname
+                ft_fsm_death_app_name_raw.strip('"').strip("'") == self.appname
             )
         self.log.debug(f"{ft_fsm_death_app_name=}")
 
@@ -296,7 +327,7 @@ class AppState:
         # Update app state, and mark as not busy
         self.state = exit_state.upper()
         self.executing_command = False
-        return
+        return Response(f"{app_execution_info}\n", status=202)
 
 
 """
@@ -304,7 +335,7 @@ Resources for Flask app
 """
 
 
-class AppCommand(Resource):
+class AppCommand(Resource):  # type: ignore[misc, no-any-unimported]
     """
     Flask interface for the fake daq app.
 
@@ -313,7 +344,7 @@ class AppCommand(Resource):
     """
 
     @classmethod
-    def pass_daq_app(cls, daq_app) -> type["AppCommand"]:
+    def pass_daq_app(cls, daq_app: AppState) -> type["AppCommand"]:
         """
         Interface to pass the daq_app instance to the Flask resource, since Flask
         doesn't allow to pass arguments to the resource constructor.
@@ -321,7 +352,7 @@ class AppCommand(Resource):
         cls.daq_app = daq_app
         return cls
 
-    def post(self) -> (str, int):
+    def post(self) -> _CommandResult:
         """
         Endpoint to receive commands from the command facility. The command data should
         be sent in a JSON format, with the following structure:
@@ -344,6 +375,11 @@ class AppCommand(Resource):
         except:
             return "Not a JSON command!\n", 406
 
+        if not isinstance(data, dict):
+            return "JSON command must be an object!\n", 406
+
+        command_data = cast(CommandRequest, data)
+
         log = get_logger("fake_daqapp_rest.AppCommand")
         log.info(f"GET request with args: {data}")
 
@@ -354,7 +390,7 @@ class AppCommand(Resource):
         thread = threading.Thread(
             target=self.daq_app.execute_command,
             kwargs={
-                "req_data": cp.deepcopy(data),
+                "req_data": cp.deepcopy(command_data),
                 "answer_port": request.headers["X-Answer-Port"],
                 "answer_host": request.headers.get("X-Answer-Host"),
                 "remote_host": request.remote_addr,
@@ -368,7 +404,7 @@ class AppCommand(Resource):
 # Helper functions
 def update_connectivity_service(
     name: str, connectivity_service: ConnectivityServiceClient, interval: int, url: str
-):
+) -> None:
     """
     Function to continuously update the connectivity service with the address of the
     app, to simulate the behaviour of a real DAQ application that is continuously
@@ -399,7 +435,7 @@ def update_connectivity_service(
         time.sleep(interval)
 
 
-def index():
+def index() -> str:
     """
     Endpoint to check if the app is running, can be used in the tests to wait for the
     app to be ready before sending commands to it.
@@ -416,7 +452,7 @@ def index():
     return f"Fake DAQ app v{__version__}"
 
 
-def get_address(hostname: str):
+def get_address(hostname: str) -> str:
     """
     Gets a new address for the application, by finding an available port.
 
@@ -466,7 +502,7 @@ def get_address(hostname: str):
 def main(
     name: str,
     configurationservice: str,
-    commandfacility: str,
+    commandfacility: str | None,
     informationservice: str,
     log_level: str,
     partition: str,
@@ -477,7 +513,7 @@ def main(
     # serves uniquely to test the robustness of the Run Control when an app fails to
     # initialize, and should not be used for any other purpose. The environment variable
     # is set in the configuration file that tests this behaviour.
-    if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT", None):
+    if os.getenv("DRUNC_PROCESS_DEATH_ON_BOOT"):
         log.info("Sleeping to allow intiialization timeout")
         time.sleep(20)
         log.warning("Simulating failure during initialization")
@@ -510,7 +546,10 @@ def main(
 
     log.debug(f"Initializing fake_daq_application with address {url}")
     if url.port == 0:
-        url = get_address(url.hostname)
+        if not url.hostname:
+            log.exception("No hostname in command facility URL")
+            exit(1)
+        url = urlparse(get_address(url.hostname))
     log.info(f"Communication address is {url}")
 
     interval = 2
@@ -523,7 +562,7 @@ def main(
     ft_die_on_boot: bool = (
         os.getenv("DRUNC_FT_PROCESS_DEATH_ON_BOOT", "false").lower() == "true"
     )
-    ft_app_to_die_boot: str = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", None)
+    ft_app_to_die_boot = os.getenv("DRUNC_FT_PROCESS_DEATH_BOOT_APP_NAME", "")
     if ft_die_on_boot and ft_app_to_die_boot == name:
         log.warning(f"Simulating death of {name} on boot")
         exit(1)
@@ -535,11 +574,11 @@ def main(
 
     connectivity_service_thread = threading.Thread(
         target=update_connectivity_service,
-        args=(name, connectivity_service, interval, url),
+        args=(name, connectivity_service, interval, url.geturl()),
         name="connectivity_service_updating_thread",
     )
 
-    def terminate(*args):  # Accept args for signal handlers
+    def terminate(*args: object) -> None:  # Accept args for signal handlers
         for s in [signal.SIGTERM, signal.SIGQUIT]:
             if signal.getsignal(s) in args:
                 log.warning(f"Received termination signal {s}, shutting down {name}...")
@@ -549,7 +588,8 @@ def main(
         # 2. Close connections explicitly
         if "server" in server_container:
             try:
-                server_container["server"].server_close()
+                server = server_container["server"]
+                server.server_close()
             except:
                 pass
 
@@ -560,7 +600,7 @@ def main(
         log.info("Shutdown complete. Exiting.")
         os._exit(1)
 
-    def terminate_signal_process(signum, sigframe):
+    def terminate_signal_process(signum: int, sigframe: object) -> None:
         log.warning(f"Received signal {signum}, terminating process")
         terminate()
 
@@ -574,8 +614,15 @@ def main(
     server_ready = threading.Event()
     shutdown_event = threading.Event()
 
-    def run_flask_app(app, host, port, event, server_container):
+    def run_flask_app(
+        app: Flask,
+        host: str,
+        port: int,
+        event: threading.Event,
+        server_container: dict[str, WSGIServer],
+    ) -> None:
         server = make_server(host, port, app)
+        server_container["server"] = server
         server.timeout = 0.5
         event.set()
 
@@ -587,10 +634,14 @@ def main(
         server.shutdown()
         server.server_close()
 
-    url = urlparse(url)
+    url = urlparse(url) if isinstance(url, str) else url
     flask_url = url.geturl().replace("rest://", "http://")
 
-    server_container = {}
+    if not url.hostname or url.port is None:
+        log.error("Invalid command facility URL: missing hostname or port")
+        exit(1)
+
+    server_container: dict[str, WSGIServer] = {}
     flask_thread = threading.Thread(
         target=run_flask_app,
         kwargs={

@@ -1,4 +1,34 @@
-from typing import Any
+from typing import Protocol
+
+from drunc.grpc_testing_tools.available_grpc_servers import ServerType
+
+
+class TargetFunc(Protocol):
+    """Callable target used to launch a server process."""
+
+    def __call__(self, *args: object, **kwargs: object) -> object: ...
+
+
+class ProcessLike(Protocol):
+    """Minimal process API required by connection managers."""
+
+    def start(self) -> object: ...
+
+    def is_alive(self) -> bool: ...
+
+    def terminate(self) -> object: ...
+
+    def kill(self) -> object: ...
+
+    def join(self, timeout: float | None = None) -> object: ...
+
+
+class EventLike(Protocol):
+    """Minimal event API used for readiness/stop coordination."""
+
+    def set(self) -> object: ...
+
+    def is_set(self) -> bool: ...
 
 
 class RunningGrpcServer:
@@ -7,7 +37,13 @@ class RunningGrpcServer:
     The server could have been started via any supported method (multiprocessing, SSH, etc.)
     """
 
-    def __init__(self, process_id: str, target_func: Any, args: tuple, kwargs: dict):
+    def __init__(
+        self,
+        process_id: str,
+        target_func: TargetFunc,
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+    ) -> None:
         """
         Initialise process handle with execution parameters.
 
@@ -21,15 +57,15 @@ class RunningGrpcServer:
         self.target_func = target_func
         self.args = args
         self.kwargs = kwargs
-        self._process = None
+        self._process: ProcessLike | None = None
         self._started = False
-        self.startup_error = None
-        self.host = None
-        self.server_id = None
-        self.port = None
-        self.server_type = None
-        self.ready_event = None
-        self.stop_event = None
+        self.startup_error: Exception | None = None
+        self.host: str | None = None
+        self.server_id: str | None = None
+        self.port: int | None = None
+        self.server_type: str | ServerType | None = None
+        self.ready_event: EventLike | None = None
+        self.stop_event: EventLike | None = None
 
     def is_valid(self) -> bool:
         """Check if the process handle is valid"""
@@ -48,11 +84,11 @@ class RunningGrpcServer:
         return self._started
 
     @property
-    def process(self) -> Any:
+    def process(self) -> ProcessLike | None:
         """Get the underlying process object (implementation-specific)."""
         return self._process
 
-    def set_process(self, process: Any) -> None:
+    def set_process(self, process: ProcessLike) -> None:
         """Set the underlying process object."""
         self._process = process
 
@@ -61,7 +97,7 @@ class RunningGrpcServer:
         self._started = True
 
     def set_server_info(
-        self, server_id: str, host: str, port: int, server_type: str
+        self, server_id: str, host: str, port: int, server_type: str | ServerType
     ) -> None:
         """Set the server information for this process."""
         self.server_id = server_id

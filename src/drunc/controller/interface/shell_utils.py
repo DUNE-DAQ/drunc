@@ -9,6 +9,7 @@ import time
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from typing import Protocol, TypeAlias
 from urllib.parse import urlparse
 
 import click
@@ -59,6 +60,13 @@ class StatusDescriptionPair:
     description: DescribeResponse | None = None
 
 
+class FSMExecutionResponseLike(Protocol):
+    name: str
+    flag: int
+    fsm_flag: int
+    children: Sequence["FSMExecutionResponseLike"]
+
+
 def match_children(
     statuses: Sequence[StatusResponse], descriptions: Sequence[DescribeResponse]
 ) -> dict[str, StatusDescriptionPair]:
@@ -77,7 +85,7 @@ def get_status_table(
     describe_response: DescribeResponse,
     display_host_overrides: dict[str, str] | None = None,
     show_ip_address: bool = False,
-):
+) -> Table | Group:
     status = status_response.status
     description = describe_response.description
 
@@ -103,7 +111,7 @@ def get_status_table(
         status_response: StatusResponse,
         describe_response: DescribeResponse,
         prefix: str,
-    ):
+    ) -> None:
         status = status_response.status
         description = describe_response.description
         if status is None or description is None:
@@ -184,7 +192,7 @@ def get_status_table(
 
     add_status_to_table(t, status_response, describe_response, "")
 
-    def add_runinfo_to_table(table: Table, status: Status):
+    def add_runinfo_to_table(table: Table, status: Status) -> None:
         table.add_row("Run number", str(status.run_info.run_number))
         table.add_row("Run type", status.run_info.run_type)
         table.add_row(
@@ -218,12 +226,12 @@ def get_status_table(
 
 
 def render_status_table(
-    ctx: ControllerContext,
+    ctx: ControllerContext | UnifiedShellContext,
     target: str = "",
     execute_along_path: bool = True,
     execute_on_all_subsequent_children_in_path: bool = True,
     show_ip_address: bool = False,
-):
+) -> Table | Group:
     statuses = ctx.get_driver("controller").status(
         target=target,
         execute_along_path=execute_along_path,
@@ -244,7 +252,13 @@ def render_status_table(
 
 
 class StatusTableUpdater(Progress):
-    def __init__(self, ctx, refresh_per_second=2, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        ctx: ControllerContext | UnifiedShellContext,
+        refresh_per_second: float = 2,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
         self.ctx = ctx
         self.update_table()
 
@@ -257,7 +271,7 @@ class StatusTableUpdater(Progress):
 
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
-    def update_table(self):
+    def update_table(self) -> None:
         self.table = render_status_table(self.ctx)
 
     def get_renderable(self) -> ConsoleRenderable | RichCast | str:
@@ -265,8 +279,10 @@ class StatusTableUpdater(Progress):
         return renderable
 
 
-def controller_cleanup_wrapper(ctx):
-    def controller_cleanup():
+def controller_cleanup_wrapper(
+    ctx: ControllerContext | UnifiedShellContext,
+):
+    def controller_cleanup() -> None:
         log = logging.getLogger("controller.shell_utils")
         dead = False
         who = ""
@@ -297,7 +313,9 @@ def controller_cleanup_wrapper(ctx):
     return controller_cleanup
 
 
-def controller_setup(ctx, controller_address):
+def controller_setup(
+    ctx: ControllerContext | UnifiedShellContext, controller_address: str
+) -> Description:
     log = logging.getLogger("controller.shell_utils")
     if not hasattr(ctx, "took_control"):
         raise DruncSetupException(
@@ -390,7 +408,9 @@ def controller_setup(ctx, controller_address):
     return desc
 
 
-def search_fsm_command(command_name: str, command_list: list[FSMCommand]):
+def search_fsm_command(
+    command_name: str, command_list: list[FSMCommand]
+) -> FSMCommand | None:
     for command in command_list:
         if command_name == command.name:
             return command
@@ -433,13 +453,17 @@ class UnhandledArguments(ArgumentException):
         super(UnhandledArguments, self).__init__(message)
 
 
-def format_bool(b, format=["dark_green", "red"], false_is_good=False):
+def format_bool(
+    b: bool,
+    format: Sequence[str] = ("dark_green", "red"),
+    false_is_good: bool = False,
+) -> str:
     index_true = 0 if not false_is_good else 1
     index_false = 1 if not false_is_good else 0
     return f"[{format[index_true]}]Yes[/]" if b else f"[{format[index_false]}]No[/]"
 
 
-def tree_prefix(i, n):
+def tree_prefix(i: int, n: int) -> str:
     first_one = "└── "
     first_many = "├── "
     next = "├── "
@@ -457,7 +481,7 @@ def tree_prefix(i, n):
 def validate_and_format_fsm_arguments(
     arguments: dict[str, int | bool | str | float | None] | None,
     command_arguments: list[Argument],
-) -> dict[str, int | bool | str | float | None]:
+) -> dict[str, any_pb2.Any]:
     """
     Validates and formats the arguments passed to an FSM command based on the command's
     argument descriptions.
@@ -478,7 +502,7 @@ def validate_and_format_fsm_arguments(
 
     # Define the output dict that will be sent to the controller, with argument names
     # and their formatted values
-    out_dict: dict[str, any_pb2] = {}
+    out_dict: dict[str, any_pb2.Any] = {}
 
     # Strip out any arguments that are None, as they are considered not passed, and will
     # be set to default values if they exist, or raise an error if they are mandatory
@@ -492,7 +516,6 @@ def validate_and_format_fsm_arguments(
     for argument_desc in command_arguments:  #  type: Argument
         aname: str = argument_desc.name
         atype: str = Argument.Type.Name(argument_desc.type)
-        adefa: str | int | float | bool | None = argument_desc.default_value
 
         # Check for duplicate arguments
         if aname in out_dict:
@@ -508,7 +531,8 @@ def validate_and_format_fsm_arguments(
         # If the argument is not passed, and it has a default value, use the default value
         value: str | int | float | bool | None = arguments.get(aname)
         if value is None:
-            out_dict[aname] = adefa
+            if argument_desc.HasField("default_value"):
+                out_dict[aname] = argument_desc.default_value
             continue
 
         # Convert the argument value to the appropriate type based on the argument
@@ -545,7 +569,9 @@ def validate_and_format_fsm_arguments(
     return out_dict
 
 
-def collect_not_ready(response, found=None):
+def collect_not_ready(
+    response: StatusResponse, found: list[str] | None = None
+) -> list[str]:
     if found is None:
         found = []
 
@@ -629,7 +655,7 @@ def run_one_fsm_command(
     else:
 
         class DummyCommand:
-            pass
+            arguments: list[Argument]
 
         command_desc = DummyCommand()
         command_desc.arguments = []
@@ -739,7 +765,9 @@ def run_one_fsm_command(
     t.add_column("Command execution")
     t.add_column("FSM transition")
 
-    def bool_to_success(flag_message, message_type):
+    def bool_to_success(
+        flag_message: int, message_type: type[ResponseFlag] | type[FSMResponseFlag]
+    ) -> str:
         flag = message_type.Name(flag_message).replace("_", " ").title()
         success = False
 
@@ -756,7 +784,9 @@ def run_one_fsm_command(
 
         return f"[dark_green]{flag}[/]" if success else f"[red]{flag}[/]"
 
-    def add_to_table(table, response, prefix=""):
+    def add_to_table(
+        table: Table, response: FSMExecutionResponseLike, prefix: str = ""
+    ) -> None:
         executed_command = response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY
 
         table.add_row(
@@ -795,7 +825,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     """
 
     # Construct the partial command executing the defined FSM command with click options
-    cmd: functools.partial = functools.partial(
+    cmd = functools.partial(
         run_one_fsm_command,
         controller_name=controller_name,
         transition_name=transition.name,
@@ -809,7 +839,8 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     )(cmd)
 
     # Define the mapping of gRPC argument types to click types
-    type_map: dict[int, str | int | float | bool] = {
+    ClickValueType: TypeAlias = type[str] | type[int] | type[float] | type[bool]
+    type_map: dict[int, ClickValueType] = {
         Argument.Type.STRING: str,
         Argument.Type.INT: int,
         Argument.Type.FLOAT: float,
@@ -818,7 +849,10 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
 
     # Define the mapping of gRPC argument types to their corresponding protobuf message
     # types for default value unpacking
-    msg_map: dict(any_pb2) = {
+    ProtobufScalarMsgType: TypeAlias = (
+        type[string_msg] | type[int_msg] | type[float_msg] | type[bool_msg]
+    )
+    msg_map: dict[ClickValueType, ProtobufScalarMsgType] = {
         str: string_msg,
         int: int_msg,
         float: float_msg,
@@ -830,7 +864,7 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     for argument in transition.arguments:  # type: Argument
         # Map the gRPC argument type to a click type, raise an exception if the type is
         # unhandled
-        atype: Argument.Type.V = type_map.get(argument.type)
+        atype = type_map.get(argument.type)
         if not atype:
             raise Exception(f"Unhandled argument type '{argument.type}'")
 

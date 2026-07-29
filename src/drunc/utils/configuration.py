@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from enum import Enum
-from typing import cast
+from typing import Protocol, cast
 
 import conffwk
 
@@ -24,6 +24,10 @@ class ConfTypes(Enum):
     JsonFileName = 2
     ProtobufAny = 3
     OKSFileName = 4
+
+
+class _OksDbProtocol(Protocol):
+    def get_dal(self, class_name: str, uid: str) -> object: ...
 
 
 def CLI_to_ConfTypes(scheme: str) -> ConfTypes:
@@ -244,7 +248,7 @@ class ConfHandler:
             self.log.debug(f"Using {self.oks_path} to configure")
             self.db = conffwk.Configuration(self.oks_path)
             assert self.oks_key is not None, "OKS key is required for OKS configuration"
-            return self.db.get_dal(
+            return cast(_OksDbProtocol, self.db).get_dal(
                 class_name=self.oks_key.class_name, uid=self.oks_key.obj_uid
             )
 

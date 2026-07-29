@@ -1,6 +1,7 @@
 import getpass
 import sys
 from functools import update_wrapper
+from typing import Callable, ParamSpec, TypeVar, cast
 
 import click
 from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
@@ -22,9 +23,12 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc.unified_shell.context import UnifiedShellMode
+from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 @click.command("boot")
@@ -48,10 +52,10 @@ from drunc.utils.utils import get_logger
 )
 @click.pass_obj
 def boot(
-    obj: ProcessManagerContext,
+    obj: UnifiedShellContext,
     override_logs: bool | None,
-    controller_log_level: bool | None,
-    sleep_between_app_boot: int | float = 0,
+    controller_log_level: str | None,
+    sleep_between_app_boot: float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
     log_pm_cmd(obj)
@@ -86,8 +90,11 @@ def boot(
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
-        expected_booted_processes = sum(1 for _ in results)
+        if results is None:
+            log.error("Boot request did not return any results.")
+            return
         for result in results:
+            expected_booted_processes += 1
             log.critical(
                 f"Booting process: {result.values[0].process_description.metadata.name}"
             )
@@ -313,7 +320,7 @@ def log_on_server(
 )
 @click.pass_obj
 @click.pass_context
-def terminate(ctx, obj, width):
+def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
     session
@@ -335,64 +342,71 @@ def terminate(ctx, obj, width):
     obj.delete_driver("controller")
 
 
-def session_injector(f):
+def session_injector(f: Callable[P, R]) -> Callable[P, R]:
     @click.pass_context
-    def wrapper(ctx, *args, **kwargs):
+    def wrapper(ctx: click.core.Context, *args: P.args, **kwargs: P.kwargs) -> R:
         kwargs["session"] = ctx.obj.session_name
         return ctx.invoke(f, *args, **kwargs)
 
-    return update_wrapper(wrapper, f)
+    return cast(Callable[P, R], update_wrapper(wrapper, f))
 
 
 @click.command("ps")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @ps_decorators
-def ps(obj, query, long_format, width):
+def ps(
+    obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
+) -> None:
     log_pm_cmd(obj)
-    return ps_impl(obj, query, long_format, width)
+    ps_impl(cast(ProcessManagerContext, obj), query, long_format, width)
 
 
 @click.command("logs")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @logs_decorators
-def logs(obj, how_far, grep, query):
+def logs(
+    obj: UnifiedShellContext,
+    how_far: int,
+    grep: str | None,
+    query: ProcessQuery,
+) -> None:
     log_pm_cmd(obj)
-    return logs_impl(obj, how_far, grep, query)
+    logs_impl(cast(ProcessManagerContext, obj), how_far, grep or "", query)
 
 
 @click.command("kill")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
-def kill(obj, query, width):
+def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    return kill_impl(obj, query, width)
+    kill_impl(cast(ProcessManagerContext, obj), query, width)
 
 
 @click.command("flush")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
-def flush(obj, query, width):
+def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    return flush_impl(obj, query, width)
+    flush_impl(cast(ProcessManagerContext, obj), query, width)
 
 
 @click.command("restart")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @click.pass_obj
-def restart(obj, query):
+def restart(obj: UnifiedShellContext, query: ProcessQuery) -> None:
     log_pm_cmd(obj)
-    return restart_impl(obj, query)
+    restart_impl(cast(ProcessManagerContext, obj), query)
 
 
 @click.command("start-shell")
 @click.pass_obj
 @click.pass_context
-def start_shell(ctx, obj):
+def start_shell(ctx: click.core.Context, obj: UnifiedShellContext) -> None:
     """
     Start an interactive shell session.
 
