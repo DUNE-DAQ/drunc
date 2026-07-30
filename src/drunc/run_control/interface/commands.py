@@ -5,7 +5,7 @@ These are intended primarily for use with the run control shell.
 """
 
 import click
-from druncschema.generic_pb2 import OutcomeFlag
+from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.process_manager.interface.commands import logs_decorators
 from drunc.run_control.interface.context import RunControlContext
@@ -183,7 +183,7 @@ def log_on_server(obj: RunControlContext, msg: str, log_level: str) -> None:
     # Send the request to the run control server.
     result = obj.get_driver("run_control").log_on_server(msg=msg, log_level=log_level)
 
-    if result == OutcomeFlag.NOT_EXECUTED_NOT_IMPLEMENTED:
+    if result == ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED:
         log.error(f"The requested level {log_level} is not recognised, did not log.")
     return
 

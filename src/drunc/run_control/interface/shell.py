@@ -58,6 +58,9 @@ def run_control_shell(
         ctx.obj.get_driver(
             "run_control"
         ).validate_communication()  # TODO- assign the outcome and validate it
+        rc_log.info(
+            f"Successfully connected to the run control server at [green]{run_control_address}[/green]"
+        )
     except ServerUnreachable as e:
         rc_log.critical("Could not connect to the process manager")
         rc_log.exception(

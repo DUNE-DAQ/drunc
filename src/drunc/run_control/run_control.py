@@ -1,4 +1,5 @@
-from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
+from druncschema.generic_pb2 import OutcomeFlag
+from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.run_control_pb2 import (
     DeploySessionResponseFlag,
     EndSessionRequest,
@@ -46,10 +47,12 @@ class RunControl(RunControlServicer):
         self, request: ValidateSessionRequest, context: RunControlContext
     ) -> ValidateSessionResponse:
         self.log.info(
-            "This will require a check with the session manager server to vlaidate that there is nothing wrong with the session name"
+            "This will require a check with the session manager server to validate that "
+            "there is nothing wrong with the session name"
         )
         self.log.info(
-            "Once the session name is validated, resource manager checks will be ran, but the resource manager currently does not exist"
+            "Once the session name is validated, resource manager checks will be ran, "
+            "but the resource manager currently does not exist"
         )
         return ValidateSessionResponse(
             token=request.token, result=DeploySessionResponseFlag.FAILURE_OTHER
@@ -62,11 +65,13 @@ class RunControl(RunControlServicer):
         Log the message on the server with the specified severity level.
 
         Args:
-            request (LogOnServerRequest): The request containing the log message and severity level.
+            request (LogOnServerRequest): The request containing the log message and
+                severity level.
             context (RunControlContext): The gRPC context.
 
         Returns:
-            LogOnServerResponse: The response indicating the outcome of the logging operation.
+            LogOnServerResponse: The response indicating the outcome of the logging
+                operation.
 
         Raises:
             TODO: ValueError: If the severity level is not recognized.
@@ -79,10 +84,12 @@ class RunControl(RunControlServicer):
         # Log the message using the appropriate logging method
         if log_method:
             log_method(request.text)
-            return OutcomeStatus(token=request.token, status=OutcomeFlag.SUCCESS)
+            return LogOnServerResponse(
+                token=request.token, flag=ResponseFlag.EXECUTED_SUCCESSFULLY
+            )
 
-        return OutcomeStatus(
-            token=request.token, status=OutcomeFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+        return LogOnServerResponse(
+            token=request.token, flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
         )
 
         # Return a response indicating the outcome of the logging operation
@@ -90,7 +97,9 @@ class RunControl(RunControlServicer):
     def validate_communication(
         self, request: ValidateCommunicationRequest, context: RunControlContext
     ) -> ValidateCommunicationResponse:
-        self.log.info(f"Received ValidateCommunication request: {request}")
+        self.log.info(
+            f"Received ValidateCommunication request from user [green]{request.token.user_name}[/]"
+        )
         return ValidateCommunicationResponse(
             token=request.token, status=OutcomeFlag.SUCCESS
         )
