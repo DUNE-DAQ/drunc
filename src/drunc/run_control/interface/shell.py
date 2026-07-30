@@ -5,6 +5,31 @@ import click
 import click_shell
 from daqpytools.logging import logging_log_levels
 
+from drunc.controller.interface.commands import (
+    connect,
+    disconnect,
+    echo,
+    exclude,
+    expert_command,
+    include,
+    recompute_status,
+    status,
+    surrender_control,
+    take_control,
+    who_am_i,
+    who_is_in_charge,
+)
+from drunc.process_manager.interface.commands import (
+    boot,
+    dummy_boot,
+    flush,
+    kill,
+    ps,
+    restart,
+    terminate,
+    wait,
+    # logs, # TODO: unify this convention
+)
 from drunc.run_control.interface.commands import (
     end_session,
     logs,
@@ -89,7 +114,39 @@ def run_control_shell(
 
     # Add commands to the shell
     run_control_commands = [validate_session, start_session, end_session, log, logs]
-    for cmd in run_control_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
+    process_manager_commands = [
+        boot,
+        dummy_boot,
+        flush,
+        kill,
+        logs,
+        ps,
+        restart,
+        terminate,
+        wait,
+    ]
+    controller_commands = [
+        connect,
+        disconnect,
+        echo,
+        exclude,
+        expert_command,
+        include,
+        recompute_status,
+        status,
+        surrender_control,
+        take_control,
+        wait,
+        who_am_i,
+        who_is_in_charge,
+    ]
+    all_run_control_commands = [
+        run_control_commands,
+        process_manager_commands,
+        controller_commands,
+    ]
+    for command_group in all_run_control_commands:
+        for command in command_group:
+            ctx.command.add_command(command, format_name_for_cli(command.name))
 
     rc_log.info("Ready")
