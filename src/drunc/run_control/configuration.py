@@ -14,7 +14,7 @@ class RunControlServerConfHandler:
 
 
 def get_run_control_server_configuration(
-    configuration: str,
+    configuration_file: str,
     port_override: int | None,
     log_path_override: str | None,
     override_logs: bool,
@@ -36,11 +36,11 @@ def get_run_control_server_configuration(
     Raises:
         FileNotFoundError: If the specified configuration file does not exist.
     """
-    resource = resources.files("drunc.data") / "run_control" / configuration
+    resource = resources.files("drunc.data") / "run_control" / configuration_file
     with resources.as_file(resource) as file_path:
         if not file_path.exists():
             raise FileNotFoundError(
-                f"Configuration file '{configuration}' not found in package data."
+                f"Configuration file '{configuration_file}' not found in package data."
             )
 
         # Import the data from the JSON file into a dictionary
