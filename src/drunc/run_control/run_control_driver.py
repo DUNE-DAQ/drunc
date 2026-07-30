@@ -1,5 +1,6 @@
 import grpc
 from druncschema.generic_pb2 import OutcomeFlag
+from druncschema.process_manager_pb2 import LogLines, LogRequest, ProcessQuery
 from druncschema.run_control_pb2 import (
     DeploySessionResponseFlag,
     EndSessionRequest,
@@ -163,3 +164,28 @@ class RunControlDriver:
         # Construct the request
         request = LogOnServerRequest(token=self.token, text=msg, severity=log_level)
         return self.stub.log_on_server(request, timeout=timeout).flag
+
+    def logs(self, grep: str, how_far: int, timeout: int | float = 60) -> LogLines:
+        """
+        Retrieve the logfile contents of the run control server.
+
+        Args:
+            grep (str): The message to log.
+            how_far (int): The number of lines to retrieve from the log file.
+
+        Returns:
+            OutcomeFlag: The outcome of the logging operation.
+
+        Raises:
+        """
+        # TODO: Implement the gRPC error handling
+        self.log.info("Running log_on_server")
+
+        # Construct the request
+        request = LogRequest(
+            token=self.token,
+            query=ProcessQuery(token=self.token, user=self.token.user_name),
+            how_far=how_far,
+        )
+        self.log.warning("Not yet implemented grep, ignoring for now.")
+        return self.stub.logs(request, timeout=timeout).flag

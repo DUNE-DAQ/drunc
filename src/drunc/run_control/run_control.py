@@ -1,9 +1,13 @@
+import os
+
 from druncschema.generic_pb2 import OutcomeFlag
+from druncschema.process_manager_pb2 import LogLines, LogRequest, ProcessUUID
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.run_control_pb2 import (
     DeploySessionResponseFlag,
     EndSessionRequest,
     EndSessionResponse,
+    EndSessionResponseFlag,
     LogOnServerRequest,
     LogOnServerResponse,
     StartSessionRequest,
@@ -35,6 +39,7 @@ class RunControl(RunControlServicer):
         self, request: StartSessionRequest, context: RunControlContext
     ) -> StartSessionResponse:
         self.log.info(f"Received StartSession request: {request}")
+        self.log.critical("Still requires implementation!")
         return StartSessionResponse(
             token=request.token,
             result=DeploySessionResponseFlag(status=DeploySessionResponseFlag.SUCCESS),
@@ -44,7 +49,11 @@ class RunControl(RunControlServicer):
         self, request: EndSessionRequest, context: RunControlContext
     ) -> EndSessionResponse:
         self.log.info(f"Received EndSession request: {request}")
-        return EndSessionResponse(token=request.token, result=OutcomeFlag.SUCCESS)
+        self.log.critical("Still requires implementation!")
+        return EndSessionResponse(
+            token=request.token,
+            result=EndSessionResponseFlag(status=EndSessionResponseFlag.SUCCESS),
+        )
 
     def validate_session(
         self, request: ValidateSessionRequest, context: RunControlContext
@@ -105,4 +114,28 @@ class RunControl(RunControlServicer):
         )
         return ValidateCommunicationResponse(
             token=request.token, status=OutcomeFlag.SUCCESS
+        )
+
+    def logs(self, request: LogRequest, context: RunControlContext) -> LogLines:
+        """
+        Get the logs of the run control service.
+
+        Args:
+            request (LogRequest): The request containing the log retrieval parameters.
+            context (RunControlContext): The gRPC context.
+
+        Returns:
+            LogLines: The response containing the retrieved log lines.
+
+        Raises:
+            TBC
+        """
+        self.log.info(f"Received Logs request: {request}")
+        self.log.critical("Still requires implementation!")
+        return LogLines(
+            name="run_control",
+            token=request.token,
+            uuid=ProcessUUID(uuid=str(os.getpid())),
+            lines=["Not yet, you've gotta wait a bit ;)"],
+            flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )

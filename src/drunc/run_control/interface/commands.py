@@ -56,12 +56,9 @@ def validate_session(
     log.info(f"\tSession Name: {session_name}")
 
     # TODO: Implement the actual validation logic here, including checks for existing sessions, resource availability, and configuration file validation.
-    session_valid = True  # Placeholder for actual validation result
+    # session_valid = True  # Placeholder for actual validation result
 
-    if session_valid:
-        log.info("Session validation successful, can proceed to start session.")
-    else:
-        log.error("Session validation failed. Please check the logs for details.")
+    log.critical("Still requires implementation!")
 
     return
 
@@ -137,7 +134,7 @@ def start_session(
         controller_log_level=controller_log_level,
         sleep_between_app_boot=sleep_between_app_boot,
     )
-
+    log.critical("Still requires implementation!")
     return
 
 
@@ -165,6 +162,8 @@ def end_session(
     """
     log = get_logger("run_control.iface.end_session")
     log.info(f"Received request to end session {session_name}.")
+    obj.get_driver("run_control").end_session(session_name=session_name)
+    log.critical("Still requires implementation!")
     return
 
 
@@ -202,19 +201,21 @@ def log_on_server(obj: RunControlContext, msg: str, log_level: str) -> None:
 
 @click.command("logs", help="Retrieve the logs of the run control server.")
 @logs_decorators
-@click.pass_obj
 def logs(obj: RunControlContext, grep: str, how_far: int) -> None:
     """
-    Send a message to be logged on the run control server.
+    Retrieve the contents of the run control server logs.
 
     Args:
-        msg: The message to log.
-        log_level: The severity of the message to log on the run control server.
+        grep: A string to filter the logs by.
+        how_far: How many lines of logs to retrieve.
 
     Returns:
         None
     """
     # TODO - extend this to get the run control logs per session too!
     log = get_logger("run_control.iface.logs")
-    log.waring("Not implemented yet, prioritized writing the core implementation.")
+    log.info("Received request to logs.")
+
+    # Send the request to the run control server.
+    obj.get_driver("run_control").logs(grep=grep, how_far=how_far)
     return
