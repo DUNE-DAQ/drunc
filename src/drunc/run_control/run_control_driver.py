@@ -1,6 +1,14 @@
 import grpc
 from druncschema.generic_pb2 import OutcomeFlag
-from druncschema.run_control_pb2 import LogOnServerRequest
+from druncschema.run_control_pb2 import (
+    DeploySessionResponseFlag,
+    EndSessionRequest,
+    EndSessionResponseFlag,
+    LogOnServerRequest,
+    StartSessionRequest,
+    ValidateCommunicationRequest,
+    ValidateSessionRequest,
+)
 from druncschema.run_control_pb2_grpc import RunControlStub
 from druncschema.token_pb2 import Token
 
@@ -19,21 +27,112 @@ class RunControlDriver:
         self.stub = RunControlStub(self.channel)
         self.token = copy_token(token)
 
-    def validate_session(self):
+    def validate_session(
+        self,
+        process_manager: str,
+        path_to_configuration_file: str,
+        session_id: str,
+        session_name: str,
+    ) -> DeploySessionResponseFlag:
+        """
+        Validate the session's requirements.
+
+        Args:
+            process_manager (str): The name of the process manager.
+            path_to_configuration_file (str): The path to the configuration file.
+            session_id (str): The session ID to validate.
+            session_name (str): The name of the session that will be used.
+
+        Returns:
+            DeploySessionResponseFlag: The response flag indicating the result of the validation.
+        """
         self.log.info("Running validate_session")
-        pass
 
-    def start_session(self):
+        # Construct the request
+        request = ValidateSessionRequest(
+            token=self.token,
+            process_manager=process_manager,
+            path_to_configuration_file=path_to_configuration_file,
+            session_id=session_id,
+            session_name=session_name,
+        )
+
+        return self.stub.validate_session(request).result.status
+
+    def start_session(
+        self,
+        process_manager: str,
+        path_to_configuration_file: str,
+        session_id: str,
+        session_name: str,
+    ) -> DeploySessionResponseFlag:
+        """
+        Start the session.
+
+        Args:
+            process_manager (str): The name of the process manager.
+            path_to_configuration_file (str): The path to the configuration file.
+            session_id (str): The session ID to validate.
+            session_name (str): The name of the session that will be used.
+
+        Returns:
+            DeploySessionResponseFlag: The response flag indicating the result of the validation.
+        """
         self.log.info("Running start_session")
-        pass
 
-    def end_session(self):
+        # Construct the request
+        request = StartSessionRequest(
+            token=self.token,
+            process_manager=process_manager,
+            path_to_configuration_file=path_to_configuration_file,
+            session_id=session_id,
+            session_name=session_name,
+        )
+
+        return self.stub.validate_session(request).result.status
+
+    def end_session(self, session_name: str) -> EndSessionResponseFlag:
+        """
+        End the session.
+
+        Args:
+            session_name (str): The name of the session to terminate.
+
+        Returns:
+            EndSessionResponseFlag: The response flag indicating the result of ending the session.
+
+        """
         self.log.info("Running end_session")
-        pass
 
-    def validate_communication(self):
+        # TODO: Implement a check for whether the session exists in the session manager
+        # registry
+
+        # Construct the request
+        request = EndSessionRequest(token=self.token, session_name=session_name)
+
+        return self.stub.end_session(request).result.status
+
+    def validate_communication(self) -> OutcomeFlag:
+        """
+        Establish communication with the run control server and validate the connection.
+
+        Args:
+            None
+
+        Returns:
+            OutcomeFlag: The outcome of the communication validation.
+
+        Raises:
+            None
+        """
         self.log.info("Running validate_communication")
-        pass
+
+        # Construct the request
+        # TODO:  Add a catch to map the response to the OutcomeFlag enum and handle any
+        # gRPC errors that may occur
+        request = ValidateCommunicationRequest(token=self.token)
+
+        return self.stub.validate_communication(request).status
 
     def log_on_server(
         self, msg: str, log_level: str = "INFO", timeout: int | float = 60
@@ -55,5 +154,4 @@ class RunControlDriver:
 
         # Construct the request
         request = LogOnServerRequest(token=self.token, text=msg, severity=log_level)
-        response = self.stub.log_on_server(request, timeout=timeout)
-        return response.flag
+        return self.stub.log_on_server(request, timeout=timeout).flag
