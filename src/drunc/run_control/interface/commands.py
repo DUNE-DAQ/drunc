@@ -121,11 +121,23 @@ def start_session(
         dict[str, str]: A dictionary containing the endpoint addresses.
     """
     log = get_logger("run_control.iface.start_session")
-    log.info("Received request to start session with the following parameters:")
+    log.info("Sending request to start session with the following parameters:")
     log.info(f"\tProcess Manager: {process_manager}")
     log.info(f"\tConfiguration File: {configuration_file}")
     log.info(f"\tSession ID: {session_id}")
     log.info(f"\tSession Name: {session_name}")
+
+    # Send the request to the run control server.
+    obj.get_driver("run_control").start_session(
+        process_manager=process_manager,
+        path_to_configuration_file=configuration_file,
+        session_id=session_id,
+        session_name=session_name,
+        override_logs=override_logs,
+        controller_log_level=controller_log_level,
+        sleep_between_app_boot=sleep_between_app_boot,
+    )
+
     return
 
 

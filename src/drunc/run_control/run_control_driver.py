@@ -65,6 +65,9 @@ class RunControlDriver:
         path_to_configuration_file: str,
         session_id: str,
         session_name: str,
+        override_logs: bool,
+        controller_log_level: str,
+        sleep_between_app_boot: float,
     ) -> DeploySessionResponseFlag:
         """
         Start the session.
@@ -74,6 +77,8 @@ class RunControlDriver:
             path_to_configuration_file (str): The path to the configuration file.
             session_id (str): The session ID to validate.
             session_name (str): The name of the session that will be used.
+            controller_log_level (str): The log level override for the controller.
+            sleep_between_app_boot (float): The sleep time between application boots.
 
         Returns:
             DeploySessionResponseFlag: The response flag indicating the result of the validation.
@@ -87,9 +92,12 @@ class RunControlDriver:
             path_to_configuration_file=path_to_configuration_file,
             session_id=session_id,
             session_name=session_name,
+            override_logs=override_logs,
+            controller_log_level=controller_log_level,
+            sleep_between_app_boot=sleep_between_app_boot,
         )
 
-        return self.stub.validate_session(request).result.status
+        return self.stub.start_session(request).result.status
 
     def end_session(self, session_name: str) -> EndSessionResponseFlag:
         """

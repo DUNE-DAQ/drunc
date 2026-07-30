@@ -35,7 +35,10 @@ class RunControl(RunControlServicer):
         self, request: StartSessionRequest, context: RunControlContext
     ) -> StartSessionResponse:
         self.log.info(f"Received StartSession request: {request}")
-        return StartSessionResponse(token=request.token, result=OutcomeFlag.SUCCESS)
+        return StartSessionResponse(
+            token=request.token,
+            result=DeploySessionResponseFlag(status=DeploySessionResponseFlag.SUCCESS),
+        )
 
     def end_session(
         self, request: EndSessionRequest, context: RunControlContext
