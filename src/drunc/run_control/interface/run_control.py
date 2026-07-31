@@ -8,8 +8,10 @@ import grpc
 from daqpytools.logging import logging_log_levels
 from druncschema.run_control_pb2_grpc import add_RunControlServicer_to_server
 
+from drunc.exceptions import DruncSetupException
 from drunc.run_control.configuration import (
     get_run_control_server_configuration,
+    is_run_control_server_valid,
 )
 from drunc.run_control.run_control import RunControl
 from drunc.utils.utils import (
@@ -36,13 +38,18 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
     """
     # Setup logging for the run control server
     log = get_logger(
-        logger_name=f"run_control_{conf['name']}",
+        logger_name="run_control_server",
         rich_handler=True,
         # file_handler_path=conf["log_path"],
     )
     log.debug("Running [green]deploy_run_control_server[/green]")
 
     # parent_death_pact()
+
+    # Validate the run control server configuration
+    if not is_run_control_server_valid():
+        log.error("Run control server configuration is invalid")
+        raise DruncSetupException("Run control server configuration is invalid")
 
     # Set environment variables from the configuration
     # This is done to ensure that the run control server has access to the necessary
