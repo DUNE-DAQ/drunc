@@ -912,6 +912,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         # verification
         arguments.extend(
             [
+                "-x",
                 "-o",
                 "LogLevel=error",
                 "-o",
@@ -1194,6 +1195,8 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 f"touch {cd_path}/.write_test && rm {cd_path}/.write_test",
             ]
             self.log.debug(f"running {touch_cmd} for CMD access test")
+            env = os.environ.copy()
+            env.pop("DISPLAY", None)
             try:
                 access = self.ssh(
                     *touch_cmd,
@@ -1205,6 +1208,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                     _preexec_fn=on_parent_exit(signal.SIGTERM)
                     if not is_macos
                     else None,
+                    _env=env,
                 )
 
                 access.wait()
@@ -1228,6 +1232,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 _bg_exc=False,
                 _new_session=True,
                 _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
+                _env=env,
             )
             assert isinstance(process, sh.RunningCommand), (
                 "Expected a RunningCommand instance from sh library"

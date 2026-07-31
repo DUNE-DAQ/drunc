@@ -115,6 +115,7 @@ class MockContext:
     def __init__(self, driver=None):
         self.driver = driver or MockDriver()
         self.output = []
+        self.session_name = "mock-session"
 
     def get_driver(self, name):
         return self.driver

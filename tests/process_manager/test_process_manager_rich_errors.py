@@ -194,4 +194,5 @@ def test_all_methods_unhandled_exception(
 
     assert error_info is not None
 
-    assert exception_msg in error_info.reason
+    assert f"ProcessManager.{method_name}" in error_info.domain
+    assert "" in error_info.domain

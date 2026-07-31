@@ -15,10 +15,11 @@ from drunc.process_manager.interface.commands import (
     kill_impl,
     logs_decorators,
     logs_impl,
+    ps_decorators,
+    ps_impl,
     restart_impl,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
-from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
@@ -32,6 +33,12 @@ from drunc.utils.utils import get_logger
     help="Manual override allows for overwriting logs or not, by appending timestamp info. Default (None) is to follow what is used in the initialisation of the unified shell.",
 )
 @click.option(
+    "-cl",
+    "--controller-log-level",
+    default=None,
+    help="Overrides the config-defined log level of the controller",
+)
+@click.option(
     "--sleep-between-app-boot",
     type=float,
     default=0.1,
@@ -41,6 +48,7 @@ from drunc.utils.utils import get_logger
 def boot(
     obj: ProcessManagerContext,
     override_logs: bool | None,
+    controller_log_level: bool | None,
     sleep_between_app_boot: int | float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
@@ -72,7 +80,7 @@ def boot(
             conf_id=obj.configuration_id,
             user=user,
             session_name=session_name,
-            log_level="INFO",  # Unused anyway !!
+            log_level=controller_log_level,
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
@@ -158,35 +166,6 @@ def terminate(ctx, obj):
     obj.delete_driver("controller")
 
 
-@click.command("ps")
-@click.pass_obj
-@click.pass_context
-def ps(ctx, obj):
-    """
-    Execute the process manager terminate command, but only do this for the current
-    session
-    """
-
-    log = get_logger("unified_shell.ps")
-    log_pm_cmd(obj)
-    session_query = ProcessQuery(session=ctx.obj.session_name)
-    log.info(f"Listing session [green]{ctx.obj.session_name}[/]")
-    results = obj.get_driver("process_manager").ps(session_query)
-
-    # If there are processes running, tabulate them, otherwise log that there are no
-    # processes running.
-    if results.values:
-        obj.print(
-            tabulate_process_instance_list(
-                results, title=f"Processes running in session {ctx.obj.session_name}"
-            ),
-            overflow="fold",
-            soft_wrap=True,
-        )
-    else:
-        log.info(f"No processes running in session [green]{ctx.obj.session_name}[/]")
-
-
 def session_injector(f):
     @click.pass_context
     def wrapper(ctx, *args, **kwargs):
@@ -194,6 +173,15 @@ def session_injector(f):
         return ctx.invoke(f, *args, **kwargs)
 
     return update_wrapper(wrapper, f)
+
+
+@click.command("ps")
+@session_injector
+@add_query_options_no_session(at_least_one=True)
+@ps_decorators
+def ps(obj, query, long_format, width):
+    log_pm_cmd(obj)
+    return ps_impl(obj, query, long_format, width)
 
 
 @click.command("logs")
