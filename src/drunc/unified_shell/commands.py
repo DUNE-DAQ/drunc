@@ -121,7 +121,14 @@ def boot(
         log.error("Could not understand where the controller is!")
         return
 
-    # Determine whether the session should be placed into an error state
+    # Determine whether the session should be placed into an error state, regardless of
+    # the outcome of the `boot` command. This variable is used to catch all instances of
+    # where the session is not booted or reported correctly, and the user should be
+    # informed of this. This catches additional issues that the `boot` process does not,
+    # which is from the architectural perspective of the booting only accounting for the
+    # deployment of the processes, and not e.g. whether the processes have successfully
+    # registered on the connevity service, or if the process has died shortly after
+    # booting.
     put_in_error_state: bool = False
 
     # If the session applications are not found on the connectivity serivce, then the
@@ -159,7 +166,6 @@ def boot(
     # Check if session booted correctly, if not put it in error state
     session_states = get_all_states(status_response)
     if "disconnected" in session_states:
-        time.sleep(1)
         log.error(
             "Booted, but there are disconnected applications/controllers. Use the "
             "[yellow]logs[/] command to find out more about this failure."

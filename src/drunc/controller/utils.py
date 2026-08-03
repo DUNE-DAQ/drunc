@@ -50,6 +50,9 @@ def count_processes_in_status_response(response: StatusResponse) -> int:
     """
     Count the number of processes in the status table, including all children.
 
+    This function is recursive to allow for the counting of processes following a nested
+    structure of StatusResponse objects through the `child` attribute.
+
     Args:
         response (StatusResponse): The StatusResponse object returrned from a controller
             servicer status request.

@@ -63,8 +63,6 @@
 
 <oks-data>
 
-<info name="" type="" num-of-items="6" oks-format="data" oks-version="862f2957270" created-by="gjc" created-on="thinkpad" creation-time="20231207T105549" last-modified-by="eflumerf" last-modified-on="ironvirt9.IRONDOMAIN.local" last-modification-time="20241022T175827"/>
-
 <include>
  <file path="schema/confmodel/dunedaq.schema.xml"/>
  <file path="config/daqsystemtest/ccm.data.xml"/>
