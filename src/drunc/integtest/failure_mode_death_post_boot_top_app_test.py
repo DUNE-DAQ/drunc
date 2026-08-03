@@ -1,5 +1,8 @@
 """
 Run a session with a nested segment application dying at the end of boot.
+Check that the application is marked as dead in the ps table, and disconnected in the
+status table, and that the session is in an error state. The application that dies is
+ft-top-segment-application.
 """
 
 import os

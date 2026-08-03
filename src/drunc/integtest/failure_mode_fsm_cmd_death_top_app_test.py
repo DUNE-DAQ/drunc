@@ -1,5 +1,8 @@
 """
 Run a session with a nested segment application dying at the end of boot.
+Check that the session goes into an error state, and that the expected messages are
+printed to stdout and logged to the log files. The application that dies is
+ft-top-segment-application.
 """
 
 import os

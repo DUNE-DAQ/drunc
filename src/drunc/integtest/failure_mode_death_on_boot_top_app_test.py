@@ -1,7 +1,7 @@
 """
 Run a session with the top segment application dying at the start of boot.
 Check that the application is correctly reported as dead, and that the session is in an
-error state after boot.
+error state after boot. The application that dies is ft-top-segment-application.
 """
 
 import os
