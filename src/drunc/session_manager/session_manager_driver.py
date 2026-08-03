@@ -102,6 +102,32 @@ class SessionManagerDriver:
 
         return response
 
+    def load_session(self, config_key: str, timeout: int | float = 60) -> None:
+        """Load a session based on the provided configuration key.
+
+        Args:
+            config_key: The configuration key for the session to load.
+            timeout: The timeout for the gRPC call in seconds.
+        """
+        # request = Request(token=copy_token(self.token))
+        self.log.info(
+            f"Sending load_session request to session manager at {self.address} with timeout {timeout}s"
+        )
+
+        # try:
+        #     self.stub.load_session(request, timeout=timeout)
+        # except grpc.RpcError as e:
+        #     try:
+        #         error_details = extract_grpc_rich_error(e)
+        #         self.log.error(error_details)
+        #     except Exception as extraction_error:
+        #         self.log.debug(
+        #             f"Could not extract rich error details from gRPC error: {extraction_error}",
+        #             exc_info=True,
+        #         )
+
+        #     handle_grpc_error(e)
+
     def list_all_configs(self, timeout: int | float = 60) -> AllConfigKeys:
         """List all available configurations in the session manager.
 
