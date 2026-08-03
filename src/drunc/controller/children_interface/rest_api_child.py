@@ -865,6 +865,23 @@ class RESTAPIChildNode(ChildNode):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> LogOnServerResponse:
+        """
+        Log a message on the server with the specified severity.
+
+        Right now, this is not implemented in the daq_applications. It is unlikely that
+        this will be implemented, thus this simply returns the correctly formatted
+        message with a NOT_EXECUTED_NOT_IMPLEMENTED flag.
+
+        Args:
+            text (str): The message to log.
+            severity (str): The severity level of the log message (default: "INFO").
+            target (str): The target for the log message (default: "").
+            execute_along_path (bool): Whether to execute along the path (default: False).
+            execute_on_all_subsequent_children_in_path (bool): Whether to execute on all subsequent children in the path (default: True).
+
+        Returns:
+            LogOnServerResponse: The response from the server after logging the message.
+        """
         return LogOnServerResponse(
             token=None,
             name=self.name,

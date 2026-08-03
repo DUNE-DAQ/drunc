@@ -400,18 +400,38 @@ def get_column_for_friendly_name(
 
 
 #! Replace this with a generic one
+def get_rows_from_table(
+    table: list[dict[str, str]], column: str, value: str
+) -> list[dict[str, str]]:
+    """
+    Return all rows whose `column` matches `value`exactly after stripping.
+
+    Args:
+        table: List of dictionaries representing the table rows.
+        column: The column name to match against.
+        value: The value to match in the specified column.
+
+    Returns:
+        List of dictionaries representing the matching rows.
+
+    Raises:
+        KeyError: If the specified column does not exist in the table rows.
+    """
+    return [row for row in table if row[column].strip() == value]
+
+
 def get_rows_by_friendly_name_from_ps_table(
     ps_table: list[dict[str, str]], friendly_name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `friendly_name` matches exactly after stripping."""
-    return [row for row in ps_table if row["friendly_name"].strip() == friendly_name]
+    return get_rows_from_table(ps_table, "friendly_name", friendly_name)
 
 
 def get_rows_by_name_from_status_table(
     status_table: list[dict[str, str]], name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `Name` matches exactly after stripping."""
-    return [row for row in status_table if row["name"].strip() == name]
+    return get_rows_from_table(status_table, "name", name)
 
 
 def assert_process_presence(
