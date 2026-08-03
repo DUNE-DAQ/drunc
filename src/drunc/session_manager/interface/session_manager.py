@@ -1,7 +1,6 @@
 """Session Manager CLI interface for Drunc."""
 
 from concurrent import futures
-from logging import getLogger
 
 import click
 import grpc
@@ -25,7 +24,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
         session_manager: The session manager instance to serve.
         address: The address to bind the server to.
     """
-    logger = getLogger("drunc.session_manager")
+    logger = get_logger("session_manager.serve")
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS),
         options=MANAGER_SERVER_GRPC_CONFIG,

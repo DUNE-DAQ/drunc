@@ -30,7 +30,7 @@ class SessionManagerDriver:
             token: The token for authentication.
             **kwargs: Additional keyword arguments for the driver.
         """
-        self.log = get_logger("controller.iface.SessionManagerDriver")
+        self.log = get_logger("session_manager.iface.SessionManagerDriver")
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
@@ -50,6 +50,9 @@ class SessionManagerDriver:
             A response containing the description of the service.
         """
         request = Request(token=copy_token(self.token))
+        self.log.info(
+            f"Sending describe request to session manager at {self.address} with timeout {timeout}s"
+        )
 
         try:
             response: Description = self.stub.describe(request, timeout=timeout)
@@ -77,9 +80,14 @@ class SessionManagerDriver:
             A response containing a list of all active sessions.
         """
         request = Request(token=copy_token(self.token))
+        self.log.info(
+            f"Sending list_all_sessions request to session manager at {self.address} with timeout {timeout}s"
+        )
 
         try:
-            response: AllActiveSessions = self.stub.list_all_sessions(request, timeout=timeout)
+            response: AllActiveSessions = self.stub.list_all_sessions(
+                request, timeout=timeout
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
@@ -104,9 +112,14 @@ class SessionManagerDriver:
             A response containing all available configuration keys.
         """
         request = Request(token=copy_token(self.token))
+        self.log.info(
+            f"Sending list_all_configs request to session manager at {self.address} with timeout {timeout}s"
+        )
 
         try:
-            response: AllConfigKeys = self.stub.list_all_configs(request, timeout=timeout)
+            response: AllConfigKeys = self.stub.list_all_configs(
+                request, timeout=timeout
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
