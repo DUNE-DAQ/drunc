@@ -32,8 +32,7 @@ __version__ = "1.0.0"
 
 # Set up logging
 get_root_logger("info")
-log = get_logger("fake_daqapp_rest", stream_handlers=True)
-log.setLevel("INFO")
+log = get_logger("fake_daqapp_rest", stream_handlers=True, log_level="INFO")
 
 
 class AppState:
@@ -58,8 +57,7 @@ class AppState:
         self.appname = app_name
         self.state = "INITIAL"
         self.executing_command = False
-        self.log = get_logger("fake_daqapp_rest.AppState")
-        self.log.setLevel("INFO")
+        self.log = get_logger("fake_daqapp_rest.AppState", log_level="INFO")
 
     def send_response_to_response_listener(
         self, address: str, txt: str, success: bool = True, data: dict = {}
