@@ -31,6 +31,12 @@ from drunc.utils.utils import get_logger, resolve_context_peer
     default=True,
     help="Override logs, if --no-override-logs filenames have the timestamp of the run.",
 )
+@click.option(
+    "-cl",
+    "--controller-log-level",
+    default=None,
+    help="Overrides the config-defined log level of the controller",
+)
 @click.argument("configuration-file", type=str, callback=validate_conf_string)
 @click.argument("configuration-id", type=str)
 @click.argument("session-name", type=str)
@@ -42,6 +48,7 @@ def boot(
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
+    controller_log_level: bool | None,
 ) -> None:
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
@@ -65,7 +72,7 @@ def boot(
             conf_id=configuration_id,
             user=user,
             session_name=session_name,
-            log_level="INFO",  ## Unused anyway!!
+            log_level=controller_log_level,
             override_logs=override_logs,
         )
         for result in results:
@@ -375,13 +382,21 @@ def ps_impl(
     log.debug(f"Running ps with query {query}")
     results = obj.get_driver("process_manager").ps(query)
 
+    # Inject session name if exits
+    ## Session name can come from either the process manager shell with --session
+    ## Or in the unified shell, where the session name is injected automatically
+
+    session_name = (
+        getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
+    )
+    title = f"Processes running{f' in session {session_name}' if session_name else ''}"
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
         obj.print(
             tabulate_process_instance_list(
                 results,
-                title=f"Processes running in session {obj.session_name}",
+                title=title,
                 long=long_format,
                 width=width,
             ),
