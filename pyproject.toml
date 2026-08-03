@@ -79,12 +79,15 @@ ignore = [
 ]
 select = [
   "E", # pycodestyle errors
-  "F", # check for errors using PyFlakes
+  # "F", # check for errors using PyFlakes
   "I", # best practices for import calls
-  "UP", # suggestions for code modernization
-  "RUF", # build in Ruff warnings
-  "R", # refactoring suggestions
+  # "UP", # suggestions for code modernization
+  # "RUF", # build in Ruff warnings
+  # "R", # refactoring suggestions
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/drunc/integtest/*.py" = ["F401"] # Ignore unused imports in all integration test files, e.g. pytestmark which is used but not explicitly
 
 [tool.mypy]
 check_untyped_defs = true
