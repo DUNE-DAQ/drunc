@@ -1027,6 +1027,11 @@ To debug it, close drunc and run the following command:
 
         try:
             response = self.stub.restart(request, timeout=timeout)
+            self.log.info(
+                f"Restarted [green]{request.names}[/green] "
+                f"from session [green]{request.session} [/green]"
+                f"with UUID [green]{response.values[0].uuid.uuid}[/green] on host [green]{response.values[0].process_description.metadata.hostname}[/green]"
+            )
         except grpc.RpcError as e:
             try:
                 error_details = extract_grpc_rich_error(e)
