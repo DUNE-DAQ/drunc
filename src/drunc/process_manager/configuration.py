@@ -37,6 +37,12 @@ class ProcessManagerTypes(Enum):
     SSH_PARAMIKO = 3
 
 
+class ProcessManagerRunningMode(Enum):
+    Unknown = 0
+    Standalone = 1
+    Subprocess = 2
+
+
 class ProcessManagerConfHandler(ConfHandler):
     """Handler for process manager configuration."""
 
