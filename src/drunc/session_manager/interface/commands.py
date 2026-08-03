@@ -23,3 +23,12 @@ def list_all_configs(ctx) -> None:
     """List all available configurations."""
     response = ctx.obj.get_driver("session_manager").list_all_configs()
     click.echo(response)
+
+
+@click.command("load_session")
+@click.argument("config_key", type=str)
+@click.pass_context
+def load_session(ctx, config_key: str) -> None:
+    """Load a session based on the provided configuration key."""
+    response = ctx.obj.get_driver("session_manager").load_session(config_key)
+    click.echo(response)
