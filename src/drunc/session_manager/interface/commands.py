@@ -26,9 +26,10 @@ def list_all_configs(ctx) -> None:
 
 
 @click.command("load_session")
-@click.argument("config_key", type=str)
+@click.argument("file", type=str)
+@click.argument("session_id", type=str)
 @click.pass_context
-def load_session(ctx, config_key: str) -> None:
-    """Load a session based on the provided configuration key."""
-    response = ctx.obj.get_driver("session_manager").load_session(config_key)
+def load_session(ctx, file: str, session_id: str) -> None:
+    """Load a session based on the provided configuration file path and ID."""
+    response = ctx.obj.get_driver("session_manager").load_session(file, session_id)
     click.echo(response)

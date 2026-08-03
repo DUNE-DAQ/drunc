@@ -15,6 +15,8 @@ from druncschema.session_manager_pb2 import (
     AllActiveSessions,
     AllConfigKeys,
     ConfigKey,
+    LoadSessionRequest,
+    LoadSessionResponse,
 )
 from druncschema.session_manager_pb2_grpc import SessionManagerServicer
 from grpc import ServicerContext
@@ -189,15 +191,22 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def load_session(self, request: Request, context: ServicerContext) -> None:
+    def load_session(
+        self, request: LoadSessionRequest, context: ServicerContext
+    ) -> LoadSessionResponse:
         """Load a session based on the provided configuration key.
 
         Args:
             request: The incoming request containing the configuration key.
             context: The gRPC context (not used).
 
-        Raises:
-            NotImplementedError: This method is not yet implemented.
+        Returns:
+            LoadSessionResponse: A response containing a result message.
         """
         self.log.debug(f"{self.name} running load_session")
-        raise NotImplementedError("load_session is not yet implemented.")
+
+        file = request.config_key.file
+        session_id = request.config_key.session_id
+        self.log.info(f"Loading session: '{session_id}' from file: '{file}'")
+
+        return LoadSessionResponse(name=self.name)
