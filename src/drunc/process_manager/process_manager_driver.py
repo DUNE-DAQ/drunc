@@ -112,6 +112,7 @@ class ProcessManagerDriver:
             handle_grpc_error(e)
 
         return response
+
     def update_controller_logs(self, ctrl_dal, level):
         ctrl_dal.controller_log_level = level
         return ctrl_dal
@@ -146,10 +147,10 @@ class ProcessManagerDriver:
         # Step 3 - check for port conflicts and update configuration/DAL as needed
         db, session_dal = self.check_port_conflicts(db, session_dal)
 
-        # Step 3.25 - Update controller dal 
+        # Step 3.25 - Update controller dal
         if log_level:
             session_dal = self.update_controller_logs(session_dal, log_level)
-        
+
         # step 3.5 update localhost mapping
         session_dal = self.resolve_localhost(session_dal)
 
@@ -222,6 +223,11 @@ class ProcessManagerDriver:
 
             try:
                 response = self.stub.boot(request, timeout=timeout)
+                self.log.info(
+                    f"Booted '{request.process_description.metadata.name}' "
+                    f"from session '{request.process_description.metadata.session}' "
+                    f"with UUID {response.values[0].uuid.uuid} on host {request.process_description.metadata.hostname}"
+                )
                 yield response
 
             except grpc.RpcError as e:
@@ -329,9 +335,9 @@ class ProcessManagerDriver:
         data_path = app.get("data_path")
         env["DUNE_DAQ_BASE_RELEASE"] = os.getenv("DUNE_DAQ_BASE_RELEASE")
         env["SPACK_RELEASES_DIR"] = os.getenv("SPACK_RELEASES_DIR")
-        # Some edge cases throw issues with DISPLAY being set, so we remove it from the 
+        # Some edge cases throw issues with DISPLAY being set, so we remove it from the
         # environment
-        env.pop('DISPLAY', None)
+        env.pop("DISPLAY", None)
         tree_id = app["tree_id"]
 
         # The following line is required to provide an independent method of injecting
