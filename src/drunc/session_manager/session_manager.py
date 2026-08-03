@@ -120,19 +120,6 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def load_session(self, request: Request, context: ServicerContext) -> None:
-        """Load a session based on the provided configuration key.
-
-        Args:
-            request: The incoming request containing the configuration key.
-            context: The gRPC context (not used).
-
-        Raises:
-            NotImplementedError: This method is not yet implemented.
-        """
-        self.log.debug(f"{self.name} running load_session")
-        raise NotImplementedError("load_session is not yet implemented.")
-
     def list_all_configs(
         self, request: Request, context: ServicerContext
     ) -> AllConfigKeys:
@@ -201,3 +188,16 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             config_keys=configs,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
+
+    def load_session(self, request: Request, context: ServicerContext) -> None:
+        """Load a session based on the provided configuration key.
+
+        Args:
+            request: The incoming request containing the configuration key.
+            context: The gRPC context (not used).
+
+        Raises:
+            NotImplementedError: This method is not yet implemented.
+        """
+        self.log.debug(f"{self.name} running load_session")
+        raise NotImplementedError("load_session is not yet implemented.")
