@@ -902,7 +902,8 @@ To debug it, close drunc and run the following command:
         timeout: int | float = 130,
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
-
+        msg = f"[green]{request.token.user_name}[/green] sent terminate"
+        self.log.info(msg)
         try:
             response = self.stub.terminate(request, timeout=timeout)
         except grpc.RpcError as e:
@@ -922,7 +923,13 @@ To debug it, close drunc and run the following command:
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
+        session_name = (
+            f" for session [green]{request.session}[/green]"
+            if hasattr(request, "session")
+            else ""
+        )
+        msg = f"[green]{request.token.user_name}[/green] sent kill" + session_name
+        self.log.info(msg)
         try:
             response = self.stub.kill(request, timeout=timeout)
         except grpc.RpcError as e:
