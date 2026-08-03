@@ -1,6 +1,49 @@
 import pytest
 
 
+@pytest.fixture
+def mock_status_tree():
+    """Builds and returns a mock StatusResponse tree for testing."""
+    from druncschema.controller_pb2 import StatusResponse
+    from druncschema.request_response_pb2 import ResponseFlag
+
+    def create_status(
+        name: str, state: str, sub_state: str, children: list = None
+    ) -> StatusResponse:
+        resp = StatusResponse(name=name, flag=ResponseFlag.EXECUTED_SUCCESSFULLY)
+        resp.status.state = state
+        resp.status.sub_state = sub_state
+        resp.status.in_error = False
+        resp.status.included = True
+        if children:
+            for child in children:
+                resp.children.add().CopyFrom(child)
+        return resp
+
+    ftns1_app = create_status("ft-nested-segment-1-application", "initial", "idle")
+    ftns1_ctrl = create_status(
+        "ft-nested-segment-1-controller", "initial", "idle", [ftns1_app]
+    )
+    ftns2_app = create_status(
+        "ft-nested-segment-2-application", "disconnected", "disconnected"
+    )
+    ftns21_app = create_status("ft-nested-segment-2.1-application", "initial", "idle")
+    ftns2_ctrl = create_status(
+        "ft-nested-segment-2-controller",
+        "initialising",
+        "initialising",
+        [ftns2_app, ftns21_app],
+    )
+    ftts_app = create_status("ft-top-segment-application", "initial", "idle")
+
+    return create_status(
+        "ft-top-segment-controller",
+        "initialising",
+        "initialising",
+        [ftns1_ctrl, ftns2_ctrl, ftts_app],
+    )
+
+
 def test_get_segment_lookup_timeout(load_test_config):
     from drunc.utils.configuration import parse_conf_url
 
@@ -36,155 +79,18 @@ def test_get_segment_lookup_timeout(load_test_config):
     assert get_segment_lookup_timeout(segment_6, base_timeout=60) == 60 * 1
 
 
-def test_get_all_states():
-    from druncschema.controller_pb2 import StatusResponse
-    from druncschema.request_response_pb2 import ResponseFlag
+# Now your tests become beautifully short:
 
+
+def test_get_all_states(mock_status_tree):
     from drunc.controller.utils import get_all_states
 
-    # Construct the expected StatusResponse object for the test, using the failure mode
-    # testing session structure as an example
-    # ftns* = failure testing nested segment
-    # ftts* = failure testing top segment
-    # * = a for fake_daq_application, c for drunc-controller
-    # Nested segment 1
-    test_status_response_ftns1a = StatusResponse(name="ft-nested-segment-1-application")
-    test_status_response_ftns1a.status.state = "initial"
-    test_status_response_ftns1a.status.sub_state = "idle"
-    test_status_response_ftns1a.status.in_error = False
-    test_status_response_ftns1a.status.included = True
-    test_status_response_ftns1a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns1c = StatusResponse(name="ft-nested-segment-1-controller")
-    test_status_response_ftns1c.status.state = "initial"
-    test_status_response_ftns1c.status.sub_state = "idle"
-    test_status_response_ftns1c.status.in_error = False
-    test_status_response_ftns1c.status.included = True
-    test_status_response_ftns1c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_ftns1c.children.add().CopyFrom(test_status_response_ftns1a)
-
-    # Nested segment 2
-    test_status_response_ftns2a = StatusResponse(name="ft-nested-segment-2-application")
-    test_status_response_ftns2a.status.state = "disconnected"
-    test_status_response_ftns2a.status.sub_state = "disconnected"
-    test_status_response_ftns2a.status.in_error = False
-    test_status_response_ftns2a.status.included = True
-    test_status_response_ftns2a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns21a = StatusResponse(
-        name="ft-nested-segment-2.1-application"
-    )
-    test_status_response_ftns21a.status.state = "initial"
-    test_status_response_ftns21a.status.sub_state = "idle"
-    test_status_response_ftns21a.status.in_error = False
-    test_status_response_ftns21a.status.included = True
-    test_status_response_ftns21a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns2c = StatusResponse(name="ft-nested-segment-1-controller")
-    test_status_response_ftns2c.status.state = "initialising"
-    test_status_response_ftns2c.status.sub_state = "initialising"
-    test_status_response_ftns21a.status.in_error = False
-    test_status_response_ftns2c.status.included = True
-    test_status_response_ftns2c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_ftns2c.children.add().CopyFrom(test_status_response_ftns2a)
-    test_status_response_ftns2c.children.add().CopyFrom(test_status_response_ftns21a)
-
-    # Top segment
-    test_status_response_fttsa = StatusResponse(name="ft-top-segment-application")
-    test_status_response_fttsa.status.state = "initial"
-    test_status_response_fttsa.status.sub_state = "idle"
-    test_status_response_fttsa.status.in_error = False
-    test_status_response_fttsa.status.included = True
-    test_status_response_ftns2c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_fttsc = StatusResponse(name="ft-top-segment-controller")
-    test_status_response_fttsc.status.state = "initialising"
-    test_status_response_fttsc.status.sub_state = "initialising"
-    test_status_response_fttsc.status.in_error = False
-    test_status_response_fttsc.status.included = True
-    test_status_response_fttsc.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_ftns1c)
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_ftns2c)
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_fttsa)
-
-    # Test get_all_states function, assert that it returns the expected unique states
-    # from the constructed StatusResponse object
-    top_segment_states = set(get_all_states(test_status_response_fttsc))
+    top_segment_states = set(get_all_states(mock_status_tree))
     assert top_segment_states == {"initialising", "disconnected", "initial"}
 
 
-def test_count_processes_in_status_response():
-    from druncschema.controller_pb2 import StatusResponse
-    from druncschema.request_response_pb2 import ResponseFlag
-
+def test_count_processes_in_status_response(mock_status_tree):
     from drunc.controller.utils import count_processes_in_status_response
 
-    # Construct the expected StatusResponse object for the test, using the failure mode
-    # testing session structure as an example
-    # ftns* = failure testing nested segment
-    # ftts* = failure testing top segment
-    # * = a for fake_daq_application, c for drunc-controller
-    # Nested segment 1
-    test_status_response_ftns1a = StatusResponse(name="ft-nested-segment-1-application")
-    test_status_response_ftns1a.status.state = "initial"
-    test_status_response_ftns1a.status.sub_state = "idle"
-    test_status_response_ftns1a.status.in_error = False
-    test_status_response_ftns1a.status.included = True
-    test_status_response_ftns1a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns1c = StatusResponse(name="ft-nested-segment-1-controller")
-    test_status_response_ftns1c.status.state = "initial"
-    test_status_response_ftns1c.status.sub_state = "idle"
-    test_status_response_ftns1c.status.in_error = False
-    test_status_response_ftns1c.status.included = True
-    test_status_response_ftns1c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_ftns1c.children.add().CopyFrom(test_status_response_ftns1a)
-
-    # Nested segment 2
-    test_status_response_ftns2a = StatusResponse(name="ft-nested-segment-2-application")
-    test_status_response_ftns2a.status.state = "disconnected"
-    test_status_response_ftns2a.status.sub_state = "disconnected"
-    test_status_response_ftns2a.status.in_error = False
-    test_status_response_ftns2a.status.included = True
-    test_status_response_ftns2a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns21a = StatusResponse(
-        name="ft-nested-segment-2.1-application"
-    )
-    test_status_response_ftns21a.status.state = "initial"
-    test_status_response_ftns21a.status.sub_state = "idle"
-    test_status_response_ftns21a.status.in_error = False
-    test_status_response_ftns21a.status.included = True
-    test_status_response_ftns21a.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_ftns2c = StatusResponse(name="ft-nested-segment-1-controller")
-    test_status_response_ftns2c.status.state = "initialising"
-    test_status_response_ftns2c.status.sub_state = "initialising"
-    test_status_response_ftns21a.status.in_error = False
-    test_status_response_ftns2c.status.included = True
-    test_status_response_ftns2c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_ftns2c.children.add().CopyFrom(test_status_response_ftns2a)
-    test_status_response_ftns2c.children.add().CopyFrom(test_status_response_ftns21a)
-
-    # Top segment
-    test_status_response_fttsa = StatusResponse(name="ft-top-segment-application")
-    test_status_response_fttsa.status.state = "initial"
-    test_status_response_fttsa.status.sub_state = "idle"
-    test_status_response_fttsa.status.in_error = False
-    test_status_response_fttsa.status.included = True
-    test_status_response_ftns2c.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-
-    test_status_response_fttsc = StatusResponse(name="ft-top-segment-controller")
-    test_status_response_fttsc.status.state = "initialising"
-    test_status_response_fttsc.status.sub_state = "initialising"
-    test_status_response_fttsc.status.in_error = False
-    test_status_response_fttsc.status.included = True
-    test_status_response_fttsc.flag = ResponseFlag.EXECUTED_SUCCESSFULLY
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_ftns1c)
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_ftns2c)
-    test_status_response_fttsc.children.add().CopyFrom(test_status_response_fttsa)
-
-    # Test get_all_states function, assert that it returns the expected unique states
-    # from the constructed StatusResponse object
-    process_count = count_processes_in_status_response(test_status_response_fttsc)
+    process_count = count_processes_in_status_response(mock_status_tree)
     assert process_count == 7
