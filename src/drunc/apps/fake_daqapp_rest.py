@@ -12,13 +12,13 @@ import signal
 import threading
 import time
 from urllib.parse import urlparse
+from wsgiref.simple_server import make_server
 
 import click
 import conffwk
 import requests
 from flask import Flask, Response, request
 from flask_restful import Api, Resource
-from werkzeug.serving import make_server
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
 from drunc.utils.utils import (
