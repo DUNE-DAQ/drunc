@@ -41,6 +41,10 @@ def load_test_config() -> None:
     os.makedirs(consolidated_conf_path, exist_ok=True)
     DUNEDAQ_DB_PATH += f":{test_configs!s}:{consolidated_conf_path!s}"
 
+    # Add the drunc root too
+    drunc_root = cwd.parent.parent
+    DUNEDAQ_DB_PATH += f":{drunc_root!s}"
+
     # For debugging, print the DUNEDAQ_DB_PATH entries
     print("DUNEDAQ_DB_PATH entries:")
     for entry in DUNEDAQ_DB_PATH.split(":"):
