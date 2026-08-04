@@ -1406,6 +1406,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         running_process = self.process_store[uuid]
 
+        process_name: str | None = None
+        if uuid in self.metadata:
+            process_name = self.metadata[uuid].name
+
         hostname = running_process.hostname
         user = running_process.user
         metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
@@ -1414,10 +1418,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         process_dead = False
 
         try:
+            process_log_str = f"Remote process [green]{process_name}[/] (UUID {uuid}, PID {remote_pid})"
             if not self.is_process_alive(uuid):
-                self.log.info(
-                    f"Skipping killing remote process {uuid} (PID {remote_pid}). It is already dead."
-                )
+                self.log.info(f"{process_log_str} is already dead, skipping kill.")
                 exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
@@ -1437,11 +1440,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 )
                 if process_dead:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGQUIT signal."
+                        f"{process_log_str} terminated gracefully following SIGQUIT signal."
                     )
                 else:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGQUIT signal."
+                        f"{process_log_str} did not terminate within timeout of {timeout} seconds after SIGQUIT signal."
                     )
 
             if not process_dead:
@@ -1453,16 +1456,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
                 if process_dead:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) terminated forcibly following SIGKILL signal."
+                        f"{process_log_str} terminated forcibly following SIGKILL signal."
                     )
                 else:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGKILL signal."
+                        f"{process_log_str} did not terminate within timeout of {timeout} seconds after SIGKILL signal."
                     )
 
             if not process_dead:
                 self.log.error(
-                    f"Remote process {uuid} (PID {remote_pid}) still did not terminate after SIGKILL signal."
+                    f"{process_log_str} still did not terminate after SIGKILL signal."
                 )
                 with self.lock:
                     running_process.pending_exit_status_source = None
