@@ -923,12 +923,15 @@ To debug it, close drunc and run the following command:
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-        session_name = (
+        log_msg_session_name_extension = (
             f" for session [green]{request.session}[/green]"
             if hasattr(request, "session")
             else ""
         )
-        msg = f"[green]{request.token.user_name}[/green] sent kill" + session_name
+        msg = (
+            f"[green]{request.token.user_name}[/green] sent kill"
+            + log_msg_session_name_extension
+        )
         self.log.info(msg)
         try:
             response = self.stub.kill(request, timeout=timeout)
