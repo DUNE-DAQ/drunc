@@ -18,7 +18,10 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
-from drunc.process_manager.configuration import ProcessManagerTypes
+from drunc.process_manager.configuration import (
+    ProcessManagerRunningMode,
+    ProcessManagerTypes,
+)
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
@@ -384,11 +387,15 @@ class SSHProcessManager(ProcessManager):
         # Store the successful hostname in boot request metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
-        self.log.info(
+        boot_msg = (
             f"Booted '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}' "
             f"with UUID {uuid} on host {hostname}"
         )
+        if self.running_mode == ProcessManagerRunningMode.Standalone:
+            self.log.debug(boot_msg)
+        else:
+            self.log.info(boot_msg)
 
         # Query current process status
         alive = self.ssh_lifetime_manager.is_process_alive(uuid)
