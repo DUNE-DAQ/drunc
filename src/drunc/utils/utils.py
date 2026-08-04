@@ -2,6 +2,7 @@
 
 import ctypes
 import ipaddress
+import json
 import logging
 import os
 import random
@@ -14,6 +15,7 @@ import time
 from contextlib import closing
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Protocol, cast
 from urllib.parse import ParseResult, urlparse
 
@@ -866,3 +868,29 @@ def file_is_read_only(file_path: str) -> bool:
         bool: True if the file is read-only, False otherwise.
     """
     return not os.access(file_path, os.W_OK)
+
+
+def load_json_to_dict(
+    file_path: str | Path,
+) -> dict[str, str | int | float | bool | None | list | dict]:
+    """
+    Reads a JSON file and returns its contents as a dictionary.
+    """
+    path = Path(file_path)
+
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                raise ValueError(
+                    f"Expected a JSON object, but got {type(data).__name__}"
+                )
+            return data
+
+    except FileNotFoundError:
+        print(f"Error: The file '{path}' does not exist.")
+        raise
+    except json.JSONDecodeError as e:
+        print(f"Error: Failed to parse JSON in '{path}'. Invalid format.")
+        print(f"Details: {e}")
+        raise

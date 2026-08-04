@@ -20,6 +20,7 @@
     "opmon_conf":{
         "level": "debug",
         "interval_s" : 10.0
-    }
-
+    },
+    "host": "localhost",
+    "port": 0
 }

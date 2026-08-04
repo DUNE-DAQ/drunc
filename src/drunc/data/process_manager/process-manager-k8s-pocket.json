@@ -11,5 +11,7 @@
         "DUNEDAQ_ERS_FATAL": "erstrace,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_INFO": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)",
         "DUNEDAQ_ERS_WARNING": "erstrace,throttle,lstdout,protobufstream(monkafka.cern.ch:30092)"
-    }
+    },
+    "host": "localhost",
+    "port": 0
 }

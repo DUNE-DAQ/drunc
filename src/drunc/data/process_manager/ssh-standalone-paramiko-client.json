@@ -22,5 +22,7 @@
     "opmon_conf": {
         "level": "info",
         "interval_s": 10.0
-    }
+    },
+    "host": "localhost",
+    "port": 0
 }

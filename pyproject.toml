@@ -51,6 +51,8 @@ drunc-session-manager-shell = "drunc.apps.session_manager_shell:main"
 drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
 drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
 drunc-unified-shell = "drunc.apps.unified_shell:main"
+dune-run-control = "drunc.apps.dune_run_control:main"
+dune-run-control-shell = "drunc.apps.dune_run_control_shell:main"
 fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
 
 [tool.setuptools.packages.find]
