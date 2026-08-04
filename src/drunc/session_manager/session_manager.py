@@ -80,6 +80,12 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 help="List all available configurations.",
                 return_type="session_manager_pb2.AllConfigKeys",
             ),
+            CommandDescription(
+                name="load_session",
+                data_type=["session_manager_pb2.LoadSessionRequest"],
+                help="Load a session based on the provided configuration key.",
+                return_type="session_manager_pb2.LoadSessionResponse",
+            ),
         ]
 
         return Description(
