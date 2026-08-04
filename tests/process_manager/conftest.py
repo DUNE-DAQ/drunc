@@ -199,12 +199,21 @@ def restart_response():
     Provide a standard restart response indicating successful process restart.
 
     Returns:
-        ProcessInstanceList: Empty response indicating processes were restarted
+    ProcessInstanceList: Response with one restarted process
     """
     return ProcessInstanceList(
         name="restart_endpoint",
         token=Token(),
-        values=[],
+        values=[
+            ProcessInstance(
+                uuid=ProcessUUID(uuid="test-restart-uuid"),
+                process_description=ProcessDescription(
+                    metadata=ProcessMetadata(hostname="test-host")
+                ),
+                status_code=ProcessInstance.StatusCode.RUNNING,
+                return_code=0,
+            )
+        ],
         flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
     )
 

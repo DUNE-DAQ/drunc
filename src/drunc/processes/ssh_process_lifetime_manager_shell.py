@@ -322,6 +322,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             logger
             if logger
             else get_logger("ssh_process_lifetime_manager_shell", rich_handler=True)
+            # ? Fun fact: this rich_handler = True is the cause of duplication. Need to fix..
         )
         self._on_process_exit = on_process_exit
 

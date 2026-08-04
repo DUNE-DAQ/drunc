@@ -367,7 +367,10 @@ def test_restart_mlt_logs(run_dunerc) -> None:
 
     booted_match = require_pattern_match(
         restart_text,
-        re.compile(r"Booted 'mlt'.*?with UUID\s+([^\s\n]+)", re.DOTALL),
+        re.compile(
+            r"Restarted \['mlt'\] from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
+            re.DOTALL,
+        ),
         error_message="Did not find the mlt boot log line after the restart exit log.",
     )
 
