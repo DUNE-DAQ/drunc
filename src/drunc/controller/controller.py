@@ -1628,7 +1628,7 @@ class Controller(ControllerServicer):
         child_list = self.address_target_path(
             request.target,
             request.execute_on_all_subsequent_children_in_path,
-            include_excluded_nodes=False,
+            include_excluded_nodes=True,
         )
         connected_indices, disconnected_indices = self._partition_connected_children(
             child_list,
