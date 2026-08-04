@@ -22,6 +22,7 @@ from drunc.process_manager.interface.commands import (
     restart_impl,
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
+from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
@@ -301,9 +302,16 @@ def log_on_server(
 
 
 @click.command("terminate")
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
 @click.pass_context
-def terminate(ctx, obj):
+def terminate(ctx, obj, width):
     """
     Execute the process manager terminate command, but only do this for the current
     session
@@ -313,8 +321,13 @@ def terminate(ctx, obj):
     log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
-    obj.get_driver("process_manager").kill(session_query)
+    result = obj.get_driver("process_manager").kill(session_query)
+    if not result:
+        return
 
+    obj.print(
+        tabulate_process_instance_list(result, "Terminated process", False, width=width)
+    )  # rich tables require console printing
     # As the session is now terminated, we can delete the controller driver, as it is no
     # longer needed.
     obj.delete_driver("controller")

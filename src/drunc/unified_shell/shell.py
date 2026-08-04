@@ -44,6 +44,7 @@ from drunc.exceptions import (
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
+    ProcessManagerRunningMode,
     ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
@@ -180,6 +181,7 @@ def unified_shell(
             f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
         )
         internal_pm = False
+        running_mode = ProcessManagerRunningMode.Subprocess
         ctx.obj.reset(address_pm=process_manager_url.netloc)
         pm_type = ProcessManagerTypes[
             ctx.obj.get_driver("process_manager").describe().type
@@ -189,7 +191,10 @@ def unified_shell(
         )
     else:
         internal_pm = True
+        running_mode = ProcessManagerRunningMode.Standalone
+
         pm_type = get_pm_type_from_name(process_manager)
+        ctx.obj.log.info(f"[green]Connected to the {pm_type.name} process manager[/]")
 
     ctx.obj.log.debug(
         f"Process manager argument parsed, internal_pm set to {internal_pm}"
@@ -260,6 +265,7 @@ def unified_shell(
                 "signal_handler": ignore_sigint_sighandler,
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
+                "running_mode": running_mode,
             },
         )
         ctx.obj.pm_process.start()

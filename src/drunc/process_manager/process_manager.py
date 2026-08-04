@@ -34,6 +34,7 @@ from drunc.exceptions import (
 )
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
+    ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
 from drunc.utils.utils import get_logger, pid_info_str
@@ -46,6 +47,9 @@ class BadQuery(DruncCommandException):
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
+
+    def set_running_mode(self, running_mode):
+        self.running_mode = running_mode
 
     def __init__(
         self, configuration: ProcessManagerConfHandler, name: str, session: str
@@ -74,6 +78,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.configuration = configuration
         self.name = name
         self.session = session
+
+        self.running_mode = ProcessManagerRunningMode.Unknown
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser
