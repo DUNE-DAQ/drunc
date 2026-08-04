@@ -8,15 +8,15 @@ from importlib import resources
 # Define the path to the drunc data root directory
 _DRUNC_DATA_ROOT = resources.files("drunc.data")
 
-CONFIGURATION_TYPES = ["prrocess_mannager", "run_control"]
+CONFIGURATION_TYPES = ["process_manager", "run_control"]
 
 # Generate the set of process manager configurations
 PROCESS_MANAGER_CONFIGS = [
-    str(path) for path in (_DRUNC_DATA_ROOT / "process_manager").glob("*.json")
+    str(path.name) for path in (_DRUNC_DATA_ROOT / "process_manager").glob("*.json")
 ]
 
 # Strip out the ones that are no longer supported
-UNSUPPORTED_PROCESS_MANAGERs = (
+UNSUPPORTED_PROCESS_MANAGERS = (
     "process-manager-k8s-pocket.json",
     "ssh-pocket-kafka.json",
     "ssh-standalone-paramiko-client.json",
@@ -24,7 +24,7 @@ UNSUPPORTED_PROCESS_MANAGERs = (
 PROCESS_MANAGER_CONFIGS = [
     config
     for config in PROCESS_MANAGER_CONFIGS
-    if not any(unsupported in config for unsupported in UNSUPPORTED_PROCESS_MANAGERs)
+    if not any(unsupported in config for unsupported in UNSUPPORTED_PROCESS_MANAGERS)
 ]
 # Generate the set of run control configurations
 

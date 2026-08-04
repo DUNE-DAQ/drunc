@@ -2,6 +2,7 @@ import getpass
 import logging
 import multiprocessing as mp
 import os
+import time
 
 import conffwk
 from druncschema.generic_pb2 import OutcomeFlag
@@ -43,7 +44,7 @@ from drunc.run_control.utils import (
     determine_process_manager_type,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, resolve_localhost_and_127_ip_to_network_ip
 
 
 class RunControl(RunControlServicer):
@@ -118,6 +119,7 @@ class RunControl(RunControlServicer):
             process_manager_conf_file: str = get_process_manager_configuration(
                 request.process_manager
             )
+            self.log.info(f"{process_manager_conf_file=}")
 
             # Validate the process manager configuration before starting it
             if not validate_pm_config(process_manager_conf_file):
@@ -137,13 +139,16 @@ class RunControl(RunControlServicer):
             pm_conf_dict = import_config_json_to_dict(
                 "process_manager", request.process_manager
             )
-            pm_host = pm_conf_dict.get("host", "localhost")
+            self.log.info(f"Got the {pm_conf_dict=}")
+            pm_host = resolve_localhost_and_127_ip_to_network_ip(
+                pm_conf_dict.get("host", "localhost")
+            )
             pm_port = pm_conf_dict.get("port", 0)
             pm_address = f"{pm_host}:{pm_port}"
             port = mp.Value("i", 0)
 
-            self.log.debug(
-                "Startign [green]process manager[/] with configuration file: [green]%s[/]",
+            self.log.info(
+                "Starting [green]process manager[/] with configuration file: [green]%s[/]",
                 process_manager_conf_file,
             )
             self.pm_process = mp.Process(
@@ -152,13 +157,20 @@ class RunControl(RunControlServicer):
                     "pm_conf": process_manager_conf_file,
                     "pm_address": pm_address,
                     "override_logs": request.override_logs,
-                    "log_level": "INFO",  # PLACEHOLDER
+                    "log_level": "DEBUG",  # PLACEHOLDER
                     "log_path": ".",  # PLACEHOLDER
                     "generated_port": port,
                 },
             )
+            self.log.info("Starting the pm process")
             self.pm_process.start()
+            time.sleep(1)  # Give the process manager time to start and bind to the port
             self.log.debug("[green]Process manager[/green] started")
+            # Update the communication port number, since it may have been set to 0 in the configuration file
+            pm_address = f"{pm_host}:{port.value}"
+            self.log.info(
+                f"Process manager started at address: [green]{pm_address}[/green]"
+            )
         else:
             pm_address = request.process_manager
             self.log.info(
@@ -167,14 +179,15 @@ class RunControl(RunControlServicer):
 
         # Add the process manager driver
         self.token = request.token
+        self.log.warning(f"Adding process manager driver with address: {pm_address}")
         self.drivers["process_manager"] = ProcessManagerDriver(pm_address, self.token)
 
         # Establish communication with the process manager, check it is running and ready to accept requests
-        self.log.debug(
+        self.log.info(
             f"Attempting to connect to the process manager at the address: [green]{pm_address}[/]"
         )
         try:
-            self.drivers("process_manager").describe()
+            self.drivers["process_manager"].describe()
         except Exception as e:
             self.log.error(
                 f"[red]Could not connect to the process manager at the address: [/red]"
@@ -197,7 +210,7 @@ class RunControl(RunControlServicer):
                     f"{self.pm_process.exitcode}"
                 )
 
-            if self.pm_process.is_alive():
+            if self.pm_process and self.pm_process.is_alive():
                 self.pm_process.terminate()
                 self.pm_process.join()
 
@@ -208,8 +221,10 @@ class RunControl(RunControlServicer):
                 ),
             )
 
+        self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
+
         # Get the dal to get the connectivity service client
-        db = conffwk.Configuration(request.configuration_file)
+        db = conffwk.Configuration(request.path_to_configuration_file)
         self.session_dal = db.get_dal(class_name="Session", uid=request.session_id)
         connectivity_service_address: str = (
             f"{self.session_dal.connectivity_service.host}:"
@@ -316,7 +331,7 @@ class RunControl(RunControlServicer):
         if self.process_manager_type == ProcessManagerDeploymentType.INTERNAL:
             self.pm_process.terminate()  # Send a SIGTERM to the pm_process
             self.pm_process.join(timeout=2)  # Block continuing execution for 2s
-            if self.pm_process.is_alive():
+            if self.pm_process and self.pm_process.is_alive():
                 self.log.warning(
                     "Process manager did not exit in time, terminating forcefully."
                 )

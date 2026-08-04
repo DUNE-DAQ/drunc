@@ -32,10 +32,9 @@ def determine_process_manager_type(
 
     """
     urlparse_result = urlparse(process_manager)
-    process_manager_with_json = process_manager + ".json"
-    if urlparse_result.scheme and urlparse_result.netloc:
+    if urlparse_result.scheme:
         return ProcessManagerDeploymentType.EXTERNAL
-    elif process_manager_with_json in PROCESS_MANAGER_CONFIGS:
+    elif urlparse_result.path in PROCESS_MANAGER_CONFIGS:
         return ProcessManagerDeploymentType.INTERNAL
     else:
         return ProcessManagerDeploymentType.UNKNOWN

@@ -100,7 +100,7 @@ def deploy_run_control_server(conf: dict[str, str | int | float | bool]) -> None
         # Start the gRPC server and log the address it's serving on
         server.start()
         log.info(
-            f"process_manager communicating through address [bold green]{host}:{port}[/bold green]"
+            f"run control communicating through address [bold green]{host}:{port}[/bold green]"
         )  # bold as part of the address was already formatting, couldn't figure out why
 
         # Include the server shutdown coroutine in the cleanup coroutines list for

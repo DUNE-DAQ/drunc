@@ -134,7 +134,6 @@ def start_session(
         controller_log_level=controller_log_level,
         sleep_between_app_boot=sleep_between_app_boot,
     )
-    log.critical("Still requires implementation!")
     return
 
 

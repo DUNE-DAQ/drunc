@@ -19,7 +19,7 @@ from drunc.utils.utils import get_logger
 
 class RunControlDriver:
     def __init__(self, address: str, token: Token):
-        self.log = get_logger("run_control.driver")
+        self.log = get_logger("run_control.driver", rich_handler=True)
         self.address = address
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
