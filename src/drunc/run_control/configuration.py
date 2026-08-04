@@ -6,7 +6,7 @@ from importlib import resources
 
 import click
 
-from drunc.configuration_types import CONFIGURATION_TYPES
+from drunc.configuration_files import CONFIGURATION_TYPES
 from drunc.utils.utils import load_json_to_dict
 
 

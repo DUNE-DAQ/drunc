@@ -27,10 +27,9 @@ from druncschema.run_control_pb2 import (
     ValidateSessionResponse,
 )
 from druncschema.run_control_pb2_grpc import RunControlServicer
-from drunschema.token_pb2 import Token
+from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
-from drunc.exceptions import ServerUnreachable
 from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
@@ -43,6 +42,7 @@ from drunc.run_control.utils import (
     ProcessManagerDeploymentType,
     determine_process_manager_type,
 )
+from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import get_logger
 
 
