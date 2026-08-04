@@ -151,6 +151,7 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
+        print(f"Checking for log file for {app_name}...")
         assert app_name in alive_processes, (
             f"Expected {app_name} to be alive after boot, but it was not."
         )

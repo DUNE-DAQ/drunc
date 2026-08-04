@@ -70,7 +70,7 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 140
+ps -w 300
 
 echo status-post-boot
 status
