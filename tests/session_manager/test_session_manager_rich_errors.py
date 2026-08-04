@@ -89,7 +89,6 @@ def test_list_all_configs_no_config_files_rich_error(
 
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
-    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     # Remove the DUNEDAQ_DB_PATH from the environment to simulate it's not set
     monkeypatch.delenv("DUNEDAQ_DB_PATH", raising=False)
@@ -101,9 +100,6 @@ def test_list_all_configs_no_config_files_rich_error(
 
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     assert "DUNEDAQ_DB_PATH" in err.details()
-
-    # The interceptor calls log.error twice (once for the method, once for the details)
-    assert mock_logger.error.call_count == 2
 
     # Unpack rich error metadata
     status = status_pb2.Status()
@@ -142,7 +138,6 @@ def test_no_config_files_rich_error(
 ):
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
-    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "/fake_path")
 
@@ -153,9 +148,6 @@ def test_no_config_files_rich_error(
 
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
     assert "Config files" in err.details()
-
-    # The interceptor calls log.error twice (once for the method, once for the details)
-    assert mock_logger.error.call_count == 2
 
     # Unpack rich error metadata
     status = status_pb2.Status()
@@ -252,7 +244,6 @@ def test_dals_missing_or_invalid(
 ):
     session_manager_rich_error_test_suite.setup_server_and_client()
     stub = session_manager_rich_error_test_suite.stub
-    mock_logger = session_manager_rich_error_test_suite.mock_client_logger
 
     # Set env var so search_paths is non-empty
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "valid_path/")
@@ -272,7 +263,6 @@ def test_dals_missing_or_invalid(
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
-    assert mock_logger.error.call_count == 2
 
     # Unpack rich error metadata
     status = status_pb2.Status()

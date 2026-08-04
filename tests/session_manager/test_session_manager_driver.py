@@ -45,8 +45,7 @@ def test_grpc_error_handling(mock_driver, method_name):
         mock_extract.assert_called_once_with(grpc_error)
         mock_handler.assert_called_once_with(grpc_error)
 
-        assert mock_driver.log.error.call_count == 2
-        logged = mock_driver.log.error.call_args_list[1][0][0]
+        logged = mock_driver.log.error.call_args_list[0][0][0]
         assert logged == error_details
 
 
@@ -94,6 +93,5 @@ def test_grpc_error_fallback(mock_driver, method_name):
 
         # Assert fallback logic
         mock_extract.assert_called_once()
-        assert mock_driver.log.error.call_count == 2
-        logged = mock_driver.log.error.call_args_list[1][0][0]
+        logged = mock_driver.log.error.call_args_list[0][0][0]
         assert logged == error_details

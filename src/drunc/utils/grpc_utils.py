@@ -474,8 +474,10 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
         return handler
 
 
-class _CallWrapper:
-    """Wraps the gRPC Call/Future object to catch exceptions."""
+class _GRPCCallWrapper:
+    """Wraps the gRPC Call/Future object to catch exceptions.
+    This is because the gRPC errors happen when the response is read, not when the
+    request is made. So we need to wrap the Future object and catch the exception when the result is read."""
 
     def __init__(self, call, method, logger):
         self._call = call
@@ -484,7 +486,6 @@ class _CallWrapper:
 
     def _handle_error(self, exception):
         if isinstance(exception, grpc.RpcError):
-            self._logger.error(f"gRPC Call Failed on method: {self._method}")
             try:
                 error_details = extract_grpc_rich_error(exception)
                 self._logger.error(error_details)
@@ -498,6 +499,7 @@ class _CallWrapper:
     def __getattr__(self, attr):
         # intercept the .result() call and process the error
         # to be used in tests if a mock passes an exception directly
+        # to do: make mocks pass a Future
         if attr == "result" and isinstance(self._call, Exception):
 
             def handle_mocked_error(*args, **kwargs):
@@ -529,9 +531,7 @@ class RichErrorClientInterceptor(grpc.UnaryUnaryClientInterceptor):
         self.log = logger
 
     def intercept_unary_unary(self, continuation, client_call_details, request):
-        response_call = continuation(client_call_details, request)
-        return _CallWrapper(response_call, client_call_details.method, self.log)
-
-    def intercept_unary_stream(self, continuation, client_call_details, request):
-        response_iterator = continuation(client_call_details, request)
-        return _CallWrapper(response_iterator, client_call_details.method, self.log)
+        response_call = continuation(
+            client_call_details, request
+        )  # continue the RPC call on the underlying channel
+        return _GRPCCallWrapper(response_call, client_call_details.method, self.log)
