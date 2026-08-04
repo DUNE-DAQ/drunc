@@ -3,6 +3,7 @@
 import abc
 from os import getenv
 from pathlib import Path
+from threading import Lock
 
 from conffwk import Configuration
 from druncschema.description_pb2 import CommandDescription, Description
@@ -42,12 +43,14 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         super().__init__()
 
-        self.log = get_logger("session_manager", rich_handler=True)
-        self.log.debug(pid_info_str())
-        self.log.debug("Initialized SessionManager")
-
         self.name = name
         self.configuration = configuration
+        self._active_sessions: dict[str, ActiveSession] = {}
+        self._active_sessions_lock = Lock()
+
+        self.log = get_logger("session_manager", rich_handler=True)
+        self.log.debug(pid_info_str())
+        self.log.debug("Initialised session manager")
 
     def describe(self, request: Request, context: ServicerContext) -> Description:
         """Respond with a description of this session manager service.
@@ -110,21 +113,13 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         """
         self.log.debug(f"{self.name} running list_all_sessions")
 
-        dummy_config = ConfigKey(
-            file="dummy_config_file",
-            session_id="dummy_config_session_id",
-        )
-
-        dummy_session = ActiveSession(
-            name="dummy_session",
-            user="dummy_user",
-            config_key=dummy_config,
-        )
+        with self._active_sessions_lock:
+            active_sessions = list(self._active_sessions.values())
 
         return AllActiveSessions(
             name=self.name,
             token=None,
-            active_sessions=[dummy_session],
+            active_sessions=active_sessions,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
