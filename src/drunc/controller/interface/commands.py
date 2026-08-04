@@ -84,10 +84,11 @@ def status(
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
 ) -> None:
-    if target != "":
-        log_msg = f"Getting status for target '{target}'..."
-    else:
-        log_msg = "Getting status for all targets..."
+    log_msg = (
+        f"Getting status for target '{target}'..."
+        if target
+        else "Getting status for all targets..."
+    )
     obj.log.info(log_msg)
     obj.print(
         render_status_table(
