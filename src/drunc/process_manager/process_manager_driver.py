@@ -210,8 +210,13 @@ class ProcessManagerDriver:
                 )
                 touch_and_chmod(opmon_file)
 
-            response = self.stub.boot(request, timeout=timeout)
-            yield response
+                response = self.stub.boot(request, timeout=timeout)
+                self.log.info(
+                    f"Booted '{request.process_description.metadata.name}' "
+                    f"from session '{request.process_description.metadata.session}' "
+                    f"with UUID {response.values[0].uuid.uuid} on host {request.process_description.metadata.hostname}"
+                )
+                yield response
 
         # Step 7: discover segment root controller
         self._discover_controller(
@@ -862,7 +867,8 @@ To debug it, close drunc and run the following command:
         timeout: int | float = 130,
     ) -> ProcessInstanceList:
         request = Request(token=copy_token(self.token))
-
+        msg = f"[green]{request.token.user_name}[/green] sent terminate"
+        self.log.info(msg)
         response = self.stub.terminate(request, timeout=timeout)
 
         return response
@@ -871,7 +877,16 @@ To debug it, close drunc and run the following command:
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
+        log_msg_session_name_extension = (
+            f" for session [green]{request.session}[/green]"
+            if hasattr(request, "session")
+            else ""
+        )
+        msg = (
+            f"[green]{request.token.user_name}[/green] sent kill"
+            + log_msg_session_name_extension
+        )
+        self.log.info(msg)
         response = self.stub.kill(request, timeout=timeout)
 
         return response
@@ -920,6 +935,11 @@ To debug it, close drunc and run the following command:
         request.token.CopyFrom(self.token)
 
         response = self.stub.restart(request, timeout=timeout)
+        self.log.info(
+            f"Restarted [green]{request.names}[/green] "
+            f"from session [green]{request.session} [/green]"
+            f"with UUID [green]{response.values[0].uuid.uuid}[/green] on host [green]{response.values[0].process_description.metadata.hostname}[/green]"
+        )
 
         return response
 
