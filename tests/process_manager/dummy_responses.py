@@ -5,8 +5,10 @@ Dummy response objects for Process Manager endpoints
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     LogLines,
+    ProcessDescription,
     ProcessInstance,
     ProcessInstanceList,
+    ProcessMetadata,
     ProcessUUID,
 )
 from druncschema.request_response_pb2 import ResponseFlag
@@ -37,7 +39,16 @@ KILL_RESPONSE = ProcessInstanceList(
 RESTART_RESPONSE = ProcessInstanceList(
     name="restart_endpoint",
     token=Token(),
-    values=[],
+    values=[
+        ProcessInstance(
+            uuid=ProcessUUID(uuid="test-restart-uuid"),
+            process_description=ProcessDescription(
+                metadata=ProcessMetadata(hostname="test-host")
+            ),
+            status_code=ProcessInstance.StatusCode.RUNNING,
+            return_code=0,
+        )
+    ],
     flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
 )
 
