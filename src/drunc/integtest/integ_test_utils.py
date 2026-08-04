@@ -14,15 +14,30 @@ The helpers are intentionally lightweight and pytest-friendly: failures are
 reported through `assert` with context-rich messages.
 """
 
+import os
 import re
 from collections.abc import Callable
 from pathlib import PosixPath
+
+import pytest
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
 
 # Define a regex for parsing UUIDs from the ps table in the drunc logsx
 UUID_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+# For the failure mode testing, reuqire drunc to be a part of DUNEDAQ_DB_PATH
+db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
+drunc_missing = not any(
+    "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
+)
+
+# Define the exportable marker
+require_drunc = pytest.mark.skipif(
+    drunc_missing,
+    reason="drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
 )
 
 

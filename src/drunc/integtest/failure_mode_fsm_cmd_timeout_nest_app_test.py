@@ -11,28 +11,16 @@ import re
 import integrationtest.data_classes as data_classes
 
 # import integrationtest.log_file_checks as log_file_checks
-import pytest
 from integ_test_utils import (
     check_file_containing,
     get_ps_table_after_echo,
     get_rows_by_name_from_status_table,
     get_status_table_after_echo,
+    require_drunc,
     strip_ansi,
 )
 
-# Check if drunc is present in the DUNEDAQ_DB_PATH, and if not, skip all tests in this
-# file with an appropriate message
-present = any(["drunc" in i for i in os.getenv("DUNEDAQ_DB_PATH").split(":")])
-db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
-drunc_missing = not any(
-    "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
-)
-
-# Apply globally to all tests in this file
-pytestmark = pytest.mark.skipif(
-    drunc_missing,
-    reason="drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
-)
+pytestmark = require_drunc
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
