@@ -169,18 +169,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.thread.join()
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
-        def find_by_uuid(pi_list, target_uuid: str):
-            """Identifies the process from a list by uuid"""
-            for pi in pi_list.values:
-                if pi.uuid.uuid == target_uuid:
-                    return pi
-            return None
-
         tech_name = self.configuration.pm_type.name
-
-        #! Evaluate code for these with the dead check down below
-        n_dead_prev = 0
-        dead_processes_prev = set()
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -212,31 +201,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     ),
                     custom_origin={"drunc_session": sesh},
                 )
-
-            n_dead = len(dead_processes)
-            if n_dead_prev < n_dead:
-                n_dead_prev = n_dead
-                #! Ask pawel whats going on with the dead process check
-                diff_set = dead_processes - dead_processes_prev
-                for diff in diff_set:
-                    if diff in self.expected_dead_applications:
-                        self.log.debug(
-                            f"Process {diff} already expected to be dead, continuing"
-                        )
-                        continue
-                    pi = find_by_uuid(results, diff)
-                    pi_return_code = (
-                        pi.return_code if pi.HasField("return_code") else "NONE"
-                    )
-                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi_return_code}"
-                    if not self.ers_handler_initialized:
-                        setup_daq_ers_logger(
-                            self.log,
-                            pi.process_description.metadata.session,
-                            "drunc.process_manager",
-                        )
-                    self.log.critical(err_msg, extra=self.handlerconf.ERS)
-                    # self.log.warning(err_msg)
 
             time.sleep(interval_s)
 
@@ -633,7 +597,33 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return processes
 
-    def add_process_to_expected_dead_processes(self, uuid: str) -> None:
+    def _find_by_uuid(self, pi_list, target_uuid: str):
+        """Identifies the process from a list by uuid"""
+        for pi in pi_list.values:
+            if pi.uuid.uuid == target_uuid:
+                return pi
+        return None
+
+    def _unexpected_death_handling(self, uuid: str):
+        empty_query = ProcessQuery()
+        empty_results = self._ps_impl(empty_query)
+        pi = self._find_by_uuid(empty_results, uuid)
+
+        pi_return_code = pi.return_code if pi.HasField("return_code") else "NONE"
+        err_msg = f"Process {pi.process_description.metadata.name} of with UUID {uuid} has died with a return code {pi_return_code}"
+
+        # Fix in notification system
+        if not self.ers_handler_initialized:
+            setup_daq_ers_logger(
+                self.log,
+                pi.process_description.metadata.session,
+                "drunc.process_manager",
+            )
+        self.log.critical(err_msg, extra=self.handlerconf.ERS)
+
+    def add_process_to_expected_dead_processes(
+        self, uuid: str, unexpected: bool = False
+    ) -> None:
         """
         Add the process to the list of processes that are expected to die. Needed as the
         OpMon publisher publishes the state when a process dies unexpectedly, and these
@@ -648,6 +638,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         Raises:
             DruncException - if the process is not known about, this error gets raised
         """
+        # Also fix this in notification system
+        if unexpected:
+            self._unexpected_death_handling(uuid)
         with self.dead_process_lock:
             if uuid in self.boot_request:
                 br = BootRequest()

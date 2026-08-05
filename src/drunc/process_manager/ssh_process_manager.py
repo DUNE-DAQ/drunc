@@ -140,7 +140,7 @@ class SSHProcessManager(ProcessManager):
         if uuid not in self.archived_exit_statuses:
             self.archived_exit_statuses[uuid] = exit_status
         if uuid not in self.expected_dead_applications:
-            self.add_process_to_expected_dead_processes(uuid)
+            self.add_process_to_expected_dead_processes(uuid, unexpected=True)
 
         boot_req = self.boot_request[uuid]
         name = boot_req.process_description.metadata.name
