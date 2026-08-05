@@ -181,7 +181,6 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         #! Evaluate code for these with the dead check down below
         n_dead_prev = 0
         dead_processes_prev = set()
-
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
@@ -209,7 +208,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                     message=ProcessStatus(
                         n_running=session_running[sesh],
                         n_dead=session_dead[sesh],
-                        n_session=1,  #! Can we change the schema? will it affect the influxdb?
+                        n_session=1,
                     ),
                     custom_origin={"drunc_session": sesh},
                 )
@@ -237,7 +236,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
                             "drunc.process_manager",
                         )
                     self.log.critical(err_msg, extra=self.handlerconf.ERS)
-                    self.log.warning(err_msg)
+                    # self.log.warning(err_msg)
 
             time.sleep(interval_s)
 
