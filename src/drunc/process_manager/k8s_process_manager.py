@@ -230,6 +230,8 @@ class K8sProcessManager(ProcessManager):
         # keeps concurrent kills (e.g. different sessions) from sharing state.
         self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
         self._pending_deletion_lock = threading.Lock()
+        # Guards against notify_termination running twice
+        self._notified_uuids: set[str] = set()
         self.final_exit_codes = {}
         # Per-session LCS state. Keyed by session (k8s namespace) name.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
@@ -368,6 +370,12 @@ class K8sProcessManager(ProcessManager):
             session: The Kubernetes namespace (session) the pod belonged to.
         """
         self.log.debug(f"notify_termination called for '{proc_uuid}'.")
+
+        # Only process each uuid's termination once
+        with self._pending_deletion_lock:
+            if proc_uuid in self._notified_uuids:
+                return
+            self._notified_uuids.add(proc_uuid)
 
         # Publish a log message and to kafka for each process that is terminated
         if proc_uuid in self.boot_request:
@@ -2521,7 +2529,10 @@ class K8sProcessManager(ProcessManager):
                 if batch_event.wait(timeout=remaining_wait):
                     break
 
-                for proc_uuid in list(remaining_uuids):
+                with self._pending_deletion_lock:
+                    pending_snapshot = list(remaining_uuids)
+
+                for proc_uuid in pending_snapshot:
                     if proc_uuid not in self.boot_request:
                         continue
                     pd = self.boot_request[proc_uuid].process_description
