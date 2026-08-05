@@ -1405,7 +1405,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         running_process = self.process_store[uuid]
 
         process_name: str | None = None
-        if uuid in self.metadata:
+        if metadata:
             process_name = self.metadata[uuid].name
 
         hostname = running_process.hostname
