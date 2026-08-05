@@ -190,7 +190,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             dead_processes = set()
 
             for process in results.values:
-                session = f"{tech_name}_{process.process_description.metadata.session}"
+                session = f"{tech_name}__{process.process_description.metadata.session}"
                 status = process.status_code
 
                 if status == ProcessInstance.StatusCode.RUNNING:
