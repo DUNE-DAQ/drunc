@@ -17,6 +17,7 @@ from drunc.grpc_settings import (
 )
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
+    ProcessManagerRunningMode,
     get_process_manager_configuration,
     validate_pm_config,
 )
@@ -43,6 +44,7 @@ def run_pm(
     ready_event: bool = None,
     signal_handler: bool = None,
     generated_port: bool = None,
+    running_mode: ProcessManagerRunningMode = ProcessManagerRunningMode.Unknown,
 ) -> None:
     appName = "process_manager"
     log = get_logger(logger_name=appName, rich_handler=True)
@@ -83,6 +85,7 @@ def run_pm(
 
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
+    pm.set_running_mode(running_mode)
 
     server: grpc.Server | None = None
 
@@ -196,4 +199,5 @@ def process_manager_cli(
         log_level=log_level,
         override_logs=override_logs,
         log_path=log_path,
+        running_mode=ProcessManagerRunningMode.Subprocess,
     )

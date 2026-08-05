@@ -105,10 +105,13 @@ def boot_test_setup(mock_driver):
         # Configure the boot stub to either return a response or raise an error
         if grpc_error:
             mock_driver.stub.boot = MagicMock(side_effect=grpc_error)
+            mock_response = None
         else:
-            mock_driver.stub.boot = MagicMock(return_value="boot_response")
+            mock_response = MagicMock()
+            mock_response.values = [MagicMock(uuid=MagicMock(uuid="test-uuid-12345"))]
+            mock_driver.stub.boot = MagicMock(return_value=mock_response)
 
-        return mock_request, csc_mock
+        return mock_request, csc_mock, mock_response
 
     return _setup
 
@@ -224,7 +227,7 @@ def test_boot_success(mock_driver, boot_test_setup):
     Test that `boot` yields process responses as expected.
     """
     # Simulate connection is ready
-    boot_test_setup(is_ready=True)
+    mock_request, csc_mock, mock_response = boot_test_setup(is_ready=True)
 
     # Control timing behaviour
     with patch("time.time", return_value=100), patch("time.sleep") as mock_sleep:
@@ -238,7 +241,7 @@ def test_boot_success(mock_driver, boot_test_setup):
             )
         )
 
-    assert responses == ["boot_response"]
+    assert responses == [mock_response]
 
     # Confirm that controller discovery was triggered
     mock_driver._discover_controller.assert_called_once()
