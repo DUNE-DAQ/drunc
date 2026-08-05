@@ -196,7 +196,6 @@ class K8sProcessManager(ProcessManager):
         # Get the username for the session. This is needed as k8s does not pass the
         # username through to the pod
         self.session = getpass.getuser()
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
 
         # Setup the loger
         self.log = get_logger("process_manager.k8s-process-manager")
@@ -224,7 +223,6 @@ class K8sProcessManager(ProcessManager):
         # Storage for process orchestrator parameters
         self.managed_sessions = set()
         self.watchers = []
-        self._start_watcher()
         self.sessions_pending_deletion = set()
         # proc_uuid -> (remaining_uuids, event) for its kill_and_wait() batch;
         # keeps concurrent kills (e.g. different sessions) from sharing state.
@@ -244,10 +242,9 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Get settings from configuration JSON file
-        # Any comments following this one will relate to the parameters retrieved from
-        # the configuration file if the comment starts as "CONFIGURATION -"
-        settings = getattr(self.configuration, "settings", {})
+        # Get settings from configuration JSON file. Uses the `configuration`
+        # parameter directly, not self.configuration
+        settings = getattr(configuration, "settings", {})
 
         # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
@@ -293,6 +290,16 @@ class K8sProcessManager(ProcessManager):
         self._host_cache_expiry = checking.get("host_cache_expiry", 300)
         self.service_startup_timeout = checking.get("service_startup_timeout", 30)
         self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
+
+        # super().__init__() starts the opmon publish thread 
+        super().__init__(configuration=configuration, session=self.session, **kwargs)
+
+        # super().__init__() sets its own self.log
+        self.log = get_logger("process_manager.k8s-process-manager")
+
+        # _start_watcher() starts a thread that immediately needs _core_v1_api and
+        # drunc_label -- so this must come after super().__init__().
+        self._start_watcher()
 
         # Get and print the list of active namespaces managed by drunc
         namespaces = self._core_v1_api.list_namespace(
