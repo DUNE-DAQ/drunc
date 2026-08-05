@@ -122,13 +122,18 @@ def boot(
         return
 
     # Determine whether the session should be placed into an error state, regardless of
-    # the outcome of the `boot` command. This variable is used to catch all instances of
-    # where the session is not booted or reported correctly, and the user should be
-    # informed of this. This catches additional issues that the `boot` process does not,
-    # which is from the architectural perspective of the booting only accounting for the
-    # deployment of the processes, and not e.g. whether the processes have successfully
+    # the outcome of the `boot` command.
+    # This variable catches all cases for which the session is not booted or reported
+    # correctly, and a relevant log message is shown.
+    # This catches additional issues that the `boot` process does not, as `boot` only
+    # deploys the processes, and not e.g. whether the processes have successfully
     # registered on the connevity service, or if the process has died shortly after
     # booting.
+    # Example - the process booted, but after booting it died before all the apps were
+    # registered on the connectivity service. The process manager would report this as a
+    # success, which is valid for process management, but it is a failure from the
+    # session perspective, as an error has occured with other services which the process
+    # manager does not interface with.
     put_in_error_state: bool = False
 
     # If the session applications are not found on the connectivity serivce, then the
