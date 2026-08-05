@@ -233,6 +233,8 @@ class K8sProcessManager(ProcessManager):
         # Guards against notify_termination running twice
         self._notified_uuids: set[str] = set()
         self.final_exit_codes = {}
+        # Guards inserts/deletes on boot_request against concurrent iteration
+        self.boot_request_lock = threading.Lock()
         # Per-session LCS state. Keyed by session (k8s namespace) name.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
         self._lcs_state: dict[str, _LcsSessionState] = {}
@@ -1858,10 +1860,13 @@ class K8sProcessManager(ProcessManager):
         Returns:
             A list of UUID strings matching the query, in the requested order.
         """
+        with self.boot_request_lock:
+            boot_request_snapshot = dict(self.boot_request)
+
         return self._match_processes_against_query(
             query=query,
-            available_uuids=list(self.boot_request.keys()),
-            boot_request_dict=self.boot_request,
+            available_uuids=list(boot_request_snapshot.keys()),
+            boot_request_dict=boot_request_snapshot,
             order_by=order_by,
         )
 
@@ -2202,8 +2207,9 @@ class K8sProcessManager(ProcessManager):
 
         # Resource Creation (Namespace, Pod, Labels)
         self._prepare_namespace(session)
-        self.boot_request[uuid] = BootRequest()
-        self.boot_request[uuid].CopyFrom(boot_request)
+        with self.boot_request_lock:
+            self.boot_request[uuid] = BootRequest()
+            self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_pod(podname, session, boot_request, tree_labels)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
@@ -2268,19 +2274,19 @@ class K8sProcessManager(ProcessManager):
             if proc_uuid not in self.boot_request:
                 continue
             pod = uuid_to_pod.get(proc_uuid)
-            status_code = ProcessInstance.StatusCode.DEAD
+            status_code = ProcessInstance.StatusCode.RUNNING
             return_code = None
-            if pod:
-                if pod.status.phase == "Running":
-                    status_code = ProcessInstance.StatusCode.RUNNING
-                elif pod.status.phase in ["Succeeded", "Failed"]:
-                    if (
-                        pod.status.container_statuses
-                        and pod.status.container_statuses[0].state.terminated
-                    ):
-                        return_code = pod.status.container_statuses[
-                            0
-                        ].state.terminated.exit_code
+            if not pod:
+                status_code = ProcessInstance.StatusCode.DEAD
+            elif pod.status.phase in ["Succeeded", "Failed"]:
+                status_code = ProcessInstance.StatusCode.DEAD
+                if (
+                    pod.status.container_statuses
+                    and pod.status.container_statuses[0].state.terminated
+                ):
+                    return_code = pod.status.container_statuses[
+                        0
+                    ].state.terminated.exit_code
 
             pd, pr, pu = (
                 ProcessDescription(),
@@ -2491,6 +2497,9 @@ class K8sProcessManager(ProcessManager):
             )
             self.log.info(f"{action} {len(uuids)} process(es)...")
 
+            for proc_uuid in uuids:
+                self.add_process_to_expected_dead_processes(proc_uuid)
+
             remaining_uuids = set(uuids)
             batch_event = threading.Event()
             with self._pending_deletion_lock:
@@ -2631,21 +2640,27 @@ class K8sProcessManager(ProcessManager):
 
         # Finalize and clean up
         final_ret = []
-        for proc_uuid in targeted_uuids:
-            if proc_uuid in self.boot_request:
-                pi = ProcessInstance(
-                    process_description=self.boot_request[
-                        proc_uuid
-                    ].process_description,
-                    process_restriction=self.boot_request[
-                        proc_uuid
-                    ].process_restriction,
-                    status_code=ProcessInstance.StatusCode.DEAD,
-                    uuid=ProcessUUID(uuid=proc_uuid),
-                    return_code=self.final_exit_codes.get(proc_uuid, -1),
-                )
-                final_ret.append(pi)
-                del self.boot_request[proc_uuid]
+        with self.boot_request_lock:
+            for proc_uuid in targeted_uuids:
+                if proc_uuid in self.boot_request:
+                    pi = ProcessInstance(
+                        process_description=self.boot_request[
+                            proc_uuid
+                        ].process_description,
+                        process_restriction=self.boot_request[
+                            proc_uuid
+                        ].process_restriction,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        uuid=ProcessUUID(uuid=proc_uuid),
+                        return_code=self.final_exit_codes.get(proc_uuid, -1),
+                    )
+                    final_ret.append(pi)
+                    del self.boot_request[proc_uuid]
+
+        # drop process once it's gone
+        for pi in final_ret:
+            if pi.uuid.uuid in self.expected_dead_applications:
+                self.remove_process_from_expected_dead_processes(pi.uuid.uuid)
 
         # If our internal process list is empty, we can clean up the namespace we used.
         if not self.boot_request:
