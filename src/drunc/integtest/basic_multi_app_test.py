@@ -92,8 +92,10 @@ dunerc_commands_2 = (
 )
 pmshell_command = ["ps"]
 
+# Find a free network port to use for the process manager
 pm_port = find_free_port(50020, 52000)
 
+# The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
 pmapp = DAQSessionApp("pm", procmsg_startup_commands)
 
@@ -103,14 +105,18 @@ pmshellapp = DAQSessionApp("pmshell", pmshell_startup_commands)
 drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
 druncapp = DAQSessionApp("drunc", drunc_startup_commands)
 
+# Packaging up the commands into DAQCommandSets
 cmd_set_1 = DAQCommandSet("drunc", dunerc_commands_1, CommandWaitParameters(style=CommandWaitStyle.ECHO))
 cmd_set_2 = DAQCommandSet("pmshell", pmshell_command, CommandWaitParameters(style=CommandWaitStyle.TIME))
 cmd_set_3 = DAQCommandSet("drunc", dunerc_commands_2, CommandWaitParameters(style=CommandWaitStyle.ECHO))
 
+# Putting everything together into a DAQSessionIngredients object
 app_list = [ pmapp, pmshellapp, druncapp ]
 cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3 ]
-dse = DAQSessionIngredients(app_list, cmd_set_list)
-daq_session_ingredients = {"MultiRCAppSession": dse}
+dsi = DAQSessionIngredients(app_list, cmd_set_list)
+
+# Declare the special variable that tells the integrationtest infrastructure what we want to run
+daq_session_ingredients = {"MultiRCAppSession": dsi}
 
 
 # The tests themselves
