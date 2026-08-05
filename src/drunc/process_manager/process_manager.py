@@ -608,6 +608,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         empty_query = ProcessQuery()
         empty_results = self._ps_impl(empty_query)
         pi = self._find_by_uuid(empty_results, uuid)
+        if not pi:
+            return
 
         pi_return_code = pi.return_code if pi.HasField("return_code") else "NONE"
         err_msg = f"Process {pi.process_description.metadata.name} of with UUID {uuid} has died with a return code {pi_return_code}"
