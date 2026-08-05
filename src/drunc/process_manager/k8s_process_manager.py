@@ -2344,19 +2344,19 @@ class K8sProcessManager(ProcessManager):
             if proc_uuid not in self.boot_request:
                 continue
             pod = uuid_to_pod.get(proc_uuid)
-            status_code = ProcessInstance.StatusCode.DEAD
+            status_code = ProcessInstance.StatusCode.RUNNING
             return_code = None
-            if pod:
-                if pod.status.phase == "Running":
-                    status_code = ProcessInstance.StatusCode.RUNNING
-                elif pod.status.phase in ["Succeeded", "Failed"]:
-                    if (
-                        pod.status.container_statuses
-                        and pod.status.container_statuses[0].state.terminated
-                    ):
-                        return_code = pod.status.container_statuses[
-                            0
-                        ].state.terminated.exit_code
+            if not pod:
+                status_code = ProcessInstance.StatusCode.DEAD
+            elif pod.status.phase in ["Succeeded", "Failed"]:
+                status_code = ProcessInstance.StatusCode.DEAD
+                if (
+                    pod.status.container_statuses
+                    and pod.status.container_statuses[0].state.terminated
+                ):
+                    return_code = pod.status.container_statuses[
+                        0
+                    ].state.terminated.exit_code
 
             pd, pr, pu = (
                 ProcessDescription(),
@@ -2539,6 +2539,9 @@ class K8sProcessManager(ProcessManager):
                 else "Gracefully terminating"
             )
             self.log.info(f"{action} {len(uuids)} process(es)...")
+
+            for proc_uuid in uuids:
+                self.add_process_to_expected_dead_processes(proc_uuid)
 
             self.termination_complete_event.clear()
             self.uuids_pending_deletion.update(uuids)
