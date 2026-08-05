@@ -183,7 +183,6 @@ def require_pattern_match(
         >>> match.group(1)
         '10'
     """
-    print(f"ITU01: {text}\n\n***\n\n")
     match = pattern.search(text)
     assert match is not None, error_message
     return match
