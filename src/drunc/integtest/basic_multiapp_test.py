@@ -1,3 +1,10 @@
+# 05-Aug-2026, KAB: the goal of this test is to validate and demonstrate the use of multiple
+# user-specified applications running in the DAQ session that is part of this test.
+#
+# This integtest was created by copying the small_footprint_quick_test from the daqsystemtest
+# repo and converting the assignment of the run control commands to make use of the new
+# "daq_session_ingredients" special integtest variable.
+#
 import pytest
 import urllib.request
 
