@@ -14,10 +14,31 @@ The helpers are intentionally lightweight and pytest-friendly: failures are
 reported through `assert` with context-rich messages.
 """
 
+import os
 import re
 from collections.abc import Callable
+from pathlib import PosixPath
+
+import pytest
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-9;]*[A-Za-z]")
+
+# Define a regex for parsing UUIDs from the ps table in the drunc logsx
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+# For the failure mode testing, reuqire drunc to be a part of DUNEDAQ_DB_PATH
+db_path_env = os.getenv("DUNEDAQ_DB_PATH", "")
+drunc_missing = not any(
+    "drunc" == segment for path in db_path_env.split(":") for segment in path.split("/")
+)
+
+# Define the exportable marker
+require_drunc = pytest.mark.skipif(
+    drunc_missing,
+    reason="drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
+)
 
 
 def strip_ansi(text: str) -> str:
@@ -76,6 +97,46 @@ def require_line_index(
     line_idx = find_line_index(lines, predicate, start_idx=start_idx)
     assert line_idx is not None, error_message
     return line_idx
+
+
+def check_file_containing(
+    lines: list[str],
+    file: PosixPath,
+) -> bool:
+    """
+    For each line in `lines`, check if the file contains the line.
+
+    Example:
+        >>> file = PosixPath("test_file.txt")
+        >>> file.write_text("Hello\\nWorld\\n")
+        >>> check_file_containing(["Hello", "World"], file)
+        True
+        >>> check_file_containing(["Hello", "Missing"], file)
+        False
+
+    Args:
+        lines: List of strings to check for presence in the file.
+        file: Path to the file to read and check against the lines.
+
+    Returns:
+        True if all lines are found in the file, False otherwise.
+
+    Raises:
+        None.
+    """
+    # Read in the file and split it by lines
+    try:
+        file_lines = file.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        print(f"Error: {file} not found.")
+        return False
+
+    # Check if the passed strings are present in the file lines
+    for target in lines:
+        if not any(target in file_line for file_line in file_lines):
+            return False
+
+    return True
 
 
 def require_line_containing(
@@ -284,8 +345,34 @@ def get_status_table_after_echo(
 
     If no status table is found after the marker, returns an empty list.
 
+    The table is structured as
+    | Name | Info | State | Substate | In error | Included | Endpoint |
+
+    Example:
+        >>> stdout = (
+        ...     "[2026/03/17 10:48:15 UTC] INFO drunc.echo test_status_marker\n"
+        ...     "unit-test status\n"
+        ...     "│ root-controller │  │ initial │ initial │ No | Yes │ grpc://np04-srv-029.cern.ch:30006 │\n"
+        ...     "└"
+        ... )
+        >>> table = get_status_table_after_echo(stdout, "test_status_marker")
+        >>> expected_row = {
+        ...     "Name": "root-controller",
+        ...     "Info": "",
+        ...     "State": "initial",
+        ...     "Substate": "initial",
+        ...     "In error": "No",
+        ...     "Included": "Yes",
+        ...     "Endpoint": "grpc://np04-srv-029.cern.ch:30006",
+        ... }
+        >>> table[0] == expected_row
+        True
+
     Returns:
         Parsed rows with keys: name, info, state, substate, in_error, included, endpoint.
+
+    Raises:
+        None
     """
     return _get_table_after_echo(lines, echo_marker, "status", _STATUS_COLUMNS)
 
@@ -327,11 +414,39 @@ def get_column_for_friendly_name(
     )
 
 
-def get_rows_for_friendly_name(
+#! Replace this with a generic one
+def get_rows_from_table(
+    table: list[dict[str, str]], column: str, value: str
+) -> list[dict[str, str]]:
+    """
+    Return all rows whose `column` matches `value`exactly after stripping.
+
+    Args:
+        table: List of dictionaries representing the table rows.
+        column: The column name to match against.
+        value: The value to match in the specified column.
+
+    Returns:
+        List of dictionaries representing the matching rows.
+
+    Raises:
+        KeyError: If the specified column does not exist in the table rows.
+    """
+    return [row for row in table if row[column].strip() == value]
+
+
+def get_rows_by_friendly_name_from_ps_table(
     ps_table: list[dict[str, str]], friendly_name: str
 ) -> list[dict[str, str]]:
     """Return all rows whose `friendly_name` matches exactly after stripping."""
-    return [row for row in ps_table if row["friendly_name"].strip() == friendly_name]
+    return get_rows_from_table(ps_table, "friendly_name", friendly_name)
+
+
+def get_rows_by_name_from_status_table(
+    status_table: list[dict[str, str]], name: str
+) -> list[dict[str, str]]:
+    """Return all rows whose `Name` matches exactly after stripping."""
+    return get_rows_from_table(status_table, "name", name)
 
 
 def assert_process_presence(
@@ -374,7 +489,7 @@ def assert_process_presence(
         ...     expected_present=False,
         ... )
     """
-    matching_rows = get_rows_for_friendly_name(ps_table, friendly_name)
+    matching_rows = get_rows_by_friendly_name_from_ps_table(ps_table, friendly_name)
 
     if expected_present:
         assert matching_rows, (

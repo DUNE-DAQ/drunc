@@ -390,8 +390,6 @@ def ps_impl(
         getattr(query, "session", None) or getattr(obj, "session_name", None) or ""
     )
     title = f"Processes running{f' in session {session_name}' if session_name else ''}"
-    log_msg = f"No processes running{f' in session [green]{session_name}[/]' if session_name else ''}"
-
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
@@ -406,4 +404,21 @@ def ps_impl(
             soft_wrap=True,
         )
     else:
-        log.info(log_msg)
+        log.info(f"No processes running in session [green]{obj.session_name}[/]")
+
+
+@click.command("log")
+@click.argument("text", required=True)
+@click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.pass_obj
+def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
+    obj.get_driver("process_manager").log_on_server(text=text, severity=severity)

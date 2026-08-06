@@ -583,8 +583,8 @@ def get_control_type_and_uri_from_connectivity_service(
         ApplicationLookupUnsuccessful: If the URI cannot be resolved.
     """
     uris: list[dict[str, object]] = []
-    logger = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
-    shared_console = get_shared_rich_console(logger)
+    log = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
+    shared_console = get_shared_rich_console(log)
 
     start = time.time()
     elapsed = 0.0
@@ -617,7 +617,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
                 except ApplicationLookupUnsuccessful:
                     elapsed = time.time() - start
-                    logger.debug(
+                    log.debug(
                         f"Could not resolve '{name}_control' elapsed {elapsed:.2f}s/{timeout}s"
                     )
                     time.sleep(retry_wait)
@@ -637,7 +637,7 @@ def get_control_type_and_uri_from_connectivity_service(
 
             except ApplicationLookupUnsuccessful:
                 elapsed = time.time() - start
-                logger.debug(
+                log.debug(
                     f"Could not resolve '{name}_control' elapsed {elapsed:.2f}s/{timeout}s"
                 )
                 time.sleep(retry_wait)
