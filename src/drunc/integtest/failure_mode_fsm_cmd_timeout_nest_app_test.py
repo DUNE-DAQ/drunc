@@ -94,7 +94,7 @@ def test_dunerc_success(run_dunerc) -> None:
     print(banner_line)
 
     # Check that dunerc completed correctly
-    assert run_dunerc.completed_process.returncode == 0
+    assert run_dunerc.completed_processes["drunc"].returncode == 0
 
 
 def test_log_files_are_present(run_dunerc) -> None:
@@ -119,7 +119,7 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
     """Checks that all expected applications are alive after boot."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Get the ps table
     ps_table_post_boot = get_ps_table_after_echo(lines, "ps-post-boot")
@@ -192,7 +192,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
     to go into an error state, and that the expected message is printed to stdout.
     """
     # Get the status table shown during the command execution
-    stdout = run_dunerc.completed_process.stdout
+    stdout = run_dunerc.completed_processes["drunc"].stdout
     lines = strip_ansi(stdout).splitlines()
     status_table_post_conf = get_status_table_after_echo(lines, "status-post-conf")
 
@@ -250,7 +250,7 @@ def test_suggestion_to_check_logs_is_present(run_dunerc) -> None:
     """
     Checks that the suggestion to check the log files is present in stdout.
     """
-    stdout = run_dunerc.completed_process.stdout
+    stdout = run_dunerc.completed_processes["drunc"].stdout
     lines = strip_ansi(stdout).splitlines()
 
     expected_suggestion = f"logs -n {timeout_app_name}"
