@@ -1405,7 +1405,6 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
         running_process = self.process_store[uuid]
 
-
         hostname = running_process.hostname
         user = running_process.user
         metadata_file = SSHProcessLifetimeManagerShell.get_metadata_file_path(uuid)
