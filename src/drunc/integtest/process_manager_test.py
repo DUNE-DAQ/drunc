@@ -283,7 +283,7 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
 
     running_pattern = re.compile(r"Command wait running for (\d+) seconds\.")
     ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
-    timestamp_pattern = re.compile(r"^\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
+    timestamp_pattern = re.compile(r"\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
 
     running_idx, running_match = require_pattern_match_index(
         lines,
