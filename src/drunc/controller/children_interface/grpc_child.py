@@ -3,6 +3,7 @@ import time
 from typing import NoReturn, cast
 
 import grpc
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -133,7 +134,9 @@ class gRPCChildNode(ChildNode):
                 time.sleep(5)
 
             else:
-                self.log.info(f"Connected to the controller ({self.uri})!")
+                self.log.info(
+                    f"Application {self.name} connected to the parent application ({self.uri})!"
+                )
                 break
 
     def _attempt_reconnection(self, retry_call):
@@ -606,3 +609,48 @@ class gRPCChildNode(ChildNode):
                     self.log.error(text)
 
         raise error
+
+    def log_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> LogOnServerResponse:
+        """
+        Log a message on the server with the specified severity.
+
+        Args:
+            text (str): The message to log.
+            severity (str): The severity level of the log message (default: "INFO").
+            target (str): The target for the log message (default: "").
+            execute_along_path (bool): Whether to execute along the path (default: False).
+            execute_on_all_subsequent_children_in_path (bool): Whether to execute on all subsequent children in the path (default: True).
+
+        Returns:
+            LogOnServerResponse: The response from the server after logging the message.
+        """
+        request = LogOnServerRequest(
+            token=None,
+            text=text,
+            severity=severity,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+
+        try:
+            response = self.stub.log_on_server(request)
+        except grpc.RpcError as e:
+            try:
+                self.handle_child_grpc_error(e)
+            except ServerUnreachable:
+                self.log.info(
+                    f"Connection to {self.name} at {self.uri} failed during log_on_server, attempting to reconnect..."
+                )
+                response = self._attempt_reconnection(
+                    lambda: self.stub.log_on_server(request)
+                )
+
+        return response

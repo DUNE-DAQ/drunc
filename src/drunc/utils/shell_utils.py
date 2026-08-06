@@ -380,7 +380,7 @@ def log_pm_cmd(obj: ShellContext):
     of the message while still recording the command name, optional session name, and
     shell identity.
 
-    These are sent over via send_msg so that it can be displayed in the process manager
+    These are sent over via  so that it can be displayed in the process manager
     shell
 
     Args:
@@ -398,4 +398,4 @@ def log_pm_cmd(obj: ShellContext):
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
     msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
-    obj.get_driver("process_manager").send_msg(msg)
+    obj.get_driver("process_manager").log_on_server(msg)

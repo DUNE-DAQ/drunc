@@ -3,7 +3,6 @@ import threading
 import uuid
 from typing import List, Optional
 
-from druncschema.generic_pb2 import OutcomeFlag, OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,
@@ -18,7 +17,10 @@ from druncschema.process_manager_pb2 import (
 from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
-from drunc.process_manager.configuration import ProcessManagerTypes
+from drunc.process_manager.configuration import (
+    ProcessManagerRunningMode,
+    ProcessManagerTypes,
+)
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
@@ -138,7 +140,7 @@ class SSHProcessManager(ProcessManager):
         if uuid not in self.archived_exit_statuses:
             self.archived_exit_statuses[uuid] = exit_status
         if uuid not in self.expected_dead_applications:
-            self.add_process_to_expected_dead_processes(uuid)
+            self.add_process_to_expected_dead_processes(uuid, unexpected=True)
 
         boot_req = self.boot_request[uuid]
         name = boot_req.process_description.metadata.name
@@ -384,11 +386,15 @@ class SSHProcessManager(ProcessManager):
         # Store the successful hostname in boot request metadata
         self.boot_request[uuid].process_description.metadata.hostname = hostname
 
-        self.log.info(
+        boot_msg = (
             f"Booted '{boot_request.process_description.metadata.name}' "
             f"from session '{boot_request.process_description.metadata.session}' "
             f"with UUID {uuid} on host {hostname}"
         )
+        if self.running_mode == ProcessManagerRunningMode.Standalone:
+            self.log.debug(boot_msg)
+        else:
+            self.log.info(boot_msg)
 
         # Query current process status
         alive = self.ssh_lifetime_manager.is_process_alive(uuid)
@@ -502,15 +508,6 @@ class SSHProcessManager(ProcessManager):
                 f"{self.name} returning {len(ret)} processes from ps query {query}"
             )
             return ret_fmt
-
-    def _send_msg_impl(self, msg: str, peer: str) -> OutcomeStatus:
-        try:
-            self.log.info(f"{msg}; from {peer}")
-        except Exception as e:
-            self.log.error(f"Failed to receive message with exception {e}")
-            return OutcomeStatus(flag=OutcomeFlag.FAIL)
-
-        return OutcomeStatus(flag=OutcomeFlag.SUCCESS)
 
     def _boot_impl(self, boot_request: BootRequest) -> ProcessInstanceList:
         self.log.debug(f"{self.name} running boot command")

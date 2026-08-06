@@ -44,6 +44,7 @@ from drunc.exceptions import (
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.process_manager.configuration import (
+    ProcessManagerRunningMode,
     ProcessManagerTypes,
     get_process_manager_configuration,
     validate_pm_config,
@@ -54,6 +55,7 @@ from drunc.unified_shell.commands import (
     boot,
     flush,
     kill,
+    log_on_server,
     logs,
     ps,
     restart,
@@ -114,6 +116,17 @@ from drunc.utils.utils import (
         "will be useful for hardware operations."
     ),
 )  # For production, change default to true/remove it
+@click.option(
+    "-nsb",
+    "--no-stop-error-batch-mode",
+    is_flag=True,
+    default=False,
+    help=(
+        "The default behaviour of the unified shell is to exit if the root-controller "
+        "of the sessions is in error. This option will allow the unified shell to "
+        "continue executing commands, mainly for use in testing scenarios."
+    ),
+)
 @click.pass_context
 def unified_shell(
     ctx: click.core.Context,
@@ -125,6 +138,7 @@ def unified_shell(
     override_logs: bool,
     log_path: str,
     safe_mode: bool,
+    no_stop_error_batch_mode: bool,
 ) -> None:
     """
     The unified shell is a command line interface to interact with the process manager
@@ -167,6 +181,7 @@ def unified_shell(
             f"[green]Connecting to an existing process manager[/] at the address {process_manager_url.netloc}"
         )
         internal_pm = False
+        running_mode = ProcessManagerRunningMode.Subprocess
         ctx.obj.reset(address_pm=process_manager_url.netloc)
         pm_type = ProcessManagerTypes[
             ctx.obj.get_driver("process_manager").describe().type
@@ -176,7 +191,10 @@ def unified_shell(
         )
     else:
         internal_pm = True
+        running_mode = ProcessManagerRunningMode.Standalone
+
         pm_type = get_pm_type_from_name(process_manager)
+        ctx.obj.log.info(f"[green]Connected to the {pm_type.name} process manager[/]")
 
     ctx.obj.log.debug(
         f"Process manager argument parsed, internal_pm set to {internal_pm}"
@@ -203,6 +221,7 @@ def unified_shell(
 
     ctx.obj.configuration_id = configuration_id
     ctx.obj.session_name = session_name
+    ctx.obj.no_stop_error_batch_mode = no_stop_error_batch_mode
 
     # Get the session DAL
     db = conffwk.Configuration(ctx.obj.configuration_file)
@@ -246,6 +265,7 @@ def unified_shell(
                 "signal_handler": ignore_sigint_sighandler,
                 # sigint gets sent to the PM, so we need to ignore it, otherwise everytime the user ctrl-c on the shell, the PM goes down
                 "generated_port": port,
+                "running_mode": running_mode,
             },
         )
         ctx.obj.pm_process.start()
@@ -290,6 +310,11 @@ def unified_shell(
 
     ctx.obj.log.info("Setting up the controller interface")
 
+    # Keep track of whether the session uses a local connectivity service
+    ctx.obj.session_uses_local_connectivity_service = (
+        session_dal.connectivity_service.host == "localhost"
+    )
+
     # Run a simple command (describe) to check the connection with the process manager
     try:
         ctx.obj.get_driver().describe()
@@ -319,13 +344,13 @@ def unified_shell(
         sys.exit(1)
     ctx.obj.log.debug("Communication with the process manager verified successfully")
 
-    ctx.obj.get_driver("process_manager").send_msg(
+    ctx.obj.get_driver("process_manager").log_on_server(
         f"{getpass.getuser()} connected from unified shell"
     )
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    unified_shell_commands = [boot, ps, terminate]
+    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
     for cmd in unified_shell_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
@@ -515,7 +540,7 @@ def unified_shell(
                 )
 
         # Remove the connection to the process manager
-        ctx.obj.get_driver("process_manager").send_msg(
+        ctx.obj.get_driver("process_manager").log_on_server(
             f"{getpass.getuser()} disconnected from unified shell"
         )
         ctx.obj.get_driver("process_manager").close()

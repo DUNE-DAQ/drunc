@@ -3,15 +3,15 @@ import re
 import sys
 import threading
 import time
+from collections import Counter
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessInstance,
@@ -35,9 +35,10 @@ from drunc.exceptions import (
 )
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
+    ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
+from drunc.utils.utils import get_logger, pid_info_str
 
 
 class BadQuery(DruncCommandException):
@@ -47,6 +48,9 @@ class BadQuery(DruncCommandException):
 
 class ProcessManager(abc.ABC, ProcessManagerServicer):
     pm_type = ProcessManagerTypes.Unknown  # Used for describe (and possibly others)
+
+    def set_running_mode(self, running_mode):
+        self.running_mode = running_mode
 
     def __init__(
         self, configuration: ProcessManagerConfHandler, name: str, session: str
@@ -75,6 +79,8 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         self.configuration = configuration
         self.name = name
         self.session = session
+
+        self.running_mode = ProcessManagerRunningMode.Unknown
 
         dach = DummyAuthoriserConfHandler.from_pyobject(
             data=self.configuration.authoriser
@@ -163,61 +169,38 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
             self.thread.join()
 
     def publish(self, q: ProcessQuery, interval_s: float = 10.0):
-        def find_by_uuid(pi_list, target_uuid: str):
-            """Identifies the process from a list by uuid"""
-            for pi in pi_list.values:
-                if pi.uuid.uuid == target_uuid:
-                    return pi
-            return None
-
-        n_dead_prev = 0
-        dead_processes_prev = set()
+        tech_name = self.configuration.pm_type.name
         while not self.stop_event.is_set():
             results = self._ps_impl(q)
 
-            n_running = sum(
-                1
-                for process in results.values
-                if process.status_code == ProcessInstance.StatusCode.RUNNING
-            )
-            dead_processes = {
-                process.uuid.uuid
-                for process in results.values
-                if process.status_code == ProcessInstance.StatusCode.DEAD
-            }
-            n_dead = len(dead_processes)
-            n_session = len(
-                {
-                    process.process_description.metadata.session
-                    for process in results.values
-                }
-            )
-            self.opmon_publisher.publish(
-                message=ProcessStatus(
-                    n_running=n_running, n_dead=n_dead, n_session=n_session
-                ),
-            )
-            if n_dead_prev < n_dead:
-                n_dead_prev = n_dead
-                diff_set = dead_processes - dead_processes_prev
-                for diff in diff_set:
-                    if diff in self.expected_dead_applications:
-                        self.log.debug(
-                            f"Process {diff} already expected to be dead, continuing"
-                        )
-                        continue
-                    pi = find_by_uuid(results, diff)
-                    pi_return_code = (
-                        pi.return_code if pi.HasField("return_code") else "NONE"
-                    )
-                    err_msg = f"Process {pi.process_description.metadata.name} has died with a return code {pi_return_code}"
-                    if not self.ers_handler_initialized:
-                        setup_daq_ers_logger(
-                            self.log,
-                            pi.process_description.metadata.session,
-                            "drunc.process_manager",
-                        )
-                    self.log.critical(err_msg, extra=self.handlerconf.ERS)
+            session_running = Counter()
+            session_dead = Counter()
+            dead_processes = set()
+
+            for process in results.values:
+                session = f"{tech_name}__{process.process_description.metadata.session}"
+                status = process.status_code
+
+                if status == ProcessInstance.StatusCode.RUNNING:
+                    session_running[session] += 1
+
+                elif status == ProcessInstance.StatusCode.DEAD:
+                    session_dead[session] += 1
+                    dead_processes.add(process.uuid.uuid)
+
+            # merge all known sessions from both counters
+            all_sessions = session_running.keys() | session_dead.keys()
+
+            # For future developers, if this is still slow consider using async.
+            for sesh in all_sessions:
+                self.opmon_publisher.publish(
+                    message=ProcessStatus(
+                        n_running=session_running[sesh],
+                        n_dead=session_dead[sesh],
+                        n_session=1,
+                    ),
+                    custom_origin={"drunc_session": sesh},
+                )
 
             time.sleep(interval_s)
 
@@ -482,57 +465,36 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
-    @abc.abstractmethod
-    def _send_msg_impl(
-        self, msg: str | None = None, peer: str | None = None
-    ) -> OutcomeStatus:
-        raise NotImplementedError
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    def log_on_server(
+        self,
+        request: LogOnServerRequest,
+        context: ServicerContext,
+    ) -> LogOnServerResponse:
+        """
+        Log a message on the server with the specified severity.
 
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
-    )
-    def send_msg(self, request: Request, context: ServicerContext) -> OutcomeStatus:
-        self.log.debug(f"{self.name} running send_msg")
+        Args:
+            request: LogOnServerRequest containing the log message and severity.
+            context: gRPC ServicerContext (not used).
 
-        try:
-            peer = context.peer()
-            peer_display = resolve_context_peer(peer)
-        except Exception:
-            self.log.warning("Could not determine caller peer", exc_info=True)
-            peer_display = "unknown"
+        Returns:
+            LogOnServerResponse indicating the result of the logging operation.
 
-        # Try to extract an optional GenericNotificationMessage from request.data
-        try:
-            if (
-                request is not None
-                and hasattr(request, "data")
-                and request.data is not None
-            ):
-                gm = GenericNotificationMessage()
-                request.data.Unpack(gm)
-                msg_value = gm.message
-        except Exception as e:
-            self.log.debug(
-                f"Error while extracting send_msg payload: {e}", exc_info=True
-            )
-            msg_value = "unknown payload"
+        Raises:
+            None
+        """
+        # Construct the default response indicating successful execution
+        response = LogOnServerResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-        try:
-            response = self._send_msg_impl(msg_value, peer_display)
-        except NotImplementedError:
-            raise DruncNotImplementedException(
-                message="Implementation missing",
-                domain="ProcessManager.send_msg",
-            )
-        except Exception as e:
-            context_msg = f"Unhandled exception in ProcessManager.send_msg: {e}"
-            self.log.exception(context_msg)
-
-            raise DruncCommandException(
-                message=context_msg,
-                domain="ProcessManager.send_msg",
-            )
-
+        # Get the log method corresponding to the severity level (e.g., debug, info,
+        # warning, error), and log the message
+        level = request.severity.lower()
+        log_method = getattr(self.log, level, self.log.info)
+        log_method(request.text)
         return response
 
     def _ensure_one_process(
@@ -635,7 +597,35 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return processes
 
-    def add_process_to_expected_dead_processes(self, uuid: str) -> None:
+    def _find_by_uuid(self, pi_list, target_uuid: str):
+        """Identifies the process from a list by uuid"""
+        for pi in pi_list.values:
+            if pi.uuid.uuid == target_uuid:
+                return pi
+        return None
+
+    def _unexpected_death_handling(self, uuid: str):
+        empty_query = ProcessQuery()
+        empty_results = self._ps_impl(empty_query)
+        pi = self._find_by_uuid(empty_results, uuid)
+        if not pi:
+            return
+
+        pi_return_code = pi.return_code if pi.HasField("return_code") else "NONE"
+        err_msg = f"Process {pi.process_description.metadata.name} of with UUID {uuid} has died with a return code {pi_return_code}"
+
+        # Fix in notification system
+        if not self.ers_handler_initialized:
+            setup_daq_ers_logger(
+                self.log,
+                pi.process_description.metadata.session,
+                "drunc.process_manager",
+            )
+        self.log.critical(err_msg, extra=self.handlerconf.ERS)
+
+    def add_process_to_expected_dead_processes(
+        self, uuid: str, unexpected: bool = False
+    ) -> None:
         """
         Add the process to the list of processes that are expected to die. Needed as the
         OpMon publisher publishes the state when a process dies unexpectedly, and these
@@ -650,6 +640,9 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         Raises:
             DruncException - if the process is not known about, this error gets raised
         """
+        # Also fix this in notification system
+        if unexpected:
+            self._unexpected_death_handling(uuid)
         with self.dead_process_lock:
             if uuid in self.boot_request:
                 br = BootRequest()
