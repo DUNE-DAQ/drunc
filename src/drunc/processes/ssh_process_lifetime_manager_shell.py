@@ -1401,12 +1401,10 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 as_manual_pm_kill=True,
                 timeout=timeout,
             )
+        process_name: str = metadata.name
 
         running_process = self.process_store[uuid]
 
-        process_name: str | None = None
-        if metadata:
-            process_name = self.metadata[uuid].name
 
         hostname = running_process.hostname
         user = running_process.user
