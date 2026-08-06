@@ -150,6 +150,9 @@ class SessionManagerDriver:
             file: The file containing the session to load.
             session_id: The ID of the session to load.
             timeout: The timeout for the gRPC call in seconds.
+
+        Returns:
+            LoadSessionResponse: A response containing loaded session metadata.
         """
         self.log.info(
             f"Sending load_session request to session manager at {self.address}"

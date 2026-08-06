@@ -202,7 +202,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             context: The gRPC context (not used).
 
         Returns:
-            LoadSessionResponse: A response containing a result message.
+            LoadSessionResponse: A response containing loaded session metadata.
         """
         self.log.debug(f"{self.name} running load_session")
 
@@ -210,4 +210,6 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         session_id = request.config_key.session_id
         self.log.info(f"Loading session: '{session_id}' from file: '{file}'")
 
-        return LoadSessionResponse(name=self.name)
+        session = ActiveSession(name=session_id)
+
+        return LoadSessionResponse(session=session)
