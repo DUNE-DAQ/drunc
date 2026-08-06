@@ -208,9 +208,12 @@ def test_parent_death_pact():
     pids = psutil.pids()
     child_pid_still_exists = False
     for pid in pids:
-        if psutil.Process(pid).name() == "tester_child_process":
-            child_pid_still_exists = True
-            break
+        try:
+            if psutil.Process(pid).name() == "tester_child_process":
+                child_pid_still_exists = True
+                break
+        except psutil.NoSuchProcess:
+            continue
 
     assert not child_pid_still_exists
 
