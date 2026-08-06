@@ -6,12 +6,11 @@ import time
 
 from daqpytools.logging import LogHandlerConf, exceptions, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import CommandDescription, Description
-from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.opmon.process_manager_pb2 import ProcessStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessInstance,
@@ -38,7 +37,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str, resolve_context_peer
+from drunc.utils.utils import get_logger, pid_info_str
 
 
 class BadQuery(DruncCommandException):
@@ -488,57 +487,36 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
 
         return response
 
-    @abc.abstractmethod
-    def _send_msg_impl(
-        self, msg: str | None = None, peer: str | None = None
-    ) -> OutcomeStatus:
-        raise NotImplementedError
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    def log_on_server(
+        self,
+        request: LogOnServerRequest,
+        context: ServicerContext,
+    ) -> LogOnServerResponse:
+        """
+        Log a message on the server with the specified severity.
 
-    @authentified_and_authorised(
-        action=ActionType.READ, system=SystemType.PROCESS_MANAGER
-    )
-    def send_msg(self, request: Request, context: ServicerContext) -> OutcomeStatus:
-        self.log.debug(f"{self.name} running send_msg")
+        Args:
+            request: LogOnServerRequest containing the log message and severity.
+            context: gRPC ServicerContext (not used).
 
-        try:
-            peer = context.peer()
-            peer_display = resolve_context_peer(peer)
-        except Exception:
-            self.log.warning("Could not determine caller peer", exc_info=True)
-            peer_display = "unknown"
+        Returns:
+            LogOnServerResponse indicating the result of the logging operation.
 
-        # Try to extract an optional GenericNotificationMessage from request.data
-        try:
-            if (
-                request is not None
-                and hasattr(request, "data")
-                and request.data is not None
-            ):
-                gm = GenericNotificationMessage()
-                request.data.Unpack(gm)
-                msg_value = gm.message
-        except Exception as e:
-            self.log.debug(
-                f"Error while extracting send_msg payload: {e}", exc_info=True
-            )
-            msg_value = "unknown payload"
+        Raises:
+            None
+        """
+        # Construct the default response indicating successful execution
+        response = LogOnServerResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
 
-        try:
-            response = self._send_msg_impl(msg_value, peer_display)
-        except NotImplementedError:
-            raise DruncNotImplementedException(
-                message="Implementation missing",
-                domain="ProcessManager.send_msg",
-            )
-        except Exception as e:
-            context_msg = f"Unhandled exception in ProcessManager.send_msg: {e}"
-            self.log.exception(context_msg)
-
-            raise DruncCommandException(
-                message=context_msg,
-                domain="ProcessManager.send_msg",
-            )
-
+        # Get the log method corresponding to the severity level (e.g., debug, info,
+        # warning, error), and log the message
+        level = request.severity.lower()
+        log_method = getattr(self.log, level, self.log.info)
+        log_method(request.text)
         return response
 
     def _ensure_one_process(

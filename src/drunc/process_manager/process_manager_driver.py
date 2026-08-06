@@ -14,10 +14,10 @@ import grpc
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
-    GenericNotificationMessage,
     LogLines,
     LogRequest,
     ProcessDescription,
@@ -87,22 +87,20 @@ class ProcessManagerDriver:
         except Exception as e:
             self.log.error(f"Error closing gRPC channel: {e}", exc_info=True)
 
-    def send_msg(self, msg):
-        request = Request(token=copy_token(self.token))
-
-        if msg is not None:
-            try:
-                gm = GenericNotificationMessage(message=str(msg))
-                request.data.Pack(gm)
-            except Exception:
-                self.log.critical("Failed to pack send_msg payload", exc_info=True)
-
-        timeout = 10
-
-        response = self.stub.send_msg(request, timeout=timeout)
-        return response
-
     def update_controller_logs(self, ctrl_dal, level):
+        """
+        Update the log level of the controller in the DAL.
+
+        Args:
+            ctrl_dal: The controller DAL object.
+            level: The new log level to set.
+
+        Returns:
+            The updated controller DAL object.
+
+        Raises:
+            None
+        """
         ctrl_dal.controller_log_level = level
         return ctrl_dal
 
@@ -614,8 +612,8 @@ To debug it, close drunc and run the following command:
 
             # 1: Try dynamic lookup via Connectivity Service
             if csc:
-                self.log.debug(
-                    f"Attempting to discover controller '{top_controller_name}' via connectivity service at {connection_server}:{connection_port}"
+                self.log.info(
+                    f"Looking for top controller '{top_controller_name}' in the connectivity service at http://{connection_server}:{connection_port}"
                 )
                 try:
                     timeout = (
@@ -989,3 +987,36 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 [yellow]connect {{controller_address}}:{{controller_port}}>[/]
 """
         )
+
+    def log_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        timeout: int | float = 60,
+    ) -> LogOnServerResponse:
+        """
+        Logs a message to the server's log system.
+
+        Args:
+            text (str): The message to log.
+            severity (str, optional): The severity level of the log message. Defaults to "INFO".
+            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+
+        Returns:
+            None
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = LogOnServerRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            target="",
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=False,
+        )
+        response: LogOnServerResponse = self.stub.log_on_server(
+            request, timeout=timeout
+        )
+        return response
