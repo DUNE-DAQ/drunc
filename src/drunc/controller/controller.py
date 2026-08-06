@@ -6,6 +6,7 @@ from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -65,6 +66,7 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
+from drunc.utils.grpc_utils import ServerTimeout
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -222,6 +224,9 @@ class Controller(ControllerServicer):
             for response in child_responses:
                 children_states[response.name] = response.status.state
                 if response.status.in_error:
+                    self.log.error(
+                        f"Child {response.name} is in error state. Placing controller in error state."
+                    )
                     self.stateful_node.to_error()
 
             if any([c.lower() != "initial" for c in children_states.values()]):
@@ -232,7 +237,8 @@ class Controller(ControllerServicer):
         bad_children = [k for k, v in children_states.items() if v.lower() != "initial"]
         if bad_children:
             log_init_controller.error(
-                f"Children that did not initialise in time: {bad_children}"
+                f"Children that did not initialise in time: [red]{', '.join(bad_children).rstrip(', ')}[/]. Placing "
+                "controller in error state."
             )
             self.stateful_node.to_error()
 
@@ -819,13 +825,14 @@ class Controller(ControllerServicer):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
+        # Parse and validate target.
         try:
-            # Parse and validate target.
             request.target = self.parse_target_string(request.target)
         except ValueError:
             response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
             return response
 
+        # Extract command information.
         command = request.command
         command_name = command.command_name
 
@@ -857,6 +864,7 @@ class Controller(ControllerServicer):
                 )
             )
 
+        # Extract FSM transition.
         transition = self.stateful_node.get_fsm_transition(command_name)
         self.log.debug(f"FSM transition: {transition}")
 
@@ -893,7 +901,7 @@ class Controller(ControllerServicer):
             response.fsm_flag = FSMResponseFlag.FSM_INVALID_TRANSITION
             return response
 
-        # This node.
+        # Execute FSM transition on this node.
         if request.target == self.name or request.execute_along_path:
             fsm_args = self.stateful_node.decode_fsm_arguments(command)
             fsm_data = self.stateful_node.prepare_transition(
@@ -937,17 +945,23 @@ class Controller(ControllerServicer):
             child_command = FSMCommand()
             child_command.CopyFrom(command)
             child_command.data = fsm_data
-            child_responses = self.propagate_concurrently(
-                lambda child, target: child.execute_fsm_command(
-                    child_command,
-                    target,
-                    request.execute_along_path,
-                    request.execute_on_all_subsequent_children_in_path,
-                ),
-                child_list,
-                indices=connected_indices,
-            )
-            response.children.extend(child_responses)
+            try:
+                child_responses = self.propagate_concurrently(
+                    lambda child, target: child.execute_fsm_command(
+                        child_command,
+                        target,
+                        request.execute_along_path,
+                        request.execute_on_all_subsequent_children_in_path,
+                    ),
+                    child_list,
+                    indices=connected_indices,
+                )
+                response.children.extend(child_responses)
+            except ServerTimeout as e:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                self.stateful_node.to_error()
+                self.log.error(f"FSM command '{command_name}' failed: {e}")
+                return response
 
             # Finish propagating FSM transition to children.
             self.stateful_node.finish_propagating_transition_mark(transition)
@@ -1526,7 +1540,6 @@ class Controller(ControllerServicer):
             name=self.name,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
-
         try:
             # Parse and validate target.
             request.target = self.parse_target_string(request.target)
@@ -1568,5 +1581,86 @@ class Controller(ControllerServicer):
         # This node.
         if request.target == self.name or request.execute_along_path:
             self.stateful_node.to_error()
+        self.log.critical(
+            f"Error state for this node: {self.stateful_node.node_is_in_error()}"
+        )
+
+        self.log.critical(f"Returning to_error response: {response}")
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    @publish_command_time
+    def log_on_server(
+        self,
+        request: LogOnServerRequest,
+        context: ServicerContext,
+    ) -> LogOnServerResponse:
+        """
+        Logs a message on the server with the specified severity level.
+
+        Args:
+            request (LogOnServerRequest): The request containing the log message, severity level, and target information.
+            context (ServicerContext): The gRPC context for the request.
+
+        Returns:
+            LogOnServerResponse: The response indicating the result of the logging operation.
+
+        Raises:
+            None
+        """
+        response = LogOnServerResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        try:
+            # Parse and validate target.
+            request.target = self.parse_target_string(request.target)
+        except ValueError:
+            response.flag = ResponseFlag.NOT_EXECUTED_BAD_REQUEST_FORMAT
+            return response
+
+        # This node.
+        if request.target == self.name or request.execute_along_path:
+            request.target = ""
+
+        # Children nodes (ignore exclusion).
+        child_list = self.address_target_path(
+            request.target,
+            request.execute_on_all_subsequent_children_in_path,
+            include_excluded_nodes=True,
+        )
+        connected_indices, disconnected_indices = self._partition_connected_children(
+            child_list,
+            operation_name="who_is_in_charge",
+        )
+        child_responses = self.propagate_concurrently(
+            lambda child, target: child.log_on_server(
+                request.text,
+                request.severity,
+                request.target,
+                request.execute_along_path,
+                request.execute_on_all_subsequent_children_in_path,
+            ),
+            child_list,
+            indices=connected_indices,
+        )
+        child_responses.extend(
+            [
+                LogOnServerResponse(
+                    token=None,
+                    name=child_list[i][0].name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
+                )
+                for i in disconnected_indices
+            ]
+        )
+        response.children.extend(child_responses)
+
+        # This node.
+        if request.target in [self.name, ""] or request.execute_along_path:
+            level = request.severity.lower()
+            log_method = getattr(self.log, level, self.log.info)
+            log_method(request.text)
 
         return response

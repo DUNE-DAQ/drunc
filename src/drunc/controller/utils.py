@@ -1,7 +1,7 @@
 import time
 from dataclasses import dataclass
 
-from druncschema.controller_pb2 import RunInfo, Status
+from druncschema.controller_pb2 import RunInfo, Status, StatusResponse
 
 from drunc.utils.utils import get_logger
 
@@ -44,6 +44,70 @@ def get_status_message(controller):
         )
 
     return msg
+
+
+def count_processes_in_status_response(response: StatusResponse) -> int:
+    """
+    Count the number of processes in the status table, including all children.
+
+    This function is recursive to allow for the counting of processes following a nested
+    structure of StatusResponse objects through the `child` attribute.
+
+    Args:
+        response (StatusResponse): The StatusResponse object returrned from a controller
+            servicer status request.
+
+    Returns:
+        int: The total number of processes in the status table.
+
+    Raises:
+        None
+    """
+    processes_found = 0
+
+    # 1. Count the processes in the current node
+    if response.status:
+        processes_found += 1
+
+    for child in response.children:
+        processes_found += count_processes_in_status_response(child)
+
+    return processes_found
+
+
+def get_all_states(response: StatusResponse) -> list[str]:
+    """
+    Recursively extracts 'state' from StatusResponse and its children.
+    """
+    states = []
+
+    # 1. Get the state of the current node
+    if response.status:
+        states.append(response.status.state)
+
+    # 2. Recurse through all children
+    for child in response.children:
+        states.extend(get_all_states(child))
+
+    return states
+
+
+def get_all_apps_with_named_substate(
+    response: StatusResponse, substate_query: str
+) -> list[str]:
+    """
+    Recursively searches for app names with a specific substate in StatusResponse and its children.
+    """
+    matching_apps = []
+
+    if response.status and response.status.sub_state == substate_query:
+        if response.name:
+            matching_apps.append(response.name)
+
+    for child in response.children:
+        matching_apps.extend(get_all_apps_with_named_substate(child, substate_query))
+
+    return matching_apps
 
 
 def get_detector_name(configuration) -> str:

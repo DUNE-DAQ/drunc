@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+from druncschema.common_pb2 import LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
@@ -154,4 +155,15 @@ class ChildNode(ABC):
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
     ) -> ToErrorResponse:
+        pass
+
+    @abstractmethod
+    def log_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+    ) -> LogOnServerResponse:
         pass

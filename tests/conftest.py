@@ -33,13 +33,17 @@ def load_test_config() -> None:
 
     # Determine the path to the test configurations
     cwd = Path(os.path.abspath(__file__))
-    test_configs = cwd.parent / ".." / "config" / "tests"
+    test_configs = cwd.parent / ".." / "config" / "drunc"
     test_configs = test_configs.resolve()
     print(f"{test_configs=}")
 
     # Ensure the consolidated configuration directory exists
     os.makedirs(consolidated_conf_path, exist_ok=True)
     DUNEDAQ_DB_PATH += f":{test_configs!s}:{consolidated_conf_path!s}"
+
+    # Add the drunc root too
+    drunc_root = cwd.parent.parent
+    DUNEDAQ_DB_PATH += f":{drunc_root!s}"
 
     # For debugging, print the DUNEDAQ_DB_PATH entries
     print("DUNEDAQ_DB_PATH entries:")
