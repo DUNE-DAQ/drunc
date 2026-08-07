@@ -18,7 +18,7 @@ def test_describe(
     session_manager, mock_request, mock_context, command_description_list, mock_logger
 ):
     response = session_manager.describe(mock_request, mock_context)
-    mock_logger.debug.assert_any_call("Initialized SessionManager")
+    mock_logger.debug.assert_any_call("Initialised session manager")
 
     assert isinstance(response, Description)
     assert response.name == "dummy_name"

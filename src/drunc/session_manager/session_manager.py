@@ -85,7 +85,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
             ),
             CommandDescription(
                 name="load_session",
-                data_type=["session_manager_pb2.LoadSessionRequest"],
+                data_type=["None"],
                 help="Load a session based on the provided configuration key.",
                 return_type="session_manager_pb2.LoadSessionResponse",
             ),
