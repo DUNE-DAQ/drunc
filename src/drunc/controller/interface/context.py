@@ -18,11 +18,7 @@ class ControllerContext(ShellContext):  # boilerplatefest
         self.took_control = False
         super(ControllerContext, self).__init__()
 
-    def reset(self, *args: object, **kwargs: object) -> None:
-        address_raw = kwargs.get("address")
-        if address_raw is None and args:
-            address_raw = args[0]
-        address = str(address_raw) if address_raw is not None else ""
+    def reset(self, address: str = None):
         self.address = resolve_localhost_to_hostname(address)
         super(ControllerContext, self)._reset(
             name="controller_context", token_args={}, driver_args={}
@@ -35,10 +31,6 @@ class ControllerContext(ShellContext):  # boilerplatefest
 
     def create_token(self, **kwargs) -> Token:
         return create_dummy_token_from_uname()
-
-    def set_controller_driver(self, address_controller: str) -> None:
-        self.address = resolve_localhost_to_hostname(address_controller)
-        self._drivers["controller"] = ControllerDriver(self.address, self._token)
 
     def terminate(self) -> None:
         if self.status_receiver:
