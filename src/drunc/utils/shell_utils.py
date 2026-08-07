@@ -51,6 +51,19 @@ class StatusReplyLike(Protocol):
     status: StatusLike
 
 
+class ProcessManagerDriverProtocol(Protocol):
+    """Protocol for process manager driver objects."""
+
+    def log_on_server(self, text: str, severity: str = "INFO") -> None:
+        """Send a log message to the process manager server.
+
+        Args:
+            text: The message to log.
+            severity: The severity level of the log message.
+        """
+        ...
+
+
 class ControllerDriverProtocol(Protocol):
     """Protocol for controller driver objects."""
 
@@ -398,4 +411,4 @@ def log_pm_cmd(obj: ShellContext):
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
     msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
-    obj.get_driver("process_manager").send_msg(msg)
+    cast(ProcessManagerDriverProtocol, obj.get_driver("process_manager")).log_on_server(msg)
