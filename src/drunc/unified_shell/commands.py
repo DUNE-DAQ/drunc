@@ -95,7 +95,7 @@ def boot(
             return
         for result in results:
             expected_booted_processes += 1
-            log.critical(
+            log.debug(
                 f"Booting process: {result.values[0].process_description.metadata.name}"
             )
             if not result:
