@@ -1401,7 +1401,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 as_manual_pm_kill=True,
                 timeout=timeout,
             )
-        process_name: str = metadata.name
+        process_name: str | None = metadata.name
 
         running_process = self.process_store[uuid]
 
