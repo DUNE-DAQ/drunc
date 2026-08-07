@@ -6,12 +6,10 @@ from collections.abc import MutableMapping
 from typing import (
     TYPE_CHECKING,
     Callable,
-    Literal,
     ParamSpec,
     Protocol,
     TypeVar,
     cast,
-    overload,
 )
 
 import click
@@ -22,8 +20,7 @@ from drunc.exceptions import DruncShellException
 from drunc.utils.utils import get_logger
 
 if TYPE_CHECKING:
-    from drunc.controller.controller_driver import ControllerDriver
-    from drunc.process_manager.process_manager_driver import ProcessManagerDriver
+    pass
 
 
 class CommandLike(Protocol):
@@ -81,6 +78,14 @@ class ControllerDriverProtocol(Protocol):
         Returns:
             DescribeFSMReplyLike: The FSM description.
         """
+        ...
+
+
+class ProcessManagerLogProtocol(Protocol):
+    """Protocol for process-manager logging used by shell command logging."""
+
+    def log_on_server(self, message: str) -> None:
+        """Send a log message to the process-manager server."""
         ...
 
 
@@ -208,13 +213,9 @@ class ShellContext:
     def _reset(
         self,
         name: str,
-        token_args: dict[str, object] | None = None,
-        driver_args: dict[str, object] | None = None,
+        token_args: dict[str, object] = {},
+        driver_args: dict[str, object] = {},
     ) -> None:
-        if token_args is None:
-            token_args = {}
-        if driver_args is None:
-            driver_args = {}
         self._console = Console()
         self._token = self.create_token(**token_args)
         self._drivers: MutableMapping[str, object] = self.create_drivers(**driver_args)
@@ -287,45 +288,7 @@ class ShellContext:
             raise DruncShellException(f"Driver {name} already present in this context")
         self._drivers[name] = driver
 
-    @overload
-    def get_driver(
-        self, name: Literal["controller"], quiet_fail: Literal[False] = False
-    ) -> "ControllerDriver": ...
-
-    @overload
-    def get_driver(
-        self, name: Literal["controller"], quiet_fail: Literal[True]
-    ) -> "ControllerDriver | None": ...
-
-    @overload
-    def get_driver(
-        self, name: Literal["process_manager"], quiet_fail: Literal[False] = False
-    ) -> "ProcessManagerDriver": ...
-
-    @overload
-    def get_driver(
-        self, name: Literal["process_manager"], quiet_fail: Literal[True]
-    ) -> "ProcessManagerDriver | None": ...
-
-    @overload
-    def get_driver(self, name: str, quiet_fail: Literal[False] = False) -> object: ...
-
-    @overload
-    def get_driver(self, name: str, quiet_fail: Literal[True]) -> object | None: ...
-
-    @overload
-    def get_driver(
-        self, name: None = None, quiet_fail: Literal[False] = False
-    ) -> object: ...
-
-    @overload
-    def get_driver(
-        self, name: None = None, quiet_fail: Literal[True] = True
-    ) -> object | None: ...
-
-    def get_driver(
-        self, name: str | None = None, quiet_fail: bool = False
-    ) -> object | None:
+    def get_driver(self, name: str | None = None, quiet_fail: bool = False) -> object:
         """Get a driver from the context.
 
         Args:
@@ -462,4 +425,5 @@ def log_pm_cmd(obj: ShellContext) -> None:
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
     msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
-    obj.get_driver("process_manager").log_on_server(msg)
+    pm_driver = cast(ProcessManagerLogProtocol, obj.get_driver("process_manager"))
+    pm_driver.log_on_server(msg)
