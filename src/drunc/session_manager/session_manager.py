@@ -211,5 +211,17 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         self.log.info(f"Loading session: '{session_id}' from file: '{file}'")
 
         session = ActiveSession(name=session_id)
+        with self._active_sessions_lock:
+            if session_id in self._active_sessions:
+                raise DruncSetupException(
+                    message="Unable to load session",
+                    details=f"Session '{session_id}' already exists.",
+                )
 
-        return LoadSessionResponse(session=session)
+            # TODO: Implement the actual session loading logic here.
+
+            # TODO: Store connection URL in `ActiveSession`.
+
+            self._active_sessions[session_id] = session
+
+            return LoadSessionResponse(session=session)
