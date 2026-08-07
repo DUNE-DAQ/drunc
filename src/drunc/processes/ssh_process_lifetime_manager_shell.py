@@ -319,10 +319,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         self.disable_host_key_check = disable_host_key_check
         self.disable_localhost_host_key_check = disable_localhost_host_key_check
         self.log = (
-            logger
-            if logger
-            else get_logger("ssh_process_lifetime_manager_shell", rich_handler=True)
-            # ? Fun fact: this rich_handler = True is the cause of duplication. Need to fix..
+            logger if logger else get_logger("ssh_process_lifetime_manager_shell")
         )
         self._on_process_exit = on_process_exit
 
@@ -1404,6 +1401,7 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 as_manual_pm_kill=True,
                 timeout=timeout,
             )
+        process_name: str | None = metadata.name
 
         running_process = self.process_store[uuid]
 
@@ -1415,10 +1413,9 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         process_dead = False
 
         try:
+            process_log_str = f"Remote process [green]{process_name}[/] (UUID {uuid}, PID {remote_pid})"
             if not self.is_process_alive(uuid):
-                self.log.info(
-                    f"Skipping killing remote process {uuid} (PID {remote_pid}). It is already dead."
-                )
+                self.log.info(f"{process_log_str} is already dead, skipping kill.")
                 exit_code = self.wait_for_process_exit_code(uuid, timeout=timeout)
                 self._cleanup_remote_file(hostname, user, metadata_file)
                 self._cleanup_process_resources(uuid)
@@ -1438,11 +1435,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
                 )
                 if process_dead:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) terminated gracefully following SIGQUIT signal."
+                        f"{process_log_str} terminated gracefully following SIGQUIT signal."
                     )
                 else:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGQUIT signal."
+                        f"{process_log_str} did not terminate within timeout of {timeout} seconds after SIGQUIT signal."
                     )
 
             if not process_dead:
@@ -1454,16 +1451,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
                 if process_dead:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) terminated forcibly following SIGKILL signal."
+                        f"{process_log_str} terminated forcibly following SIGKILL signal."
                     )
                 else:
                     self.log.info(
-                        f"Remote process {uuid} (PID {remote_pid}) did not terminate within timeout of {timeout} seconds after SIGKILL signal."
+                        f"{process_log_str} did not terminate within timeout of {timeout} seconds after SIGKILL signal."
                     )
 
             if not process_dead:
                 self.log.error(
-                    f"Remote process {uuid} (PID {remote_pid}) still did not terminate after SIGKILL signal."
+                    f"{process_log_str} still did not terminate after SIGKILL signal."
                 )
                 with self.lock:
                     running_process.pending_exit_status_source = None
