@@ -9,6 +9,8 @@ from druncschema.session_manager_pb2 import (
     AllActiveSessions,
     AllConfigKeys,
     ConfigKey,
+    LoadSessionRequest,
+    LoadSessionResponse,
 )
 
 from drunc.exceptions import DruncSetupException
@@ -159,3 +161,48 @@ def test_list_all_configs_dals_missing(
             mock_logger.error.assert_any_call(
                 "Failed to get DALs from mock_file_1.data.xml: DALs missing or invalid"
             )
+
+
+def test_load_session(session_manager, mock_context, mock_logger):
+    """
+    Test loading a session with a given configuration key.
+    """
+    session_file = "dummy_config_file"
+    session_id = "dummy_config_session_id"
+    session_name = "session_name"
+    session_user = "session_user"
+
+    mock_config = ConfigKey(file=session_file, session_id=session_id)
+    mock_request = LoadSessionRequest(config_key=mock_config)
+
+    response = session_manager.load_session(mock_request, mock_context)
+    session = session_manager._active_sessions[session_id]
+    mock_logger.debug.assert_any_call(f"{session_manager.name} running load_session")
+
+    assert session.name == session_name
+    assert session.user == session_user
+    assert session.config_key == mock_config
+
+    assert isinstance(response, LoadSessionResponse)
+    assert response.session.name == session_name
+    assert response.session.user == session_user
+    assert response.session.config_key == mock_config
+
+
+def test_load_session_duplicate_id(session_manager, mock_context):
+    """
+    Test loading a session with a duplicate session ID.
+    """
+    session_file = "dummy_config_file"
+    session_id = "dummy_config_session_id"
+
+    mock_config = ConfigKey(file=session_file, session_id=session_id)
+    mock_request = LoadSessionRequest(config_key=mock_config)
+
+    session_manager.load_session(mock_request, mock_context)
+    with pytest.raises(DruncSetupException) as excinfo:
+        session_manager.load_session(mock_request, mock_context)
+
+    assert "Unable to load session" in str(excinfo.value)
+    assert len(session_manager._active_sessions) == 1
+    assert session_manager._active_sessions[session_id].config_key == mock_config

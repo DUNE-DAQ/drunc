@@ -210,7 +210,10 @@ class SessionManager(abc.ABC, SessionManagerServicer):
         session_id = request.config_key.session_id
         self.log.info(f"Loading session: '{session_id}' from file: '{file}'")
 
-        session = ActiveSession(name=session_id)
+        session = ActiveSession(
+            name="session_name", user="session_user", config_key=request.config_key
+        )
+
         with self._active_sessions_lock:
             if session_id in self._active_sessions:
                 raise DruncSetupException(
@@ -219,7 +222,7 @@ class SessionManager(abc.ABC, SessionManagerServicer):
                 )
 
             # TODO: Implement the actual session loading logic here.
-
+            # TODO: Set user name and session name (different from session ID).
             # TODO: Store connection URL in `ActiveSession`.
 
             self._active_sessions[session_id] = session
