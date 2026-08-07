@@ -123,4 +123,4 @@ module = ["google.rpc.*"]
 
 [[tool.mypy.overrides]]
 ignore_missing_imports = true
-module = ["conffwk"]
+module = ["conffwk", "sh"]
