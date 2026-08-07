@@ -38,12 +38,14 @@ from drunc.process_manager.configuration import (
     validate_pm_config,
 )
 from drunc.process_manager.interface.process_manager import run_pm
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.run_control.configuration import import_config_json_to_dict
 from drunc.run_control.interface.context import RunControlContext
 from drunc.run_control.utils import (
     ProcessManagerDeploymentType,
     determine_process_manager_type,
 )
+from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     get_logger,
     ignore_sigint_sighandler,
@@ -230,6 +232,68 @@ class RunControl(RunControlServicer):
             self.log.info(
                 f"External process manager address received: {pm_address}, using it directly"
             )
+
+        # Add the process manager driver
+        self.token = request.token
+        self.log.warning(f"Adding process manager driver with address: {pm_address}")
+        self.drivers["process_manager"] = ProcessManagerDriver(pm_address, self.token)
+
+        # Establish communication with the process manager, check it is running and ready to accept requests
+        self.log.info(
+            f"Attempting to connect to the process manager at the address: [green]{pm_address}[/]"
+        )
+        try:
+            describe_result = self.drivers["process_manager"].describe()
+            self.log.critical(f"{describe_result=}")
+        except Exception as e:
+            self.log.error(
+                f"[red]Could not connect to the process manager at the address: [/red]"
+                f"[green]{pm_address}[/green]"
+            )
+            self.log.critical(f"Reason: {e}")
+
+            if type(e) == ServerUnreachable:
+                self.log.error(
+                    "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
+                    "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
+                )
+
+            if (
+                self.process_manager_type == ProcessManagerDeploymentType.INTERNAL
+                and not self.pm_process.is_alive()
+            ):
+                self.log.error(
+                    f"[red]The process_manager is dead[/red], exit code "
+                    f"{self.pm_process.exitcode}"
+                )
+
+            if self.pm_process and self.pm_process.is_alive():
+                self.pm_process.terminate()
+                self.pm_process.join()
+
+            return StartSessionResponse(
+                token=request.token,
+                result=DeploySessionResponseFlag(
+                    status=DeploySessionResponseFlag.FAILURE_PROCESS_MANAGER_NOT_REACHABLE
+                ),
+            )
+
+        self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
+
+        # Get the dal to get the connectivity service client
+        connectivity_service_address: str = (
+            f"{session_dal.connectivity_service.host}:"
+            f"{session_dal.connectivity_service.service.port}"
+        )
+        self.connectivity_server_client = ConnectivityServiceClient(
+            self.session_name, connectivity_service_address
+        )
+
+        # Print the process manager endpoint addresses
+        self.log.info(
+            f"Process manager is running and reachable at the address: [green]{pm_address}[/]"
+        )
+        self.log.info("Ready to start the data taking")
 
         # Include the endpoint addresses in the response
         return StartSessionResponse(
