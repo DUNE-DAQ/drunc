@@ -597,7 +597,13 @@ def unified_shell(
 def _maybe_enter_shell(ctx: click.core.Context, results: object, **_: object) -> None:
     # If user requested interactive mode at the end
     if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
-        sh = click_shell.make_click_shell(ctx, prompt="drunc-unified-shell > ")
+        prompt_default = "drunc-unified-shell > "
+        shell_obj = getattr(ctx.command, "shell", None)
+        if shell_obj is not None:
+            candidate = getattr(shell_obj, "prompt", None)
+            if isinstance(candidate, str):
+                prompt_default = candidate
+        sh = click_shell.make_click_shell(ctx, prompt=prompt_default)
         sh.cmdloop()
 
 

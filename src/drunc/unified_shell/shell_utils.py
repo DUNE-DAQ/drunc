@@ -33,6 +33,10 @@ class FSMSequenceLike(Protocol):
     sequence: Sequence[SequenceEntryLike]
 
 
+class ProcessManagerPsProtocol(Protocol):
+    def ps(self, query: ProcessQuery) -> ProcessInstanceList: ...
+
+
 def run_fsm_sequence(
     sequence_commands: list[str],
     sequence_command_opts_and_args: dict[str, list[str]],
@@ -92,7 +96,10 @@ def run_fsm_sequence(
 
         # These commands are not stateful. If they are a part of the sequence, they
         # should be run regardless of their position in the sequence
-        pmd = obj.get_driver("process_manager", quiet_fail=True)
+        pmd = cast(
+            ProcessManagerPsProtocol | None,
+            obj.get_driver("process_manager", quiet_fail=True),
+        )
         process_list: ProcessInstanceList | None = None
         if command == "boot":
             if pmd is not None:
@@ -106,8 +113,8 @@ def run_fsm_sequence(
                 accepted_command.append("terminate")
 
         # Get the FSM commands that can be ran from the current state
-        controller_driver: ControllerDriver | None = obj.get_driver(
-            "controller", quiet_fail=True
+        controller_driver: ControllerDriver | None = cast(
+            ControllerDriver | None, obj.get_driver("controller", quiet_fail=True)
         )
         if controller_driver:
             accepted_command_raw: DescribeFSMResponse = controller_driver.describe_fsm()

@@ -1,10 +1,16 @@
 import getpass
 import sys
+from collections.abc import Iterable
 from functools import update_wrapper
-from typing import Callable, ParamSpec, TypeVar, cast
+from typing import Callable, ParamSpec, Protocol, TypeVar, cast
 
 import click
-from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
+from druncschema.controller_pb2 import StatusResponse
+from druncschema.process_manager_pb2 import (
+    ProcessInstance,
+    ProcessInstanceList,
+    ProcessQuery,
+)
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.controller.utils import count_processes_in_status_response, get_all_states
@@ -26,6 +32,43 @@ from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
+
+
+class ProcessManagerDriverProtocol(Protocol):
+    controller_address: str | None
+
+    def ps(self, query: ProcessQuery) -> ProcessInstanceList: ...
+
+    def boot(
+        self,
+        conf_file: str,
+        conf_id: str,
+        user: str,
+        session_name: str,
+        log_level: str | None,
+        override_logs: bool,
+        sleep_between_app_boot: float,
+    ) -> Iterable[ProcessInstanceList] | None: ...
+
+    def log_on_server(self, text: str, severity: str) -> None: ...
+
+    def kill(self, query: ProcessQuery) -> ProcessInstanceList | None: ...
+
+
+class ControllerDriverProtocol(Protocol):
+    def status(self) -> StatusResponse: ...
+
+    def to_error(self) -> None: ...
+
+    def log_on_server(
+        self,
+        text: str,
+        severity: str,
+        target: str,
+        execute_along_path: bool,
+        execute_on_all_subsequent_children_in_path: bool,
+    ) -> None: ...
+
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -61,9 +104,8 @@ def boot(
     log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
-    processes = obj.get_driver("process_manager").ps(
-        ProcessQuery(user=user, session=session_name)
-    )
+    pm_driver = cast(ProcessManagerDriverProtocol, obj.get_driver("process_manager"))
+    processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
 
     # Store the number of processes that are expected to be booted with this command, to check later if any processes died immediately after booting.
     expected_booted_processes = 0
@@ -81,7 +123,7 @@ def boot(
         return
 
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = pm_driver.boot(
             conf_file=obj.configuration_file,
             conf_id=obj.configuration_id,
             user=user,
@@ -110,14 +152,12 @@ def boot(
         log.error(e)
         return
 
-    processes = obj.get_driver("process_manager").ps(
-        ProcessQuery(user=user, session=session_name)
-    )
+    processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
     if not processes.values:
         log.debug("No processes found after boot - stopping due to previous errors")
         return
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = pm_driver.controller_address
     if controller_address:
         log.debug(f"Controller endpoint is '{controller_address}'")
         log.debug("Connecting the unified_shell to the controller endpoint")
@@ -146,12 +186,11 @@ def boot(
     # If the session applications are not found on the connectivity serivce, then the
     # session is not booted correctly. This is a critical error, the user should be
     # informed, and the session should be placed in error state.
-    ps_response = obj.get_driver("process_manager").ps(
-        ProcessQuery(session=session_name)
-    )
+    ps_response = pm_driver.ps(ProcessQuery(session=session_name))
     ps_process_count = len(ps_response.values)
 
-    status_response = obj.get_driver("controller").status()
+    controller_driver = cast(ControllerDriverProtocol, obj.get_driver("controller"))
+    status_response = controller_driver.status()
     status_process_count = count_processes_in_status_response(status_response)
 
     # Local connectivity serivces are not reported in the status table, but they should
@@ -199,7 +238,7 @@ def boot(
     # Check if there is or should be an error state. If not, then the boot was
     # successful and we can return, otherwise, we will log the error and place the
     # session in an error state if required.
-    in_error_state = obj.get_driver("controller").status().status.in_error
+    in_error_state = controller_driver.status().status.in_error
     if not in_error_state and not put_in_error_state:
         log.info("Booted successfully")
         return
@@ -213,8 +252,8 @@ def boot(
     )
     if put_in_error_state and not in_error_state:
         log.error("Placing the session into an error state due to boot issues")
-        obj.get_driver("controller").to_error()
-        in_error_state = obj.get_driver("controller").status().status.in_error
+        controller_driver.to_error()
+        in_error_state = controller_driver.status().status.in_error
 
     # If the unified shell is running in batch or semibatch mode, exit with a non-zero
     # exit code unless bypassed with the --no-stop-error-batch-mode option in the
@@ -295,13 +334,15 @@ def log_on_server(
     log.debug("Logging message to server(s)...")
 
     if target_server in ["", "process_manager"]:
-        obj.get_driver("process_manager").log_on_server(
+        cast(
+            ProcessManagerDriverProtocol, obj.get_driver("process_manager")
+        ).log_on_server(
             text=text,
             severity=severity,
         )
 
     if target_server in ["", "controller"] and obj.has_driver("controller"):
-        obj.get_driver("controller").log_on_server(
+        cast(ControllerDriverProtocol, obj.get_driver("controller")).log_on_server(
             text=text,
             severity=severity,
             target=target,
@@ -330,7 +371,9 @@ def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> 
     log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
-    result = obj.get_driver("process_manager").kill(session_query)
+    result = cast(ProcessManagerDriverProtocol, obj.get_driver("process_manager")).kill(
+        session_query
+    )
     if not result:
         return
 
