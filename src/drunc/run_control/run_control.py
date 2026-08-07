@@ -128,7 +128,7 @@ class RunControl(RunControlServicer):
             # Validate the process manager configuration before starting it
             if not validate_pm_config(process_manager_conf_file):
                 self.log.error(
-                    "Process manager configuration [red]{process_manager_conf_file[/] validation failed. Exiting."
+                    f"Process manager configuration [red]{process_manager_conf_file}[/] validation failed. Exiting."
                 )
                 return StartSessionResponse(
                     token=request.token,
@@ -149,22 +149,31 @@ class RunControl(RunControlServicer):
             )
             pm_port = pm_conf_dict.get("port", 0)
             pm_address = f"{pm_host}:{pm_port}"
-            ready_event = mp.Event()
-            port = mp.Value("i", 0)
+
+            ctx_mp = mp.get_context("spawn")
+            ready_event = ctx_mp.Event()
+            port = ctx_mp.Value("i", 0)
+
+            # Get the session DAL
+            db = conffwk.Configuration(
+                "oksconflibs:" + request.path_to_configuration_file
+            )
+            session_dal = db.get_dal(class_name="Session", uid=request.session_id)
+            app_log_path = session_dal.log_path
 
             self.log.info(
                 "Starting [green]process manager[/] with configuration file: [green]%s[/]",
                 process_manager_conf_file,
             )
             self.log.info(f"Target address: {pm_address=}")
-            self.pm_process = mp.Process(
+            self.pm_process = ctx_mp.Process(
                 target=run_pm,
                 kwargs={
                     "pm_conf": process_manager_conf_file,
                     "pm_address": pm_address,
                     "override_logs": request.override_logs,
                     "log_level": "DEBUG",  # PLACEHOLDER
-                    "log_path": ".",  # PLACEHOLDER
+                    "log_path": app_log_path,
                     "ready_event": ready_event,
                     "signal_handler": ignore_sigint_sighandler,
                     "generated_port": port,
@@ -222,69 +231,6 @@ class RunControl(RunControlServicer):
                 f"External process manager address received: {pm_address}, using it directly"
             )
 
-        # # Add the process manager driver
-        # self.token = request.token
-        # self.log.warning(f"Adding process manager driver with address: {pm_address}")
-        # self.drivers["process_manager"] = ProcessManagerDriver(pm_address, self.token)
-
-        # # Establish communication with the process manager, check it is running and ready to accept requests
-        # self.log.info(
-        #     f"Attempting to connect to the process manager at the address: [green]{pm_address}[/]"
-        # )
-        # try:
-        #     self.drivers["process_manager"].describe()
-        # except Exception as e:
-        #     self.log.error(
-        #         f"[red]Could not connect to the process manager at the address: [/red]"
-        #         f"[green]{pm_address}[/green]"
-        #     )
-        #     self.log.critical(f"Reason: {e}")
-
-        #     if type(e) == ServerUnreachable:
-        #         self.log.error(
-        #             "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
-        #             "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
-        #         )
-
-        #     if (
-        #         self.process_manager_type == ProcessManagerDeploymentType.INTERNAL
-        #         and not self.pm_process.is_alive()
-        #     ):
-        #         self.log.error(
-        #             f"[red]The process_manager is dead[/red], exit code "
-        #             f"{self.pm_process.exitcode}"
-        #         )
-
-        #     if self.pm_process and self.pm_process.is_alive():
-        #         self.pm_process.terminate()
-        #         self.pm_process.join()
-
-        #     return StartSessionResponse(
-        #         token=request.token,
-        #         result=DeploySessionResponseFlag(
-        #             status=DeploySessionResponseFlag.FAILURE_PROCESS_MANAGER_NOT_REACHABLE
-        #         ),
-        #     )
-
-        # self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
-
-        # # Get the dal to get the connectivity service client
-        # db = conffwk.Configuration(request.path_to_configuration_file)
-        # self.session_dal = db.get_dal(class_name="Session", uid=request.session_id)
-        # connectivity_service_address: str = (
-        #     f"{self.session_dal.connectivity_service.host}:"
-        #     f"{self.session_dal.connectivity_service.service.port}"
-        # )
-        # self.connectivity_server_client = ConnectivityServiceClient(
-        #     self.session_name, connectivity_service_address
-        # )
-
-        # # Print the process manager endpoint addresses
-        # self.log.info(
-        #     f"Process manager is running and reachable at the address: [green]{pm_address}[/]"
-        # )
-        # self.log.info("Ready to start the data taking")
-
         # Include the endpoint addresses in the response
         return StartSessionResponse(
             token=request.token,
@@ -298,7 +244,7 @@ class RunControl(RunControlServicer):
         self.log.critical("Still requires implementation!")
 
         # Check there is a running session
-        if not self.session:
+        if not self.session_name:  # Fixed check to match self.session_name
             error_msg = (
                 "Cannot end a session when no session is running. Please start a "
                 "session before attempting to end it."
@@ -316,37 +262,14 @@ class RunControl(RunControlServicer):
             "Bringing the session's FSM back to an initial state if running in safe mode"
         )
         self.log.critical("LEFT AS A TODO")
-        # if hasattr(self.drivers, "controller"):
-        #     try:
-        #         self.log.info("Attempting graceful shutdown of the controller")
-        #         stop_run_cmd = ctx.command.commands.get("stop-run")
-        #         scrap_cmd = ctx.command.commands.get("scrap")
-        #         if stop_run_cmd is not None:
-        #             ctx.invoke(stop_run_cmd)
-        #         else:
-        #             ctx.obj.log.warning(
-        #                 "Command 'stop-run' not found; skipping graceful "
-        #                 "shutdown step."
-        #             )
-        #         if scrap_cmd is not None:
-        #             ctx.invoke(scrap_cmd)
-        #         else:
-        #             ctx.obj.log.warning(
-        #                 "Command 'scrap' not found; skipping graceful "
-        #                 "shutdown step."
-        #             )
-        #         ctx.obj.log.info("Controller shutdown gracefully")
-        #     except Exception as e:
-        #         ctx.obj.log.error(
-        #             f"Could not shutdown the controller gracefully, reason: {e}"
 
         # Remove the controller driver
-        if hasattr(self.drivers, "controller"):
-            self.drivers.remove("controller")
+        if "controller" in self.drivers:
+            del self.drivers["controller"]
 
         # Check all processes have been terminated. If not, terminate them
         self.log.info("Checking all processes have been terminated")
-        if hasattr(self.drivers, "process_manager"):
+        if "process_manager" in self.drivers:
             query = ProcessQuery(session=self.session_name)
             running_processes = self.drivers["process_manager"].ps(query)
             if running_processes:
@@ -355,28 +278,33 @@ class RunControl(RunControlServicer):
                 self.log.info("All processes terminated successfully")
 
         # Retract the session from the connectivity server
-        try:
-            self.connectivity_server_client.retract_partition(
-                fail_quickly=True, fail_quietly=True
-            )
-            self.log.debug("Session retracted from the connectivity service")
-        except Exception as e:
-            self.log.error(
-                f"Could not retract the session from the connectivity service: {e}"
-            )
+        if self.connectivity_server_client:
+            try:
+                self.connectivity_server_client.retract_partition(
+                    fail_quickly=True, fail_quietly=True
+                )
+                self.log.debug("Session retracted from the connectivity service")
+            except Exception as e:
+                self.log.error(
+                    f"Could not retract the session from the connectivity service: {e}"
+                )
 
-        # Remove the process manager driver
-        self.drivers("process_manager").send_msg(
-            f"{getpass.getuser()} disconnected from the run control"
-        )
-        self.drivers("process_manager").close()
-        self.drivers.remove("process_manager")
+        # Remove the process manager driver using proper dict access
+        if "process_manager" in self.drivers:
+            self.drivers["process_manager"].send_msg(
+                f"{getpass.getuser()} disconnected from the run control"
+            )
+            self.drivers["process_manager"].close()
+            del self.drivers["process_manager"]
 
         # If the process manager was deployed by the run control, terminate it
-        if self.process_manager_type == ProcessManagerDeploymentType.INTERNAL:
+        if (
+            self.process_manager_type == ProcessManagerDeploymentType.INTERNAL
+            and self.pm_process
+        ):
             self.pm_process.terminate()  # Send a SIGTERM to the pm_process
             self.pm_process.join(timeout=2)  # Block continuing execution for 2s
-            if self.pm_process and self.pm_process.is_alive():
+            if self.pm_process.is_alive():
                 self.log.warning(
                     "Process manager did not exit in time, terminating forcefully."
                 )
@@ -386,7 +314,8 @@ class RunControl(RunControlServicer):
 
             self.log.info("[green]unified_shell exited successfully[/green]")
             logging.shutdown()
-            self.terminate()
+            if hasattr(self, "terminate"):
+                self.terminate()
             self.pm_process = None
 
         # Clear the local variables
@@ -430,9 +359,6 @@ class RunControl(RunControlServicer):
         Returns:
             LogOnServerResponse: The response indicating the outcome of the logging
                 operation.
-
-        Raises:
-            TODO: ValueError: If the severity level is not recognized.
         """
 
         # Map the severity level to the corresponding logging method and get the method
@@ -449,8 +375,6 @@ class RunControl(RunControlServicer):
         return LogOnServerResponse(
             token=request.token, flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
         )
-
-        # Return a response indicating the outcome of the logging operation
 
     def validate_communication(
         self, request: ValidateCommunicationRequest, context: RunControlContext
@@ -472,9 +396,6 @@ class RunControl(RunControlServicer):
 
         Returns:
             LogLines: The response containing the retrieved log lines.
-
-        Raises:
-            TBC
         """
         self.log.info(f"Received Logs request: {request}")
         self.log.critical("Still requires implementation!")
