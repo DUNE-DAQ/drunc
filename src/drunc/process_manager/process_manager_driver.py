@@ -208,13 +208,13 @@ class ProcessManagerDriver:
                 )
                 touch_and_chmod(opmon_file)
 
-                response = self.stub.boot(request, timeout=timeout)
-                self.log.info(
-                    f"Booted '{request.process_description.metadata.name}' "
-                    f"from session '{request.process_description.metadata.session}' "
-                    f"with UUID {response.values[0].uuid.uuid} on host {request.process_description.metadata.hostname}"
-                )
-                yield response
+            response = self.stub.boot(request, timeout=timeout)
+            self.log.info(
+                f"Booted '{request.process_description.metadata.name}' "
+                f"from session '{request.process_description.metadata.session}' "
+                f"with UUID {response.values[0].uuid.uuid} on host {request.process_description.metadata.hostname}"
+            )
+            yield response
 
         # Step 7: discover segment root controller
         self._discover_controller(
