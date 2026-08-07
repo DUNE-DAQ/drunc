@@ -35,6 +35,7 @@ def test_list_all_sessions(session_manager, mock_request, mock_context, mock_log
         name="dummy_session", user="dummy_user", config_key=mock_config
     )
 
+    session_manager._active_sessions = {mock_config.session_id: mock_session}
     response = session_manager.list_all_sessions(mock_request, mock_context)
     mock_logger.debug.assert_any_call(f"{response.name} running list_all_sessions")
 
