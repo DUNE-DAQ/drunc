@@ -2,6 +2,7 @@ import getpass
 import logging
 import multiprocessing as mp
 import os
+import sys
 import time
 
 import conffwk
@@ -31,20 +32,23 @@ from druncschema.run_control_pb2_grpc import RunControlServicer
 from druncschema.token_pb2 import Token
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.exceptions import DruncSetupException
 from drunc.process_manager.configuration import (
     get_process_manager_configuration,
     validate_pm_config,
 )
 from drunc.process_manager.interface.process_manager import run_pm
-from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.run_control.configuration import import_config_json_to_dict
 from drunc.run_control.interface.context import RunControlContext
 from drunc.run_control.utils import (
     ProcessManagerDeploymentType,
     determine_process_manager_type,
 )
-from drunc.utils.grpc_utils import ServerUnreachable
-from drunc.utils.utils import get_logger, resolve_localhost_and_127_ip_to_network_ip
+from drunc.utils.utils import (
+    get_logger,
+    ignore_sigint_sighandler,
+    resolve_localhost_and_127_ip_to_network_ip,
+)
 
 
 class RunControl(RunControlServicer):
@@ -145,12 +149,14 @@ class RunControl(RunControlServicer):
             )
             pm_port = pm_conf_dict.get("port", 0)
             pm_address = f"{pm_host}:{pm_port}"
+            ready_event = mp.Event()
             port = mp.Value("i", 0)
 
             self.log.info(
                 "Starting [green]process manager[/] with configuration file: [green]%s[/]",
                 process_manager_conf_file,
             )
+            self.log.info(f"Target address: {pm_address=}")
             self.pm_process = mp.Process(
                 target=run_pm,
                 kwargs={
@@ -159,12 +165,51 @@ class RunControl(RunControlServicer):
                     "override_logs": request.override_logs,
                     "log_level": "DEBUG",  # PLACEHOLDER
                     "log_path": ".",  # PLACEHOLDER
+                    "ready_event": ready_event,
+                    "signal_handler": ignore_sigint_sighandler,
                     "generated_port": port,
                 },
             )
             self.log.info("Starting the pm process")
             self.pm_process.start()
-            time.sleep(1)  # Give the process manager time to start and bind to the port
+
+            # Check if the process manager started correctly
+            process_started = False
+            for _ in range(100):  # 10s timeout
+                if ready_event.is_set():
+                    process_started = True
+                    break
+
+                if not self.pm_process.is_alive():
+                    exit_code = self.pm_process.exitcode
+                    self.log.error(
+                        f"[red]Process manager process died unexpectedly with exit code {exit_code}."
+                    )
+                    self.log.error(
+                        "[red]This is likely a configuration error (e.g., bad kube-config)."
+                    )
+                    self.log.error(
+                        "[red]Please check the full traceback in the terminal above this message.[/red]"
+                    )
+                    sys.exit(exit_code if exit_code else 1)
+                time.sleep(0.1)
+
+            if not process_started:
+                # This message will only show if the process is *alive* but never sent the "ready" signal
+                raise DruncSetupException(
+                    "[red]Process manager timed out starting. Check logs for details.[/red]"
+                )
+
+            # Setup the process manager address
+            process_manager_address = resolve_localhost_and_127_ip_to_network_ip(
+                f"{pm_host}:{port.value}"
+            )
+            # ctx.obj.reset(address_pm=process_manager_address)
+            self.log.debug(
+                f"[green]process_manager[/green] started at address [green]"
+                f"{process_manager_address}[/green]"
+            )
+
             self.log.debug("[green]Process manager[/green] started")
             # Update the communication port number, since it may have been set to 0 in the configuration file
             pm_address = f"{pm_host}:{port.value}"
@@ -177,68 +222,68 @@ class RunControl(RunControlServicer):
                 f"External process manager address received: {pm_address}, using it directly"
             )
 
-        # Add the process manager driver
-        self.token = request.token
-        self.log.warning(f"Adding process manager driver with address: {pm_address}")
-        self.drivers["process_manager"] = ProcessManagerDriver(pm_address, self.token)
+        # # Add the process manager driver
+        # self.token = request.token
+        # self.log.warning(f"Adding process manager driver with address: {pm_address}")
+        # self.drivers["process_manager"] = ProcessManagerDriver(pm_address, self.token)
 
-        # Establish communication with the process manager, check it is running and ready to accept requests
-        self.log.info(
-            f"Attempting to connect to the process manager at the address: [green]{pm_address}[/]"
-        )
-        try:
-            self.drivers["process_manager"].describe()
-        except Exception as e:
-            self.log.error(
-                f"[red]Could not connect to the process manager at the address: [/red]"
-                f"[green]{pm_address}[/green]"
-            )
-            self.log.critical(f"Reason: {e}")
+        # # Establish communication with the process manager, check it is running and ready to accept requests
+        # self.log.info(
+        #     f"Attempting to connect to the process manager at the address: [green]{pm_address}[/]"
+        # )
+        # try:
+        #     self.drivers["process_manager"].describe()
+        # except Exception as e:
+        #     self.log.error(
+        #         f"[red]Could not connect to the process manager at the address: [/red]"
+        #         f"[green]{pm_address}[/green]"
+        #     )
+        #     self.log.critical(f"Reason: {e}")
 
-            if type(e) == ServerUnreachable:
-                self.log.error(
-                    "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
-                    "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
-                )
+        #     if type(e) == ServerUnreachable:
+        #         self.log.error(
+        #             "[red]This can happen if you have the webproxy enabled at CERN. Ensure "
+        #             "http_proxy, https_proxy, no_proxy, and equivalent aren't set. [/red]"
+        #         )
 
-            if (
-                self.process_manager_type == ProcessManagerDeploymentType.INTERNAL
-                and not self.pm_process.is_alive()
-            ):
-                self.log.error(
-                    f"[red]The process_manager is dead[/red], exit code "
-                    f"{self.pm_process.exitcode}"
-                )
+        #     if (
+        #         self.process_manager_type == ProcessManagerDeploymentType.INTERNAL
+        #         and not self.pm_process.is_alive()
+        #     ):
+        #         self.log.error(
+        #             f"[red]The process_manager is dead[/red], exit code "
+        #             f"{self.pm_process.exitcode}"
+        #         )
 
-            if self.pm_process and self.pm_process.is_alive():
-                self.pm_process.terminate()
-                self.pm_process.join()
+        #     if self.pm_process and self.pm_process.is_alive():
+        #         self.pm_process.terminate()
+        #         self.pm_process.join()
 
-            return StartSessionResponse(
-                token=request.token,
-                result=DeploySessionResponseFlag(
-                    status=DeploySessionResponseFlag.FAILURE_PROCESS_MANAGER_NOT_REACHABLE
-                ),
-            )
+        #     return StartSessionResponse(
+        #         token=request.token,
+        #         result=DeploySessionResponseFlag(
+        #             status=DeploySessionResponseFlag.FAILURE_PROCESS_MANAGER_NOT_REACHABLE
+        #         ),
+        #     )
 
-        self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
+        # self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
 
-        # Get the dal to get the connectivity service client
-        db = conffwk.Configuration(request.path_to_configuration_file)
-        self.session_dal = db.get_dal(class_name="Session", uid=request.session_id)
-        connectivity_service_address: str = (
-            f"{self.session_dal.connectivity_service.host}:"
-            f"{self.session_dal.connectivity_service.service.port}"
-        )
-        self.connectivity_server_client = ConnectivityServiceClient(
-            self.session_name, connectivity_service_address
-        )
+        # # Get the dal to get the connectivity service client
+        # db = conffwk.Configuration(request.path_to_configuration_file)
+        # self.session_dal = db.get_dal(class_name="Session", uid=request.session_id)
+        # connectivity_service_address: str = (
+        #     f"{self.session_dal.connectivity_service.host}:"
+        #     f"{self.session_dal.connectivity_service.service.port}"
+        # )
+        # self.connectivity_server_client = ConnectivityServiceClient(
+        #     self.session_name, connectivity_service_address
+        # )
 
-        # Print the process manager endpoint addresses
-        self.log.info(
-            f"Process manager is running and reachable at the address: [green]{pm_address}[/]"
-        )
-        self.log.info("Ready to start the data taking")
+        # # Print the process manager endpoint addresses
+        # self.log.info(
+        #     f"Process manager is running and reachable at the address: [green]{pm_address}[/]"
+        # )
+        # self.log.info("Ready to start the data taking")
 
         # Include the endpoint addresses in the response
         return StartSessionResponse(
