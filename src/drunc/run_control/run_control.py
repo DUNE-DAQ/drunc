@@ -6,10 +6,12 @@ import sys
 import time
 
 import conffwk
+from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import OutcomeFlag
 from druncschema.process_manager_pb2 import (
     LogLines,
     LogRequest,
+    ProcessInstance,
     ProcessQuery,
     ProcessUUID,
 )
@@ -21,6 +23,10 @@ from druncschema.run_control_pb2 import (
     EndSessionResponseFlag,
     LogOnServerRequest,
     LogOnServerResponse,
+    RunControlBootRequest,
+    RunControlBootResponse,
+    RunControlTerminateRequest,
+    RunControlTerminateResponse,
     StartSessionRequest,
     StartSessionResponse,
     ValidateCommunicationRequest,
@@ -30,8 +36,17 @@ from druncschema.run_control_pb2 import (
 )
 from druncschema.run_control_pb2_grpc import RunControlServicer
 from druncschema.token_pb2 import Token
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from drunc.connectivity_service.client import ConnectivityServiceClient
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncSetupException
 from drunc.process_manager.configuration import (
     get_process_manager_configuration,
@@ -46,6 +61,7 @@ from drunc.run_control.utils import (
     determine_process_manager_type,
 )
 from drunc.utils.grpc_utils import ServerUnreachable
+from drunc.utils.shell_utils import InterruptedCommand
 from drunc.utils.utils import (
     get_logger,
     ignore_sigint_sighandler,
@@ -77,6 +93,10 @@ class RunControl(RunControlServicer):
         self.pm_process: mp.Process | None = None
         self.drivers: dict[str, object] = {}
         self.token: Token | None = None
+        self.configuration_file: str | None = None
+        self.session_id: str | None = None
+        self.override_logs: bool | None = None
+        self.controller_log_level: str | None = None
 
     def start_session(
         self, request: StartSessionRequest, context: RunControlContext
@@ -279,6 +299,11 @@ class RunControl(RunControlServicer):
             )
 
         self.log.critical("PROCESS MANAGER EXISTS WOOHOO!")
+        self.configuration_file = request.path_to_configuration_file
+        self.session_id = request.session_id
+        self.override_logs = request.override_logs
+        self.controller_log_level = request.controller_log_level
+        self.session_name = request.session_name
 
         # Get the dal to get the connectivity service client
         connectivity_service_address: str = (
@@ -329,7 +354,7 @@ class RunControl(RunControlServicer):
 
         # Remove the controller driver
         if "controller" in self.drivers:
-            del self.drivers["controller"]
+            self.drivers.pop("controller")
 
         # Check all processes have been terminated. If not, terminate them
         self.log.info("Checking all processes have been terminated")
@@ -470,3 +495,236 @@ class RunControl(RunControlServicer):
             lines=["Not yet, you've gotta wait a bit ;)"],
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
         )
+
+    def boot(
+        self, request: RunControlBootRequest, context: RunControlContext
+    ) -> RunControlBootResponse:
+        """
+        Boot the run control service.
+
+        Args:
+            request (RunControlBootRequest): The request containing the boot parameters.
+            context (RunControlContext): The gRPC context.
+
+        Returns:
+            RunControlBootResponse: The response indicating the outcome of the boot
+                operation.
+        """
+        if not self.session_name:
+            self.log.error(
+                "Cannot boot: run control does not have a session. Please start a session first."
+            )
+            return RunControlBootResponse(
+                token=request.token,
+                flag=DeploySessionResponseFlag(
+                    status=DeploySessionResponseFlag.FAILURE_OTHER
+                ),
+            )
+        self.log.info(f"Received Boot request: {request}")
+        processes = self.drivers["process_manager"].ps(
+            ProcessQuery(session=self.session_name)
+        )
+
+        # Check that the run control has a process manager driver
+        if "process_manager" not in self.drivers:
+            self.log.error(
+                "Cannot boot: run control does not have a process manager driver. "
+                "Please start a session first."
+            )
+            return RunControlBootResponse(
+                token=request.token,
+                flag=DeploySessionResponseFlag(
+                    status=DeploySessionResponseFlag.FAILURE_OTHER
+                ),
+            )
+
+        # Store the number of processes that are expected to be booted with this command, to check later if any processes died immediately after booting.
+        expected_booted_processes = 0
+
+        # PLACEHOLDER
+        user = getpass.getuser()  # PLACEHOLDER
+
+        # The run control will validate this in the session manager in the future
+        if len(processes.values) > 0:
+            self.log.error(
+                f"Cannot boot: session {self.session_name} already has {len(processes.values)} processes running. "
+                "Please terminate the existing session first."
+            )
+            # Note this will be overridden with an exception handled through gRPC
+            # interceptors, but that will only happen once we have the base set of
+            # comamnds running
+            return RunControlBootResponse(
+                token=request.token,
+                flag=DeploySessionResponseFlag(
+                    status=DeploySessionResponseFlag.FAILURE_SESSION_APPS_ALREADY_RUNNING
+                ),
+            )
+
+        try:
+            results = self.drivers["process_manager"].boot(
+                conf_file=self.configuration_file,
+                conf_id=self.session_id,
+                user=user,
+                session_name=self.session_name,
+                log_level=self.controller_log_level,
+                override_logs=self.override_logs,
+                sleep_between_app_boot=0,
+            )
+            expected_booted_processes = sum(1 for _ in results)
+            for result in results:
+                self.log.critical(
+                    f"Booting process: {result.values[0].process_description.metadata.name}"
+                )
+                if not result:
+                    break
+                self.log.debug(
+                    f"'{result.values[0].process_description.metadata.name}' ({result.values[0].uuid.uuid}) started"
+                )
+        except InterruptedCommand:
+            self.log.warning("Booting interrupted")
+            return
+        except DruncSetupException as e:
+            self.log.error(e)
+            return
+
+        controller_address = self.drivers["process_manager"].controller_address
+        if controller_address:
+            self.log.info(f"Controller endpoint is '{controller_address}'")
+            self.log.info("Connecting the unified_shell to the controller endpoint")
+            self.drivers["controller"] = ControllerDriver(
+                controller_address, self.token
+            )
+
+        else:
+            self.log.error("Could not understand where the controller is!")
+            return
+
+        # If any processes died immediately, place the controller in error.
+        alive_process_count = len(
+            [p for p in processes.values if p.status_code == ProcessInstance.RUNNING]
+        )
+
+        dead_process_count = expected_booted_processes - alive_process_count
+
+        if (
+            not self.drivers["controller"].status().status.in_error
+            and dead_process_count == 0
+        ):
+            self.log.info("Booted successfully")
+        elif dead_process_count != 0:
+            self.log.error(
+                f"Booted, but {dead_process_count} processes died after booting."
+            )
+            # The following line has been commented out as there are issues with the k8s PM
+            # booting process, which terminates processes and immediately reboots them. The
+            # current cause of this issue is unknown, and has been listed in the issue list.
+            # obj.get_driver("controller").to_error()
+        elif self.drivers["controller"].status().status.in_error:
+            self.log.error("Booted, but the top controller is in error")
+            # if obj.running_mode in [UnifiedShellMode.BATCH, UnifiedShellMode.SEMIBATCH]:
+            #     log.error(
+            #         "Unified shell: Running in batch mode, and because error state is detected, exiting."
+            #     )
+            sys.exit(1)
+
+        return RunControlBootResponse(
+            token=request.token, flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED
+        )
+
+    def terminate(
+        self, request: RunControlTerminateRequest, context: RunControlContext
+    ) -> RunControlTerminateResponse:
+        """
+        Execute the process manager terminate command, but only do this for the current
+        session
+        """
+        session_query = ProcessQuery(session=self.session_name)
+        self.log.info(f"Terminating session [green]{self.session_name}[/]")
+        self.drivers["process_manager"].kill(session_query)
+
+        # As the session is now terminated, we can delete the controller driver, as it is no
+        # longer needed.
+        self.drivers.pop("controller")
+
+    def _controller_setup(self, controller_address):
+        desc = Description()
+
+        timeout = 60
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TimeRemainingColumn(),
+            TimeElapsedColumn(),
+            # console=ctx._console,
+        ) as progress:
+            waiting = progress.add_task(
+                "[yellow]Trying to talk to the root controller...", total=timeout
+            )
+
+            stored_exception = None
+
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                progress.update(waiting, completed=time.time() - start_time)
+
+                try:
+                    desc = self.drivers["controller"].describe().description
+                    stored_exception = None
+                    break
+                except ServerUnreachable as e:
+                    stored_exception = e
+                    time.sleep(1)
+                except Exception as e:
+                    self.log.critical("Could not get the controller's status")
+                    self.log.critical(e)
+                    self.log.critical("Exiting.")
+                    self.drivers["process_manager"].terminate()
+                    raise e
+
+        if stored_exception is not None:
+            raise stored_exception
+
+        self.log.info(
+            f"{controller_address} is '{desc.name}.{desc.session}' (name.session), starting listening..."
+        )
+        self.drivers["controller"].name = f"{desc.name}.{desc.session}"
+
+        self.log.warning("Connected to the controller")
+
+        # 60s for everyone to show up on the connectivity service, and 10s to come out of initialising state
+        timeout = 60 + 10
+
+        time_start = time.time()
+        state = self.drivers["controller"].status().status.state.lower()
+        # with StatusTableUpdater(ctx) as updater:
+        #     task = updater.add_task("Waiting on tree initialisation...", total=timeout)
+        while time.time() - time_start < timeout and state == "initialising":
+            state = self.drivers["controller"].status().status.state.lower()
+            # updater.update(task, completed=time.time() - time_start)
+            # updater.update_table()
+            time.sleep(0.5)
+
+            # updater.update_table()
+
+        if state == "initialising":
+            self.log.error("Controller did not initialise in time")
+            return
+
+        self.log.debug(f"Taking control of the controller as {self.token()}")
+        try:
+            ret = self.drivers["controller"].take_control()
+
+            if ret.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
+                self.log.info("You are in control.")
+                # ctx.took_control = True
+            else:
+                self.log.info("You are NOT in control.")
+                # ctx.took_control = False
+
+        except Exception as e:
+            self.log.error("You are NOT in control.")
+            raise e
+
+        return desc

@@ -218,3 +218,45 @@ def logs(obj: RunControlContext, grep: str, how_far: int) -> None:
     # Send the request to the run control server.
     obj.get_driver("run_control").logs(grep=grep, how_far=how_far)
     return
+
+
+@click.command("boot", help="Boot the applications defined in the session.")
+@click.pass_obj
+def boot(obj: RunControlContext) -> None:
+    """
+    Boot the applications specified in the session configuration.
+
+    Args:
+        obj: The RunControlContext object.
+
+    Returns:
+        None
+    """
+    # TODO - extend this to get the run control logs per session too!
+    log = get_logger("run_control.iface.boot")
+    # Send the request to the run control server.
+    log.info("Received request to boot.")
+
+    obj.get_driver("run_control").boot()
+    return
+
+
+@click.command("terminate", help="Kill the applications defined in the session.")
+@click.pass_obj
+def terminate(obj: RunControlContext) -> None:
+    """
+    Kill the applications specified in the session configuration.
+
+    Args:
+        obj: The RunControlContext object.
+
+    Returns:
+        None
+    """
+    # TODO - extend this to get the run control logs per session too!
+    log = get_logger("run_control.iface.terminate")
+    # Send the request to the run control server.
+    log.info("Received request to boot.")
+
+    obj.get_driver("run_control").terminate()
+    return

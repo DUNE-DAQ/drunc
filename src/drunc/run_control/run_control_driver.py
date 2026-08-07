@@ -6,6 +6,7 @@ from druncschema.run_control_pb2 import (
     EndSessionRequest,
     EndSessionResponseFlag,
     LogOnServerRequest,
+    RunControlBootRequest,
     StartSessionRequest,
     ValidateCommunicationRequest,
     ValidateSessionRequest,
@@ -189,3 +190,23 @@ class RunControlDriver:
         )
         self.log.warning("Not yet implemented grep, ignoring for now.")
         return self.stub.logs(request, timeout=timeout).flag
+
+    def boot(self) -> OutcomeFlag:
+        """
+        Boot the session applications.
+
+        Args:
+            None
+
+        Returns:
+            OutcomeFlag: The outcome of the boot operation.
+
+        Raises:
+            None
+        """
+        self.log.info("Running boot")
+
+        request = RunControlBootRequest(token=self.token)
+
+        self.log.info("Sending boot request to run control server")
+        return self.stub.boot(request).flag

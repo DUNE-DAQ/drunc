@@ -20,20 +20,20 @@ from drunc.controller.interface.commands import (
     who_is_in_charge,
 )
 from drunc.process_manager.interface.commands import (
-    boot,
     dummy_boot,
     flush,
     kill,
     ps,
     restart,
-    terminate,
     wait,
     # logs, # TODO: unify this convention
 )
 from drunc.run_control.interface.commands import (
+    boot,
     end_session,
     logs,
     start_session,
+    terminate,
     validate_session,
 )
 from drunc.run_control.interface.commands import log_on_server as log
@@ -113,16 +113,22 @@ def run_control_shell(
     ctx.call_on_close(cleanup)
 
     # Add commands to the shell
-    run_control_commands = [validate_session, start_session, end_session, log, logs]
-    process_manager_commands = [
+    run_control_commands = [
+        validate_session,
+        start_session,
+        end_session,
+        log,
+        logs,
         boot,
+        terminate,
+    ]
+    process_manager_commands = [
         dummy_boot,
         flush,
         kill,
         logs,
         ps,
         restart,
-        terminate,
         wait,
     ]
     controller_commands = [
