@@ -40,6 +40,8 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.utils import get_logger, pid_info_str
 
+log_echo = get_logger("echo", rich_handler=True)
+
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -493,7 +495,7 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # Get the log method corresponding to the severity level (e.g., debug, info,
         # warning, error), and log the message
         level = request.severity.lower()
-        log_method = getattr(self.log, level, self.log.info)
+        log_method = getattr(log_echo, level, log_echo.info)
         log_method(request.text)
         return response
 
