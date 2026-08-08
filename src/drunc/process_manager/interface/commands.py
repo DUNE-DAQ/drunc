@@ -15,6 +15,15 @@ from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
+log_echo = get_logger("echo", rich_handler=True)
+
+
+@click.command("echo")
+@click.argument("text", required=False)
+@click.pass_obj
+def echo(obj, text: str | None) -> None:
+    log_echo.info(text or "")
+
 
 @click.command("boot")
 @click.option(

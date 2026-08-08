@@ -8,6 +8,7 @@ from daqpytools.logging import HandlerType, add_handler, logging_log_levels
 from drunc.process_manager.interface.commands import (
     boot,
     dummy_boot,
+    echo,
     flush,
     kill,
     logs,
@@ -95,6 +96,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.command.add_command(flush, "flush")
     ctx.command.add_command(logs, "logs")
     ctx.command.add_command(restart, "restart")
+    ctx.command.add_command(echo, "echo")
     ctx.command.add_command(ps, "ps")
     ctx.command.add_command(dummy_boot, "dummy_boot")
 
