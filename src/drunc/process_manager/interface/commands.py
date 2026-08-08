@@ -413,7 +413,8 @@ def ps_impl(
             soft_wrap=True,
         )
     else:
-        log.info(f"No processes running in session [green]{obj.session_name}[/]")
+        log_msg = f"No processes running{f' in session [green]{obj.session_name}[/]' if session_name else ''}"
+        log.info(log_msg)
 
 
 @click.command("log")
