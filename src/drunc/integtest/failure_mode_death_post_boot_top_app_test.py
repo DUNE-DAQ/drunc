@@ -63,7 +63,7 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps
+ps -w 160
 
 echo status-post-boot
 status
@@ -179,7 +179,7 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
     Checks that the application that dies on boot is marked with a disconnected status
     in the status table after boot.
     """
-    # Check that the application that dies on boot is not present in the ps table after
+    # Check that the application that dies on boot is not present in the status table after
     # boot.
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
@@ -189,10 +189,10 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
         status_table, dead_app_name
     )
     assert status_table_dead_app_entry, (
-        f"Expected to see {dead_app_name} in the ps table, but it was not found"
+        f"Expected to see {dead_app_name} in the status table, but it was not found"
     )
     assert dead_app_name not in status_table, (
-        f"Expected to see {dead_app_name} missing from the ps table, but it was found."
+        f"Expected to see {dead_app_name} missing from the status table, but it was found."
     )
     status_table_state = status_table_dead_app_entry[0]["state"]
     assert status_table_state == "disconnected", (
