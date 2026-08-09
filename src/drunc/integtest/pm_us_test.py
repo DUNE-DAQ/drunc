@@ -17,7 +17,10 @@ from daqconf.utils import find_free_port
 from integ_test_utils import (
     _PS_COLUMNS,
     _parse_table_from_index,
+    assert_contains_between_markers,
+    assert_rows_have_valid_uuids,
     find_line_index,
+    get_lines_between_markers,
     get_ps_table_after_echo,
     require_line_containing,
     strip_ansi,
@@ -109,11 +112,18 @@ pm_port = find_free_port(50020, 52000)
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
 pmapp = DAQSessionApp("pm", procmsg_startup_commands)
 
-drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
+drunc_startup_commands = [
+    "drunc-unified-shell",
+    f"grpc://localhost:{pm_port}",
+    "<config_data_file>",
+    "<config_session_name>",
+    "<daq_session_name>",
+]
 druncapp = DAQSessionApp("us", drunc_startup_commands)
 
-cmd_set_list = DAQCommandSet("us", dunerc_commands, CommandWaitParameters(style=CommandWaitStyle.ECHO))
-
+cmd_set_list = DAQCommandSet(
+    "us", dunerc_commands, CommandWaitParameters(style=CommandWaitStyle.ECHO)
+)
 
 
 # Putting everything together into a DAQSessionIngredients object
@@ -152,16 +162,20 @@ def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
     assert any(
-        f"{run_dunerc.daq_session_name}_df-01" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_df-01" in str(logname)
+        for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.daq_session_name}_dfo" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_dfo" in str(logname)
+        for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.daq_session_name}_mlt" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_mlt" in str(logname)
+        for logname in run_dunerc.log_files
     )
     assert any(
-        f"{run_dunerc.daq_session_name}_ru" in str(logname) for logname in run_dunerc.log_files
+        f"{run_dunerc.daq_session_name}_ru" in str(logname)
+        for logname in run_dunerc.log_files
     )
 
     # Check that there are no warnings or errors in the log files
@@ -190,60 +204,31 @@ def test_connections(run_dunerc) -> None:
     )
 
     assert any(us_connect in line for line in lines_us), (
-            f"Did not find '{us_connect}' between pre_boot and post_boot.\nBetween:\n"
-            + "\n".join(lines_us)
-        )
-
+        f"Did not find '{us_connect}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(lines_us)
+    )
 
 
 def test_boot_us(run_dunerc) -> None:
     """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
     lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot",
-        error_message="Did not find the 'pre_boot' header line in stdout.",
-    )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot",
-        error_message="Did not find the 'post_boot' footer line in stdout.",
-    )
-    between = lines[pre_boot_idx + 1 : post_boot_idx]
-    no_boot_re = "No processes running"
-    assert any(no_boot_re in line for line in between), (
-        f"Did not find '{no_boot_re}' between pre_boot and post_boot.\nBetween:\n"
-        + "\n".join(between)
+    assert_contains_between_markers(
+        lines, "pre_boot", "post_boot", "No processes running"
     )
 
     ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
     assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
-    for row in ps_post_boot:
-        assert UUID_RE.match(row["uuid"]), (
-            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
-        )
+    assert_rows_have_valid_uuids(ps_post_boot)
 
 
 def test_boot_pm(run_dunerc) -> None:
     """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot",
-        error_message="Did not find the 'pre_boot' header line in stdout.",
-    )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot",
-        error_message="Did not find the 'post_boot' footer line in stdout.",
-    )
-    between = lines[pre_boot_idx + 1 : post_boot_idx]
+    between = get_lines_between_markers(lines, "pre_boot", "post_boot")
     check_boot_sent_re = "sent boot for session pm_us via unified_shell"
     assert any(check_boot_sent_re in line for line in between), (
         f"Did not find '{check_boot_sent_re}' between pre_boot and post_boot.\nBetween:\n"
@@ -259,12 +244,9 @@ def test_boot_pm(run_dunerc) -> None:
     )
 
 
-
 def test_terminate(run_dunerc) -> None:
     """Test terminate by checking both pm and pms shells"""
-    lines_pms = strip_ansi(
-        run_dunerc.completed_processes["us"].stdout
-    ).splitlines()
+    lines_pms = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
     lines_pm = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
     pre_boot_idx_pm = require_line_containing(
