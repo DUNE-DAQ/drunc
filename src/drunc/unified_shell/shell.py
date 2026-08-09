@@ -53,6 +53,7 @@ from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import (
     boot,
+    echo_on_server,
     flush,
     kill,
     log_on_server,
@@ -350,7 +351,13 @@ def unified_shell(
 
     # Add the unified shell Click commands to the CLI
     ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
+    unified_shell_commands: list[click.Command] = [
+        boot,
+        log_on_server,
+        ps,
+        terminate,
+        echo_on_server,
+    ]
     for cmd in unified_shell_commands:
         ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
         ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))

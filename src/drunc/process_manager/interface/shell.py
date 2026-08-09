@@ -9,9 +9,9 @@ from drunc.process_manager.interface.commands import (
     boot,
     dummy_boot,
     echo,
+    echo_on_server,
     flush,
     kill,
-    log_on_server,
     logs,
     ps,
     restart,
@@ -96,7 +96,7 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
     ctx.command.add_command(kill, "kill")
     ctx.command.add_command(flush, "flush")
     ctx.command.add_command(logs, "logs")
-    ctx.command.add_command(log_on_server, "log")
+    ctx.command.add_command(echo_on_server, "echo-on-server")
     ctx.command.add_command(restart, "restart")
     ctx.command.add_command(echo, "echo")
     ctx.command.add_command(ps, "ps")
