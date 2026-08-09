@@ -89,19 +89,19 @@ confgen_arguments = {"SmallFootprint": conf_dict}
 dunerc_commands = """
 
     echo pre_boot
-    log pre_boot
+    echo-on-server pre_boot
     ps -w 180
     boot
     wait 5
     echo post_boot
-    log post_boot
+    echo-on-server post_boot
     ps -w 180
 
     echo test_terminate
-    log test_terminate
+    echo-on-server test_terminate
     terminate
     echo test_terminate_done
-    log test_terminate_done
+    echo-on-server test_terminate_done
 
     """.split()
 
