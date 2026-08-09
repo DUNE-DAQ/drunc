@@ -1021,3 +1021,39 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             request, timeout=timeout
         )
         return response
+
+    def echo_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        timeout: int | float = 60,
+    ) -> LogOnServerResponse:
+        """
+        Same as log_on_server but goes to drunc.echo. CLI tool for testing
+
+        Args:
+            text (str): The message to log.
+            severity (str, optional): The severity level of the log message. Defaults to "INFO".
+            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+
+        Returns:
+            None
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = LogOnServerRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            target="",
+            execute_along_path=False,
+            execute_on_all_subsequent_children_in_path=False,
+        )
+        request.token.CopyFrom(self.token)
+        try:
+            response = self.stub.echo_on_server(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
