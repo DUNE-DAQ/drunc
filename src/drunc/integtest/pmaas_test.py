@@ -17,6 +17,7 @@ from daqconf.utils import find_free_port
 from integ_test_utils import (
     _PS_COLUMNS,
     _parse_table_from_index,
+    assert_rows_have_valid_uuids,
     find_line_index,
     get_ps_table_after_echo,
     require_echo_marker_index,
@@ -152,7 +153,10 @@ pm_port = find_free_port(50020, 52000)
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
 pmapp = DAQSessionApp("pm", procmsg_startup_commands)
 
-pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
+pmshell_startup_commands = [
+    "drunc-process-manager-shell",
+    f"grpc://localhost:{pm_port}",
+]
 pmshellapp = DAQSessionApp("pmshell", pmshell_startup_commands)
 
 us_startup_commands = [
@@ -266,10 +270,7 @@ def test_pms_ps_contains_three_sessions(run_dunerc) -> None:
         f"Expected sessions {expected_sessions} in pms ps output, got {observed_sessions}."
     )
 
-    for row in ps_all:
-        assert UUID_RE.match(row["uuid"]), (
-            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
-        )
+    assert_rows_have_valid_uuids(ps_all)
 
 
 def test_pms_ps_session_filter(run_dunerc) -> None:
@@ -277,7 +278,9 @@ def test_pms_ps_session_filter(run_dunerc) -> None:
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
     ps_filtered = get_ps_table_after_echo(lines, "pms_ps_session_1_only")
 
-    assert ps_filtered, "Expected a ps table after pms_ps_session_1_only, but found none."
+    assert ps_filtered, (
+        "Expected a ps table after pms_ps_session_1_only, but found none."
+    )
 
     observed_sessions = {row["session"].strip() for row in ps_filtered}
     assert observed_sessions == {daq_session_name_1}, (
@@ -344,8 +347,7 @@ def test_us_ps_contains_only_us_session(run_dunerc) -> None:
 
     observed_sessions = {row["session"].strip() for row in us_ps}
     assert observed_sessions == {conf_dict.config_session_name}, (
-        "Expected only us session rows in us ps output, "
-        f"got {observed_sessions}."
+        f"Expected only us session rows in us ps output, got {observed_sessions}."
     )
 
 
@@ -363,18 +365,21 @@ def test_us_terminated_table_contains_only_us_session(run_dunerc) -> None:
         lambda line: "Terminated process" in line,
         start_idx=terminate_marker_idx + 1,
     )
-    assert table_start_idx is not None, "Could not find terminated process table in us output."
+    assert table_start_idx is not None, (
+        "Could not find terminated process table in us output."
+    )
     assert table_start_idx < terminate_done_idx, (
         "Terminated process table appears after us terminate block ended."
     )
 
     terminated_table = _parse_table_from_index(lines, table_start_idx, _PS_COLUMNS)
-    assert terminated_table, "Expected terminated table rows in us output, but found none."
+    assert terminated_table, (
+        "Expected terminated table rows in us output, but found none."
+    )
 
     observed_sessions = {row["session"].strip() for row in terminated_table}
     assert observed_sessions == {conf_dict.config_session_name}, (
-        "Expected only us session rows in terminated table, "
-        f"got {observed_sessions}."
+        f"Expected only us session rows in terminated table, got {observed_sessions}."
     )
 
 
@@ -383,7 +388,9 @@ def test_pms_ps_after_us_terminate(run_dunerc) -> None:
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
     ps_after_us = get_ps_table_after_echo(lines, "pms_ps_after_us_terminate")
 
-    assert ps_after_us, "Expected a ps table after pms_ps_after_us_terminate, but found none."
+    assert ps_after_us, (
+        "Expected a ps table after pms_ps_after_us_terminate, but found none."
+    )
 
     observed_sessions = {row["session"].strip() for row in ps_after_us}
     assert conf_dict.config_session_name not in observed_sessions, (

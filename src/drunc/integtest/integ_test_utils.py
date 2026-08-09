@@ -249,6 +249,96 @@ def require_pattern_match(
     return match
 
 
+def get_lines_between_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    *,
+    start_idx: int = 0,
+) -> list[str]:
+    """Return lines found strictly between two marker lines.
+
+    Marker matching uses substring containment via `require_line_containing`.
+    """
+    start_line_idx = require_line_containing(
+        lines,
+        start_marker,
+        error_message=f"Did not find the '{start_marker}' header line in stdout.",
+        start_idx=start_idx,
+    )
+    end_line_idx = require_line_containing(
+        lines,
+        end_marker,
+        error_message=f"Did not find the '{end_marker}' footer line in stdout.",
+        start_idx=start_line_idx + 1,
+    )
+    return lines[start_line_idx + 1 : end_line_idx]
+
+
+def assert_contains_between_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    expected_text: str,
+    *,
+    start_idx: int = 0,
+) -> None:
+    """Assert that `expected_text` appears between two marker lines."""
+    between = get_lines_between_markers(
+        lines,
+        start_marker,
+        end_marker,
+        start_idx=start_idx,
+    )
+    assert any(expected_text in line for line in between), (
+        f"Did not find '{expected_text}' between {start_marker} and {end_marker}.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+
+def get_text_between_echo_markers(
+    lines: list[str],
+    start_marker: str,
+    end_marker: str,
+    *,
+    start_idx: int = 0,
+) -> str:
+    """Return concatenated text between two `drunc.echo` markers."""
+    echo_start_idx = require_echo_marker_index(lines, start_marker, start_idx=start_idx)
+    echo_end_idx = require_echo_marker_index(
+        lines, end_marker, start_idx=echo_start_idx + 1
+    )
+    return "\n".join(lines[echo_start_idx + 1 : echo_end_idx])
+
+
+def assert_match_contains_uuid(
+    text: str,
+    pattern: re.Pattern[str],
+    *,
+    error_message: str,
+) -> str:
+    """Assert `pattern` matches and group(1) is a valid UUID; return the UUID."""
+    match = require_pattern_match(text, pattern, error_message=error_message)
+    matched_uuid = match.group(1)
+    assert UUID_RE.match(matched_uuid), (
+        f"Expected the matched log line to contain a UUID, got: {matched_uuid}"
+    )
+    return matched_uuid
+
+
+def assert_rows_have_valid_uuids(
+    rows: list[dict[str, str]],
+    *,
+    name_column: str = "friendly_name",
+    uuid_column: str = "uuid",
+) -> None:
+    """Assert each row has a valid UUID in `uuid_column`."""
+    for row in rows:
+        assert UUID_RE.match(row[uuid_column]), (
+            f"Expected a valid UUID for process '{row[name_column]}', got '{row[uuid_column]}'"
+        )
+
+
 # ── Table parsing ──────────────────────────────────────────────────────────────
 
 
