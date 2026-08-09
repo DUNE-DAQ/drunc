@@ -18,10 +18,15 @@ from daqconf.utils import find_free_port
 from integ_test_utils import (
     _PS_COLUMNS,
     _parse_table_from_index,
+    assert_contains_between_markers,
+    assert_match_contains_uuid,
     assert_process_presence,
+    assert_rows_have_valid_uuids,
     find_line_index,
     get_column_for_friendly_name,
+    get_lines_between_markers,
     get_ps_table_after_echo,
+    get_text_between_echo_markers,
     require_echo_marker_index,
     require_line_containing,
     require_pattern_match,
@@ -274,62 +279,28 @@ def test_boot_pms(run_dunerc) -> None:
     """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot",
-        error_message="Did not find the 'pre_boot' header line in stdout.",
+    assert_contains_between_markers(
+        lines, "pre_boot", "post_boot", "No processes running"
     )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot",
-        error_message="Did not find the 'post_boot' footer line in stdout.",
-    )
-    between = lines[pre_boot_idx + 1 : post_boot_idx]
-    no_boot_re = "No processes running"
-    assert any(no_boot_re in line for line in between), (
-        f"Did not find '{no_boot_re}' between pre_boot and post_boot.\nBetween:\n"
-        + "\n".join(between)
-    )
-
     ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
     assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
-    for row in ps_post_boot:
-        assert UUID_RE.match(row["uuid"]), (
-            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
-        )
+    assert_rows_have_valid_uuids(ps_post_boot)
 
 
 def test_boot_pm(run_dunerc) -> None:
     """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot",
-        error_message="Did not find the 'pre_boot' header line in stdout.",
+    assert_contains_between_markers(
+        lines, "pre_boot", "post_boot", "sent boot with arguments"
     )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot",
-        error_message="Did not find the 'post_boot' footer line in stdout.",
-    )
-    between = lines[pre_boot_idx + 1 : post_boot_idx]
-    check_boot_sent_re = "sent boot with arguments"
-    assert any(check_boot_sent_re in line for line in between), (
-        f"Did not find '{check_boot_sent_re}' between pre_boot and post_boot.\nBetween:\n"
-        + "\n".join(between)
-    )
-
     check_root_controller_boot = (
         f"Booted 'root-controller' from session '{daq_session_name}' with UUID"
     )
-    assert any(check_root_controller_boot in line for line in between), (
-        f"Did not find '{check_root_controller_boot}' between pre_boot and post_boot.\nBetween:\n"
-        + "\n".join(between)
+    assert_contains_between_markers(
+        lines, "pre_boot", "post_boot", check_root_controller_boot
     )
 
 
@@ -337,56 +308,26 @@ def test_boot_pms_2(run_dunerc) -> None:
     """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot_2",
-        error_message="Did not find the 'pre_boot_2' header line in stdout.",
-    )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot_2",
-        error_message="Did not find the 'post_boot_2' footer line in stdout.",
-    )
-
+    get_lines_between_markers(lines, "pre_boot_2", "post_boot_2")
     ps_post_boot = get_ps_table_after_echo(lines, "post_boot_2")
     assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
-    for row in ps_post_boot:
-        assert UUID_RE.match(row["uuid"]), (
-            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
-        )
+    assert_rows_have_valid_uuids(ps_post_boot)
 
 
 def test_boot_pm_2(run_dunerc) -> None:
     """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
 
-    # Check if no processes running in session works
-    pre_boot_idx = require_line_containing(
-        lines,
-        "pre_boot_2",
-        error_message="Did not find the 'pre_boot_2' header line in stdout.",
+    assert_contains_between_markers(
+        lines, "pre_boot_2", "post_boot_2", "sent boot with arguments"
     )
-    post_boot_idx = require_line_containing(
-        lines,
-        "post_boot_2",
-        error_message="Did not find the 'post_boot_2' footer line in stdout.",
-    )
-    between = lines[pre_boot_idx + 1 : post_boot_idx]
-    check_boot_sent_re = "sent boot with arguments"
-    assert any(check_boot_sent_re in line for line in between), (
-        f"Did not find '{check_boot_sent_re}' between pre_boot_2 and post_boot_2.\nBetween:\n"
-        + "\n".join(between)
-    )
-
     check_root_controller_boot = (
         f"Booted 'root-controller' from session '{daq_session_name_1}' with UUID"
     )
-    assert any(check_root_controller_boot in line for line in between), (
-        f"Did not find '{check_root_controller_boot}' between pre_boot and post_boot.\nBetween:\n"
-        + "\n".join(between)
+    assert_contains_between_markers(
+        lines, "pre_boot_2", "post_boot_2", check_root_controller_boot
     )
 
 
@@ -503,15 +444,9 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
 def test_restart_mlt_logs_pm(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
     lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
-
-    echo_idx = require_echo_marker_index(lines, "pre_restart_mlt")
-
-    post_restart_idx = require_echo_marker_index(
-        lines, "post_restart_mlt", start_idx=echo_idx + 1
+    restart_text = get_text_between_echo_markers(
+        lines, "pre_restart_mlt", "post_restart_mlt"
     )
-
-    restart_lines = lines[echo_idx + 1 : post_restart_idx]
-    restart_text = "\n".join(restart_lines)
 
     require_pattern_match(
         restart_text,
@@ -531,19 +466,14 @@ def test_restart_mlt_logs_pm(run_dunerc) -> None:
         error_message="Did not find the mlt exit-code log line after graceful termination.",
     )
 
-    # * Note difference in the reboot message between the PM and the PMS
-    booted_match = require_pattern_match(
+    # Note difference in the reboot message between the PM and PMS.
+    assert_match_contains_uuid(
         restart_text,
-        re.compile(
+        pattern=re.compile(
             r"Booted 'mlt' from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
             re.DOTALL,
         ),
         error_message="Did not find the mlt boot log line in pm after the restart exit log.",
-    )
-
-    booted_uuid = booted_match.group(1)
-    assert UUID_RE.match(booted_uuid), (
-        f"Expected the mlt boot log to contain a UUID, got: {booted_uuid}"
     )
 
 
@@ -551,29 +481,18 @@ def test_restart_mlt_logs_pms(run_dunerc) -> None:
     """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
 
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
-
-    echo_idx = require_echo_marker_index(lines, "pre_restart_mlt")
-
-    post_restart_idx = require_echo_marker_index(
-        lines, "post_restart_mlt", start_idx=echo_idx + 1
+    restart_text = get_text_between_echo_markers(
+        lines, "pre_restart_mlt", "post_restart_mlt"
     )
 
-    restart_lines = lines[echo_idx + 1 : post_restart_idx]
-    restart_text = "\n".join(restart_lines)
-
-    # * Note difference in the reboot message between the PM and the PMS
-    booted_match = require_pattern_match(
+    # Note difference in the reboot message between the PM and PMS.
+    assert_match_contains_uuid(
         restart_text,
-        re.compile(
-            r"Restarted \['mlt'\] from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",  # OKAY SO THIS WAS WRON
+        pattern=re.compile(
+            r"Restarted \['mlt'\] from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
             re.DOTALL,
         ),
         error_message="Did not find the mlt boot log line in pms after the restart exit log.",
-    )
-
-    booted_uuid = booted_match.group(1)
-    assert UUID_RE.match(booted_uuid), (
-        f"Expected the mlt boot log to contain a UUID, got: {booted_uuid}"
     )
 
 
