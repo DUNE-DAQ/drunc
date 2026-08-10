@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
+import integrationtest.utility_functions as utility_functions
 import pytest
 from integ_test_utils import (
     check_execution_report_success,
@@ -212,18 +213,10 @@ def _check_command(
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 
-def test_dunerc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc, caplog) -> None:
     """Checks that the drunc integration command sequence completes successfully."""
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    assert run_dunerc.completed_process.returncode == 0
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
 
 
 def test_log_files(run_dunerc) -> None:
