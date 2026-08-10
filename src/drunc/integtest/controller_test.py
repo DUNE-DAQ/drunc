@@ -46,8 +46,8 @@ conf_dict.op_env = "integtest"
 conf_dict.session = "minimal"
 conf_dict.tpg_enabled = False
 
-# For testing, allow drunc to manage ConnectivityService (default is False, integrationtest manages Connectivity Service)
-conf_dict.drunc_connsvc = True
+# Request that drunc manages the ConnectivityService
+conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
