@@ -848,7 +848,12 @@ def generate_fsm_command(ctx, transition: FSMCommandDescription, controller_name
     }
 
     # Define the mapping of gRPC argument types to their corresponding protobuf message
-    # types for default value unpacking
+    # types for default value unpacking. The ProtobufScalarMsgType is a type alias for
+    # the union of the protobuf message types used for scalar values, and is used by
+    # mypy to check the types of the unpacked default values. The msg_map is the
+    # dictionary that maps the gRPC argument types to their corresponding protobuf
+    # message types, which are later handed off to click to define the click command
+    # options.
     ProtobufScalarMsgType: TypeAlias = (
         type[string_msg] | type[int_msg] | type[float_msg] | type[bool_msg]
     )
