@@ -1,4 +1,4 @@
-from druncschema.authoriser_pb2 import ActionType
+from druncschema.authoriser_pb2 import ActionType, SystemType
 from google.rpc import code_pb2
 
 from drunc.exceptions import DruncCommandException
@@ -6,7 +6,11 @@ from drunc.exceptions import DruncCommandException
 
 class Unauthorised(DruncCommandException):
     def __init__(
-        self, user: str, action: ActionType.ValueType, command: str, drunc_system: str
+        self,
+        user: str,
+        action: ActionType.ValueType,
+        command: str,
+        drunc_system: SystemType,
     ) -> None:
         self.user = user
         self.action = action

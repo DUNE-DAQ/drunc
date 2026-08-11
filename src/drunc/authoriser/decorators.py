@@ -2,6 +2,7 @@ import functools
 from typing import Callable, Protocol
 
 import grpc
+from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
@@ -14,8 +15,8 @@ class _AuthoriserProtocol(Protocol):
     def is_authorised(
         self,
         token: Token,
-        action: int,
-        system: str,
+        action: ActionType,
+        system: SystemType,
         command_name: str,
     ) -> bool: ...
 
@@ -24,23 +25,25 @@ class _RequestProtocol(Protocol):
     token: Token
 
 
-class _ObjectProtocol(Protocol):
+class _ContextProtocol(Protocol):
     name: str
     authoriser: _AuthoriserProtocol
 
 
-_Command = Callable[[_ObjectProtocol, _RequestProtocol, grpc.ServicerContext], Response]
+_Command = Callable[
+    [_ContextProtocol, _RequestProtocol, grpc.ServicerContext], Response
+]
 
 
 def authentified_and_authorised(
-    action: int, system: str
+    action: ActionType, system: SystemType
 ) -> Callable[[_Command], _Command]:
     def decor(cmd: _Command) -> _Command:
         @functools.wraps(
             cmd
         )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
         def check_token(
-            obj: _ObjectProtocol,
+            obj: _ContextProtocol,
             request: _RequestProtocol,
             context: grpc.ServicerContext,
         ) -> Response:
