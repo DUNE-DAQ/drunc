@@ -1,51 +1,48 @@
 import signal
+import threading
 import time
 from concurrent import futures
-from typing import List, Optional, Protocol, Tuple, cast
+from typing import Callable, TypeVar, cast
 
+from grpc import Server, insecure_channel
+from grpc import server as grpc_server
+
+from drunc.grpc_testing_tools.child_controller import (
+    ChildControllerServiceImpl,
+)
 from drunc.grpc_testing_tools.grpc_log_util import (
     stderr_observer,
     stdout_observer,
 )
+from drunc.grpc_testing_tools.process_manager import ManagerServiceImpl
+from drunc.grpc_testing_tools.root_controller import RootControllerServiceImpl
+from drunc.grpc_testing_tools.test_services_pb2_grpc import (
+    add_ChildControllerServiceServicer_to_server,
+    add_ManagerServiceServicer_to_server,
+    add_RootControllerServiceServicer_to_server,
+)
 from drunc.process_manager.configuration import ProcessManagerTypes
 
-
-class _GrpcServerProtocol(Protocol):
-    def add_insecure_port(self, addr: str) -> int: ...
-
-
-class _GrpcServicerAddFunc(Protocol):
-    def __call__(self, servicer: object, server: _GrpcServerProtocol) -> object: ...
-
-
-class _EventLike(Protocol):
-    def set(self) -> object: ...
-
-    def is_set(self) -> bool: ...
-
-
 SERVER_GRACE_PERIOD = 2
+T = TypeVar("T")
 
 
 def run_grpc_server(
     server_name: str,
-    servicer_instance: object,
-    add_servicer_func: _GrpcServicerAddFunc,
+    servicer_instance: T,
+    add_servicer_func: Callable[[T, Server], None],
     max_workers: int,
     server_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, object]]] = None,
-    upstream_connection: Optional[dict[str, object]] = None,
-    ready_event: _EventLike | None = None,
-    stop_event: _EventLike | None = None,
+    server_options: list[tuple[str, object]] | None = None,
+    upstream_connection: dict[str, object] | None = None,
+    ready_event: threading.Event | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """Generic gRPC server runner that handles the common server lifecycle."""
 
     stderr_observer(log_file)
     stdout_observer(log_file)
-
-    from grpc import insecure_channel
-    from grpc import server as grpc_server
 
     shutdown_requested = False
 
@@ -111,16 +108,12 @@ def run_process_manager_server(
     manager_max_workers: int,
     server_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, object]]] = None,
-    ready_event: _EventLike | None = None,
-    stop_event: _EventLike | None = None,
+    server_options: list[tuple[str, object]] | None = None,
+    ready_event: threading.Event | None = None,
+    stop_event: threading.Event | None = None,
     lifetime_manager_type: ProcessManagerTypes = ProcessManagerTypes.SSH_SHELL,
 ) -> None:
     """Run Manager server process with output logging."""
-    from drunc.grpc_testing_tools.process_manager import ManagerServiceImpl
-    from drunc.grpc_testing_tools.test_services_pb2_grpc import (
-        add_ManagerServiceServicer_to_server,
-    )
 
     run_grpc_server(
         server_name="Manager",
@@ -143,16 +136,12 @@ def run_root_controller_server(
     server_port: int,
     manager_port: int,
     log_file: str,
-    server_options: Optional[List[Tuple[str, object]]] = None,
-    client_options: Optional[List[Tuple[str, object]]] = None,
-    ready_event: _EventLike | None = None,
-    stop_event: _EventLike | None = None,
+    server_options: list[tuple[str, object]] | None = None,
+    client_options: list[tuple[str, object]] | None = None,
+    ready_event: threading.Event | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """Run RootController server with Manager client connection."""
-    from drunc.grpc_testing_tools.root_controller import RootControllerServiceImpl
-    from drunc.grpc_testing_tools.test_services_pb2_grpc import (
-        add_RootControllerServiceServicer_to_server,
-    )
 
     run_grpc_server(
         server_name="RootController",
@@ -178,18 +167,12 @@ def run_child_controller_server(
     root_port: int,
     child_name: str,
     log_file: str,
-    server_options: Optional[List[Tuple[str, object]]] = None,
-    client_options: Optional[List[Tuple[str, object]]] = None,
-    ready_event: _EventLike | None = None,
-    stop_event: _EventLike | None = None,
+    server_options: list[tuple[str, object]] | None = None,
+    client_options: list[tuple[str, object]] | None = None,
+    ready_event: threading.Event | None = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """Run ChildController server with RootController client connection."""
-    from drunc.grpc_testing_tools.child_controller import (
-        ChildControllerServiceImpl,
-    )
-    from drunc.grpc_testing_tools.test_services_pb2_grpc import (
-        add_ChildControllerServiceServicer_to_server,
-    )
 
     run_grpc_server(
         server_name=child_name,

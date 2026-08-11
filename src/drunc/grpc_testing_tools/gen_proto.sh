@@ -13,7 +13,7 @@ PROTO_FILE="${1:-test_services.proto}"
 BASE_NAME="${PROTO_FILE%.proto}"
 
 # Generate protobuf files
-python -m grpc_tools.protoc --python_out=. --grpc_python_out=. -I. "$PROTO_FILE"
+python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. --mypy_grpc_out=. -I. "$PROTO_FILE"
 
 # Fix import in the gRPC file
 GRPC_FILE="${BASE_NAME}_pb2_grpc.py"

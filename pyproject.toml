@@ -126,6 +126,10 @@ select = [
 
 [tool.mypy]
 # exclude = "(?:^|/).*_pb2(?:_grpc)?\\.py$"
+exclude = [
+  "src/drunc/grpc_testing_tools/.*_pb2\\.pyi?$",
+  "src/drunc/grpc_testing_tools/.*_pb2_grpc\\.pyi?$",
+]
 
 check_untyped_defs = true
 disallow_any_generics = true
