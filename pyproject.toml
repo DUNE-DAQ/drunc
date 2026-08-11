@@ -125,7 +125,7 @@ select = [
 "**/integtest/*.py" = ["F401"] # Ignore unused imports in all integration test files, e.g. pytestmark which is used but not explicitly
 
 [tool.mypy]
-exclude = "(?:^|/).*_pb2(?:_grpc)?\\.py$"
+# exclude = "(?:^|/).*_pb2(?:_grpc)?\\.py$"
 
 check_untyped_defs = true
 disallow_any_generics = true

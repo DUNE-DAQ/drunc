@@ -29,7 +29,9 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
 )
 
-# TypedDicts for execute_command request structure
+# TypedDicts for execute_command request structure - execution-time is not a valid
+# python identifier, so we use a TypedDict to define the structure of the data
+# dictionary in the command request.
 _CmdData = TypedDict(
     "_CmdData",
     {

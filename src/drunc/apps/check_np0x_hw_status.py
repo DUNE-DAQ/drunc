@@ -59,8 +59,11 @@ def setup_wib_path() -> str | None:
     for base_source in search_paths:
         potential_path = os.path.join(base_source, "dune-wib-firmware/sw")
         if os.path.isdir(potential_path):
+            # If the path is not in sys.path, it likely has not been installed. This
+            # adds it to sys.path for dynamic imports, and update the warning message
+            # for the user to inform on how to use this tool.
             if potential_path not in sys.path:
-                sys.path.insert(0, potential_path)  # TODO: Is this needed?
+                sys.path.insert(0, potential_path)
             return potential_path
     return None
 
@@ -75,6 +78,12 @@ wibpb = None
 
 if WIB_FW_SW_IFACE_PATH:
     try:
+        # For the following type excludes:
+        #   - no-redef is needed as the presence of this library is denoted with the
+        #     same name as the module.
+        #   - import-not-found is needed as this library is not available in the default
+        #     Python environment and is only present if the dune-wib-firmware repository
+        #     is cloned and installed.
         import wib_pb2 as wibpb  # type: ignore[import-not-found, no-redef]
         from wib import WIB  # type: ignore[import-not-found, no-redef]
 

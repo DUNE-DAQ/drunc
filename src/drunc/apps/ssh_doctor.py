@@ -39,6 +39,11 @@ def test_host_connection(host: str, test_auth: str) -> bool:
         bool: True if the SSH connection is successful, False otherwise.
     """
 
+    # Note - the SSHProcessLifetimeManagerParamiko is reported by mypy as an abstract
+    # class, as since the official support for this process manager has stopped, there
+    # have been new abstract methods implemented in the base class that are not
+    # implemented in this class. However, this class is still functional and can be used
+    # to validate SSH connections.
     ssh_manager = SSHProcessLifetimeManagerParamiko(disable_host_key_check=True)  # type: ignore[abstract]
 
     try:

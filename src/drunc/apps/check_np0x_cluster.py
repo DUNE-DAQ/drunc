@@ -197,7 +197,21 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> HostDat
     host_conf = ssh_config.lookup(host_alias)
 
     def _normalise_ssh_conf_str(value: object, default: str) -> str:
-        """Normalise Paramiko SSH config values to a single string."""
+        """
+        Normalise Paramiko SSH config values to a single string.
+
+        Args:
+            value: The value from the SSH config, which may be a string or a list.
+            default: The default string to return if the value is not a string or list.
+
+        Returns:
+            str: The normalised string value from the SSH config, or the default if not
+            applicable.
+
+        Raises:
+            None. This function handles type checking and returns a default value if the
+            input is not a string or a non-empty list.
+        """
         if isinstance(value, str):
             return value
         if isinstance(value, list) and value:
@@ -208,6 +222,9 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> HostDat
 
     # Determine the real hostname to connect to. If the SSH config provides a "hostname"
     # entry for this alias, use that; otherwise, use the alias itself as the hostname.
+    # Note - this casting is required because Paramiko's SSHConfig.lookup() can return
+    # a list for some fields, and we want to ensure we have a single string for the
+    # hostname.
     hostname = _normalise_ssh_conf_str(host_conf.get("hostname"), host_alias)
 
     # First, check if the host is pingable before attempting an SSH connection. If the
@@ -241,8 +258,9 @@ def get_host_metrics(host_alias: str, ssh_config: paramiko.SSHConfig) -> HostDat
             _normalise_ssh_conf_str(host_conf.get("identityfile"), "") or None
         )
 
-        # Attempt to establish an SSH connection using strongly typed arguments so
-        # static type checking can validate the Paramiko API call.
+        # Attempt to establish an SSH connection to the host using the prepared
+        # arguments. If the host key is missing, the custom policy will handle it and
+        # update the result dict.
         client.connect(
             hostname=hostname,
             username=username,
