@@ -33,9 +33,42 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75", "types-requests"]
+dev = [
+  "ruff",
+  "pre-commit",
+  "pytest",
+  "pytest-cov",
+  "grpcio-testing",
+  "grpcio",
+  "grpcio-tools",
+  "grpcio-status",
+  "types-requests",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+]
 prod = ["paramiko[gssapi]"]
-test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75", "types-grpcio-status", "types-pytz", "types-psutil", "types-click-shell", "types-paramiko"]
+test = [
+  "pytest",
+  "pytest-cov",
+  "grpcio-testing",
+  "grpcio",
+  "grpcio-tools",
+  "grpcio-status",
+  "types-requests",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+]
 
 [project.scripts]
 application-registry-service = "drunc.apps.app_connectivity_server:main"
@@ -76,12 +109,9 @@ source = ["drunc"]
 [tool.ruff.lint]
 ignore = [
   "E501", # Don't enforce line lengths within a linting context
-  "D201", 
-  "D202", 
-  "D212"
 ]
 select = [
-  "D",
+  "D", # pydocstyle docstring errors
   "E", # pycodestyle errors
   "F", # check for errors using PyFlakes
   "I", # best practices for import calls
