@@ -1,5 +1,4 @@
 import time
-from typing import cast
 
 from requests.exceptions import ConnectionError, HTTPError, ReadTimeout
 
@@ -196,7 +195,7 @@ class ConnectivityServiceClient:
                     ignore_errors=True,
                 )
                 response.raise_for_status()
-                content = cast(dict[str, object], response.json())
+                content: dict[str, object] = response.json()
                 if content:
                     return content
                 else:
