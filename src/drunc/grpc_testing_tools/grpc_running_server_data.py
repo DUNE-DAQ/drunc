@@ -1,34 +1,7 @@
-from typing import Protocol
+import multiprocessing
 
 from drunc.grpc_testing_tools.available_grpc_servers import ServerType
-
-
-class TargetFunc(Protocol):
-    """Callable target used to launch a server process."""
-
-    def __call__(self, *args: object, **kwargs: object) -> object: ...
-
-
-class ProcessLike(Protocol):
-    """Minimal process API required by connection managers."""
-
-    def start(self) -> object: ...
-
-    def is_alive(self) -> bool: ...
-
-    def terminate(self) -> object: ...
-
-    def kill(self) -> object: ...
-
-    def join(self, timeout: float | None = None) -> object: ...
-
-
-class EventLike(Protocol):
-    """Minimal event API used for readiness/stop coordination."""
-
-    def set(self) -> object: ...
-
-    def is_set(self) -> bool: ...
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class RunningGrpcServer:
@@ -40,7 +13,7 @@ class RunningGrpcServer:
     def __init__(
         self,
         process_id: str,
-        target_func: TargetFunc,
+        target_func: TargetFunc[P, object],
         args: tuple[object, ...],
         kwargs: dict[str, object],
     ) -> None:
@@ -57,15 +30,15 @@ class RunningGrpcServer:
         self.target_func = target_func
         self.args = args
         self.kwargs = kwargs
-        self._process: ProcessLike | None = None
+        self._process: multiprocessing.Process | None = None
         self._started = False
         self.startup_error: Exception | None = None
         self.host: str | None = None
         self.server_id: str | None = None
         self.port: int | None = None
         self.server_type: str | ServerType | None = None
-        self.ready_event: EventLike | None = None
-        self.stop_event: EventLike | None = None
+        self.ready_event: multiprocessing.synchronize.Event | None = None
+        self.stop_event: multiprocessing.synchronize.Event | None = None
 
     def is_valid(self) -> bool:
         """Check if the process handle is valid"""
@@ -84,11 +57,11 @@ class RunningGrpcServer:
         return self._started
 
     @property
-    def process(self) -> ProcessLike | None:
+    def process(self) -> multiprocessing.Process | None:
         """Get the underlying process object (implementation-specific)."""
         return self._process
 
-    def set_process(self, process: ProcessLike) -> None:
+    def set_process(self, process: multiprocessing.Process) -> None:
         """Set the underlying process object."""
         self._process = process
 

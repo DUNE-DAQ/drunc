@@ -8,13 +8,13 @@ management for servers running as separate processes on the same machine.
 
 import multiprocessing
 import os
-from typing import Dict, Optional, cast
+from typing import Dict, Optional
 
-from drunc.grpc_testing_tools.grpc_running_server_data import TargetFunc
 from drunc.grpc_testing_tools.process_connection_manager import (
     ProcessConnectionManager,
     RunningGrpcServer,
 )
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class MultiprocessingConnectionManager(ProcessConnectionManager):
@@ -38,7 +38,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
     def create_process(
         self,
         process_id: str,
-        target_func: TargetFunc,
+        target_func: TargetFunc[P, object],
         *args: object,
         **kwargs: object,
     ) -> RunningGrpcServer:
@@ -64,8 +64,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         stop_event: multiprocessing.synchronize.Event = multiprocessing.Event()
 
         # Wrap target function to set environment variables
-        def wrapped_target(*target_args: object, **target_kwargs: object) -> object:
-            # Set environment variables in child process
+        def wrapped_target(*target_args: P.args, **target_kwargs: P.kwargs) -> object:
             for key, value in self.env_vars.items():
                 os.environ[key] = value
             return target_func(*target_args, **target_kwargs)
@@ -131,7 +130,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         if not handle.started or not handle.process:
             return
 
-        process = cast(multiprocessing.Process, handle.process)
+        process = handle.process
 
         if not process.is_alive():
             return
@@ -151,7 +150,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
 
     def is_process_alive(self, handle: RunningGrpcServer) -> bool:
         """
-        Check if a multiprocessing.Process is alive.
+        Check if a the handled process is alive.
 
         Args:
             handle: RunningGrpcServer to check
@@ -162,7 +161,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         if not handle.started or not handle.process:
             return False
 
-        process = cast(multiprocessing.Process, handle.process)
+        process = handle.process
         return process.is_alive()
 
     def wait_for_termination(
@@ -176,7 +175,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
             timeout: Maximum time to wait
         """
         if handle.started and handle.process:
-            process = cast(multiprocessing.Process, handle.process)
+            process = handle.process
             process.join(timeout=timeout)
 
     def cleanup(self) -> None:

@@ -7,7 +7,7 @@ to connection managers while handling server-specific configuration and coordina
 """
 
 import time
-from typing import Dict, Optional, cast
+from typing import Dict, Optional
 
 from grpc import (
     FutureCancelledError,
@@ -16,10 +16,7 @@ from grpc import (
     insecure_channel,
 )
 
-from drunc.grpc_testing_tools.grpc_running_server_data import (
-    RunningGrpcServer,
-    TargetFunc,
-)
+from drunc.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
 from drunc.grpc_testing_tools.grpc_server_config import GrpcServerConfig
 from drunc.grpc_testing_tools.process_connection_manager import (
     ProcessConnectionManager,
@@ -78,7 +75,7 @@ class GrpcServerManager:
             # Create process handle with complete server function and arguments
             handle = self.connection_manager.create_process(
                 config.server_id,
-                cast(TargetFunc, run_process_manager_server),
+                run_process_manager_server,
                 config.max_workers,
                 config.port,
                 config.log_file,
@@ -133,7 +130,7 @@ class GrpcServerManager:
             # Create process handle with complete server function and arguments
             handle = self.connection_manager.create_process(
                 config.server_id,
-                cast(TargetFunc, run_root_controller_server),
+                run_root_controller_server,
                 config.max_workers,
                 config.port,
                 manager_port,
@@ -193,7 +190,7 @@ class GrpcServerManager:
             # Create process handle with complete server function and arguments
             handle = self.connection_manager.create_process(
                 config.server_id,
-                cast(TargetFunc, run_child_controller_server),
+                run_child_controller_server,
                 config.max_workers,
                 config.port,
                 root_port,

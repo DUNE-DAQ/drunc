@@ -9,23 +9,18 @@ and reporting to the RootController.
 import os
 import signal
 import threading
-from typing import Protocol, cast
 
 import grpc
 
-from drunc.grpc_testing_tools import test_services_pb2 as pb2
+from drunc.grpc_testing_tools.test_services_pb2 import (
+    DummyRequest,
+    DummyResponse,
+    KillRequest,
+    KillResponse,
+)
 from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     ChildControllerServiceServicer,
 )
-
-
-class _Pb2ModuleProtocol(Protocol):
-    def DummyResponse(self, *args: object, **kwargs: object) -> object: ...
-
-    def KillResponse(self, *args: object, **kwargs: object) -> object: ...
-
-
-PB2 = cast(_Pb2ModuleProtocol, pb2)
 
 
 class ChildControllerServiceImpl(ChildControllerServiceServicer):
@@ -47,7 +42,9 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
         """
         self.name = name
 
-    def MakeRequest(self, request: object, context: grpc.ServicerContext) -> object:
+    def MakeRequest(
+        self, request: DummyRequest, context: grpc.ServicerContext
+    ) -> DummyResponse:
         """
         Handle incoming connectivity test requests.
 
@@ -58,18 +55,27 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
         Returns:
             DummyResponse with echoed message confirming ChildController is responsive
         """
-        message = getattr(request, "message", "")
-        return PB2.DummyResponse(reply=f"{self.name} server response: {message}")
+        return DummyResponse(reply=f"{self.name} server response: {request.message}")
 
-    def Kill(self, request: object, context: grpc.ServicerContext) -> object:
+    def Kill(self, request: KillRequest, context: grpc.ServicerContext) -> KillResponse:
+        """
+        Handle shutdown requests from the RootController.
+
+        Args:
+            request: KillRequest containing optional reason and grace period
+            context: gRPC context object
+
+        Returns:
+            KillResponse indicating shutdown initiation and details
+        """
         grace_period = (
-            max(getattr(request, "grace_period_seconds", 0), 1)
-            if getattr(request, "grace_period_seconds", 0) > 0
+            max(request.grace_period_seconds, 1)
+            if request.grace_period_seconds > 0
             else 2
         )
 
         # Build detailed response message
-        reason = getattr(request, "reason", None) or "No reason provided"
+        reason = request.reason or "No reason provided"
         response_details = [
             "Manager Kill method executed successfully",
             f"Reason: {reason}",
@@ -90,6 +96,6 @@ class ChildControllerServiceImpl(ChildControllerServiceServicer):
         shutdown_thread.daemon = True
         shutdown_thread.start()
 
-        return PB2.KillResponse(
+        return KillResponse(
             shutdown_initiated=True, message=" | ".join(response_details)
         )

@@ -7,10 +7,8 @@ This module provides abstraction over different process execution methods (multi
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
-from drunc.grpc_testing_tools.grpc_running_server_data import (
-    RunningGrpcServer,
-    TargetFunc,
-)
+from drunc.grpc_testing_tools.grpc_running_server_data import RunningGrpcServer
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class ProcessConnectionManager(ABC):
@@ -35,7 +33,7 @@ class ProcessConnectionManager(ABC):
     def create_process(
         self,
         process_id: str,
-        target_func: TargetFunc,
+        target_func: TargetFunc[P, object],
         *args: object,
         **kwargs: object,
     ) -> RunningGrpcServer:
