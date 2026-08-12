@@ -9,23 +9,22 @@ between the Manager and ChildControllers.
 import os
 import signal
 import threading
-from typing import Protocol, cast
 
 import grpc
 
-from drunc.grpc_testing_tools import test_services_pb2 as pb2
+from drunc.grpc_testing_tools.test_services_pb2 import (
+    CommandRequest,
+    CommandResponse,
+    DummyRequest,
+    DummyResponse,
+    KillRequest,
+    KillResponse,
+    StatusRequest,
+    StatusResponse,
+)
 from drunc.grpc_testing_tools.test_services_pb2_grpc import (
     RootControllerServiceServicer,
 )
-
-
-class _Pb2ModuleProtocol(Protocol):
-    def DummyResponse(self, *args: object, **kwargs: object) -> object: ...
-
-    def KillResponse(self, *args: object, **kwargs: object) -> object: ...
-
-
-PB2 = cast(_Pb2ModuleProtocol, pb2)
 
 
 class RootControllerServiceImpl(RootControllerServiceServicer):
@@ -41,7 +40,9 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
         """Initialise the RootController service implementation."""
         pass
 
-    def MakeRequest(self, request: object, context: grpc.ServicerContext) -> object:
+    def MakeRequest(
+        self, request: DummyRequest, context: grpc.ServicerContext
+    ) -> DummyResponse:
         """
         Handle incoming connectivity test requests.
 
@@ -52,18 +53,27 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
         Returns:
             DummyResponse with echoed message confirming RootController is responsive
         """
-        message = getattr(request, "message", "")
-        return PB2.DummyResponse(reply=f"RootController server response: {message}")
+        return DummyResponse(reply=f"RootController server response: {request.message}")
 
-    def Kill(self, request: object, context: grpc.ServicerContext) -> object:
+    def Kill(self, request: KillRequest, context: grpc.ServicerContext) -> KillResponse:
+        """
+        Handle shutdown requests from the Manager.
+
+        Args:
+            request: KillRequest containing reason and grace period
+            context: gRPC context object
+
+        Returns:
+            KillResponse indicating that shutdown has been initiated
+        """
         grace_period = (
-            max(getattr(request, "grace_period_seconds", 0), 1)
-            if getattr(request, "grace_period_seconds", 0) > 0
+            max(request.grace_period_seconds, 1)
+            if request.grace_period_seconds > 0
             else 2
         )
 
         # Build detailed response message
-        reason = getattr(request, "reason", None) or "No reason provided"
+        reason = request.reason or "No reason provided"
         response_details = [
             "Manager Kill method executed successfully",
             f"Reason: {reason}",
@@ -84,6 +94,44 @@ class RootControllerServiceImpl(RootControllerServiceServicer):
         shutdown_thread.daemon = True
         shutdown_thread.start()
 
-        return PB2.KillResponse(
+        return KillResponse(
             shutdown_initiated=True, message=" | ".join(response_details)
+        )
+
+    def ReceiveCommand(
+        self, request: CommandRequest, context: grpc.ServicerContext
+    ) -> CommandResponse:
+        """
+        Handle incoming command requests from the Manager.
+
+        Args:
+            request: CommandRequest containing command details
+            context: gRPC context object
+
+        Returns:
+            CommandResponse indicating success or failure of command execution
+        """
+        # For demonstration, we simply echo back the command received
+        return CommandResponse(
+            success=True,
+            result=f"Command '{request}' received and processed by RootController.",
+            error_message="Not needed (yet)",
+        )
+
+    def ReceiveStatus(
+        self, request: StatusRequest, context: grpc.ServicerContext
+    ) -> StatusResponse:
+        """
+        Handle incoming status reports from ChildControllers.
+
+        Args:
+            request: DummyRequest containing status details
+            context: gRPC context object
+
+        Returns:
+            StatusResponse acknowledging receipt of the status report
+        """
+        # For demonstration, we simply acknowledge the status received
+        return StatusResponse(
+            received=True, acknowledgement=f"Status report received: {request}"
         )
