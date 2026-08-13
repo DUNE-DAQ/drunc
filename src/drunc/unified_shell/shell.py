@@ -367,37 +367,19 @@ def unified_shell(
     # Avoid setting up the ELISA logbook for the unified shell
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
-    ctx.obj.log.debug("Initializing the [green]FSM[/green]")
-
-    #! This is an absolute _hack_ because we do not want the
-    # unified shell fsm to go to tty but want other fsms to do so
-    # live with it. At least until controller.core uses file handler instead of stream
-    get_logger("controller.core.FSM", log_level="CRITICAL")
-
-    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
-
-    ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
-    stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
-
-    ctx.obj.log.debug("Retrieving the [green]StatefulNode[/green] transitions")
-    transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
-
-    # Add the FSM transitions and sequences as Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]controller[/green] commands to the click context")
-    command_group = cast(click.Group, ctx.command)
-    for transition in transitions.commands:
-        command_group.add_command(
-            *generate_fsm_command(ctx.obj, transition, controller_name)
-        )
-        ctx.obj.dynamic_commands.add(format_name_for_cli(transition.name))
-    for sequence in session_dal.segment.controller.fsm.command_sequences:
-        command_group.add_command(
-            *generate_fsm_sequence_command(ctx, sequence, controller_name)
-        )
-        ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
-
     # Group the imported commands for adding to the click shell
-    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
+    command_group = cast(click.Group, ctx.command)
+    unified_shell_commands: list[click.Command] = [
+        boot,
+        flush,
+        kill,
+        log_on_server,
+        logs,
+        ps,
+        restart,
+        start_shell,
+        terminate,
+    ]
     process_manager_commands: list[click.Command] = [
         kill,
         flush,
@@ -437,6 +419,34 @@ def unified_shell(
                 ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
             else:
                 ctx.obj.log.warning(f"Skipping nameless command: {cmd}")
+
+    ctx.obj.log.debug("Initializing the [green]FSM[/green]")
+
+    #! This is an absolute _hack_ because we do not want the
+    # unified shell fsm to go to tty but want other fsms to do so
+    # live with it. At least until controller.core uses file handler instead of stream
+    get_logger("controller.core.FSM", log_level="CRITICAL")
+
+    fsmch = FSMConfHandler.from_pyobject(data=controller_configuration.controller.fsm)
+
+    ctx.obj.log.debug("Initializing the [green]StatefulNode[/green]")
+    stateful_node = StatefulNode(fsm_configuration=fsmch, top_segment_controller=False)
+
+    ctx.obj.log.debug("Retrieving the [green]StatefulNode[/green] transitions")
+    transitions = convert_fsm_transition(stateful_node.get_all_fsm_transitions())
+
+    # Add the FSM transitions and sequences as Click commands to the CLI
+    ctx.obj.log.debug("Adding [green]controller[/green] commands to the click context")
+    for transition in transitions.commands:
+        command_group.add_command(
+            *generate_fsm_command(ctx.obj, transition, controller_name)
+        )
+        ctx.obj.dynamic_commands.add(format_name_for_cli(transition.name))
+    for sequence in session_dal.segment.controller.fsm.command_sequences:
+        command_group.add_command(
+            *generate_fsm_sequence_command(ctx, sequence, controller_name)
+        )
+        ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
 
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])

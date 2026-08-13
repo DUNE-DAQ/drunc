@@ -18,7 +18,8 @@ python -m grpc_tools.protoc --python_out=. --grpc_python_out=. --mypy_out=. --my
 # Fix import in the gRPC file
 GRPC_FILE="${BASE_NAME}_pb2_grpc.py"
 if [ -f "$GRPC_FILE" ]; then
-    sed -i "s/import ${BASE_NAME}_pb2 as/import grpc_testing_tools.${BASE_NAME}_pb2 as/g" "$GRPC_FILE"
+    # Add drunc. prefix so it matches your package structure
+    sed -i "s/import ${BASE_NAME}_pb2 as/import drunc.grpc_testing_tools.${BASE_NAME}_pb2 as/g" "$GRPC_FILE"
     echo "Generated and fixed $GRPC_FILE"
 else
     echo "Warning: $GRPC_FILE not found"
