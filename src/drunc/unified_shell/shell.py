@@ -353,19 +353,17 @@ def unified_shell(
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
     controller_name = session_dal.segment.controller.id
-    controller_configuration = cast(
-        ControllerConfHandler,
-        ControllerConfHandler.from_oks(
-            url=ctx.obj.configuration_file,
-            oks_key=OKSKey(
-                schema_file="schema/confmodel/dunedaq.schema.xml",
-                class_name="RCApplication",
-                obj_uid=controller_name,
-                session=ctx.obj.configuration_id,
-            ),
-            session_name=ctx.obj.session_name,
+    controller_configuration = ControllerConfHandler.from_oks(
+        url=ctx.obj.configuration_file,
+        oks_key=OKSKey(
+            schema_file="schema/confmodel/dunedaq.schema.xml",
+            class_name="RCApplication",
+            obj_uid=controller_name,
+            session=ctx.obj.configuration_id,
         ),
+        session_name=ctx.obj.session_name,
     )
+
     # Avoid setting up the ELISA logbook for the unified shell
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
 
