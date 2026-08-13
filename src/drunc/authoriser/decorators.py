@@ -1,5 +1,5 @@
 import functools
-from typing import Callable, Protocol
+from typing import Callable, Protocol, TypeVar, cast
 
 import grpc
 from druncschema.authoriser_pb2 import ActionType, SystemType
@@ -34,14 +34,29 @@ _Command = Callable[
     [_ContextProtocol, _RequestProtocol, grpc.ServicerContext], Response
 ]
 
+# Typevar here is used for mypy. While not necessary, it makes the code much more
+# readable.
+C = TypeVar("C", bound=_Command)
+
 
 def authentified_and_authorised(
     action: ActionType, system: SystemType
-) -> Callable[[_Command], _Command]:
-    def decor(cmd: _Command) -> _Command:
-        @functools.wraps(
-            cmd
-        )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
+) -> Callable[[C], C]:
+    """
+    Decorator to check if the user is authentified and authorised to execute a command.
+
+    Args:
+        action: The action type to check.
+        system: The system type to check.
+
+    Returns:
+        A decorator that checks if the user is authentified and authorised.
+
+    Raises:
+        Unauthorised: If the user is not authorised to execute the command.
+    """
+
+    def decor(cmd: C) -> C:
         def check_token(
             obj: _ContextProtocol,
             request: _RequestProtocol,
@@ -75,6 +90,6 @@ def authentified_and_authorised(
             log.debug("Exiting")
             return ret
 
-        return check_token
+        return cast(C, functools.update_wrapper(check_token, cmd))
 
     return decor
