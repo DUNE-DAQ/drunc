@@ -103,7 +103,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         # controller without going through the process manager (e.g. standalone boot).
         # In that case hostname overrides are unavailable and we fall back to
         # get_hostname_smart in the endpoint rendering path.
-        pm_driver = self.get_pm_driver()
+        pm_driver = self.get_pm_driver(quiet_fail=True)
         if not pm_driver:
             return {}
 

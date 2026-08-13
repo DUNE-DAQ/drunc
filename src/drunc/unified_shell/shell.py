@@ -349,27 +349,6 @@ def unified_shell(
         f"{getpass.getuser()} connected from unified shell"
     )
 
-    command_group = cast(click.Group, ctx.command)
-
-    # Add the unified shell Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
-    for cmd in unified_shell_commands:
-        command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name or ""))
-
-    # Add the process manager Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
-    process_manager_commands: list[click.Command] = [
-        kill,
-        flush,
-        logs,
-        restart,
-    ]
-    for cmd in process_manager_commands:
-        command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name or ""))
-
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
@@ -407,6 +386,7 @@ def unified_shell(
 
     # Add the FSM transitions and sequences as Click commands to the CLI
     ctx.obj.log.debug("Adding [green]controller[/green] commands to the click context")
+    command_group = cast(click.Group, ctx.command)
     for transition in transitions.commands:
         command_group.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
@@ -418,7 +398,14 @@ def unified_shell(
         )
         ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
 
-    # Add the controller Click commands to the CLI
+    # Group the imported commands for adding to the click shell
+    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
+    process_manager_commands: list[click.Command] = [
+        kill,
+        flush,
+        logs,
+        restart,
+    ]
     controller_commands: list[click.Command] = [
         status,
         recompute_status,
@@ -435,9 +422,23 @@ def unified_shell(
         expert_command,
         to_error,
     ]
-    for cmd in controller_commands:
-        command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name or ""))
+
+    # Click command groups
+    click_command_groups = [
+        process_manager_commands,
+        unified_shell_commands,
+        controller_commands,
+    ]
+    for click_command_group in click_command_groups:
+        ctx.obj.log.debug(
+            f"Adding [green]{click_command_group[0].name}[/green] commands to the click shell"
+        )
+        for cmd in click_command_group:
+            if cmd.name is not None:
+                command_group.add_command(cmd, format_name_for_cli(cmd.name))
+                ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
+            else:
+                ctx.obj.log.warning(f"Skipping nameless command: {cmd}")
 
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
