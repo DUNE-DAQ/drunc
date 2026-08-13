@@ -546,11 +546,12 @@ def main(
         log.exception("DAQApplication communication scheme must be rest")
         exit(1)
 
+    if not url.hostname:
+        log.exception("No hostname in command facility URL")
+        exit(1)
+
     log.debug(f"Initializing fake_daq_application with address {url}")
     if url.port == 0:
-        if not url.hostname:
-            log.exception("No hostname in command facility URL")
-            exit(1)
         url = urlparse(get_address(url.hostname))
     log.info(f"Communication address is {url}")
 
@@ -580,10 +581,8 @@ def main(
         name="connectivity_service_updating_thread",
     )
 
-    def terminate(*args: object) -> None:  # Accept args for signal handlers
-        for s in [signal.SIGTERM, signal.SIGQUIT]:
-            if signal.getsignal(s) in args:
-                log.warning(f"Received termination signal {s}, shutting down {name}...")
+    def terminate() -> None:
+        # No args needed! Just clean shutdown logic.
         log.info(f"Terminating application {name}...")
         shutdown_event.set()
 
@@ -603,11 +602,13 @@ def main(
         os._exit(1)
 
     def terminate_signal_process(signum: int, sigframe: object) -> None:
-        log.warning(f"Received signal {signum}, terminating process")
+        # Handles the signal unpacking and logs the exact integer received
+        log.warning(f"Received termination signal {signum}, shutting down {name}...")
         terminate()
 
     for sig in [signal.SIGTERM, signal.SIGQUIT]:
-        signal.signal(sig, terminate)
+        signal.signal(sig, terminate_signal_process)
+
     app = Flask(__name__)
     api = Api(app)
     DAQAppCMD = AppCommand.pass_daq_app(app_state)
@@ -639,7 +640,7 @@ def main(
     url = urlparse(url) if isinstance(url, str) else url
     flask_url = url.geturl().replace("rest://", "http://")
 
-    if not url.hostname or url.port is None:
+    if not url.hostname or not url.port:
         log.error("Invalid command facility URL: missing hostname or port")
         exit(1)
 
