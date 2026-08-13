@@ -1,19 +1,14 @@
 from collections.abc import MutableMapping
 from enum import Enum
 from multiprocessing.context import Process
-from typing import Protocol, cast
 
 import grpc
-from druncschema.process_manager_pb2 import ProcessInstanceList, ProcessQuery
+from druncschema.process_manager_pb2 import ProcessQuery
 from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import ServerTimeout, ServerUnreachable
 from drunc.utils.shell_utils import ShellContext
 from drunc.utils.utils import resolve_localhost_to_hostname
-
-
-class ProcessManagerPsProtocol(Protocol):
-    def ps(self, query: ProcessQuery) -> ProcessInstanceList: ...
 
 
 class UnifiedShellMode(Enum):
@@ -108,10 +103,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         # controller without going through the process manager (e.g. standalone boot).
         # In that case hostname overrides are unavailable and we fall back to
         # get_hostname_smart in the endpoint rendering path.
-        pm_driver = cast(
-            ProcessManagerPsProtocol | None,
-            self.get_driver("process_manager", quiet_fail=True),
-        )
+        pm_driver = self.get_pm_driver()
         if not pm_driver:
             return {}
 

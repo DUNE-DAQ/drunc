@@ -16,6 +16,7 @@ import click
 from druncschema.token_pb2 import Token
 from rich.console import Console
 
+from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.utils import get_logger
@@ -340,6 +341,26 @@ class ShellContext:
             raise RuntimeError("ProcessManagerDriver is not loaded!")
 
         return pmd
+
+    def get_controller_driver(self, quiet_fail: bool = False) -> ControllerDriver:
+        """
+        Get the root controller driver from the context.
+
+        Args:
+            quiet_fail: If True, return None on failure instead of raising an exception.
+
+        Returns:
+            ControllerDriver: The process manager driver.
+
+        Raises:
+            RuntimeError: If the process manager driver is not initialized.
+        """
+        ctrld = self.get_driver("controller", quiet_fail=quiet_fail)
+
+        if not ctrld or isinstance(ctrld, ControllerDriver):
+            raise RuntimeError("ControllerDriver is not loaded!")
+
+        return ctrld
 
     def has_driver(self, name: str) -> bool:
         """Check if a driver exists in the context.

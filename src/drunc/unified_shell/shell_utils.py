@@ -1,18 +1,14 @@
 import functools
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import Protocol, cast
 
 import click
 from druncschema.controller_pb2 import DescribeFSMResponse
 from druncschema.process_manager_pb2 import ProcessInstanceList, ProcessQuery
 
-from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.utils import format_name_for_cli, get_logger
-
-if TYPE_CHECKING:
-    pass
 
 
 class SequenceEntryLike(Protocol):
@@ -31,10 +27,6 @@ class SequenceOptionLike(Protocol):
 class FSMSequenceLike(Protocol):
     id: str
     sequence: Sequence[SequenceEntryLike]
-
-
-class ProcessManagerPsProtocol(Protocol):
-    def ps(self, query: ProcessQuery) -> ProcessInstanceList: ...
 
 
 def run_fsm_sequence(
@@ -96,10 +88,7 @@ def run_fsm_sequence(
 
         # These commands are not stateful. If they are a part of the sequence, they
         # should be run regardless of their position in the sequence
-        pmd = cast(
-            ProcessManagerPsProtocol | None,
-            obj.get_driver("process_manager", quiet_fail=True),
-        )
+        pmd = ctx.obj.get_pm_driver(quiet_fail=True)
         process_list: ProcessInstanceList | None = None
         if command == "boot":
             if pmd is not None:
@@ -113,9 +102,7 @@ def run_fsm_sequence(
                 accepted_command.append("terminate")
 
         # Get the FSM commands that can be ran from the current state
-        controller_driver: ControllerDriver | None = cast(
-            ControllerDriver | None, obj.get_driver("controller", quiet_fail=True)
-        )
+        controller_driver = ctx.obj.get_controller_driver(quiet_fail=True)
         if controller_driver:
             accepted_command_raw: DescribeFSMResponse = controller_driver.describe_fsm()
             accepted_command += [

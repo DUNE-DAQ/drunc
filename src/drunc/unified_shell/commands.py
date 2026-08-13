@@ -1,14 +1,12 @@
 import getpass
 import sys
-from collections.abc import Iterable
 from functools import update_wrapper
-from typing import Callable, ParamSpec, Protocol, TypeVar, cast
+from typing import cast
 
 import click
-from druncschema.controller_pb2 import StatusResponse
+from click.decorators import FC
 from druncschema.process_manager_pb2 import (
     ProcessInstance,
-    ProcessInstanceList,
     ProcessQuery,
 )
 
@@ -32,46 +30,6 @@ from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
-
-
-class ProcessManagerDriverProtocol(Protocol):
-    controller_address: str | None
-
-    def ps(self, query: ProcessQuery) -> ProcessInstanceList: ...
-
-    def boot(
-        self,
-        conf_file: str,
-        conf_id: str,
-        user: str,
-        session_name: str,
-        log_level: str | None,
-        override_logs: bool,
-        sleep_between_app_boot: float,
-    ) -> Iterable[ProcessInstanceList] | None: ...
-
-    def log_on_server(self, text: str, severity: str) -> None: ...
-
-    def kill(self, query: ProcessQuery) -> ProcessInstanceList | None: ...
-
-
-class ControllerDriverProtocol(Protocol):
-    def status(self) -> StatusResponse: ...
-
-    def to_error(self) -> None: ...
-
-    def log_on_server(
-        self,
-        text: str,
-        severity: str,
-        target: str,
-        execute_along_path: bool,
-        execute_on_all_subsequent_children_in_path: bool,
-    ) -> None: ...
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 @click.command("boot")
@@ -104,7 +62,7 @@ def boot(
     log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
-    pm_driver = cast(ProcessManagerDriverProtocol, obj.get_driver("process_manager"))
+    pm_driver = obj.get_pm_driver()
     processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
 
     # Store the number of processes that are expected to be booted with this command, to check later if any processes died immediately after booting.
@@ -189,7 +147,7 @@ def boot(
     ps_response = pm_driver.ps(ProcessQuery(session=session_name))
     ps_process_count = len(ps_response.values)
 
-    controller_driver = cast(ControllerDriverProtocol, obj.get_driver("controller"))
+    controller_driver = obj.get_controller_driver()
     status_response = controller_driver.status()
     status_process_count = count_processes_in_status_response(status_response)
 
@@ -334,15 +292,13 @@ def log_on_server(
     log.debug("Logging message to server(s)...")
 
     if target_server in ["", "process_manager"]:
-        cast(
-            ProcessManagerDriverProtocol, obj.get_driver("process_manager")
-        ).log_on_server(
+        obj.get_pm_driver().log_on_server(
             text=text,
             severity=severity,
         )
 
     if target_server in ["", "controller"] and obj.has_driver("controller"):
-        cast(ControllerDriverProtocol, obj.get_driver("controller")).log_on_server(
+        obj.get_controller_driver().log_on_server(
             text=text,
             severity=severity,
             target=target,
@@ -371,9 +327,7 @@ def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> 
     log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
-    result = cast(ProcessManagerDriverProtocol, obj.get_driver("process_manager")).kill(
-        session_query
-    )
+    result = obj.get_pm_driver().kill(session_query)
     if not result:
         return
 
@@ -385,13 +339,49 @@ def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> 
     obj.delete_driver("controller")
 
 
-def session_injector(f: Callable[P, R]) -> Callable[P, R]:
+def session_injector(f: FC) -> FC:
+    """
+    Decorator to inject the session name into the command function.
+
+    This is used to wrap the relevant unified shell commands, as the unified shell is
+    intended to only operate a single session at a time, and the session name is stored
+    in the context object.
+
+    Args:
+        f (FC): The command function to wrap.
+
+    Returns:
+        FC: The wrapped command function with the session name injected.
+
+    Raises:
+        None
+    """
+
     @click.pass_context
-    def wrapper(ctx: click.core.Context, *args: P.args, **kwargs: P.kwargs) -> R:
+    def wrapper(ctx: click.core.Context, *args: object, **kwargs: object) -> object:
+        """
+        Wrapper function to inject the session name into the command function.
+
+        Args:
+            ctx (click.core.Context): The click context object.
+            *args (object): Positional arguments to pass to the command function.
+            **kwargs (object): Keyword arguments to pass to the command function.
+
+        Returns:
+            object: The result of invoking the command function with the session name
+                injected.
+
+        Raises:
+            None
+        """
         kwargs["session"] = ctx.obj.session_name
         return ctx.invoke(f, *args, **kwargs)
 
-    return cast(Callable[P, R], update_wrapper(wrapper, f))
+    # The update_wrapper function is used to update the internal python methods for the
+    # functions so that the click decorators can be used with the session_injector
+    # decorator. This is necessary because the click decorators rely on the function
+    # signature to determine the parameters that are passed to the function
+    return cast(FC, update_wrapper(wrapper, f))
 
 
 @click.command("ps")
