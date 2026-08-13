@@ -3,14 +3,6 @@
 import abc
 import getpass
 from collections.abc import MutableMapping
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    ParamSpec,
-    Protocol,
-    TypeVar,
-    cast,
-)
 
 import click
 from druncschema.token_pb2 import Token
@@ -20,79 +12,6 @@ from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.utils import get_logger
-
-if TYPE_CHECKING:
-    pass
-
-
-class CommandLike(Protocol):
-    """Protocol for command-like objects."""
-
-    name: str
-
-
-class SequenceLike(Protocol):
-    """Protocol for sequence-like objects."""
-
-    id: str
-
-
-class FSMDescriptionLike(Protocol):
-    """Protocol for FSM description-like objects."""
-
-    commands: list[CommandLike]
-    sequences: list[SequenceLike]
-
-
-class DescribeFSMReplyLike(Protocol):
-    """Protocol for describe FSM reply-like objects."""
-
-    description: FSMDescriptionLike
-
-
-class StatusLike(Protocol):
-    """Protocol for status-like objects."""
-
-    state: str
-    in_error: bool
-
-
-class StatusReplyLike(Protocol):
-    """Protocol for status reply-like objects."""
-
-    status: StatusLike
-
-
-class ControllerDriverProtocol(Protocol):
-    """Protocol for controller driver objects."""
-
-    def status(self) -> StatusReplyLike:
-        """Get the current status.
-
-        Returns:
-            StatusReplyLike: The current status.
-        """
-        ...
-
-    def describe_fsm(self) -> DescribeFSMReplyLike:
-        """Describe the FSM.
-
-        Returns:
-            DescribeFSMReplyLike: The FSM description.
-        """
-        ...
-
-
-class ProcessManagerLogProtocol(Protocol):
-    """Protocol for process-manager logging used by shell command logging."""
-
-    def log_on_server(self, message: str) -> None:
-        """Send a log message to the process-manager server."""
-        ...
-
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class InterruptedCommand(DruncShellException):
@@ -113,25 +32,6 @@ def create_dummy_token_from_uname() -> Token:
             token=f"{user}-token", user_name=user
         )
     )
-
-
-def add_traceback_flag() -> Callable[[Callable[P, R]], Callable[P, R]]:
-    """Add a traceback flag to a command.
-
-    Returns:
-        Callable: A decorator that adds the traceback flag.
-    """
-
-    def wrapper(f0: Callable[P, R]) -> Callable[P, R]:
-        f1 = click.option(
-            "-t/-nt",
-            "--traceback/--no-traceback",
-            default=None,
-            help="Print full exception traceback",
-        )(f0)
-        return f1
-
-    return wrapper
 
 
 class DecodedResponse:
@@ -210,6 +110,21 @@ class ShellContext:
     )
 
     def get_shell_id(self) -> str | None:
+        """
+        Get the shell ID.
+
+        This is primarily used by the superclasses of the ShellContext to identify the
+        type of shell (e.g., PM shell, Unified shell) for logging purposes.
+
+        Args:
+            None
+
+        Returns:
+            str | None: The shell ID, or None if not set.
+
+        Raises:
+            None
+        """
         return self.shell_id
 
     def _reset(
@@ -337,7 +252,8 @@ class ShellContext:
         """
         pmd = self.get_driver("process_manager", quiet_fail=quiet_fail)
 
-        if not pmd or isinstance(pmd, ProcessManagerDriver):
+        # Check the type for mypy and runtime safety.
+        if not isinstance(pmd, ProcessManagerDriver):
             raise RuntimeError("ProcessManagerDriver is not loaded!")
 
         return pmd
@@ -357,7 +273,7 @@ class ShellContext:
         """
         ctrld = self.get_driver("controller", quiet_fail=quiet_fail)
 
-        if not ctrld or isinstance(ctrld, ControllerDriver):
+        if not isinstance(ctrld, ControllerDriver):
             raise RuntimeError("ControllerDriver is not loaded!")
 
         return ctrld
@@ -414,7 +330,7 @@ class ShellContext:
     def print_status_summary(self) -> None:
         """Print a summary of the FSM status and available transitions."""
         log = get_logger("utils.ShellContext")
-        controller = cast(ControllerDriverProtocol, self.get_driver("controller"))
+        controller = self.get_controller_driver()
         status = controller.status().status
         describe_fsm = controller.describe_fsm().description
         current_state = status.state
@@ -467,5 +383,5 @@ def log_pm_cmd(obj: ShellContext) -> None:
     args = f" with arguments {parms_dict}" if parms_dict else ""
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
     msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
-    pm_driver = cast(ProcessManagerLogProtocol, obj.get_driver("process_manager"))
+    pm_driver = obj.get_pm_driver()
     pm_driver.log_on_server(msg)

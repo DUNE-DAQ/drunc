@@ -140,7 +140,7 @@ class ConfHandler:
 
     @classmethod
     def from_pyobject(cls, data: object, session_name: str | None = None) -> Self:
-        instance: ConfHandler = cls.__new__(cls)
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
         instance._raw_data = data
@@ -150,7 +150,7 @@ class ConfHandler:
 
     @classmethod
     def from_pbany(cls, data: object, session_name: str | None = None) -> Self:
-        instance: ConfHandler = cls.__new__(cls)
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
         instance._raw_data = None
@@ -161,7 +161,7 @@ class ConfHandler:
 
     @classmethod
     def from_json(cls, path: str, session_name: str | None = None) -> Self:
-        instance: ConfHandler = cls.__new__(cls)
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = path
         resolved = expand_path(path, True)
@@ -181,8 +181,8 @@ class ConfHandler:
         url: str,
         oks_key: OKSKey,
         session_name: str | None = None,
-    ) -> "ConfHandler":
-        instance: ConfHandler = cls.__new__(cls)
+    ) -> Self:
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = url
         instance.oks_key = oks_key
