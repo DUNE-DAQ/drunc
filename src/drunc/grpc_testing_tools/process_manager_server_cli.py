@@ -11,7 +11,7 @@ import sys
 from drunc.grpc_testing_tools.run_grpc_services import run_process_manager_server
 
 
-def main():
+def main() -> None:
     """
     Main entry point for Manager server CLI.
 
