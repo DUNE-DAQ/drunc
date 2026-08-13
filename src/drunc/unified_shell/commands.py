@@ -393,7 +393,7 @@ def ps(
     obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
 ) -> None:
     log_pm_cmd(obj)
-    ps_impl(cast(ProcessManagerContext, obj), query, long_format, width)
+    ps_impl(obj, query, long_format, width)
 
 
 @click.command("logs")
@@ -408,7 +408,7 @@ def logs(
     query: ProcessQuery,
 ) -> None:
     log_pm_cmd(obj)
-    logs_impl(cast(ProcessManagerContext, obj), how_far, grep or "", query)
+    logs_impl(obj, how_far, grep or "", query)
 
 
 @click.command("kill")
@@ -418,7 +418,7 @@ def logs(
 @click.pass_obj
 def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    kill_impl(cast(ProcessManagerContext, obj), query, width)
+    kill_impl(obj, query, width)
 
 
 @click.command("flush")
@@ -428,7 +428,7 @@ def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
 @click.pass_obj
 def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    flush_impl(cast(ProcessManagerContext, obj), query, width)
+    flush_impl(obj, query, width)
 
 
 @click.command("restart")
@@ -437,7 +437,7 @@ def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
 @click.pass_obj
 def restart(obj: UnifiedShellContext, query: ProcessQuery) -> None:
     log_pm_cmd(obj)
-    restart_impl(cast(ProcessManagerContext, obj), query)
+    restart_impl(obj, query)
 
 
 @click.command("start-shell")

@@ -14,6 +14,7 @@ from drunc.process_manager.interface.cli_argument import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
+from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
@@ -317,7 +318,9 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
 
 
 def kill_impl(
-    obj: ProcessManagerContext, query: ProcessQuery, width: int | None
+    obj: ProcessManagerContext | UnifiedShellContext,
+    query: ProcessQuery,
+    width: int | None,
 ) -> None:
     """
     Implementation of the 'kill' command.
@@ -395,7 +398,7 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) ->
 
 
 def flush_impl(
-    obj: ProcessManagerContext,
+    obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     width: int | None,
 ) -> None:
@@ -479,7 +482,10 @@ def logs(
 
 
 def logs_impl(
-    obj: ProcessManagerContext, how_far: int, grep: str | None, query: ProcessQuery
+    obj: ProcessManagerContext | UnifiedShellContext,
+    how_far: int,
+    grep: str | None,
+    query: ProcessQuery,
 ) -> None:
     """
     Implementation of the 'logs' command.
@@ -556,7 +562,9 @@ def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
     return restart_impl(obj, query)
 
 
-def restart_impl(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+def restart_impl(
+    obj: ProcessManagerContext | UnifiedShellContext, query: ProcessQuery
+) -> None:
     """
     Implementation of the 'restart' command.
 
@@ -642,7 +650,7 @@ def ps(
 
 
 def ps_impl(
-    obj: ProcessManagerContext,
+    obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
