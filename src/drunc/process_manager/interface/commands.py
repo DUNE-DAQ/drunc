@@ -50,7 +50,7 @@ def boot(
     configuration_file: str,
     configuration_id: str,
     override_logs: bool,
-    controller_log_level: bool | None,
+    controller_log_level: str | None,
 ) -> None:
     """
     Boot a session with the given configuration file and configuration ID.
@@ -275,7 +275,6 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
     Raises:
         None
     """
-    f = click.pass_obj(f)
     f = click.option(
         "-w",
         "--width",
@@ -295,6 +294,7 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
 @click.command("kill")
 @add_query_options(at_least_one=True)
 @kill_decorators
+@click.pass_obj
 def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     """
     Kill processes matching the given query.
@@ -359,7 +359,6 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
     Raises:
         None
     """
-    f = click.pass_obj(f)
     f = click.option(
         "-w",
         "--width",
@@ -373,6 +372,7 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
 @click.command("flush")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @flush_decorators
+@click.pass_obj
 def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
     """
     Flush processes matching the given query.
@@ -439,7 +439,6 @@ def logs_decorators(f: FC) -> Callable[[FC], FC]:
     Raises:
         None
     """
-    f = click.pass_obj(f)
     f = click.option("--grep", type=str, default=None)(f)
     f = click.option(
         "--how-far",
@@ -454,6 +453,7 @@ def logs_decorators(f: FC) -> Callable[[FC], FC]:
 @click.command("logs")
 @add_query_options(at_least_one=True)
 @logs_decorators
+@click.pass_obj
 def logs(
     obj: ProcessManagerContext, how_far: int, grep: str | None, query: ProcessQuery
 ) -> None:
@@ -479,7 +479,7 @@ def logs(
 
 
 def logs_impl(
-    obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
+    obj: ProcessManagerContext, how_far: int, grep: str | None, query: ProcessQuery
 ) -> None:
     """
     Implementation of the 'logs' command.
@@ -590,7 +590,6 @@ def ps_decorators(f: FC) -> Callable[[FC], FC]:
     Raises:
         None
     """
-    f = click.pass_obj(f)
     f = click.option(
         "-w",
         "--width",
@@ -613,6 +612,7 @@ def ps_decorators(f: FC) -> Callable[[FC], FC]:
 @click.command("ps")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @ps_decorators
+@click.pass_obj
 def ps(
     obj: ProcessManagerContext,
     query: ProcessQuery,

@@ -398,6 +398,7 @@ def session_injector(f: Callable[P, R]) -> Callable[P, R]:
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @ps_decorators
+@click.pass_obj
 def ps(
     obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
 ) -> None:
@@ -409,6 +410,7 @@ def ps(
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @logs_decorators
+@click.pass_obj
 def logs(
     obj: UnifiedShellContext,
     how_far: int,
@@ -423,6 +425,7 @@ def logs(
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
+@click.pass_obj
 def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
     kill_impl(cast(ProcessManagerContext, obj), query, width)
@@ -432,6 +435,7 @@ def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
+@click.pass_obj
 def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
     flush_impl(cast(ProcessManagerContext, obj), query, width)
