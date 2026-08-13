@@ -39,9 +39,27 @@ class ProcessManagerContext(ShellContext):  # boilerplatefest
             )
         }
 
-    def create_token(self, **kwargs) -> Token:
+    def create_token(self, **kwargs: object) -> Token:
+        """
+        Create a dummy token for the user in the process manager context.
+
+        This is a placeholder implementation and should be replaced with actual token
+        creation logic as needed.
+        """
         return create_dummy_token_from_uname()
 
     def terminate(self) -> None:
+        """
+        Run the cleanup procedures for the process manager context.
+
+        This method stops the status receiver if it is running, ensuring that any
+        resources associated with the process manager context are properly released.
+
+        Args:
+            None
+
+        Returns:
+            None
+        """
         if self.status_receiver:
             self.status_receiver.stop()

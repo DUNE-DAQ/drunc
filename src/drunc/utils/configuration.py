@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from enum import Enum
-from typing import Protocol, cast
+from typing import Protocol, Self, cast
 
 import conffwk
 
@@ -139,9 +139,7 @@ class ConfHandler:
     _raw_data: object  # raw OKS/pyobject data, available during _post_process_oks
 
     @classmethod
-    def from_pyobject(
-        cls, data: object, session_name: str | None = None
-    ) -> "ConfHandler":
+    def from_pyobject(cls, data: object, session_name: str | None = None) -> Self:
         instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
@@ -151,7 +149,7 @@ class ConfHandler:
         return instance
 
     @classmethod
-    def from_pbany(cls, data: object, session_name: str | None = None) -> "ConfHandler":
+    def from_pbany(cls, data: object, session_name: str | None = None) -> Self:
         instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
@@ -162,7 +160,7 @@ class ConfHandler:
         return instance
 
     @classmethod
-    def from_json(cls, path: str, session_name: str | None = None) -> "ConfHandler":
+    def from_json(cls, path: str, session_name: str | None = None) -> Self:
         instance: ConfHandler = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = path

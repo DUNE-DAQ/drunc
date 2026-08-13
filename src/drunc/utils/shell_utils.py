@@ -17,6 +17,7 @@ from druncschema.token_pb2 import Token
 from rich.console import Console
 
 from drunc.exceptions import DruncShellException
+from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.utils.utils import get_logger
 
 if TYPE_CHECKING:
@@ -319,6 +320,26 @@ class ShellContext:
             raise SystemExit(
                 1
             )  # used to avoid having to catch multiple Attribute errors when this function gets called
+
+    def get_pm_driver(self, quiet_fail: bool = False) -> ProcessManagerDriver:
+        """
+        Get the process manager driver from the context.
+
+        Args:
+            quiet_fail: If True, return None on failure instead of raising an exception.
+
+        Returns:
+            ProcessManagerDriver: The process manager driver.
+
+        Raises:
+            RuntimeError: If the process manager driver is not initialized.
+        """
+        pmd = self.get_driver("process_manager", quiet_fail=quiet_fail)
+
+        if not pmd or isinstance(pmd, ProcessManagerDriver):
+            raise RuntimeError("ProcessManagerDriver is not loaded!")
+
+        return pmd
 
     def has_driver(self, name: str) -> bool:
         """Check if a driver exists in the context.

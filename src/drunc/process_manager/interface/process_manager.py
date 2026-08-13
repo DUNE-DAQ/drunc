@@ -9,7 +9,6 @@ import types
 from collections.abc import Callable
 from multiprocessing.sharedctypes import Synchronized
 from multiprocessing.synchronize import Event
-from typing import cast
 
 import click
 import grpc
@@ -76,10 +75,7 @@ def run_pm(
             log_path=log_path or "",
         )
     else:
-        pmch = cast(
-            ProcessManagerConfHandler,
-            ProcessManagerConfHandler.from_pyobject(data=path_or_url),
-        )
+        pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
     log_path = get_log_path(
         user=getpass.getuser(),

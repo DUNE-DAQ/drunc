@@ -1,7 +1,9 @@
 import getpass
 from time import sleep
+from typing import Callable
 
 import click
+from click.decorators import FC
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
@@ -50,11 +52,37 @@ def boot(
     override_logs: bool,
     controller_log_level: bool | None,
 ) -> None:
+    """
+    Boot a session with the given configuration file and configuration ID.
+
+    Calls the process manager driver to boot a session with the specified parameters.
+    If there are already running processes for the given session name, it prompts the
+    user for confirmation before proceeding.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        user: The user for whom the session is being booted.
+        session_name: The name of the session to be booted.
+        configuration_file: The path to the configuration file to be used for booting
+            the session.
+        configuration_id: The ID of the configuration to be used for booting the
+            session.
+        override_logs: A boolean indicating whether to override existing logs or not.
+        controller_log_level: An optional log level to override the configuration
+            defined log level of the controller.
+
+    Returns:
+        None
+
+    Raises:
+        InterruptedCommand: If the command is interrupted by the user.
+        Exception: If any other exception occurs during the boot process.
+    """
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
-    processes = obj.get_driver("process_manager").ps(
-        ProcessQuery(user=user, session=session_name)
-    )
+    pm_driver = obj.get_pm_driver()
+    processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
 
     # The run control will validate this in the session manager in the future
     if len(processes.values) > 0:
@@ -67,7 +95,7 @@ def boot(
         f"Booting session {session_name} with boot configuration file {configuration_file} and id {configuration_id}, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = pm_driver.boot(
             conf_file=configuration_file,
             conf_id=configuration_id,
             user=user,
@@ -87,7 +115,7 @@ def boot(
         log.exception(e)
         raise e
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = pm_driver.controller_address
     controller_address = resolve_context_peer(controller_address)
     if controller_address:
         obj.print(
@@ -141,13 +169,35 @@ def dummy_boot(
     n_sleeps: int,
     session_name: str,
 ) -> None:
+    """
+    Boot a session with the given number of dummy processes.
+
+    The dummy processes will sleep for the specified duration and number of times. This
+    command used for testing the process manager without running actual processes.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        user: The user for whom the session is being booted.
+        n_processes: The number of dummy processes to boot.
+        sleep: The duration in seconds for which each dummy process will sleep.
+        n_sleeps: The number of times each dummy process will sleep.
+        session_name: The name of the session to be booted.
+
+    Returns:
+        None
+
+    Raises:
+        InterruptedCommand: If the command is interrupted by the user.
+    """
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
     log.debug(
         f"Running dummy_boot with {n_processes} processes for {sleep} seconds {n_sleeps} times, requested by user {user}"
     )
     try:
-        results = obj.get_driver("process_manager").dummy_boot(
+        pm_driver = obj.get_pm_driver()
+        results = pm_driver.dummy_boot(
             user=user,
             session_name=session_name,
             n_processes=n_processes,
@@ -184,10 +234,26 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
 )
 @click.pass_obj
 def terminate(obj: ProcessManagerContext, width: int | None) -> None:
+    """
+    Terminate the process manager and all its managed processes.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        width: The width of the table to display the terminated processes. If None, the
+            width will be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the termination process.
+    """
     log = get_logger("process_manager.shell")
     log_pm_cmd(obj)
     log.debug("Terminating")
-    result = obj.get_driver("process_manager").terminate()
+    pm_driver = obj.get_pm_driver()
+    result = pm_driver.terminate()
     if not result:
         return
     obj.print(
@@ -196,7 +262,19 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     obj.delete_driver("controller")
 
 
-def kill_decorators(f):
+def kill_decorators(f: FC) -> Callable[[FC], FC]:
+    """
+    Decorator function to add click options to the 'kill' command.
+
+    Args:
+        f: The function to be decorated.
+
+    Returns:
+        The decorated function with added options for the 'kill' command.
+
+    Raises:
+        None
+    """
     f = click.pass_obj(f)
     f = click.option(
         "-w",
@@ -217,7 +295,23 @@ def kill_decorators(f):
 @click.command("kill")
 @add_query_options(at_least_one=True)
 @kill_decorators
-def kill(obj, query, width):
+def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+    """
+    Kill processes matching the given query.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be killed.
+        width: The width of the table to display the killed processes. If None, the
+            width will be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the kill process.
+    """
     log_pm_cmd(obj)
     return kill_impl(obj, query, width)
 
@@ -225,9 +319,26 @@ def kill(obj, query, width):
 def kill_impl(
     obj: ProcessManagerContext, query: ProcessQuery, width: int | None
 ) -> None:
+    """
+    Implementation of the 'kill' command.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be killed.
+        width: The width of the table to display the killed processes. If None, the
+            width will be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the kill process.
+    """
     log = get_logger("process_manager.shell")
     log.debug(f"Killing with query {query}")
-    result = obj.get_driver("process_manager").kill(query)
+    pm_driver = obj.get_pm_driver()
+    result = pm_driver.kill(query)
     if not result:
         return
     obj.print(
@@ -235,7 +346,19 @@ def kill_impl(
     )  # rich tables require console printing
 
 
-def flush_decorators(f):
+def flush_decorators(f: FC) -> Callable[[FC], FC]:
+    """
+    Decorator function to add click options to the 'flush' command.
+
+    Args:
+        f: The function to be decorated.
+
+    Returns:
+        The decorated function with added options for the 'flush' command.
+
+    Raises:
+        None
+    """
     f = click.pass_obj(f)
     f = click.option(
         "-w",
@@ -250,7 +373,23 @@ def flush_decorators(f):
 @click.command("flush")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @flush_decorators
-def flush(obj, query, width):
+def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+    """
+    Flush processes matching the given query.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be flushed.
+        width: The width of the table to display the flushed processes. If None, the
+            width will be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the flush process.
+    """
     log_pm_cmd(obj)
     return flush_impl(obj, query, width)
 
@@ -260,9 +399,26 @@ def flush_impl(
     query: ProcessQuery,
     width: int | None,
 ) -> None:
+    """
+    Implementation of the 'flush' command.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be flushed.
+        width: The width of the table to display the flushed processes. If None, the
+            width will be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the flush process.
+    """
     log = get_logger("process_manager.shell")
     log.debug(f"Flushing with query {query}")
-    result = obj.get_driver("process_manager").flush(query)
+    pm_driver = obj.get_pm_driver()
+    result = pm_driver.flush(query)
     if not result:
         return
     obj.print(
@@ -270,7 +426,19 @@ def flush_impl(
     )  # rich tables require console printing
 
 
-def logs_decorators(f):
+def logs_decorators(f: FC) -> Callable[[FC], FC]:
+    """
+    Decorator function to add click options to the 'logs' command.
+
+    Args:
+        f: The function to be decorated.
+
+    Returns:
+        The decorated function with added options for the 'logs' command.
+
+    Raises:
+        None
+    """
     f = click.pass_obj(f)
     f = click.option("--grep", type=str, default=None)(f)
     f = click.option(
@@ -286,7 +454,26 @@ def logs_decorators(f):
 @click.command("logs")
 @add_query_options(at_least_one=True)
 @logs_decorators
-def logs(obj, how_far, grep, query):
+def logs(
+    obj: ProcessManagerContext, how_far: int, grep: str | None, query: ProcessQuery
+) -> None:
+    """
+    Display logs for processes matching the given query.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        how_far: The number of lines of logs to display.
+        grep: A string to filter the logs. Only lines containing this string will be
+            displayed. If None, all lines will be displayed.
+        query: The query to match processes whose logs are to be displayed.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the log retrieval process.
+    """
     log_pm_cmd(obj)
     return logs_impl(obj, how_far, grep, query)
 
@@ -294,6 +481,23 @@ def logs(obj, how_far, grep, query):
 def logs_impl(
     obj: ProcessManagerContext, how_far: int, grep: str, query: ProcessQuery
 ) -> None:
+    """
+    Implementation of the 'logs' command.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        how_far: The number of lines of logs to display.
+        grep: A string to filter the logs. Only lines containing this string will be
+            displayed. If None, all lines will be displayed.
+        query: The query to match processes whose logs are to be displayed.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the log retrieval process.
+    """
     log = get_logger("process_manager.shell")
     log.debug(f"Running logs with query {query}")
     log_req = LogRequest(
@@ -301,7 +505,8 @@ def logs_impl(
         query=query,
     )
 
-    result = obj.get_driver("process_manager").logs(log_req)
+    pm_driver = obj.get_pm_driver()
+    result = pm_driver.logs(log_req)
     if result is None:
         return
 
@@ -333,17 +538,58 @@ def logs_impl(
 @add_query_options(at_least_one=True)
 @click.pass_obj
 def restart(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+    """
+    Restart processes matching the given query.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be restarted.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the restart process.
+    """
     log_pm_cmd(obj)
     return restart_impl(obj, query)
 
 
 def restart_impl(obj: ProcessManagerContext, query: ProcessQuery) -> None:
+    """
+    Implementation of the 'restart' command.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be restarted.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the restart process.
+    """
     log = get_logger("process_manager.shell")
     log.debug(f"Restarting with query {query}")
-    obj.get_driver("process_manager").restart(query)
+    pm_driver = obj.get_pm_driver()
+    pm_driver.restart(query)
 
 
-def ps_decorators(f):
+def ps_decorators(f: FC) -> Callable[[FC], FC]:
+    """
+    Decorator function to add click options to the 'ps' command.
+
+    Args:
+        f: The function to be decorated.
+
+    Returns:
+        The decorated function with added options for the 'ps' command.
+
+    Raises:
+        None
+    """
     f = click.pass_obj(f)
     f = click.option(
         "-w",
@@ -367,7 +613,30 @@ def ps_decorators(f):
 @click.command("ps")
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @ps_decorators
-def ps(obj, query, long_format, width):
+def ps(
+    obj: ProcessManagerContext,
+    query: ProcessQuery,
+    long_format: bool,
+    width: int | None,
+) -> None:
+    """
+    Display processes matching the given query.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be displayed.
+        long_format: A boolean indicating whether to display the processes in long
+            format.
+        width: The width of the table to display the processes. If None, the width will
+            be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the process retrieval or display.
+    """
     log_pm_cmd(obj)
     return ps_impl(obj, query, long_format, width)
 
@@ -378,9 +647,28 @@ def ps_impl(
     long_format: bool,
     width: int | None,
 ) -> None:
+    """
+    Implementation of the 'ps' command.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        query: The query to match processes to be displayed.
+        long_format: A boolean indicating whether to display the processes in long
+            format.
+        width: The width of the table to display the processes. If None, the width will
+            be automatically calculated.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the process retrieval or display.
+    """
     log = get_logger("process_manager.shell")
     log.debug(f"Running ps with query {query}")
-    results = obj.get_driver("process_manager").ps(query)
+    pm_driver = obj.get_pm_driver()
+    results = pm_driver.ps(query)
 
     # Inject session name if exits
     ## Session name can come from either the process manager shell with --session
@@ -404,7 +692,10 @@ def ps_impl(
             soft_wrap=True,
         )
     else:
-        log.info(f"No processes running in session [green]{obj.session_name}[/]")
+        if session_name:
+            log.info(f"No processes running in session [green]{session_name}[/]")
+        else:
+            log.info("No processes running")
 
 
 @click.command("log")
@@ -421,4 +712,21 @@ def ps_impl(
 )
 @click.pass_obj
 def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
-    obj.get_driver("process_manager").log_on_server(text=text, severity=severity)
+    """
+    Log a message on the server with the specified severity level.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        text: The log message to be sent to the server.
+        severity: The severity level of the log message. Options are DEBUG, INFO,
+            WARNING, ERROR, CRITICAL. Default is INFO.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the logging process.
+    """
+    pm_driver = obj.get_pm_driver()
+    pm_driver.log_on_server(text=text, severity=severity)
