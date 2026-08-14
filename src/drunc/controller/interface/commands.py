@@ -157,7 +157,7 @@ def connect(obj: ControllerContext, controller_address: str, force: bool) -> Non
 @click.command("disconnect")
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
-def disconnect(obj: ControllerContext, force: bool):
+def disconnect(obj: ControllerContext, force: bool) -> None:
     if not obj.has_driver("controller"):
         log.info("You are not connected to any controller.")
         return
@@ -257,7 +257,7 @@ def who_am_i(obj: ControllerContext) -> None:
 @click.command("echo")
 @click.argument("text", required=False)
 @click.pass_obj
-def echo(obj, text: str | None) -> None:
+def echo(obj: ControllerContext, text: str | None) -> None:
     log_echo.info(text or "")
 
 
