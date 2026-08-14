@@ -8,9 +8,8 @@ from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 
 from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
     copy_token,
-    extract_grpc_rich_error,
-    handle_grpc_error,
 )
 from drunc.utils.utils import get_logger
 
@@ -35,7 +34,9 @@ class SessionManagerDriver:
         options = [
             ("grpc.keepalive_time_ms", 60000)  # pings the server every 60 seconds
         ]
-        self.channel = grpc.insecure_channel(self.address, options=options)
+        raw_channel = grpc.insecure_channel(self.address, options=options)
+        rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+        self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = SessionManagerStub(self.channel)
         self.token = copy_token(token)
         self.log = get_logger("session_manager_driver", rich_handler=True)
@@ -54,19 +55,7 @@ class SessionManagerDriver:
             f"Sending describe request to session manager at {self.address} with timeout {timeout}s"
         )
 
-        try:
-            response: Description = self.stub.describe(request, timeout=timeout)
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response: Description = self.stub.describe(request, timeout=timeout)
 
         return response
 
@@ -84,21 +73,9 @@ class SessionManagerDriver:
             f"Sending list_all_sessions request to session manager at {self.address} with timeout {timeout}s"
         )
 
-        try:
-            response: AllActiveSessions = self.stub.list_all_sessions(
-                request, timeout=timeout
-            )
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response: AllActiveSessions = self.stub.list_all_sessions(
+            request, timeout=timeout
+        )
 
         return response
 
@@ -116,20 +93,6 @@ class SessionManagerDriver:
             f"Sending list_all_configs request to session manager at {self.address} with timeout {timeout}s"
         )
 
-        try:
-            response: AllConfigKeys = self.stub.list_all_configs(
-                request, timeout=timeout
-            )
-        except grpc.RpcError as e:
-            try:
-                error_details = extract_grpc_rich_error(e)
-                self.log.error(error_details)
-            except Exception as extraction_error:
-                self.log.debug(
-                    f"Could not extract rich error details from gRPC error: {extraction_error}",
-                    exc_info=True,
-                )
-
-            handle_grpc_error(e)
+        response: AllConfigKeys = self.stub.list_all_configs(request, timeout=timeout)
 
         return response

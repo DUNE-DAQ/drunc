@@ -3,7 +3,7 @@ from drunc.process_manager.interface.shell import process_manager_shell
 from drunc.utils.utils import get_logger, get_root_logger
 
 
-def main():
+def main() -> None:
     context = ProcessManagerContext()
     try:
         process_manager_shell(obj=context)

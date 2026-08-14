@@ -65,6 +65,7 @@ class _LcsSessionState:
     podname: str | None = None
     node_port: int | None = None
     is_booted: bool = False
+    cluster_ip: str | None = None
 
 
 class K8sPodWatcherThread(threading.Thread):
@@ -195,7 +196,6 @@ class K8sProcessManager(ProcessManager):
         # Get the username for the session. This is needed as k8s does not pass the
         # username through to the pod
         self.session = getpass.getuser()
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
 
         # Setup the loger
         self.log = get_logger("process_manager.k8s-process-manager")
@@ -223,13 +223,17 @@ class K8sProcessManager(ProcessManager):
         # Storage for process orchestrator parameters
         self.managed_sessions = set()
         self.watchers = []
-        self._start_watcher()
         self.sessions_pending_deletion = set()
-        self.uuids_pending_deletion = set()
-        self.termination_complete_event = threading.Event()
+        # proc_uuid -> (remaining_uuids, event) for its kill_and_wait() batch;
+        # keeps concurrent kills (e.g. different sessions) from sharing state.
+        self._pending_deletion_batches: dict[str, tuple[set[str], threading.Event]] = {}
+        self._pending_deletion_lock = threading.Lock()
+        # Guards against notify_termination running twice
+        self._notified_uuids: set[str] = set()
         self.final_exit_codes = {}
+        # Guards inserts/deletes on boot_request against concurrent iteration
+        self.boot_request_lock = threading.Lock()
         # Per-session LCS state. Keyed by session (k8s namespace) name.
-        # Sessions that have no LCS simply have no entry here.
         # Use _lcs_state_for(session) to read and _lcs_state.pop(session) to clean up.
         self._lcs_state: dict[str, _LcsSessionState] = {}
         self._lcs_state_lock = threading.Lock()
@@ -238,17 +242,13 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Get settings from configuration JSON file
-        # Any comments following this one will relate to the parameters retrieved from
-        # the configuration file if the comment starts as "CONFIGURATION -"
-        settings = getattr(self.configuration, "settings", {})
+        # Get settings from configuration JSON file. Uses the `configuration`
+        # parameter directly, not self.configuration
+        settings = getattr(configuration, "settings", {})
 
         # CONFIGURATION - label defaults
         labels = settings.get("labels", {})
         self.drunc_label = labels.get("drunc_label", "drunc.daq")
-
-        # Readout app selector
-        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
 
         # Readout app selector
         self.perf_selector = settings.get("readout_app_selector", "runp").lower()
@@ -266,6 +266,9 @@ class K8sProcessManager(ProcessManager):
         cleanup = settings.get("cleanup", {})
         self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
         self.restart_cleanup_polling = cleanup.get("restart_cleanup_polling", 0.5)
+        self.kill_watch_fallback_poll_interval = cleanup.get(
+            "kill_watch_fallback_poll_interval", 5.0
+        )
 
         # CONFIGURATION - volume mounts
         self.volume_configs = settings.get("volumes", [])
@@ -285,8 +288,18 @@ class K8sProcessManager(ProcessManager):
         self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
         self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
         self._host_cache_expiry = checking.get("host_cache_expiry", 300)
-        self.grpc_startup_timeout = checking.get("grpc_startup_timeout", 30)
+        self.service_startup_timeout = checking.get("service_startup_timeout", 30)
         self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
+
+        # super().__init__() starts the opmon publish thread 
+        super().__init__(configuration=configuration, session=self.session, **kwargs)
+
+        # super().__init__() sets its own self.log
+        self.log = get_logger("process_manager.k8s-process-manager")
+
+        # _start_watcher() starts a thread that immediately needs _core_v1_api and
+        # drunc_label -- so this must come after super().__init__().
+        self._start_watcher()
 
         # Get and print the list of active namespaces managed by drunc
         namespaces = self._core_v1_api.list_namespace(
@@ -356,8 +369,8 @@ class K8sProcessManager(ProcessManager):
         """
         Callback for when a pod terminates.
 
-        Updates the final exit code and signals the termination_complete_event
-        when all pending deletions are confirmed.
+        Updates the final exit code, and signals the waiting kill_and_wait()
+        batch (if any) once every uuid in it is confirmed.
 
         Args:
             proc_uuid: The UUID string of the terminated process.
@@ -365,9 +378,13 @@ class K8sProcessManager(ProcessManager):
             reason: A string describing the termination reason (e.g. 'GracefulShutdown', 'PodDeleted').
             session: The Kubernetes namespace (session) the pod belonged to.
         """
-        self.log.debug(
-            f"notify_termination called for '{proc_uuid}'. Pending={self.uuids_pending_deletion}"
-        )
+        self.log.debug(f"notify_termination called for '{proc_uuid}'.")
+
+        # Only process each uuid's termination once
+        with self._pending_deletion_lock:
+            if proc_uuid in self._notified_uuids:
+                return
+            self._notified_uuids.add(proc_uuid)
 
         # Publish a log message and to kafka for each process that is terminated
         if proc_uuid in self.boot_request:
@@ -393,15 +410,22 @@ class K8sProcessManager(ProcessManager):
                     )
                     self._lcs_state.pop(session, None)
 
-        # Clear the list of processes being removed
-        if proc_uuid in self.uuids_pending_deletion:
-            self.uuids_pending_deletion.remove(proc_uuid)
+        # Confirm against this uuid's batch
+        with self._pending_deletion_lock:
+            batch = self._pending_deletion_batches.pop(proc_uuid, None)
+            if batch is not None:
+                remaining_uuids, batch_event = batch
+                remaining_uuids.discard(proc_uuid)
+                all_done = not remaining_uuids
+                remaining = len(remaining_uuids)
+
+        if batch is not None:
             self.log.debug(
-                f"Watcher confirmed termination of {proc_uuid}. {len(self.uuids_pending_deletion)} pods remaining."
+                f"Watcher confirmed termination of {proc_uuid}. {remaining} pods remaining in this batch."
             )
-            if not self.uuids_pending_deletion:
-                self.log.debug("All pending pods terminated, setting event.")
-                self.termination_complete_event.set()
+            if all_done:
+                self.log.debug("All pods in this batch terminated, setting event.")
+                batch_event.set()
 
     def is_alive(self, podname: str, session: str) -> bool:
         """
@@ -427,75 +451,6 @@ class K8sProcessManager(ProcessManager):
             # exception is logged.
             self.log.error(f"Error checking status for pod {session}.{podname}: {e}")
             return False
-
-    def _add_label(
-        self,
-        obj_name: str,
-        obj_type: str,
-        key: str,
-        label: str,
-        session: str | None = None,
-    ) -> None:
-        """
-        Constructs a label in the format '{key}.{drunc_label}: {label}' and patches
-        the specified Kubernetes object.
-
-        Args:
-            obj_name: The name of the Kubernetes object to label.
-            obj_type: The type of object, either 'pod' or 'namespace'.
-            key: The label key prefix (combined with drunc_label).
-            label: The label value to apply.
-            session: The Kubernetes namespace (required when obj_type is 'pod',
-                ignored for 'namespace').
-
-        Raises:
-            DruncK8sNamespaceException: If obj_type is 'pod' and session is not provided.
-            DruncK8sException: If obj_type is not 'pod' or 'namespace'.
-        """
-        # Construct the body of the metadata to allocate to the object
-        body = {"metadata": {"labels": {f"{key}.{self.drunc_label}": label}}}
-
-        # Allocated the metadata
-        if obj_type == "pod":
-            # Ensure all required information has been provided for the pod
-            if not session:
-                raise DruncK8sNamespaceException(
-                    "Session (namespace) must be provided to label a pod."
-                )
-
-            try:
-                # Add the label, and log the entry
-                self._core_v1_api.patch_namespaced_pod(
-                    name=obj_name, namespace=session, body=body
-                )
-                self.log.info(
-                    f'Added label "{key}.{self.drunc_label}:{label}" to pod "{session}.{obj_name}"'
-                )
-            except self._api_error_v1_api as e:
-                self.log.error(
-                    f"Failed to apply label to pod {session}/{obj_name}: {e}"
-                )
-        elif obj_type == "namespace":
-            try:
-                # Add the label, and log the entry
-                self._core_v1_api.patch_namespace(name=obj_name, body=body)
-                self.log.info(
-                    f'Added label "{key}.{self.drunc_label}:{label}" to namespace "{obj_name}"'
-                )
-            except self._api_error_v1_api as e:
-                self.log.error(f"Failed to apply label to namespace {obj_name}: {e}")
-        else:
-            raise DruncK8sException(f"Cannot add label to object type: {obj_type}")
-
-    def _add_creator_label(self, obj_name: str, obj_type: str) -> None:
-        """
-        Sets the label 'creator.{drunc_label}' to the class name on the given object.
-
-        Args:
-            obj_name: The name of the Kubernetes object to label.
-            obj_type: The type of object, either 'pod' or 'namespace'.
-        """
-        self._add_label(obj_name, obj_type, "creator", self.__class__.__name__)
 
     def _get_creator_label_selector(self) -> str:
         """
@@ -647,10 +602,10 @@ class K8sProcessManager(ProcessManager):
 
     def _create_namespace_and_wait_for_active(self, session: str) -> None:
         """
-        Constructs a V1Namespace with privileged pod-security enforcement, creates it
-        via the Kubernetes API, then polls until its phase becomes 'Active' (up to
-        restart_cleanup_time seconds). On success, applies the creator label and adds
-        the session to managed_sessions.
+        Constructs a V1Namespace with privileged pod-security enforcement and the
+        creator label already set, creates it via the Kubernetes API, then polls
+        until its phase becomes 'Active' (up to restart_cleanup_time seconds). On
+        success, adds the session to managed_sessions.
 
         Args:
             session: The name of the Kubernetes namespace to create.
@@ -665,7 +620,10 @@ class K8sProcessManager(ProcessManager):
             kind="Namespace",
             metadata=self._meta_v1_api(
                 name=session,
-                labels={"pod-security.kubernetes.io/enforce": "privileged"},
+                labels={
+                    "pod-security.kubernetes.io/enforce": "privileged",
+                    f"creator.{self.drunc_label}": self.__class__.__name__,
+                },
             ),
         )
         self._core_v1_api.create_namespace(body=namespace_manifest)
@@ -688,7 +646,6 @@ class K8sProcessManager(ProcessManager):
                 f"Namespace '{session}' not ready after {self.restart_cleanup_time} seconds."
             )
 
-        self._add_creator_label(session, "namespace")
         self.managed_sessions.add(session)
 
     def _prepare_namespace(self, session) -> None:
@@ -1397,7 +1354,8 @@ class K8sProcessManager(ProcessManager):
         For non-LCS pods when a local connection server is booted, retrieves the
         connection server's ClusterIP and creates a host alias mapping 'localhost'
         to that IP. This allows pods to reach the connection server via localhost.
-        Retries up to 10 times if the ClusterIP is not immediately available.
+        Served from lcs.cluster_ip;
+        the retry loop is a fallback for an uncached miss.
 
         Args:
             podname - the name of the pod (used for logging)
@@ -1417,7 +1375,7 @@ class K8sProcessManager(ProcessManager):
         ):
             return None
 
-        connection_server_ip = None
+        connection_server_ip = lcs.cluster_ip
         retry_count = 0
         max_retries = 10
         while not connection_server_ip and retry_count < max_retries:
@@ -1427,6 +1385,10 @@ class K8sProcessManager(ProcessManager):
                 retry_count += 1
 
         if connection_server_ip:
+            if connection_server_ip != lcs.cluster_ip:
+                with self._lcs_state_lock:
+                    if self._lcs_state.get(session) is lcs:
+                        lcs.cluster_ip = connection_server_ip
             self.log.info(
                 f"Pod '{podname}' will resolve localhost to connection server IP {connection_server_ip}"
             )
@@ -1888,54 +1850,32 @@ class K8sProcessManager(ProcessManager):
 
         return None
 
-    def _get_process_uid(self, query: ProcessQuery, order_by: str = None) -> list[str]:
+    def _get_process_uid(
+        self, query: ProcessQuery, order_by: str = "random"
+    ) -> list[str]:
         """
         Finds process UUIDs matching a query.
 
-        Searches all stored boot requests for processes matching the query criteria
-        (UUIDs, names, session, user). An empty query matches all processes. If
-        order_by is "leaf_first", sorts the UUIDs so that child processes (which
-        have a longer tree_id) come before their parents.
+        Delegates to the shared ProcessManager._match_processes_against_query
 
         Args:
             query: A ProcessQuery protobuf with optional uuids, names, session, and user
-                filters.
-            order_by: Optional sorting mode. Use 'leaf_first' to sort by tree depth
-                (deepest first). Defaults to None (unsorted).
+                filters. An empty query matches all processes.
+            order_by: Sort order - "random" (default, unsorted), "leaf_first"
+                (deepest tree_id first), or "root_first".
 
         Returns:
-            A list of UUID strings matching the query, optionally sorted by tree depth.
+            A list of UUID strings matching the query, in the requested order.
         """
-        initial_match = set()
-        for proc_uuid, boot_req in self.boot_request.items():
-            meta = boot_req.process_description.metadata
-            query_is_empty = not any(
-                [query.uuids, query.names, query.session, query.user]
-            )
+        with self.boot_request_lock:
+            boot_request_snapshot = dict(self.boot_request)
 
-            if (
-                query_is_empty
-                or any(uid.uuid == proc_uuid for uid in query.uuids)
-                or (query.session and query.session == meta.session)
-                or (query.user and query.user == meta.user)
-                or any(re.search(name_reg, meta.name) for name_reg in query.names)
-            ):
-                initial_match.add(proc_uuid)
-
-        if order_by != "leaf_first":
-            return list(initial_match)
-
-        self.log.debug("Sorting processes in leaf-first order using tree_id.")
-
-        procs_to_sort = []
-        for a_uuid in initial_match:
-            if a_uuid in self.boot_request:
-                tree_id = self.boot_request[a_uuid].process_description.metadata.tree_id
-                procs_to_sort.append((a_uuid, tree_id))
-
-        procs_to_sort.sort(key=lambda p: (-len(p[1]), p[1]))
-        sorted_uuids = [uuid for uuid, tree_id in procs_to_sort]
-        return sorted_uuids
+        return self._match_processes_against_query(
+            query=query,
+            available_uuids=list(boot_request_snapshot.keys()),
+            boot_request_dict=boot_request_snapshot,
+            order_by=order_by,
+        )
 
     def _logs_impl(self, log_request: LogRequest) -> LogLines:
         """
@@ -2164,29 +2104,23 @@ class K8sProcessManager(ProcessManager):
             session - the Kubernetes namespace (session) of the pod
 
         Raises:
-            DruncK8sException - if either stage times out within pod_ready_timeout seconds
+            DruncK8sException - if either stage times out
         """
         self.log.info(f"Waiting for LCS '{podname}' to be fully ready...")
-        start_time = time()
-        total_timeout = self.pod_ready_timeout
 
         # --- STAGE 1: Wait for Pod to be Running/Ready in K8s API ---
-        node_name = self._wait_for_pod_api_ready(podname, session, total_timeout)
+        node_name = self._wait_for_pod_api_ready(
+            podname, session, self.pod_ready_timeout
+        )
 
         # --- STAGE 2: Wait for NodePort to be externally reachable (using HTTP urllib) ---
         lcs = self._lcs_state_for(session)
         url = f"http://{node_name}:{lcs.node_port}"
 
-        # Calculate remaining time for stage 2, preserving original logic
-        elapsed_stage1 = time() - start_time
-        remaining_time = total_timeout - elapsed_stage1
+        self._wait_for_nodeport_http_ready(url, self.service_startup_timeout)
 
-        if remaining_time <= 0:
-            raise DruncK8sException(
-                f"NodePort {url} check failed: No time left after API readiness."
-            )
-
-        self._wait_for_nodeport_http_ready(url, remaining_time)
+        # Cached for speedup
+        cluster_ip = self._get_connection_server_cluster_ip(session)
 
         with self._lcs_state_lock:
             # Re-check the entry still exists: the watcher may have popped it
@@ -2194,6 +2128,7 @@ class K8sProcessManager(ProcessManager):
             # and this assignment.
             if self._lcs_state.get(session) is lcs:
                 lcs.is_booted = True
+                lcs.cluster_ip = cluster_ip
         self.log.info(f"Connection server '{podname}' is fully ready.")
 
     def _wait_for_controller_readiness(
@@ -2205,7 +2140,7 @@ class K8sProcessManager(ProcessManager):
         Stage 1: waits for the pod to be Running and Ready in the Kubernetes API
         (up to pod_ready_timeout seconds).
         Stage 2: waits for the NodePort to be reachable via TCP socket connection
-        (up to grpc_startup_timeout seconds).
+        (up to service_startup_timeout seconds).
 
         Args:
             podname - the name of the controller pod to wait for
@@ -2232,7 +2167,7 @@ class K8sProcessManager(ProcessManager):
 
         # --- STAGE 2: Wait for NodePort to be externally reachable (using TCP socket) ---
         self._wait_for_nodeport_tcp_ready(
-            node_name, controller_port, self.grpc_startup_timeout
+            node_name, controller_port, self.service_startup_timeout
         )
 
         self.log.info(f"Drunc controller '{podname}' is fully ready.")
@@ -2241,10 +2176,10 @@ class K8sProcessManager(ProcessManager):
         """
         Internal boot method for creating a pod and waiting for critical services.
 
-        Orchestrates the full boot sequence: determines tree labels and roles,
-        runs pre-boot validation, prepares the namespace, stores the boot request,
-        creates the pod and its service, adds the UUID label, and performs
-        blocking readiness waits for the LCS or root controller if applicable.
+        Orchestrates the full boot sequence: determines tree labels and roles
+        runs pre-boot validation, prepares the namespace, stores the
+        boot request, creates the pod and its service, and performs blocking
+        readiness waits for the LCS or root controller if applicable.
 
         Args:
             boot_request - the BootRequest protobuf defining the process to start
@@ -2259,6 +2194,8 @@ class K8sProcessManager(ProcessManager):
             boot_request.process_description.metadata.tree_id, podname, boot_request
         )
 
+        tree_labels[f"uuid.{self.drunc_label}"] = uuid
+
         # Format the hostname for safety
         hostname = format_hostname(boot_request.process_description.metadata.hostname)
         boot_request.process_description.metadata.hostname = hostname
@@ -2268,11 +2205,11 @@ class K8sProcessManager(ProcessManager):
 
         # Resource Creation (Namespace, Pod, Labels)
         self._prepare_namespace(session)
-        self.boot_request[uuid] = BootRequest()
-        self.boot_request[uuid].CopyFrom(boot_request)
+        with self.boot_request_lock:
+            self.boot_request[uuid] = BootRequest()
+            self.boot_request[uuid].CopyFrom(boot_request)
 
         self._create_pod(podname, session, boot_request, tree_labels)
-        self._add_label(podname, "pod", "uuid", uuid, session=session)
         self.log.info(f'"{session}.{podname}":{uuid} boot request sent.')
 
         # Special handling and blocking wait for critical processes
@@ -2335,19 +2272,19 @@ class K8sProcessManager(ProcessManager):
             if proc_uuid not in self.boot_request:
                 continue
             pod = uuid_to_pod.get(proc_uuid)
-            status_code = ProcessInstance.StatusCode.DEAD
+            status_code = ProcessInstance.StatusCode.RUNNING
             return_code = None
-            if pod:
-                if pod.status.phase == "Running":
-                    status_code = ProcessInstance.StatusCode.RUNNING
-                elif pod.status.phase in ["Succeeded", "Failed"]:
-                    if (
-                        pod.status.container_statuses
-                        and pod.status.container_statuses[0].state.terminated
-                    ):
-                        return_code = pod.status.container_statuses[
-                            0
-                        ].state.terminated.exit_code
+            if not pod:
+                status_code = ProcessInstance.StatusCode.DEAD
+            elif pod.status.phase in ["Succeeded", "Failed"]:
+                status_code = ProcessInstance.StatusCode.DEAD
+                if (
+                    pod.status.container_statuses
+                    and pod.status.container_statuses[0].state.terminated
+                ):
+                    return_code = pod.status.container_statuses[
+                        0
+                    ].state.terminated.exit_code
 
             pd, pr, pu = (
                 ProcessDescription(),
@@ -2490,6 +2427,33 @@ class K8sProcessManager(ProcessManager):
                     f"Failed to delete pod '{session}.{podname}': {e}"
                 )
 
+    def _pod_deleted(self, podname: str, session: str) -> bool:
+        """
+        Directly checks the K8s API for whether a pod object has been fully deleted.
+
+        Used as a fallback when the watch stream may have missed the pod's
+        termination event, so kill_and_wait does not have to sit out 
+        the full timeout for a pod that is already gone.
+
+        Args:
+            podname: The name of the pod to check.
+            session: The Kubernetes namespace (session) containing the pod.
+
+        Returns:
+            True if the pod no longer exists (404), False if it still exists
+            or the check itself failed.
+        """
+        try:
+            self._core_v1_api.read_namespaced_pod_status(podname, session)
+            return False
+        except self._api_error_v1_api as e:
+            if e.status == 404:
+                return True
+            self.log.error(
+                f"Error checking pod {session}.{podname} for fallback deletion check: {e}"
+            )
+            return False
+
     def _kill_impl(self, query: ProcessQuery) -> ProcessInstanceList:
         """
         Handle the 'kill' gRPC command with staged, role-based shutdown.
@@ -2531,8 +2495,17 @@ class K8sProcessManager(ProcessManager):
             )
             self.log.info(f"{action} {len(uuids)} process(es)...")
 
-            self.termination_complete_event.clear()
-            self.uuids_pending_deletion.update(uuids)
+            for proc_uuid in uuids:
+                self.add_process_to_expected_dead_processes(proc_uuid)
+
+            remaining_uuids = set(uuids)
+            batch_event = threading.Event()
+            with self._pending_deletion_lock:
+                for proc_uuid in uuids:
+                    self._pending_deletion_batches[proc_uuid] = (
+                        remaining_uuids,
+                        batch_event,
+                    )
 
             for proc_uuid in uuids:
                 if proc_uuid not in self.boot_request:
@@ -2550,10 +2523,52 @@ class K8sProcessManager(ProcessManager):
             wait_timeout = (
                 self.kill_timeout if grace_period is None else grace_period + 5
             )
-            if not self.termination_complete_event.wait(timeout=wait_timeout):
-                self.log.warning(f"Timeout. Remaining: {self.uuids_pending_deletion}")
 
-            self.uuids_pending_deletion.clear()
+            # Fallback poll
+            deadline = time() + wait_timeout
+            fallback_check_interval = min(
+                self.kill_watch_fallback_poll_interval, wait_timeout
+            )
+            while remaining_uuids and time() < deadline:
+                remaining_wait = max(
+                    0.0, min(fallback_check_interval, deadline - time())
+                )
+                if batch_event.wait(timeout=remaining_wait):
+                    break
+
+                with self._pending_deletion_lock:
+                    pending_snapshot = list(remaining_uuids)
+
+                for proc_uuid in pending_snapshot:
+                    if proc_uuid not in self.boot_request:
+                        continue
+                    pd = self.boot_request[proc_uuid].process_description
+                    if not self._pod_deleted(pd.metadata.name, pd.metadata.session):
+                        continue
+
+                    # Re-check: the watcher may have confirmed it while we
+                    # were making the network call above.
+                    with self._pending_deletion_lock:
+                        still_pending = proc_uuid in remaining_uuids
+                    if not still_pending:
+                        continue
+
+                    self.log.warning(
+                        f'Watch missed termination event for "{pd.metadata.session}.'
+                        f'{pd.metadata.name}" (UUID {proc_uuid}); confirming directly.'
+                    )
+                    self.notify_termination(
+                        proc_uuid, -1, "PodDeleted", pd.metadata.session
+                    )
+
+            with self._pending_deletion_lock:
+                unconfirmed = set(remaining_uuids)
+                # Drop leftover entries so unconfirmed uuids don't linger.
+                for proc_uuid in unconfirmed:
+                    self._pending_deletion_batches.pop(proc_uuid, None)
+
+            if unconfirmed:
+                self.log.warning(f"Timeout. Remaining: {unconfirmed}")
 
         # Execute staged shutdown
         all_pods = []
@@ -2623,21 +2638,27 @@ class K8sProcessManager(ProcessManager):
 
         # Finalize and clean up
         final_ret = []
-        for proc_uuid in targeted_uuids:
-            if proc_uuid in self.boot_request:
-                pi = ProcessInstance(
-                    process_description=self.boot_request[
-                        proc_uuid
-                    ].process_description,
-                    process_restriction=self.boot_request[
-                        proc_uuid
-                    ].process_restriction,
-                    status_code=ProcessInstance.StatusCode.DEAD,
-                    uuid=ProcessUUID(uuid=proc_uuid),
-                    return_code=self.final_exit_codes.get(proc_uuid, -1),
-                )
-                final_ret.append(pi)
-                del self.boot_request[proc_uuid]
+        with self.boot_request_lock:
+            for proc_uuid in targeted_uuids:
+                if proc_uuid in self.boot_request:
+                    pi = ProcessInstance(
+                        process_description=self.boot_request[
+                            proc_uuid
+                        ].process_description,
+                        process_restriction=self.boot_request[
+                            proc_uuid
+                        ].process_restriction,
+                        status_code=ProcessInstance.StatusCode.DEAD,
+                        uuid=ProcessUUID(uuid=proc_uuid),
+                        return_code=self.final_exit_codes.get(proc_uuid, -1),
+                    )
+                    final_ret.append(pi)
+                    del self.boot_request[proc_uuid]
+
+        # drop process once it's gone
+        for pi in final_ret:
+            if pi.uuid.uuid in self.expected_dead_applications:
+                self.remove_process_from_expected_dead_processes(pi.uuid.uuid)
 
         # If our internal process list is empty, we can clean up the namespace we used.
         if not self.boot_request:
