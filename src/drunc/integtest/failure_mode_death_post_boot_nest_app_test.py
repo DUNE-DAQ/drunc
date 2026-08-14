@@ -63,7 +63,7 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps
+ps -w 160
 
 echo status-post-boot
 status
@@ -199,7 +199,7 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
         status_table, dead_app_name
     )
     assert status_table_dead_app_entry, (
-        f"Expected to see {dead_app_name} in the ps table, but it was not found"
+        f"Expected to see {dead_app_name} in the status table, but it was not found"
     )
 
     # Check that the app that simulated death is in fact marked as disconnected in the status table
