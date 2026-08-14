@@ -45,9 +45,8 @@ conf_dict.dunerc_cmd_args = ["--no-stop-error-batch-mode"]
 conf_dict.op_env = "test"
 
 # Connectivity service configuration
-# Allow drunc to manage ConnectivityService (default is False, integrationtest manages
-# the Connectivity Service)
-conf_dict.drunc_connsvc = True
+# drunc manages the ConnectivityService with a pre-defined dunedaq configuration
+# conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
 # Specify connectivity service port (default is 0, a random port is chosen for the
 # Connectivity Service)
 # conf_dict.connsvc_port = 12345
