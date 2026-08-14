@@ -1,17 +1,67 @@
 import functools
+from typing import Callable, Protocol, TypeVar, cast
 
+import grpc
+from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
+from druncschema.token_pb2 import Token
 
+from drunc.utils.grpc_utils import pack_to_any
 from drunc.utils.utils import get_logger
 
 
-def authentified_and_authorised(action, system):
-    def decor(cmd):
-        @functools.wraps(
-            cmd
-        )  # this nifty decorator of decorator (!) is nicely preserving the cmd.__name__ (i.e. signature)
-        def check_token(obj, request, context):
+class _AuthoriserProtocol(Protocol):
+    def is_authorised(
+        self,
+        token: Token,
+        action: ActionType,
+        system: SystemType,
+        command_name: str,
+    ) -> bool: ...
+
+
+class _RequestProtocol(Protocol):
+    token: Token
+
+
+class _ContextProtocol(Protocol):
+    name: str
+    authoriser: _AuthoriserProtocol
+
+
+_Command = Callable[
+    [_ContextProtocol, _RequestProtocol, grpc.ServicerContext], Response
+]
+
+# Typevar here is used for mypy. While not necessary, it makes the code much more
+# readable.
+C = TypeVar("C", bound=_Command)
+
+
+def authentified_and_authorised(
+    action: ActionType, system: SystemType
+) -> Callable[[C], C]:
+    """
+    Decorator to check if the user is authentified and authorised to execute a command.
+
+    Args:
+        action: The action type to check.
+        system: The system type to check.
+
+    Returns:
+        A decorator that checks if the user is authentified and authorised.
+
+    Raises:
+        Unauthorised: If the user is not authorised to execute the command.
+    """
+
+    def decor(cmd: C) -> C:
+        def check_token(
+            obj: _ContextProtocol,
+            request: _RequestProtocol,
+            context: grpc.ServicerContext,
+        ) -> Response:
             log = get_logger("utils.authentified_and_authorised_decorator")
             log.debug("Entering")
             if not obj.authoriser.is_authorised(
@@ -20,11 +70,13 @@ def authentified_and_authorised(action, system):
                 return Response(
                     name=obj.name,
                     token=request.token,
-                    data=PlainText(
-                        text=f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
+                    data=pack_to_any(
+                        PlainText(
+                            text=f"User {request.token.user_name} is not authorised to execute {cmd.__name__} on {obj.name} (action type is {action}, system is {system})"
+                        )
                     ),
                     flag=ResponseFlag.NOT_EXECUTED_NOT_AUTHORISED,
-                    responses=[],
+                    children=[],
                 )
 
                 # raise Unauthorised(
@@ -38,6 +90,6 @@ def authentified_and_authorised(action, system):
             log.debug("Exiting")
             return ret
 
-        return check_token
+        return cast(C, functools.update_wrapper(check_token, cmd))
 
     return decor

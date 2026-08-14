@@ -3,7 +3,7 @@ from drunc.unified_shell.shell import unified_shell
 from drunc.utils.utils import get_logger, get_root_logger
 
 
-def main():
+def main() -> None:
     context = UnifiedShellContext()
 
     try:

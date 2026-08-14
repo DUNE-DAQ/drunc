@@ -1,9 +1,14 @@
 import getpass
 import sys
 from functools import update_wrapper
+from typing import cast
 
 import click
-from druncschema.process_manager_pb2 import ProcessInstance, ProcessQuery
+from click.decorators import FC
+from druncschema.process_manager_pb2 import (
+    ProcessInstance,
+    ProcessQuery,
+)
 
 from drunc.controller.interface.shell_utils import controller_setup
 from drunc.controller.utils import count_processes_in_status_response, get_all_states
@@ -22,7 +27,7 @@ from drunc.process_manager.interface.commands import (
 )
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
-from drunc.unified_shell.context import UnifiedShellMode
+from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger
 
@@ -48,18 +53,17 @@ from drunc.utils.utils import get_logger
 )
 @click.pass_obj
 def boot(
-    obj: ProcessManagerContext,
+    obj: UnifiedShellContext,
     override_logs: bool | None,
-    controller_log_level: bool | None,
-    sleep_between_app_boot: int | float = 0,
+    controller_log_level: str | None,
+    sleep_between_app_boot: float = 0,
 ) -> None:
     log = get_logger("unified_shell.boot")
     log_pm_cmd(obj)
     session_name = obj.session_name
     user = getpass.getuser()
-    processes = obj.get_driver("process_manager").ps(
-        ProcessQuery(user=user, session=session_name)
-    )
+    pm_driver = obj.get_pm_driver()
+    processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
 
     # Store the number of processes that are expected to be booted with this command, to check later if any processes died immediately after booting.
     expected_booted_processes = 0
@@ -77,7 +81,7 @@ def boot(
         return
 
     try:
-        results = obj.get_driver("process_manager").boot(
+        results = pm_driver.boot(
             conf_file=obj.configuration_file,
             conf_id=obj.configuration_id,
             user=user,
@@ -86,9 +90,12 @@ def boot(
             override_logs=override_logs_boot,
             sleep_between_app_boot=sleep_between_app_boot,
         )
-        expected_booted_processes = sum(1 for _ in results)
+        if results is None:
+            log.error("Boot request did not return any results.")
+            return
         for result in results:
-            log.critical(
+            expected_booted_processes += 1
+            log.debug(
                 f"Booting process: {result.values[0].process_description.metadata.name}"
             )
             if not result:
@@ -103,14 +110,12 @@ def boot(
         log.error(e)
         return
 
-    processes = obj.get_driver("process_manager").ps(
-        ProcessQuery(user=user, session=session_name)
-    )
+    processes = pm_driver.ps(ProcessQuery(user=user, session=session_name))
     if not processes.values:
         log.debug("No processes found after boot - stopping due to previous errors")
         return
 
-    controller_address = obj.get_driver("process_manager").controller_address
+    controller_address = pm_driver.controller_address
     if controller_address:
         log.debug(f"Controller endpoint is '{controller_address}'")
         log.debug("Connecting the unified_shell to the controller endpoint")
@@ -139,12 +144,11 @@ def boot(
     # If the session applications are not found on the connectivity serivce, then the
     # session is not booted correctly. This is a critical error, the user should be
     # informed, and the session should be placed in error state.
-    ps_response = obj.get_driver("process_manager").ps(
-        ProcessQuery(session=session_name)
-    )
+    ps_response = pm_driver.ps(ProcessQuery(session=session_name))
     ps_process_count = len(ps_response.values)
 
-    status_response = obj.get_driver("controller").status()
+    controller_driver = obj.get_controller_driver()
+    status_response = controller_driver.status()
     status_process_count = count_processes_in_status_response(status_response)
 
     # Local connectivity serivces are not reported in the status table, but they should
@@ -192,7 +196,7 @@ def boot(
     # Check if there is or should be an error state. If not, then the boot was
     # successful and we can return, otherwise, we will log the error and place the
     # session in an error state if required.
-    in_error_state = obj.get_driver("controller").status().status.in_error
+    in_error_state = controller_driver.status().status.in_error
     if not in_error_state and not put_in_error_state:
         log.info("Booted successfully")
         return
@@ -206,8 +210,8 @@ def boot(
     )
     if put_in_error_state and not in_error_state:
         log.error("Placing the session into an error state due to boot issues")
-        obj.get_driver("controller").to_error()
-        in_error_state = obj.get_driver("controller").status().status.in_error
+        controller_driver.to_error()
+        in_error_state = controller_driver.status().status.in_error
 
     # If the unified shell is running in batch or semibatch mode, exit with a non-zero
     # exit code unless bypassed with the --no-stop-error-batch-mode option in the
@@ -288,13 +292,13 @@ def log_on_server(
     log.debug("Logging message to server(s)...")
 
     if target_server in ["", "process_manager"]:
-        obj.get_driver("process_manager").log_on_server(
+        obj.get_pm_driver().log_on_server(
             text=text,
             severity=severity,
         )
 
     if target_server in ["", "controller"] and obj.has_driver("controller"):
-        obj.get_driver("controller").log_on_server(
+        obj.get_controller_driver().log_on_server(
             text=text,
             severity=severity,
             target=target,
@@ -313,7 +317,7 @@ def log_on_server(
 )
 @click.pass_obj
 @click.pass_context
-def terminate(ctx, obj, width):
+def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
     session
@@ -323,7 +327,7 @@ def terminate(ctx, obj, width):
     log_pm_cmd(obj)
     session_query = ProcessQuery(session=ctx.obj.session_name)
     log.info(f"Terminating session [green]{ctx.obj.session_name}[/]")
-    result = obj.get_driver("process_manager").kill(session_query)
+    result = obj.get_pm_driver().kill(session_query)
     if not result:
         return
 
@@ -335,64 +339,111 @@ def terminate(ctx, obj, width):
     obj.delete_driver("controller")
 
 
-def session_injector(f):
+def session_injector(f: FC) -> FC:
+    """
+    Decorator to inject the session name into the command function.
+
+    This is used to wrap the relevant unified shell commands, as the unified shell is
+    intended to only operate a single session at a time, and the session name is stored
+    in the context object.
+
+    Args:
+        f (FC): The command function to wrap.
+
+    Returns:
+        FC: The wrapped command function with the session name injected.
+
+    Raises:
+        None
+    """
+
     @click.pass_context
-    def wrapper(ctx, *args, **kwargs):
+    def wrapper(ctx: click.core.Context, *args: object, **kwargs: object) -> object:
+        """
+        Wrapper function to inject the session name into the command function.
+
+        Args:
+            ctx (click.core.Context): The click context object.
+            *args (object): Positional arguments to pass to the command function.
+            **kwargs (object): Keyword arguments to pass to the command function.
+
+        Returns:
+            object: The result of invoking the command function with the session name
+                injected.
+
+        Raises:
+            None
+        """
         kwargs["session"] = ctx.obj.session_name
         return ctx.invoke(f, *args, **kwargs)
 
-    return update_wrapper(wrapper, f)
+    # The update_wrapper function is used to update the internal python methods for the
+    # functions so that the click decorators can be used with the session_injector
+    # decorator. This is necessary because the click decorators rely on the function
+    # signature to determine the parameters that are passed to the function
+    return cast(FC, update_wrapper(wrapper, f))
 
 
 @click.command("ps")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @ps_decorators
-def ps(obj, query, long_format, width):
+@click.pass_obj
+def ps(
+    obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
+) -> None:
     log_pm_cmd(obj)
-    return ps_impl(obj, query, long_format, width)
+    ps_impl(obj, query, long_format, width)
 
 
 @click.command("logs")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @logs_decorators
-def logs(obj, how_far, grep, query):
+@click.pass_obj
+def logs(
+    obj: UnifiedShellContext,
+    how_far: int,
+    grep: str | None,
+    query: ProcessQuery,
+) -> None:
     log_pm_cmd(obj)
-    return logs_impl(obj, how_far, grep, query)
+    logs_impl(obj, how_far, grep or "", query)
 
 
 @click.command("kill")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
-def kill(obj, query, width):
+@click.pass_obj
+def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    return kill_impl(obj, query, width)
+    kill_impl(obj, query, width)
 
 
 @click.command("flush")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
-def flush(obj, query, width):
+@click.pass_obj
+def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
     log_pm_cmd(obj)
-    return flush_impl(obj, query, width)
+    flush_impl(obj, query, width)
 
 
 @click.command("restart")
 @session_injector
 @add_query_options_no_session(at_least_one=True)
 @click.pass_obj
-def restart(obj, query):
+def restart(obj: UnifiedShellContext, query: ProcessQuery) -> None:
     log_pm_cmd(obj)
-    return restart_impl(obj, query)
+    restart_impl(obj, query)
 
 
 @click.command("start-shell")
 @click.pass_obj
 @click.pass_context
-def start_shell(ctx, obj):
+def start_shell(ctx: click.core.Context, obj: UnifiedShellContext) -> None:
     """
     Start an interactive shell session.
 

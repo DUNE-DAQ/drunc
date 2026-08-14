@@ -1,3 +1,12 @@
+"""Test rich error handling with a real gRPC server with RichErrorServerInterceptor
+and a real client stub with RichErrorClientInterceptor.
+
+These tests check:
+- server-side exception mapping to gRPC status and rich details
+- client-interceptor handling by asserting that `extract_grpc_rich_error` and
+the interceptor logger are called.
+"""
+
 from concurrent import futures
 from unittest.mock import MagicMock, patch
 
@@ -8,7 +17,11 @@ from druncschema.process_manager_pb2_grpc import (
     add_ProcessManagerServicer_to_server,
 )
 
-from drunc.utils.grpc_utils import RichErrorServerInterceptor, extract_grpc_rich_error
+from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
+    RichErrorServerInterceptor,
+    extract_grpc_rich_error,
+)
 from tests.process_manager.process_manager_mock_impls import (
     ConcreteProcessManager,
 )
@@ -24,6 +37,7 @@ class ProcessManagerRichErrorTestSuite:
         self.channel = None
         self.stub = None
         self.servicer = None
+        self.mock_client_logger = None
 
     def setup_server_and_client(self):
         """
@@ -55,8 +69,13 @@ class ProcessManagerRichErrorTestSuite:
         self.server.add_insecure_port(listen_addr)
         self.server.start()
 
+        # Create a mock logger for the client interceptor
+        self.mock_client_logger = MagicMock()
+        client_interceptor = RichErrorClientInterceptor(logger=self.mock_client_logger)
+
         # Create client channel and stub
-        self.channel = grpc.insecure_channel(self.server_address)
+        raw_channel = grpc.insecure_channel(self.server_address)
+        self.channel = grpc.intercept_channel(raw_channel, client_interceptor)
         self.stub = ProcessManagerStub(self.channel)
 
     def teardown_server_and_client(self):
@@ -103,23 +122,48 @@ def process_manager_rich_error_test_suite():
     suite.teardown_server_and_client()
 
 
+@pytest.fixture(scope="function")
+def request_by_method(
+    boot_request, process_query_request, generic_request, log_request
+):
+    return {
+        "boot": boot_request,
+        "restart": process_query_request,
+        "kill": process_query_request,
+        "terminate": generic_request,
+        "ps": process_query_request,
+        "logs": log_request,
+        "flush": process_query_request,
+    }
+
+
+METHODS_WITH_REQUEST = [
+    ("boot", "_boot_impl"),
+    ("restart", "_restart_impl"),
+    ("kill", "_kill_impl"),
+    ("ps", "_ps_impl"),
+    ("logs", "_logs_impl"),
+    ("flush", "_flush_impl"),
+]
+
+METHODS_WITHOUT_REQUEST = [
+    ("terminate", "_terminate_impl"),
+]
+
+
 @pytest.mark.parametrize(
     "method_name, impl_name",
-    [
-        ("boot", "_boot_impl"),
-        ("restart", "_restart_impl"),
-        ("kill", "_kill_impl"),
-        ("terminate", "_terminate_impl"),
-        ("ps", "_ps_impl"),
-        ("logs", "_logs_impl"),
-    ],
+    METHODS_WITH_REQUEST,
 )
-def test_all_methods_not_implemented(
-    process_manager_rich_error_test_suite, ers_env, method_name, impl_name, boot_request
+def test_methods_with_request_not_implemented(
+    process_manager_rich_error_test_suite,
+    ers_env,
+    request_by_method,
+    method_name,
+    impl_name,
 ):
     """
-    Parametrized test to verify that all ProcessManager methods correctly
-    handle NotImplementedError by returning a Rich Error.
+    Test that methods correctly handle NotImplementedError by returning a Rich Error.
     """
 
     # Setup the test suite
@@ -128,12 +172,21 @@ def test_all_methods_not_implemented(
     # Mock the specific implementation method
     mock_impl = MagicMock(side_effect=NotImplementedError())
     setattr(process_manager_rich_error_test_suite.servicer, impl_name, mock_impl)
+    request = request_by_method[method_name]
 
     # Call the method via the stub
     stub_method = getattr(process_manager_rich_error_test_suite.stub, method_name)
 
-    with pytest.raises(grpc.RpcError) as exc_info:
-        stub_method(boot_request)
+    # Patch but allow the real extract_grpc_rich_error to be called as this only happens
+    # when the ClientInterceptor catches the RpcError
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as exc_info:
+            stub_method(request)
+
+    mock_impl.assert_called_once_with(request)
 
     err = exc_info.value
     assert err.code() == grpc.StatusCode.UNIMPLEMENTED
@@ -145,26 +198,75 @@ def test_all_methods_not_implemented(
     error_info = rich_error.details[0]
 
     assert error_info is not None
+    assert rich_error.code == "UNIMPLEMENTED"
     assert error_info.reason == "NOT_IMPLEMENTED"
+    assert error_info.domain == f"ProcessManager.{method_name}"
+    mock_extract_grpc_rich_error.assert_called_once()
+    process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
 
 
 @pytest.mark.parametrize(
     "method_name, impl_name",
-    [
-        ("boot", "_boot_impl"),
-        ("restart", "_restart_impl"),
-        ("kill", "_kill_impl"),
-        ("terminate", "_terminate_impl"),
-        ("ps", "_ps_impl"),
-        ("logs", "_logs_impl"),
-    ],
+    METHODS_WITHOUT_REQUEST,
 )
-def test_all_methods_unhandled_exception(
-    process_manager_rich_error_test_suite, ers_env, method_name, impl_name, boot_request
+def test_methods_without_request_not_implemented(
+    process_manager_rich_error_test_suite,
+    ers_env,
+    request_by_method,
+    method_name,
+    impl_name,
 ):
     """
-    Parametrized test to verify that all ProcessManager methods correctly
-    handle DruncCommandExceptions by returning an INTERNAL error with ErrorInfo.
+    Check that methods for which the implementation takes no request argument
+    return rich errors when NotImplementedError is raised.
+    """
+
+    process_manager_rich_error_test_suite.setup_server_and_client()
+
+    mock_impl = MagicMock(side_effect=NotImplementedError())
+    setattr(process_manager_rich_error_test_suite.servicer, impl_name, mock_impl)
+    request = request_by_method[method_name]
+
+    stub_method = getattr(process_manager_rich_error_test_suite.stub, method_name)
+
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as exc_info:
+            stub_method(request)
+
+    mock_impl.assert_called_once_with()
+
+    err = exc_info.value
+    assert err.code() == grpc.StatusCode.UNIMPLEMENTED
+    assert "Implementation missing" in err.details()
+
+    rich_error = extract_grpc_rich_error(err)
+    error_info = rich_error.details[0]
+
+    assert error_info is not None
+    assert rich_error.code == "UNIMPLEMENTED"
+    assert error_info.reason == "NOT_IMPLEMENTED"
+    assert error_info.domain == f"ProcessManager.{method_name}"
+    mock_extract_grpc_rich_error.assert_called_once()
+    process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "method_name, impl_name",
+    METHODS_WITH_REQUEST,
+)
+def test_methods_with_request_unhandled_exception(
+    process_manager_rich_error_test_suite,
+    ers_env,
+    request_by_method,
+    method_name,
+    impl_name,
+):
+    """
+    Check that methods handle DruncCommandExceptions by returning an I
+    NTERNAL error with ErrorInfo.
     """
 
     # Setup the test suite
@@ -174,12 +276,19 @@ def test_all_methods_unhandled_exception(
     exception_msg = f"Unexpected error in {method_name}"
     mock_impl = MagicMock(side_effect=ValueError(exception_msg))
     setattr(process_manager_rich_error_test_suite.servicer, impl_name, mock_impl)
+    request = request_by_method[method_name]
 
     # Call the method via the stub
     stub_method = getattr(process_manager_rich_error_test_suite.stub, method_name)
 
-    with pytest.raises(grpc.RpcError) as exc_info:
-        stub_method(boot_request)
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as exc_info:
+            stub_method(request)
+
+    mock_impl.assert_called_once_with(request)
 
     err = exc_info.value
     err_msg = f"Unhandled exception in ProcessManager.{method_name}"
@@ -193,6 +302,59 @@ def test_all_methods_unhandled_exception(
     error_info = rich_error.details[0]
 
     assert error_info is not None
+    assert rich_error.code == "INTERNAL"
+    assert error_info.reason == "COMMAND_ERROR"
+    assert error_info.domain == f"ProcessManager.{method_name}"
+    mock_extract_grpc_rich_error.assert_called_once()
+    process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
 
-    assert f"ProcessManager.{method_name}" in error_info.domain
-    assert "" in error_info.domain
+
+@pytest.mark.parametrize(
+    "method_name, impl_name",
+    METHODS_WITHOUT_REQUEST,
+)
+def test_methods_without_request_unhandled_exception(
+    process_manager_rich_error_test_suite,
+    ers_env,
+    request_by_method,
+    method_name,
+    impl_name,
+):
+    """
+    Check that the methods for which the implementation
+    takes no request argument return INTERNAL rich errors for unhandled exceptions.
+    """
+
+    process_manager_rich_error_test_suite.setup_server_and_client()
+
+    exception_msg = f"Unexpected error in {method_name}"
+    mock_impl = MagicMock(side_effect=ValueError(exception_msg))
+    setattr(process_manager_rich_error_test_suite.servicer, impl_name, mock_impl)
+    request = request_by_method[method_name]
+
+    stub_method = getattr(process_manager_rich_error_test_suite.stub, method_name)
+
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as exc_info:
+            stub_method(request)
+
+    mock_impl.assert_called_once_with()
+
+    err = exc_info.value
+    err_msg = f"Unhandled exception in ProcessManager.{method_name}"
+    assert err.code() == grpc.StatusCode.INTERNAL
+    assert err_msg in err.details()
+    assert exception_msg in err.details()
+
+    rich_error = extract_grpc_rich_error(err)
+    error_info = rich_error.details[0]
+
+    assert error_info is not None
+    assert rich_error.code == "INTERNAL"
+    assert error_info.reason == "COMMAND_ERROR"
+    assert error_info.domain == f"ProcessManager.{method_name}"
+    mock_extract_grpc_rich_error.assert_called_once()
+    process_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()

@@ -124,6 +124,9 @@ class MockContext:
     def get_driver(self, name):
         return self.driver
 
+    def get_pm_driver(self):
+        return self.get_driver("process_manager")
+
     def get_shell_id(self):
         return "mock-shell"
 

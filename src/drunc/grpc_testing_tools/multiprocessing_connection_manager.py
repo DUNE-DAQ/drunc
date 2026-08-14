@@ -8,12 +8,13 @@ management for servers running as separate processes on the same machine.
 
 import multiprocessing
 import os
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 from drunc.grpc_testing_tools.process_connection_manager import (
     ProcessConnectionManager,
     RunningGrpcServer,
 )
+from drunc.grpc_testing_tools.stubs import P, TargetFunc
 
 
 class MultiprocessingConnectionManager(ProcessConnectionManager):
@@ -25,7 +26,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
     Creates and manages ready/stop events for process coordination.
     """
 
-    def __init__(self, env_vars: Dict[str, str] = None):
+    def __init__(self, env_vars: Dict[str, str] | None = None) -> None:
         """
         Initialise multiprocessing connection manager.
 
@@ -35,7 +36,11 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         super().__init__(env_vars)
 
     def create_process(
-        self, process_id: str, target_func: Any, *args, **kwargs
+        self,
+        process_id: str,
+        target_func: TargetFunc[P, object],
+        *args: object,
+        **kwargs: object,
     ) -> RunningGrpcServer:
         """
         Create a multiprocessing.Process handle with coordination events.
@@ -55,12 +60,11 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
             RunningGrpcServer containing the multiprocessing.Process and events
         """
         # Create coordination events for this process
-        ready_event = multiprocessing.Event()
-        stop_event = multiprocessing.Event()
+        ready_event: multiprocessing.synchronize.Event = multiprocessing.Event()
+        stop_event: multiprocessing.synchronize.Event = multiprocessing.Event()
 
         # Wrap target function to set environment variables
-        def wrapped_target(*target_args, **target_kwargs):
-            # Set environment variables in child process
+        def wrapped_target(*target_args: P.args, **target_kwargs: P.kwargs) -> object:
             for key, value in self.env_vars.items():
                 os.environ[key] = value
             return target_func(*target_args, **target_kwargs)
@@ -100,7 +104,10 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
             raise RuntimeError(f"Process {handle.process_id} is already started")
 
         try:
-            handle.process.start()
+            process = handle.process
+            if process is None:
+                raise RuntimeError(f"Process {handle.process_id} has not been created")
+            process.start()
             handle.mark_started()
         except Exception as e:
             raise RuntimeError(f"Failed to start process {handle.process_id}: {e}")
@@ -143,7 +150,7 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
 
     def is_process_alive(self, handle: RunningGrpcServer) -> bool:
         """
-        Check if a multiprocessing.Process is alive.
+        Check if a the handled process is alive.
 
         Args:
             handle: RunningGrpcServer to check
@@ -154,7 +161,8 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
         if not handle.started or not handle.process:
             return False
 
-        return handle.process.is_alive()
+        process = handle.process
+        return process.is_alive()
 
     def wait_for_termination(
         self, handle: RunningGrpcServer, timeout: Optional[float] = None
@@ -167,7 +175,8 @@ class MultiprocessingConnectionManager(ProcessConnectionManager):
             timeout: Maximum time to wait
         """
         if handle.started and handle.process:
-            handle.process.join(timeout=timeout)
+            process = handle.process
+            process.join(timeout=timeout)
 
     def cleanup(self) -> None:
         """Stop all managed processes and cleanup resources."""

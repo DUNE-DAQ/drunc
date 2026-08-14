@@ -1,3 +1,13 @@
+"""Test rich error handling with a real gRPC server with RichErrorServerInterceptor
+and a real client stub with RichErrorClientInterceptor.
+
+These tests check:
+- server-side exception mapping to gRPC status and rich details
+- manually unpack grpc-status-details-bin to test specific ErrorInfo and PreconditionFailure fields
+- client-interceptor handling by asserting that `extract_grpc_rich_error` and
+the interceptor logger are called.
+"""
+
 from concurrent import futures
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,7 +21,11 @@ from druncschema.session_manager_pb2_grpc import (
 from google.rpc import error_details_pb2, status_pb2
 
 from drunc.session_manager.session_manager import SessionManager
-from drunc.utils.grpc_utils import RichErrorServerInterceptor
+from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
+    RichErrorServerInterceptor,
+    extract_grpc_rich_error,
+)
 
 
 class SessionManagerRichErrorTestSuite:
@@ -49,8 +63,12 @@ class SessionManagerRichErrorTestSuite:
         self.server.add_insecure_port(listen_addr)
         self.server.start()
 
+        self.mock_client_logger = MagicMock()
+        client_interceptor = RichErrorClientInterceptor(logger=self.mock_client_logger)
+
         # Create client channel and stub
-        self.channel = grpc.insecure_channel(self.server_address)
+        raw_channel = grpc.insecure_channel(self.server_address)
+        self.channel = grpc.intercept_channel(raw_channel, client_interceptor)
         self.stub = SessionManagerStub(self.channel)
 
     def teardown_server_and_client(self):
@@ -86,8 +104,13 @@ def test_list_all_configs_no_config_files_rich_error(
     # Remove the DUNEDAQ_DB_PATH from the environment to simulate it's not set
     monkeypatch.delenv("DUNEDAQ_DB_PATH", raising=False)
 
-    with pytest.raises(grpc.RpcError) as excinfo:
-        stub.list_all_configs(generic_request)
+    # Patch but allow the real extract_grpc_rich_error to be called
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as excinfo:
+            stub.list_all_configs(generic_request)
 
     err = excinfo.value
 
@@ -125,6 +148,9 @@ def test_list_all_configs_no_config_files_rich_error(
             assert violation.type == "MISSING OR INVALID"
             assert "DUNEDAQ_DB_PATH env variable not set" in violation.description
 
+    mock_extract_grpc_rich_error.assert_called_once()
+    session_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
 
 def test_no_config_files_rich_error(
     session_manager_rich_error_test_suite, generic_request, monkeypatch
@@ -134,8 +160,13 @@ def test_no_config_files_rich_error(
 
     monkeypatch.setenv("DUNEDAQ_DB_PATH", "/fake_path")
 
-    with pytest.raises(grpc.RpcError) as excinfo:
-        stub.list_all_configs(generic_request)
+    # Patch but allow the real extract_grpc_rich_error to be called
+    with patch(
+        "drunc.utils.grpc_utils.extract_grpc_rich_error",
+        wraps=extract_grpc_rich_error,
+    ) as mock_extract_grpc_rich_error:
+        with pytest.raises(grpc.RpcError) as excinfo:
+            stub.list_all_configs(generic_request)
 
     err = excinfo.value
 
@@ -147,7 +178,6 @@ def test_no_config_files_rich_error(
     for key, value in err.trailing_metadata():
         if key == "grpc-status-details-bin":
             status.ParseFromString(value)
-
             precond = None
             base_error = None
 
@@ -174,6 +204,9 @@ def test_no_config_files_rich_error(
             assert "No configuration files found in /fake_path" in violation.description
             assert "Config files" in violation.subject
 
+    mock_extract_grpc_rich_error.assert_called_once()
+    session_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
 
 def test_config_parse_failure(
     session_manager_rich_error_test_suite, generic_request, monkeypatch
@@ -193,8 +226,12 @@ def test_config_parse_failure(
             "drunc.session_manager.session_manager.Configuration",
             side_effect=Exception("Config failed"),
         ):
-            with pytest.raises(grpc.RpcError) as excinfo:
-                stub.list_all_configs(generic_request)
+            with patch(
+                "drunc.utils.grpc_utils.extract_grpc_rich_error",
+                wraps=extract_grpc_rich_error,
+            ) as mock_extract_grpc_rich_error:
+                with pytest.raises(grpc.RpcError) as excinfo:
+                    stub.list_all_configs(generic_request)
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
@@ -232,6 +269,9 @@ def test_config_parse_failure(
             assert "Failed to parse configuration file" in violation.description
             assert "Services could not start" in violation.subject
 
+    mock_extract_grpc_rich_error.assert_called_once()
+    session_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
 
 def test_dals_missing_or_invalid(
     session_manager_rich_error_test_suite, generic_request, monkeypatch
@@ -252,8 +292,12 @@ def test_dals_missing_or_invalid(
             "drunc.session_manager.session_manager.Configuration",
             return_value=fake_config,
         ):
-            with pytest.raises(grpc.RpcError) as excinfo:
-                stub.list_all_configs(generic_request)
+            with patch(
+                "drunc.utils.grpc_utils.extract_grpc_rich_error",
+                wraps=extract_grpc_rich_error,
+            ) as mock_extract_grpc_rich_error:
+                with pytest.raises(grpc.RpcError) as excinfo:
+                    stub.list_all_configs(generic_request)
 
     err = excinfo.value
     assert err.code() == grpc.StatusCode.FAILED_PRECONDITION
@@ -289,3 +333,6 @@ def test_dals_missing_or_invalid(
             assert "Session DALs" in violation.subject
             assert violation.type == "MISSING OR INVALID"
             assert "DALs missing or invalid" in violation.description
+
+    mock_extract_grpc_rich_error.assert_called_once()
+    session_manager_rich_error_test_suite.mock_client_logger.error.assert_called_once()
