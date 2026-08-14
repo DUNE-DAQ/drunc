@@ -530,12 +530,16 @@ def logs_impl(
         if grep is not None and grep not in line:
             continue
 
-        line = escape(line)
+        if grep is not None and grep:
+            # Highlight grep term by splitting on it, escaping each part separately,
+            # then rejoining with Rich underline markup around the escaped grep term
+            escaped_grep = escape(grep)
+            parts = line.split(grep)
+            escaped_line = f"[u]{escaped_grep}[/u]".join(escape(part) for part in parts)
+        else:
+            escaped_line = escape(line)
 
-        if grep is not None:
-            line = line.replace(grep, f"[u]{grep}[/]")
-
-        obj.print(line, soft_wrap=True)
+        obj.print(escaped_line, soft_wrap=True)
     if result.name is not None:
         obj.rule(f"[yellow]{display_name}[/yellow] end")
 
@@ -701,7 +705,9 @@ def ps_impl(
         )
     else:
         if session_name:
-            log.info(f"No processes running in session [green]{session_name}[/]")
+            log.info(
+                f"No processes running in session [green]{escape(session_name)}[/green]"
+            )
         else:
             log.info("No processes running")
 
