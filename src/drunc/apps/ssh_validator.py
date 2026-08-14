@@ -7,11 +7,13 @@ from daqpytools.logging import logging_log_levels
 from sh import Command
 
 from drunc.process_manager.oks_parser import collect_apps
-from drunc.process_manager.ssh_process_manager_paramiko_client import on_parent_exit
+from drunc.process_manager.utils import on_parent_exit
 from drunc.utils.utils import get_logger
 
 
-def validate_ssh_connection(configuration: str, session_name: str, log_level: str):
+def validate_ssh_connection(
+    configuration: str, session_name: str, log_level: str
+) -> None:
     log = get_logger("validate_ssh_connection", rich_handler=True)
 
     db = conffwk.Configuration(f"oksconflibs:{configuration}")

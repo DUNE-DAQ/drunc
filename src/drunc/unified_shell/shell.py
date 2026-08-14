@@ -6,6 +6,7 @@ import signal
 import sys
 import types
 from time import sleep
+from typing import cast
 from urllib.parse import ParseResult, urlparse
 
 import click
@@ -348,25 +349,6 @@ def unified_shell(
         f"{getpass.getuser()} connected from unified shell"
     )
 
-    # Add the unified shell Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]unified_shell[/green] commands")
-    unified_shell_commands: list[click.Command] = [boot, log_on_server, ps, terminate]
-    for cmd in unified_shell_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
-
-    # Add the process manager Click commands to the CLI
-    ctx.obj.log.debug("Adding [green]process_manager[/green] commands")
-    process_manager_commands: list[click.Command] = [
-        kill,
-        flush,
-        logs,
-        restart,
-    ]
-    for cmd in process_manager_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
-
     # Get all the controller commands by instantiating the stateful node defined in the
     # configuration and getting the FSM transitions from it.
     ctx.obj.log.debug("Defining the pseudo controller to get its FSM commands")
@@ -381,8 +363,62 @@ def unified_shell(
         ),
         session_name=ctx.obj.session_name,
     )
+
     # Avoid setting up the ELISA logbook for the unified shell
     os.environ["DUNEDAQ_ELISA_LOGBOOK_APPARATUS"] = "unified_shell"
+
+    # Group the imported commands for adding to the click shell
+    command_group = cast(click.Group, ctx.command)
+    unified_shell_commands: list[click.Command] = [
+        boot,
+        flush,
+        kill,
+        log_on_server,
+        logs,
+        ps,
+        restart,
+        start_shell,
+        terminate,
+    ]
+    process_manager_commands: list[click.Command] = [
+        kill,
+        flush,
+        logs,
+        restart,
+    ]
+    controller_commands: list[click.Command] = [
+        status,
+        recompute_status,
+        connect,
+        disconnect,
+        take_control,
+        surrender_control,
+        who_am_i,
+        echo,
+        who_is_in_charge,
+        include,
+        exclude,
+        wait,
+        expert_command,
+        to_error,
+    ]
+
+    # Click command groups
+    click_command_groups = [
+        process_manager_commands,
+        unified_shell_commands,
+        controller_commands,
+    ]
+    for click_command_group in click_command_groups:
+        ctx.obj.log.debug(
+            f"Adding [green]{click_command_group[0].name}[/green] commands to the click shell"
+        )
+        for cmd in click_command_group:
+            if cmd.name is not None:
+                command_group.add_command(cmd, format_name_for_cli(cmd.name))
+                ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
+            else:
+                ctx.obj.log.warning(f"Skipping nameless command: {cmd}")
 
     ctx.obj.log.debug("Initializing the [green]FSM[/green]")
 
@@ -402,36 +438,15 @@ def unified_shell(
     # Add the FSM transitions and sequences as Click commands to the CLI
     ctx.obj.log.debug("Adding [green]controller[/green] commands to the click context")
     for transition in transitions.commands:
-        ctx.command.add_command(
+        command_group.add_command(
             *generate_fsm_command(ctx.obj, transition, controller_name)
         )
         ctx.obj.dynamic_commands.add(format_name_for_cli(transition.name))
     for sequence in session_dal.segment.controller.fsm.command_sequences:
-        ctx.command.add_command(
+        command_group.add_command(
             *generate_fsm_sequence_command(ctx, sequence, controller_name)
         )
         ctx.obj.dynamic_commands.add(format_name_for_cli(sequence.id))
-
-    # Add the controller Click commands to the CLI
-    controller_commands: list[click.Command] = [
-        status,
-        recompute_status,
-        connect,
-        disconnect,
-        take_control,
-        surrender_control,
-        who_am_i,
-        echo,
-        who_is_in_charge,
-        include,
-        exclude,
-        wait,
-        expert_command,
-        to_error,
-    ]
-    for cmd in controller_commands:
-        ctx.command.add_command(cmd, format_name_for_cli(cmd.name))
-        ctx.obj.dynamic_commands.add(format_name_for_cli(cmd.name))
 
     parser = ctx.command.make_parser(ctx)
     _, extract_batch_args, _ = parser.parse_args(sys.argv[1:])
@@ -440,7 +455,7 @@ def unified_shell(
     # If any of the commands is in the click commands, set batch mode
     if ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.BATCH
-        ctx.command.add_command(start_shell, "start-shell")
+        command_group.add_command(start_shell, "start-shell")
         ctx.obj.dynamic_commands.add("start-shell")
         validate_chain(ctx, extract_batch_args)
 
@@ -448,7 +463,7 @@ def unified_shell(
     if "start-shell" in ctx.obj.batch_commands:
         ctx.obj.running_mode = UnifiedShellMode.SEMIBATCH
 
-    def cleanup():
+    def cleanup() -> None:
         """
         Cleanup function to be called on exit.
 
@@ -472,8 +487,8 @@ def unified_shell(
                             ctx.obj.log.info(
                                 "Attempting graceful shutdown of the controller"
                             )
-                            stop_run_cmd = ctx.command.commands.get("stop-run")
-                            scrap_cmd = ctx.command.commands.get("scrap")
+                            stop_run_cmd = command_group.commands.get("stop-run")
+                            scrap_cmd = command_group.commands.get("scrap")
                             if stop_run_cmd is not None:
                                 ctx.invoke(stop_run_cmd)
                             else:
@@ -566,7 +581,7 @@ def unified_shell(
     ctx.call_on_close(cleanup)
 
     # Handle SIGTERM to gracefully shutdown the unified_shell
-    def signal_sigterm_handler(signum: int, frame: types.FrameType) -> None:
+    def signal_sigterm_handler(signum: int, frame: types.FrameType | None) -> None:
         """
         Handle the SIGTERM signal to gracefully shut down the unified_shell.
 
@@ -588,10 +603,16 @@ def unified_shell(
 
 @unified_shell.result_callback()
 @click.pass_context
-def _maybe_enter_shell(ctx, results, **_):
+def _maybe_enter_shell(ctx: click.core.Context, results: object, **_: object) -> None:
     # If user requested interactive mode at the end
     if ctx.obj.running_mode == UnifiedShellMode.SEMIBATCH:
-        sh = click_shell.make_click_shell(ctx, prompt=ctx.command.shell.prompt)
+        prompt_default = "drunc-unified-shell > "
+        shell_obj = getattr(ctx.command, "shell", None)
+        if shell_obj is not None:
+            candidate = getattr(shell_obj, "prompt", None)
+            if isinstance(candidate, str):
+                prompt_default = candidate
+        sh = click_shell.make_click_shell(ctx, prompt=prompt_default)
         sh.cmdloop()
 
 
@@ -632,7 +653,7 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
         ctx: Click context object containing the command registry.
         chain_args (list): Flattened list of tokens from extract_chain_tokens.
     """
-    command_names = set(ctx.command.commands.keys())
+    command_names = set(cast(click.Group, ctx.command).commands.keys())
 
     def command_can_consume_more_positionals(
         command: click.Command, provided_args: list[str]
@@ -660,7 +681,7 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
             cmd_args = cmd_args_real.copy()
             cmd_args_static = cmd_args_real.copy()
 
-            sub_cmd: click.Command = ctx.command.commands[cmd_name]
+            sub_cmd: click.Command = cast(click.Group, ctx.command).commands[cmd_name]
 
             # Validate the command as split by split_chain
             sub_cmd.make_context(
@@ -691,10 +712,10 @@ def validate_chain(ctx: click.core.Context, chain_args: list[str]) -> None:
                     raise DruncBatchShellMissingArg(prev_cmd_name, next_cmd_name) from e
 
     except click.NoSuchOption as e:
-        raise DruncBatchShellError(e) from e
+        raise DruncBatchShellError(str(e)) from e
 
     except click.UsageError as e:
-        raise DruncBatchShellArgError(cmd_args_static) from e
+        raise DruncBatchShellArgError(str(cmd_args_static)) from e
 
     except click.ClickException as e:
-        raise DruncBatchShellError(e) from e
+        raise DruncBatchShellError(str(e)) from e

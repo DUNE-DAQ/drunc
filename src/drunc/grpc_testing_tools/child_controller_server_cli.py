@@ -12,7 +12,7 @@ import sys
 from drunc.grpc_testing_tools.run_grpc_services import run_child_controller_server
 
 
-def main():
+def main() -> None:
     """
     Main entry point for ChildController server CLI.
 

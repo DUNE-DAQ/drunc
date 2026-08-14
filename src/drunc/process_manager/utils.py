@@ -2,8 +2,10 @@ import copy as cp
 import os
 import re
 from functools import update_wrapper
+from typing import cast
 
 import click
+from click.decorators import FC
 from druncschema.process_manager_pb2 import (
     BootRequest,
     ProcessInstance,
@@ -50,10 +52,17 @@ def compute_role_from_boot_request(boot_request: BootRequest) -> str:
 
 
 def generate_process_query(
-    f, at_least_one: bool, all_processes_by_default: bool = False
-):
+    f: FC, at_least_one: bool, all_processes_by_default: bool = False
+) -> FC:
     @click.pass_context
-    def new_func(ctx, session, name, user, uuid, **kwargs):
+    def new_func(
+        ctx: click.Context,
+        session: str | None,
+        name: tuple[str, ...],
+        user: str | None,
+        uuid: tuple[str, ...],
+        **kwargs: object,
+    ) -> object:
         is_trivial_query = bool(
             (len(uuid) == 0)
             and (session is None)
@@ -66,22 +75,24 @@ def generate_process_query(
                 "You need to provide at least a '--uuid', '--session', '--user' or '--name'!\nAll these values are presented with 'ps'.\nIf you want to kill everything, use 'ps' and 'kill'."
             )
 
+        names_list = list(name)
         if all_processes_by_default and is_trivial_query:
-            name = [".*"]
+            names_list = [".*"]
 
         uuids = [ProcessUUID(uuid=uuid_) for uuid_ in uuid]
 
+        crash = bool(kwargs.pop("crash", False))
         query = ProcessQuery(
             session=session,
-            names=name,
+            names=names_list,
             user=user,
             uuids=uuids,
-            crash=kwargs.pop("crash", False),
+            crash=crash,
         )
-        # print(query)
+
         return ctx.invoke(f, query=query, **kwargs)
 
-    return update_wrapper(new_func, f)
+    return cast(FC, update_wrapper(new_func, f))
 
 
 def make_tree(values):

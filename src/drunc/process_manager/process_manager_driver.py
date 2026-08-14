@@ -119,7 +119,7 @@ class ProcessManagerDriver:
             int | float
         ) = 0,  # This may be useful if you have are using SSHPM, and have SSHD's maxstartups setting set to a low value.
         **kwargs,
-    ) -> Iterator[ProcessInstanceList] | None:
+    ) -> Iterator[ProcessInstanceList]:
         self.log.info(f"Booting session [green]{session_name}[/green]")
 
         # Assume oksconflibs if no framework is defined
@@ -161,7 +161,7 @@ class ProcessManagerDriver:
         ):
             if not request:
                 self.log.error("[red]No boot request was generated, ending boot.[/red]")
-                return None
+                return
             if request.process_description.metadata.name in [
                 app.id for app in session_dal.infrastructure_applications
             ]:

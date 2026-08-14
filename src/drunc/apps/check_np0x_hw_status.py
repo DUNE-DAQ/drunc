@@ -11,6 +11,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 from datetime import datetime
+from typing import TypedDict
 
 import click
 import pytz
@@ -21,8 +22,15 @@ from rich.live import Live
 from rich.table import Table
 
 
+class HardwareStatus(TypedDict):
+    """Status dictionary returned by check_hardware."""
+
+    online: bool
+    fembs: list[bool]
+
+
 # --- DYNAMIC PATH SETUP ---
-def setup_wib_path():
+def setup_wib_path() -> str | None:
     """
     Sets up the path to the local copy of the dune-wib-firmware repository if it exists.
 
@@ -51,8 +59,11 @@ def setup_wib_path():
     for base_source in search_paths:
         potential_path = os.path.join(base_source, "dune-wib-firmware/sw")
         if os.path.isdir(potential_path):
+            # If the path is not in sys.path, it likely has not been installed. This
+            # adds it to sys.path for dynamic imports, and update the warning message
+            # for the user to inform on how to use this tool.
             if potential_path not in sys.path:
-                sys.path.insert(0, potential_path)  # TODO: Is this needed?
+                sys.path.insert(0, potential_path)
             return potential_path
     return None
 
@@ -67,8 +78,14 @@ wibpb = None
 
 if WIB_FW_SW_IFACE_PATH:
     try:
-        import wib_pb2 as wibpb
-        from wib import WIB
+        # For the following type excludes:
+        #   - no-redef is needed as the presence of this library is denoted with the
+        #     same name as the module.
+        #   - import-not-found is needed as this library is not available in the default
+        #     Python environment and is only present if the dune-wib-firmware repository
+        #     is cloned and installed.
+        import wib_pb2 as wibpb  # type: ignore[import-not-found, no-redef]
+        from wib import WIB  # type: ignore[import-not-found, no-redef]
 
         WIB_LIB_AVAILABLE = True
     except (ImportError, ModuleNotFoundError):
@@ -156,7 +173,7 @@ WIB_DATA = {
 }
 
 
-def check_hardware(ip: str) -> dict:
+def check_hardware(ip: str) -> HardwareStatus:
     """
     Checks the hardware status of a given IP address by first pinging it to determine if
     it is online, and if it is online, attempting to query its FEMB power status using
@@ -180,7 +197,7 @@ def check_hardware(ip: str) -> dict:
             errors (e.g. timeouts, subprocess errors, gRPC errors, etc.).
     """
     # Default state is 'In Progress' (None)
-    final_status = {"online": False, "fembs": [False] * 4}
+    final_status: HardwareStatus = {"online": False, "fembs": [False] * 4}
 
     try:
         # 1. Ping
@@ -193,7 +210,7 @@ def check_hardware(ip: str) -> dict:
             final_status["online"] = True
 
             # 2. Protocol Check
-            if WIB_LIB_AVAILABLE:
+            if WIB is not None and wibpb is not None:
                 try:
                     wib_inst = WIB(ip)
                     req = wibpb.GetFEMBStatus()
@@ -214,7 +231,9 @@ def check_hardware(ip: str) -> dict:
     return final_status
 
 
-def make_wib_table(category: str, wibs: dict[str, str], results_map: dict) -> Table:
+def make_wib_table(
+    category: str, wibs: dict[str, str], results_map: dict[str, HardwareStatus | None]
+) -> Table:
     """
     Creates a Rich Table for a given category of WIBs, showing their online status and
     FEMB power status.
@@ -281,7 +300,7 @@ def make_wib_table(category: str, wibs: dict[str, str], results_map: dict) -> Ta
     return table
 
 
-def generate_display(results_map: dict) -> Table:
+def generate_display(results_map: dict[str, HardwareStatus | None]) -> Table:
     """
     Generates the overall display grid for the current results.
 
@@ -326,7 +345,7 @@ def generate_display(results_map: dict) -> Table:
         "Each WIB is pinged first, then queried for FEMB status when reachable."
     ),
 )
-def main():
+def main() -> None:
     """
     Prints the power status of the hardware defined in WIB_DATA.
 
@@ -355,7 +374,7 @@ def main():
     ]
 
     # Initialize results map as empty/None for all IPs to force dots initially
-    results = {ip: None for ip in all_ips}
+    results: dict[str, HardwareStatus | None] = {ip: None for ip in all_ips}
 
     # Define a ThreadPoolExecutor to check hardware in parallel, and a mapping of
     # futures to IPs
