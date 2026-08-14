@@ -5,9 +5,6 @@ status table, and that the session is in an error state. The application that di
 ft-nested-segment-2-application.
 """
 
-import os
-import re
-
 # from datetime import datetime
 import integrationtest.data_classes as data_classes
 import integrationtest.utility_functions as utility_functions

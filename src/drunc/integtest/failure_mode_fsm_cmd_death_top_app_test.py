@@ -5,9 +5,6 @@ printed to stdout and logged to the log files. The application that dies is
 ft-top-segment-application.
 """
 
-import os
-import re
-
 # from datetime import datetime
 import integrationtest.data_classes as data_classes
 import integrationtest.utility_functions as utility_functions

@@ -4,9 +4,6 @@ Check that the application is correctly reported as dead, and that the session i
 error state after boot. The application that dies is ft-nested-segment-2-application.
 """
 
-import os
-import re
-
 import integrationtest.data_classes as data_classes
 import integrationtest.utility_functions as utility_functions
 from integ_test_utils import (
