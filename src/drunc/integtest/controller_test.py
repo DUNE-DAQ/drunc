@@ -125,9 +125,13 @@ _FSM_SEQUENCES = {
         command_args=["--run-number", "2"],
         run_number=2,
     ),
-    "test_shutdown": FsmCommandParams("test_shutdown", "shutdown", "initial"),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
 }
+
+_SHUTDOWN_MARKER = "test_shutdown"
+_SHUTDOWN_STATUS_ERROR = (
+    "Controller-specific commands cannot be sent until the session is booted"
+)
 
 # ── Command list ───────────────────────────────────────────────────────────────
 
@@ -139,10 +143,18 @@ status
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + " terminate "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + f"""
+echo {_SHUTDOWN_MARKER}
+shutdown
+echo {_SHUTDOWN_MARKER}_done
+status
+echo {_SHUTDOWN_MARKER}_status_done
+"""
     + "\nterminate"
 ).split()
 
@@ -244,3 +256,22 @@ def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) ->
     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
     _check_command(lines, boot_status_table, params)
+
+
+@pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
+def test_fsm_transitions(
+    run_dunerc, boot_status_table, params: FsmCommandParams
+) -> None:
+    """Checks that each FSM transition executes successfully and reaches its expected state."""
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    _check_command(lines, boot_status_table, params)
+
+
+def test_shutdown_status(run_dunerc) -> None:
+    """Checks that status reports the session is no longer booted after shutdown."""
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    shutdown_index = next(
+        index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
+    )
+    shutdown_output = "\n".join(lines[shutdown_index:])
+    assert _SHUTDOWN_STATUS_ERROR in shutdown_output
