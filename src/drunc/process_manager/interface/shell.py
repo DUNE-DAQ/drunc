@@ -1,5 +1,6 @@
 import getpass
 import os
+from typing import cast
 
 import click
 import click_shell
@@ -19,6 +20,7 @@ from drunc.process_manager.interface.commands import (
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
+    format_name_for_cli,
     get_logger,
     get_root_logger,
     validate_command_facility,
@@ -40,7 +42,30 @@ from drunc.utils.utils import (
 )
 @click.argument("process-manager-address", type=str, callback=validate_command_facility)
 @click.pass_context
-def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> None:
+def process_manager_shell(
+    ctx: click.core.Context, process_manager_address: str, log_level: str
+) -> None:
+    """
+    Shell interface for the process manager.
+
+    This shell allows users to interact with the process manager through a command-line
+    interface.
+
+    Additional commands can be added to this shell by defining new functions and
+    registering them with the shell.
+
+    Args:
+        ctx: The Click context object.
+        process_manager_address (str): The address of the process manager to connect to.
+        log_level (str): The log level for logging messages.
+
+    Returns:
+        None
+
+    Raises:
+        ServerUnreachable: If the process manager is unreachable at the specified
+            address.
+    """
     get_root_logger(log_level)
     process_manager_log = get_logger(
         logger_name="process_manager",
@@ -77,7 +102,10 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
         f"Connected to {process_manager_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
 
-    def cleanup():
+    def cleanup() -> None:
+        """
+        Cleanup function to be called when the shell is closed.
+        """
         ctx.obj.get_driver("process_manager").log_on_server(
             f"{getpass.getuser()} disconnecting from {ctx.obj.shell_id}"
         )
@@ -88,14 +116,25 @@ def process_manager_shell(ctx, process_manager_address: str, log_level: str) -> 
 
     ctx.call_on_close(cleanup)
 
-    ctx.command.add_command(boot, "boot")
-    ctx.command.add_command(wait, "wait")
-    ctx.command.add_command(terminate, "terminate")
-    ctx.command.add_command(kill, "kill")
-    ctx.command.add_command(flush, "flush")
-    ctx.command.add_command(logs, "logs")
-    ctx.command.add_command(restart, "restart")
-    ctx.command.add_command(ps, "ps")
-    ctx.command.add_command(dummy_boot, "dummy_boot")
+    # Register all the click commands to the shell
+    ## List of commands to be exposed in the shell
+    exposed_process_manager_commands = [
+        boot,
+        wait,
+        terminate,
+        kill,
+        flush,
+        logs,
+        restart,
+        ps,
+        dummy_boot,
+    ]
+
+    ## Cast the command group to click.core.Group to avoid type errors
+    command_group = cast(click.core.Group, ctx.command)
+
+    ## Add each command to the shell's command group with a formatted name
+    for cmd in exposed_process_manager_commands:
+        command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
 
     process_manager_shell_log.info("Ready")

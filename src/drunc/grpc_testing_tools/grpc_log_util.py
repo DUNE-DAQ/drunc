@@ -3,7 +3,7 @@ import sys
 import threading
 
 
-def stderr_observer(log_file_name):
+def stderr_observer(log_file_name: str) -> None:
     """
     Redirect stderr to a log file for process output capture.
 
@@ -15,7 +15,7 @@ def stderr_observer(log_file_name):
     os.dup2(w, stderr_fd)
     os.close(w)
 
-    def reader():
+    def reader() -> None:
         log_handle = open(log_file_name, "a", buffering=1)
         with os.fdopen(r) as pipe:
             for line in pipe:
@@ -27,7 +27,7 @@ def stderr_observer(log_file_name):
     reader_thread.start()
 
 
-def stdout_observer(log_file_name):
+def stdout_observer(log_file_name: str) -> None:
     """
     Redirect stdout to a log file for process output capture.
 
@@ -39,7 +39,7 @@ def stdout_observer(log_file_name):
     os.dup2(w, stdout_fd)
     os.close(w)
 
-    def reader():
+    def reader() -> None:
         log_handle = open(log_file_name, "a", buffering=1)
         with os.fdopen(r) as pipe:
             for line in pipe:

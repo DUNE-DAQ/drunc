@@ -5,11 +5,9 @@ status table, and that the session is in an error state. The application that di
 ft-nested-segment-2-application.
 """
 
-import os
-import re
-
 # from datetime import datetime
 import integrationtest.data_classes as data_classes
+import integrationtest.utility_functions as utility_functions
 
 # import integrationtest.log_file_checks as log_file_checks
 from integ_test_utils import (
@@ -62,7 +60,7 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps
+ps -w 160
 
 echo status-post-boot
 status
@@ -71,25 +69,14 @@ status
 dead_app_name = "ft-nested-segment-2-application"
 
 
-def test_dunerc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc, caplog) -> None:
     """
     Checks that the drunc integration command sequence completes successfully without
     any unexpected failures.
     """
 
-    # print the name of the current test
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    # Check that dunerc completed correctly
-    assert run_dunerc.completed_process.returncode == 0
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
 
 
 def test_log_files_are_present(run_dunerc) -> None:
@@ -198,7 +185,7 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
         status_table, dead_app_name
     )
     assert status_table_dead_app_entry, (
-        f"Expected to see {dead_app_name} in the ps table, but it was not found"
+        f"Expected to see {dead_app_name} in the status table, but it was not found"
     )
 
     # Check that the app that simulated death is in fact marked as disconnected in the status table
