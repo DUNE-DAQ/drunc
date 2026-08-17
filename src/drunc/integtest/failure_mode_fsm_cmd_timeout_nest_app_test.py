@@ -61,13 +61,13 @@ echo ps-post-boot
 ps -w 200
 
 echo status-post-boot
-status
+status -w 140
 
 echo pre-conf
 conf
 
 echo status-post-conf
-status
+status -w 140
 """.split()
 
 timeout_app_name = "ft-nested-segment-2-application"
