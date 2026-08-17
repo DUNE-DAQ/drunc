@@ -1,57 +1,90 @@
 [build-system]
-requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools >= 61.0"]
 
 [project]
-name = "drunc"
 description = "A flexible run control infrastructure for a distributed DAQ system"
-version = "1.1.4"
+name = "drunc"
 readme = "docs/README.md"
 requires-python = ">=3.10"
+version = "1.1.4"
 
 dependencies = [
-    "click",
-    "click-shell",
-    "protobuf",
-    "types-protobuf",
-    "grpcio",
-    "grpcio-status",
-    "grpcio-tools",
-    "types-grpcio",
-    "gunicorn",
-    "kafka-python",
-    "nest-asyncio",
-    "rich",
-    "requests",
-    "Flask",
-    "Flask-RESTful",
-    "sh",
-    "kubernetes",
-    "pytz",
-    "psutil",
-    "paramiko"
+  "click",
+  "click-shell",
+  "protobuf",
+  "types-protobuf",
+  "grpcio",
+  "grpcio-status",
+  "grpcio-tools",
+  "types-grpcio",
+  "gunicorn",
+  "kafka-python",
+  "nest-asyncio",
+  "rich",
+  "requests",
+  "Flask",
+  "Flask-RESTful",
+  "sh",
+  "kubernetes",
+  "pytz",
+  "psutil",
+  "paramiko",
 ]
 
 [project.optional-dependencies]
+dev = [
+  "ruff",
+  "pre-commit",
+  "pytest",
+  "pytest-cov",
+  "grpcio-testing",
+  "grpcio",
+  "grpcio-tools",
+  "grpcio-status",
+  "types-requests",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+]
 prod = ["paramiko[gssapi]"]
-dev = ["ruff", "pre-commit", "pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
-test = ["pytest", "pytest-cov", "grpcio-testing", "grpcio==1.75", "grpcio-tools==1.75", "grpcio-status==1.75"]
+test = [
+  "pytest",
+  "pytest-cov",
+  "grpcio-testing",
+  "grpcio",
+  "grpcio-tools",
+  "grpcio-status",
+  "types-requests",
+  "types-grpcio-status",
+  "types-pytz",
+  "types-psutil",
+  "types-click-shell",
+  "types-paramiko",
+]
 
 [project.scripts]
-fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
+application-registry-service = "drunc.apps.app_connectivity_server:main"
+drunc-check-np0x-cluster = "drunc.apps.check_np0x_cluster:main"
+drunc-check-np0x-hw = "drunc.apps.check_np0x_hw_status:main"
 drunc-controller = "drunc.apps.controller:main"
 drunc-controller-shell = "drunc.apps.controller_shell:main"
+drunc-fsm-tests = "drunc.tests.fsm:main"
 drunc-process-manager = "drunc.apps.pm:main"
 drunc-process-manager-shell = "drunc.apps.pm_shell:main"
 drunc-session-manager = "drunc.apps.session_manager:main"
-drunc-unified-shell = "drunc.apps.unified_shell:main"
-drunc-fsm-tests = "drunc.tests.fsm:main"
-application-registry-service = "drunc.apps.app_connectivity_server:main"
-drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-session-manager-shell = "drunc.apps.session_manager_shell:main"
 drunc-setup-ssh-config = "drunc.apps.ssh_configurator:main"
-drunc-check-np0x-hw = "drunc.apps.check_np0x_hw_status:main"
-drunc-check-np0x-cluster = "drunc.apps.check_np0x_cluster:main"
-
+drunc-ssh-doctor = "drunc.apps.ssh_doctor:main"
+drunc-unified-shell = "drunc.apps.unified_shell:main"
+fake_daq_application = "drunc.apps.fake_daqapp_rest:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -61,57 +94,66 @@ where = ["src"]
 "drunc.data.process_manager.schema" = ["*.json"]
 
 [tool.pytest.ini_options]
-markers = [
-    "grpc: marks tests for gRPC isolation (run with --test-grpc)",
-    "paramiko: marks tests for paramiko isolation (run with --test-paramiko)",
-]
 addopts = "-v --tb=short --cov=drunc --cov=src/drunc"
+markers = [
+  "grpc: marks tests for gRPC isolation (run with --test-grpc)",
+  "paramiko: marks tests for paramiko isolation (run with --test-paramiko)",
+]
 testpaths = ["tests"]
 
 [tool.coverage.run]
-source = ["drunc"]
 omit = ["tests/*"]
+source = ["drunc"]
 
 # * See https://docs.astral.sh/ruff/rules/ for details on Ruff's linting options
 [tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "F",    # check for errors using PyFlakes
-    "I",    # best practices for import calls
-    "UP",   # suggestions for code modernization
-    "RUF",  # build in Ruff warnings
-    "R",    # refactoring suggestions
-]
 ignore = [
-    "E501", # Don't enforce line lengths within a linting context
+  "E501", # Don't enforce line lengths within a linting context
 ]
+select = [
+  "D", # pydocstyle docstring errors
+  "E", # pycodestyle errors
+  "F", # check for errors using PyFlakes
+  "I", # best practices for import calls
+]
+# "UP", # suggestions for code modernization
+# "RUF", # build in Ruff warnings
+# "R", # refactoring suggestions
+# "E", # pycodestyle errors
 
+[tool.ruff.lint.per-file-ignores]
+"**/integtest/*.py" = ["F401"] # Ignore unused imports in all integration test files, e.g. pytestmark which is used but not explicitly
 
 [tool.mypy]
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
+exclude = [
+  "src/drunc/grpc_testing_tools/.*_pb2\\.pyi?$",
+  "src/drunc/grpc_testing_tools/.*_pb2_grpc\\.pyi?$",
+]
+
 check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+disallow_untyped_defs = true
 no_implicit_optional = true
+strict_equality = true
+warn_redundant_casts = true
 warn_return_any = true
 warn_unused_ignores = true
-warn_redundant_casts = true
-strict_equality = true
-disallow_any_generics = true
-disallow_subclassing_any = true
 
+disallow_any_decorated = true
 disallow_any_explicit = true
 disallow_any_expr = false
-disallow_any_decorated = true
 disallow_any_unimported = true
 
-warn_unused_configs = true
 show_error_codes = true
+warn_unused_configs = true
 
 # These overrides are because the library stubs dont exist and not on typeshed
 [[tool.mypy.overrides]]
-module = ["google.rpc.*"]
 ignore_missing_imports = true
+module = ["google.rpc.*"]
 
 [[tool.mypy.overrides]]
-module = ["conffwk"]
 ignore_missing_imports = true
+module = ["conffwk", "sh"]

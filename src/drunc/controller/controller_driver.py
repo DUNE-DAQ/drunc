@@ -2,6 +2,7 @@ import ipaddress
 import socket
 
 import grpc
+from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -35,12 +36,12 @@ from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
+from drunc.utils.grpc_classes import DecodedResponse
 from drunc.utils.grpc_utils import (
     UnpackingError,
     handle_grpc_error,
     unpack_any,
 )
-from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
 
@@ -351,6 +352,47 @@ class ControllerDriver:
 
         try:
             response = self.stub.to_error(request, timeout=timeout)
+        except grpc.RpcError as e:
+            handle_grpc_error(e)
+
+        return response
+
+    def log_on_server(
+        self,
+        text: str,
+        severity: str = "INFO",
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> LogOnServerResponse:
+        """
+        Logs a message to the server's log system.
+
+        Args:
+            text (str): The message to log.
+            target (str, optional): The target node for the log message. Defaults to "".
+            execute_along_path (bool, optional): Whether to execute the log command along the path. Defaults to False.
+            execute_on_all_subsequent_children_in_path (bool, optional): Whether to execute the log command on all subsequent children in the path. Defaults to True.
+            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+
+        Returns:
+            None
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = LogOnServerRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+        try:
+            response = self.stub.log_on_server(request, timeout=timeout)
         except grpc.RpcError as e:
             handle_grpc_error(e)
 

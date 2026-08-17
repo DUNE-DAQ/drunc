@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import google.protobuf.any_pb2
+import grpc
 import grpc_testing
 import pytest
 from druncschema.description_pb2 import CommandDescription, Description
@@ -148,33 +149,87 @@ def mock_logger_driver():
         yield mock_logger_instance
 
 
+class MockGrpcCall:
+    """A mock of the gRPC Future (Call) object.
+
+    The real gRPC channel returns a (response, call) tuple from `with_call`.
+    The interceptor uses the `call` object to read the response and any trailing metadata.
+    This mock allows that without requiring a real network connection.
+    """
+
+    def __init__(self, response=None):
+        self._response = response
+
+    def result(self):
+        return self._response
+
+
+class FakeMultiCallable:
+    """Simulates a single gRPC unary-unary method endpoint.
+
+    The real `grpc.Channel.unary_unary()` returns a callable that, when called
+    with a request, performs the RPC. `FakeMultiCallable` replaces that callable.
+    """
+
+    def __init__(self, channel):
+        self.channel = channel
+
+    def with_call(self, request, *args, **kwargs):
+        if self.channel.error:
+            raise self.channel.error
+
+        call = MockGrpcCall(response=self.channel.response)
+        return (self.channel.response, call)
+
+
+class FakeChannel(grpc.Channel):
+    """A fake gRPC channel used to test the SessionManagerDriver in isolation."""
+
+    def __init__(self):
+        self.response = None
+        self.error = None
+
+    def unary_unary(self, method, *args, **kwargs):
+        return FakeMultiCallable(self)
+
+    def unary_stream(self, *args, **kwargs):
+        pass
+
+    def stream_unary(self, *args, **kwargs):
+        pass
+
+    def stream_stream(self, *args, **kwargs):
+        pass
+
+    def close(self):
+        pass
+
+    def subscribe(self, *args, **kwargs):
+        pass
+
+    def unsubscribe(self, *args, **kwargs):
+        pass
+
+
 @pytest.fixture(scope="function")
 def mock_driver(mock_logger_driver):
-    """
-    This fixture creates a driver instance where the underlying gRPC channel
-    and stub are mocked.
+    """Create a SessionManagerDriver with a FakeChannel instead of a real gRPC connection.
 
-    Returns:
-        SessionManagerDriver: Driver instance with mocked dependencies
+    `grpc.insecure_channel` returns a `FakeChannel`, so the driver
+    initialises normally.
+
+    The `FakeChannel` is attached as `driver._fake_channel` so individual tests
+    can set `.response` or `.error` on it to control what each stub call returns.
     """
-    with (
-        patch("drunc.session_manager.session_manager_driver.grpc.insecure_channel"),
-        patch(
-            "drunc.session_manager.session_manager_driver.SessionManagerStub"
-        ) as mock_stub_class,
+    fake_channel = FakeChannel()
+
+    with patch(
+        "drunc.session_manager.session_manager_driver.grpc.insecure_channel",
+        return_value=fake_channel,
     ):
-        # Create mock stub instance that will be returned by SessionManagerStub()
-        mock_stub = MagicMock()
-        mock_stub_class.return_value = mock_stub
-
-        # Initialize driver with mocked dependencies
         driver = SessionManagerDriver(address="localhost:50051", token=Token())
-
-        # Attach mock stub for easy access in tests
-        driver._mock_stub = mock_stub
-
         driver.log = mock_logger_driver
-
+        driver._fake_channel = fake_channel
         return driver
 
 

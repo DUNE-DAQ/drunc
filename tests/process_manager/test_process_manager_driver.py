@@ -4,6 +4,8 @@ Test suite for ProcessManagerDriver gRPC method invocations.
 This module tests that the ProcessManagerDriver correctly invokes the underlying
 gRPC stub methods and properly handles gRPC exceptions.
 
+They use a real stub and interceptor and a mocked channel.
+
 if any of these tests fail it is likely that the driver method implementations
 have changed. The tests should be checked to see if they need to be updated
 or if a bug was introduced.
@@ -26,7 +28,6 @@ from druncschema.token_pb2 import Token
 from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
-from drunc.utils.grpc_utils import GrpcErrorDetails
 
 
 @pytest.fixture(scope="function")
@@ -43,7 +44,6 @@ def mock_logger():
 def mock_driver(mock_logger):
     """
     Create a ProcessManagerDriver instance with a mocked gRPC stub.
-
     This fixture creates a driver instance where the underlying gRPC channel
     and stub are mocked, allowing tests to verify method invocations without
     requiring a real gRPC server.
@@ -63,10 +63,10 @@ def mock_driver(mock_logger):
 
         # Initialise driver with mocked dependencies
         driver = ProcessManagerDriver(address="localhost:50051", token=Token())
+        driver.log = mock_logger
 
-        # Attach mock stub for easy access in tests
+        # Initialise driver with mocked dependencies
         driver._mock_stub = mock_stub
-
         return driver
 
 
@@ -84,6 +84,7 @@ def boot_test_setup(mock_driver):
 
         # Create a mock session DAL with no infrastructure applications
         fake_dal = MagicMock(infrastructure_applications=[])
+        fake_dal.opmon_uri.type = "file"
         fake_db = MagicMock()
 
         # Mock connectivity service
@@ -104,11 +105,14 @@ def boot_test_setup(mock_driver):
 
         # Configure the boot stub to either return a response or raise an error
         if grpc_error:
-            mock_driver.stub.boot = MagicMock(side_effect=grpc_error)
+            mock_driver.stub.boot.side_effect = grpc_error
+            mock_response = None
         else:
-            mock_driver.stub.boot = MagicMock(return_value="boot_response")
+            mock_response = MagicMock()
+            mock_response.values = [MagicMock(uuid=MagicMock(uuid="test-uuid-12345"))]
+            mock_driver.stub.boot = MagicMock(return_value=mock_response)
 
-        return mock_request, csc_mock
+        return mock_request, csc_mock, mock_response
 
     return _setup
 
@@ -135,7 +139,7 @@ def test_collect_all_apps_merges_correctly(mock_infra_apps, mock_apps, mock_driv
     )
 
     # Assert the stub wasn't used
-    assert mock_driver._mock_stub.method_calls == []
+    assert mock_driver._mock_stub.boot.call_count == 0
     # Assert the result is a merged list
     assert result == [
         {"tree_id": "1.0", "name": "infra_app_1"},
@@ -224,10 +228,14 @@ def test_boot_success(mock_driver, boot_test_setup):
     Test that `boot` yields process responses as expected.
     """
     # Simulate connection is ready
-    boot_test_setup(is_ready=True)
+    mock_request, csc_mock, mock_response = boot_test_setup(is_ready=True)
 
     # Control timing behaviour
-    with patch("time.time", return_value=100), patch("time.sleep") as mock_sleep:
+    with (
+        patch("time.time", return_value=100),
+        patch("time.sleep") as mock_sleep,
+        patch("drunc.process_manager.process_manager_driver.touch_and_chmod"),
+    ):
         responses = list(
             mock_driver.boot(
                 conf_file="conf.yaml",
@@ -238,7 +246,7 @@ def test_boot_success(mock_driver, boot_test_setup):
             )
         )
 
-    assert responses == ["boot_response"]
+    assert responses == [mock_response]
 
     # Confirm that controller discovery was triggered
     mock_driver._discover_controller.assert_called_once()
@@ -277,42 +285,22 @@ def test_boot_handles_grpc_exception(mock_driver, boot_test_setup):
     grpc_error = grpc.RpcError("Connection failed")
     boot_test_setup(grpc_error=grpc_error)
 
-    error_details = GrpcErrorDetails(
-        code="INVALID_ARGUMENT",
-        message="Invalid request parameters",
-        details=["field_violations: field=token, description=Invalid token format"],
-    )
-
     with (
-        patch(
-            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
-        ) as mock_extract,
-        patch(
-            "drunc.process_manager.process_manager_driver.handle_grpc_error"
-        ) as mock_handler,
-        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
+        pytest.raises(grpc.RpcError) as excinfo,
+        patch("drunc.process_manager.process_manager_driver.touch_and_chmod"),
     ):
-        mock_extract.return_value = error_details
-        mock_handler.side_effect = grpc_error
-
-        # Expect the exception to be raised after error handling
-        with pytest.raises(grpc.RpcError):
-            list(
-                mock_driver.boot(
-                    conf_file="conf.yaml",
-                    conf_id="conf1",
-                    user="u",
-                    session_name="s",
-                    log_level="INFO",
-                )
+        list(
+            mock_driver.boot(
+                conf_file="conf.yaml",
+                conf_id="conf1",
+                user="u",
+                session_name="s",
+                log_level="INFO",
             )
+        )
 
-        mock_extract.assert_called_once_with(grpc_error)
-        mock_driver.log.error.assert_called_with(error_details)
-        mock_handler.assert_called_once_with(grpc_error)
-
-        logged = mock_driver.log.error.call_args[0][0]
-        assert logged == error_details
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.boot.assert_called_once()
 
 
 @patch("drunc.process_manager.process_manager_driver.get_log_path")
@@ -622,21 +610,18 @@ def test_discover_controller_without_connectivity_service(
 
 
 @patch("drunc.process_manager.process_manager_driver.copy_token", return_value=Token())
-@patch("drunc.process_manager.process_manager_driver.handle_grpc_error")
 @patch(
     "drunc.process_manager.process_manager_driver.os.getcwd",
     return_value="/mocked/path",
 )
-def test_dummy_boot_success(
-    mock_getcwd, mock_handle_error, mock_copy_token, mock_driver
-):
+def test_dummy_boot_success(mock_getcwd, mock_copy_token, mock_driver):
     """
     Test that `dummy_boot` creates and sends correct BootRequests and yields responses.
     """
     mock_driver.token = Token()
 
     # Simulate gRPC stub returning two different responses for each process
-    mock_driver.stub.boot.side_effect = ["response_0", "response_1"]
+    mock_driver._mock_stub.boot.side_effect = ["response_0", "response_1"]
 
     result = list(
         mock_driver.dummy_boot(
@@ -649,10 +634,10 @@ def test_dummy_boot_success(
         )
     )
     assert result == ["response_0", "response_1"]
-    assert mock_driver.stub.boot.call_count == 2
+    assert mock_driver._mock_stub.boot.call_count == 2
 
     # Assert each BootRequest sent to the stub
-    for i, call in enumerate(mock_driver.stub.boot.call_args_list):
+    for i, call in enumerate(mock_driver._mock_stub.boot.call_args_list):
         args, _ = call
         request = args[0]
         assert isinstance(request, BootRequest)
@@ -674,52 +659,30 @@ def test_dummy_boot_success(
 )
 def test_dummy_boot_grpc_error_handling(mock_getcwd, mock_copy_token, mock_driver):
     """
-    Test that dummy_boot handles grpc.RpcError using handle_grpc_error().
-    Simulates a gRPC failure during stub.boot and verifies that the error handler is invoked.
+    Test that dummy_boot propagates grpc.RpcError from the boot call.
     """
-    # Setup mock driver and stub
     mock_driver.token = Token()
     mock_driver._prepare_exec_and_args_dummy_boot = MagicMock(
         return_value=[{"exec": "binary", "args": ["--arg1"]}]
     )
     mock_driver._build_boot_request_dummy_boot = MagicMock()
     grpc_error = grpc.RpcError()
-    mock_driver.stub.boot.side_effect = grpc_error
+    mock_driver._mock_stub.boot.side_effect = grpc_error
 
-    error_details = GrpcErrorDetails(
-        code="INVALID_ARGUMENT",
-        message="Invalid request parameters",
-        details=["field_violations: field=token, description=Invalid token format"],
-    )
-    with (
-        patch(
-            "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
-        ) as mock_extract,
-        patch(
-            "drunc.process_manager.process_manager_driver.handle_grpc_error"
-        ) as mock_handler,
-        patch("grpc_status.rpc_status.from_call", return_value=MagicMock()),
-    ):
-        mock_extract.return_value = error_details
-        mock_handler.side_effect = grpc_error
-        with pytest.raises(grpc.RpcError):
-            list(
-                mock_driver.dummy_boot(
-                    user="test_user",
-                    session_name="test_session",
-                    n_processes=1,
-                    sleep=1,
-                    n_sleeps=1,
-                    timeout=30,
-                )
+    with pytest.raises(grpc.RpcError) as excinfo:
+        list(
+            mock_driver.dummy_boot(
+                user="test_user",
+                session_name="test_session",
+                n_processes=1,
+                sleep=1,
+                n_sleeps=1,
+                timeout=30,
             )
+        )
 
-        mock_extract.assert_called_once_with(grpc_error)
-        mock_driver.log.error.assert_called_with(error_details)
-        mock_handler.assert_called_once_with(grpc_error)
-
-        logged = mock_driver.log.error.call_args[0][0]
-        assert logged == error_details
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.boot.assert_called_once()
 
 
 def test_prepare_exec_and_args_dummy_boot(mock_driver):
@@ -819,58 +782,26 @@ def test_terminate_success(mock_driver, terminate_response):
 def test_terminate_grpc_error(mock_driver):
     """
     Test that terminate method properly handles gRPC exceptions.
-
-    Verifies that when the gRPC stub raises an exception, the driver
-    calls the error handling utility function which then re-raises.
     """
-    # Configure mock stub to raise gRPC error
     grpc_error = grpc.RpcError("Connection failed")
     mock_driver._mock_stub.terminate.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        # Configure mock handler to re-raise as the real function does
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.terminate()
 
-        # Expect the exception to be raised after error handling
-        with pytest.raises(grpc.RpcError):
-            mock_driver.terminate()
-
-        # Verify error handler was called with the exception
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.terminate.assert_called_once()
 
 
-def test_terminate_error_no_grpc(mock_driver, mock_logger):
-    """
-    Test that terminate method properly handles exceptions that are not gRPC.
-    """
-    # Outer exception
-    grpc_err = grpc.RpcError("gRPC Failed")
-    mock_driver._mock_stub.terminate.side_effect = grpc_err
+def test_terminate_non_grpc_error(mock_driver):
+    error = Exception("boom")
+    mock_driver._mock_stub.terminate.side_effect = error
 
-    # Inner exception for when extract_grpc_rich_error_fails
-    extract_grpc_rich_error_path = (
-        "drunc.process_manager.process_manager_driver.extract_grpc_rich_error"
-    )
-    handle_grpc_error_path = (
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    )
+    with pytest.raises(Exception) as excinfo:
+        mock_driver.terminate()
 
-    with (
-        patch(extract_grpc_rich_error_path) as mock_extract_grpc_rich_error,
-        patch(handle_grpc_error_path) as mock_handler,
-    ):
-        # Simulate a TypeError
-        mock_extract_grpc_rich_error.side_effect = TypeError("Test TypeError")
-        mock_handler.side_effect = grpc_err
-
-        with pytest.raises(grpc.RpcError):
-            mock_driver.terminate()
-
-        args, kwargs = mock_logger.debug.call_args
-        assert "Could not extract rich error details" in args[0]
-        assert kwargs.get("exc_info") is True
+    assert excinfo.value is error
+    mock_driver._mock_stub.terminate.assert_called_once()
 
 
 def test_kill_success(mock_driver, process_query_request, kill_response):
@@ -898,15 +829,11 @@ def test_kill_grpc_error(mock_driver, process_query_request):
     grpc_error = grpc.RpcError("Service unavailable")
     mock_driver._mock_stub.kill.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.kill(process_query_request)
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.kill(process_query_request)
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.kill.assert_called_once()
 
 
 def test_logs_success(mock_driver, log_request, logs_response):
@@ -934,15 +861,11 @@ def test_logs_grpc_error(mock_driver, log_request):
     grpc_error = grpc.RpcError("Authentication failed")
     mock_driver._mock_stub.logs.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.logs(log_request)
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.logs(log_request)
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.logs.assert_called_once()
 
 
 def test_logs_bad_query_target_not_found(mock_driver, mock_logger, log_request):
@@ -1000,15 +923,11 @@ def test_ps_grpc_error(mock_driver, process_query_request):
     grpc_error = grpc.RpcError("Request timeout")
     mock_driver._mock_stub.ps.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.ps(process_query_request)
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.ps(process_query_request)
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.ps.assert_called_once()
 
 
 def test_flush_success(mock_driver, process_query_request, flush_response):
@@ -1036,15 +955,11 @@ def test_flush_grpc_error(mock_driver, process_query_request):
     grpc_error = grpc.RpcError("Server error")
     mock_driver._mock_stub.flush.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.flush(process_query_request)
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.flush(process_query_request)
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.flush.assert_called_once()
 
 
 def test_restart_success(mock_driver, process_query_request, restart_response):
@@ -1072,15 +987,11 @@ def test_restart_grpc_error(mock_driver, process_query_request):
     grpc_error = grpc.RpcError("Network unreachable")
     mock_driver._mock_stub.restart.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.restart(process_query_request)
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.restart(process_query_request)
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.restart.assert_called_once()
 
 
 def test_describe_success(mock_driver, describe_response):
@@ -1109,12 +1020,8 @@ def test_describe_grpc_error(mock_driver):
     grpc_error = grpc.RpcError("Service not found")
     mock_driver._mock_stub.describe.side_effect = grpc_error
 
-    with patch(
-        "drunc.process_manager.process_manager_driver.handle_grpc_error"
-    ) as mock_handler:
-        mock_handler.side_effect = grpc_error
+    with pytest.raises(grpc.RpcError) as excinfo:
+        mock_driver.describe()
 
-        with pytest.raises(grpc.RpcError):
-            mock_driver.describe()
-
-        mock_handler.assert_called_once_with(grpc_error)
+    assert excinfo.value is grpc_error
+    mock_driver._mock_stub.describe.assert_called_once()

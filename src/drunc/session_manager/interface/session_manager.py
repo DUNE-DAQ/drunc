@@ -1,10 +1,10 @@
 """Session Manager CLI interface for Drunc."""
 
 from concurrent import futures
-from logging import getLogger
 
 import click
 import grpc
+from daqpytools.logging import logging_log_levels
 from druncschema.session_manager_pb2_grpc import add_SessionManagerServicer_to_server
 
 from drunc.grpc_settings import (
@@ -24,7 +24,7 @@ def serve(session_manager: SessionManager, address: str) -> None:
         session_manager: The session manager instance to serve.
         address: The address to bind the server to.
     """
-    logger = getLogger("drunc.session_manager")
+    logger = get_logger("session_manager.serve")
     server = grpc.server(
         futures.ThreadPoolExecutor(max_workers=MANAGER_SERVER_GRPC_MAX_WORKERS),
         options=MANAGER_SERVER_GRPC_CONFIG,
@@ -38,16 +38,22 @@ def serve(session_manager: SessionManager, address: str) -> None:
 
 
 @click.command()
-def session_manager_cli() -> None:
+@click.option(
+    "-l",
+    "--log-level",
+    type=click.Choice(logging_log_levels, case_sensitive=False),
+    default="INFO",
+    help="Set the log level (default is 'INFO').",
+)
+def session_manager_cli(log_level: str) -> None:
     """CLI interface for the Drunc session manager.
 
     This command starts the session manager service, which allows clients to manage
     and interact with drunc sessions.
     """
-    app_name = "session_manager"
-    log_level = "DEBUG"
-
     get_root_logger(log_level)
+
+    app_name = "session_manager"
     logger = get_logger(app_name, rich_handler=True)
 
     # Load the configuration for the session manager.

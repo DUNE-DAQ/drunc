@@ -1,10 +1,10 @@
 import getpass
-import os
 import re
 from datetime import datetime
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
+import integrationtest.utility_functions as utility_functions
 from integ_test_utils import (
     assert_process_presence,
     get_column_for_friendly_name,
@@ -47,8 +47,8 @@ conf_dict.op_env = "integtest"
 conf_dict.session = "minimal"
 conf_dict.tpg_enabled = False
 
-# For testing, allow drunc to manage ConnectivityService (default is False, integrationtest manages Connectivity Service)
-conf_dict.drunc_connsvc = True
+# Request that drunc manages the ConnectivityService
+conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
@@ -142,20 +142,11 @@ UUID_RE = re.compile(
 )
 
 
-def test_dunerc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc, caplog) -> None:
     """Checks that the drunc integration command sequence completes successfully."""
-    # print the name of the current test
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
 
-    # Check that dunerc completed correctly
-    assert run_dunerc.completed_process.returncode == 0
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
 
 
 def test_log_files(run_dunerc) -> None:
@@ -196,14 +187,25 @@ def test_boot(run_dunerc) -> None:
     """Checks that boot starts the managed processes and exposes UUIDs in ps."""
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
 
-    ps_pre_boot = get_ps_table_after_echo(lines, "pre_boot")
-    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
-
-    assert not ps_pre_boot, (
-        f"Expected ps table before boot to be empty, but found {len(ps_pre_boot)} row(s): "
-        + ", ".join(row["friendly_name"] for row in ps_pre_boot)
+    # Check if no processes running in session works
+    pre_boot_idx = require_line_containing(
+        lines,
+        "pre_boot",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+    post_boot_idx = require_line_containing(
+        lines,
+        "post_boot",
+        error_message="Did not find the 'post_boot' footer line in stdout.",
+    )
+    between = lines[pre_boot_idx + 1 : post_boot_idx]
+    no_boot_re = "No processes running in session"
+    assert any(no_boot_re in line for line in between), (
+        f"Did not find '{no_boot_re}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(between)
     )
 
+    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
     assert ps_post_boot, (
         "Expected ps table after boot to contain processes, but it was empty."
     )
@@ -356,7 +358,10 @@ def test_restart_mlt_logs(run_dunerc) -> None:
 
     booted_match = require_pattern_match(
         restart_text,
-        re.compile(r"Booted 'mlt'.*?with UUID\s+([^\s\n]+)", re.DOTALL),
+        re.compile(
+            r"Restarted \['mlt'\] from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
+            re.DOTALL,
+        ),
         error_message="Did not find the mlt boot log line after the restart exit log.",
     )
 

@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from enum import Enum
-from typing import cast
+from typing import Protocol, Self, cast
 
 import conffwk
 
@@ -24,6 +24,10 @@ class ConfTypes(Enum):
     JsonFileName = 2
     ProtobufAny = 3
     OKSFileName = 4
+
+
+class _OksDbProtocol(Protocol):
+    def get_dal(self, class_name: str, uid: str) -> object: ...
 
 
 def CLI_to_ConfTypes(scheme: str) -> ConfTypes:
@@ -135,10 +139,8 @@ class ConfHandler:
     _raw_data: object  # raw OKS/pyobject data, available during _post_process_oks
 
     @classmethod
-    def from_pyobject(
-        cls, data: object, session_name: str | None = None
-    ) -> "ConfHandler":
-        instance: ConfHandler = cls.__new__(cls)
+    def from_pyobject(cls, data: object, session_name: str | None = None) -> Self:
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
         instance._raw_data = data
@@ -147,8 +149,8 @@ class ConfHandler:
         return instance
 
     @classmethod
-    def from_pbany(cls, data: object, session_name: str | None = None) -> "ConfHandler":
-        instance: ConfHandler = cls.__new__(cls)
+    def from_pbany(cls, data: object, session_name: str | None = None) -> Self:
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = data
         instance._raw_data = None
@@ -158,8 +160,8 @@ class ConfHandler:
         return instance
 
     @classmethod
-    def from_json(cls, path: str, session_name: str | None = None) -> "ConfHandler":
-        instance: ConfHandler = cls.__new__(cls)
+    def from_json(cls, path: str, session_name: str | None = None) -> Self:
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = path
         resolved = expand_path(path, True)
@@ -179,8 +181,8 @@ class ConfHandler:
         url: str,
         oks_key: OKSKey,
         session_name: str | None = None,
-    ) -> "ConfHandler":
-        instance: ConfHandler = cls.__new__(cls)
+    ) -> Self:
+        instance: Self = cls.__new__(cls)
         instance._init_common(session_name)
         instance.initial_data = url
         instance.oks_key = oks_key
@@ -244,7 +246,7 @@ class ConfHandler:
             self.log.debug(f"Using {self.oks_path} to configure")
             self.db = conffwk.Configuration(self.oks_path)
             assert self.oks_key is not None, "OKS key is required for OKS configuration"
-            return self.db.get_dal(
+            return cast(_OksDbProtocol, self.db).get_dal(
                 class_name=self.oks_key.class_name, uid=self.oks_key.obj_uid
             )
 

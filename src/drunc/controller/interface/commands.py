@@ -84,6 +84,12 @@ def status(
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
 ) -> None:
+    log_msg = (
+        f"Getting status for target '{target}'..."
+        if target
+        else "Getting status for all targets..."
+    )
+    obj.log.info(log_msg)
     obj.print(
         render_status_table(
             obj,
@@ -151,7 +157,7 @@ def connect(obj: ControllerContext, controller_address: str, force: bool) -> Non
 @click.command("disconnect")
 @click.option("-f", "--force", is_flag=True, help="Confirm the disconnect")
 @click.pass_obj
-def disconnect(obj: ControllerContext, force: bool):
+def disconnect(obj: ControllerContext, force: bool) -> None:
     if not obj.has_driver("controller"):
         log.info("You are not connected to any controller.")
         return
@@ -251,8 +257,41 @@ def who_am_i(obj: ControllerContext) -> None:
 @click.command("echo")
 @click.argument("text", required=False)
 @click.pass_obj
-def echo(obj, text: str | None) -> None:
+def echo(obj: ControllerContext, text: str | None) -> None:
     log_echo.info(text or "")
+
+
+@click.command("log")
+@click.argument("text", required=True)
+@click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--execute-along-path/--dont-execute-along-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command along the path",
+    default=False,
+)
+@click.option(
+    "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
+    is_flag=True,
+    show_default=True,
+    help="Execute the command on all subsequent children in the path",
+    default=False,
+)
+@click.pass_obj
+def log_on_server(
+    obj: ControllerContext,
+    text: str,
+    target: str,
+    execute_along_path: bool,
+    execute_on_all_subsequent_children_in_path: bool,
+) -> None:
+    obj.get_driver("controller").log_on_server(
+        text=text,
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+    )
 
 
 @click.command("who-is-in-charge")

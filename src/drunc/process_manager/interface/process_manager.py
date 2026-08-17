@@ -1,9 +1,14 @@
+from __future__ import annotations
+
 import concurrent
 import getpass
 import os
 import signal
 import sys
 import types
+from collections.abc import Callable
+from multiprocessing.sharedctypes import Synchronized
+from multiprocessing.synchronize import Event
 
 import click
 import grpc
@@ -17,6 +22,7 @@ from drunc.grpc_settings import (
 )
 from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
+    ProcessManagerRunningMode,
     get_process_manager_configuration,
     validate_pm_config,
 )
@@ -31,7 +37,7 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
 )
 
-_cleanup_coroutines = []
+_cleanup_coroutines: list[Callable[[], None]] = []
 
 
 def run_pm(
@@ -39,10 +45,11 @@ def run_pm(
     pm_address: str,
     log_level: str,
     override_logs: bool,
-    log_path: str = None,
-    ready_event: bool = None,
-    signal_handler: bool = None,
-    generated_port: bool = None,
+    log_path: str | None = None,
+    ready_event: Event | None = None,
+    signal_handler: Callable[[], None] | None = None,
+    generated_port: Synchronized[int] | None = None,
+    running_mode: ProcessManagerRunningMode = ProcessManagerRunningMode.Unknown,
 ) -> None:
     appName = "process_manager"
     log = get_logger(logger_name=appName, rich_handler=True)
@@ -63,7 +70,10 @@ def run_pm(
     path_or_url = conf_path.split(":")[1]
 
     if conf_type == ConfTypes.JsonFileName:
-        pmch = ProcessManagerConfHandler.from_json(path=path_or_url, log_path=log_path)
+        pmch = ProcessManagerConfHandler.from_json(
+            path=path_or_url,
+            log_path=log_path or "",
+        )
     else:
         pmch = ProcessManagerConfHandler.from_pyobject(data=path_or_url)
 
@@ -72,7 +82,7 @@ def run_pm(
         session_name=getattr(pmch, "pm_type", pmch.type).name,
         application_name=appName,
         override_logs=override_logs,
-        app_log_path=log_path,
+        app_log_path=log_path or "",
     )
 
     # Logger has been added to process_manager, so everything will be logged
@@ -83,6 +93,7 @@ def run_pm(
 
     pm = ProcessManager.get(pmch, name="process_manager")
     log.debug("Setup up ProcessManager")
+    pm.set_running_mode(running_mode)
 
     server: grpc.Server | None = None
 
@@ -133,7 +144,7 @@ def run_pm(
             server = None
         return
 
-    def handle_sigterm(signum: int, frame: types.FrameType) -> None:
+    def handle_sigterm(signum: int, frame: types.FrameType | None) -> None:
         """
         Handle the SIGTERM signal to gracefully shut down the server.
 
@@ -196,4 +207,5 @@ def process_manager_cli(
         log_level=log_level,
         override_logs=override_logs,
         log_path=log_path,
+        running_mode=ProcessManagerRunningMode.Subprocess,
     )

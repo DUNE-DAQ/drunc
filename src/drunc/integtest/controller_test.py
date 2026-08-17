@@ -1,9 +1,9 @@
-import os
 import re
 from dataclasses import dataclass, field
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
+import integrationtest.utility_functions as utility_functions
 import pytest
 from integ_test_utils import (
     check_execution_report_success,
@@ -46,8 +46,8 @@ conf_dict.op_env = "integtest"
 conf_dict.session = "minimal"
 conf_dict.tpg_enabled = False
 
-# For testing, allow drunc to manage ConnectivityService (default is False, integrationtest manages Connectivity Service)
-conf_dict.drunc_connsvc = True
+# Request that drunc manages the ConnectivityService
+conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
 # For testing, specify connectivity service port (default is 0, a random port is chosen for the Connectivity Service)
 # conf_dict.connsvc_port = 12345
 
@@ -125,9 +125,13 @@ _FSM_SEQUENCES = {
         command_args=["--run-number", "2"],
         run_number=2,
     ),
-    "test_shutdown": FsmCommandParams("test_shutdown", "shutdown", "initial"),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
 }
+
+_SHUTDOWN_MARKER = "test_shutdown"
+_SHUTDOWN_STATUS_ERROR = (
+    "Controller-specific commands cannot be sent until the session is booted"
+)
 
 # ── Command list ───────────────────────────────────────────────────────────────
 
@@ -139,10 +143,18 @@ status
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + " terminate "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + f"""
+echo {_SHUTDOWN_MARKER}
+shutdown
+echo {_SHUTDOWN_MARKER}_done
+status
+echo {_SHUTDOWN_MARKER}_status_done
+"""
     + "\nterminate"
 ).split()
 
@@ -212,18 +224,10 @@ def _check_command(
 # ── Tests ──────────────────────────────────────────────────────────────────────
 
 
-def test_dunerc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc, caplog) -> None:
     """Checks that the drunc integration command sequence completes successfully."""
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    assert run_dunerc.completed_process.returncode == 0
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
 
 
 def test_log_files(run_dunerc) -> None:
@@ -252,3 +256,22 @@ def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) ->
     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
     lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
     _check_command(lines, boot_status_table, params)
+
+
+@pytest.mark.parametrize("params", _FSM_SEQUENCES.values(), ids=lambda p: p.marker)
+def test_fsm_transitions(
+    run_dunerc, boot_status_table, params: FsmCommandParams
+) -> None:
+    """Checks that each FSM transition executes successfully and reaches its expected state."""
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    _check_command(lines, boot_status_table, params)
+
+
+def test_shutdown_status(run_dunerc) -> None:
+    """Checks that status reports the session is no longer booted after shutdown."""
+    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    shutdown_index = next(
+        index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
+    )
+    shutdown_output = "\n".join(lines[shutdown_index:])
+    assert _SHUTDOWN_STATUS_ERROR in shutdown_output

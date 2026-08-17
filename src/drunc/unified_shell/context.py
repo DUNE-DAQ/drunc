@@ -1,5 +1,6 @@
-from collections.abc import Mapping
+from collections.abc import MutableMapping
 from enum import Enum
+from multiprocessing.context import Process
 
 import grpc
 from druncschema.process_manager_pb2 import ProcessQuery
@@ -19,12 +20,12 @@ class UnifiedShellMode(Enum):
 class UnifiedShellContext(ShellContext):  # boilerplatefest
     shell_id = "unified_shell"
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.log = None
         self.status_receiver_pm = None
         self.status_receiver_controller = None
         self.took_control = False
-        self.pm_process = None
+        self.pm_process: Process | None = None
         self.address_pm = ""
         self.address_controller = ""
         self.configuration_file = ""
@@ -32,15 +33,21 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         self.session_name = ""
         self.override_logs = True
         self.running_mode = UnifiedShellMode.INTERACTIVE
-        self.batch_commands: list(str) = []
+        self.batch_commands: list[str] = []
+        self.no_stop_error_batch_mode = False
+        self.session_uses_local_connectivity_service: bool | None = None
         super(UnifiedShellContext, self).__init__()
 
-    def reset(self, address_pm: str = ""):
+    def reset(self, *args: object, **kwargs: object) -> None:
+        address_pm_raw = kwargs.get("address_pm")
+        if address_pm_raw is None and args:
+            address_pm_raw = args[0]
+        address_pm = str(address_pm_raw) if address_pm_raw is not None else ""
         self.address_pm = resolve_localhost_to_hostname(address_pm)
         super(UnifiedShellContext, self)._reset(name="unified_shell")
 
-    def create_drivers(self, **kwargs) -> Mapping[str, object]:
-        ret = {}
+    def create_drivers(self, **kwargs: object) -> MutableMapping[str, object]:
+        ret: MutableMapping[str, object] = {}
         if self.address_pm != "":
             from drunc.process_manager.process_manager_driver import (
                 ProcessManagerDriver,
@@ -54,17 +61,20 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             from drunc.controller.controller_driver import ControllerDriver
 
             ret["controller"] = ControllerDriver(
-                self.address,
+                self.address_controller,
                 self._token,
             )
         return ret
 
-    def set_controller_driver(self, address_controller, **kwargs) -> None:
-        self.address_controller = address_controller
+    def set_controller_driver(
+        self, address_controller: str | None, **kwargs: object
+    ) -> None:
+        self.address_controller = address_controller or ""
         from drunc.controller.controller_driver import ControllerDriver
 
         if address_controller is None:
-            del self._drivers["controller"]
+            if "controller" in self._drivers:
+                del self._drivers["controller"]
             return
 
         self._drivers["controller"] = ControllerDriver(
@@ -72,7 +82,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
             self._token,
         )
 
-    def create_token(self, **kwargs) -> Token:
+    def create_token(self, **kwargs: object) -> Token:
         from drunc.utils.shell_utils import create_dummy_token_from_uname
 
         token = create_dummy_token_from_uname()
@@ -93,7 +103,7 @@ class UnifiedShellContext(ShellContext):  # boilerplatefest
         # controller without going through the process manager (e.g. standalone boot).
         # In that case hostname overrides are unavailable and we fall back to
         # get_hostname_smart in the endpoint rendering path.
-        pm_driver = self.get_driver("process_manager", quiet_fail=True)
+        pm_driver = self.get_pm_driver(quiet_fail=True)
         if not pm_driver:
             return {}
 
