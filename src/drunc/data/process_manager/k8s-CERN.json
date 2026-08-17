@@ -35,13 +35,14 @@
         },
         "cleanup": {
             "restart_cleanup_time": 10,
-            "restart_cleanup_polling": 0.5
+            "restart_cleanup_polling": 0.5,
+            "kill_watch_fallback_poll_interval": 5
         },
         "checking": {
             "watcher_retry_sleep": 5,
             "pod_status_check_sleep": 1,
             "host_cache_expiry": 300,
-            "grpc_startup_timeout": 30,
+            "service_startup_timeout": 30,
             "socket_retry_timeout": 1.0
         },
         "readout_app_selector": "runp",

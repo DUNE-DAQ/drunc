@@ -4,11 +4,9 @@ Check that the session goes into an error state, and that the expected messages 
 printed to stdout. The application that dies is ft-top-segment-application.
 """
 
-import os
-import re
-
 # from datetime import datetime
 import integrationtest.data_classes as data_classes
+import integrationtest.utility_functions as utility_functions
 
 # import integrationtest.log_file_checks as log_file_checks
 from integ_test_utils import (
@@ -47,9 +45,8 @@ conf_dict.dunerc_cmd_args = ["--no-stop-error-batch-mode"]
 conf_dict.op_env = "test"
 
 # Connectivity service configuration
-# Allow drunc to manage ConnectivityService (default is False, integrationtest manages
-# the Connectivity Service)
-conf_dict.drunc_connsvc = True
+# drunc manages the ConnectivityService with a pre-defined dunedaq configuration
+# conf_dict.connsvc_control = data_classes.ConnSvcControl.RUNCONTROL
 # Specify connectivity service port (default is 0, a random port is chosen for the
 # Connectivity Service)
 # conf_dict.connsvc_port = 12345
@@ -77,25 +74,14 @@ status
 timeout_app_name = "ft-top-segment-application"
 
 
-def test_dunerc_success(run_dunerc) -> None:
+def test_dunerc_success(run_dunerc, caplog) -> None:
     """
     Checks that the drunc integration command sequence completes successfully without
     any unexpected failures.
     """
 
-    # print the name of the current test
-    current_test = os.environ.get("PYTEST_CURRENT_TEST")
-    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
-    if match_obj:
-        current_test = match_obj.group(1)
-
-    banner_line = re.sub(".", "=", current_test)
-    print(banner_line)
-    print(current_test)
-    print(banner_line)
-
-    # Check that dunerc completed correctly
-    assert run_dunerc.completed_processes["drunc"].returncode == 0
+    # checks for run control success, problems during pytest setup, etc.
+    utility_functions.basic_checks(run_dunerc, caplog, print_test_name=True)
 
 
 def test_log_files_are_present(run_dunerc) -> None:
