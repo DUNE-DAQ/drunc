@@ -130,7 +130,7 @@ class ControllerConfHandler(ConfHandler):
                 enabled_only = False
 
         def process_segment(segment):
-            if enabled_only and confmodel_dal.component_disabled(
+            if enabled_only and confmodel_dal.entity_excluded(
                 self.db._obj, session.id, segment.id
             ):
                 return  # Ignore disabled segments.
@@ -152,7 +152,7 @@ class ControllerConfHandler(ConfHandler):
             child_nodes.append(node)
 
         def process_application(app):
-            if enabled_only and confmodel_dal.component_disabled(
+            if enabled_only and confmodel_dal.entity_excluded(
                 self.db._obj, session.id, app.id
             ):
                 return

@@ -105,12 +105,12 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
-def component_disabled_from_session_dal(
+def entity_excluded_from_session_dal(
     session_dal_obj: "conffwk.dal.Session", component_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
-        confmodel_dal.component_disabled(db._obj, session_dal_obj.id, component_id)
+        confmodel_dal.entity_excluded(db._obj, session_dal_obj.id, component_id)
 
     Uses only the Session DAL object (session_dal_obj) and the component UID.
 
@@ -206,7 +206,7 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if component_disabled_from_session_dal(session_dal_obj, sub_segment_obj.id):
+        if entity_excluded_from_session_dal(session_dal_obj, sub_segment_obj.id):
             log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
             continue
 
@@ -233,7 +233,7 @@ def collect_apps(
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "Resource" in app.oksTypes():
-            enabled = not component_disabled_from_session_dal(session_dal_obj, app.id)
+            enabled = not entity_excluded_from_session_dal(session_dal_obj, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:
             enabled = True
@@ -382,11 +382,11 @@ def find_controlled_apps(db, session, mycontroller, segment):
         for app in segment.applications:
             apps.append(app.id)
         for seg in segment.segments:
-            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
                 controllers.append(seg.controller.id)
     else:
         for seg in segment.segments:
-            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
                 aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
                 if len(apps) > 0:
                     break
