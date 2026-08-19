@@ -5,17 +5,13 @@
 # repo and converting the assignment of the run control commands to make use of the new
 # "daq_session_ingredients" special integtest variable.
 #
-import pytest
-import urllib.request
-
-from integrationtest.data_classes import *
+from daqconf.utils import find_free_port
+import integrationtest.data_classes as idc
 import integrationtest.data_file_checks as data_file_checks
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
 from integrationtest.get_pytest_tmpdir import get_pytest_tmpdir
-from integrationtest.verbosity_helper import IntegtestVerbosityLevels
-from daqconf.utils import find_free_port
 
 import functools
 print = functools.partial(print, flush=True)  # always flush print() output
@@ -75,7 +71,7 @@ resource_validator.free_disk_space_needs(actual_output_path, 1)  # more than wha
 # The arguments to pass to the config generator, excluding the json
 # output directory (the test framework handles that)
 
-conf_dict = integtest_params_for_generated_dunedaq_config()
+conf_dict = idc.integtest_params_for_generated_dunedaq_config()
 conf_dict.object_databases = ["config/daqsystemtest/integrationtest-objects.data.xml"]
 conf_dict.dro_map_config.n_streams = number_of_data_producers
 conf_dict.op_env = "integtest"
@@ -84,7 +80,7 @@ conf_dict.tpg_enabled = False
 utility_functions.enable_fake_hsi_trigger(conf_dict, trigger_rate=1.0)
 
 conf_dict.config_substitutions.append(
-    attribute_substitution(obj_class="LatencyBuffer", updates={"size": 50000})
+    idc.attribute_substitution(obj_class="LatencyBuffer", updates={"size": 50000})
 )
 
 confgen_arguments = {"SmallFootprint": conf_dict}
@@ -104,23 +100,23 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = DAQSessionApp("pm", procmsg_startup_commands)
+pmapp = idc.DAQSessionApp("pm", procmsg_startup_commands)
 
 pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
-pmshellapp = DAQSessionApp("pmshell", pmshell_startup_commands)
+pmshellapp = idc.DAQSessionApp("pmshell", pmshell_startup_commands)
 
 drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
-druncapp = DAQSessionApp("drunc", drunc_startup_commands)
+druncapp = idc.DAQSessionApp("drunc", drunc_startup_commands)
 
 # Packaging up the commands into DAQCommandSets
-cmd_set_1 = DAQCommandSet("drunc", dunerc_commands_1, CommandWaitParameters(style=CommandWaitStyle.ECHO))
-cmd_set_2 = DAQCommandSet("pmshell", pmshell_command, CommandWaitParameters(style=CommandWaitStyle.TIME))
-cmd_set_3 = DAQCommandSet("drunc", dunerc_commands_2, CommandWaitParameters(style=CommandWaitStyle.ECHO))
+cmd_set_1 = idc.DAQCommandSet("drunc", dunerc_commands_1, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO))
+cmd_set_2 = idc.DAQCommandSet("pmshell", pmshell_command, idc.CommandWaitParameters(style=idc.CommandWaitStyle.TIME))
+cmd_set_3 = idc.DAQCommandSet("drunc", dunerc_commands_2, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO))
 
 # Putting everything together into a DAQSessionIngredients object
 app_list = [ pmapp, pmshellapp, druncapp ]
 cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3 ]
-dsi = DAQSessionIngredients(app_list, cmd_set_list)
+dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
 
 # Declare the special variable that tells the integrationtest infrastructure what we want to run
 daq_session_ingredients = {"MultiRCAppSession": dsi}
