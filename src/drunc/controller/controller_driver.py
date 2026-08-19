@@ -36,12 +36,12 @@ from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
 from drunc.exceptions import DruncServerSideError
+from drunc.utils.grpc_classes import DecodedResponse
 from drunc.utils.grpc_utils import (
     RichErrorClientInterceptor,
     UnpackingError,
     unpack_any,
 )
-from drunc.utils.shell_utils import DecodedResponse
 from drunc.utils.utils import get_logger
 
 
