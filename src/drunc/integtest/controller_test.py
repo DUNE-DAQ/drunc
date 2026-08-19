@@ -125,6 +125,13 @@ _FSM_SEQUENCES = {
         command_args=["--run-number", "2"],
         run_number=2,
     ),
+    "test_srun_w_boot": FsmCommandParams(
+        "test_srun_w_boot",
+        "start-run",
+        "running",
+        command_args=["--run-number", "5"],
+        run_number=5,
+    ),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
 }
 
@@ -143,6 +150,7 @@ status -w 140
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
     + " terminate "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
