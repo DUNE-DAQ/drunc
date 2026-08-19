@@ -298,7 +298,12 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        host = resolve_localhost_to_hostname(app["restriction"]) # Format the hostname for safety: host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+        # Temporary hack while resource management is under development: the hostname
+        # is taken as-is from the app restriction (only localhost is resolved).
+        # When resource management is ready, restore the original logic below and
+        # remove this line:
+        # host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+        host = resolve_localhost_to_hostname(app["restriction"])
         name = app["name"]
         exe = app["type"]
         args = app["args"]

@@ -2204,9 +2204,12 @@ class K8sProcessManager(ProcessManager):
 
         tree_labels[f"uuid.{self.drunc_label}"] = uuid
 
-        # Format the hostname for safety
-        #hostname = format_hostname(boot_request.process_description.metadata.hostname)
-        #boot_request.process_description.metadata.hostname = hostname
+        # Temporary hack while resource management is under development: the hostname
+        # from the boot request is used as-is (no format_hostname normalization).
+        # When resource management is ready, restore the original logic below and
+        # remove this comment block:
+        # hostname = format_hostname(boot_request.process_description.metadata.hostname)
+        # boot_request.process_description.metadata.hostname = hostname
 
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
