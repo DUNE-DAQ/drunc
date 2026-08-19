@@ -63,7 +63,7 @@ echo ps-post-boot
 ps -w 160
 
 echo status-post-boot
-status
+status -w 140
 """.split()
 
 

@@ -62,13 +62,13 @@ echo ps-post-boot
 ps -w 160
 
 echo status-post-boot
-status
+status -w 140
 
 echo pre-conf
 conf
 
 echo status-post-conf
-status
+status -w 140
 
 echo ps-post-conf
 ps -w 160
