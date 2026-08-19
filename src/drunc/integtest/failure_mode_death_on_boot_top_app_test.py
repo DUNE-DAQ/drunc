@@ -62,7 +62,7 @@ echo ps-post-boot
 ps -w 140
 
 echo status-post-boot
-status
+status -w 140
 """.split()
 
 dead_app_name = "ft-top-segment-application"
