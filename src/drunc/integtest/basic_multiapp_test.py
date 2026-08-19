@@ -101,13 +101,13 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = idc.DAQSessionApp("pm", procmsg_startup_commands)
+pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
 
 pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
-pmshellapp = idc.DAQSessionApp("pmshell", pmshell_startup_commands)
+pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
 
 drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
-druncapp = idc.DAQSessionApp("drunc", drunc_startup_commands)
+druncapp = idc.DAQControlApplication("drunc", drunc_startup_commands)
 
 # Packaging up the commands into DAQCommandSets
 cmd_set_1 = idc.DAQCommandSet("drunc", dunerc_commands_1, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO))
