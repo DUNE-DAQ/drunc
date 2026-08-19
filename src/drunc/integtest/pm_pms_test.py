@@ -103,7 +103,7 @@ dunerc_commands = f"""
     echo-on-server pre_boot
     ps -w 180
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
-    wait 5
+    wait 15
     echo post_boot
     echo-on-server post_boot
     ps -w 180
