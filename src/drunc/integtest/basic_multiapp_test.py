@@ -5,15 +5,16 @@
 # repo and converting the assignment of the run control commands to make use of the new
 # "daq_session_ingredients" special integtest variable.
 #
-from daqconf.utils import find_free_port
+import functools
+
 import integrationtest.data_classes as idc
 import integrationtest.data_file_checks as data_file_checks
 import integrationtest.log_file_checks as log_file_checks
 import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
+from daqconf.utils import find_free_port
 from integrationtest.get_pytest_tmpdir import get_pytest_tmpdir
 
-import functools
 print = functools.partial(print, flush=True)  # always flush print() output
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
