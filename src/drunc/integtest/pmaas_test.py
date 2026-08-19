@@ -99,13 +99,13 @@ pmshell_commands_stage_1 = f"""
     wait 5
     echo pms_boot_2
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name_2}
-    wait 5
+    wait 15
     """.split()
 
 us_commands_stage_1 = """
     echo us_boot
     boot
-    wait 5
+    wait 15
     """.split()
 
 pmshell_commands_stage_2 = f"""
