@@ -126,7 +126,7 @@ def entity_excluded_from_session_dal(
     """
     # session_dal_obj.disabled is a list of DAL objects (Resources) disabled in this session
     try:
-        disabled = session_dal_obj.disabled
+        disabled = session_dal_obj.excluded
     except Exception:
         # If OKS/DAL isn't available, fall back to "not disabled"
         return False
