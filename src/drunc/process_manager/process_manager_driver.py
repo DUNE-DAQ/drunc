@@ -1051,9 +1051,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
             execute_on_all_subsequent_children_in_path=False,
         )
         request.token.CopyFrom(self.token)
-        try:
-            response = self.stub.echo_on_server(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response: LogOnServerResponse = self.stub.echo_on_server(
+            request, timeout=timeout
+        )
         return response
