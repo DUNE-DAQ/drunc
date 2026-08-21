@@ -109,7 +109,7 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
     """Checks that all expected session applications are alive after boot in both the ps and status tables."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Get the ps table after boot
     ps_table_post_boot = get_ps_table_after_echo(lines, "ps-post-boot")
@@ -179,7 +179,7 @@ def test_fsm_cmd_application_death_ps_table(run_dunerc) -> None:
     Checks that the application that dies on fsm cmd execution is marked as dead in the ps table.
     """
     # Get the ps table after the fsm cmd execution
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     ps_table_post_conf = get_ps_table_after_echo(lines, "ps-post-conf")
     assert ps_table_post_conf, "Expected ps table after conf, but did not find it."
 
@@ -203,7 +203,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
     to go into an error state, and that the expected message is printed to stdout.
     """
     # Get the status table after the command execution
-    stdout = run_dunerc.completed_process.stdout
+    stdout = run_dunerc.completed_processes["drunc"].stdout
     lines = strip_ansi(stdout).splitlines()
     status_table_post_conf = get_status_table_after_echo(lines, "status-post-conf")
 

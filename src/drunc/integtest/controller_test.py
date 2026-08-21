@@ -191,7 +191,7 @@ def boot_status_table(run_dunerc):
     Scoped to the module so every test in this file can compare against the
     same baseline without re-parsing stdout each time.
     """
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     return get_status_table_after_echo(lines, "post_boot")
 
 
@@ -272,7 +272,7 @@ def test_log_files(run_dunerc) -> None:
 @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
 def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     _check_command(lines, boot_status_table, params)
 
 
@@ -281,13 +281,13 @@ def test_fsm_transitions(
     run_dunerc, boot_status_table, params: FsmCommandParams
 ) -> None:
     """Checks that each FSM transition executes successfully and reaches its expected state."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     _check_command(lines, boot_status_table, params)
 
 
 def test_shutdown_status(run_dunerc) -> None:
     """Checks that status reports the session is no longer booted after shutdown."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     shutdown_index = next(
         index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
     )
