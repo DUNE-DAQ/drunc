@@ -232,7 +232,7 @@ def collect_apps(
     app_index = len(segment_obj.segments)
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
-        if "Resource" in app.oksTypes():
+        if "ExcludableEntity" in app.oksTypes():
             enabled = not entity_excluded_from_session_dal(session_dal_obj, app.id)
             log.debug(f"{app.id} {enabled=}")
         else:
