@@ -133,7 +133,7 @@ class ControllerConfHandler(ConfHandler):
             if enabled_only and confmodel_dal.entity_excluded(
                 self.db._obj, session.id, segment.id
             ):
-                return  # Ignore disabled segments.
+                return  # Ignore excluded segments.
 
             cmd_args = get_commandline_parameters(
                 config_filename=self.initial_data,
