@@ -115,24 +115,24 @@ def entity_excluded_from_session_dal(
     Uses only the Session DAL object (session_dal_obj) and the component UID.
 
     Semantics:
-      - Returns True if the component UID is explicitly present in session_dal_obj.disabled
+      - Returns True if the component UID is explicitly present in session_dal_obj.excluded
       - Returns False otherwise
 
     Notes:
-      - This matches the common meaning of 'disabled' in OKS configs as exposed via
-        conffwk.dal.Session.disabled.
-      - It does *not* attempt to infer disabled state via parent/child propagation
+      - This matches the common meaning of 'excluded' in OKS configs as exposed via
+        conffwk.dal.Session.excluded.
+      - It does *not* attempt to infer excluded state via parent/child propagation
         rules that may exist in confmodel C++ (if any).
     """
-    # session_dal_obj.disabled is a list of DAL objects (ExcludableEntities) disabled in this session
+    # session_dal_obj.excluded is a list of DAL objects (ExcludableEntities) excluded in this session
     try:
-        disabled = session_dal_obj.excluded
+        excluded = session_dal_obj.excluded
     except Exception:
-        # If OKS/DAL isn't available, fall back to "not disabled"
+        # If OKS/DAL isn't available, fall back to "not excluded"
         return False
 
     # Compare by UID (DAL .id)
-    for d in disabled:
+    for d in excluded:
         try:
             if d.id == component_id:
                 return True
@@ -207,7 +207,7 @@ def collect_apps(
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
         if entity_excluded_from_session_dal(session_dal_obj, sub_segment_obj.id):
-            log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
+            log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is excluded")
             continue
 
         log.debug(f"Collecting apps for segment {sub_segment_obj.id}")
@@ -227,20 +227,20 @@ def collect_apps(
         for app in sub_apps:
             apps.append(app)
 
-    # Get all the enabled applications of this segment
+    # Get all the included applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
     app_index = len(segment_obj.segments)
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
         if "ExcludableEntity" in app.oksTypes():
-            enabled = not entity_excluded_from_session_dal(session_dal_obj, app.id)
-            log.debug(f"{app.id} {enabled=}")
+            included = not entity_excluded_from_session_dal(session_dal_obj, app.id)
+            log.debug(f"{app.id} {included=}")
         else:
-            enabled = True
-            log.debug(f"{app.id} {enabled=}")
+            included = True
+            log.debug(f"{app.id} {included=}")
 
-        if not enabled:
-            log.debug(f"Ignoring disabled app {app.id}")
+        if not included:
+            log.debug(f"Ignoring excluded app {app.id}")
             continue
 
         app_env = defenv.copy()

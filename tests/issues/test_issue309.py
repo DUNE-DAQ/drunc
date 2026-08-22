@@ -17,7 +17,7 @@ def test_issue309(load_test_config):
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
             obj_uid=controller_id,
-            session="deep-segments-config",  # some of the function for enable/disable require the full dal of the session
+            session="deep-segments-config",  # some of the function for include/exclude requires the full dal of the session
         ),
         session_name="test",
     )
