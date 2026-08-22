@@ -124,7 +124,7 @@ def entity_excluded_from_session_dal(
       - It does *not* attempt to infer disabled state via parent/child propagation
         rules that may exist in confmodel C++ (if any).
     """
-    # session_dal_obj.disabled is a list of DAL objects (Resources) disabled in this session
+    # session_dal_obj.disabled is a list of DAL objects (ExcludableEntities) disabled in this session
     try:
         disabled = session_dal_obj.excluded
     except Exception:
