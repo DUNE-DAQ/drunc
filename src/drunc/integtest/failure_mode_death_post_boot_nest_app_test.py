@@ -63,7 +63,7 @@ echo ps-post-boot
 ps -w 160
 
 echo status-post-boot
-status
+status -w 140
 """.split()
 
 dead_app_name = "ft-nested-segment-2-application"
@@ -131,7 +131,7 @@ def test_expected_log_message_in_terminal(run_dunerc) -> None:
     printed to stdout, as a summary after the controller check is complete.
     """
     # Get and format the stdout
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Check that the expected boot failure message is in stdout for the application that
     # dies on boot
@@ -147,7 +147,7 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     Checks that the application that dies on boot is not present in the ps table after
     boot.
     """
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Get the ps table
     ps_table = get_ps_table_after_echo(lines, "ps-post-boot")
@@ -175,7 +175,7 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
     Checks that the application that dies on boot is marked with a disconnected status
     in the status table after boot.
     """
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Get the status table post boot
     status_table = get_status_table_after_echo(lines, "status-post-boot")
@@ -205,7 +205,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
     state, and that the expected message is printed to stdout.
     """
     # Get the stdout and format it
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Check the stdout for the expected error message.
     search_str = "Booted, but the session is in an error state."
