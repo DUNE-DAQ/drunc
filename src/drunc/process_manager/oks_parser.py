@@ -106,16 +106,16 @@ class EnvironmentVariableCannotBeSet(DruncException):
 
 
 def entity_excluded_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", component_id: str
+    session_dal_obj: "conffwk.dal.Session", entity_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
-        confmodel_dal.entity_excluded(db._obj, session_dal_obj.id, component_id)
+        confmodel_dal.entity_excluded(db._obj, session_dal_obj.id, entity_id)
 
-    Uses only the Session DAL object (session_dal_obj) and the component UID.
+    Uses only the Session DAL object (session_dal_obj) and the entity UID.
 
     Semantics:
-      - Returns True if the component UID is explicitly present in session_dal_obj.excluded
+      - Returns True if the entity UID is explicitly present in session_dal_obj.excluded
       - Returns False otherwise
 
     Notes:
@@ -134,7 +134,7 @@ def entity_excluded_from_session_dal(
     # Compare by UID (DAL .id)
     for d in excluded:
         try:
-            if d.id == component_id:
+            if d.id == entity_id:
                 return True
         except Exception:
             # Defensive: if an element doesn't look like a DAL object, ignore it
