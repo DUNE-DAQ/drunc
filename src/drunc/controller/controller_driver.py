@@ -32,8 +32,9 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerStub
 from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import ResponseFlag
+from druncschema.request_response_pb2 import Response, ResponseFlag
 from druncschema.token_pb2 import Token
+from google.protobuf.message import Message
 
 from drunc.exceptions import DruncServerSideError
 from drunc.utils.grpc_classes import DecodedResponse
@@ -346,10 +347,14 @@ class ControllerDriver:
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        response = self.stub.log_on_server(request, timeout=timeout)
+        response: LogOnServerResponse = self.stub.log_on_server(
+            request, timeout=timeout
+        )
         return response
 
-    def handle_response(self, response, command, outformat):
+    def handle_response(
+        self, response: Response, command: str, outformat: type[Message]
+    ) -> DecodedResponse | None:
         dr = DecodedResponse(
             name=response.name,
             token=response.token,
@@ -366,7 +371,7 @@ class ControllerDriver:
 
         else:
 
-            def text(verb="not executed", reason=""):
+            def text(verb: str = "not executed", reason: str = "") -> str:
                 return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
 
             if not response.HasField("data"):
@@ -405,7 +410,9 @@ class ControllerDriver:
 
         for c_response in response.children:
             try:
-                dr.children.append(self.handle_response(c_response, command, outformat))
+                child = self.handle_response(c_response, command, outformat)
+                if child is not None:
+                    dr.children.append(child)
             except DruncServerSideError as e:
                 self.log.error(f"Exception thrown from child: {e}")
 
