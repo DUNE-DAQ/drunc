@@ -21,6 +21,7 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     validate_command_facility,
 )
+from src.drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 @click.command()
@@ -112,6 +113,7 @@ def controller_cli(
                 max_workers=CONTROLLER_SERVER_GRPC_MAX_WORKERS
             ),
             options=CONTROLLER_SERVER_GRPC_CONFIG,
+            interceptors=[RichErrorServerInterceptor()],
         )
         add_ControllerServicer_to_server(ctrlr, server)
         port = server.add_insecure_port(listen_addr)
