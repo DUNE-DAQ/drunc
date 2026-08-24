@@ -97,7 +97,7 @@ class FsmCommandParams:
 echo {self.marker}
 {self.full_command}
 echo {self.marker}_done
-status
+status -w 140
 echo {self.marker}_status_done
 """
 
@@ -125,6 +125,20 @@ _FSM_SEQUENCES = {
         command_args=["--run-number", "2"],
         run_number=2,
     ),
+    "test_srun_w_boot": FsmCommandParams(
+        "test_srun_w_boot",
+        "start-run",
+        "running",
+        command_args=["--run-number", "5"],
+        run_number=5,
+    ),
+    "test_srunw_boot_conf": FsmCommandParams(
+        "test_srunw_boot_conf",
+        "start-run",
+        "running",
+        command_args=["--run-number", "6"],
+        run_number=6,
+    ),
     "test_stop_run": FsmCommandParams("test_stop_run", "stop-run", "configured"),
 }
 
@@ -139,10 +153,14 @@ dunerc_command_list = (
     """
 boot
 echo post_boot
-status
+status -w 140
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
+    + _FSM_SEQUENCES["test_srun_w_boot"].to_command_block()
+    + " terminate "
+    + "boot wait 10 conf"
+    + _FSM_SEQUENCES["test_srunw_boot_conf"].to_command_block()
     + " terminate "
     + _FSM_SEQUENCES["test_start_run"].to_command_block()
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
@@ -152,7 +170,7 @@ echo post_boot_done
 echo {_SHUTDOWN_MARKER}
 shutdown
 echo {_SHUTDOWN_MARKER}_done
-status
+status -w 140
 echo {_SHUTDOWN_MARKER}_status_done
 """
     + "\nterminate"
@@ -173,7 +191,7 @@ def boot_status_table(run_dunerc):
     Scoped to the module so every test in this file can compare against the
     same baseline without re-parsing stdout each time.
     """
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     return get_status_table_after_echo(lines, "post_boot")
 
 
@@ -254,7 +272,7 @@ def test_log_files(run_dunerc) -> None:
 @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)
 def test_fsm_command(run_dunerc, boot_status_table, params: FsmCommandParams) -> None:
     """Checks that each FSM command executes successfully and transitions all processes to the expected state."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     _check_command(lines, boot_status_table, params)
 
 
@@ -263,13 +281,13 @@ def test_fsm_transitions(
     run_dunerc, boot_status_table, params: FsmCommandParams
 ) -> None:
     """Checks that each FSM transition executes successfully and reaches its expected state."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     _check_command(lines, boot_status_table, params)
 
 
 def test_shutdown_status(run_dunerc) -> None:
     """Checks that status reports the session is no longer booted after shutdown."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     shutdown_index = next(
         index for index, line in enumerate(lines) if _SHUTDOWN_MARKER in line
     )
