@@ -8,6 +8,7 @@ It uses the Rich library to display a live-updating table of results in the term
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import click
 from rich import box
 from rich.console import Console
 from rich.live import Live
@@ -207,6 +208,15 @@ def generate_table(results_map: dict) -> Table:
     return table
 
 
+@click.command(
+    help="""
+Perform a security and connectivity audit of NP0x cluster hosts via SSH.
+
+This script checks for host key mismatches (MITM), new host keys, authentication
+failures, and connectivity issues. It uses the Rich library to display a 
+live-updating table of results in the terminal.
+"""
+)
 def main():
     """
     Run the SSH audit and display the results in a live-updating table.
