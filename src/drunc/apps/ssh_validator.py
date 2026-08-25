@@ -96,7 +96,9 @@ def check_host_ssh(host: str) -> dict:
     }
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL
+        )
         stderr = proc.stderr
 
         # 1. Check for MITM / Host Key Mismatch
