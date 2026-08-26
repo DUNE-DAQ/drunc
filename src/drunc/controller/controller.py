@@ -68,7 +68,9 @@ from drunc.fsm.exceptions import (
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import ServerTimeout
 from drunc.utils.utils import get_logger
-from src.drunc.exceptions import ConnectivityServiceUnavailable, ControllerException, DruncSetupException
+from drunc.exceptions import DruncSetupException
+from drunc.connectivity_service.exceptions import ConnectivityServiceUnavailable
+from drunc.controller.exceptions import ControllerException
 
 T = TypeVar("T")
 
