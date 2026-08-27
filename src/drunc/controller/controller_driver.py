@@ -31,16 +31,10 @@ from druncschema.controller_pb2 import (
     WhoIsInChargeResponse,
 )
 from druncschema.controller_pb2_grpc import ControllerStub
-from druncschema.generic_pb2 import PlainText, Stacktrace
-from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
 
-from drunc.exceptions import DruncServerSideError
-from drunc.utils.grpc_classes import DecodedResponse
 from drunc.utils.grpc_utils import (
-    UnpackingError,
-    handle_grpc_error,
-    unpack_any,
+    RichErrorClientInterceptor,
 )
 from drunc.utils.utils import get_logger
 
@@ -94,7 +88,9 @@ class ControllerDriver:
             raise e
 
         target_address = f"ipv4:{resolved_address}"
-        self.channel = grpc.insecure_channel(target_address, options=options)
+        raw_channel = grpc.insecure_channel(target_address, options=options)
+        rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+        self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
         self.stub = ControllerStub(self.channel)
         self.token = Token()
         self.token.CopyFrom(token)
@@ -113,11 +109,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.status(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.status(request, timeout=timeout)
         return response
 
     def describe(
@@ -134,11 +126,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.describe(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.describe(request, timeout=timeout)
         return response
 
     def describe_fsm(
@@ -157,11 +145,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.describe_fsm(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.describe_fsm(request, timeout=timeout)
         return response
 
     def execute_fsm_command(
@@ -180,11 +164,7 @@ class ControllerDriver:
         request.token.CopyFrom(self.token)
         request.command.CopyFrom(command)
 
-        try:
-            response = self.stub.execute_fsm_command(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.execute_fsm_command(request, timeout=timeout)
         return response
 
     def execute_expert_command(
@@ -203,11 +183,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.execute_expert_command(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.execute_expert_command(request, timeout=timeout)
         return response
 
     def include(
@@ -224,11 +200,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.include(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.include(request, timeout=timeout)
         return response
 
     def exclude(
@@ -245,11 +217,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.exclude(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.exclude(request, timeout=timeout)
         return response
 
     def recompute_status(
@@ -266,11 +234,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.recompute_status(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.recompute_status(request, timeout=timeout)
         return response
 
     def take_control(
@@ -287,11 +251,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.take_control(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.take_control(request, timeout=timeout)
         return response
 
     def surrender_control(
@@ -308,10 +268,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.surrender_control(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
+        response = self.stub.surrender_control(request, timeout=timeout)
 
         return response
 
@@ -329,11 +286,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.who_is_in_charge(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.who_is_in_charge(request, timeout=timeout)
         return response
 
     def to_error(
@@ -350,11 +303,7 @@ class ControllerDriver:
         )
         request.token.CopyFrom(self.token)
 
-        try:
-            response = self.stub.to_error(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
+        response = self.stub.to_error(request, timeout=timeout)
         return response
 
     def log_on_server(
@@ -391,71 +340,7 @@ class ControllerDriver:
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        try:
-            response = self.stub.log_on_server(request, timeout=timeout)
-        except grpc.RpcError as e:
-            handle_grpc_error(e)
-
-        return response
-
-    def handle_response(self, response, command, outformat):
-        dr = DecodedResponse(
-            name=response.name,
-            token=response.token,
-            flag=response.flag,
+        response: LogOnServerResponse = self.stub.log_on_server(
+            request, timeout=timeout
         )
-
-        if response.flag == ResponseFlag.EXECUTED_SUCCESSFULLY:
-            if response.HasField("data") and response.data not in [None, ""]:
-                try:
-                    dr.data = unpack_any(response.data, outformat)
-                except UnpackingError as e:
-                    self.log.error(f"Error unpacking data: {e}")
-                    dr.data = response.data
-
-        else:
-
-            def text(verb="not executed", reason=""):
-                return f"Command '{command}' {verb} on '{response.name}' (response flag '{ResponseFlag.Name(response.flag)}') {reason}"
-
-            if not response.HasField("data"):
-                return None
-
-            error_txt = ""
-            stack_txt = None
-
-            if response.data.Is(Stacktrace.DESCRIPTOR):
-                stack = unpack_any(response.data, Stacktrace)
-                dr.data = stack
-                stack_txt = "Stacktrace on remote server!\n"
-                last_one = ""
-
-                for l in stack.text:
-                    stack_txt += l + "\n"
-                    if l != "":
-                        last_one = l
-                error_txt = last_one
-
-            elif response.data.Is(PlainText.DESCRIPTOR):
-                txt = unpack_any(response.data, PlainText)
-                error_txt = txt.text  # noqa: F841  (might need to revisit this)
-                dr.data = error_txt
-
-            if response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
-            ]:
-                self.log.debug(text())
-            elif response.flag in [
-                ResponseFlag.NOT_EXECUTED_NOT_IN_CONTROL,
-            ]:
-                self.log.warning(text())
-            else:
-                self.log.error(text("failed", error_txt))
-
-        for c_response in response.children:
-            try:
-                dr.children.append(self.handle_response(c_response, command, outformat))
-            except DruncServerSideError as e:
-                self.log.error(f"Exception thrown from child: {e}")
-
-        return dr
+        return response
