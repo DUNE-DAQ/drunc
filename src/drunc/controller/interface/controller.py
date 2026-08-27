@@ -21,7 +21,7 @@ from drunc.utils.utils import (
     resolve_localhost_and_127_ip_to_network_ip,
     validate_command_facility,
 )
-from src.drunc.utils.grpc_utils import RichErrorServerInterceptor
+from drunc.utils.grpc_utils import RichErrorServerInterceptor
 
 
 @click.command()
