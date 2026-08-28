@@ -68,9 +68,6 @@ from drunc.fsm.exceptions import (
 from drunc.fsm.utils import convert_fsm_transition
 from drunc.utils.grpc_utils import ServerTimeout
 from drunc.utils.utils import get_logger
-from drunc.exceptions import DruncSetupException
-from drunc.connectivity_service.exceptions import ConnectivityServiceUnavailable
-from drunc.controller.exceptions import ControllerException
 
 T = TypeVar("T")
 
@@ -144,9 +141,7 @@ class Controller(ControllerServicer):
             if connection_server_host == "localhost":
                 injected_hostname = os.getenv("DRUNC_HOST_NAME")
                 if not injected_hostname:
-                    raise DruncSetupException(
-                        message="DRUNC_HOST_NAME environment variable is not set.",
-                        details="Controller cannot connect to the connectivity service because the DRUNC_HOST_NAME environment variable is not set.",)
+                    raise ValueError("DRUNC_HOST_NAME environment variable is not set.")
                 self.log.debug(
                     f"Remapping connectivity service host from 'localhost' to '{injected_hostname}'"
                 )
@@ -172,14 +167,12 @@ class Controller(ControllerServicer):
                 init_token=self.actor.get_token(),
                 connectivity_service=self.connectivity_service,
             )
-        except ApplicationLookupUnsuccessful as e:
-            error_msg = "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
-            log_init_controller.error(error_msg)
+        except ApplicationLookupUnsuccessful:
+            log_init_controller.error(
+                "Failed to find all child applications on the connectivity service. Check that all children are up and registered to the connectivity service."
+            )
             self.stateful_node.to_error()
-
-            # re-raise but pass rich error message
-            raise ApplicationLookupUnsuccessful(message=error_msg) from e
-
+            return
 
         # At this point, we already waited for 60s for the children applications to
         # start and show up on the connectivity service
@@ -355,8 +348,8 @@ class Controller(ControllerServicer):
             f"Looking for connectivity service at address {self.connectivity_service.address}"
         )
         if not self.connectivity_service.is_ready(timeout=20):
-            raise ConnectivityServiceUnavailable(
-                message="Connectivity service unavailable for control address advertising."
+            raise ValueError(
+                "Connectivity service unavailable for control address advertising."
             )
         self.log.info(
             f"Registering {self.name} ({address}) to the connectivity service at {self.connectivity_service.address}"
@@ -441,7 +434,7 @@ class Controller(ControllerServicer):
         if target_path[0] != self.name:
             error_str = f"Target '{target}' does not start with '{self.name}'"
             self.log.error(error_str)
-            raise ControllerException(message=error_str)
+            raise ValueError(error_str)
 
         return target
 
