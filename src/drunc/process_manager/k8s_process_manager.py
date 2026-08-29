@@ -1339,9 +1339,10 @@ class K8sProcessManager(ProcessManager):
 
             self._verify_host_in_cluster(target_host)
 
-            node_selector = {"kubernetes.io/hostname": target_host}
+            physical_host = format_hostname(target_host)
+            node_selector = {"kubernetes.io/hostname": physical_host}
             self.log.info(
-                f"Pod '{podname}' will be scheduled on node '{target_host}' (from boot request)"
+                f"Pod '{podname}' will be scheduled on node '{physical_host}' (from boot request)"
             )
         return node_selector
 
@@ -1693,7 +1694,14 @@ class K8sProcessManager(ProcessManager):
             node_selector = self._get_pod_node_selector(
                 podname, boot_request.process_restriction
             )
-            host_aliases = self._get_pod_host_aliases(podname, session, tree_labels)
+            # hostAliases is only valid for non-hostNetwork pods (Kubernetes constraint).
+            # When use_host_network=True (Headless service pods), skip host_aliases to
+            # avoid a 422 Unprocessable Entity error from the Kubernetes API.
+            host_aliases = (
+                None
+                if use_host_network
+                else self._get_pod_host_aliases(podname, session, tree_labels)
+            )
             pod_manifest = self._build_pod_manifest(
                 podname,
                 session,
@@ -2196,9 +2204,12 @@ class K8sProcessManager(ProcessManager):
 
         tree_labels[f"uuid.{self.drunc_label}"] = uuid
 
-        # Format the hostname for safety
-        hostname = format_hostname(boot_request.process_description.metadata.hostname)
-        boot_request.process_description.metadata.hostname = hostname
+        # Temporary hack while resource management is under development: the hostname
+        # from the boot request is used as-is (no format_hostname normalization).
+        # When resource management is ready, restore the original logic below and
+        # remove this comment block:
+        # hostname = format_hostname(boot_request.process_description.metadata.hostname)
+        # boot_request.process_description.metadata.hostname = hostname
 
         # Pre-checks (Session validation, NodePort collision)
         self._run_pre_boot_checks(session, podname, boot_request)
