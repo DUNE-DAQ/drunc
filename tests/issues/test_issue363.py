@@ -31,7 +31,7 @@ def test_issue363(load_test_config):
             schema_file="schema/confmodel/dunedaq.schema.xml",
             class_name="RCApplication",
             obj_uid=controller_id,
-            session="test-nested-config",  # some of the function for enable/disable require the full dal of the session
+            session="test-nested-config",  # some of the function for include/exclude requires the full dal of the session
         ),
         session_name="test",
     )

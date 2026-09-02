@@ -105,36 +105,36 @@ class EnvironmentVariableCannotBeSet(DruncException):
     pass
 
 
-def component_disabled_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", component_id: str
+def entity_excluded_from_session_dal(
+    session_dal_obj: "conffwk.dal.Session", entity_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
-        confmodel_dal.component_disabled(db._obj, session_dal_obj.id, component_id)
+        confmodel_dal.entity_excluded(db._obj, session_dal_obj.id, entity_id)
 
-    Uses only the Session DAL object (session_dal_obj) and the component UID.
+    Uses only the Session DAL object (session_dal_obj) and the entity UID.
 
     Semantics:
-      - Returns True if the component UID is explicitly present in session_dal_obj.disabled
+      - Returns True if the entity UID is explicitly present in session_dal_obj.excluded
       - Returns False otherwise
 
     Notes:
-      - This matches the common meaning of 'disabled' in OKS configs as exposed via
-        conffwk.dal.Session.disabled.
-      - It does *not* attempt to infer disabled state via parent/child propagation
+      - This matches the common meaning of 'excluded' in OKS configs as exposed via
+        conffwk.dal.Session.excluded.
+      - It does *not* attempt to infer excluded state via parent/child propagation
         rules that may exist in confmodel C++ (if any).
     """
-    # session_dal_obj.disabled is a list of DAL objects (Resources) disabled in this session
+    # session_dal_obj.excluded is a list of DAL objects (ExcludableEntities) excluded in this session
     try:
-        disabled = session_dal_obj.disabled
+        excluded = session_dal_obj.excluded
     except Exception:
-        # If OKS/DAL isn't available, fall back to "not disabled"
+        # If OKS/DAL isn't available, fall back to "not excluded"
         return False
 
     # Compare by UID (DAL .id)
-    for d in disabled:
+    for d in excluded:
         try:
-            if d.id == component_id:
+            if d.id == entity_id:
                 return True
         except Exception:
             # Defensive: if an element doesn't look like a DAL object, ignore it
@@ -206,8 +206,8 @@ def collect_apps(
     # Recurse over nested segments
     for idx, sub_segment_obj in enumerate(segment_obj.segments):
         log.debug(f"Considering segment {sub_segment_obj.id}")
-        if component_disabled_from_session_dal(session_dal_obj, sub_segment_obj.id):
-            log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is disabled")
+        if entity_excluded_from_session_dal(session_dal_obj, sub_segment_obj.id):
+            log.debug(f"Ignoring segment '{sub_segment_obj.id}' as it is excluded")
             continue
 
         log.debug(f"Collecting apps for segment {sub_segment_obj.id}")
@@ -227,20 +227,20 @@ def collect_apps(
         for app in sub_apps:
             apps.append(app)
 
-    # Get all the enabled applications of this segment
+    # Get all the included applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
     app_index = len(segment_obj.segments)
     for app in segment_obj.applications:
         log.debug(f"Considering app {app.id}")
-        if "Resource" in app.oksTypes():
-            enabled = not component_disabled_from_session_dal(session_dal_obj, app.id)
-            log.debug(f"{app.id} {enabled=}")
+        if "ExcludableEntity" in app.oksTypes():
+            included = not entity_excluded_from_session_dal(session_dal_obj, app.id)
+            log.debug(f"{app.id} {included=}")
         else:
-            enabled = True
-            log.debug(f"{app.id} {enabled=}")
+            included = True
+            log.debug(f"{app.id} {included=}")
 
-        if not enabled:
-            log.debug(f"Ignoring disabled app {app.id}")
+        if not included:
+            log.debug(f"Ignoring excluded app {app.id}")
             continue
 
         app_env = defenv.copy()
@@ -382,11 +382,11 @@ def find_controlled_apps(db, session, mycontroller, segment):
         for app in segment.applications:
             apps.append(app.id)
         for seg in segment.segments:
-            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
                 controllers.append(seg.controller.id)
     else:
         for seg in segment.segments:
-            if not confmodel_dal.component_disabled(db._obj, session.id, seg.id):
+            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
                 aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
                 if len(apps) > 0:
                     break

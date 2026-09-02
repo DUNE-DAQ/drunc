@@ -110,7 +110,7 @@ class ControllerConfHandler(ConfHandler):
         session_name: str,
         init_token: Token,
         connectivity_service: ConnectivityServiceClient | None = None,
-        enabled_only: bool = True,
+        included_only: bool = True,
     ) -> list[ChildNode]:
         child_nodes: list[ChildNode] = []
         booting_errors: list[Exception] = []
@@ -123,17 +123,17 @@ class ControllerConfHandler(ConfHandler):
             session = self.db.get_dal(class_name="Session", uid=self.oks_key.session)
         except ImportError:
             session = None
-            if enabled_only:
+            if included_only:
                 self.log.error(
                     "OKS was not set up, so configuration does not know about include/exclude. All the children nodes will be returned"
                 )
-                enabled_only = False
+                included_only = False
 
         def process_segment(segment):
-            if enabled_only and confmodel_dal.component_disabled(
+            if included_only and confmodel_dal.entity_excluded(
                 self.db._obj, session.id, segment.id
             ):
-                return  # Ignore disabled segments.
+                return  # Ignore excluded segments.
 
             cmd_args = get_commandline_parameters(
                 config_filename=self.initial_data,
@@ -152,7 +152,7 @@ class ControllerConfHandler(ConfHandler):
             child_nodes.append(node)
 
         def process_application(app):
-            if enabled_only and confmodel_dal.component_disabled(
+            if included_only and confmodel_dal.entity_excluded(
                 self.db._obj, session.id, app.id
             ):
                 return
