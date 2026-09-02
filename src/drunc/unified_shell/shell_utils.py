@@ -93,22 +93,27 @@ def run_fsm_sequence(
         if command == "boot":
             if pmd is not None:
                 process_list = pmd.ps(ProcessQuery(names=[".*"]))
-            if process_list is not None and not process_list.values:
+            if process_list is not None and len(process_list.values) == 0:
                 accepted_command.append("boot")
         elif command == "terminate":
             if pmd is not None:
                 process_list = pmd.ps(ProcessQuery(names=[".*"]))
-            if process_list is not None and process_list.values:
+            if process_list is not None and len(process_list.values) != 0:
                 accepted_command.append("terminate")
-
-        # Get the FSM commands that can be ran from the current state
-        controller_driver = ctx.obj.get_controller_driver(quiet_fail=True)
-        if controller_driver:
-            accepted_command_raw: DescribeFSMResponse = controller_driver.describe_fsm()
-            accepted_command += [
-                format_name_for_cli(c.name)
-                for c in accepted_command_raw.description.commands
-            ]
+        else:
+            # Get the FSM commands that can be ran from the current state
+            try:
+                controller_driver = ctx.obj.get_controller_driver()
+                if controller_driver:
+                    accepted_command_raw: DescribeFSMResponse = (
+                        controller_driver.describe_fsm()
+                    )
+                    accepted_command += [
+                        format_name_for_cli(c.name)
+                        for c in accepted_command_raw.description.commands
+                    ]
+            except RuntimeError:
+                continue
 
         # If the command is not in the list of accepted commands, skip it and move on to
         # the next command in the sequence
