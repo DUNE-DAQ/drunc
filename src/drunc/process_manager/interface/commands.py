@@ -18,6 +18,15 @@ from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
+log_echo = get_logger("echo", rich_handler=True)
+
+
+@click.command("echo")
+@click.argument("text", required=False)
+@click.pass_obj
+def echo(obj, text: str | None) -> None:
+    log_echo.info(text or "")
+
 
 @click.command("boot")
 @click.option(
@@ -744,3 +753,36 @@ def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
     """
     pm_driver = obj.get_pm_driver()
     pm_driver.log_on_server(text=text, severity=severity)
+
+@click.command("echo-on-server")
+@click.argument("text", required=True)
+@click.option(
+    "-s",
+    "--severity",
+    type=str,
+    default="INFO",
+    help=(
+        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
+        "WARNING, ERROR, CRITICAL"
+    ),
+)
+@click.pass_obj
+def echo_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
+    """
+    Echo a message on the server with the specified severity level.
+
+    Args:
+        obj: The context object containing the process manager driver and other relevant
+            information.
+        text: The log message to be sent to the server.
+        severity: The severity level of the log message. Options are DEBUG, INFO,
+            WARNING, ERROR, CRITICAL. Default is INFO.
+
+    Returns:
+        None
+
+    Raises:
+        Exception: If any exception occurs during the logging process.
+    """
+    pm_driver = obj.get_pm_driver()
+    pm_driver.echo_on_server(text=text, severity=severity)

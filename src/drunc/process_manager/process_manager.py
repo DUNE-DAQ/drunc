@@ -40,6 +40,8 @@ from drunc.process_manager.configuration import (
 )
 from drunc.utils.utils import get_logger, pid_info_str
 
+log_echo = get_logger("echo", rich_handler=True)
+
 
 class BadQuery(DruncCommandException):
     def __init__(self, txt):
@@ -494,6 +496,38 @@ class ProcessManager(abc.ABC, ProcessManagerServicer):
         # warning, error), and log the message
         level = request.severity.lower()
         log_method = getattr(self.log, level, self.log.info)
+        log_method(request.text)
+        return response
+
+    @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
+    def echo_on_server(
+        self,
+        request: LogOnServerRequest,
+        context: ServicerContext,
+    ) -> LogOnServerResponse:
+        """
+        Same as log_on_server but goes to drunc.echo. CLI tool
+
+        Args:
+            request: LogOnServerRequest containing the log message and severity.
+            context: gRPC ServicerContext (not used).
+
+        Returns:
+            LogOnServerResponse indicating the result of the logging operation.
+
+        Raises:
+            None
+        """
+        # Construct the default response indicating successful execution
+        response = LogOnServerResponse(
+            token=None,
+            flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
+        )
+
+        # Get the log method corresponding to the severity level (e.g., debug, info,
+        # warning, error), and log the message
+        level = request.severity.lower()
+        log_method = getattr(log_echo, level, log_echo.info)
         log_method(request.text)
         return response
 

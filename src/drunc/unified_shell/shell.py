@@ -54,6 +54,7 @@ from drunc.process_manager.interface.process_manager import run_pm
 from drunc.process_manager.utils import get_pm_type_from_name, validate_k8s_session_name
 from drunc.unified_shell.commands import (
     boot,
+    echo_on_server,
     flush,
     kill,
     log_on_server,
@@ -374,6 +375,7 @@ def unified_shell(
         flush,
         kill,
         log_on_server,
+        echo_on_server,
         logs,
         ps,
         restart,
