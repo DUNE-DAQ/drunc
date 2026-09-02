@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
+from drunc.exceptions import DruncCommandException
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
@@ -963,21 +964,37 @@ class Controller(ControllerServicer):
                 self.log.error(f"FSM command '{command_name}' failed: {e}")
                 return response
 
-            # Finish propagating FSM transition to children.
-            self.stateful_node.finish_propagating_transition_mark(transition)
+            try:
+                # Finish propagating FSM transition to children.
+                self.stateful_node.finish_propagating_transition_mark(transition)
 
-            # Start FSM transition on this node.
-            self.stateful_node.start_transition_mark(transition)
+                # Start FSM transition on this node.
+                self.stateful_node.start_transition_mark(transition)
 
-            # Finish FSM transition on this node.
-            self.stateful_node.terminate_transition_mark(transition)
+                # Finish FSM transition on this node.
+                self.stateful_node.terminate_transition_mark(transition)
 
-            fsm_data = self.stateful_node.finalise_transition(
-                transition=transition,
-                transition_args=fsm_args,
-                transition_data=fsm_data,
-                ctx=self,
-            )
+                fsm_data = self.stateful_node.finalise_transition(
+                    transition=transition,
+                    transition_args=fsm_args,
+                    transition_data=fsm_data,
+                    ctx=self,
+                )
+
+            except Exception as error:
+                try:
+                    self.stateful_node.to_error()
+                except Exception:
+                    self.log.exception(
+                        "Could not place controller in error state after FSM failure"
+                    )
+
+                raise DruncCommandException(
+                    message=(
+                        f"FSM command '{command_name}' failed to execute: {error}"
+                    ),
+                    domain="Controller.execute_fsm_command",
+                ) from error
 
         # Children nodes.
         else:

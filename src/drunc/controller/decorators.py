@@ -34,35 +34,9 @@ def in_control(cmd):
 def publish_command_time(cmd):
     @wraps(cmd)
     def wrap(obj, *args, **kwargs):
-        log = get_logger(f"controller.core.publish_command_time.{cmd}")
-
         cmd_start_time = time.time()
-        try:
-            log.debug(f"Executing wrapped function ({cmd.__name__})")
-            ret = cmd(obj, *args, **kwargs)
+        ret = cmd(obj, *args, **kwargs)
 
-        except Exception as e:
-            log.exception(e)
-
-            stack = traceback.format_exc().split("\n")
-
-            flag = (
-                ResponseFlag.DRUNC_EXCEPTION_THROWN
-                if isinstance(e, DruncException)
-                else ResponseFlag.UNHANDLED_EXCEPTION_THROWN
-            )
-            token = kwargs.get("token", None)
-            return Response(
-                name=obj.name,
-                token=token,
-                data=pack_to_any(
-                    Stacktrace(
-                        text=stack,
-                    )
-                ),
-                flag=flag,
-                children=[],
-            )
         cmd_end_time = time.time()
         cmd_exe_time = cmd_end_time - cmd_start_time
 
