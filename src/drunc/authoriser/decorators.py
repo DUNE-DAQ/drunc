@@ -2,6 +2,8 @@ import functools
 from typing import Callable, Protocol, TypeVar, cast
 
 import grpc
+from drunc.authoriser.exceptions import AuthenticationSystemUnavailable
+from drunc.exceptions import DruncException
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.generic_pb2 import PlainText
 from druncschema.request_response_pb2 import Response, ResponseFlag
@@ -64,9 +66,19 @@ def authentified_and_authorised(
         ) -> Response:
             log = get_logger("utils.authentified_and_authorised_decorator")
             log.debug("Entering")
-            if not obj.authoriser.is_authorised(
-                request.token, action, system, cmd.__name__
-            ):
+
+            try:
+                is_auth = obj.authoriser.is_authorised(
+                                request.token, action, system, cmd.__name__)
+            except Exception as e:
+                raise AuthenticationSystemUnavailable(
+                    resource_type="AuthenticationSystem",
+                    resource_name="drunc.authentication",
+                    details=f"Authentication system unavailable while checking if '{request.token.user_name}' is authorised to '{ActionType.Name(action)}', required for command '{cmd.__name__}' on '{obj.name}'",
+                ) from e
+            
+
+            if not is_auth:
                 return Response(
                     name=obj.name,
                     token=request.token,
@@ -79,12 +91,6 @@ def authentified_and_authorised(
                     children=[],
                 )
 
-                # raise Unauthorised(
-                #     user = request.token.user_name,
-                #     action = action,
-                #     command = cmd.__name__,
-                #     drunc_system = obj.name,
-                # )
             log.debug("Executing wrapped function")
             ret = cmd(obj, request, context)
             log.debug("Exiting")

@@ -4,8 +4,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
+import grpc
+
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandException, DruncException
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
@@ -623,8 +625,16 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-            status = get_status_message(self)
-            response.status.CopyFrom(status)
+            try:
+                status = get_status_message(self)
+                response.status.CopyFrom(status)
+            except Exception as e:
+                self.log.error(f"Failed to get status for '{self.name}': {e}")
+                raise DruncException(
+                    message=f"Cannot get FSM status for '{self.name}': {e}",
+                    domain="Controller.get_status_message",
+                    reason="FSM_STATUS_ERROR",
+                ) from e
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -991,9 +1001,10 @@ class Controller(ControllerServicer):
 
                 raise DruncCommandException(
                     message=(
-                        f"FSM command '{command_name}' failed to execute: {error}"
+                        f"Could not place controller in error state after '{command_name}' failed to execute: {error}"
                     ),
                     domain="Controller.execute_fsm_command",
+                    reason="FSM_COMMAND_ERROR",
                 ) from error
 
         # Children nodes.
@@ -1308,7 +1319,14 @@ class Controller(ControllerServicer):
                 )
 
                 # Children are in bad state, so set our state to error.
-                self.stateful_node.to_error()
+                try:
+                    self.stateful_node.to_error()
+                except Exception as e:
+                    raise DruncCommandException(
+                        message=f"Failed to set node '{self.name}' to error state: {e}",
+                        domain="Controller.recompute_status",
+                        reason="FSM_COMMAND_ERROR",
+                    ) from e
 
             else:
                 state = children_states.pop()
