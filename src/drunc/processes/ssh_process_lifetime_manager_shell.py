@@ -1122,6 +1122,43 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
         else:
             self.log.error(msg.strip())
 
+    def _check_process_execution_directory_access(
+        self,
+        ssh_arguments: List[str],
+        cd_path: str,
+        env: Dict[str, str],
+        is_macos: bool,
+    ) -> None:
+        touch_cmd = [
+            *ssh_arguments,
+            f"touch {cd_path}/.write_test && rm {cd_path}/.write_test",
+        ]
+        self.log.debug(f"running {touch_cmd} for CMD access test")
+        try:
+            access = self.ssh(
+                *touch_cmd,
+                _out=self.log.warning,
+                _err=self.log.error,
+                _bg=True,
+                _bg_exc=False,
+                _new_session=True,
+                _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
+                _env=env,
+            )
+
+            access.wait()
+            if access.exit_code != 0:
+                raise RuntimeError("SSH error fails to finish successfully")
+        except Exception as e:
+            err_msg = (
+                f"No access to {cd_path}. "
+                "For multiusers to work, the above path needs elevated permissions for"
+                " the PM superuser to cd and write into. "
+                "Please change the permissions to allow for this."
+            )
+            self.log.error(err_msg)
+            raise RuntimeError from e
+
     def _execute_bootrequest_via_ssh(
         self,
         uuid: str,
@@ -1188,39 +1225,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
 
             # Test access to CMD
             cd_path = f"{boot_request.process_description.process_execution_directory}"
-            touch_cmd = [
-                arguments[0],  # assume first arg is username@host
-                f"touch {cd_path}/.write_test && rm {cd_path}/.write_test",
-            ]
-            self.log.debug(f"running {touch_cmd} for CMD access test")
             env = os.environ.copy()
             env.pop("DISPLAY", None)
-            try:
-                access = self.ssh(
-                    *touch_cmd,
-                    _out=self.log.warning,
-                    _err=self.log.error,
-                    _bg=True,
-                    _bg_exc=False,
-                    _new_session=True,
-                    _preexec_fn=on_parent_exit(signal.SIGTERM)
-                    if not is_macos
-                    else None,
-                    _env=env,
-                )
-
-                access.wait()
-                if access.exit_code != 0:
-                    raise RuntimeError("SSH error fails to finish successfully")
-            except Exception as e:
-                err_msg = (
-                    f"No access to {cd_path}"
-                    "for multiusers to work, the above path needs elevated permissions for"
-                    " the PM superuser to cd and write into. "
-                    "Please change the permissions to allow for this."
-                )
-                self.log.error(err_msg)
-                raise RuntimeError from e
+            self._check_process_execution_directory_access(
+                arguments[:-1], cd_path, env, is_macos
+            )
 
             process = self.ssh(
                 *arguments,
