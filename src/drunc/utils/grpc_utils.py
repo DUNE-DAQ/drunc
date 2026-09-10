@@ -18,6 +18,7 @@ from grpc_status import rpc_status
 from drunc.exceptions import (
     DruncCommandException,
     DruncException,
+    DruncTerminalException,
 )
 
 
@@ -97,8 +98,10 @@ def unpack_any(data: any_pb2.Any, format: type[T]) -> T:
     return req
 
 
-class ServerUnreachable(DruncException):
+class ServerUnreachable(DruncTerminalException):
     """Exception raised when the gRPC server is unreachable."""
+    
+    grpc_error_code: int = code_pb2.UNAVAILABLE
 
     def __init__(self, message: str) -> None:
         """Initialize the ServerUnreachable exception.
@@ -110,9 +113,10 @@ class ServerUnreachable(DruncException):
         super(ServerUnreachable, self).__init__(message)
 
 
-class ServerTimeout(DruncException):
+class ServerTimeout(DruncTerminalException):
     """Exception raised when the gRPC server times out."""
 
+    grpc_error_code: int = code_pb2.DEADLINE_EXCEEDED
     def __init__(self, message: str) -> None:
         """Initialize the ServerTimeout exception.
 
@@ -459,7 +463,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     return handler
                 return unary_unary(request, context)
 
-            except DruncException as e:
+            except DruncTerminalException as e:
                 abort_with_rich_details(
                     context, int(e.grpc_error_code), str(e), e.rich_details
                 )

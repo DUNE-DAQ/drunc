@@ -7,7 +7,7 @@ from typing import Callable, List, TypeVar
 import grpc
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
-from drunc.exceptions import DruncCommandException, DruncException
+from drunc.exceptions import DruncCommandException, DruncException, DruncTerminalException
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
@@ -69,7 +69,7 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.grpc_utils import ServerTimeout
+from drunc.utils.grpc_utils import ServerTimeout, extract_grpc_rich_error
 from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
@@ -630,7 +630,7 @@ class Controller(ControllerServicer):
                 response.status.CopyFrom(status)
             except Exception as e:
                 self.log.error(f"Failed to get status for '{self.name}': {e}")
-                raise DruncException(
+                raise DruncTerminalException(
                     message=f"Cannot get FSM status for '{self.name}': {e}",
                     domain="Controller.get_status_message",
                     reason="FSM_STATUS_ERROR",

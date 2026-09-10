@@ -1,10 +1,7 @@
-from drunc.exceptions import DruncCommandException
 
 
-class ControllerException(DruncCommandException):
-    """Base exception for all Controller errors.
-    """
-    reason: str = "CONTROLLER_COMMAND_ERROR"
+class ControllerException(Exception):
+    pass
 
 
 class ChildError(ControllerException):
@@ -16,10 +13,6 @@ class CannotSurrenderControl(ControllerException):
 
 
 class OtherUserAlreadyInControl(ControllerException):
-    pass
-
-
-class MalformedMessage(ControllerException):
     pass
 
 
