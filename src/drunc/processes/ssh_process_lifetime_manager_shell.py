@@ -1138,14 +1138,16 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             access = self.ssh(
                 *touch_cmd,
                 _out=self.log.warning,
-                _err=self.log.error,
+                _err=self._ssh_client_stderr_logger,
                 _bg=True,
                 _bg_exc=False,
                 _new_session=True,
                 _preexec_fn=on_parent_exit(signal.SIGTERM) if not is_macos else None,
                 _env=env,
             )
-
+            assert isinstance(access, sh.RunningCommand), (
+                "SSH command did not return a RunningCommand instance"
+            )
             access.wait()
             if access.exit_code != 0:
                 raise RuntimeError("SSH error fails to finish successfully")
@@ -1227,8 +1229,11 @@ class SSHProcessLifetimeManagerShell(ProcessLifetimeManager):
             cd_path = f"{boot_request.process_description.process_execution_directory}"
             env = os.environ.copy()
             env.pop("DISPLAY", None)
+            check_directory_access_arguments = self._build_ssh_arguments(
+                hostname, user_host, use_tty=False
+            )
             self._check_process_execution_directory_access(
-                arguments[:-1], cd_path, env, is_macos
+                check_directory_access_arguments, cd_path, env, is_macos
             )
 
             process = self.ssh(
