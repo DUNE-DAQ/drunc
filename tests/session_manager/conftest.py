@@ -289,6 +289,12 @@ def command_description_list():
             help="List all available configurations.",
             return_type="session_manager_pb2.AllConfigKeys",
         ),
+        CommandDescription(
+            name="load_session",
+            data_type=["None"],
+            help="Load a session based on the provided configuration key.",
+            return_type="session_manager_pb2.LoadSessionResponse",
+        ),
     ]
 
 
