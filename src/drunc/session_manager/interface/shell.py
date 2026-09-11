@@ -8,6 +8,7 @@ from drunc.session_manager.interface.commands import (
     describe,
     list_all_configs,
     list_all_sessions,
+    load_session,
 )
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
@@ -42,6 +43,7 @@ def session_manager_shell(ctx, session_manager_address: str, log_level: str) -> 
     ctx.command.add_command(describe, "describe")
     ctx.command.add_command(list_all_sessions, "list_all_sessions")
     ctx.command.add_command(list_all_configs, "list_all_configs")
+    ctx.command.add_command(load_session, "load_session")
     ctx.call_on_close(cleanup)
 
     log.info("Starting session manager shell")

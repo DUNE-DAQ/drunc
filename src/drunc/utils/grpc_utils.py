@@ -331,6 +331,8 @@ def _extract_message_parts(message: Message) -> list[str]:
     Returns:
         list[str]: A list of strings representing non-empty field=value pairs
     """
+    if not hasattr(message, "DESCRIPTOR"):
+        return [str(message)] if message else []
     parts = []
     for field in message.DESCRIPTOR.fields:
         value = getattr(message, field.name)
