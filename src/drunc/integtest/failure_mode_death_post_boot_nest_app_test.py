@@ -60,10 +60,10 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 160
+ps -w 300
 
 echo status-post-boot
-status -w 140
+status -w 300
 """.split()
 
 dead_app_name = "ft-nested-segment-2-application"
@@ -92,7 +92,6 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
-        print(f"Checking for log file for {app_name}...")
         assert any(
             f"{run_dunerc.daq_session_name}_{app_name}" in logfile
             for logfile in generated_log_files
@@ -164,8 +163,8 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     )
 
     # Check that the app that simulated death is in fact dead in the ps table
-    aliveness_state = ps_table_dead_app_entry[0]["alive"]
-    assert aliveness_state == "False", (
+    aliveness_state = ps_table_dead_app_entry[0]["status"]
+    assert aliveness_state == "Dead", (
         f"Expected to see {dead_app_name} marked as dead in the ps table, but it was not."
     )
 

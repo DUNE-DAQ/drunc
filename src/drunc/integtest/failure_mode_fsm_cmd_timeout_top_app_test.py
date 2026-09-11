@@ -59,16 +59,16 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 200
+ps -w 300
 
 echo status-post-boot
-status -w 140
+status -w 300
 
 echo pre-conf
 conf
 
 echo status-post-conf
-status -w 140
+status -w 300
 """.split()
 
 timeout_app_name = "ft-top-segment-application"
@@ -114,7 +114,7 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
 
     # Check that all expected applications are alive after boot
     alive_processes = [
-        row["friendly_name"] for row in ps_table_post_boot if row["alive"] == "True"
+        row["friendly_name"] for row in ps_table_post_boot if row["status"] == "Alive"
     ]
     for app_name in [
         "ft-root-controller",
@@ -126,7 +126,6 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
-        print(f"Checking for log file for {app_name}...")
         assert app_name in alive_processes, (
             f"Expected {app_name} to be alive after boot, but it was not."
         )
