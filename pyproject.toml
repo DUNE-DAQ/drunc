@@ -7,7 +7,7 @@ description = "A flexible run control infrastructure for a distributed DAQ syste
 name = "drunc"
 readme = "docs/README.md"
 requires-python = ">=3.10"
-version = "1.2.1"
+version = "1.2.0"
 
 dependencies = [
   "click",
@@ -64,6 +64,7 @@ test = [
   "types-psutil",
   "types-click-shell",
   "types-paramiko",
+  "types-jsonschema",
 ]
 
 [project.scripts]
