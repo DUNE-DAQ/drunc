@@ -13,6 +13,10 @@ jobs:
     env: 
       WIKI_SUBFOLDER: Developer-Wiki
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: ts-graphviz/setup-graphviz@v1
       - name: Checkout Main Repository
         uses: actions/checkout@v5
 
@@ -24,6 +28,10 @@ jobs:
           ref: master # Wiki default branch 
           # Create temporary wiki subfolder
           path: docs/${{ env.WIKI_SUBFOLDER }}
+
+      - name: Install daqpytools for uml generation
+        run : |
+          pip install "daqpytools[dev] @ git+https://github.com/DUNE-DAQ/daqpytools.git@develop"
 
       # Move Archives to a temp folder so they aren't processed
       - name: Hide Archive files from script
@@ -43,6 +51,14 @@ jobs:
           python docs/utils/process_wiki.py $GITHUB_PAGES_BASE $WIKI_SUBFOLDER
           cd ~
 
+      - name: run uml generation
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          daqpytools-generate-uml drunc --directory . --output-directory pics --split
+          mkdir docs/class_diagrams
+          mv pics/split/classes_styled/*.png docs/class_diagrams
+          
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

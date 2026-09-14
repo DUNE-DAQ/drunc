@@ -1,0 +1,23 @@
+.image-folder-grid {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.image-folder-grid figure {
+  margin: 0;
+}
+
+.image-folder-grid img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+}
+
+.image-folder-grid figcaption {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-top: 6px;
+  word-break: break-word;
+}
