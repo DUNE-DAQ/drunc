@@ -292,7 +292,7 @@ class K8sProcessManager(ProcessManager):
         self.service_startup_timeout = checking.get("service_startup_timeout", 30)
         self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
 
-        # super().__init__() starts the opmon publish thread 
+        # super().__init__() starts the opmon publish thread
         super().__init__(configuration=configuration, session=self.session, **kwargs)
 
         # super().__init__() sets its own self.log
@@ -2433,7 +2433,7 @@ class K8sProcessManager(ProcessManager):
         Directly checks the K8s API for whether a pod object has been fully deleted.
 
         Used as a fallback when the watch stream may have missed the pod's
-        termination event, so kill_and_wait does not have to sit out 
+        termination event, so kill_and_wait does not have to sit out
         the full timeout for a pod that is already gone.
 
         Args:

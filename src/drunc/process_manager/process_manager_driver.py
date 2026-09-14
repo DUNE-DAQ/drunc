@@ -16,7 +16,6 @@ from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.description_pb2 import Description
-from druncschema.generic_pb2 import OutcomeStatus
 from druncschema.process_manager_pb2 import (
     BootRequest,
     LogLines,

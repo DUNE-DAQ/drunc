@@ -20,7 +20,9 @@ from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
 
-def _pm_driver(obj: ProcessManagerContext | UnifiedShellContext) -> ProcessManagerDriver:
+def _pm_driver(
+    obj: ProcessManagerContext | UnifiedShellContext,
+) -> ProcessManagerDriver:
     driver = obj.get_driver("process_manager")
     if not isinstance(driver, ProcessManagerDriver):
         raise RuntimeError("Process manager driver is not initialized")

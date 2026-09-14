@@ -47,8 +47,8 @@ class SSHProcessManager(ProcessManager):
         self.disable_host_key_check = False
 
         if getattr(configuration, "settings", None):
-            self.disable_localhost_host_key_check = (
-                configuration.settings.get("disable_localhost_host_key_check", False)
+            self.disable_localhost_host_key_check = configuration.settings.get(
+                "disable_localhost_host_key_check", False
             )
             self.disable_host_key_check = configuration.settings.get(
                 "disable_host_key_check", False
