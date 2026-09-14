@@ -16,7 +16,6 @@ import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
 from daqconf.utils import find_free_port
 from integ_test_utils import (
-    _PS_COLUMNS,
     _parse_table_from_index,
     assert_contains_between_markers,
     assert_rows_have_valid_uuids,
@@ -282,7 +281,7 @@ def test_terminate(run_dunerc) -> None:
 
     assert table_start_idx is not None, "cannot fine terminated process table"
 
-    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, _PS_COLUMNS)
+    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, "ps")
     for row in terminated_table:
         assert UUID_RE.match(row["uuid"]), (
             f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"

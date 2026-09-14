@@ -16,7 +16,6 @@ import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
 from daqconf.utils import find_free_port
 from integ_test_utils import (
-    _PS_COLUMNS,
     _parse_table_from_index,
     assert_rows_have_valid_uuids,
     find_line_index,
@@ -372,7 +371,7 @@ def test_us_terminated_table_contains_only_us_session(run_dunerc) -> None:
         "Terminated process table appears after us terminate block ended."
     )
 
-    terminated_table = _parse_table_from_index(lines, table_start_idx, _PS_COLUMNS)
+    terminated_table = _parse_table_from_index(lines, table_start_idx, "ps")
     assert terminated_table, (
         "Expected terminated table rows in us output, but found none."
     )
