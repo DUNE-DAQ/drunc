@@ -1,0 +1,84 @@
+"Architecture/Design":
+  - changed-files:
+      - any-glob-to-any-file:
+          - config/**
+          - pyproject.toml
+          - mkdocs.yml
+          - docs/README.md
+          - docs/Messaging-format.md
+          - docs/FSM.md
+
+Controller:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/controller/**
+          - src/drunc/apps/controller.py
+          - src/drunc/apps/controller_shell.py
+          - tests/controller/**
+          - docs/Controller*.md
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - docs/**
+          - mkdocs.yml
+
+gRPC:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/grpc_settings.py
+          - src/drunc/grpc_testing_tools/**
+          - src/drunc/utils/grpc_*.py
+          - src/drunc/controller/children_interface/grpc_child.py
+          - tests/grpc/**
+          - tests/utils/test_grpc_utils.py
+
+K8s:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/k8s_exceptions.py
+          - src/drunc/process_manager/k8s_process_manager.py
+          - src/drunc/data/process_manager/k8s*.json
+          - tests/test_k8s_exceptions.py
+          - tests/process_manager/test_k8s_process_manager.py
+
+"Process Manager":
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/process_manager/**
+          - src/drunc/data/process_manager/**
+          - src/drunc/apps/pm.py
+          - src/drunc/apps/pm_shell.py
+          - tests/process_manager/**
+          - docs/Process-manager*.md
+
+"Resource Manager":
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/resource_manager/**
+          - tests/resource_manager/**
+
+"Session Manager":
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/session_manager/**
+          - src/drunc/apps/session_manager.py
+          - src/drunc/apps/session_manager_shell.py
+          - tests/session_manager/**
+
+Testing:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/**
+          - src/drunc/integtest/**
+          - conftest.py
+
+Utilities:
+  - changed-files:
+      - any-glob-to-any-file:
+          - src/drunc/utils/**
+          - src/drunc/processes/**
+          - src/drunc/unified_shell/**
+          - tests/utils/**
+          - tests/processes/**
+          - tests/unified_shell/**
