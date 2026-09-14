@@ -17,7 +17,6 @@ import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
 from daqconf.utils import find_free_port
 from integ_test_utils import (
-    _PS_COLUMNS,
     _parse_table_from_index,
     assert_contains_between_markers,
     assert_match_contains_uuid,
@@ -558,7 +557,7 @@ def test_terminate(run_dunerc) -> None:
 
     assert table_start_idx is not None, "cannot fine terminated process table"
 
-    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, _PS_COLUMNS)
+    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, "ps")
     for row in terminated_table:
         assert UUID_RE.match(row["uuid"]), (
             f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
@@ -574,8 +573,8 @@ def test_flush(run_dunerc) -> None:
     assert_process_presence(ps_initial, "mlt", context="before crash")
 
     ps_after_crash = get_ps_table_after_echo(lines, "after_crash")
-    mlt_alive = get_column_for_friendly_name(ps_after_crash, "mlt", "alive")
-    assert mlt_alive == "False", "The mlt should have crashed"
+    mlt_alive = get_column_for_friendly_name(ps_after_crash, "mlt", "status")
+    assert mlt_alive == "Dead", "The mlt should have crashed"
 
     ps_after_flash = get_ps_table_after_echo(lines, "after_flush")
     assert_process_presence(
