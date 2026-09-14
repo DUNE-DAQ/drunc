@@ -7,7 +7,7 @@ description = "A flexible run control infrastructure for a distributed DAQ syste
 name = "drunc"
 readme = "docs/README.md"
 requires-python = ">=3.10"
-version = "1.2.0"
+version = "1.2.1"
 
 dependencies = [
   "click",
