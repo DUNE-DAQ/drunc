@@ -58,16 +58,16 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 200
+ps -w 300
 
 echo status-post-boot
-status
+status -w 300
 
 echo pre-conf
 conf
 
 echo status-post-conf
-status
+status -w 300
 """.split()
 
 timeout_app_name = "ft-nested-segment-2-application"
@@ -96,7 +96,6 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
-        print(f"Checking for log file for {app_name}...")
         assert any(
             f"{run_dunerc.daq_session_name}_{app_name}" in logfile
             for logfile in generated_log_files
@@ -105,7 +104,7 @@ def test_log_files_are_present(run_dunerc) -> None:
 
 def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
     """Checks that all expected applications are alive after boot."""
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     # Get the ps table
     ps_table_post_boot = get_ps_table_after_echo(lines, "ps-post-boot")
@@ -113,7 +112,7 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
 
     # Check that all expected applications are alive after boot
     alive_processes = [
-        row["friendly_name"] for row in ps_table_post_boot if row["alive"] == "True"
+        row["friendly_name"] for row in ps_table_post_boot if row["status"] == "Alive"
     ]
     for app_name in [
         "ft-root-controller",
@@ -125,7 +124,6 @@ def test_all_apps_alive_and_no_initial_error(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
-        print(f"Checking for log file for {app_name}...")
         assert app_name in alive_processes, (
             f"Expected {app_name} to be alive after boot, but it was not."
         )
@@ -178,7 +176,7 @@ def test_session_in_error_cli(run_dunerc) -> None:
     to go into an error state, and that the expected message is printed to stdout.
     """
     # Get the status table shown during the command execution
-    stdout = run_dunerc.completed_process.stdout
+    stdout = run_dunerc.completed_processes["drunc"].stdout
     lines = strip_ansi(stdout).splitlines()
     status_table_post_conf = get_status_table_after_echo(lines, "status-post-conf")
 
@@ -236,7 +234,7 @@ def test_suggestion_to_check_logs_is_present(run_dunerc) -> None:
     """
     Checks that the suggestion to check the log files is present in stdout.
     """
-    stdout = run_dunerc.completed_process.stdout
+    stdout = run_dunerc.completed_processes["drunc"].stdout
     lines = strip_ansi(stdout).splitlines()
 
     expected_suggestion = f"logs -n {timeout_app_name}"

@@ -250,10 +250,54 @@ def require_pattern_match(
 
 
 # ── Table parsing ──────────────────────────────────────────────────────────────
+_PS_COLUMNS = [
+    "session",
+    "friendly_name",
+    "user",
+    "host",
+    "uuid",
+    "status",
+    "exit_code",
+]
+_STATUS_COLUMNS = [
+    "name",
+    "info",
+    "state",
+    "substate",
+    "in_error",
+    "included",
+    "endpoint",
+]
+_EXEC_REPORT_COLUMNS = ["name", "command_execution", "fsm_transition"]
+_RUN_INFO_COLUMNS = ["key", "value"]
+_TABLE_COLUMNS = {
+    "ps": _PS_COLUMNS,
+    "status": _STATUS_COLUMNS,
+    "exec_report": _EXEC_REPORT_COLUMNS,
+    "run_info": _RUN_INFO_COLUMNS,
+}
+
+
+def get_table_columns(table_type: str) -> list[str]:
+    """
+    Get the expected column entries based on the table type.
+
+    Args:
+        table_type: the expected type of table
+
+    Returns:
+        list of expected table entries
+
+    Raises:
+        None
+    """
+    if table_type not in _TABLE_COLUMNS:
+        raise ValueError(f"Unknown table type: {table_type}")
+    return _TABLE_COLUMNS[table_type]
 
 
 def _parse_table_from_index(
-    lines: list[str], start_idx: int, columns: list[str]
+    lines: list[str], start_idx: int, table_type: str
 ) -> list[dict[str, str]]:
     """Parse a Unicode box table starting after `start_idx`, mapping cells to `columns`.
 
@@ -261,6 +305,9 @@ def _parse_table_from_index(
     Rows with fewer cells than `columns` are silently skipped.
     """
     rows: list[dict[str, str]] = []
+    columns = get_table_columns(table_type)
+    column_len = len(columns)
+    header_row = True
 
     for line in lines[start_idx + 1 :]:
         stripped = line.strip()
@@ -269,8 +316,16 @@ def _parse_table_from_index(
         if not stripped.startswith("│"):
             continue
         cells = [cell.strip() for cell in stripped.strip("│").split("│")]
-        if len(cells) < len(columns):
+
+        # ps tables can omit the exit-status column if nothing died; detect the
+        # narrower shape from the first data row.
+        if header_row and table_type == "ps" and len(cells) < column_len:
+            columns = columns[: len(cells)]
+            column_len = len(cells)
+
+        if len(cells) < column_len:
             continue
+        header_row = False
         rows.append(dict(zip(columns, cells)))
 
     return rows
@@ -280,7 +335,7 @@ def _get_table_after_echo(
     lines: list[str],
     echo_marker: str,
     header_keyword: str,
-    columns: list[str],
+    table_type: str,
 ) -> list[dict[str, str]]:
     """Return parsed table rows found after `echo_marker`, anchored by `header_keyword`.
 
@@ -303,20 +358,7 @@ def _get_table_after_echo(
     if table_start_idx is None:
         return []
 
-    return _parse_table_from_index(lines, table_start_idx, columns)
-
-
-_PS_COLUMNS = ["session", "friendly_name", "user", "host", "uuid", "alive", "exit_code"]
-_STATUS_COLUMNS = [
-    "name",
-    "info",
-    "state",
-    "substate",
-    "in_error",
-    "included",
-    "endpoint",
-]
-_EXEC_REPORT_COLUMNS = ["name", "command_execution", "fsm_transition"]
+    return _parse_table_from_index(lines, table_start_idx, table_type)
 
 
 def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str, str]]:
@@ -335,7 +377,7 @@ def get_ps_table_after_echo(lines: list[str], echo_marker: str) -> list[dict[str
         >>> table[0]["friendly_name"]
         'root-controller'
     """
-    return _get_table_after_echo(lines, echo_marker, "Processes running", _PS_COLUMNS)
+    return _get_table_after_echo(lines, echo_marker, "Processes running", "ps")
 
 
 def get_status_table_after_echo(
@@ -374,7 +416,7 @@ def get_status_table_after_echo(
     Raises:
         None
     """
-    return _get_table_after_echo(lines, echo_marker, "status", _STATUS_COLUMNS)
+    return _get_table_after_echo(lines, echo_marker, "status", "status")
 
 
 def get_execution_report_after_echo(
@@ -387,9 +429,7 @@ def get_execution_report_after_echo(
     Returns:
         Parsed rows with keys: name, command_execution, fsm_transition.
     """
-    return _get_table_after_echo(
-        lines, echo_marker, "execution report", _EXEC_REPORT_COLUMNS
-    )
+    return _get_table_after_echo(lines, echo_marker, "execution report", "exec_report")
 
 
 # ── Process table helpers ──────────────────────────────────────────────────────
@@ -576,14 +616,11 @@ def check_status_table_substates(
     assert not failures, "Substate mismatch(es) found:\n" + "\n".join(failures)
 
 
-_RUN_INFO_COLUMNS = ["key", "value"]
-
-
 def get_run_info_after_echo(lines: list[str], echo_marker: str) -> dict[str, str]:
     """Return parsed Run Info key-value pairs found after `echo_marker`.
 
     The Run Info table is a two-column │key│value│ table anchored by 'Run Info'.
     Returns a dict mapping stripped key → stripped value.
     """
-    rows = _get_table_after_echo(lines, echo_marker, "Run Info", _RUN_INFO_COLUMNS)
+    rows = _get_table_after_echo(lines, echo_marker, "Run Info", "run_info")
     return {row["key"]: row["value"] for row in rows}

@@ -60,10 +60,10 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 160
+ps -w 300
 
 echo status-post-boot
-status
+status -w 300
 """.split()
 
 
@@ -87,7 +87,6 @@ def test_log_files_are_present(run_dunerc) -> None:
         "ft-nested-segment-2.1-application",
         "ft-top-segment-application",
     ]:
-        print(f"Checking for log file for {app_name}...")
         assert any(
             f"{run_dunerc.daq_session_name}_{app_name}" in logfile
             for logfile in generated_log_files
@@ -128,7 +127,7 @@ def test_expected_log_message_in_terminal(run_dunerc) -> None:
     """
     # Check that the expected boot failure message is in stdout for the application that
     # dies on boot
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     search_str = "Booted, but there are disconnected applications/controllers."
 
     str_found = any(search_str in line for line in lines)
@@ -144,7 +143,7 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     """
     # Check that the application that dies on boot is not present in the ps table after
     # boot.
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     ps_table = get_ps_table_after_echo(lines, "ps-post-boot")
     dead_app_name = "ft-top-segment-application"
@@ -157,8 +156,8 @@ def test_process_dead_in_ps_table(run_dunerc) -> None:
     assert dead_app_name not in ps_table, (
         f"Expected to see {dead_app_name} missing from the ps table, but it was found."
     )
-    aliveness_state = ps_table_dead_app_entry[0]["alive"]
-    assert aliveness_state == "False", (
+    aliveness_state = ps_table_dead_app_entry[0]["status"]
+    assert aliveness_state == "Dead", (
         f"Expected to see {dead_app_name} marked as dead in the ps table, but it was not."
     )
 
@@ -170,7 +169,7 @@ def test_process_disconnected_in_status_table(run_dunerc) -> None:
     """
     # Check that the application that dies on boot is not present in the status table after
     # boot.
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     status_table = get_status_table_after_echo(lines, "status-post-boot")
     dead_app_name = "ft-top-segment-application"
@@ -200,7 +199,7 @@ def test_boot_failure_cli(run_dunerc) -> None:
     """
     # Check that the session is correctly put in error state if an appliucation dies on
     # boot.
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
     search_str = "Booted, but the session is in an error state."
     str_found = any(search_str in line for line in lines)
     assert str_found is True, (
@@ -215,7 +214,7 @@ def test_fsm_in_error_status_table(run_dunerc) -> None:
     """
     # Check that the session FSM is correctly put in error state if an appliucation dies
     # on boot.
-    lines = strip_ansi(run_dunerc.completed_process.stdout).splitlines()
+    lines = strip_ansi(run_dunerc.completed_processes["drunc"].stdout).splitlines()
 
     status_table = get_status_table_after_echo(lines, "status-post-boot")
     root_controller_status = get_rows_by_name_from_status_table(

@@ -85,6 +85,7 @@ def get_status_table(
     describe_response: DescribeResponse,
     display_host_overrides: dict[str, str] | None = None,
     show_ip_address: bool = False,
+    width: int | None = None,
 ) -> Table | Group:
     status = status_response.status
     description = describe_response.description
@@ -94,7 +95,8 @@ def get_status_table(
             f"[dark_green]{description.session}[/dark_green] status"
             if description is not None
             else "[dark_green]status[/dark_green]"
-        )
+        ),
+        width=width,
     )
     t.add_column("Name")
     t.add_column("Info")
@@ -231,6 +233,7 @@ def render_status_table(
     execute_along_path: bool = True,
     execute_on_all_subsequent_children_in_path: bool = True,
     show_ip_address: bool = False,
+    width: int | None = None,
 ) -> Table | Group:
     statuses = ctx.get_driver("controller").status(
         target=target,
@@ -248,6 +251,7 @@ def render_status_table(
         descriptions,
         display_host_overrides=display_host_overrides,
         show_ip_address=show_ip_address,
+        width=width,
     )
 
 

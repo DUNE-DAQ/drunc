@@ -3,7 +3,13 @@
 import grpc
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Request
-from druncschema.session_manager_pb2 import AllActiveSessions, AllConfigKeys
+from druncschema.session_manager_pb2 import (
+    AllActiveSessions,
+    AllConfigKeys,
+    ConfigKey,
+    LoadSessionRequest,
+    LoadSessionResponse,
+)
 from druncschema.session_manager_pb2_grpc import SessionManagerStub
 from druncschema.token_pb2 import Token
 
@@ -50,10 +56,9 @@ class SessionManagerDriver:
         Returns:
             A response containing the description of the service.
         """
+        self.log.info(f"Sending describe request to session manager at {self.address}")
+
         request = Request(token=copy_token(self.token))
-        self.log.info(
-            f"Sending describe request to session manager at {self.address} with timeout {timeout}s"
-        )
 
         response: Description = self.stub.describe(request, timeout=timeout)
 
@@ -68,10 +73,11 @@ class SessionManagerDriver:
         Returns:
             A response containing a list of all active sessions.
         """
-        request = Request(token=copy_token(self.token))
         self.log.info(
-            f"Sending list_all_sessions request to session manager at {self.address} with timeout {timeout}s"
+            f"Sending list_all_sessions request to session manager at {self.address}"
         )
+
+        request = Request(token=copy_token(self.token))
 
         response: AllActiveSessions = self.stub.list_all_sessions(
             request, timeout=timeout
@@ -88,11 +94,40 @@ class SessionManagerDriver:
         Returns:
             A response containing all available configuration keys.
         """
-        request = Request(token=copy_token(self.token))
         self.log.info(
-            f"Sending list_all_configs request to session manager at {self.address} with timeout {timeout}s"
+            f"Sending list_all_configs request to session manager at {self.address}"
         )
 
+        request = Request(token=copy_token(self.token))
+
         response: AllConfigKeys = self.stub.list_all_configs(request, timeout=timeout)
+
+        return response
+
+    def load_session(
+        self, file: str, session_id: str, timeout: int | float = 60
+    ) -> LoadSessionResponse:
+        """Load a session based on the provided configuration key.
+
+        Args:
+            file: The file containing the session to load.
+            session_id: The ID of the session to load.
+            timeout: The timeout for the gRPC call in seconds.
+
+        Returns:
+            LoadSessionResponse: A response containing loaded session metadata.
+        """
+        self.log.info(
+            f"Sending load_session request to session manager at {self.address}"
+        )
+
+        request = LoadSessionRequest(
+            config_key=ConfigKey(
+                file=file,
+                session_id=session_id,
+            )
+        )
+
+        response: LoadSessionResponse = self.stub.load_session(request, timeout=timeout)
 
         return response

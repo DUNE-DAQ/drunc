@@ -76,6 +76,13 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     default=False,
     help="Show additional columns, including the IP address of each endpoint.",
 )
+@click.option(
+    "-w",
+    "--width",
+    type=int,
+    default=None,
+    help="Table width. Default is automatically calculated",
+)
 @click.pass_obj
 def status(
     obj: ControllerContext,
@@ -83,6 +90,7 @@ def status(
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
+    width: int | None,
 ) -> None:
     log_msg = (
         f"Getting status for target '{target}'..."
@@ -97,7 +105,9 @@ def status(
             execute_along_path=execute_along_path,
             execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
             show_ip_address=extended,
-        )
+            width=width,
+        ),
+        soft_wrap=True,
     )
     obj.print_status_summary()
 
