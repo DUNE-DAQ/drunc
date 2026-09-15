@@ -24,29 +24,33 @@ from drunc.process_manager.configuration import (
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
+from drunc.utils.utils import get_logger
 
 
 class SSHProcessManager(ProcessManager):
     pm_type = ProcessManagerTypes.SSH_SHELL
 
     def __init__(
-        self, configuration, LifetimeManagerClass: ProcessLifetimeManager, **kwargs
+        self,
+        configuration,
+        LifetimeManagerClass: type[ProcessLifetimeManager],
+        name: str = "process_manager",
+        **kwargs,
     ):
         # Used to prevent races between process exit callbacks and ps/kill/flush queries
         self.boot_request_lock = threading.Lock()
         self.ssh_lifetime_manager: Optional[ProcessLifetimeManager] = None
         self.session = getpass.getuser()  # unfortunate
-
-        super().__init__(configuration=configuration, session=self.session, **kwargs)
+        self.log = get_logger("process_manager.ssh_process_manager")
 
         self.disable_localhost_host_key_check = False
         self.disable_host_key_check = False
 
-        if self.configuration.settings:
-            self.disable_localhost_host_key_check = self.configuration.settings.get(
+        if getattr(configuration, "settings", None):
+            self.disable_localhost_host_key_check = configuration.settings.get(
                 "disable_localhost_host_key_check", False
             )
-            self.disable_host_key_check = self.configuration.settings.get(
+            self.disable_host_key_check = configuration.settings.get(
                 "disable_host_key_check", False
             )
 
@@ -58,6 +62,13 @@ class SSHProcessManager(ProcessManager):
             disable_localhost_host_key_check=self.disable_localhost_host_key_check,
             logger=self.log,
             on_process_exit=self._on_ssh_process_exit,
+        )
+
+        super().__init__(
+            configuration=configuration,
+            name=name,
+            session=self.session,
+            **kwargs,
         )
         # stores the exit statuses for all dead processes by uuid
         self.archived_exit_statuses: dict[str, ExitStatus] = {}
