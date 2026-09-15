@@ -3,24 +3,28 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Self, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Self, Union
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
 from jsonschema import validate as js_validate
 from kafkaopmon.OpMonPublisher import OpMonPublisher as KafkaOpMonPublisher
-from opmonlib.conf import OpMonConf
 from opmonlib.publisher import OpMonPublisher
 from opmonlib.utils import parse_opmon_conf
 
-from drunc.exceptions import DruncCommandException
+from drunc.exceptions import DruncCommandException, DruncSetupException
 from drunc.process_manager.exceptions import UnknownProcessManagerType
-from drunc.utils.configuration import ConfHandler
-from drunc.utils.utils import get_logger, touch_and_chmod
+from drunc.process_manager.process_manager_json_conf import (
+    OpMonConfig,
+    OpMonUri,
+    ProcessManagerJsonConfData,
+    ProcessManagerSettings,
+)
+from drunc.utils.configuration import ConfHandler, ConfTypes
+from drunc.utils.utils import expand_path, get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
     import conffwk
-
 
 PROCESS_SHUTDOWN_ORDERING = [
     "unknown",
@@ -49,42 +53,49 @@ class ProcessManagerConfHandler(ConfHandler):
 
     log_path: str = "./"
 
-    def populate_from_dict(self, data: dict[str, object]) -> None:
+    def populate_from_conf_data(self, data: ProcessManagerJsonConfData) -> None:
         self.broadcaster = None
         self.authoriser = None
         self.pm_type = ProcessManagerTypes.Unknown
         self.command_address = ""
-        self.environment = {}
-        self.settings = {}
-        self.opmon_conf: OpMonConf | None = None
-        self.opmon_uri = None
+        self.environment: dict[str, str] = data.environment
+        self.settings: ProcessManagerSettings = data.settings
+        self.opmon_conf: OpMonConfig | None = data.opmon_conf
+        self.opmon_uri: OpMonUri | None = data.opmon_uri
         self.opmon_publisher = None
 
-        self.environment = cast(dict[str, str], data.get("environment", {}))
-        self.settings = cast(dict[str, object], data.get("settings", {}))
-        self.opmon_conf = data.get("opmon_conf")
-        self.opmon_uri = data.get("opmon_uri")
-
-        conf_type = str(data["type"]).lower()
+        conf_type = data.type.lower()
         match conf_type:
             case "ssh":
                 self.pm_type = ProcessManagerTypes.SSH_SHELL
-                self.kill_timeout = float(data.get("kill_timeout", 0.5))
+                self.kill_timeout = data.kill_timeout
             case "ssh-paramiko":
                 self.pm_type = ProcessManagerTypes.SSH_PARAMIKO
-                self.kill_timeout = float(data.get("kill_timeout", 0.5))
+                self.kill_timeout = data.kill_timeout
             case "k8s":
                 self.pm_type = ProcessManagerTypes.K8s
-                self.image = str(data.get("image", "ghcr.io/dune-daq/alma9:latest"))
+                self.image = data.image
             case _:
-                raise UnknownProcessManagerType(str(data["type"]))
+                raise UnknownProcessManagerType(data.type)
 
     @classmethod
     def from_json(
         cls, path: str, session_name: str | None = None, log_path: str = "./"
     ) -> Self:
         """Create handler from JSON file with optional log path."""
-        instance = super().from_json(path, session_name)
+        instance: Self = cls.__new__(cls)
+        instance._init_common(session_name)
+        resolved = expand_path(path, True)
+        if not os.path.exists(expand_path(path)):
+            raise DruncSetupException(f"Location {resolved} ({path}) is empty!")
+        with open(resolved) as f:
+            loaded_json: object = json.load(f)
+            json_data = ProcessManagerJsonConfData.from_raw(loaded_json)
+        instance.initial_data = json_data
+        instance._raw_data = None
+        instance.populate_from_conf_data(json_data)
+        instance.type = ConfTypes.PyObject
+        instance._post_process_oks()
         instance.log_path = log_path
         instance.log = get_logger("process_manager.conf_handler")
         return instance
