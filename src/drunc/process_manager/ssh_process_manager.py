@@ -116,7 +116,7 @@ class SSHProcessManager(ProcessManager):
     def _get_process_timeouts(self, uuids: List[str]) -> dict[str, float]:
         process_timeouts = {}
         for process_uuid in uuids:
-            process_timeouts[process_uuid] = self.configuration.conf_data.kill_timeout
+            process_timeouts[process_uuid] = self.configuration.kill_timeout
         return process_timeouts
 
     def _on_ssh_process_exit(
@@ -550,7 +550,7 @@ class SSHProcessManager(ProcessManager):
         self.add_process_to_expected_dead_processes(uuid)
 
         exit_status = self.ssh_lifetime_manager.kill_process(
-            uuid, self.configuration.conf_data.kill_timeout
+            uuid, self.configuration.kill_timeout
         )
         if exit_status is not None:
             self.archived_exit_statuses[uuid] = exit_status
@@ -714,7 +714,7 @@ class SSHProcessManager(ProcessManager):
                 del self.boot_request[proc_uuid]
                 # Clean data associated with the process from the lifetime manager
                 self.ssh_lifetime_manager.kill_process(
-                    proc_uuid, self.configuration.conf_data.kill_timeout
+                    proc_uuid, self.configuration.kill_timeout
                 )
 
                 pi_return_code = (
