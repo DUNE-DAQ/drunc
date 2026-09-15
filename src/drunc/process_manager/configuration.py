@@ -3,7 +3,7 @@ import os
 import sys
 from enum import Enum
 from importlib import resources
-from typing import TYPE_CHECKING, Any, Dict, Protocol, Self, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Self, Union, cast
 from urllib.parse import unquote, urlparse
 
 from jsonschema import ValidationError
@@ -20,33 +20,6 @@ from drunc.utils.utils import get_logger, touch_and_chmod
 
 if TYPE_CHECKING:
     import conffwk
-
-
-class _RunsOnInner(Protocol):
-    id: str
-
-
-class _RunsOn(Protocol):
-    runs_on: _RunsOnInner
-
-
-class _Service(Protocol):
-    id: str
-    port: int
-    protocol: str
-
-
-class _SessionDal(Protocol):
-    id: str
-    controller_log_level: str
-
-
-class _AppLike(Protocol):
-    id: str
-    runs_on: _RunsOn
-    exposes_service: list[_Service]
-
-    def oksTypes(self) -> list[str]: ...
 
 
 PROCESS_SHUTDOWN_ORDERING = [
