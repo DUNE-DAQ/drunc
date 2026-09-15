@@ -491,6 +491,7 @@ class _GRPCCallWrapper:
             try:
                 error_details = extract_grpc_rich_error(exception)
                 self._logger.error(error_details)
+                exception.rich_error_details = error_details
             except Exception as extraction_error:
                 self._logger.debug(
                     f"Could not extract rich error details: {extraction_error}",

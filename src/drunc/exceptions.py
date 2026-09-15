@@ -3,6 +3,7 @@ from google.rpc import code_pb2, error_details_pb2
 
 
 class DruncException(Exception):
+    """Base exception class for Drunc errors."""
     def __init__(
         self,
         message: str | None = "An error occurred in Drunc.",
@@ -61,11 +62,19 @@ class DruncException(Exception):
         return details_list
 
 
+class DruncTerminalException(DruncException):
+    """The RPC must be aborted with a rich gRPC status."""
+
+
+class DruncNonTerminalException(DruncException):
+    """The command can return a normal response containing the error."""
+
+    
 class DruncShellException(DruncException):
     pass
 
 
-class DruncSetupException(DruncException):
+class DruncSetupException(DruncTerminalException):
     grpc_error_code: int = code_pb2.FAILED_PRECONDITION
 
     @property
@@ -82,12 +91,12 @@ class DruncSetupException(DruncException):
         return [precond]
 
 
-class DruncCommandException(DruncException):
+class DruncCommandException(DruncTerminalException):
     grpc_error_code: int = code_pb2.INTERNAL
     reason: str = "COMMAND_ERROR"
 
 
-class DruncServerSideError(DruncException):
+class DruncServerSideError(DruncTerminalException):
     def __init__(
         self,
         error_txt: str,
@@ -110,30 +119,47 @@ class DruncServerSideError(DruncException):
         return f"{self.stack_txt}\n{self.error_txt}\n{self.server_response}"
 
 
-class DruncBatchShellError(DruncException):
+class DruncBatchShellError(DruncTerminalException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error: {msg}"
         super().__init__(message=err_msg)
 
 
-class DruncBatchShellArgError(DruncException):
+class DruncBatchShellArgError(DruncTerminalException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error, unknown command or argument: {msg}"
         super().__init__(message=err_msg)
 
 
-class DruncBatchShellUnknownCommand(DruncException):
+class DruncBatchShellUnknownCommand(DruncTerminalException):
     def __init__(self, msg: str) -> None:
         err_msg = f"Batch shell error, unknown command: {msg}"
         super().__init__(message=err_msg)
 
 
-class DruncBatchShellMissingArg(DruncException):
+class DruncBatchShellMissingArg(DruncTerminalException):
     def __init__(self, msg1: str, msg2: str) -> None:
         err_msg = f"Batch shell error, this optional argument is mandatory in batch mode. Failed command: {msg1}. Next input: {msg2}"
         super().__init__(message=err_msg)
 
 
-class DruncNotImplementedException(DruncException):
+class DruncNotImplementedException(DruncTerminalException):
     grpc_error_code: int = code_pb2.UNIMPLEMENTED
     reason: str = "NOT_IMPLEMENTED"
+
+
+
+#########################################################################
+#                   CONTROLLER EXCEPTIONS
+#########################################################################
+
+
+class ChildCommandFailed(DruncCommandException):
+    def __init__(self, child_name: str, child_details: list[Message], **kwargs) -> None:
+        self.child_name = child_name
+        self._child_details = child_details
+        super().__init__(message=f"Child '{child_name}' failed", **kwargs)
+
+    @property
+    def specialised_details(self) -> list[Message]:
+        return self._child_details

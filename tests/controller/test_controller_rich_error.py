@@ -7,6 +7,7 @@ from concurrent import futures
 from unittest.mock import MagicMock, patch
 
 import grpc
+from drunc.controller.controller import Controller
 import pytest
 from druncschema.controller_pb2 import StatusRequest, StatusResponse
 from druncschema.controller_pb2_grpc import (
@@ -154,3 +155,118 @@ def test_drunc_exception_rich_error(controller_rich_error_test_suite, status_req
 
     mock_extract_grpc_rich_error.assert_called_once()
     controller_rich_error_test_suite.mock_client_logger.error.assert_called_once()
+
+#################################################################################
+# Test Controller propagate_concurently
+#################################################################################
+
+class FakeChild:
+    """Minimal ChildNode stand-in; safe_call only needs `.name` and a callable."""
+
+    def __init__(self, name: str, stub: ControllerStub):
+        self.name = name
+        self._stub = stub
+
+    def status(self, target: str = "") -> StatusResponse:
+        return self._stub.status(
+            StatusRequest(
+                token=Token(),
+                target=target,
+                execute_along_path=False,
+                execute_on_all_subsequent_children_in_path=True,
+            )
+        )
+
+
+class ParentPropagatingServicer(ControllerServicer):
+    """Dummy parent servicer that propagates to a single failing child via
+    Controller.propagate_concurrently, exercising the safe_call wrapper."""
+
+    def __init__(self, child: FakeChild):
+        self.child = child
+
+    def status(self, request: StatusRequest, context) -> StatusResponse:
+        Controller.propagate_concurrently(
+            lambda child, target: child.status(target),
+            [(self.child, "")],
+        )
+        return StatusResponse(name="parent", token=request.token)  # not reached
+
+
+def test_propagate_concurrently_wraps_child_grpc_error(status_request):
+    """
+    Test than when a child raises a DruncSetupException, the parent catches the grpc.RpcError
+    and raises a ChildCommandFailed with the child's rich error details.
+    """
+    # Child server which raises DruncSetupException.
+    child_server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=5),
+        interceptors=[RichErrorServerInterceptor()],
+    )
+    add_ControllerServicer_to_server(DummyControllerServicer(), child_server)
+    child_port = child_server.add_insecure_port("[::]:0")
+    child_server.start()
+
+    child_raw_channel = grpc.insecure_channel(f"localhost:{child_port}")
+    child_channel = grpc.intercept_channel(
+        child_raw_channel, RichErrorClientInterceptor(logger=MagicMock())
+    )
+    child_stub = ControllerStub(child_channel)
+    fake_child = FakeChild(name="child1", stub=child_stub)
+
+    # Parent server which propagates to the child and catches the RpcError.
+    parent_server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=5),
+        interceptors=[RichErrorServerInterceptor()],
+    )
+    add_ControllerServicer_to_server(
+        ParentPropagatingServicer(child=fake_child), parent_server
+    )
+    parent_port = parent_server.add_insecure_port("[::]:0")
+    parent_server.start()
+
+    parent_channel = grpc.insecure_channel(f"localhost:{parent_port}")
+    parent_stub = ControllerStub(parent_channel)
+
+    try:
+        with pytest.raises(grpc.RpcError) as excinfo:
+            parent_stub.status(status_request)
+
+        err = excinfo.value
+        assert err.code() == grpc.StatusCode.INTERNAL
+        assert "child1" in err.details()
+
+        status = status_pb2.Status()
+        for key, value in err.trailing_metadata():
+            if key == "grpc-status-details-bin":
+                status.ParseFromString(value)
+
+        error_infos = []
+        precond = None
+        for detail in status.details:
+            if detail.Is(error_details_pb2.ErrorInfo.DESCRIPTOR):
+                info = error_details_pb2.ErrorInfo()
+                detail.Unpack(info)
+                error_infos.append(info)
+            elif detail.Is(error_details_pb2.PreconditionFailure.DESCRIPTOR):
+                precond = error_details_pb2.PreconditionFailure()
+                detail.Unpack(precond)
+
+        # Two ErrorInfo -one for the parent's wrapper, and the
+        # child's original error, each with their own `reason`.
+        assert len(error_infos) == 2
+        parent_error = next(i for i in error_infos if i.reason == "COMMAND_ERROR")
+        child_error = next(i for i in error_infos if i.reason == "DruncSetupException")
+
+        assert parent_error.metadata["message"] == "Child 'child1' failed"
+        assert child_error.domain == "drunc"
+        assert "Controller is not ready" in child_error.metadata["message"]
+
+        assert precond is not None
+        assert len(precond.violations) > 0
+        assert "Controller has not finished initialising" in precond.violations[0].description
+    finally:
+        parent_channel.close()
+        child_channel.close()
+        parent_server.stop(grace=0)
+        child_server.stop(grace=0)
