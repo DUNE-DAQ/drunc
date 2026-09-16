@@ -35,7 +35,7 @@ from drunc.connectivity_service.exceptions import ApplicationLookupUnsuccessful
 from drunc.controller.utils import get_segment_lookup_timeout
 from drunc.exceptions import DruncSetupException, DruncShellException
 from drunc.process_manager.oks_parser import get_full_db_path
-from drunc.process_manager.utils import format_hostname, get_log_path, get_rte_script
+from drunc.process_manager.utils import get_log_path, get_rte_script
 from drunc.utils.grpc_utils import (
     RichErrorClientInterceptor,
     copy_token,
@@ -298,10 +298,12 @@ class ProcessManagerDriver:
         override_logs: bool,
         pwd: str,
     ) -> BootRequest:
-        # Run mapping to physical hostname to enable multi host usage
-        host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
-
-        # this is one of the two minimal changes needed to get this working in general?
+        # Temporary hack while resource management is under development: the hostname
+        # is taken as-is from the app restriction (only localhost is resolved).
+        # When resource management is ready, restore the original logic below and
+        # remove this line:
+        # host = resolve_localhost_to_hostname(format_hostname(app["restriction"]))
+        host = resolve_localhost_to_hostname(app["restriction"])
         name = app["name"]
         exe = app["type"]
         args = app["args"]
