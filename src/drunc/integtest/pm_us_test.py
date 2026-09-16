@@ -90,12 +90,12 @@ dunerc_commands = """
 
     echo pre_boot
     echo-on-server pre_boot
-    ps -w 180
+    ps -w 300
     boot
     wait 15
     echo post_boot
     echo-on-server post_boot
-    ps -w 180
+    ps -w 300
 
     echo test_terminate
     echo-on-server test_terminate

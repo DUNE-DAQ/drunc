@@ -101,12 +101,12 @@ dunerc_commands = f"""
 
     echo pre_boot
     echo-on-server pre_boot
-    ps -w 180
+    ps -w 300
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
     wait 15
     echo post_boot
     echo-on-server post_boot
-    ps -w 180
+    ps -w 300
 
 
     echo test_logs
@@ -125,16 +125,16 @@ dunerc_commands = f"""
     restart -n root-controller
     wait 5
     echo post_restart_mlt
-    ps -w 180
+    ps -w 300
     echo-on-server post_restart_mlt
 
 
     echo test_kill_mlt
-    ps -w 180
+    ps -w 300
     kill -n mlt
     wait 2
     echo test_kill_mlt_post
-    ps -w 180
+    ps -w 300
     echo test_kill_mlt_done
 
 
@@ -143,30 +143,30 @@ dunerc_commands = f"""
     restart -n trg-controller
     wait 5
     echo test_recovery_post
-    ps -w 180
+    ps -w 300
     echo test_recovery_done
 
 
     echo test_flush
-    ps -w 180
+    ps -w 300
     kill -n mlt --crash 
     wait 5
     echo after_crash
-    ps -w 180
+    ps -w 300
     flush
     echo after_flush
-    ps -w 180
+    ps -w 300
     echo test_flush_done
 
 
     echo pre_boot_2
     echo-on-server pre_boot_2
-    ps -w 180
+    ps -w 300
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name_1}
     wait 5
     echo post_boot_2
     echo-on-server post_boot_2
-    ps -w 180
+    ps -w 300
 
 
     echo test_terminate
