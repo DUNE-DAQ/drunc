@@ -109,7 +109,7 @@ us_commands_stage_1 = """
 
 pmshell_commands_stage_2 = f"""
     echo pms_ps_all_sessions
-    ps -w 180
+    ps -w 300
 
     echo pms_ps_session_1_only
     ps -s {daq_session_name_1} -w 180
@@ -124,7 +124,7 @@ pmshell_commands_stage_2 = f"""
 us_commands_stage_2 = """
 
     echo us_ps_only
-    ps -w 180
+    ps -w 300
 
     echo us_logs_scoped
     logs -n root-controller --how-far 5
@@ -136,13 +136,13 @@ us_commands_stage_2 = """
 
 pmshell_commands_stage_3 = """
     echo pms_ps_after_us_terminate
-    ps -w 180
+    ps -w 300
 
     echo pms_terminate_all
     terminate
 
     echo pms_ps_final
-    ps -w 180
+    ps -w 300
     """.split()
 
 # Find a free network port to use for the process manager
