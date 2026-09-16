@@ -5,9 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, TypeVar
 
 import grpc
-
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
-from drunc.exceptions import ChildCommandFailed, DruncCommandException, DruncException, DruncTerminalException
 from druncschema.authoriser_pb2 import ActionType, SystemType
 from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
 from druncschema.controller_pb2 import (
@@ -41,12 +39,12 @@ from druncschema.controller_pb2 import (
 )
 from druncschema.controller_pb2_grpc import ControllerServicer
 from druncschema.description_pb2 import Description
+from druncschema.generic_pb2 import ResponseError
 from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
-from druncschema.generic_pb2 import ResponseError
-
+from google.protobuf.message import Message
 from grpc import ServicerContext
 
 from drunc.authoriser.configuration import DummyAuthoriserConfHandler
@@ -64,6 +62,13 @@ from drunc.controller.utils import (
     get_detector_name,
     get_status_message,
 )
+from drunc.exceptions import (
+    ChildCommandNonTerminalException,
+    ChildCommandTerminalException,
+    DruncCommandException,
+    DruncCommandNonTerminalException,
+    DruncTerminalException,
+)
 from drunc.fsm.actions.utils import get_dotdrunc_json
 from drunc.fsm.configuration import FSMConfHandler
 from drunc.fsm.exceptions import (
@@ -71,14 +76,11 @@ from drunc.fsm.exceptions import (
     DotDruncJsonNotFound,
 )
 from drunc.fsm.utils import convert_fsm_transition
-from drunc.utils.utils import get_logger
-from google.protobuf.message import Message
-
 from drunc.utils.grpc_utils import (
-    ServerTimeout,
     extract_grpc_rich_error,
     pack_to_any,
 )
+from drunc.utils.utils import get_logger
 
 T = TypeVar("T")
 
@@ -524,7 +526,7 @@ class Controller(ControllerServicer):
         self,
         response_type: type[T],
         child: ChildNode,
-        failure: ChildCommandFailed,
+        failure: ChildCommandNonTerminalException,
     ) -> T:
         self.log.error(f"Child '{child.name}' failed: {failure}")
 
@@ -533,8 +535,11 @@ class Controller(ControllerServicer):
             name=child.name,
             flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
             error=ResponseError(
-                message=str(failure),
-                details=[pack_to_any(detail) for detail in failure.rich_details],
+            message=str(failure),
+            details=[
+                pack_to_any(detail)
+                for detail in failure.child_details
+                ],
             ),
         )
 
@@ -542,7 +547,7 @@ class Controller(ControllerServicer):
     def _degrade_status_response(
         self,
         child: ChildNode,
-        failure: ChildCommandFailed,
+        failure: ChildCommandNonTerminalException,
     ) -> StatusResponse:
         response = self._degrade_response(StatusResponse, child, failure)
         response.status.CopyFrom(
@@ -556,13 +561,52 @@ class Controller(ControllerServicer):
         return response
 
 
+    def _degrade_fsm_response(
+        self,
+        child: ChildNode,
+        failure: ChildCommandNonTerminalException,
+        command_name: str,
+    ) -> ExecuteFSMCommandResponse:
+        """
+        Handles failures of FSM commands for a child node.
+        """
+        response = self._degrade_response(
+            ExecuteFSMCommandResponse,
+            child,
+            failure,
+        )
+        response.command_name = command_name
+        response.fsm_flag = FSMResponseFlag.FSM_FAILED
+        return response
+
+
+    def _set_fsm_command_error(
+        self,
+        response: ExecuteFSMCommandResponse,
+        error: DruncCommandNonTerminalException,
+    ) -> ExecuteFSMCommandResponse:
+        """
+        Handles DruncCommandException when executing the FSM command on the current
+        controller and modifies the exisitingparent response
+        """
+        response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
+        response.fsm_flag = FSMResponseFlag.FSM_FAILED
+        response.error.CopyFrom(
+            ResponseError(
+                message=str(error),
+                details=[pack_to_any(detail) for detail in error.rich_details],
+            )
+        )
+        self.stateful_node.to_error()
+        return response
+
     @staticmethod
     def propagate_concurrently(
         child_callable: Callable[[ChildNode, str], T],
         child_list: list[tuple[ChildNode, str]],
         indices: list[int] | None = None,
         abort_on_child_error: bool = True,
-        degrade_response: Callable[[ChildNode, ChildCommandFailed], T] | None = None,
+        degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None = None,
     ) -> list[T]:
         """Propagate commands concurrently to a list of children.
             maintaining the ordering of the children in the response list.
@@ -576,6 +620,7 @@ class Controller(ControllerServicer):
             abort_on_child_error: If True, raise an exception immediately when a child fails.
                 If False, use degrade_response to convert the failure into the
                 expected response type.
+            degrade_response: Callable[[ChildNode, ChildCommandNonTerminalException], T] | None: Optional callable to convert a child failure into a response when abort_on_child_error is False.
 
         Returns:
             List of typed responses from each child.
@@ -589,15 +634,20 @@ class Controller(ControllerServicer):
                 if rich is None:
                     rich = extract_grpc_rich_error(error)
 
-                child_error = ChildCommandFailed(
+                child_details = [
+                    detail for detail in rich.details if isinstance(detail, Message)
+                ]
+
+                child_error = ChildCommandNonTerminalException(
                     child_name=child.name,
-                    child_details=[
-                        detail for detail in rich.details if isinstance(detail, Message)
-                    ],
+                    child_details=child_details
                 )
 
                 if abort_on_child_error:
-                    raise child_error from error
+                    raise ChildCommandTerminalException(
+                        child_name=child.name,
+                        child_details=child_details,
+                    ) from error
 
                 if degrade_response is None:
                     raise RuntimeError(
@@ -766,24 +816,15 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target == self.name or request.execute_along_path:
-            try:
-                description = Description(
-                    type="controller",
-                    name=self.name,
-                    endpoint=self.uri if self.uri is not None else "unknown",
-                    info=get_detector_name(self.configuration),
-                    session=self.session,
-                    commands=None,
-                )
-                response.description.CopyFrom(description)
-            except DruncException:
-                raise
-            except Exception as error:
-                raise DruncTerminalException(
-                    message=f"Cannot describe controller '{self.name}': {error}",
-                    domain="Controller.describe",
-                    reason="DESCRIPTION_ERROR",
-                ) from error
+            description = Description(
+                type="controller",
+                name=self.name,
+                endpoint=self.uri if self.uri is not None else "unknown",
+                info=get_detector_name(self.configuration),
+                session=self.session,
+                commands=None,
+            )
+            response.description.CopyFrom(description)
 
         # Children nodes (ignore exclusion).
         child_list = self.address_target_path(
@@ -1016,19 +1057,19 @@ class Controller(ControllerServicer):
                     transition_data=command.data,
                     ctx=self,
                 )
-                self.stateful_node.propagate_transition_mark(transition)
 
-            except DruncException:
+            except DruncCommandNonTerminalException as error:
+                return self._set_fsm_command_error(response, error)
+            except DruncTerminalException:
                 raise
-
             except Exception as error:
-                raise DruncCommandException(
+                raise DruncTerminalException(
                     message=(
-                        f"Could not prepare FSM command '{command_name}' "
-                        f"for '{self.name}': {error}"
+                        f"Unexpected error preparing FSM command "
+                        f"'{command_name}' for '{self.name}': {error}"
                     ),
                     domain="Controller.execute_fsm_command",
-                    reason="FSM_COMMAND_PREPARATION_ERROR",
+                    reason="UNEXPECTED_FSM_PREPARATION_ERROR",
                 ) from error
 
             # If the command publishes to ELisa Logbook, make sure that .dotdrunc.json
@@ -1065,25 +1106,36 @@ class Controller(ControllerServicer):
             child_command = FSMCommand()
             child_command.CopyFrom(command)
             child_command.data = fsm_data
-            try:
-                child_responses = self.propagate_concurrently(
-                    lambda child, target: child.execute_fsm_command(
-                        child_command,
-                        target,
-                        request.execute_along_path,
-                        request.execute_on_all_subsequent_children_in_path,
-                    ),
-                    child_list,
-                    indices=connected_indices,
-                    abort_on_child_error=True # terminal - stop executing on child error
-                )
-                response.children.extend(child_responses)
-            except ServerTimeout as e:
+            
+            child_responses = self.propagate_concurrently(
+                lambda child, target: child.execute_fsm_command(
+                    child_command,
+                    target,
+                    request.execute_along_path,
+                    request.execute_on_all_subsequent_children_in_path,
+                ),
+                child_list,
+                indices=connected_indices,
+                abort_on_child_error=False,
+                degrade_response=lambda child, failure: self._degrade_fsm_response(
+                    child,
+                    failure,
+                    command_name,
+                ),
+            )
+            
+            response.children.extend(child_responses)
+
+            child_failed = any(
+                child_response.fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+                or child_response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY
+                for child_response in response.children
+            )
+            if child_failed:
                 response.fsm_flag = FSMResponseFlag.FSM_FAILED
                 self.stateful_node.to_error()
-                self.log.error(f"FSM command '{command_name}' failed: {e}")
                 return response
-
+            
 
             try:
                 # Finish propagating FSM transition to children.
@@ -1101,24 +1153,19 @@ class Controller(ControllerServicer):
                     transition_data=fsm_data,
                     ctx=self,
                 )
-            except DruncException:
+            except DruncCommandException as error:
+                return self._set_fsm_command_error(response, error)
+            except DruncTerminalException:
                 raise
-
             except Exception as error:
-                try:
-                    self.stateful_node.to_error()
-                except Exception:
-                    self.log.exception(
-                        "Could not place controller in error state after FSM failure"
-                    )
-
-                raise DruncCommandException(
+                self.stateful_node.to_error()
+                raise DruncTerminalException(
                     message=(
-                        f"Could not finish FSM command '{command_name}' "
-                        f"for '{self.name}': {error}"
+                        f"Unexpected error finishing FSM command "
+                        f"'{command_name}' for '{self.name}': {error}"
                     ),
                     domain="Controller.execute_fsm_command",
-                    reason="FSM_COMMAND_ERROR",
+                    reason="UNEXPECTED_FSM_FINALISATION_ERROR",
                 ) from error
 
         # Children nodes.
@@ -1132,8 +1179,23 @@ class Controller(ControllerServicer):
                 ),
                 child_list,
                 indices=connected_indices,
+                abort_on_child_error=False,
+                degrade_response=lambda child, failure: self._degrade_fsm_response(
+                    child,
+                    failure,
+                    command_name,
+                ),
             )
             response.children.extend(child_responses)
+
+            child_failed = any(
+                child_response.fsm_flag != FSMResponseFlag.FSM_EXECUTED_SUCCESSFULLY
+                or child_response.flag != ResponseFlag.EXECUTED_SUCCESSFULLY
+                for child_response in response.children) # should this check include disconnected children?
+            if child_failed:
+                response.fsm_flag = FSMResponseFlag.FSM_FAILED
+                return response
+            
 
         return response
 

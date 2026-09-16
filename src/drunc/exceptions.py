@@ -70,7 +70,7 @@ class DruncNonTerminalException(DruncException):
     """The command can return a normal response containing the error."""
 
     
-class DruncShellException(DruncException):
+class DruncShellException(DruncTerminalException):
     pass
 
 
@@ -92,6 +92,11 @@ class DruncSetupException(DruncTerminalException):
 
 
 class DruncCommandException(DruncTerminalException):
+    grpc_error_code: int = code_pb2.INTERNAL
+    reason: str = "COMMAND_EXECUTION_FAILED"
+
+
+class DruncCommandNonTerminalException(DruncNonTerminalException):
     grpc_error_code: int = code_pb2.INTERNAL
     reason: str = "COMMAND_ERROR"
 
@@ -154,11 +159,32 @@ class DruncNotImplementedException(DruncTerminalException):
 #########################################################################
 
 
-class ChildCommandFailed(DruncCommandException):
+class ChildCommandNonTerminalException(DruncCommandNonTerminalException):
+    """Non terminal exception for child command failures. Used when a child command fails but the parent can continue."""
+    reason = "CHILD_COMMAND_ERROR"
+
     def __init__(self, child_name: str, child_details: list[Message], **kwargs) -> None:
         self.child_name = child_name
         self._child_details = child_details
         super().__init__(message=f"Child '{child_name}' failed", **kwargs)
+
+    @property
+    def child_details(self) -> list[Message]:
+        return self._child_details
+
+class ChildCommandTerminalException(DruncCommandException):
+    """Terminal exception for child command failures. Used when a child command fails and the parent cannot continue."""
+    grpc_error_code = code_pb2.INTERNAL
+    reason = "CHILD_COMMAND_EXECUTION_FAILED"
+
+    def __init__(
+        self,
+        child_name: str,
+        child_details: list[Message],
+    ) -> None:
+        self.child_name = child_name
+        self._child_details = child_details
+        super().__init__(message=f"Child '{child_name}' failed")
 
     @property
     def specialised_details(self) -> list[Message]:
