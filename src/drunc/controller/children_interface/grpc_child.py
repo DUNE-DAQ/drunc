@@ -44,6 +44,7 @@ from drunc.exceptions import DruncSetupException
 from drunc.grpc_settings import CONTROLLER_CLIENT_GRPC_CONFIG
 from drunc.utils.configuration import ConfHandler
 from drunc.utils.grpc_utils import (
+    RichErrorClientInterceptor,
     ServerUnreachable,
     rethrow_if_unreachable_server,
     unpack_any,
@@ -102,11 +103,12 @@ class gRPCChildNode(ChildNode):
             if hasattr(self, "channel") and self.channel:
                 self.channel.close()
 
-            self.channel = grpc.insecure_channel(
-                self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG
-            )
+            raw_channel = grpc.insecure_channel(self.uri, options=CONTROLLER_CLIENT_GRPC_CONFIG)
+            rich_interceptor = RichErrorClientInterceptor(logger=self.log)
+            self.channel = grpc.intercept_channel(raw_channel, rich_interceptor)
             self.log.info(f"Created new gRPC channel to {self.uri}")
             self.stub = ControllerStub(self.channel)
+
 
         request = DescribeRequest(
             token=None,

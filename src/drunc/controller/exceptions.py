@@ -17,17 +17,5 @@ class OtherUserAlreadyInControl(ControllerException):
     pass
 
 
-class MalformedMessage(ControllerException):
-    pass
-
-
-class MalformedCommand(ControllerException):
-    pass
-
-
-class MalformedCommandArgument(ControllerException):
-    pass
-
-
 class ExpertCommandException(ControllerException):
     pass
