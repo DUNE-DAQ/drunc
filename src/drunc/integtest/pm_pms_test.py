@@ -276,59 +276,81 @@ def test_connections(run_dunerc) -> None:
     )
 
 
+def _check_boot(
+    run_dunerc,
+    process_name,
+    pre_marker,
+    post_marker,
+    expected_message=None,
+    *,
+    session_name=None,
+    check_ps_table=False,
+) -> None:
+    """Shared boot-check logic: verifies markers/message, and optionally the root-controller
+    boot message (pm) or a populated, UUID-valid ps table (pmshell)."""
+    lines = strip_ansi(run_dunerc.completed_processes[process_name].stdout).splitlines()
+
+    if expected_message:
+        assert_contains_between_markers(
+            lines, pre_marker, post_marker, expected_message
+        )
+    else:
+        get_lines_between_markers(lines, pre_marker, post_marker)
+
+    if session_name:
+        check_root_controller_boot = (
+            f"Booted 'root-controller' from session '{session_name}' with UUID"
+        )
+        assert_contains_between_markers(
+            lines, pre_marker, post_marker, check_root_controller_boot
+        )
+
+    if check_ps_table:
+        ps_post_boot = get_ps_table_after_echo(lines, post_marker)
+        assert ps_post_boot, (
+            "Expected ps table after boot to contain processes, but it was empty."
+        )
+        assert_rows_have_valid_uuids(ps_post_boot)
+
+
 def test_boot_pms(run_dunerc) -> None:
     """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
-    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
-
-    assert_contains_between_markers(
-        lines, "pre_boot", "post_boot", "No processes running"
+    _check_boot(
+        run_dunerc,
+        "pmshell",
+        "pre_boot",
+        "post_boot",
+        "No processes running",
+        check_ps_table=True,
     )
-    ps_post_boot = get_ps_table_after_echo(lines, "post_boot")
-    assert ps_post_boot, (
-        "Expected ps table after boot to contain processes, but it was empty."
-    )
-    assert_rows_have_valid_uuids(ps_post_boot)
 
 
 def test_boot_pm(run_dunerc) -> None:
     """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
-    lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
-
-    assert_contains_between_markers(
-        lines, "pre_boot", "post_boot", "sent boot with arguments"
-    )
-    check_root_controller_boot = (
-        f"Booted 'root-controller' from session '{daq_session_name}' with UUID"
-    )
-    assert_contains_between_markers(
-        lines, "pre_boot", "post_boot", check_root_controller_boot
+    _check_boot(
+        run_dunerc,
+        "pm",
+        "pre_boot",
+        "post_boot",
+        "sent boot with arguments",
+        session_name=daq_session_name,
     )
 
 
 def test_boot_pms_2(run_dunerc) -> None:
     """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
-    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
-
-    get_lines_between_markers(lines, "pre_boot_2", "post_boot_2")
-    ps_post_boot = get_ps_table_after_echo(lines, "post_boot_2")
-    assert ps_post_boot, (
-        "Expected ps table after boot to contain processes, but it was empty."
-    )
-    assert_rows_have_valid_uuids(ps_post_boot)
+    _check_boot(run_dunerc, "pmshell", "pre_boot_2", "post_boot_2", check_ps_table=True)
 
 
 def test_boot_pm_2(run_dunerc) -> None:
     """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
-    lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
-
-    assert_contains_between_markers(
-        lines, "pre_boot_2", "post_boot_2", "sent boot with arguments"
-    )
-    check_root_controller_boot = (
-        f"Booted 'root-controller' from session '{daq_session_name_1}' with UUID"
-    )
-    assert_contains_between_markers(
-        lines, "pre_boot_2", "post_boot_2", check_root_controller_boot
+    _check_boot(
+        run_dunerc,
+        "pm",
+        "pre_boot_2",
+        "post_boot_2",
+        "sent boot with arguments",
+        session_name=daq_session_name_1,
     )
 
 
