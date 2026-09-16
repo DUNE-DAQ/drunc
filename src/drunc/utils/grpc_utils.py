@@ -18,6 +18,7 @@ from grpc_status import rpc_status
 from drunc.exceptions import (
     DruncCommandException,
     DruncException,
+    DruncTerminalException,
 )
 
 
@@ -461,7 +462,7 @@ class RichErrorServerInterceptor(grpc.ServerInterceptor):
                     return handler
                 return unary_unary(request, context)
 
-            except DruncException as e:
+            except DruncTerminalException as e:
                 abort_with_rich_details(
                     context, int(e.grpc_error_code), str(e), e.rich_details
                 )

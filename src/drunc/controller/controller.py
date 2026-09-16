@@ -45,7 +45,7 @@ from druncschema.opmon.FSM_pb2 import FSMStatus
 from druncschema.opmon.generic_pb2 import RunInfo
 from druncschema.request_response_pb2 import ResponseFlag
 from druncschema.token_pb2 import Token
-from druncschema.generic_pb2 import ErrorDetails
+from druncschema.generic_pb2 import ResponseError
 
 from grpc import ServicerContext
 
@@ -532,7 +532,7 @@ class Controller(ControllerServicer):
             token=None,
             name=child.name,
             flag=ResponseFlag.DRUNC_EXCEPTION_THROWN,
-            error=ErrorDetails(
+            error=ResponseError(
                 message=str(failure),
                 details=[pack_to_any(detail) for detail in failure.rich_details],
             ),
@@ -699,6 +699,8 @@ class Controller(ControllerServicer):
             return response
 
         # This node.
+        # Q: Should we catch exceptions when getting the status of this node and should they
+        # be terminal or non terminal?
         if request.target == self.name or request.execute_along_path:
             status = get_status_message(self)
             response.status.CopyFrom(status)
@@ -721,8 +723,8 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-            abort_on_child_error=False, # non terminal - keep executing and propagate error
-            degrade_response=self._degrade_status_response,
+            abort_on_child_error=False, # non terminal - parent should still return status for children
+            degrade_response=self._degrade_status_response, # convert child failure into a StatusResponse with error info
         )
         child_responses.extend(
             [
@@ -793,6 +795,8 @@ class Controller(ControllerServicer):
             child_list,
             operation_name="describe",
         )
+
+        # Describe children nodes concurrently - non terminal, propagate errors without aborting 
         child_responses = self.propagate_concurrently(
             lambda child, target: child.describe(
                 target,
@@ -885,7 +889,13 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-        )
+            abort_on_child_error=False, # non terminal - keep executing and propagate error
+            degrade_response=lambda child, failure: self._degrade_response(
+                DescribeFSMResponse,
+                child,
+                failure,
+                )
+            ),
         child_responses.extend(
             [
                 DescribeFSMResponse(
@@ -1776,7 +1786,13 @@ class Controller(ControllerServicer):
             ),
             child_list,
             indices=connected_indices,
-        )
+            abort_on_child_error=False, # non terminal - keep executing and propagate error
+            degrade_response=lambda child, failure: self._degrade_response(
+                LogOnServerResponse,
+                child,
+                failure,
+                )
+            ),
         child_responses.extend(
             [
                 LogOnServerResponse(
