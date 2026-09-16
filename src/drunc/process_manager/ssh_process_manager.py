@@ -18,10 +18,14 @@ from druncschema.request_response_pb2 import ResponseFlag
 
 from drunc.exceptions import DruncCommandException
 from drunc.process_manager.configuration import (
+    ProcessManagerConfHandler,
     ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
 from drunc.process_manager.process_manager import ProcessManager
+from drunc.process_manager.ssh_process_manager_settings import (
+    SSHProcessManagerSettings,
+)
 from drunc.processes.exit_status import ExitStatus
 from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 from drunc.utils.utils import get_logger
@@ -32,7 +36,7 @@ class SSHProcessManager(ProcessManager):
 
     def __init__(
         self,
-        configuration,
+        configuration: ProcessManagerConfHandler,
         LifetimeManagerClass: type[ProcessLifetimeManager],
         name: str = "process_manager",
         **kwargs,
@@ -46,13 +50,12 @@ class SSHProcessManager(ProcessManager):
         self.disable_localhost_host_key_check = False
         self.disable_host_key_check = False
 
-        if getattr(configuration, "settings", None):
-            self.disable_localhost_host_key_check = configuration.settings.get(
-                "disable_localhost_host_key_check", False
+        settings = getattr(configuration, "settings", None)
+        if isinstance(settings, SSHProcessManagerSettings):
+            self.disable_localhost_host_key_check = (
+                settings.disable_localhost_host_key_check
             )
-            self.disable_host_key_check = configuration.settings.get(
-                "disable_host_key_check", False
-            )
+            self.disable_host_key_check = settings.disable_host_key_check
 
         # self.children_logs_depth = 1000
         # self.children_logs = {}

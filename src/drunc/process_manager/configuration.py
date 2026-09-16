@@ -100,7 +100,7 @@ class ProcessManagerConfHandler(ConfHandler):
         instance.log = get_logger("process_manager.conf_handler")
         return instance
 
-    def get_log_path(self):
+    def get_log_path(self) -> str:
         return self.log_path
 
     def _post_process_oks(self) -> None:

@@ -1,9 +1,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import TypedDict, TypeVar
 
+from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import get_logger
+
+T = TypeVar("T")
+
+
+def require_type(value: object, expected_type: type[T], message: str) -> T:
+    """Return `value` narrowed to `expected_type`, or raise DruncSetupException."""
+    if not isinstance(value, expected_type):
+        raise DruncSetupException(message)
+    return value
+
+
+def require_number(value: object, message: str) -> int | float:
+    """Return `value` narrowed to int/float, or raise DruncSetupException."""
+    if not isinstance(value, (int, float)):
+        raise DruncSetupException(message)
+    return value
 
 
 class ServiceConfig(TypedDict, total=False):
@@ -58,22 +75,20 @@ def _empty_checking_config() -> CheckingConfig:
 
 
 def _number_from_raw(key: str, raw: object) -> int | float:
-    assert isinstance(raw, (int, float)), f"'{key}' must be numeric"
-    return raw
+    return require_number(raw, f"'{key}' must be numeric")
 
 
 def _int_from_raw(key: str, raw: object) -> int:
-    assert isinstance(raw, int), f"'{key}' must be an integer"
-    return raw
+    return require_type(raw, int, f"'{key}' must be an integer")
 
 
 def _string_map_from_raw(key: str, raw: object) -> dict[str, str]:
-    assert isinstance(raw, dict), f"'{key}' must be an object"
+    raw = require_type(raw, dict, f"'{key}' must be a JSON object")
     return {str(k): str(v) for k, v in raw.items()}
 
 
 def _service_config_from_raw(raw: object) -> ServiceConfig:
-    assert isinstance(raw, dict), "'service' must be an object"
+    raw = require_type(raw, dict, "'service' must be a JSON object")
     config = ServiceConfig()
     value = raw.get("headless_discovery_port")
     if value is not None:
@@ -84,7 +99,7 @@ def _service_config_from_raw(raw: object) -> ServiceConfig:
 
 
 def _pod_management_config_from_raw(raw: object) -> PodManagementConfig:
-    assert isinstance(raw, dict), "'pod_management' must be an object"
+    raw = require_type(raw, dict, "'pod_management' must be a JSON object")
     config = PodManagementConfig()
     value = raw.get("kill_timeout")
     if value is not None:
@@ -98,7 +113,7 @@ def _pod_management_config_from_raw(raw: object) -> PodManagementConfig:
 
 
 def _cleanup_config_from_raw(raw: object) -> CleanupConfig:
-    assert isinstance(raw, dict), "'cleanup' must be an object"
+    raw = require_type(raw, dict, "'cleanup' must be a JSON object")
     config = CleanupConfig()
     value = raw.get("restart_cleanup_time")
     if value is not None:
@@ -119,29 +134,31 @@ def _cleanup_config_from_raw(raw: object) -> CleanupConfig:
 
 
 def _volume_config_from_raw(raw: object) -> VolumeConfig:
-    assert isinstance(raw, dict), "'volumes' entries must be objects"
+    raw = require_type(raw, dict, "'volumes' entries must be objects")
     config = VolumeConfig()
     name = raw.get("name")
     if name is not None:
-        assert isinstance(name, str), "'volumes.name' must be a string"
-        config["name"] = name
+        config["name"] = require_type(name, str, "'volumes.name' must be a string")
     mount_path = raw.get("mount_path")
     if mount_path is not None:
-        assert isinstance(mount_path, str), "'volumes.mount_path' must be a string"
-        config["mount_path"] = mount_path
+        config["mount_path"] = require_type(
+            mount_path, str, "'volumes.mount_path' must be a string"
+        )
     host_path = raw.get("host_path")
     if host_path is not None:
-        assert isinstance(host_path, str), "'volumes.host_path' must be a string"
-        config["host_path"] = host_path
+        config["host_path"] = require_type(
+            host_path, str, "'volumes.host_path' must be a string"
+        )
     value = raw.get("read_only")
     if value is not None:
-        assert isinstance(value, bool), "'volumes.read_only' must be boolean"
-        config["read_only"] = value
+        config["read_only"] = require_type(
+            value, bool, "'volumes.read_only' must be boolean"
+        )
     return config
 
 
 def _checking_config_from_raw(raw: object) -> CheckingConfig:
-    assert isinstance(raw, dict), "'checking' must be an object"
+    raw = require_type(raw, dict, "'checking' must be a JSON object")
     config = CheckingConfig()
     value = raw.get("watcher_retry_sleep")
     if value is not None:
@@ -170,7 +187,7 @@ def _checking_config_from_raw(raw: object) -> CheckingConfig:
 
 
 def _host_config_from_raw(raw: object) -> HostConfig:
-    assert isinstance(raw, dict), "'host_configs' entries must be objects"
+    raw = require_type(raw, dict, "'host_configs' entries must be objects")
     config = HostConfig()
     limits = raw.get("limits")
     if limits is not None:
@@ -202,7 +219,7 @@ class K8sProcessManagerSettings:
     def from_raw(cls, raw: object) -> "K8sProcessManagerSettings":
         if raw is None:
             return cls()
-        assert isinstance(raw, dict), "'settings' must be an object"
+        raw = require_type(raw, dict, "'settings' must be a JSON object")
 
         settings = cls()
         known_fields = {
@@ -229,8 +246,9 @@ class K8sProcessManagerSettings:
             if key == "labels":
                 settings.labels = _string_map_from_raw("labels", value)
             elif key == "readout_app_selector":
-                assert isinstance(value, str), "'readout_app_selector' must be a string"
-                settings.readout_app_selector = value
+                settings.readout_app_selector = require_type(
+                    value, str, "'readout_app_selector' must be a string"
+                )
             elif key == "service":
                 settings.service = _service_config_from_raw(value)
             elif key == "pod_management":
@@ -238,39 +256,21 @@ class K8sProcessManagerSettings:
             elif key == "cleanup":
                 settings.cleanup = _cleanup_config_from_raw(value)
             elif key == "volumes":
-                assert isinstance(value, list), "'volumes' must be a list"
+                value = require_type(value, list, "'volumes' must be a list")
                 settings.volumes = [_volume_config_from_raw(v) for v in value]
             elif key == "home_path_base":
-                assert isinstance(value, str), "'home_path_base' must be a string"
-                settings.home_path_base = value
+                settings.home_path_base = require_type(
+                    value, str, "'home_path_base' must be a string"
+                )
             elif key == "checking":
                 settings.checking = _checking_config_from_raw(value)
             elif key == "host_configs":
-                assert isinstance(value, dict), "'host_configs' must be an object"
+                value = require_type(
+                    value, dict, "'host_configs' must be a JSON object"
+                )
                 settings.host_configs = {
                     str(host): _host_config_from_raw(config)
                     for host, config in value.items()
                 }
 
         return settings
-
-    def get(self, key: str, default: object | None = None) -> object | None:
-        if key == "labels":
-            return self.labels
-        if key == "readout_app_selector":
-            return self.readout_app_selector
-        if key == "service":
-            return self.service
-        if key == "pod_management":
-            return self.pod_management
-        if key == "cleanup":
-            return self.cleanup
-        if key == "volumes":
-            return self.volumes
-        if key == "home_path_base":
-            return self.home_path_base
-        if key == "checking":
-            return self.checking
-        if key == "host_configs":
-            return self.host_configs
-        return self.extra.get(key, default)

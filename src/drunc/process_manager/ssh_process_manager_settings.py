@@ -1,8 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypeVar
 
+from drunc.exceptions import DruncSetupException
 from drunc.utils.utils import get_logger
+
+T = TypeVar("T")
+
+
+def require_type(value: object, expected_type: type[T], message: str) -> T:
+    """Return `value` narrowed to `expected_type`, or raise DruncSetupException."""
+    if not isinstance(value, expected_type):
+        raise DruncSetupException(message)
+    return value
 
 
 @dataclass
@@ -17,7 +28,7 @@ class SSHProcessManagerSettings:
     def from_raw(cls, raw: object) -> "SSHProcessManagerSettings":
         if raw is None:
             return cls()
-        assert isinstance(raw, dict), "'settings' must be an object"
+        raw = require_type(raw, dict, "'settings' must be a JSON object")
 
         settings = cls()
         for key, value in raw.items():
@@ -33,21 +44,12 @@ class SSHProcessManagerSettings:
                 continue
 
             if key == "disable_localhost_host_key_check":
-                assert isinstance(value, bool), (
-                    "'disable_localhost_host_key_check' must be boolean"
+                settings.disable_localhost_host_key_check = require_type(
+                    value, bool, "'disable_localhost_host_key_check' must be boolean"
                 )
-                settings.disable_localhost_host_key_check = value
             elif key == "disable_host_key_check":
-                assert isinstance(value, bool), (
-                    "'disable_host_key_check' must be boolean"
+                settings.disable_host_key_check = require_type(
+                    value, bool, "'disable_host_key_check' must be boolean"
                 )
-                settings.disable_host_key_check = value
 
         return settings
-
-    def get(self, key: str, default: object | None = None) -> object | None:
-        if key == "disable_localhost_host_key_check":
-            return self.disable_localhost_host_key_check
-        if key == "disable_host_key_check":
-            return self.disable_host_key_check
-        return self.extra.get(key, default)

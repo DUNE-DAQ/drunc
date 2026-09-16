@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from drunc.exceptions import DruncSetupException
 from drunc.process_manager import k8s_process_manager_settings
 from drunc.process_manager.configuration import ProcessManagerTypes
 from drunc.process_manager.k8s_process_manager_settings import K8sProcessManagerSettings
@@ -116,10 +117,30 @@ def test_process_manager_from_json_loads_k8s_settings(
         }
     }
     assert settings.extra == {"discarded_k8s_setting": "unused"}
-    assert settings.get("labels") == {"app": "readout", "run": "42"}
-    assert settings.get("discarded_k8s_setting") == "unused"
     logger.warning.assert_called_once_with(
         "Discarding unsupported K8s process manager setting '%s'",
         "discarded_k8s_setting",
     )
     assert opmon_conf.application == "process_manager"
+
+
+def test_process_manager_from_json_raises_on_invalid_k8s_setting(
+    process_manager_from_json: ProcessManagerFromJson,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logger = Mock()
+    monkeypatch.setattr(
+        k8s_process_manager_settings, "get_logger", Mock(return_value=logger)
+    )
+    config_data: dict[str, object] = {
+        "type": "k8s",
+        "settings": {
+            "readout_app_selector": 123,
+        },
+    }
+
+    with pytest.raises(
+        DruncSetupException,
+        match="'readout_app_selector' must be a string",
+    ):
+        process_manager_from_json(config_data, logger)

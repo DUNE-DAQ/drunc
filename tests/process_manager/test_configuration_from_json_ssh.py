@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from drunc.exceptions import DruncSetupException
 from drunc.process_manager import ssh_process_manager_settings
 from drunc.process_manager.configuration import ProcessManagerTypes
 from drunc.process_manager.ssh_process_manager_settings import SSHProcessManagerSettings
@@ -58,11 +59,30 @@ def test_process_manager_from_json_loads_ssh_settings(
     assert settings.disable_localhost_host_key_check is True
     assert settings.disable_host_key_check is False
     assert settings.extra == {"discarded_ssh_setting": "unused"}
-    assert settings.get("disable_localhost_host_key_check") is True
-    assert settings.get("disable_host_key_check") is False
-    assert settings.get("discarded_ssh_setting") == "unused"
     logger.warning.assert_called_once_with(
         "Discarding unsupported SSH process manager setting '%s'",
         "discarded_ssh_setting",
     )
     assert opmon_conf.application == "process_manager"
+
+
+def test_process_manager_from_json_raises_on_invalid_ssh_setting(
+    process_manager_from_json: ProcessManagerFromJson,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    logger = Mock()
+    monkeypatch.setattr(
+        ssh_process_manager_settings, "get_logger", Mock(return_value=logger)
+    )
+    config_data: dict[str, object] = {
+        "type": "ssh",
+        "settings": {
+            "disable_localhost_host_key_check": "not-a-bool",
+        },
+    }
+
+    with pytest.raises(
+        DruncSetupException,
+        match="'disable_localhost_host_key_check' must be boolean",
+    ):
+        process_manager_from_json(config_data, logger)
