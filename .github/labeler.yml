@@ -38,7 +38,7 @@ K8s:
       - any-glob-to-any-file:
           - src/drunc/k8s_exceptions.py
           - src/drunc/process_manager/k8s_process_manager.py
-          - src/drunc/data/process_manager/k8s*.json
+          - src/drunc/data/process_manager/*k8s*.json
           - tests/test_k8s_exceptions.py
           - tests/process_manager/test_k8s_process_manager.py
 
