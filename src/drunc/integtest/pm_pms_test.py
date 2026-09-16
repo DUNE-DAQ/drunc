@@ -7,6 +7,7 @@
 #
 
 import functools
+import getpass
 import os
 import re
 from datetime import datetime
@@ -124,6 +125,7 @@ dunerc_commands = f"""
     restart -n root-controller
     wait 5
     echo post_restart_mlt
+    ps -w 180
     echo-on-server post_restart_mlt
 
 
@@ -230,18 +232,17 @@ def test_dunerc_success(run_dunerc) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
-    assert any(
-        f"{daq_session_name}_df-01" in str(logname) for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{daq_session_name}_dfo" in str(logname) for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{daq_session_name}_mlt" in str(logname) for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{daq_session_name}_ru" in str(logname) for logname in run_dunerc.log_files
-    )
+    logfile_types = ("df-01", "dfo", "mlt", "ru")
+    log_names = tuple(map(str, run_dunerc.log_files))
+    missing_logfiles = [
+        f"{session_name}_{logfile_type}"
+        for session_name in (daq_session_name, daq_session_name_1)
+        for logfile_type in logfile_types
+        if not any(
+            f"{session_name}_{logfile_type}" in str(logname) for logname in log_names
+        )
+    ]
+    assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
 
     # Check that there are no warnings or errors in the log files
     assert log_file_checks.logs_are_error_free(
@@ -262,8 +263,12 @@ def test_connections(run_dunerc) -> None:
         run_dunerc.completed_processes["pmshell"].stdout
     ).splitlines()
 
-    pm_connect = "connected from process_manager_shell"
-    pms_connect = "connected to the process manager through a"
+    user_name = getpass.getuser()
+    pm_connect = f"{user_name} connected from process_manager_shell"
+    pms_connect = (
+        f"{user_name} connected to the process manager through a "
+        f"drunc-process-manager-shell via address localhost:{pm_port}"
+    )
 
     assert any(pm_connect in line for line in lines_pm), (
         f"Did not find '{pm_connect}' between pre_boot and post_boot.\nBetween:\n"
@@ -311,6 +316,13 @@ def _check_boot(
             "Expected ps table after boot to contain processes, but it was empty."
         )
         assert_rows_have_valid_uuids(ps_post_boot)
+        non_alive_processes = [
+            row["friendly_name"] for row in ps_post_boot if row["status"] != "Alive"
+        ]
+        assert not non_alive_processes, (
+            "Expected all processes after boot to be alive, but these were not: "
+            + ", ".join(non_alive_processes)
+        )
 
 
 def test_boot_pms(run_dunerc) -> None:
@@ -516,6 +528,12 @@ def test_restart_mlt_logs_pms(run_dunerc) -> None:
             re.DOTALL,
         ),
         error_message="Did not find the mlt boot log line in pms after the restart exit log.",
+    )
+
+    ps_after_restart = get_ps_table_after_echo(lines, "post_restart_mlt")
+    mlt_status = get_column_for_friendly_name(ps_after_restart, "mlt", "status")
+    assert mlt_status == "Alive", (
+        f"Expected mlt to be alive after restart, but its status was '{mlt_status}'."
     )
 
 

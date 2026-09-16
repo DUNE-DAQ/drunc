@@ -7,6 +7,7 @@
 #
 
 import functools
+import getpass
 import os
 import re
 
@@ -160,22 +161,17 @@ def test_dunerc_success(run_dunerc) -> None:
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     # Check that at least some of the expected log files are present
-    assert any(
-        f"{run_dunerc.daq_session_name}_df-01" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_dfo" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_mlt" in str(logname)
-        for logname in run_dunerc.log_files
-    )
-    assert any(
-        f"{run_dunerc.daq_session_name}_ru" in str(logname)
-        for logname in run_dunerc.log_files
-    )
+    logfile_types = ("df-01", "dfo", "mlt", "ru")
+    log_names = tuple(map(str, run_dunerc.log_files))
+    missing_logfiles = [
+        f"{run_dunerc.daq_session_name}_{logfile_type}"
+        for logfile_type in logfile_types
+        if not any(
+            f"{run_dunerc.daq_session_name}_{logfile_type}" in log_name
+            for log_name in log_names
+        )
+    ]
+    assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
 
     # Check that there are no warnings or errors in the log files
     assert log_file_checks.logs_are_error_free(
@@ -194,8 +190,11 @@ def test_connections(run_dunerc) -> None:
     lines_pm = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
     lines_us = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
 
-    pm_connect = "connected from unified shell"
-    us_connect = "Connecting to an existing process manager"
+    user_name = getpass.getuser()
+    pm_connect = f"{user_name} connected from unified shell"
+    us_connect = (
+        f"Connecting to an existing process manager at the address localhost:{pm_port}"
+    )
 
     assert any(pm_connect in line for line in lines_pm), (
         f"Did not find '{pm_connect}' between pre_boot and post_boot.\nBetween:\n"
@@ -221,6 +220,13 @@ def test_boot_us(run_dunerc) -> None:
         "Expected ps table after boot to contain processes, but it was empty."
     )
     assert_rows_have_valid_uuids(ps_post_boot)
+    non_alive_processes = [
+        row["friendly_name"] for row in ps_post_boot if row["status"] != "Alive"
+    ]
+    assert not non_alive_processes, (
+        "Expected all processes after boot to be alive, but these were not: "
+        + ", ".join(non_alive_processes)
+    )
 
 
 def test_boot_pm(run_dunerc) -> None:
