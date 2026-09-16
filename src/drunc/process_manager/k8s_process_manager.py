@@ -1230,12 +1230,7 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = self.configuration.settings
-            if not isinstance(settings, K8sProcessManagerSettings):
-                raise DruncK8sException(
-                    f"K8sProcessManager requires K8s settings, got "
-                    f"{type(settings).__name__}"
-                )
+            settings: K8sProcessManagerSettings = self.configuration.settings
             host_configs = settings.host_configs
 
             if not target_host or target_host not in host_configs:
