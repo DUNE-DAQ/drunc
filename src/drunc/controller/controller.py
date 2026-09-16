@@ -528,6 +528,20 @@ class Controller(ControllerServicer):
         child: ChildNode,
         failure: ChildCommandNonTerminalException,
     ) -> T:
+        """Convert a child failure into a normal typed response.
+
+        The returned response uses `DRUNC_EXCEPTION_THROWN` and stores the original 
+        child's error details. This allows responses to be returned without
+        aborting the RPC.
+
+        Args:
+            response_type: Protobuf response class.
+            child: Child node whose command failed.
+            failure: Non-terminal wrapper containing the child's error details.
+
+        Returns:
+            A response of `response_type` representing the child failure.
+        """
         self.log.error(f"Child '{child.name}' failed: {failure}")
 
         return response_type(
@@ -549,6 +563,17 @@ class Controller(ControllerServicer):
         child: ChildNode,
         failure: ChildCommandNonTerminalException,
     ) -> StatusResponse:
+        """Convert a child failure into an error-state status response. Needed as StatusResponse
+        contains additional fields compared to the generic responses.
+
+        Args:
+            child: Child node whose status request failed.
+            failure: Non-terminal wrapper containing the child's error details.
+
+        Returns:
+            A `StatusResponse` marked as a DRUNC exception and reporting the
+            child as being in an error state.
+        """
         response = self._degrade_response(StatusResponse, child, failure)
         response.status.CopyFrom(
             Status(
@@ -567,8 +592,16 @@ class Controller(ControllerServicer):
         failure: ChildCommandNonTerminalException,
         command_name: str,
     ) -> ExecuteFSMCommandResponse:
-        """
-        Handles failures of FSM commands for a child node.
+        """Convert a child RPC failure into a failed FSM command response.
+
+        Args:
+            child: Child node whose FSM command failed.
+            failure: Non-terminal wrapper containing the child's error details.
+            command_name: Name of the FSM command that was executed.
+
+        Returns:
+            An `ExecuteFSMCommandResponse` with `FSM_FAILED` and the original
+            child's structured error details.
         """
         response = self._degrade_response(
             ExecuteFSMCommandResponse,
@@ -585,9 +618,17 @@ class Controller(ControllerServicer):
         response: ExecuteFSMCommandResponse,
         error: DruncCommandNonTerminalException,
     ) -> ExecuteFSMCommandResponse:
-        """
-        Handles DruncCommandException when executing the FSM command on the current
-        controller and modifies the exisitingparent response
+        """Record a local non-terminal FSM command error in an existing response.
+
+        The current controller is placed in its error state, while the RPC returns
+        normally with the failure encoded in the response.
+
+        Args:
+            response: Response for the current controller to update.
+            error: Non-terminal command error raised during local FSM execution.
+
+        Returns:
+            The updated response with `DRUNC_EXCEPTION_THROWN` and `FSM_FAILED`.
         """
         response.flag = ResponseFlag.DRUNC_EXCEPTION_THROWN
         response.fsm_flag = FSMResponseFlag.FSM_FAILED
