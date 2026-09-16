@@ -17,6 +17,11 @@ class SSHProcessManagerParamikoClient(SSHProcessManager):
     ) -> None:
         super().__init__(
             configuration=configuration,
+            # SSHProcessLifetimeManagerParamiko does not implement the full
+            # ProcessLifetimeManager interface, so mypy
+            # rejects it as "abstract" here without this cast.
+            # Since it's not in active development the mypy check is bypassed,
+            # if paramiko is picked up again the cast should be removed.
             LifetimeManagerClass=cast(
                 type[ProcessLifetimeManager],
                 SSHProcessLifetimeManagerParamiko,

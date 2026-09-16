@@ -1,8 +1,5 @@
-from typing import cast
-
 from drunc.process_manager.configuration import ProcessManagerConfHandler
 from drunc.process_manager.ssh_process_manager import SSHProcessManager
-from drunc.processes.ssh_process_lifetime_manager import ProcessLifetimeManager
 from drunc.processes.ssh_process_lifetime_manager_from_forked_process import (
     SSHProcessLifetimeManagerShellOnForkedProcess,
 )
@@ -17,10 +14,7 @@ class SSHProcessManagerShell(SSHProcessManager):
     ) -> None:
         super().__init__(
             configuration=configuration,
-            LifetimeManagerClass=cast(
-                type[ProcessLifetimeManager],
-                SSHProcessLifetimeManagerShellOnForkedProcess,
-            ),
+            LifetimeManagerClass=SSHProcessLifetimeManagerShellOnForkedProcess,
             name=name,
             **kwargs,
         )
