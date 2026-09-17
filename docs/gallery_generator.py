@@ -12,6 +12,8 @@ Usage in markdown:
 import html
 from pathlib import Path
 
+from mkdocs.utils import normalize_url
+
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 
 
@@ -115,8 +117,13 @@ def define_env(env):
             HTML string for the viewer container.
         """
         element_id = viewer_id or f"svg-viewer-{abs(hash(src))}"
-        data_src = html.escape(f"../{src}")
-        legend_attr = f' data-legend="{html.escape(f"../{legend}")}"' if legend else ""
+        # normalize_url is page-depth aware, unlike a hardcoded '../' prefix.
+        data_src = html.escape(normalize_url(src, page=env.page))
+        legend_attr = (
+            f' data-legend="{html.escape(normalize_url(legend, page=env.page))}"'
+            if legend
+            else ""
+        )
 
         return (
             f'<div class="svg-viewer" id="{html.escape(element_id)}" '

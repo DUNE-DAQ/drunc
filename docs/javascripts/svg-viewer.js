@@ -25,6 +25,7 @@
     const legendSlot = container.querySelector(".svg-viewer-legend");
     const searchInput = container.querySelector(".svg-viewer-search");
     const searchResults = container.querySelector(".svg-viewer-search-results");
+    const toolbar = container.querySelector(".svg-viewer-toolbar");
     const src = container.dataset.src;
     const legendSrc = container.dataset.legend;
 
@@ -145,17 +146,49 @@
       });
     });
 
+    // Land a matched node clear of the toolbar/legend, whatever their actual
+    // rendered size is, clamped so it stays sane on small canvases too.
+    function computeFocusAnchor() {
+      const canvasRect = canvas.getBoundingClientRect();
+      const toolbarHeight = toolbar ? toolbar.getBoundingClientRect().height : 0;
+      const legendRect = legendSlot ? legendSlot.getBoundingClientRect() : null;
+      const legendVisible = legendRect && legendRect.width > 0;
+
+      const clearY = (legendVisible ? Math.max(toolbarHeight, legendRect.height) : toolbarHeight) + 24;
+      const clearX = (legendVisible ? legendRect.width : 0) + 24;
+
+      return {
+        x: Math.min(clearX, canvasRect.width * 0.4),
+        y: Math.min(clearY, canvasRect.height * 0.4),
+      };
+    }
+
     function focusOnNode(match) {
       if (!svgEl) {
         return;
       }
+      const nodeCTM = match.node.getScreenCTM();
+      if (!nodeCTM) {
+        return;
+      }
+      // Ask the browser exactly where the node is on screen right now (this
+      // accounts for the viewBox, any Graphviz wrapper transforms, and our
+      // own pan/zoom), instead of recomputing that mapping ourselves - that
+      // manual math is what made snapping unreliable at some zoom levels.
       const bbox = match.node.getBBox();
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
-      const rect = canvas.getBoundingClientRect();
-      state.scale = Math.max(state.scale, 2);
-      state.x = rect.width / 2 - cx * state.scale;
-      state.y = rect.height / 2 - cy * state.scale;
+      const centerPoint = svgEl.createSVGPoint();
+      centerPoint.x = bbox.x + bbox.width / 2;
+      centerPoint.y = bbox.y + bbox.height / 2;
+      const screenPoint = centerPoint.matrixTransform(nodeCTM);
+
+      const canvasRect = canvas.getBoundingClientRect();
+      const anchor = computeFocusAnchor();
+      const dx = canvasRect.left + anchor.x - screenPoint.x;
+      const dy = canvasRect.top + anchor.y - screenPoint.y;
+
+      // Leave the zoom level untouched so the jump feels gentle.
+      state.x += dx;
+      state.y += dy;
       applyTransform();
 
       if (highlightedNode) {
