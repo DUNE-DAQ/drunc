@@ -58,8 +58,6 @@ jobs:
           pip install .
 
       - name: run uml generation
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
         run: |
           daqpytools-generate-uml drunc --directory . --output-directory pics --split
           mkdir docs/class_diagrams
