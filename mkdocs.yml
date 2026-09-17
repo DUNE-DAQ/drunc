@@ -39,8 +39,10 @@ plugins:
   - gen-files:
       scripts:
         - docs/utils/generate_ghpages_docstrings.py
+        - docs/utils/generate_graph_src_pages.py
   - literate-nav:
       nav_file: README.md
+      implicit_index: true
   - section-index
   - mkdocstrings:
       default_handler: python
@@ -55,6 +57,10 @@ plugins:
 
 extra_css:
   - stylesheets/gallery.css
+  - stylesheets/svg-viewer.css
+
+extra_javascript:
+  - javascripts/svg-viewer.js
 
 hooks:
 - docs/utils/mkdocs_hooks.py
