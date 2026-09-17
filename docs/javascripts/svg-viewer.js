@@ -28,15 +28,21 @@
 
     const state = { x: 0, y: 0, scale: 1 };
     let svgEl = null;
+    let naturalWidth = 0;
+    let naturalHeight = 0;
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
 
     function applyTransform() {
-      if (svgEl) {
-        svgEl.style.transform =
-          `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+      if (!svgEl) {
+        return;
       }
+      // Resize the SVG itself (true vector re-layout) rather than CSS-scaling it,
+      // so zooming stays crisp instead of stretching a rasterized layer.
+      svgEl.style.width = `${naturalWidth * state.scale}px`;
+      svgEl.style.height = `${naturalHeight * state.scale}px`;
+      svgEl.style.transform = `translate(${state.x}px, ${state.y}px)`;
     }
 
     function resetView() {
@@ -69,8 +75,12 @@
         if (!svgEl) {
           return;
         }
+        // Read the SVG's true intrinsic size before any theme CSS shrinks it.
+        const viewBox = svgEl.viewBox && svgEl.viewBox.baseVal;
+        naturalWidth = parseFloat(svgEl.getAttribute("width")) || (viewBox && viewBox.width) || 800;
+        naturalHeight = parseFloat(svgEl.getAttribute("height")) || (viewBox && viewBox.height) || 600;
+        svgEl.style.maxWidth = "none";
         svgEl.style.transformOrigin = "0 0";
-        svgEl.style.willChange = "transform";
         applyTransform();
       });
 

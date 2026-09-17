@@ -20,6 +20,8 @@
 
 .svg-viewer-canvas svg {
   display: block;
+  max-width: none !important;
+  max-height: none !important;
 }
 
 .svg-viewer-toolbar {
