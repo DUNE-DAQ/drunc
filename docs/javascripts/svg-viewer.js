@@ -23,6 +23,8 @@
 
     const canvas = container.querySelector(".svg-viewer-canvas");
     const legendSlot = container.querySelector(".svg-viewer-legend");
+    const searchInput = container.querySelector(".svg-viewer-search");
+    const searchResults = container.querySelector(".svg-viewer-search-results");
     const src = container.dataset.src;
     const legendSrc = container.dataset.legend;
 
@@ -33,6 +35,8 @@
     let dragging = false;
     let lastX = 0;
     let lastY = 0;
+    let nodeIndex = [];
+    let highlightedNode = null;
 
     function applyTransform() {
       if (!svgEl) {
@@ -82,6 +86,13 @@
         svgEl.style.maxWidth = "none";
         svgEl.style.transformOrigin = "0 0";
         applyTransform();
+
+        nodeIndex = Array.from(svgEl.querySelectorAll("g.node"))
+          .map((node) => {
+            const title = node.querySelector("title");
+            return title ? { node, name: title.textContent.trim() } : null;
+          })
+          .filter(Boolean);
       });
 
     if (legendSrc && legendSlot) {
@@ -133,6 +144,76 @@
         }
       });
     });
+
+    function focusOnNode(match) {
+      if (!svgEl) {
+        return;
+      }
+      const bbox = match.node.getBBox();
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const rect = canvas.getBoundingClientRect();
+      state.scale = Math.max(state.scale, 2);
+      state.x = rect.width / 2 - cx * state.scale;
+      state.y = rect.height / 2 - cy * state.scale;
+      applyTransform();
+
+      if (highlightedNode) {
+        highlightedNode.classList.remove("svg-viewer-highlight");
+      }
+      highlightedNode = match.node;
+      highlightedNode.classList.add("svg-viewer-highlight");
+    }
+
+    function renderSearchResults(query) {
+      searchResults.innerHTML = "";
+      if (!query) {
+        searchResults.hidden = true;
+        return;
+      }
+
+      const lowerQuery = query.toLowerCase();
+      const matches = nodeIndex
+        .filter((entry) => entry.name.toLowerCase().includes(lowerQuery))
+        .slice(0, 8);
+
+      if (matches.length === 0) {
+        searchResults.innerHTML = '<div class="svg-viewer-search-empty">No matches</div>';
+        searchResults.hidden = false;
+        return;
+      }
+
+      matches.forEach((match) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "svg-viewer-search-item";
+        item.textContent = match.name;
+        item.addEventListener("click", () => {
+          focusOnNode(match);
+          searchResults.hidden = true;
+        });
+        searchResults.appendChild(item);
+      });
+      searchResults.hidden = false;
+    }
+
+    if (searchInput) {
+      searchInput.addEventListener("input", () => {
+        renderSearchResults(searchInput.value.trim());
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        const query = searchInput.value.trim().toLowerCase();
+        const firstMatch = nodeIndex.find((entry) => entry.name.toLowerCase().includes(query));
+        if (firstMatch) {
+          focusOnNode(firstMatch);
+          searchResults.hidden = true;
+        }
+      });
+    }
   }
 
   function initAllViewers() {

@@ -43,11 +43,61 @@
   font-size: 0.9rem;
 }
 
+.svg-viewer-search {
+  min-width: 220px;
+  padding: 3px 8px;
+  border: 1px solid var(--md-default-fg-color--lighter, #ccc);
+  border-radius: 4px;
+  background: var(--md-default-bg-color, #fff);
+  color: inherit;
+  font-size: 0.9rem;
+}
+
+.svg-viewer-search-results {
+  position: absolute;
+  top: 44px;
+  left: 8px;
+  z-index: 4;
+  min-width: 220px;
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--md-default-fg-color--lighter, #ccc);
+  border-radius: 4px;
+  background: var(--md-default-bg-color, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.svg-viewer-search-results[hidden] {
+  display: none;
+}
+
+.svg-viewer-search-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: inherit;
+}
+
+.svg-viewer-search-item:hover {
+  background: var(--md-default-fg-color--lightest, #eee);
+}
+
+.svg-viewer-search-empty {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
 /* Fixed overlay: stays put while the main diagram is panned/zoomed. */
 .svg-viewer-legend {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 48px;
+  left: 8px;
   z-index: 2;
   max-width: 220px;
   max-height: 60%;
@@ -59,8 +109,23 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
+/* Pages with a viewer hide their TOC (see graph.md front matter); reclaim that width. */
+.md-content:has(.svg-viewer),
+.md-content:has(.svg-viewer) .md-content__inner,
+.md-grid:has(.svg-viewer) {
+  max-width: none;
+}
+
 .svg-viewer-legend svg {
   display: block;
   max-width: 100%;
   height: auto;
+}
+
+/* Applied to the matched Graphviz node group after a search. */
+.svg-viewer-highlight polygon,
+.svg-viewer-highlight ellipse,
+.svg-viewer-highlight path {
+  stroke: #ff3b30 !important;
+  stroke-width: 3px !important;
 }

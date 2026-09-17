@@ -125,7 +125,10 @@ def define_env(env):
             '<button type="button" data-action="zoom-in" title="Zoom in">+</button>'
             '<button type="button" data-action="zoom-out" title="Zoom out">\u2212</button>'
             '<button type="button" data-action="reset" title="Reset view">Reset</button>'
+            '<input type="search" class="svg-viewer-search" '
+            'placeholder="Search for a class or module…" autocomplete="off">'
             "</div>"
+            '<div class="svg-viewer-search-results"></div>'
             '<div class="svg-viewer-canvas"></div>'
             '<div class="svg-viewer-legend"></div>'
             "</div>"

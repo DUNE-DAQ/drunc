@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # Class Diagram
 
 Pan by dragging, zoom with the scroll wheel or the buttons. The legend stays fixed in place.
