@@ -1,5 +1,7 @@
 """Shared setup for process-manager integration tests."""
 
+from dataclasses import dataclass, field
+
 import integrationtest.data_classes as idc
 import integrationtest.resource_validation as resource_validation
 import integrationtest.utility_functions as utility_functions
@@ -48,3 +50,33 @@ def make_conf_dict(config_session_name: str):
         idc.attribute_substitution(obj_class="LatencyBuffer", updates={"size": 50000})
     )
     return conf_dict
+
+
+@dataclass
+class FsmCommandParams:
+    """Describes a single FSM command to send in a dunerc command sequence, and
+    the state/substate it is expected to leave the session in."""
+
+    marker: str
+    command: str
+    expected_state: str
+    non_controller_substate: str = "idle"
+    command_args: list[str] = field(default_factory=list)
+    run_number: int | None = None
+
+    @property
+    def done_marker(self) -> str:
+        return f"{self.marker}_done"
+
+    @property
+    def full_command(self) -> str:
+        return " ".join([self.command] + self.command_args)
+
+    def to_command_block(self) -> str:
+        return f"""
+echo {self.marker}
+{self.full_command}
+echo {self.marker}_done
+status -w 140
+echo {self.marker}_status_done
+"""
