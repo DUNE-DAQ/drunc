@@ -33,26 +33,34 @@ conf_dict = make_conf_dict("pmaas-us")
 confgen_arguments = {"SmallFootprint": conf_dict}
 
 
-daq_session_name_1 = "pmaas-pms-1"
-daq_session_name_2 = "pmaas-pms-2"
+pms_session_name_1 = "pmaas-pms-1"
+pms_session_name_2 = "pmaas-pms-2"
+us_session_name_1 = "pmaas-us-1"
+us_session_name_2 = "pmaas-us-2"
 
 # Commands in requested order:
 # 1) pms: boot session 1, boot session 2
-# 2) us: boot
+# 2) us 1: boot, us 2: boot
 # 3) pms: ps, ps -s session1, logs (ambiguous), logs scoped
-# 4) us: ps, logs scoped, terminate
+# 4) us 1: ps, logs scoped, terminate; us 2: ps, logs scoped, terminate
 # 5) pms: ps, terminate, ps
 pmshell_commands_stage_1 = f"""
     echo pms_boot_1
-    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name_1}
+    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {pms_session_name_1}
     wait 5
     echo pms_boot_2
-    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name_2}
+    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {pms_session_name_2}
     wait 15
     """.split()
 
-us_commands_stage_1 = """
-    echo us_boot
+us_1_commands_stage_1 = """
+    echo us_1_boot
+    boot
+    wait 15
+    """.split()
+
+us_2_commands_stage_1 = """
+    echo us_2_boot
     boot
     wait 15
     """.split()
@@ -62,26 +70,39 @@ pmshell_commands_stage_2 = f"""
     ps -w 300
 
     echo pms_ps_session_1_only
-    ps -s {daq_session_name_1} -w 180
+    ps -s {pms_session_name_1} -w 180
 
     echo pms_logs_ambiguous
     logs -n root-controller
 
     echo pms_logs_scoped
-    logs -n root-controller -s {daq_session_name_1} --how-far 5
+    logs -n root-controller -s {pms_session_name_1} --how-far 5
     """.split()
 
-us_commands_stage_2 = """
+us_1_commands_stage_2 = """
 
-    echo us_ps_only
+    echo us_1_ps_only
     ps -w 300
 
-    echo us_logs_scoped
+    echo us_1_logs_scoped
     logs -n root-controller --how-far 5
 
-    echo us_terminate
+    echo us_1_terminate
     terminate
-    echo us_terminate_done
+    echo us_1_terminate_done
+    """.split()
+
+us_2_commands_stage_2 = """
+
+    echo us_2_ps_only
+    ps -w 300
+
+    echo us_2_logs_scoped
+    logs -n root-controller --how-far 5
+
+    echo us_2_terminate
+    terminate
+    echo us_2_terminate_done
     """.split()
 
 pmshell_commands_stage_3 = """
@@ -108,14 +129,23 @@ pmshell_startup_commands = [
 ]
 pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
 
-us_startup_commands = [
+us_1_startup_commands = [
     "drunc-unified-shell",
     f"grpc://localhost:{pm_port}",
     "<config_data_file>",
     "<config_session_name>",
-    "<daq_session_name>",
+    us_session_name_1,
 ]
-usapp = idc.DAQControlApplication("us", us_startup_commands)
+us_1_app = idc.DAQControlApplication("us_1", us_1_startup_commands)
+
+us_2_startup_commands = [
+    "drunc-unified-shell",
+    f"grpc://localhost:{pm_port}",
+    "<config_data_file>",
+    "<config_session_name>",
+    us_session_name_2,
+]
+us_2_app = idc.DAQControlApplication("us_2", us_2_startup_commands)
 
 # Packaging up the commands into DAQCommandSets
 cmd_set_1 = idc.DAQCommandSet(
@@ -124,29 +154,47 @@ cmd_set_1 = idc.DAQCommandSet(
     idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
 )
 cmd_set_2 = idc.DAQCommandSet(
-    "us",
-    us_commands_stage_1,
+    "us_1",
+    us_1_commands_stage_1,
     idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
 )
 cmd_set_3 = idc.DAQCommandSet(
+    "us_2",
+    us_2_commands_stage_1,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_4 = idc.DAQCommandSet(
     "pmshell",
     pmshell_commands_stage_2,
     idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
 )
-cmd_set_4 = idc.DAQCommandSet(
-    "us",
-    us_commands_stage_2,
+cmd_set_5 = idc.DAQCommandSet(
+    "us_1",
+    us_1_commands_stage_2,
     idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
 )
-cmd_set_5 = idc.DAQCommandSet(
+cmd_set_6 = idc.DAQCommandSet(
+    "us_2",
+    us_2_commands_stage_2,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_7 = idc.DAQCommandSet(
     "pmshell",
     pmshell_commands_stage_3,
     idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
 )
 
 # Putting everything together into a DAQSessionIngredients object
-app_list = [pmapp, pmshellapp, usapp]
-cmd_set_list = [cmd_set_1, cmd_set_2, cmd_set_3, cmd_set_4, cmd_set_5]
+app_list = [pmapp, pmshellapp, us_1_app, us_2_app]
+cmd_set_list = [
+    cmd_set_1,
+    cmd_set_2,
+    cmd_set_3,
+    cmd_set_4,
+    cmd_set_5,
+    cmd_set_6,
+    cmd_set_7,
+]
 dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
 
 # Declare the special variable that tells the integrationtest infrastructure what we want to run
@@ -172,22 +220,25 @@ def test_dunerc_success(run_dunerc) -> None:
     print(banner_line)
 
     assert run_dunerc.completed_processes["pmshell"].returncode == 0
-    assert run_dunerc.completed_processes["us"].returncode == 0
+    assert run_dunerc.completed_processes["us_1"].returncode == 0
+    assert run_dunerc.completed_processes["us_2"].returncode == 0
 
 
 def test_log_files(run_dunerc) -> None:
     """Checks that expected process-manager log files exist and are free of errors."""
     assert any(
-        f"{daq_session_name_1}_df-01" in str(logname)
+        f"{pms_session_name_1}_df-01" in str(logname)
         for logname in run_dunerc.log_files
     )
     assert any(
-        f"{daq_session_name_2}_df-01" in str(logname)
+        f"{pms_session_name_2}_df-01" in str(logname)
         for logname in run_dunerc.log_files
     )
     assert any(
-        f"{conf_dict.config_session_name}_df-01" in str(logname)
-        for logname in run_dunerc.log_files
+        f"{us_session_name_1}_df-01" in str(logname) for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{us_session_name_2}_df-01" in str(logname) for logname in run_dunerc.log_files
     )
 
     assert log_file_checks.logs_are_error_free(
@@ -202,8 +253,8 @@ def test_log_files(run_dunerc) -> None:
     )
 
 
-def test_pms_ps_contains_three_sessions(run_dunerc) -> None:
-    """Checks that pms sees the two pms sessions and the us session together."""
+def test_pms_ps_contains_four_sessions(run_dunerc) -> None:
+    """Checks that pms sees both pms and both us sessions together."""
     lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
     ps_all = get_ps_table_after_echo(lines, "pms_ps_all_sessions")
 
@@ -211,9 +262,10 @@ def test_pms_ps_contains_three_sessions(run_dunerc) -> None:
 
     observed_sessions = {row["session"].strip() for row in ps_all}
     expected_sessions = {
-        daq_session_name_1,
-        daq_session_name_2,
-        conf_dict.config_session_name,
+        pms_session_name_1,
+        pms_session_name_2,
+        us_session_name_1,
+        us_session_name_2,
     }
     assert expected_sessions.issubset(observed_sessions), (
         f"Expected sessions {expected_sessions} in pms ps output, got {observed_sessions}."
@@ -232,8 +284,8 @@ def test_pms_ps_session_filter(run_dunerc) -> None:
     )
 
     observed_sessions = {row["session"].strip() for row in ps_filtered}
-    assert observed_sessions == {daq_session_name_1}, (
-        f"Expected only session '{daq_session_name_1}' in filtered ps output, got {observed_sessions}."
+    assert observed_sessions == {pms_session_name_1}, (
+        f"Expected only session '{pms_session_name_1}' in filtered ps output, got {observed_sessions}."
     )
 
 
@@ -287,26 +339,36 @@ def test_pms_root_controller_logs_scoped(run_dunerc) -> None:
     )
 
 
-def test_us_ps_contains_only_us_session(run_dunerc) -> None:
-    """Checks that us ps output only contains the us session."""
-    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
-    us_ps = get_ps_table_after_echo(lines, "us_ps_only")
+def test_us_sessions_only_see_their_own_processes(run_dunerc) -> None:
+    """Checks that each us ps output only contains its own session."""
+    lines = strip_ansi(run_dunerc.completed_processes["us_1"].stdout).splitlines()
+    us_ps = get_ps_table_after_echo(lines, "us_1_ps_only")
 
-    assert us_ps, "Expected a ps table after us_ps_only, but found none."
+    assert us_ps, "Expected a ps table after us_1_ps_only, but found none."
 
     observed_sessions = {row["session"].strip() for row in us_ps}
-    assert observed_sessions == {conf_dict.config_session_name}, (
-        f"Expected only us session rows in us ps output, got {observed_sessions}."
+    assert observed_sessions == {us_session_name_1}, (
+        f"Expected only us_1 session rows in ps output, got {observed_sessions}."
+    )
+
+    lines = strip_ansi(run_dunerc.completed_processes["us_2"].stdout).splitlines()
+    us_ps = get_ps_table_after_echo(lines, "us_2_ps_only")
+
+    assert us_ps, "Expected a ps table after us_2_ps_only, but found none."
+
+    observed_sessions = {row["session"].strip() for row in us_ps}
+    assert observed_sessions == {us_session_name_2}, (
+        f"Expected only us_2 session rows in ps output, got {observed_sessions}."
     )
 
 
-def test_us_terminated_table_contains_only_us_session(run_dunerc) -> None:
-    """Checks that us terminate only reports us session entries in terminated table."""
-    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+def test_us_terminated_tables_contain_only_their_sessions(run_dunerc) -> None:
+    """Checks that each us terminate only reports its own session entries."""
+    lines = strip_ansi(run_dunerc.completed_processes["us_1"].stdout).splitlines()
 
-    terminate_marker_idx = require_echo_marker_index(lines, "us_terminate")
+    terminate_marker_idx = require_echo_marker_index(lines, "us_1_terminate")
     terminate_done_idx = require_echo_marker_index(
-        lines, "us_terminate_done", start_idx=terminate_marker_idx + 1
+        lines, "us_1_terminate_done", start_idx=terminate_marker_idx + 1
     )
 
     table_start_idx = find_line_index(
@@ -327,8 +389,36 @@ def test_us_terminated_table_contains_only_us_session(run_dunerc) -> None:
     )
 
     observed_sessions = {row["session"].strip() for row in terminated_table}
-    assert observed_sessions == {conf_dict.config_session_name}, (
-        f"Expected only us session rows in terminated table, got {observed_sessions}."
+    assert observed_sessions == {us_session_name_1}, (
+        f"Expected only us_1 session rows in terminated table, got {observed_sessions}."
+    )
+
+    lines = strip_ansi(run_dunerc.completed_processes["us_2"].stdout).splitlines()
+    terminate_marker_idx = require_echo_marker_index(lines, "us_2_terminate")
+    terminate_done_idx = require_echo_marker_index(
+        lines, "us_2_terminate_done", start_idx=terminate_marker_idx + 1
+    )
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: "Terminated process" in line,
+        start_idx=terminate_marker_idx + 1,
+    )
+    assert table_start_idx is not None, (
+        "Could not find terminated process table in us_2 output."
+    )
+    assert table_start_idx < terminate_done_idx, (
+        "Terminated process table appears after us_2 terminate block ended."
+    )
+
+    terminated_table = _parse_table_from_index(lines, table_start_idx, "ps")
+    assert terminated_table, (
+        "Expected terminated table rows in us_2 output, but found none."
+    )
+
+    observed_sessions = {row["session"].strip() for row in terminated_table}
+    assert observed_sessions == {us_session_name_2}, (
+        f"Expected only us_2 session rows in terminated table, got {observed_sessions}."
     )
 
 
@@ -342,15 +432,19 @@ def test_pms_ps_after_us_terminate(run_dunerc) -> None:
     )
 
     observed_sessions = {row["session"].strip() for row in ps_after_us}
-    assert conf_dict.config_session_name not in observed_sessions, (
-        f"Expected us session '{conf_dict.config_session_name}' to be gone, "
+    assert us_session_name_1 not in observed_sessions, (
+        f"Expected us session '{us_session_name_1}' to be gone, "
         f"but sessions were {observed_sessions}."
     )
-    assert daq_session_name_1 in observed_sessions, (
-        f"Expected pms session '{daq_session_name_1}' to still be alive."
+    assert us_session_name_2 not in observed_sessions, (
+        f"Expected us session '{us_session_name_2}' to be gone, "
+        f"but sessions were {observed_sessions}."
     )
-    assert daq_session_name_2 in observed_sessions, (
-        f"Expected pms session '{daq_session_name_2}' to still be alive."
+    assert pms_session_name_1 in observed_sessions, (
+        f"Expected pms session '{pms_session_name_1}' to still be alive."
+    )
+    assert pms_session_name_2 in observed_sessions, (
+        f"Expected pms session '{pms_session_name_2}' to still be alive."
     )
 
 
