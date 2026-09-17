@@ -1,0 +1,64 @@
+.svg-viewer {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--md-default-fg-color--lightest, #ddd);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--md-default-bg-color, #fff);
+}
+
+.svg-viewer-canvas {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.svg-viewer-canvas.is-grabbing {
+  cursor: grabbing;
+}
+
+.svg-viewer-canvas svg {
+  display: block;
+}
+
+.svg-viewer-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+}
+
+.svg-viewer-toolbar button {
+  min-width: 28px;
+  padding: 2px 8px;
+  border: 1px solid var(--md-default-fg-color--lighter, #ccc);
+  border-radius: 4px;
+  background: var(--md-default-bg-color, #fff);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* Fixed overlay: stays put while the main diagram is panned/zoomed. */
+.svg-viewer-legend {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  max-width: 220px;
+  max-height: 60%;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--md-default-fg-color--lighter, #ccc);
+  border-radius: 4px;
+  background: var(--md-default-bg-color, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.svg-viewer-legend svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}

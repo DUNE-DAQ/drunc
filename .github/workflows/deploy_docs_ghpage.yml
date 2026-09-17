@@ -59,10 +59,13 @@ jobs:
 
       - name: run uml generation
         run: |
-          daqpytools-generate-uml drunc --directory . --output-directory pics --split
+          daqpytools-generate-uml drunc --directory . --output-directory pics --split \
+            --color-by-directory --generate-linkable --link-line-number
           mkdir docs/class_diagrams
           mv pics/split/classes_styled/*.png docs/class_diagrams
           mv pics/classes_styled.png docs/class_diagrams
+          mv pics/classes_styled.svg docs/class_diagrams
+          mv pics/directory_color_legend.svg docs/class_diagrams
           
 
       - name: Deploy Docs
