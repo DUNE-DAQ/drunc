@@ -58,6 +58,7 @@ jobs:
           daqpytools-generate-uml drunc --directory . --output-directory pics --split
           mkdir docs/class_diagrams
           mv pics/split/classes_styled/*.png docs/class_diagrams
+          mv pics/classes_styled.png docs/class_diagrams
           
       - name: Install dependencies
         run: |
