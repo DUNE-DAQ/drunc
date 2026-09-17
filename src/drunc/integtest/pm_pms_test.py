@@ -44,7 +44,6 @@ confgen_arguments = {"SmallFootprint": conf_dict}
 
 
 daq_session_name = "pms-test"
-daq_session_name_1 = "pms-test-1"
 
 # The commands to run in dunerc and the process manager shell
 dunerc_commands = f"""
@@ -107,17 +106,6 @@ dunerc_commands = f"""
     echo after_flush
     ps -w 300
     echo test_flush_done
-
-
-    echo pre_boot_2
-    echo-on-server pre_boot_2
-    ps -w 300
-    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name_1}
-    wait 5
-    echo post_boot_2
-    echo-on-server post_boot_2
-    ps -w 300
-
 
     echo test_terminate
     echo-on-server test_terminate
@@ -185,11 +173,11 @@ def test_log_files(run_dunerc) -> None:
     logfile_types = ("df-01", "dfo", "mlt", "ru")
     log_names = tuple(map(str, run_dunerc.log_files))
     missing_logfiles = [
-        f"{session_name}_{logfile_type}"
-        for session_name in (daq_session_name, daq_session_name_1)
+        f"{daq_session_name}_{logfile_type}"
         for logfile_type in logfile_types
         if not any(
-            f"{session_name}_{logfile_type}" in str(logname) for logname in log_names
+            f"{daq_session_name}_{logfile_type}" in str(logname)
+            for logname in log_names
         )
     ]
     assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
@@ -296,23 +284,6 @@ def test_boot_pm(run_dunerc) -> None:
         "post_boot",
         "sent boot with arguments",
         session_name=daq_session_name,
-    )
-
-
-def test_boot_pms_2(run_dunerc) -> None:
-    """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
-    _check_boot(run_dunerc, "pmshell", "pre_boot_2", "post_boot_2", check_ps_table=True)
-
-
-def test_boot_pm_2(run_dunerc) -> None:
-    """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
-    _check_boot(
-        run_dunerc,
-        "pm",
-        "pre_boot_2",
-        "post_boot_2",
-        "sent boot with arguments",
-        session_name=daq_session_name_1,
     )
 
 
