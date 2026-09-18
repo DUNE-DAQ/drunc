@@ -1,10 +1,14 @@
-# 05-Aug-2026, KAB: the goal of this test is to validate and demonstrate the use of multiple
-# user-specified applications running in the DAQ session that is part of this test.
-#
-# This integtest was created by copying the small_footprint_quick_test from the daqsystemtest
-# repo and converting the assignment of the run control commands to make use of the new
-# "daq_session_ingredients" special integtest variable.
-#
+# The goal of this test is to test the process manager as a service
+# by having an independent process manager
+# and having a process manager shell spawning two sessions in it
+# and two different unified shell spawning a session each in it
+# Note: This only tests how well the process manager can deal with multiple sessions
+# booted in various ways. It does not test the nitty gritty functions in the
+# process manager shell and the unified shell because that is tested in other tests
+
+###############################################################
+# Note: requires daqsystemtest to be locally cloned to be run #
+###############################################################
 
 import functools
 import os
