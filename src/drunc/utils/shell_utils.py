@@ -6,7 +6,7 @@ from collections.abc import MutableMapping
 
 import click
 from druncschema.token_pb2 import Token
-from rich.console import Console
+from rich.console import Console, Group
 from rich.measure import Measurement
 from rich.table import Table
 
@@ -285,16 +285,22 @@ class ShellContext:
             )
 
 
-def set_full_table_width(obj: ShellContext, table: Table) -> Table:
+def set_full_table_width(obj: ShellContext, table: Table | Group) -> Table | Group:
     """Set a table's width to the maximum available console width.
 
     Args:
         obj: Shell context providing the Rich console.
-        table: Table whose width should be expanded.
+        table: Table or group of tables whose width should be expanded.
 
     Returns:
-        The same table instance with its width updated.
+        The same table or group instance with its width updated.
     """
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, Table | Group):
+                set_full_table_width(obj, renderable)
+        return table
+
     table.expand = False
     options = obj._console.options.update(max_width=10000)
     table_width = Measurement.get(obj._console, options, table).maximum
