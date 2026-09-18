@@ -13,6 +13,10 @@ jobs:
     env: 
       WIKI_SUBFOLDER: Developer-Wiki
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: ts-graphviz/setup-graphviz@v1
       - name: Checkout Main Repository
         uses: actions/checkout@v5
 
@@ -24,6 +28,10 @@ jobs:
           ref: master # Wiki default branch 
           # Create temporary wiki subfolder
           path: docs/${{ env.WIKI_SUBFOLDER }}
+
+      - name: Install daqpytools for uml generation
+        run : |
+          pip install "daqpytools[dev] @ git+https://github.com/DUNE-DAQ/daqpytools.git@07d0427fa7e04fb98515b99e2900f5f12cfb1009"
 
       # Move Archives to a temp folder so they aren't processed
       - name: Hide Archive files from script
@@ -49,16 +57,46 @@ jobs:
           pip install -r docs/requirements.txt
           pip install .
 
+      - name: run uml generation
+        run: |
+          daqpytools-generate-uml drunc --directory . --output-directory pics --split \
+            --color-by-directory --generate-linkable --link-line-number
+          mkdir docs/class_diagrams
+          mv pics/split/classes_styled/*.png docs/class_diagrams
+          mv pics/classes_styled.png docs/class_diagrams
+
+          # Structured diagrams for the interactive Graph pages (docs/graph/).
+          mkdir -p docs/class_diagrams/overall
+          cp pics/classes_styled.svg pics/packages_styled.svg docs/class_diagrams/overall
+          cp pics/directory_color_legend.svg docs/class_diagrams/overall || true
+
+          package=drunc
+          for directory in "src/$package"/*/; do
+            [ -f "$directory/__init__.py" ] || continue
+            name=$(basename "$directory")
+            daqpytools-generate-uml "$package.$name" --directory . \
+              --output-directory "pics/$name" \
+              --color-by-directory --generate-linkable --link-line-number
+            mkdir -p "docs/class_diagrams/src/$name"
+            cp "pics/$name/classes_styled.svg" "pics/$name/packages_styled.svg" \
+              "docs/class_diagrams/src/$name"
+            cp "pics/$name/directory_color_legend.svg" "docs/class_diagrams/src/$name" || true
+          done
+          
+
       - name: Deploy Docs
         run: mkdocs gh-deploy --force
 
       # Check whether the links used in the documentation are valid
       # twiki, indico, amd dunescience excludes are used as they are behind SSOs, leading to timeouts, and errors being thrown by this step
       # drunc contains a set of outdated documentation page that should be kept for reference, they contain good descriptions on e.g. configuration structure
+      # docs/graph/src is generated in-memory by docs/utils/generate_graph_src_pages.py (mkdocs-gen-files) during `mkdocs gh-deploy`,
+      # so it never exists as a real file in the checked-out repo that lychee scans
       - name: Run Lychee link checker
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
+            --exclude-path 'docs/graph/README.md'
             --exclude 'https://twiki.cern.ch/.*' 
             --exclude 'https://indico.*' 
             --exclude 'https://wiki.dunescience.org/wiki/.*'
