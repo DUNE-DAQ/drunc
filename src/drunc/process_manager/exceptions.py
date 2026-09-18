@@ -2,7 +2,7 @@ from drunc.exceptions import DruncException, DruncSetupException
 
 
 class UnknownProcessManagerType(DruncSetupException):
-    def __init__(self, pm_type):
+    def __init__(self, pm_type: str) -> None:
         super().__init__(f"'{pm_type}' is not handled/unknown")
 
 
