@@ -15,7 +15,7 @@ from drunc.process_manager.interface.cli_argument import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd, set_full_table_width
 from drunc.utils.utils import get_logger, resolve_context_peer
 
 
@@ -658,6 +658,7 @@ def ps_impl(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
+    full: bool = False,
 ) -> None:
     """
     Implementation of the 'ps' command.
@@ -693,13 +694,18 @@ def ps_impl(
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
+        table = tabulate_process_instance_list(
+            results,
+            title=title,
+            long=long_format,
+            width=width,
+        )
+
+        if full:
+            table = set_full_table_width(obj, table)
+
         obj.print(
-            tabulate_process_instance_list(
-                results,
-                title=title,
-                long=long_format,
-                width=width,
-            ),
+            table,
             overflow="fold",
             soft_wrap=True,
         )
