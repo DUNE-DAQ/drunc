@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TypeVar
 
 from drunc.exceptions import DruncSetupException
@@ -22,7 +22,6 @@ class SSHProcessManagerSettings:
 
     disable_localhost_host_key_check: bool = False
     disable_host_key_check: bool = False
-    extra: dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def from_raw(cls, raw: object) -> "SSHProcessManagerSettings":
@@ -36,7 +35,6 @@ class SSHProcessManagerSettings:
                 "disable_localhost_host_key_check",
                 "disable_host_key_check",
             }:
-                settings.extra[key] = value
                 get_logger("process_manager.config_validation").warning(
                     "Discarding unsupported SSH process manager setting '%s'",
                     key,

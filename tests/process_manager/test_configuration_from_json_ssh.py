@@ -58,7 +58,6 @@ def test_process_manager_from_json_loads_ssh_settings(
     assert isinstance(settings, SSHProcessManagerSettings)
     assert settings.disable_localhost_host_key_check is True
     assert settings.disable_host_key_check is False
-    assert settings.extra == {"discarded_ssh_setting": "unused"}
     logger.warning.assert_called_once_with(
         "Discarding unsupported SSH process manager setting '%s'",
         "discarded_ssh_setting",

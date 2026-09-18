@@ -213,7 +213,6 @@ class K8sProcessManagerSettings:
     home_path_base: str | None = None
     checking: CheckingConfig = field(default_factory=_empty_checking_config)
     host_configs: dict[str, HostConfig] = field(default_factory=dict)
-    extra: dict[str, object] = field(default_factory=dict)
 
     @classmethod
     def from_raw(cls, raw: object) -> "K8sProcessManagerSettings":
@@ -236,7 +235,6 @@ class K8sProcessManagerSettings:
 
         for key, value in raw.items():
             if key not in known_fields:
-                settings.extra[key] = value
                 get_logger("process_manager.config_validation").warning(
                     "Discarding unsupported K8s process manager setting '%s'",
                     key,

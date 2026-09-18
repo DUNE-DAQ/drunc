@@ -116,7 +116,6 @@ def test_process_manager_from_json_loads_k8s_settings(
             "requests": {"cpu": "1", "memory": "2Gi"},
         }
     }
-    assert settings.extra == {"discarded_k8s_setting": "unused"}
     logger.warning.assert_called_once_with(
         "Discarding unsupported K8s process manager setting '%s'",
         "discarded_k8s_setting",
