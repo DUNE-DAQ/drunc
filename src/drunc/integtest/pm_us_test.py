@@ -1,13 +1,9 @@
-# 05-Aug-2026, KAB: the goal of this test is to validate and demonstrate the use of multiple
-# user-specified applications running in the DAQ session that is part of this test.
-#
-# This integtest was created by copying the small_footprint_quick_test from the daqsystemtest
-# repo and converting the assignment of the run control commands to make use of the new
-# "daq_session_ingredients" special integtest variable.
-#
-# 17-Sep-2026: extended to also exercise the process-manager commands (logs, wait,
-# restart, kill, recovery, flush, terminate) and the FSM command/sequence coverage
-# from controller_test.py, all through the drunc-unified-shell.
+# The goal of this test is to test all functions in the unified shell, when connected
+# to a standalone process manager shell
+# Because the unified shell encompassees both the process manager shell and the
+# controller shell, the contents of this test cover both the process_manager_test
+# and the controller_test. However this is all done in the context of
+# the split shell functionality.
 
 import functools
 import getpass
