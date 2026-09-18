@@ -5,6 +5,7 @@ import click
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
+from drunc.utils.shell_utils import set_full_table_width
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
@@ -83,6 +84,12 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--full/--no-full",
+    "full",
+    default=False,
+    help="Expand the table to the full available terminal width.",
+)
 @click.pass_obj
 def status(
     obj: ControllerContext,
@@ -91,6 +98,7 @@ def status(
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
     width: int | None,
+    full: bool,
 ) -> None:
     log_msg = (
         f"Getting status for target '{target}'..."
@@ -98,15 +106,18 @@ def status(
         else "Getting status for all targets..."
     )
     obj.log.info(log_msg)
+    table = render_status_table(
+        obj,
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        show_ip_address=extended,
+        width=width,
+    )
+    if full:
+        table = set_full_table_width(obj, table)
     obj.print(
-        render_status_table(
-            obj,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-            show_ip_address=extended,
-            width=width,
-        ),
+        table,
         soft_wrap=True,
     )
     obj.print_status_summary()

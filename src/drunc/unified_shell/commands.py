@@ -28,7 +28,7 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd, set_full_table_width
 from drunc.utils.utils import get_logger
 
 
@@ -315,9 +315,17 @@ def log_on_server(
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--full/--no-full",
+    "full",
+    default=False,
+    help="Expand the table to the full available terminal width.",
+)
 @click.pass_obj
 @click.pass_context
-def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> None:
+def terminate(
+    ctx: click.core.Context, obj: UnifiedShellContext, width: int | None, full: bool
+) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
     session
@@ -331,8 +339,13 @@ def terminate(ctx: click.core.Context, obj: UnifiedShellContext, width: int) -> 
     if not result:
         return
 
+    table = tabulate_process_instance_list(
+        result, "Terminated process", False, width=width
+    )
+    if full:
+        table = set_full_table_width(obj, table)
     obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False, width=width)
+        table,
     )  # rich tables require console printing
     # As the session is now terminated, we can delete the controller driver, as it is no
     # longer needed.
@@ -390,10 +403,14 @@ def session_injector(f: FC) -> FC:
 @ps_decorators
 @click.pass_obj
 def ps(
-    obj: UnifiedShellContext, query: ProcessQuery, long_format: bool, width: int
+    obj: UnifiedShellContext,
+    query: ProcessQuery,
+    long_format: bool,
+    width: int | None,
+    full: bool,
 ) -> None:
     log_pm_cmd(obj)
-    ps_impl(obj, query, long_format, width)
+    ps_impl(obj, query, long_format, width, full)
 
 
 @click.command("logs")
@@ -416,9 +433,11 @@ def logs(
 @add_query_options_no_session(at_least_one=True)
 @kill_decorators
 @click.pass_obj
-def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
+def kill(
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, full: bool
+) -> None:
     log_pm_cmd(obj)
-    kill_impl(obj, query, width)
+    kill_impl(obj, query, width, full)
 
 
 @click.command("flush")
@@ -426,9 +445,11 @@ def kill(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
 @add_query_options_no_session(at_least_one=True)
 @flush_decorators
 @click.pass_obj
-def flush(obj: UnifiedShellContext, query: ProcessQuery, width: int) -> None:
+def flush(
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, full: bool
+) -> None:
     log_pm_cmd(obj)
-    flush_impl(obj, query, width)
+    flush_impl(obj, query, width, full)
 
 
 @click.command("restart")

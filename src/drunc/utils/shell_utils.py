@@ -6,7 +6,9 @@ from collections.abc import MutableMapping
 
 import click
 from druncschema.token_pb2 import Token
-from rich.console import Console
+from rich.console import Console, Group
+from rich.measure import Measurement
+from rich.table import Table
 
 from drunc.controller.controller_driver import ControllerDriver
 from drunc.exceptions import DruncShellException
@@ -281,6 +283,29 @@ class ShellContext:
             log.info(
                 f"Current FSM status is [green]{current_state}[/green]. Available transitions are [green]{'[/green], [green]'.join(available_actions)}[/green]. Available sequence commands are [green]{'[/green], [green]'.join(available_sequences)}[/green]."
             )
+
+
+def set_full_table_width(obj: ShellContext, table: Table | Group) -> Table | Group:
+    """Set a table's width to the maximum available console width.
+
+    Args:
+        obj: Shell context providing the Rich console.
+        table: Table or group of tables whose width should be expanded.
+
+    Returns:
+        The same table or group instance with its width updated.
+    """
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, Table | Group):
+                set_full_table_width(obj, renderable)
+        return table
+
+    table.expand = False
+    options = obj._console.options.update(max_width=10000)
+    table_width = Measurement.get(obj._console, options, table).maximum
+    table.width = table_width
+    return table
 
 
 def log_pm_cmd(obj: ShellContext) -> None:
