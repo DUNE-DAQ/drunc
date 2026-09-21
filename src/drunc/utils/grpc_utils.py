@@ -50,6 +50,9 @@ def unpack_error_response(name: str, text: str, token: Token) -> Response:
 
     Returns:
         response: the response object containing the error message.
+
+    Raises:
+        UnpackingError: If the response cannot be created due to unpacking issues.
     """
     return Response(
         name=name,
