@@ -42,7 +42,15 @@ require_drunc = pytest.mark.skipif(
 
 
 def strip_ansi(text: str) -> str:
-    """Remove ANSI escape codes from a text block."""
+    """
+    Remove ANSI escape codes from a text block.
+
+    Args:
+        text: The input text containing potential ANSI escape codes.
+
+    Returns:
+        The text with all ANSI escape codes removed.
+    """
     return ANSI_ESCAPE_RE.sub("", text)
 
 
