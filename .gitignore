@@ -16,3 +16,8 @@ info.*.json
 *.hdf5
 *.hdf5.writing
 .coverage
+
+## Revert me!
+*.svg
+*.dot
+*.png
