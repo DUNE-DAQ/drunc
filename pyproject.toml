@@ -68,6 +68,7 @@ test = [
   "types-psutil",
   "types-click-shell",
   "types-paramiko",
+  "paramiko[gssapi]"
 ]
 
 [project.scripts]
