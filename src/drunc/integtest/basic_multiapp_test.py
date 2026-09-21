@@ -104,9 +104,9 @@ pm_port = find_free_port(50020, 52000)
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
 pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands,
-                                       idc.KeyPhraseWaitParameters(search_phrase="communicating through",
-                                                                   timeout_waiting_for_first_msg=5,
-                                                                   wait_time_after_last_msg=5))
+                                  idc.KeyPhraseWaitParameters(search_phrase="communicating through",
+                                                              timeout_waiting_for_first_msg=5,
+                                                              wait_time_after_last_msg=5))
 
 pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
 pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands,
