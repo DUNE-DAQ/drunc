@@ -59,9 +59,6 @@ def count_processes_in_status_response(response: StatusResponse) -> int:
 
     Returns:
         int: The total number of processes in the status table.
-
-    Raises:
-        None
     """
     processes_found = 0
 
