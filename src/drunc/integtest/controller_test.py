@@ -97,7 +97,7 @@ class FsmCommandParams:
 echo {self.marker}
 {self.full_command}
 echo {self.marker}_done
-status -w 140
+status --full
 echo {self.marker}_status_done
 """
 
@@ -153,7 +153,7 @@ dunerc_command_list = (
     """
 boot
 echo post_boot
-status -w 140
+status --full
 echo post_boot_done
 """
     + "".join(p.to_command_block() for p in _FSM_COMMANDS)
@@ -170,7 +170,7 @@ echo post_boot_done
 echo {_SHUTDOWN_MARKER}
 shutdown
 echo {_SHUTDOWN_MARKER}_done
-status -w 140
+status --full
 echo {_SHUTDOWN_MARKER}_status_done
 """
     + "\nterminate"

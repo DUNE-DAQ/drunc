@@ -60,7 +60,7 @@ echo ps-post-boot
 ps --full
 
 echo status-post-boot
-status -w 300
+status --full
 """.split()
 
 dead_app_name = "ft-nested-segment-2-application"
