@@ -61,6 +61,9 @@ class SessionManager(abc.ABC, SessionManagerServicer):
 
         Returns:
             A response containing the service description.
+
+        Raises:
+            DruncSetupException: If the session manager is not properly configured.
         """
         self.log.debug(f"{self.name} running describe")
 
