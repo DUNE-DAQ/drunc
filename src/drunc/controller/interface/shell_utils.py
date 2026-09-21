@@ -49,6 +49,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
+from drunc.utils.shell_utils import set_full_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
@@ -806,9 +807,8 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(t)  # rich tables require console printing
-
-    obj.print(render_status_table(obj))
+    obj.print(set_full_table_width(obj, t))  # rich tables require console printing
+    obj.print(set_full_table_width(obj, render_status_table(obj)))
     obj.print_status_summary()
 
 
