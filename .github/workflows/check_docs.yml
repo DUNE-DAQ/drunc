@@ -20,6 +20,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
+            --exclude-path '(^|/)docs/graph/README\.md$'
             --exclude 'https://twiki.cern.ch/.*'
             --exclude 'https://indico.*'
             --exclude 'https://wiki.dunescience.org/wiki/.*'

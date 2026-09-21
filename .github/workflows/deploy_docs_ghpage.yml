@@ -90,10 +90,13 @@ jobs:
       # Check whether the links used in the documentation are valid
       # twiki, indico, amd dunescience excludes are used as they are behind SSOs, leading to timeouts, and errors being thrown by this step
       # drunc contains a set of outdated documentation page that should be kept for reference, they contain good descriptions on e.g. configuration structure
+      # docs/graph/src is generated in-memory by docs/utils/generate_graph_src_pages.py (mkdocs-gen-files) during `mkdocs gh-deploy`,
+      # so it never exists as a real file in the checked-out repo that lychee scans
       - name: Run Lychee link checker
         uses: lycheeverse/lychee-action@v2
         with:
           args: >
+            --exclude-path '(^|/)docs/graph/README\.md$'
             --exclude 'https://twiki.cern.ch/.*' 
             --exclude 'https://indico.*' 
             --exclude 'https://wiki.dunescience.org/wiki/.*'
