@@ -65,6 +65,8 @@ def define_env(env):
             '<button type="button" data-action="reset" title="Reset view">Reset</button>'
             '<input type="search" class="svg-viewer-search" '
             'placeholder="Search for a class or module…" autocomplete="off">'
+            '<button type="button" class="svg-viewer-isolate" '
+            'data-action="isolate" hidden>Isolate</button>'
             "</div>"
             '<div class="svg-viewer-search-results"></div>'
             '<div class="svg-viewer-canvas"></div>'

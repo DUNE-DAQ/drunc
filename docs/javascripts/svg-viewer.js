@@ -25,6 +25,7 @@
     const legendSlot = container.querySelector(".svg-viewer-legend");
     const searchInput = container.querySelector(".svg-viewer-search");
     const searchResults = container.querySelector(".svg-viewer-search-results");
+    const isolateButton = container.querySelector(".svg-viewer-isolate");
     const toolbar = container.querySelector(".svg-viewer-toolbar");
     const src = container.dataset.src;
     const legendSrc = container.dataset.legend;
@@ -37,7 +38,11 @@
     let lastX = 0;
     let lastY = 0;
     let nodeIndex = [];
+    let edgeIndex = [];
+    let selectedMatch = null;
+    let isolated = false;
     let highlightedNode = null;
+    let highlightedEdges = [];
 
     function applyTransform() {
       if (!svgEl) {
@@ -54,7 +59,26 @@
       state.x = 0;
       state.y = 0;
       state.scale = 1;
+      clearSearchState();
       applyTransform();
+    }
+
+    function clearSearchState() {
+      if (searchInput) {
+        searchInput.value = "";
+      }
+      if (searchResults) {
+        searchResults.innerHTML = "";
+        searchResults.hidden = true;
+      }
+      if (isolated) {
+        clearIsolation();
+      }
+      clearHighlights();
+      selectedMatch = null;
+      if (isolateButton) {
+        isolateButton.hidden = true;
+      }
     }
 
     function zoomBy(factor, originX, originY) {
@@ -92,6 +116,16 @@
           .map((node) => {
             const title = node.querySelector("title");
             return title ? { node, name: title.textContent.trim() } : null;
+          })
+          .filter(Boolean);
+        edgeIndex = Array.from(svgEl.querySelectorAll("g.edge"))
+          .map((edge) => {
+            const title = edge.querySelector("title");
+            if (!title) {
+              return null;
+            }
+            const [source, target] = title.textContent.trim().split(/->|--/);
+            return source && target ? { edge, source, target } : null;
           })
           .filter(Boolean);
       });
@@ -142,6 +176,8 @@
           zoomBy(1 / ZOOM_STEP);
         } else if (action === "reset") {
           resetView();
+        } else if (action === "isolate") {
+          toggleIsolation();
         }
       });
     });
@@ -167,6 +203,10 @@
       if (!svgEl) {
         return;
       }
+      const wasIsolated = isolated;
+      if (isolated) {
+        clearIsolation();
+      }
       const nodeCTM = match.node.getScreenCTM();
       if (!nodeCTM) {
         return;
@@ -191,11 +231,89 @@
       state.y += dy;
       applyTransform();
 
-      if (highlightedNode) {
-        highlightedNode.classList.remove("svg-viewer-highlight");
+      clearHighlights();
+      selectedMatch = match;
+      if (isolateButton) {
+        isolateButton.hidden = false;
       }
       highlightedNode = match.node;
       highlightedNode.classList.add("svg-viewer-highlight");
+
+      highlightedEdges = edgeIndex
+        .filter((entry) => entry.source === match.name || entry.target === match.name)
+        .map((entry) => entry.edge);
+      highlightedEdges.forEach((edge) => {
+        edge.classList.add("svg-viewer-edge-highlight");
+      });
+      if (wasIsolated) {
+        applyIsolation();
+      }
+    }
+
+    function clearHighlights() {
+      if (highlightedNode) {
+        highlightedNode.classList.remove("svg-viewer-highlight");
+      }
+      highlightedEdges.forEach((edge) => {
+        edge.classList.remove("svg-viewer-edge-highlight");
+      });
+      highlightedNode = null;
+      highlightedEdges = [];
+    }
+
+    function applyIsolation() {
+      if (!selectedMatch) {
+        return;
+      }
+
+      const visibleNodeNames = new Set([selectedMatch.name]);
+      const visibleEdges = new Set();
+      edgeIndex.forEach((entry) => {
+        if (entry.source === selectedMatch.name || entry.target === selectedMatch.name) {
+          visibleNodeNames.add(entry.source);
+          visibleNodeNames.add(entry.target);
+          visibleEdges.add(entry.edge);
+        }
+      });
+
+      nodeIndex.forEach((entry) => {
+        entry.node.classList.toggle(
+          "svg-viewer-isolation-hidden",
+          !visibleNodeNames.has(entry.name),
+        );
+      });
+      edgeIndex.forEach((entry) => {
+        entry.edge.classList.toggle(
+          "svg-viewer-isolation-hidden",
+          !visibleEdges.has(entry.edge),
+        );
+      });
+
+      isolated = true;
+      if (isolateButton) {
+        isolateButton.textContent = "Show all";
+      }
+    }
+
+    function clearIsolation() {
+      nodeIndex.forEach((entry) => {
+        entry.node.classList.remove("svg-viewer-isolation-hidden");
+      });
+      edgeIndex.forEach((entry) => {
+        entry.edge.classList.remove("svg-viewer-isolation-hidden");
+      });
+      isolated = false;
+      if (isolateButton) {
+        isolateButton.textContent = "Isolate";
+      }
+    }
+
+    function toggleIsolation() {
+      if (isolated) {
+        clearIsolation();
+      } else {
+        applyIsolation();
+      }
     }
 
     function renderSearchResults(query) {

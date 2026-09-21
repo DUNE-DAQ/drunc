@@ -129,3 +129,22 @@
   stroke: #ff3b30 !important;
   stroke-width: 3px !important;
 }
+
+.svg-viewer-edge-highlight path,
+.svg-viewer-edge-highlight polygon {
+  stroke: #ff3b30 !important;
+  stroke-width: 3px !important;
+}
+
+.svg-viewer-edge-highlight polygon {
+  fill: #ff3b30 !important;
+}
+
+.svg-viewer-edge-highlight text {
+  fill: #ff3b30 !important;
+  font-weight: 700;
+}
+
+.svg-viewer-isolation-hidden {
+  display: none;
+}
