@@ -30,9 +30,7 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger
-
-log_echo = get_logger("echo", rich_handler=True)
+from drunc.utils.utils import get_logger, log_echo
 
 
 @click.command("boot")

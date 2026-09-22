@@ -38,9 +38,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerRunningMode,
     ProcessManagerTypes,
 )
-from drunc.utils.utils import get_logger, pid_info_str
-
-log_echo = get_logger("echo", rich_handler=True)
+from drunc.utils.utils import get_logger, log_echo, pid_info_str
 
 
 class BadQuery(DruncCommandException):
