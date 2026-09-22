@@ -7,10 +7,9 @@ from druncschema.common_pb2 import LoggerTarget
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
 from drunc.utils.shell_utils import format_table_width
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, log_echo
 
 log = get_logger("controller.iface", rich_handler=True)
-log_echo = get_logger("echo", rich_handler=True)
 
 
 @click.command("list-transitions")
