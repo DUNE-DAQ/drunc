@@ -14,7 +14,7 @@ import grpc
 from daqconf.set_connectivity_service_port import set_connectivity_service_port
 from daqconf.set_rc_controller_port import set_rc_controller_port
 from daqconf.utils import find_free_port
-from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
 from druncschema.process_manager_pb2 import (
     BootRequest,
@@ -988,70 +988,43 @@ To find the controller address, you can look up \'{top_controller_name}_control\
 """
         )
 
-    def log_on_server(
+    def send_log(
         self,
         text: str,
         severity: str = "INFO",
+        logger: int = LoggerTarget.ECHO,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
         timeout: int | float = 60,
-    ) -> LogOnServerResponse:
-        """
-        Logs a message to the server's log system.
+    ) -> SendLogResponse:
+        """Send a log message to the process manager over gRPC.
 
         Args:
-            text (str): The message to log.
-            severity (str, optional): The severity level of the log message. Defaults to "INFO".
-            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
+            text: The message to log.
+            severity: The log severity, such as ``INFO`` or ``ERROR``.
+            logger: The server logger target.
+            target: The target node for the message.
+            execute_along_path: Whether to execute along the target path.
+            execute_on_all_subsequent_children_in_path: Whether to execute on all
+                subsequent children in the target path.
+            timeout: The gRPC request timeout in seconds.
 
         Returns:
-            None
+            The response from the process manager.
 
         Raises:
             grpc.RpcError: If the gRPC request fails.
         """
-        request = LogOnServerRequest(
+        request = SendLogRequest(
             token=self.token,
             text=text,
             severity=severity,
-            target="",
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=False,
+            logger=logger,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
         )
         request.token.CopyFrom(self.token)
-        response: LogOnServerResponse = self.stub.log_on_server(
-            request, timeout=timeout
-        )
-        return response
-
-    def echo_on_server(
-        self,
-        text: str,
-        severity: str = "INFO",
-        timeout: int | float = 60,
-    ) -> LogOnServerResponse:
-        """
-        Same as log_on_server but goes to drunc.echo. CLI tool for testing
-
-        Args:
-            text (str): The message to log.
-            severity (str, optional): The severity level of the log message. Defaults to "INFO".
-            timeout (int | float, optional): The timeout for the gRPC request in seconds. Defaults to 60.
-
-        Returns:
-            None
-
-        Raises:
-            grpc.RpcError: If the gRPC request fails.
-        """
-        request = LogOnServerRequest(
-            token=self.token,
-            text=text,
-            severity=severity,
-            target="",
-            execute_along_path=False,
-            execute_on_all_subsequent_children_in_path=False,
-        )
-        request.token.CopyFrom(self.token)
-        response: LogOnServerResponse = self.stub.echo_on_server(
-            request, timeout=timeout
-        )
+        response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
         return response

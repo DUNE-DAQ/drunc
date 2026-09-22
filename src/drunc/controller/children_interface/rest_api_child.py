@@ -9,7 +9,7 @@ from json import JSONDecodeError
 
 import requests
 import socks
-from druncschema.common_pb2 import LogOnServerResponse
+from druncschema.common_pb2 import LoggerTarget, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMResponse,
     DescribeResponse,
@@ -857,14 +857,15 @@ class RESTAPIChildNode(ChildNode):
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
 
-    def log_on_server(
+    def send_log(
         self,
         text: str,
         severity: str = "INFO",
         target: str = "",
+        logger: "LoggerTarget" = LoggerTarget.MAIN,
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
-    ) -> LogOnServerResponse:
+    ) -> SendLogResponse:
         """
         Log a message on the server with the specified severity.
 
@@ -880,9 +881,9 @@ class RESTAPIChildNode(ChildNode):
             execute_on_all_subsequent_children_in_path (bool): Whether to execute on all subsequent children in the path (default: True).
 
         Returns:
-            LogOnServerResponse: The response from the server after logging the message.
+            SendLogResponse: The response from the server after logging the message.
         """
-        return LogOnServerResponse(
+        return SendLogResponse(
             token=None,
             name=self.name,
             flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,

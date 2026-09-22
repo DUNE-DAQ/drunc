@@ -44,12 +44,12 @@ daq_session_name = "pms-test"
 dunerc_commands = f"""
 
     echo pre_boot
-    echo-on-server pre_boot
+    echo --server  pre_boot
     ps -w 300
     boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
     wait 15
     echo post_boot
-    echo-on-server post_boot
+    echo --server  post_boot
     ps -w 300
 
 
@@ -64,13 +64,13 @@ dunerc_commands = f"""
     echo test_wait_done
 
     echo pre_restart_mlt
-    echo-on-server pre_restart_mlt
+    echo --server  pre_restart_mlt
     restart -n mlt
     restart -n root-controller
     wait 5
     echo post_restart_mlt
     ps -w 300
-    echo-on-server post_restart_mlt
+    echo --server  post_restart_mlt
 
 
     echo test_kill_mlt
@@ -103,10 +103,10 @@ dunerc_commands = f"""
     echo test_flush_done
 
     echo test_terminate
-    echo-on-server test_terminate
+    echo --server  test_terminate
     terminate
     echo test_terminate_done
-    echo-on-server test_terminate_done
+    echo --server  test_terminate_done
 
     """.split()
 

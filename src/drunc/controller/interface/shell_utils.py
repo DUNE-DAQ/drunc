@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import click
 import grpc
 from daqpytools.logging.formatter import DATE_TIME_BASE_FORMAT, TIME_ZONE
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.controller_pb2 import (
     Argument,
     DescribeResponse,
@@ -748,7 +749,9 @@ def run_one_fsm_command(
         log.error(err_str)
         for app in apps_that_timed_out:
             log.error(f"\t[yellow]logs -n {app}[/]")
-        obj.get_driver("controller").log_on_server(err_str, severity="ERROR")
+        obj.get_driver("controller").send_log(
+            err_str, severity="ERROR", logger=LoggerTarget.MAIN
+        )
         obj.get_driver("controller").to_error(
             execute_on_all_subsequent_children_in_path=False
         )

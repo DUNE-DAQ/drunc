@@ -6,7 +6,7 @@ from typing import Callable, List, TypeVar
 
 from daqpytools.logging import LogHandlerConf, setup_daq_ers_logger
 from druncschema.authoriser_pb2 import ActionType, SystemType
-from druncschema.common_pb2 import LogOnServerRequest, LogOnServerResponse
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.controller_pb2 import (
     DescribeFSMRequest,
     DescribeFSMResponse,
@@ -1590,25 +1590,25 @@ class Controller(ControllerServicer):
 
     @authentified_and_authorised(action=ActionType.READ, system=SystemType.CONTROLLER)
     @publish_command_time
-    def log_on_server(
+    def send_log(
         self,
-        request: LogOnServerRequest,
+        request: SendLogRequest,
         context: ServicerContext,
-    ) -> LogOnServerResponse:
+    ) -> SendLogResponse:
         """
         Logs a message on the server with the specified severity level.
 
         Args:
-            request (LogOnServerRequest): The request containing the log message, severity level, and target information.
+            request (SendLogRequest): The request containing the log message, severity level, and target information.
             context (ServicerContext): The gRPC context for the request.
 
         Returns:
-            LogOnServerResponse: The response indicating the result of the logging operation.
+            SendLogResponse: The response indicating the result of the logging operation.
 
         Raises:
             None
         """
-        response = LogOnServerResponse(
+        response = SendLogResponse(
             token=None,
             flag=ResponseFlag.EXECUTED_SUCCESSFULLY,
         )
@@ -1635,9 +1635,10 @@ class Controller(ControllerServicer):
             operation_name="who_is_in_charge",
         )
         child_responses = self.propagate_concurrently(
-            lambda child, target: child.log_on_server(
+            lambda child, target: child.send_log(
                 request.text,
                 request.severity,
+                request.logger,
                 request.target,
                 request.execute_along_path,
                 request.execute_on_all_subsequent_children_in_path,
@@ -1647,7 +1648,7 @@ class Controller(ControllerServicer):
         )
         child_responses.extend(
             [
-                LogOnServerResponse(
+                SendLogResponse(
                     token=None,
                     name=child_list[i][0].name,
                     flag=ResponseFlag.NOT_EXECUTED_NOT_READY,
@@ -1659,6 +1660,14 @@ class Controller(ControllerServicer):
 
         # This node.
         if request.target in [self.name, ""] or request.execute_along_path:
+            if request.logger == LoggerTarget.ECHO:
+                self.log.critical("Echo logging is not implemented")
+                return SendLogResponse(
+                    token=request.token,
+                    name=self.name,
+                    flag=ResponseFlag.NOT_EXECUTED_NOT_IMPLEMENTED,
+                )
+
             level = request.severity.lower()
             log_method = getattr(self.log, level, self.log.info)
             log_method(request.text)
