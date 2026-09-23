@@ -8,7 +8,7 @@ from drunc.utils.utils import resolve_localhost_to_hostname
 
 
 class RunControlContext(ShellContext):
-    shell_id = "run_control"
+    shell_id = "run_control_shell"
 
     def __init__(self, *args, **kwargs) -> None:
         self.status_receiver = None
