@@ -88,10 +88,12 @@ confgen_arguments = {"SmallFootprint": conf_dict}
 
 # The commands to run in dunerc and the process manager shell
 dunerc_commands_1 = (
-    "boot conf start --run-number 101 wait 1 enable-triggers wait ".split()
-    + [str(run_duration)] + ["disable-triggers"]
+    "boot conf start --run-number 101 wait 1".split()
 )
 dunerc_commands_2 = (
+    "enable-triggers wait".split() + [str(run_duration)] + ["disable-triggers"]
+)
+dunerc_commands_3 = (
     "drain-dataflow stop-trigger-sources stop wait 2 scrap terminate".split()
 )
 pmshell_command = ["ps"]
@@ -101,22 +103,30 @@ pm_port = find_free_port(50020, 52000)
 
 # The command lines that should be used to start the applications
 procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
-pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands,
+                                  idc.KeyPhraseWaitParameters(search_phrase="communicating through",
+                                                              timeout_waiting_for_first_msg=5,
+                                                              wait_time_after_last_msg=5))
 
 pmshell_startup_commands = ["drunc-process-manager-shell", f"grpc://localhost:{pm_port}"]
-pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
+pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands,
+                                       idc.KeyPhraseWaitParameters(search_phrase="Ready"))
 
-drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}", "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
-druncapp = idc.DAQControlApplication("drunc", drunc_startup_commands)
+drunc_startup_commands = ["drunc-unified-shell", f"grpc://localhost:{pm_port}",
+                          "<config_data_file>", "<config_session_name>", "<daq_session_name>"]
+druncapp = idc.DAQControlApplication("drunc", drunc_startup_commands,
+                                     idc.KeyPhraseWaitParameters(search_phrase="unified_shell ready"))
 
 # Packaging up the commands into DAQCommandSets
-cmd_set_1 = idc.DAQCommandSet("drunc", dunerc_commands_1, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO))
-cmd_set_2 = idc.DAQCommandSet("pmshell", pmshell_command, idc.CommandWaitParameters(style=idc.CommandWaitStyle.TIME))
-cmd_set_3 = idc.DAQCommandSet("drunc", dunerc_commands_2, idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO))
+cmd_set_1 = idc.DAQCommandSet("drunc", dunerc_commands_1, idc.EchoCommandWaitParameters())
+cmd_set_2 = idc.DAQCommandSet("pmshell", pmshell_command, wait_for_command_completion=False)
+cmd_set_3 = idc.DAQCommandSet("drunc", dunerc_commands_2, idc.EchoCommandWaitParameters())
+cmd_set_4 = idc.DAQCommandSet("pmshell", pmshell_command, idc.KeyPhraseWaitParameters(search_phrase="mlt"))
+cmd_set_5 = idc.DAQCommandSet("drunc", dunerc_commands_3, idc.EchoCommandWaitParameters())
 
 # Putting everything together into a DAQSessionIngredients object
 app_list = [ pmapp, pmshellapp, druncapp ]
-cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3 ]
+cmd_set_list = [ cmd_set_1, cmd_set_2, cmd_set_3, cmd_set_4, cmd_set_5 ]
 dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
 
 # Declare the special variable that tells the integrationtest infrastructure what we want to run
