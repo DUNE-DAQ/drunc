@@ -1,11 +1,14 @@
 import os
+from typing import cast
 
 import click
 import click_shell
 
+from drunc.run_control.interface.commands import echo
 from drunc.utils.grpc_utils import ServerUnreachable
 from drunc.utils.utils import (
     CONTEXT_SETTINGS,
+    format_name_for_cli,
     get_logger,
     get_root_logger,
     validate_command_facility,
@@ -47,3 +50,22 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
     rc_shell_log.info(
         f"Connected to {run_control_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
     )
+
+    def cleanup() -> None:
+        ctx.obj.get_driver("run_control").send_log(
+            f"disconnecting from {ctx.obj.shell_id}"
+        )
+        ctx.obj.terminate()
+        rc_log.info("disconnected from process manager thingy")
+
+    ctx.call_on_close(cleanup)
+
+    exposed_run_control_commands = [echo]
+
+    # cast the command group
+    command_group = cast(click.core.Group, ctx.command)
+
+    for cmd in exposed_run_control_commands:
+        command_group.add_command(cmd, format_name_for_cli(cmd.name or ""))
+
+    rc_log.info("ready")
