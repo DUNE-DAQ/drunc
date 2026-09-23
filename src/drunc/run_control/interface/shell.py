@@ -34,6 +34,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
     try:
         rc_log.info("running a logger instance")
         rc_shell_log.info("getting describe from run control driver")
+        desc = ctx.obj.get_driver("run_control").describe()
     except ServerUnreachable as e:
         rc_shell_log.critical("Could not connect to the run control")
         rc_shell_log.exception(e)
@@ -42,3 +43,7 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         rc_shell_log.critical(f"failed somehow: {e}")
         rc_shell_log.info("dont forget to remove this fork :)")
         exit(1)
+
+    rc_shell_log.info(
+        f"Connected to {run_control_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
+    )
