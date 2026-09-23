@@ -1,3 +1,4 @@
+import getpass
 import os
 from typing import cast
 
@@ -47,8 +48,16 @@ def rc_shell(ctx: click.core.Context, run_control_address: str):
         rc_shell_log.info("dont forget to remove this fork :)")
         exit(1)
 
+    rc_log.info(
+        f"[green]{getpass.getuser()}[/green] connected to the run control through a [green]drunc-run-control-shell[/green] via address [green]{run_control_address}[/green]"
+    )
+
     rc_shell_log.info(
         f"Connected to {run_control_address}, running '{desc.name}.{desc.session}' (name.session), starting listening..."
+    )
+
+    ctx.obj.get_driver("run_control").send_log(
+        f"{getpass.getuser()} connected from {ctx.obj.shell_id}"
     )
 
     def cleanup() -> None:
