@@ -1,4 +1,5 @@
 import grpc
+from druncschema.common_pb2 import LoggerTarget, SendLogRequest, SendLogResponse
 from druncschema.description_pb2 import Description
 from druncschema.request_response_pb2 import Request
 from druncschema.run_control_pb2_grpc import RunControlStub
@@ -41,5 +42,43 @@ class RunControlDriver:
 
         return response
 
-    def send_log():
-        raise ValueError("To be supported soon!")
+    def send_log(
+        self,
+        text: str,
+        severity: str = "INFO",
+        logger: int = LoggerTarget.ECHO,
+        target: str = "",
+        execute_along_path: bool = False,
+        execute_on_all_subsequent_children_in_path: bool = True,
+        timeout: int | float = 60,
+    ) -> SendLogResponse:
+        """Send a log message to the process manager over gRPC.
+
+        Args:
+            text: The message to log.
+            severity: The log severity, such as ``INFO`` or ``ERROR``.
+            logger: The server logger target.
+            target: The target node for the message.
+            execute_along_path: Whether to execute along the target path.
+            execute_on_all_subsequent_children_in_path: Whether to execute on all
+                subsequent children in the target path.
+            timeout: The gRPC request timeout in seconds.
+
+        Returns:
+            The response from the process manager.
+
+        Raises:
+            grpc.RpcError: If the gRPC request fails.
+        """
+        request = SendLogRequest(
+            token=self.token,
+            text=text,
+            severity=severity,
+            logger=logger,
+            target=target,
+            execute_along_path=execute_along_path,
+            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        )
+        request.token.CopyFrom(self.token)
+        response: SendLogResponse = self.stub.send_log(request, timeout=timeout)
+        return response
