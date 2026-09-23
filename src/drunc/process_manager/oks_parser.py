@@ -32,8 +32,8 @@ def get_full_db_path(db_path: str) -> str:
 
     # Get the env var that points to the configuration files. If it doesn't exist, raise
     # an exception
-    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", None)
-    if not search_path_str:
+    search_path_str: str = os.environ.get("DUNEDAQ_DB_PATH", "")
+    if search_path_str == "":
         err_str = "DUNEDAQ_DB_PATH not set, exiting."
         raise DruncSetupException(err_str)
 
