@@ -236,7 +236,7 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
 @click.option(
     "--full/--no-full",
     "full",
-    default=False,
+    default=True,
     help="Expand the table to the full available terminal width.",
 )
 @click.pass_obj

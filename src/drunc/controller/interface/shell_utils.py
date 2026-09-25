@@ -807,8 +807,16 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(set_full_table_width(obj, t))  # rich tables require console printing
-    obj.print(set_full_table_width(obj, render_status_table(obj)))
+    obj.print(
+        set_full_table_width(obj, t),
+        overflow="fold",
+        soft_wrap=True,
+    )
+    obj.print(
+        set_full_table_width(obj, render_status_table(obj)),
+        overflow="fold",
+        soft_wrap=True,
+    )
     obj.print_status_summary()
 
 
