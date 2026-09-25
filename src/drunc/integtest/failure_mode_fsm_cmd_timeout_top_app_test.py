@@ -59,16 +59,16 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps --full
+ps 
 
 echo status-post-boot
-status --full
+status 
 
 echo pre-conf
 conf
 
 echo status-post-conf
-status --full
+status 
 """.split()
 
 timeout_app_name = "ft-top-segment-application"

@@ -85,10 +85,10 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     help="Table width. Default is automatically calculated",
 )
 @click.option(
-    "--full/--no-full",
-    "full",
-    default=True,
-    help="Expand the table to the full available terminal width.",
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
 )
 @click.pass_obj
 def status(
@@ -98,8 +98,26 @@ def status(
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
     width: int | None,
-    full: bool,
+    fit: bool,
 ) -> None:
+    """
+    Show the status of the controller and its managed components.
+
+    Args:
+        obj (ControllerContext): The controller context.
+        target (str): The target to address.
+        execute_along_path (bool): Whether to execute the command along the path.
+        execute_on_all_subsequent_children_in_path (bool): Whether to execute the command on all subsequent children in the path.
+        extended (bool): Whether to show additional columns, including the IP address of each endpoint.
+        width (int | None): The table width. Default is automatically calculated.
+        fit (bool): Whether to restrict the table to the available terminal width.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     log_msg = (
         f"Getting status for target '{target}'..."
         if target
@@ -114,7 +132,7 @@ def status(
         show_ip_address=extended,
         width=width,
     )
-    if full:
+    if not fit:
         table = set_full_table_width(obj, table)
     obj.print(
         table,

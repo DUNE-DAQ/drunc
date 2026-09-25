@@ -28,7 +28,7 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import ConsoleRenderable, Group, RichCast
+from rich.console import Group
 from rich.progress import (
     BarColumn,
     Progress,
@@ -259,28 +259,35 @@ def render_status_table(
 class StatusTableUpdater(Progress):
     def __init__(
         self,
-        ctx: ControllerContext | UnifiedShellContext,
+        ctx,
         refresh_per_second: float = 2,
         *args: object,
         **kwargs: object,
     ) -> None:
         self.ctx = ctx
-        self.update_table()
 
-        # Get the instance of the console that the logger is using with the rich handler
-        # so that the progress bar can be rendered in the same console, and not mess up
-        # the logs
+        # Use the shared console for the table rendering
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
+        # Initialize Progress (this will internally trigger get_renderable once)
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
-    def update_table(self) -> None:
-        self.table = render_status_table(self.ctx)
+        # Now update the table with the real data and full width
+        self.update_table()
 
-    def get_renderable(self) -> ConsoleRenderable | RichCast | str:
-        renderable = Group(self.table, *self.get_renderables())
+    def update_table(self) -> None:
+        raw_table = render_status_table(self.ctx)
+        # Use your global function, passing the Progress bar's native console
+        self.table = set_full_table_width(self.console, raw_table)
+
+    def get_renderable(self):
+        # Safely get the table if it exists, otherwise use an empty string
+        # (Rich can safely render empty strings without errors)
+        table_renderable = getattr(self, "table", "")
+
+        renderable = Group(table_renderable, *self.get_renderables())
         return renderable
 
 

@@ -285,26 +285,47 @@ class ShellContext:
             )
 
 
-def set_full_table_width(obj: ShellContext, table: Table | Group) -> Table | Group:
-    """Set a table's width to the maximum available console width.
+def set_full_table_width(
+    ctx_or_console: ShellContext | Console, table: Table | Group
+) -> Table | Group:
+    """
+    Set a table's width to the maximum available console width.
 
     Args:
-        obj: Shell context providing the Rich console.
+        ctx_or_console: Either a ShellContext or a Rich Console instance.
         table: Table or group of tables whose width should be expanded.
 
     Returns:
         The same table or group instance with its width updated.
     """
+    # Retrieve the console instance
+    if hasattr(ctx_or_console, "_console"):
+        console = ctx_or_console._console
+    else:
+        console = ctx_or_console
+
+    # If the table is a Group, recursively set the width for each renderable within it.
     if isinstance(table, Group):
         for renderable in table.renderables:
             if isinstance(renderable, Table | Group):
-                set_full_table_width(obj, renderable)
+                set_full_table_width(console, renderable)
         return table
 
+    # If the table is not a Group, proceed to set its width directly.
     table.expand = False
-    options = obj._console.options.update(max_width=10000)
-    table_width = Measurement.get(obj._console, options, table).maximum
-    table.width = table_width
+
+    # Prevent columns from wrapping text, ensuring the table's width is determined by content.
+    for column in table.columns:
+        column.no_wrap = True
+
+    # Measure the ideal width of the table based on its content and the console's options.
+    options = console.options.update(max_width=10000)
+    ideal_width = Measurement.get(console, options, table).maximum
+    table.width = ideal_width
+
+    # Adjust the console's internal width if the table's ideal width exceeds it.
+    if ideal_width > console.width:
+        console._width = ideal_width
     return table
 
 

@@ -60,10 +60,10 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps --full
+ps 
 
 echo status-post-boot
-status --full
+status 
 """.split()
 
 

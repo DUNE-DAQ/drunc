@@ -316,15 +316,15 @@ def log_on_server(
     help="Table width. Default is automatically calculated",
 )
 @click.option(
-    "--full/--no-full",
-    "full",
-    default=True,
-    help="Expand the table to the full available terminal width.",
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
 )
 @click.pass_obj
 @click.pass_context
 def terminate(
-    ctx: click.core.Context, obj: UnifiedShellContext, width: int | None, full: bool
+    ctx: click.core.Context, obj: UnifiedShellContext, width: int | None, fit: bool
 ) -> None:
     """
     Execute the process manager terminate command, but only do this for the current
@@ -342,7 +342,7 @@ def terminate(
     table = tabulate_process_instance_list(
         result, "Terminated process", False, width=width
     )
-    if full:
+    if not fit:
         table = set_full_table_width(obj, table)
     obj.print(
         table,
@@ -407,10 +407,10 @@ def ps(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
-    full: bool,
+    fit: bool,
 ) -> None:
     log_pm_cmd(obj)
-    ps_impl(obj, query, long_format, width, full)
+    ps_impl(obj, query, long_format, width, fit)
 
 
 @click.command("logs")
@@ -434,10 +434,10 @@ def logs(
 @kill_decorators
 @click.pass_obj
 def kill(
-    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, full: bool
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, fit: bool
 ) -> None:
     log_pm_cmd(obj)
-    kill_impl(obj, query, width, full)
+    kill_impl(obj, query, width, fit)
 
 
 @click.command("flush")
@@ -446,10 +446,10 @@ def kill(
 @flush_decorators
 @click.pass_obj
 def flush(
-    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, full: bool
+    obj: UnifiedShellContext, query: ProcessQuery, width: int | None, fit: bool
 ) -> None:
     log_pm_cmd(obj)
-    flush_impl(obj, query, width, full)
+    flush_impl(obj, query, width, fit)
 
 
 @click.command("restart")

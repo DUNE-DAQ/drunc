@@ -99,7 +99,7 @@ dunerc_commands_1 = (
     + ["disable-triggers"]
 )
 dunerc_commands_2 = (
-    "drain-dataflow stop-trigger-sources stop wait 2 scrap terminate --full".split()
+    "drain-dataflow stop-trigger-sources stop wait 2 scrap terminate".split()
 )
 pmshell_command = ["ps"]
 
