@@ -1,0 +1,472 @@
+# The goal of this test is to test the process manager as a service
+# by having an independent process manager
+# and having a process manager shell spawning two sessions in it
+# and two different unified shell spawning a session each in it
+# Note: This only tests how well the process manager can deal with multiple sessions
+# booted in various ways. It does not test the nitty gritty functions in the
+# process manager shell and the unified shell because that is tested in other tests
+
+###############################################################
+# Note: requires daqsystemtest to be locally cloned to be run #
+###############################################################
+
+import functools
+import os
+import re
+
+import integrationtest.data_classes as idc
+import integrationtest.log_file_checks as log_file_checks
+from daqconf.utils import find_free_port
+from integ_test_utils import (
+    _parse_table_from_index,
+    assert_rows_have_valid_uuids,
+    find_line_index,
+    get_ps_table_after_echo,
+    require_echo_marker_index,
+    require_line_containing,
+    strip_ansi,
+)
+from pm_test_common import ignored_logfile_problems, make_conf_dict
+
+print = functools.partial(print, flush=True)  # always flush print() output
+
+pytest_plugins = "integrationtest.integrationtest_drunc"
+
+conf_dict = make_conf_dict("pmaas-us")
+
+confgen_arguments = {"SmallFootprint": conf_dict}
+
+
+pms_session_name_1 = "pmaas-pms-1"
+pms_session_name_2 = "pmaas-pms-2"
+us_session_name_1 = "pmaas-us-1"
+us_session_name_2 = "pmaas-us-2"
+
+# Commands in requested order:
+# 1) pms: boot session 1, boot session 2
+# 2) us 1: boot, us 2: boot
+# 3) pms: ps, ps -s session1, logs (ambiguous), logs scoped
+# 4) us 1: ps, logs scoped, terminate; us 2: ps, logs scoped, terminate
+# 5) pms: ps, terminate, ps
+pmshell_commands_stage_1 = f"""
+    echo pms_boot_1
+    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {pms_session_name_1}
+    wait 5
+    echo pms_boot_2
+    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {pms_session_name_2}
+    wait 15
+    """.split()
+
+us_1_commands_stage_1 = """
+    echo us_1_boot
+    boot
+    wait 15
+    """.split()
+
+us_2_commands_stage_1 = """
+    echo us_2_boot
+    boot
+    wait 15
+    """.split()
+
+pmshell_commands_stage_2 = f"""
+    echo pms_ps_all_sessions
+    ps -w 300
+
+    echo pms_ps_session_1_only
+    ps -s {pms_session_name_1} -w 180
+
+    echo pms_logs_ambiguous
+    logs -n root-controller
+
+    echo pms_logs_scoped
+    logs -n root-controller -s {pms_session_name_1} --how-far 5
+    """.split()
+
+us_1_commands_stage_2 = """
+
+    echo us_1_ps_only
+    ps -w 300
+
+    echo us_1_logs_scoped
+    logs -n root-controller --how-far 5
+
+    echo us_1_terminate
+    terminate
+    echo us_1_terminate_done
+    """.split()
+
+us_2_commands_stage_2 = """
+
+    echo us_2_ps_only
+    ps -w 300
+
+    echo us_2_logs_scoped
+    logs -n root-controller --how-far 5
+
+    echo us_2_terminate
+    terminate
+    echo us_2_terminate_done
+    """.split()
+
+pmshell_commands_stage_3 = """
+    echo pms_ps_after_us_terminate
+    ps -w 300
+
+    echo pms_terminate_all
+    terminate
+
+    echo pms_ps_final
+    ps -w 300
+    """.split()
+
+# Find a free network port to use for the process manager
+pm_port = find_free_port(50020, 52000)
+
+# The command lines that should be used to start the applications
+procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
+pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+
+pmshell_startup_commands = [
+    "drunc-process-manager-shell",
+    f"grpc://localhost:{pm_port}",
+]
+pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
+
+us_1_startup_commands = [
+    "drunc-unified-shell",
+    f"grpc://localhost:{pm_port}",
+    "<config_data_file>",
+    "<config_session_name>",
+    us_session_name_1,
+]
+us_1_app = idc.DAQControlApplication("us_1", us_1_startup_commands)
+
+us_2_startup_commands = [
+    "drunc-unified-shell",
+    f"grpc://localhost:{pm_port}",
+    "<config_data_file>",
+    "<config_session_name>",
+    us_session_name_2,
+]
+us_2_app = idc.DAQControlApplication("us_2", us_2_startup_commands)
+
+# Packaging up the commands into DAQCommandSets
+cmd_set_1 = idc.DAQCommandSet(
+    "pmshell",
+    pmshell_commands_stage_1,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_2 = idc.DAQCommandSet(
+    "us_1",
+    us_1_commands_stage_1,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_3 = idc.DAQCommandSet(
+    "us_2",
+    us_2_commands_stage_1,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_4 = idc.DAQCommandSet(
+    "pmshell",
+    pmshell_commands_stage_2,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_5 = idc.DAQCommandSet(
+    "us_1",
+    us_1_commands_stage_2,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_6 = idc.DAQCommandSet(
+    "us_2",
+    us_2_commands_stage_2,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+cmd_set_7 = idc.DAQCommandSet(
+    "pmshell",
+    pmshell_commands_stage_3,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+
+# Putting everything together into a DAQSessionIngredients object
+app_list = [pmapp, pmshellapp, us_1_app, us_2_app]
+cmd_set_list = [
+    cmd_set_1,
+    cmd_set_2,
+    cmd_set_3,
+    cmd_set_4,
+    cmd_set_5,
+    cmd_set_6,
+    cmd_set_7,
+]
+dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
+
+# Declare the special variable that tells the integrationtest infrastructure what we want to run
+daq_session_ingredients = {"MultiRCAppSession": dsi}
+
+
+# The tests themselves
+
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def test_dunerc_success(run_dunerc) -> None:
+    """Checks that the drunc integration command sequence completes successfully."""
+    current_test = os.environ.get("PYTEST_CURRENT_TEST")
+    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
+    if match_obj:
+        current_test = match_obj.group(1)
+    banner_line = re.sub(".", "=", current_test)
+    print(banner_line)
+    print(current_test)
+    print(banner_line)
+
+    assert run_dunerc.completed_processes["pmshell"].returncode == 0
+    assert run_dunerc.completed_processes["us_1"].returncode == 0
+    assert run_dunerc.completed_processes["us_2"].returncode == 0
+
+
+def test_log_files(run_dunerc) -> None:
+    """Checks that expected process-manager log files exist and are free of errors."""
+    assert any(
+        f"{pms_session_name_1}_df-01" in str(logname)
+        for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{pms_session_name_2}_df-01" in str(logname)
+        for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{us_session_name_1}_df-01" in str(logname) for logname in run_dunerc.log_files
+    )
+    assert any(
+        f"{us_session_name_2}_df-01" in str(logname) for logname in run_dunerc.log_files
+    )
+
+    assert log_file_checks.logs_are_error_free(
+        [
+            logname
+            for logname in run_dunerc.log_files
+            if "process_manager" in str(logname)
+        ],
+        True,
+        True,
+        ignored_logfile_problems,
+    )
+
+
+def test_pms_ps_contains_four_sessions(run_dunerc) -> None:
+    """Checks that pms sees both pms and both us sessions together."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    ps_all = get_ps_table_after_echo(lines, "pms_ps_all_sessions")
+
+    assert ps_all, "Expected a ps table after pms_ps_all_sessions, but found none."
+
+    observed_sessions = {row["session"].strip() for row in ps_all}
+    expected_sessions = {
+        pms_session_name_1,
+        pms_session_name_2,
+        us_session_name_1,
+        us_session_name_2,
+    }
+    assert expected_sessions.issubset(observed_sessions), (
+        f"Expected sessions {expected_sessions} in pms ps output, got {observed_sessions}."
+    )
+
+    assert_rows_have_valid_uuids(ps_all)
+
+
+def test_pms_ps_session_filter(run_dunerc) -> None:
+    """Checks that pms ps -s for session 1 only returns rows from that session."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    ps_filtered = get_ps_table_after_echo(lines, "pms_ps_session_1_only")
+
+    assert ps_filtered, (
+        "Expected a ps table after pms_ps_session_1_only, but found none."
+    )
+
+    observed_sessions = {row["session"].strip() for row in ps_filtered}
+    assert observed_sessions == {pms_session_name_1}, (
+        f"Expected only session '{pms_session_name_1}' in filtered ps output, got {observed_sessions}."
+    )
+
+
+def test_unknown_log_command(run_dunerc) -> None:
+    """Checks that ambiguous logs query without session reports the expected error."""
+    test_str = (
+        "Bad query for logs: There are more than 1 processes corresponding to the query"
+    )
+    assert test_str in run_dunerc.completed_processes["pmshell"].stdout
+
+
+def test_pms_root_controller_logs_scoped(run_dunerc) -> None:
+    """Checks scoped root-controller logs from pms for expected format and line count."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+
+    marker_idx = require_echo_marker_index(lines, "pms_logs_scoped")
+    marker_end_idx = require_echo_marker_index(
+        lines, "pms_ps_after_us_terminate", start_idx=marker_idx + 1
+    )
+
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
+        start_idx=marker_idx + 1,
+    )
+    footer_idx = require_line_containing(
+        lines,
+        "root-controller end",
+        error_message="Did not find the 'root-controller end' footer line in stdout.",
+        start_idx=header_idx + 1,
+    )
+
+    assert header_idx < marker_end_idx, "Scoped logs header appears after scoped block."
+    assert footer_idx < marker_end_idx, "Scoped logs footer appears after scoped block."
+    assert footer_idx > header_idx, "Footer appears before header in stdout."
+
+    between = lines[header_idx + 1 : footer_idx]
+    assert len(between) == 5, (
+        f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+    init_controller_ready_re = re.compile(
+        r"drunc\.controller\.core\.init_controller.*Controller ready\s*$"
+    )
+    matches = [line for line in between if init_controller_ready_re.search(line)]
+    assert len(matches) >= 1, (
+        "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+
+def test_us_sessions_only_see_their_own_processes(run_dunerc) -> None:
+    """Checks that each us ps output only contains its own session."""
+    lines = strip_ansi(run_dunerc.completed_processes["us_1"].stdout).splitlines()
+    us_ps = get_ps_table_after_echo(lines, "us_1_ps_only")
+
+    assert us_ps, "Expected a ps table after us_1_ps_only, but found none."
+
+    observed_sessions = {row["session"].strip() for row in us_ps}
+    assert observed_sessions == {us_session_name_1}, (
+        f"Expected only us_1 session rows in ps output, got {observed_sessions}."
+    )
+
+    lines = strip_ansi(run_dunerc.completed_processes["us_2"].stdout).splitlines()
+    us_ps = get_ps_table_after_echo(lines, "us_2_ps_only")
+
+    assert us_ps, "Expected a ps table after us_2_ps_only, but found none."
+
+    observed_sessions = {row["session"].strip() for row in us_ps}
+    assert observed_sessions == {us_session_name_2}, (
+        f"Expected only us_2 session rows in ps output, got {observed_sessions}."
+    )
+
+
+def test_us_terminated_tables_contain_only_their_sessions(run_dunerc) -> None:
+    """Checks that each us terminate only reports its own session entries."""
+    lines = strip_ansi(run_dunerc.completed_processes["us_1"].stdout).splitlines()
+
+    terminate_marker_idx = require_echo_marker_index(lines, "us_1_terminate")
+    terminate_done_idx = require_echo_marker_index(
+        lines, "us_1_terminate_done", start_idx=terminate_marker_idx + 1
+    )
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: "Terminated process" in line,
+        start_idx=terminate_marker_idx + 1,
+    )
+    assert table_start_idx is not None, (
+        "Could not find terminated process table in us output."
+    )
+    assert table_start_idx < terminate_done_idx, (
+        "Terminated process table appears after us terminate block ended."
+    )
+
+    terminated_table = _parse_table_from_index(lines, table_start_idx, "ps")
+    assert terminated_table, (
+        "Expected terminated table rows in us output, but found none."
+    )
+
+    observed_sessions = {row["session"].strip() for row in terminated_table}
+    assert observed_sessions == {us_session_name_1}, (
+        f"Expected only us_1 session rows in terminated table, got {observed_sessions}."
+    )
+
+    lines = strip_ansi(run_dunerc.completed_processes["us_2"].stdout).splitlines()
+    terminate_marker_idx = require_echo_marker_index(lines, "us_2_terminate")
+    terminate_done_idx = require_echo_marker_index(
+        lines, "us_2_terminate_done", start_idx=terminate_marker_idx + 1
+    )
+
+    table_start_idx = find_line_index(
+        lines,
+        lambda line: "Terminated process" in line,
+        start_idx=terminate_marker_idx + 1,
+    )
+    assert table_start_idx is not None, (
+        "Could not find terminated process table in us_2 output."
+    )
+    assert table_start_idx < terminate_done_idx, (
+        "Terminated process table appears after us_2 terminate block ended."
+    )
+
+    terminated_table = _parse_table_from_index(lines, table_start_idx, "ps")
+    assert terminated_table, (
+        "Expected terminated table rows in us_2 output, but found none."
+    )
+
+    observed_sessions = {row["session"].strip() for row in terminated_table}
+    assert observed_sessions == {us_session_name_2}, (
+        f"Expected only us_2 session rows in terminated table, got {observed_sessions}."
+    )
+
+
+def test_pms_ps_after_us_terminate(run_dunerc) -> None:
+    """Checks that us session is gone but pms sessions are still present."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    ps_after_us = get_ps_table_after_echo(lines, "pms_ps_after_us_terminate")
+
+    assert ps_after_us, (
+        "Expected a ps table after pms_ps_after_us_terminate, but found none."
+    )
+
+    observed_sessions = {row["session"].strip() for row in ps_after_us}
+    assert us_session_name_1 not in observed_sessions, (
+        f"Expected us session '{us_session_name_1}' to be gone, "
+        f"but sessions were {observed_sessions}."
+    )
+    assert us_session_name_2 not in observed_sessions, (
+        f"Expected us session '{us_session_name_2}' to be gone, "
+        f"but sessions were {observed_sessions}."
+    )
+    assert pms_session_name_1 in observed_sessions, (
+        f"Expected pms session '{pms_session_name_1}' to still be alive."
+    )
+    assert pms_session_name_2 in observed_sessions, (
+        f"Expected pms session '{pms_session_name_2}' to still be alive."
+    )
+
+
+def test_pms_terminate_all_and_ps_empty(run_dunerc) -> None:
+    """Checks that final pms terminate leaves no processes running."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+
+    ps_final = get_ps_table_after_echo(lines, "pms_ps_final")
+    assert not ps_final, (
+        "Expected no running processes after final pms terminate, "
+        f"but got {len(ps_final)} entries."
+    )
+
+    final_marker_idx = require_echo_marker_index(lines, "pms_ps_final")
+    no_process_idx = require_line_containing(
+        lines,
+        "No processes running",
+        error_message="Did not find final 'No processes running' message in pms output.",
+        start_idx=final_marker_idx + 1,
+    )
+    assert no_process_idx > final_marker_idx

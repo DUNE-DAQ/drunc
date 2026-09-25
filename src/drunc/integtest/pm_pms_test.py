@@ -1,0 +1,538 @@
+# The goal of this test is to test all functions in the process manager shell, when
+# connected via a standalone process manager.
+
+import functools
+import getpass
+import os
+import re
+from datetime import datetime
+
+import integrationtest.data_classes as idc
+import integrationtest.log_file_checks as log_file_checks
+from daqconf.utils import find_free_port
+from integ_test_utils import (
+    _parse_table_from_index,
+    assert_contains_between_markers,
+    assert_match_contains_uuid,
+    assert_process_presence,
+    assert_rows_have_valid_uuids,
+    find_line_index,
+    get_column_for_friendly_name,
+    get_lines_between_markers,
+    get_ps_table_after_echo,
+    get_text_between_echo_markers,
+    require_echo_marker_index,
+    require_line_containing,
+    require_pattern_match,
+    require_pattern_match_index,
+    strip_ansi,
+)
+from pm_test_common import ignored_logfile_problems, make_conf_dict
+
+print = functools.partial(print, flush=True)  # always flush print() output
+
+pytest_plugins = "integrationtest.integrationtest_drunc"
+
+conf_dict = make_conf_dict("pm_pms")
+
+confgen_arguments = {"SmallFootprint": conf_dict}
+
+
+daq_session_name = "pms-test"
+
+# The commands to run in dunerc and the process manager shell
+dunerc_commands = f"""
+
+    echo pre_boot
+    echo-on-server pre_boot
+    ps -w 300
+    boot config/daqsystemtest/example-configs.data.xml local-1x1-config {daq_session_name}
+    wait 15
+    echo post_boot
+    echo-on-server post_boot
+    ps -w 300
+
+
+    echo test_logs
+    logs --name unknown
+    logs --name root-controller --how-far 5
+    logs --name mlt --how-far 5
+    echo test_logs_done
+
+    echo test_wait
+    wait 10
+    echo test_wait_done
+
+    echo pre_restart_mlt
+    echo-on-server pre_restart_mlt
+    restart -n mlt
+    restart -n root-controller
+    wait 5
+    echo post_restart_mlt
+    ps -w 300
+    echo-on-server post_restart_mlt
+
+
+    echo test_kill_mlt
+    ps -w 300
+    kill -n mlt
+    wait 2
+    echo test_kill_mlt_post
+    ps -w 300
+    echo test_kill_mlt_done
+
+
+    echo test_recovery
+    restart -n mlt
+    restart -n trg-controller
+    wait 5
+    echo test_recovery_post
+    ps -w 300
+    echo test_recovery_done
+
+
+    echo test_flush
+    ps -w 300
+    kill -n mlt --crash 
+    wait 5
+    echo after_crash
+    ps -w 300
+    flush
+    echo after_flush
+    ps -w 300
+    echo test_flush_done
+
+    echo test_terminate
+    echo-on-server test_terminate
+    terminate
+    echo test_terminate_done
+    echo-on-server test_terminate_done
+
+    """.split()
+
+# Find a free network port to use for the process manager
+pm_port = find_free_port(50020, 52000)
+
+# The command lines that should be used to start the applications
+procmsg_startup_commands = ["drunc-process-manager", "<proc_mgr_choice>", str(pm_port)]
+pmapp = idc.DAQControlApplication("pm", procmsg_startup_commands)
+
+pmshell_startup_commands = [
+    "drunc-process-manager-shell",
+    f"grpc://localhost:{pm_port}",
+]
+pmshellapp = idc.DAQControlApplication("pmshell", pmshell_startup_commands)
+
+# Packaging up the commands into DAQCommandSets
+cmd_set = idc.DAQCommandSet(
+    "pmshell",
+    dunerc_commands,
+    idc.CommandWaitParameters(style=idc.CommandWaitStyle.ECHO),
+)
+
+# Putting everything together into a DAQSessionIngredients object
+app_list = [pmapp, pmshellapp]
+cmd_set_list = [cmd_set]
+dsi = idc.DAQSessionIngredients(app_list, cmd_set_list)
+
+# Declare the special variable that tells the integrationtest infrastructure what we want to run
+daq_session_ingredients = {"MultiRCAppSession": dsi}
+
+
+# The tests themselves
+
+UUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+
+
+def test_dunerc_success(run_dunerc) -> None:
+    """Checks that the drunc integration command sequence completes successfully."""
+    # print the name of the current test
+    current_test = os.environ.get("PYTEST_CURRENT_TEST")
+    match_obj = re.search(r".*\[(.+)-run_.*rc.*\d].*", current_test)
+    if match_obj:
+        current_test = match_obj.group(1)
+    banner_line = re.sub(".", "=", current_test)
+    print(banner_line)
+    print(current_test)
+    print(banner_line)
+
+    # Check that dunerc completed correctly
+    assert run_dunerc.completed_processes["pmshell"].returncode == 0
+
+
+def test_log_files(run_dunerc) -> None:
+    """Checks that expected process-manager log files exist and are free of errors."""
+    # Check that at least some of the expected log files are present
+    logfile_types = ("df-01", "dfo", "mlt", "ru")
+    log_names = tuple(map(str, run_dunerc.log_files))
+    missing_logfiles = [
+        f"{daq_session_name}_{logfile_type}"
+        for logfile_type in logfile_types
+        if not any(
+            f"{daq_session_name}_{logfile_type}" in str(logname)
+            for logname in log_names
+        )
+    ]
+    assert not missing_logfiles, f"No logfile found for: {', '.join(missing_logfiles)}."
+
+    # Check that there are no warnings or errors in the log files
+    assert log_file_checks.logs_are_error_free(
+        [
+            logname
+            for logname in run_dunerc.log_files
+            if "process_manager" in str(logname)
+        ],
+        True,
+        True,
+        ignored_logfile_problems,
+    )
+
+
+def test_connections(run_dunerc) -> None:
+    lines_pm = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
+    lines_pms = strip_ansi(
+        run_dunerc.completed_processes["pmshell"].stdout
+    ).splitlines()
+
+    user_name = getpass.getuser()
+    pm_connect = f"{user_name} connected from process_manager_shell"
+    pms_connect = (
+        f"{user_name} connected to the process manager through a "
+        f"drunc-process-manager-shell via address localhost:{pm_port}"
+    )
+
+    assert any(pm_connect in line for line in lines_pm), (
+        f"Did not find '{pm_connect}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(lines_pm)
+    )
+
+    assert any(pms_connect in line for line in lines_pms), (
+        f"Did not find '{pms_connect}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(lines_pms)
+    )
+
+
+def _check_boot(
+    run_dunerc,
+    process_name,
+    pre_marker,
+    post_marker,
+    expected_message=None,
+    *,
+    session_name=None,
+    check_ps_table=False,
+) -> None:
+    """Shared boot-check logic: verifies markers/message, and optionally the root-controller
+    boot message (pm) or a populated, UUID-valid ps table (pmshell)."""
+    lines = strip_ansi(run_dunerc.completed_processes[process_name].stdout).splitlines()
+
+    if expected_message:
+        assert_contains_between_markers(
+            lines, pre_marker, post_marker, expected_message
+        )
+    else:
+        get_lines_between_markers(lines, pre_marker, post_marker)
+
+    if session_name:
+        check_root_controller_boot = (
+            f"Booted 'root-controller' from session '{session_name}' with UUID"
+        )
+        assert_contains_between_markers(
+            lines, pre_marker, post_marker, check_root_controller_boot
+        )
+
+    if check_ps_table:
+        ps_post_boot = get_ps_table_after_echo(lines, post_marker)
+        assert ps_post_boot, (
+            "Expected ps table after boot to contain processes, but it was empty."
+        )
+        assert_rows_have_valid_uuids(ps_post_boot)
+        non_alive_processes = [
+            row["friendly_name"] for row in ps_post_boot if row["status"] != "Alive"
+        ]
+        assert not non_alive_processes, (
+            "Expected all processes after boot to be alive, but these were not: "
+            + ", ".join(non_alive_processes)
+        )
+
+
+def test_boot_pms(run_dunerc) -> None:
+    """Checks that boot starts in the pms the managed processes and exposes UUIDs in ps."""
+    _check_boot(
+        run_dunerc,
+        "pmshell",
+        "pre_boot",
+        "post_boot",
+        "No processes running",
+        check_ps_table=True,
+    )
+
+
+def test_boot_pm(run_dunerc) -> None:
+    """Checks that boot starts in the pm. More lightweight, checks if root-controller boots"""
+    _check_boot(
+        run_dunerc,
+        "pm",
+        "pre_boot",
+        "post_boot",
+        "sent boot with arguments",
+        session_name=daq_session_name,
+    )
+
+
+def test_unknown_log_command(run_dunerc) -> None:
+    """Checks that querying logs for an unknown process reports the expected error."""
+    test_str = (
+        "Bad query for logs: The process corresponding to the query doesn't exist"
+    )
+    assert test_str in run_dunerc.completed_processes["pmshell"].stdout
+
+
+def test_root_controller_logs(run_dunerc) -> None:
+    """
+    Verifies that:
+    - the stdout contains a "root-controller logs" header line and a "root-controller end" footer line
+    - there are exactly 5 lines between those two lines
+    - among those 5 lines, the one from "drunc.controller.core.init_controller" ends with "Controller ready"
+    """
+    lines = run_dunerc.completed_processes["pmshell"].stdout.splitlines()
+
+    # 1) Find the header/footer lines
+    header_idx = require_line_containing(
+        lines,
+        "root-controller logs",
+        error_message="Did not find the 'root-controller logs' header line in stdout.",
+    )
+    footer_idx = require_line_containing(
+        lines,
+        "root-controller end",
+        error_message="Did not find the 'root-controller end' footer line in stdout.",
+    )
+    assert footer_idx > header_idx, "Footer appears before header in stdout."
+
+    # 2) Check there are 5 lines between header and footer
+    between = lines[header_idx + 1 : footer_idx]
+    assert len(between) == 5, (
+        f"Expected exactly 5 lines between header and footer, found {len(between)}.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+    # 3) Check one of the init_controller line ends with "Controller ready"
+    # Example line:
+    # [2026/03/13 08:17:47 UTC] INFO ... drunc.controller.core.init_controller ... Controller ready
+    init_controller_ready_re = re.compile(
+        r"drunc\.controller\.core\.init_controller.*Controller ready\s*$"
+    )
+
+    matches = [line for line in between if init_controller_ready_re.search(line)]
+    assert len(matches) >= 1, (
+        "Did not find an init_controller line ending with 'Controller ready' within the 5 lines.\nBetween:\n"
+        + "\n".join(between)
+    )
+
+
+def test_wait_command_duration_from_logs(run_dunerc) -> None:
+    """Checks that the wait command logs the expected duration and elapsed time."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+
+    echo_idx = require_echo_marker_index(lines, "test_wait")
+
+    running_pattern = re.compile(r"Command wait running for (\d+) seconds\.")
+    ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
+    timestamp_pattern = re.compile(r"\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
+
+    running_idx, running_match = require_pattern_match_index(
+        lines,
+        running_pattern,
+        error_message=(
+            "Did not find 'Command wait running for ... seconds.' after test_wait marker."
+        ),
+        start_idx=echo_idx + 1,
+    )
+
+    ran_idx, ran_match = require_pattern_match_index(
+        lines,
+        ran_pattern,
+        error_message=(
+            "Did not find 'Command wait ran for ... seconds.' after wait start log."
+        ),
+        start_idx=running_idx + 1,
+    )
+
+    expected_seconds = 10
+    assert int(running_match.group(1)) == expected_seconds, (
+        f"Expected wait start log to report {expected_seconds} seconds, got {running_match.group(1)}."
+    )
+    assert int(ran_match.group(1)) == expected_seconds, (
+        f"Expected wait end log to report {expected_seconds} seconds, got {ran_match.group(1)}."
+    )
+
+    start_ts_match = require_pattern_match(
+        lines[running_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait start log line.",
+    )
+    end_ts_match = require_pattern_match(
+        lines[ran_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait end log line.",
+    )
+
+    ts_strp_pattern = "%Y/%m/%d %H:%M:%S"
+    start_ts = datetime.strptime(start_ts_match.group(1), ts_strp_pattern)
+    end_ts = datetime.strptime(end_ts_match.group(1), ts_strp_pattern)
+    elapsed_seconds = (end_ts - start_ts).total_seconds()
+
+    tolerance_seconds = 1
+    assert abs(elapsed_seconds - expected_seconds) <= tolerance_seconds, (
+        f"Expected wait log timestamps to differ by {expected_seconds}±{tolerance_seconds} seconds, "
+        f"got {elapsed_seconds} seconds."
+    )
+
+
+def test_restart_mlt_logs_pm(run_dunerc) -> None:
+    """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
+    lines = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
+    restart_text = get_text_between_echo_markers(
+        lines, "pre_restart_mlt", "post_restart_mlt"
+    )
+
+    require_pattern_match(
+        restart_text,
+        re.compile(
+            r"Remote process .*?terminated gracefully following SIGQUIT signal\.",
+            re.DOTALL,
+        ),
+        error_message="Did not find the graceful termination log line for mlt after restart request.",
+    )
+
+    require_pattern_match(
+        restart_text,
+        re.compile(
+            r"Process 'mlt' \(.*?\) was terminated by the process manager through the remote pid\. Reported exit code: 0\.",
+            re.DOTALL,
+        ),
+        error_message="Did not find the mlt exit-code log line after graceful termination.",
+    )
+
+    # Note difference in the reboot message between the PM and PMS.
+    assert_match_contains_uuid(
+        restart_text,
+        pattern=re.compile(
+            r"Booted 'mlt' from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
+            re.DOTALL,
+        ),
+        error_message="Did not find the mlt boot log line in pm after the restart exit log.",
+    )
+
+
+def test_restart_mlt_logs_pms(run_dunerc) -> None:
+    """Checks that restarting mlt produces the expected restart, exit, and boot logs."""
+
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    restart_text = get_text_between_echo_markers(
+        lines, "pre_restart_mlt", "post_restart_mlt"
+    )
+
+    # Note difference in the reboot message between the PM and PMS.
+    assert_match_contains_uuid(
+        restart_text,
+        pattern=re.compile(
+            r"Restarted \['mlt'\] from session \S+ with UUID\s+([^\s\n]+)(?:\s+on host\s+\S+)?",
+            re.DOTALL,
+        ),
+        error_message="Did not find the mlt boot log line in pms after the restart exit log.",
+    )
+
+    ps_after_restart = get_ps_table_after_echo(lines, "post_restart_mlt")
+    mlt_status = get_column_for_friendly_name(ps_after_restart, "mlt", "status")
+    assert mlt_status == "Alive", (
+        f"Expected mlt to be alive after restart, but its status was '{mlt_status}'."
+    )
+
+
+def test_kill_removes_mlt_from_ps_table(run_dunerc) -> None:
+    """Checks that killing mlt removes it from the subsequent ps table."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+
+    ps_before_kill = get_ps_table_after_echo(lines, "test_kill_mlt")
+    ps_after_kill = get_ps_table_after_echo(lines, "test_kill_mlt_post")
+
+    assert_process_presence(ps_before_kill, "mlt", context="before kill")
+    assert_process_presence(
+        ps_after_kill, "mlt", context="after kill", expected_present=False
+    )
+
+
+def test_mlt_recovers_after_kill(run_dunerc) -> None:
+    """Checks that mlt is present again after the recovery restart sequence."""
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    ps_after_recovery = get_ps_table_after_echo(lines, "test_recovery_post")
+    assert_process_presence(ps_after_recovery, "mlt", context="after recovery")
+
+
+def test_terminate(run_dunerc) -> None:
+    """Test terminate by checking both pm and pms shells"""
+    lines_pms = strip_ansi(
+        run_dunerc.completed_processes["pmshell"].stdout
+    ).splitlines()
+    lines_pm = strip_ansi(run_dunerc.completed_processes["pm"].stdout).splitlines()
+
+    pre_boot_idx_pm = require_line_containing(
+        lines_pm,
+        "test_terminate",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+    post_boot_idx_pm = require_line_containing(
+        lines_pm,
+        "test_terminate_done",
+        error_message="Did not find the 'post_boot' footer line in stdout.",
+    )
+
+    pre_boot_idx_pms = require_line_containing(
+        lines_pms,
+        "test_terminate",
+        error_message="Did not find the 'pre_boot' header line in stdout.",
+    )
+
+    between_pm = lines_pm[pre_boot_idx_pm + 1 : post_boot_idx_pm]
+    shutdown_re = "--- Shutdown stage: Role 'root-controller' complete ---"
+    assert any(shutdown_re in line for line in between_pm), (
+        f"Did not find '{shutdown_re}' between pre_boot and post_boot.\nBetween:\n"
+        + "\n".join(between_pm)
+    )
+
+    # TODO: This bit here is grabbing functions from the integ test utils. Maybe it can be better optimised?
+    table_start_idx = find_line_index(
+        lines_pms,
+        lambda line: "Terminated process" in line,
+        start_idx=pre_boot_idx_pms + 1,
+    )
+
+    assert table_start_idx is not None, "cannot fine terminated process table"
+
+    terminated_table = _parse_table_from_index(lines_pm, table_start_idx, "ps")
+    for row in terminated_table:
+        assert UUID_RE.match(row["uuid"]), (
+            f"Expected a valid UUID for process '{row['friendly_name']}', got '{row['uuid']}'"
+        )
+
+
+def test_flush(run_dunerc) -> None:
+    """Checks that flush work by crashing mlt, seeing that the process exists,
+    and then flushing to show its gone"""
+
+    lines = strip_ansi(run_dunerc.completed_processes["pmshell"].stdout).splitlines()
+    ps_initial = get_ps_table_after_echo(lines, "test_flush")
+    assert_process_presence(ps_initial, "mlt", context="before crash")
+
+    ps_after_crash = get_ps_table_after_echo(lines, "after_crash")
+    mlt_alive = get_column_for_friendly_name(ps_after_crash, "mlt", "status")
+    assert mlt_alive == "Dead", "The mlt should have crashed"
+
+    ps_after_flash = get_ps_table_after_echo(lines, "after_flush")
+    assert_process_presence(
+        ps_after_flash, "mlt", context="after crash", expected_present=False
+    )

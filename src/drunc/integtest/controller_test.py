@@ -1,5 +1,4 @@
 import re
-from dataclasses import dataclass, field
 
 import integrationtest.data_classes as data_classes
 import integrationtest.log_file_checks as log_file_checks
@@ -14,6 +13,7 @@ from integ_test_utils import (
     get_status_table_after_echo,
     strip_ansi,
 )
+from pm_test_common import FsmCommandParams
 
 pytest_plugins = "integrationtest.integrationtest_drunc"
 
@@ -72,35 +72,7 @@ conf_dict.config_substitutions.append(
 confgen_arguments = {"MinimalSystem": conf_dict}
 
 
-# ── FSM command dataclass ──────────────────────────────────────────────────────
-
-
-@dataclass
-class FsmCommandParams:
-    marker: str
-    command: str
-    expected_state: str
-    non_controller_substate: str = "idle"
-    command_args: list[str] = field(default_factory=list)
-    run_number: int | None = None
-
-    @property
-    def done_marker(self) -> str:
-        return f"{self.marker}_done"
-
-    @property
-    def full_command(self) -> str:
-        return " ".join([self.command] + self.command_args)
-
-    def to_command_block(self) -> str:
-        return f"""
-echo {self.marker}
-{self.full_command}
-echo {self.marker}_done
-status -w 140
-echo {self.marker}_status_done
-"""
-
+# ── FSM command definitions ─────────────────────────────────────────────────────
 
 _FSM_COMMANDS = [
     FsmCommandParams("test_conf", "conf", "configured"),
