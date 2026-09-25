@@ -262,18 +262,6 @@ def format_updater_table(
     table: Table | Group,
     fit: bool = True,
 ) -> Table | Group:
-    """Format a table or group specifically for dynamic StatusTableUpdater rendering.
-
-    Args:
-        console: The Rich Console instance used by the updater.
-        table: The Table or Group of tables to format.
-        fit: If True, clamps the maximum table width to the physical console
-            width so live redrawing never cascades. If False, sets the table
-            width to its unconstrained measurement.
-
-    Returns:
-        The updated table or group instance.
-    """
     if isinstance(table, Group):
         for renderable in table.renderables:
             if isinstance(renderable, (Table, Group)):
@@ -306,27 +294,42 @@ class StatusTableUpdater(Progress):
         self,
         ctx: ControllerContext | UnifiedShellContext,
         refresh_per_second: float = 2,
-        fit: bool = True,
         *args: object,
         **kwargs: object,
     ) -> None:
         self.ctx = ctx
-        self.fit = fit
 
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
+
+        # Allow dynamic expansion without dropping leftover lines
+        self.live.vertical_overflow = "visible"
+        self.live.transient = False
+
         self.update_table()
 
     def update_table(self) -> None:
-        raw_table = render_status_table(self.ctx)
-        self.table = format_updater_table(self.console, raw_table, fit=self.fit)
+        # Native rendering: No ellipsis, natural wrapping intact for integtests
+        self.table = render_status_table(self.ctx)
 
     def get_renderable(self):
         table_renderable = getattr(self, "table", "")
         return Group(table_renderable, *self.get_renderables())
+
+    def start(self) -> None:
+        # Disable hardware autowrap while live display is active
+        self.console.file.write("\x1b[?7l")
+        self.console.file.flush()
+        super().start()
+
+    def stop(self) -> None:
+        super().stop()
+        # Restore hardware autowrap when finished
+        self.console.file.write("\x1b[?7h")
+        self.console.file.flush()
 
 
 def controller_cleanup_wrapper(
