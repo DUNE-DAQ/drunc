@@ -61,6 +61,15 @@ def mock_logger():
         yield logger
 
 
+@pytest.fixture(autouse=True)
+def mock_pm_driver():
+    with patch(
+        "drunc.process_manager.interface.commands._pm_driver",
+        side_effect=lambda obj: obj.get_driver("process_manager"),
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_tabulate():
     with patch(

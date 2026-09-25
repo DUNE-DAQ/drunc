@@ -42,6 +42,7 @@ from drunc.process_manager.configuration import (
     ProcessManagerConfHandler,
     ProcessManagerTypes,
 )
+from drunc.process_manager.k8s_process_manager_settings import K8sProcessManagerSettings
 from drunc.process_manager.process_manager import ProcessManager
 from drunc.process_manager.utils import (
     compute_role_from_boot_request,
@@ -242,39 +243,40 @@ class K8sProcessManager(ProcessManager):
         self._host_cache = {}
         self._host_cache_lock = threading.Lock()
 
-        # Get settings from configuration JSON file. Uses the `configuration`
-        # parameter directly, not self.configuration
-        settings = getattr(configuration, "settings", {})
+        # Get settings from the configuration object; this is the API used by the
+        # current process-manager configuration handler and keeps the k8s manager
+        # aligned with the rest of the PM stack.
+        settings: K8sProcessManagerSettings = configuration.settings
 
         # CONFIGURATION - label defaults
-        labels = settings.get("labels", {})
-        self.drunc_label = labels.get("drunc_label", "drunc.daq")
+        self.drunc_label = settings.labels.get("drunc_label", "drunc.daq")
 
         # Readout app selector
-        self.perf_selector = settings.get("readout_app_selector", "runp").lower()
+        self.perf_selector = settings.readout_app_selector.lower()
 
         # CONFIGURATION - per-pod service port number
-        service = settings.get("service", {})
-        self.headless_discovery_port = service.get("headless_discovery_port", 80)
+        self.headless_discovery_port = settings.service.get(
+            "headless_discovery_port", 80
+        )
 
         # CONFIGURATION - pod startup management parameters
-        pod_management = settings.get("pod_management", {})
-        self.kill_timeout = pod_management.get("kill_timeout", 30)
-        self.pod_ready_timeout = pod_management.get("pod_ready_timeout", 60)
+        self.kill_timeout = settings.pod_management.get("kill_timeout", 30)
+        self.pod_ready_timeout = settings.pod_management.get("pod_ready_timeout", 60)
 
         # CONFIGURATION - restart cleanup parameters
-        cleanup = settings.get("cleanup", {})
-        self.restart_cleanup_time = cleanup.get("restart_cleanup_time", 10.0)
-        self.restart_cleanup_polling = cleanup.get("restart_cleanup_polling", 0.5)
-        self.kill_watch_fallback_poll_interval = cleanup.get(
+        self.restart_cleanup_time = settings.cleanup.get("restart_cleanup_time", 10.0)
+        self.restart_cleanup_polling = settings.cleanup.get(
+            "restart_cleanup_polling", 0.5
+        )
+        self.kill_watch_fallback_poll_interval = settings.cleanup.get(
             "kill_watch_fallback_poll_interval", 5.0
         )
 
         # CONFIGURATION - volume mounts
-        self.volume_configs = settings.get("volumes", [])
+        self.volume_configs = settings.volumes
 
         # CONFIGURATION - home path definition
-        self.home_path_base = settings.get("home_path_base")
+        self.home_path_base = settings.home_path_base
         if not self.home_path_base:
             self.log.error(
                 "No 'home_path_base' configured, exiting. Required as Kubernetes is "
@@ -284,14 +286,15 @@ class K8sProcessManager(ProcessManager):
             sys.exit(1)
 
         # CONFIGURATION - timeouts and check parameters
-        checking = settings.get("checking", {})
-        self.watcher_retry_sleep = checking.get("watcher_retry_sleep", 5)
-        self.pod_status_check_sleep = checking.get("pod_status_check_sleep", 1)
-        self._host_cache_expiry = checking.get("host_cache_expiry", 300)
-        self.service_startup_timeout = checking.get("service_startup_timeout", 30)
-        self.socket_retry_timeout = checking.get("socket_retry_timeout", 1.0)
+        self.watcher_retry_sleep = settings.checking.get("watcher_retry_sleep", 5)
+        self.pod_status_check_sleep = settings.checking.get("pod_status_check_sleep", 1)
+        self._host_cache_expiry = settings.checking.get("host_cache_expiry", 300)
+        self.service_startup_timeout = settings.checking.get(
+            "service_startup_timeout", 30
+        )
+        self.socket_retry_timeout = settings.checking.get("socket_retry_timeout", 1.0)
 
-        # super().__init__() starts the opmon publish thread 
+        # super().__init__() starts the opmon publish thread
         super().__init__(configuration=configuration, session=self.session, **kwargs)
 
         # super().__init__() sets its own self.log
@@ -1227,8 +1230,8 @@ class K8sProcessManager(ProcessManager):
         resource_reqs = None
         is_perf_app = self.perf_selector in podname.lower()
         if is_perf_app:
-            settings = getattr(self.configuration, "settings", {})
-            host_configs = settings.get("host_configs", {})
+            settings: K8sProcessManagerSettings = self.configuration.settings
+            host_configs = settings.host_configs
 
             if not target_host or target_host not in host_configs:
                 error_msg = (
@@ -2432,7 +2435,7 @@ class K8sProcessManager(ProcessManager):
         Directly checks the K8s API for whether a pod object has been fully deleted.
 
         Used as a fallback when the watch stream may have missed the pod's
-        termination event, so kill_and_wait does not have to sit out 
+        termination event, so kill_and_wait does not have to sit out
         the full timeout for a pod that is already gone.
 
         Args:

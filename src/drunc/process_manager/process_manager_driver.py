@@ -607,7 +607,7 @@ To debug it, close drunc and run the following command:
         def get_controller_address(session_dal, session_name):
             from drunc.process_manager.oks_parser import collect_variables
 
-            env = {}
+            env: dict[str, str] = {}
             collect_variables(session_dal.environment, env)
 
             # 1: Try dynamic lookup via Connectivity Service
@@ -868,7 +868,6 @@ To debug it, close drunc and run the following command:
         msg = f"[green]{request.token.user_name}[/green] sent terminate"
         self.log.info(msg)
         response = self.stub.terminate(request, timeout=timeout)
-
         return response
 
     def kill(
@@ -886,12 +885,10 @@ To debug it, close drunc and run the following command:
         )
         self.log.info(msg)
         response = self.stub.kill(request, timeout=timeout)
-
         return response
 
     def logs(self, request: LogRequest, timeout: int | float = 60) -> LogLines | None:
         request.token.CopyFrom(self.token)
-
         response = self.stub.logs(request, timeout=timeout)
 
         # Check if the response indicates a BadQuery error
@@ -913,39 +910,31 @@ To debug it, close drunc and run the following command:
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.ps(request, timeout=timeout)
-
         return response
 
     def flush(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.flush(request, timeout=timeout)
-
         return response
 
     def restart(
         self, request: ProcessQuery, timeout: int | float = 60
     ) -> ProcessInstanceList:
         request.token.CopyFrom(self.token)
-
         response = self.stub.restart(request, timeout=timeout)
         self.log.info(
             f"Restarted [green]{request.names}[/green] "
             f"from session [green]{request.session} [/green]"
             f"with UUID [green]{response.values[0].uuid.uuid}[/green] on host [green]{response.values[0].process_description.metadata.hostname}[/green]"
         )
-
         return response
 
     def describe(self, timeout: int | float = 60) -> Description:
         request = Request(token=copy_token(self.token))
-
         response = self.stub.describe(request, timeout=timeout)
-
         return response
 
     # ----- logging helpers -----
