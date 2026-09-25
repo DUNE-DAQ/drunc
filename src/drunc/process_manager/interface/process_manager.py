@@ -79,7 +79,7 @@ def run_pm(
 
     log_path = get_log_path(
         user=getpass.getuser(),
-        session_name=getattr(pmch, "pm_type", pmch.type).name,
+        session_name=getattr(pmch, "pm_type", getattr(pmch, "type", None)).name,
         application_name=appName,
         override_logs=override_logs,
         app_log_path=log_path or "",

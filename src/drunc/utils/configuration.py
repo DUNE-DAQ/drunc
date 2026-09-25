@@ -1,15 +1,13 @@
 """Configuration utilities for DRUNC."""
 
-import json
 import logging
-import os
 from enum import Enum
 from typing import Protocol, Self, cast
 
 import conffwk
 
 from drunc.exceptions import DruncSetupException
-from drunc.utils.utils import expand_path, get_logger
+from drunc.utils.utils import get_logger
 
 
 class ConfTypes(Enum):
@@ -119,9 +117,8 @@ class ConfHandler:
     """Handler for loading and parsing DRUNC configurations.
 
     Supports multiple configuration sources via from_* classmethods.
-    Subclasses override populate_from_dict / populate_from_pbany to handle
-    JSON and protobuf sources, and _post_process_oks to handle OKS/pyobject
-    sources (via self._raw_data).
+    Subclasses override populate_from_pbany to handle protobuf sources, and
+    _post_process_oks to handle OKS/pyobject sources (via self._raw_data).
     """
 
     type: ConfTypes
@@ -160,22 +157,6 @@ class ConfHandler:
         return instance
 
     @classmethod
-    def from_json(cls, path: str, session_name: str | None = None) -> Self:
-        instance: Self = cls.__new__(cls)
-        instance._init_common(session_name)
-        instance.initial_data = path
-        resolved = expand_path(path, True)
-        if not os.path.exists(expand_path(path)):
-            raise DruncSetupException(f"Location {resolved} ({path}) is empty!")
-        with open(resolved) as f:
-            json_data = json.load(f)
-        instance._raw_data = None
-        instance.populate_from_dict(cast(dict[str, object], json_data))
-        instance.type = ConfTypes.PyObject
-        instance._post_process_oks()
-        return instance
-
-    @classmethod
     def from_oks(
         cls,
         url: str,
@@ -190,13 +171,6 @@ class ConfHandler:
         instance.type = ConfTypes.PyObject
         instance._post_process_oks()
         return instance
-
-    def populate_from_dict(self, data: dict[str, object]) -> None:
-        """Populate from a dictionary (JSON source).
-
-        Override in subclasses that support JSON configuration.
-        """
-        raise ConfTypeNotSupported(ConfTypes.JsonFileName, self.__class__.__name__)
 
     def populate_from_pbany(self, pbany_data: object) -> None:
         """Populate from a Protobuf Any message.
