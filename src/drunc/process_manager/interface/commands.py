@@ -16,7 +16,7 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd, set_full_table_width
+from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
 
@@ -277,13 +277,8 @@ def terminate(obj: ProcessManagerContext, width: int | None, fit: bool) -> None:
     table = tabulate_process_instance_list(
         result, "Terminated process", False, width=width
     )
-    if not fit:
-        table = set_full_table_width(obj, table)
-    obj.print(
-        table,
-        overflow="fold",
-        soft_wrap=True,
-    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
 
@@ -380,11 +375,8 @@ def kill_impl(
     if not result:
         return
     table = tabulate_process_instance_list(result, "Killed process", False, width=width)
-    if not fit:
-        table = set_full_table_width(obj, table)
-    obj.print(
-        table,
-    )  # rich tables require console printing
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def flush_decorators(f: FC) -> Callable[[FC], FC]:
@@ -476,11 +468,8 @@ def flush_impl(
     table = tabulate_process_instance_list(
         result, "Flushed process", False, width=width
     )
-    if not fit:
-        table = set_full_table_width(obj, table)
-    obj.print(
-        table,
-    )  # rich tables require console printing
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def logs_decorators(f: FC) -> Callable[[FC], FC]:
@@ -763,14 +752,8 @@ def ps_impl(
             width=width,
         )
 
-        if not fit:
-            table = set_full_table_width(obj, table)
-
-        obj.print(
-            table,
-            overflow="fold",
-            soft_wrap=True,
-        )
+        table = format_table_width(obj, table, fit)
+        obj.print(table, soft_wrap=not fit)
     else:
         if session_name:
             log.info(

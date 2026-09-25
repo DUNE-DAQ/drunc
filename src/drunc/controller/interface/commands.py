@@ -5,7 +5,7 @@ import click
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
-from drunc.utils.shell_utils import set_full_table_width
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
@@ -132,12 +132,8 @@ def status(
         show_ip_address=extended,
         width=width,
     )
-    if not fit:
-        table = set_full_table_width(obj, table)
-    obj.print(
-        table,
-        soft_wrap=True,
-    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
     obj.print_status_summary()
 
 

@@ -285,47 +285,51 @@ class ShellContext:
             )
 
 
-def set_full_table_width(
-    ctx_or_console: ShellContext | Console, table: Table | Group
+def format_table_width(
+    ctx_or_console: ShellContext | Console,
+    table: Table | Group,
+    fit: bool,
 ) -> Table | Group:
-    """
-    Set a table's width to the maximum available console width.
+    """Configure a table or group of tables for single-line row formatting.
 
     Args:
-        ctx_or_console: Either a ShellContext or a Rich Console instance.
-        table: Table or group of tables whose width should be expanded.
+        ctx_or_console: Shell context or Rich Console instance.
+        table: Table or Group of tables to format.
+        fit: If True, constrains the table to the console width (using ellipsis truncation
+            to keep single lines). If False, expands the table to its full unconstrained
+            content width without truncating.
 
     Returns:
-        The same table or group instance with its width updated.
+        The formatted table or group.
     """
-    # Retrieve the console instance
-    if hasattr(ctx_or_console, "_console"):
-        console = ctx_or_console._console
-    else:
-        console = ctx_or_console
+    # Duck-type Console extraction
+    console = (
+        ctx_or_console._console
+        if hasattr(ctx_or_console, "_console")
+        else ctx_or_console
+    )
 
-    # If the table is a Group, recursively set the width for each renderable within it.
+    # Recursively format Group instances
     if isinstance(table, Group):
         for renderable in table.renderables:
-            if isinstance(renderable, Table | Group):
-                set_full_table_width(console, renderable)
+            if isinstance(renderable, (Table, Group)):
+                format_table_width(console, renderable, fit=fit)
         return table
 
-    # If the table is not a Group, proceed to set its width directly.
     table.expand = False
 
-    # Prevent columns from wrapping text, ensuring the table's width is determined by content.
-    for column in table.columns:
-        column.no_wrap = True
+    # 1. Prevent cell line-splitting so each row is always strictly 1 visual line
+    for col in table.columns:
+        col.no_wrap = True
 
-    # Measure the ideal width of the table based on its content and the console's options.
-    options = console.options.update(max_width=10000)
-    ideal_width = Measurement.get(console, options, table).maximum
-    table.width = ideal_width
+    if fit:
+        # Constrain to the terminal window; columns will truncate with '…' instead of wrapping
+        table.width = console.width
+    else:
+        # Measure and set the true content width up to 10,000 characters
+        options = console.options.update(max_width=10000)
+        table.width = Measurement.get(console, options, table).maximum
 
-    # Adjust the console's internal width if the table's ideal width exceeds it.
-    if ideal_width > console.width:
-        console._width = ideal_width
     return table
 
 

@@ -28,7 +28,8 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import Group
+from rich.console import Console, Group
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     Progress,
@@ -49,7 +50,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
-from drunc.utils.shell_utils import set_full_table_width
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
@@ -256,39 +257,76 @@ def render_status_table(
     )
 
 
+def format_updater_table(
+    console: Console,
+    table: Table | Group,
+    fit: bool = True,
+) -> Table | Group:
+    """Format a table or group specifically for dynamic StatusTableUpdater rendering.
+
+    Args:
+        console: The Rich Console instance used by the updater.
+        table: The Table or Group of tables to format.
+        fit: If True, clamps the maximum table width to the physical console
+            width so live redrawing never cascades. If False, sets the table
+            width to its unconstrained measurement.
+
+    Returns:
+        The updated table or group instance.
+    """
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, (Table, Group)):
+                format_updater_table(console, renderable, fit=fit)
+        return table
+
+    table.expand = False
+
+    # Prevent cells from breaking onto multiple lines
+    for col in table.columns:
+        col.no_wrap = True
+
+    # Reset any explicit width before measuring each update cycle
+    table.width = None
+
+    options = console.options.update(max_width=10000)
+    ideal_width = Measurement.get(console, options, table).maximum
+
+    if fit:
+        # Constrain to terminal boundaries to prevent cursor tracking mismatch
+        table.width = min(ideal_width, console.width)
+    else:
+        table.width = ideal_width
+
+    return table
+
+
 class StatusTableUpdater(Progress):
     def __init__(
         self,
-        ctx,
+        ctx: ControllerContext | UnifiedShellContext,
         refresh_per_second: float = 2,
+        fit: bool = True,
         *args: object,
         **kwargs: object,
     ) -> None:
         self.ctx = ctx
+        self.fit = fit
 
-        # Use the shared console for the table rendering
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
-        # Initialize Progress (this will internally trigger get_renderable once)
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
-
-        # Now update the table with the real data and full width
         self.update_table()
 
     def update_table(self) -> None:
         raw_table = render_status_table(self.ctx)
-        # Use your global function, passing the Progress bar's native console
-        self.table = set_full_table_width(self.console, raw_table)
+        self.table = format_updater_table(self.console, raw_table, fit=self.fit)
 
     def get_renderable(self):
-        # Safely get the table if it exists, otherwise use an empty string
-        # (Rich can safely render empty strings without errors)
         table_renderable = getattr(self, "table", "")
-
-        renderable = Group(table_renderable, *self.get_renderables())
-        return renderable
+        return Group(table_renderable, *self.get_renderables())
 
 
 def controller_cleanup_wrapper(
@@ -814,16 +852,13 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(
-        set_full_table_width(obj, t),
-        overflow="fold",
-        soft_wrap=True,
-    )
-    obj.print(
-        set_full_table_width(obj, render_status_table(obj)),
-        overflow="fold",
-        soft_wrap=True,
-    )
+
+    execution_report_table = format_table_width(obj, t, False)
+    obj.print(execution_report_table, soft_wrap=True)
+
+    status_table = format_table_width(obj, render_status_table(obj), False)
+    obj.print(status_table, soft_wrap=True)
+
     obj.print_status_summary()
 
 

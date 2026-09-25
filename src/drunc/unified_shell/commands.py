@@ -28,7 +28,7 @@ from drunc.process_manager.interface.commands import (
 from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext, UnifiedShellMode
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd, set_full_table_width
+from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
 from drunc.utils.utils import get_logger
 
 
@@ -342,13 +342,9 @@ def terminate(
     table = tabulate_process_instance_list(
         result, "Terminated process", False, width=width
     )
-    if not fit:
-        table = set_full_table_width(obj, table)
-    obj.print(
-        table,
-    )  # rich tables require console printing
-    # As the session is now terminated, we can delete the controller driver, as it is no
-    # longer needed.
+
+    table = format_table_width(obj, table, fit=fit)
+    obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
 
