@@ -5,6 +5,7 @@ import click
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
@@ -83,6 +84,12 @@ def wait(obj: ControllerContext, sleep_time: int) -> None:
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
+)
 @click.pass_obj
 def status(
     obj: ControllerContext,
@@ -91,24 +98,42 @@ def status(
     execute_on_all_subsequent_children_in_path: bool,
     extended: bool,
     width: int | None,
+    fit: bool,
 ) -> None:
+    """
+    Show the status of the controller and its managed components.
+
+    Args:
+        obj (ControllerContext): The controller context.
+        target (str): The target to address.
+        execute_along_path (bool): Whether to execute the command along the path.
+        execute_on_all_subsequent_children_in_path (bool): Whether to execute the command on all subsequent children in the path.
+        extended (bool): Whether to show additional columns, including the IP address of each endpoint.
+        width (int | None): The table width. Default is automatically calculated.
+        fit (bool): Whether to restrict the table to the available terminal width.
+
+    Returns:
+        None
+
+    Raises:
+        None
+    """
     log_msg = (
         f"Getting status for target '{target}'..."
         if target
         else "Getting status for all targets..."
     )
     obj.log.info(log_msg)
-    obj.print(
-        render_status_table(
-            obj,
-            target=target,
-            execute_along_path=execute_along_path,
-            execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
-            show_ip_address=extended,
-            width=width,
-        ),
-        soft_wrap=True,
+    table = render_status_table(
+        obj,
+        target=target,
+        execute_along_path=execute_along_path,
+        execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        show_ip_address=extended,
+        width=width,
     )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
     obj.print_status_summary()
 
 

@@ -28,7 +28,8 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import ConsoleRenderable, Group, RichCast
+from rich.console import Console, Group
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     Progress,
@@ -49,6 +50,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
@@ -255,6 +257,38 @@ def render_status_table(
     )
 
 
+def format_updater_table(
+    console: Console,
+    table: Table | Group,
+    fit: bool = True,
+) -> Table | Group:
+    if isinstance(table, Group):
+        for renderable in table.renderables:
+            if isinstance(renderable, (Table, Group)):
+                format_updater_table(console, renderable, fit=fit)
+        return table
+
+    table.expand = False
+
+    # Prevent cells from breaking onto multiple lines
+    for col in table.columns:
+        col.no_wrap = True
+
+    # Reset any explicit width before measuring each update cycle
+    table.width = None
+
+    options = console.options.update(max_width=10000)
+    ideal_width = Measurement.get(console, options, table).maximum
+
+    if fit:
+        # Constrain to terminal boundaries to prevent cursor tracking mismatch
+        table.width = min(ideal_width, console.width)
+    else:
+        table.width = ideal_width
+
+    return table
+
+
 class StatusTableUpdater(Progress):
     def __init__(
         self,
@@ -264,23 +298,38 @@ class StatusTableUpdater(Progress):
         **kwargs: object,
     ) -> None:
         self.ctx = ctx
-        self.update_table()
 
-        # Get the instance of the console that the logger is using with the rich handler
-        # so that the progress bar can be rendered in the same console, and not mess up
-        # the logs
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
+        # Allow dynamic expansion without dropping leftover lines
+        self.live.vertical_overflow = "visible"
+        self.live.transient = False
+
+        self.update_table()
+
     def update_table(self) -> None:
+        # Native rendering: No ellipsis, natural wrapping intact for integtests
         self.table = render_status_table(self.ctx)
 
-    def get_renderable(self) -> ConsoleRenderable | RichCast | str:
-        renderable = Group(self.table, *self.get_renderables())
-        return renderable
+    def get_renderable(self):
+        table_renderable = getattr(self, "table", "")
+        return Group(table_renderable, *self.get_renderables())
+
+    def start(self) -> None:
+        # Disable hardware autowrap while live display is active
+        self.console.file.write("\x1b[?7l")
+        self.console.file.flush()
+        super().start()
+
+    def stop(self) -> None:
+        super().stop()
+        # Restore hardware autowrap when finished
+        self.console.file.write("\x1b[?7h")
+        self.console.file.flush()
 
 
 def controller_cleanup_wrapper(
@@ -806,9 +855,13 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(t)  # rich tables require console printing
 
-    obj.print(render_status_table(obj))
+    execution_report_table = format_table_width(obj, t, False)
+    obj.print(execution_report_table, soft_wrap=True)
+
+    status_table = format_table_width(obj, render_status_table(obj), False)
+    obj.print(status_table, soft_wrap=True)
+
     obj.print_status_summary()
 
 

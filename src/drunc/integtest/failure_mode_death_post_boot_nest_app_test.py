@@ -60,10 +60,10 @@ dunerc_command_list = """
 boot
 
 echo ps-post-boot
-ps -w 300
+ps 
 
 echo status-post-boot
-status -w 300
+status 
 """.split()
 
 dead_app_name = "ft-nested-segment-2-application"
