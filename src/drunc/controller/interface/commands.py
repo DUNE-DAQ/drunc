@@ -2,13 +2,13 @@ import json
 from time import sleep
 
 import click
+from druncschema.common_pb2 import LoggerTarget
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
-from drunc.utils.utils import get_logger
+from drunc.utils.utils import get_logger, log_echo
 
 log = get_logger("controller.iface", rich_handler=True)
-log_echo = get_logger("echo", rich_handler=True)
 
 
 @click.command("list-transitions")
@@ -265,21 +265,26 @@ def who_am_i(obj: ControllerContext) -> None:
 
 
 @click.command("echo")
-@click.argument("text", required=False)
-@click.pass_obj
-def echo(obj: ControllerContext, text: str | None) -> None:
-    log_echo.info(text or "")
-
-
-@click.command("log")
 @click.argument("text", required=True)
 @click.option("--target", type=str, help="The target to address", default="")
+@click.option(
+    "--server/--local",
+    default=False,
+    help="Send the message to the server via RPC (default: log locally only).",
+)
 @click.option(
     "--execute-along-path/--dont-execute-along-path",
     is_flag=True,
     show_default=True,
     help="Execute the command along the path",
     default=False,
+)
+@click.option(
+    "--logger",
+    type=click.Choice(["echo", "main"]),
+    default="echo",
+    callback=lambda context, parameter, value: LoggerTarget.Value(value.upper()),
+    help="Which server-side logger to target when --server is used.",
 )
 @click.option(
     "--execute-on-all-subsequent-children-in-path/--dont-execute-on-all-subsequent-children-in-path",
@@ -289,18 +294,27 @@ def echo(obj: ControllerContext, text: str | None) -> None:
     default=False,
 )
 @click.pass_obj
-def log_on_server(
+def echo(
     obj: ControllerContext,
     text: str,
+    server: bool,
+    logger: int,
     target: str,
     execute_along_path: bool,
     execute_on_all_subsequent_children_in_path: bool,
 ) -> None:
-    obj.get_driver("controller").log_on_server(
+    """Log a message locally or send it to the controller server."""
+    if not server:
+        # Local-only path, no RPC — mirrors the old bare `echo` command.
+        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        return
+
+    obj.get_driver("controller").send_log(
         text=text,
         target=target,
         execute_along_path=execute_along_path,
         execute_on_all_subsequent_children_in_path=execute_on_all_subsequent_children_in_path,
+        logger=logger,
     )
 
 

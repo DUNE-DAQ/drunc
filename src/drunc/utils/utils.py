@@ -80,6 +80,9 @@ def get_logger(
     )
 
 
+log_echo = get_logger("echo", rich_handler=True)
+
+
 def get_shared_rich_console(logger: logging.Logger) -> Console | None:
     """
     Traverses logger hierarchy to find a FormattedRichHandler's console.

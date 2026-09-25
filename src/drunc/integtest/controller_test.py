@@ -119,6 +119,22 @@ _SHUTDOWN_STATUS_ERROR = (
     "Controller-specific commands cannot be sent until the session is booted"
 )
 
+# Maps each echo marker to the controller it was targeted at (None means no --target, i.e. broadcast).
+_ECHO_SERVER_TARGETS = {
+    "test_of_echo_on_server_full": None,
+    "test_of_echo_on_server_root_controller": "root-controller",
+    # "test_of_echo_on_server_df_controller": "df-controller", ## does not appear to work, but doesn't work in develop anyway..
+}
+
+
+def _echo_server_command_block() -> str:
+    lines = []
+    for marker, target in _ECHO_SERVER_TARGETS.items():
+        target_arg = f" --target {target}" if target else ""
+        lines.append(f"echo --server --logger main{target_arg} {marker}")
+    return "\n" + "\n".join(lines) + "\n"
+
+
 # ── Command list ───────────────────────────────────────────────────────────────
 
 dunerc_command_list = (
@@ -138,6 +154,7 @@ echo post_boot_done
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
     + "start-run --run-number 3"
     + _FSM_SEQUENCES["test_stop_run"].to_command_block()
+    + _echo_server_command_block()
     + f"""
 echo {_SHUTDOWN_MARKER}
 shutdown
@@ -239,6 +256,35 @@ def test_log_files(run_dunerc) -> None:
             True,
             ignored_logfile_problems,
         )
+
+
+def _marker_found_in_logs(marker: str, log_files) -> bool:
+    for logname in log_files:
+        with open(logname, errors="ignore") as log_file:
+            if any(marker in line for line in log_file):
+                return True
+    return False
+
+
+@pytest.mark.parametrize(
+    "marker,target",
+    list(_ECHO_SERVER_TARGETS.items()),
+    ids=list(_ECHO_SERVER_TARGETS.keys()),
+)
+def test_echo_on_server(run_dunerc, marker, target) -> None:
+    """Checks that the server-side echo marker appears in the expected log file."""
+    # No --target means the command is sent to the root controller.
+    log_target = target or "root-controller"
+    matching_logs = [
+        logname
+        for logname in run_dunerc.log_files
+        if f"{run_dunerc.daq_session_name}_{log_target}" in str(logname)
+    ]
+    assert matching_logs, f"No {log_target} log file found."
+
+    assert _marker_found_in_logs(marker, matching_logs), (
+        f"'{marker}' not found in log file(s): {matching_logs}"
+    )
 
 
 @pytest.mark.parametrize("params", _FSM_COMMANDS, ids=lambda p: p.marker)

@@ -4,6 +4,7 @@ from typing import Callable
 
 import click
 from click.decorators import FC
+from druncschema.common_pb2 import LoggerTarget
 from druncschema.process_manager_pb2 import LogRequest, ProcessQuery
 from rich.markup import escape
 from rich.panel import Panel
@@ -17,16 +18,7 @@ from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
-from drunc.utils.utils import get_logger, resolve_context_peer
-
-log_echo = get_logger("echo", rich_handler=True)
-
-
-@click.command("echo")
-@click.argument("text", required=False)
-@click.pass_obj
-def echo(obj, text: str | None) -> None:
-    log_echo.info(text or "")
+from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
 
 
 def _pm_driver(
@@ -731,8 +723,20 @@ def ps_impl(
             log.info("No processes running")
 
 
-@click.command("log")
+@click.command("echo")
 @click.argument("text", required=True)
+@click.option(
+    "--server/--local",
+    default=False,
+    help="Send the message to the server via RPC (default: log locally only).",
+)
+@click.option(
+    "--logger",
+    type=click.Choice(["echo", "main"]),
+    default="echo",
+    callback=lambda context, parameter, value: LoggerTarget.Value(value.upper()),
+    help="Which server-side logger to target when --server is used.",
+)
 @click.option(
     "-s",
     "--severity",
@@ -744,55 +748,19 @@ def ps_impl(
     ),
 )
 @click.pass_obj
-def log_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
+def echo(
+    obj: ProcessManagerContext, text: str, server: bool, logger: int, severity: str
+) -> None:
     """
-    Log a message on the server with the specified severity level.
+    Log a message locally or send it to the process manager server.
 
-    Args:
-        obj: The context object containing the process manager driver and other relevant
-            information.
-        text: The log message to be sent to the server.
-        severity: The severity level of the log message. Options are DEBUG, INFO,
-            WARNING, ERROR, CRITICAL. Default is INFO.
-
-    Returns:
-        None
-
-    Raises:
-        Exception: If any exception occurs during the logging process.
+    The selected logger controls the local logger or the server-side logger, depending
+    on whether server mode is enabled.
     """
+    log = get_logger("process_manager.shell")
+    if not server:
+        # Local-only path, no RPC — mirrors the old bare `echo` command.
+        (log_echo if logger == LoggerTarget.ECHO else log).info(text)
+        return
     pm_driver = obj.get_pm_driver()
-    pm_driver.log_on_server(text=text, severity=severity)
-
-@click.command("echo-on-server")
-@click.argument("text", required=True)
-@click.option(
-    "-s",
-    "--severity",
-    type=str,
-    default="INFO",
-    help=(
-        "Severity level of the log message (default INFO). Options: DEBUG, INFO, "
-        "WARNING, ERROR, CRITICAL"
-    ),
-)
-@click.pass_obj
-def echo_on_server(obj: ProcessManagerContext, text: str, severity: str) -> None:
-    """
-    Echo a message on the server with the specified severity level.
-
-    Args:
-        obj: The context object containing the process manager driver and other relevant
-            information.
-        text: The log message to be sent to the server.
-        severity: The severity level of the log message. Options are DEBUG, INFO,
-            WARNING, ERROR, CRITICAL. Default is INFO.
-
-    Returns:
-        None
-
-    Raises:
-        Exception: If any exception occurs during the logging process.
-    """
-    pm_driver = obj.get_pm_driver()
-    pm_driver.echo_on_server(text=text, severity=severity)
+    pm_driver.send_log(text=text, severity=severity, logger=logger)

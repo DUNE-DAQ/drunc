@@ -316,4 +316,4 @@ def log_pm_cmd(obj: ShellContext) -> None:
     session = f" for session {obj.session_name}" if hasattr(obj, "session_name") else ""
     msg = f"{getpass.getuser()} sent {cmd_name}{args}{session} via {obj.get_shell_id()}"
     pm_driver = obj.get_pm_driver()
-    pm_driver.log_on_server(msg)
+    pm_driver.send_log(msg)

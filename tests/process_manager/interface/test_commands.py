@@ -111,13 +111,9 @@ class MockDriver:
         mock_result.lines = []
         return mock_result
 
-    def log(self, msg: str) -> None:
+    def send_log(self, *args, **kwargs) -> None:
         # simulate sending a message; tests don't assert on this, so store it
-        self._last_sent_msg = msg
-
-    def log_on_server(self, msg: str) -> None:
-        # simulate sending a message; tests don't assert on this, so store it
-        self._last_sent_msg = msg
+        self._last_sent_msg = args[0] if args else kwargs.get("text")
 
 
 class MockContext:
