@@ -1,0 +1,11 @@
+mkdocs
+mkdocs-material
+mkdocs-mermaid2-plugin
+mkdocs-gen-files
+mkdocs-literate-nav
+mkdocs-section-index
+mkdocstrings
+mkdocstrings-python
+pymdown-extensions
+mkdocs-exclude
+mkdocs-macros-plugin
