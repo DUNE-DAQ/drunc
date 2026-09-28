@@ -37,7 +37,10 @@ drunc_missing = not any(
 # Define the exportable marker
 require_drunc = pytest.mark.skipif(
     drunc_missing,
-    reason="drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests",
+    reason=(
+        "drunc is not present in DUNEDAQ_DB_PATH, skipping drunc integration tests; "
+        "you should run source $DBT_AREA_ROOT/pythoncode/drunc/scripts/setup_drunc_config_path.sh"
+    ),
 )
 
 
