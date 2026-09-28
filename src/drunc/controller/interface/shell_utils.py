@@ -345,19 +345,31 @@ class StatusTableUpdater(Progress):
     ) -> None:
         self.ctx = ctx
 
-        # Protect logs from being overwritten
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
+
+        # Detect if standard output is a real terminal screen. This is most common in
+        # integration tests, where the output is typically captured and not displayed on
+        # a real terminal. This prevents the cascade of status tables.
+        self.is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+
+        # Completely disable the animation loop if writing to a file or CI pipe
+        if not self.is_interactive:
+            kwargs["disable"] = True
 
         kwargs.pop("vertical_overflow", None)
         kwargs.pop("fit", None)
 
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
+
+        # Only configure Live parameters if we are actually animating
+        if hasattr(self, "live") and self.is_interactive:
+            self.live.vertical_overflow = "visible"
+
         self.update_table()
 
     def update_table(self) -> None:
-        # Generate the raw table structure
         self.table = render_status_table(self.ctx)
 
     def get_renderable(self):
@@ -366,9 +378,16 @@ class StatusTableUpdater(Progress):
             return Group(*self.get_renderables())
 
         protected_table = WrappingSafeTable(raw_table)
-
-        # NOTE: To keep the progress bar above the table, place it first in the Group
         return Group(*self.get_renderables(), protected_table)
+
+    def stop(self) -> None:
+        super().stop()
+
+        # If animation was disabled for a file, print the final state exactly once at the end.
+        # This keeps integration tests happy with a single, clean table and no ANSI spam.
+        if getattr(self, "disable", False):
+            self.update_table()
+            self.console.print(self.get_renderable())
 
 
 def controller_cleanup_wrapper(
