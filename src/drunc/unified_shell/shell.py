@@ -576,7 +576,10 @@ def unified_shell(
         ctx.obj.log.info("[green]unified_shell exited successfully[/green]")
         logging.shutdown()
         ctx.obj.terminate()
-        ctx.exit()
+        # Only force a clean exit here if we're not already unwinding due to an
+        # exception, otherwise ctx.exit() would replace/hide that exception.
+        if sys.exc_info()[0] is None:
+            ctx.exit()
 
     ctx.call_on_close(cleanup)
 
