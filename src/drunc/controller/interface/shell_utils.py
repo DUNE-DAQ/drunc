@@ -28,7 +28,7 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import Console, Group
+from rich.console import Console, ConsoleOptions, Group, RenderResult
 from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
@@ -39,6 +39,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.table import Table
+from rich.text import Text
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.utils import get_all_apps_with_named_substate
@@ -289,47 +290,85 @@ def format_updater_table(
     return table
 
 
+class WrappingSafeTable:
+    """
+    Renders a table at its full unconstrained width to prevent ellipses,
+    yielding it line-by-line. Rich folds the overflow at the terminal edge
+    and perfectly tracks the cursor height to prevent cascades.
+    """
+
+    def __init__(self, renderable: Table | Group):
+        def lock_table(obj):
+            if isinstance(obj, Group):
+                for item in obj.renderables:
+                    lock_table(item)
+            elif hasattr(obj, "columns"):
+                obj.expand = False
+                obj.width = None
+                for col in obj.columns:
+                    col.no_wrap = True
+
+        lock_table(renderable)
+        self.renderable = renderable
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        # Measure with unlimited width so Rich doesn't drop columns or add '...'
+        unconstrained = options.update(max_width=10000)
+        lines = console.render_lines(self.renderable, unconstrained)
+
+        for line_segments in lines:
+            # overflow="fold" forces hard breaks at the screen edge (replicating terminal wrapping)
+            t = Text(overflow="fold")
+            for seg in line_segments:
+                t.append(seg.text, style=seg.style)
+
+            # Strip trailing padding to prevent phantom blank lines
+            t.rstrip()
+            yield t
+
+    def __rich_measure__(
+        self, console: Console, options: ConsoleOptions
+    ) -> Measurement:
+        # Tell the layout engine this takes up the full terminal width
+        return Measurement(console.width, console.width)
+
+
 class StatusTableUpdater(Progress):
     def __init__(
         self,
-        ctx: ControllerContext | UnifiedShellContext,
+        ctx,  # ControllerContext | UnifiedShellContext
         refresh_per_second: float = 2,
         *args: object,
         **kwargs: object,
     ) -> None:
         self.ctx = ctx
 
+        # Protect logs from being overwritten
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
+        kwargs.pop("vertical_overflow", None)
+        kwargs.pop("fit", None)
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
-
-        # Allow dynamic expansion without dropping leftover lines
-        self.live.vertical_overflow = "visible"
-        self.live.transient = False
-
         self.update_table()
 
     def update_table(self) -> None:
-        # Native rendering: No ellipsis, natural wrapping intact for integtests
+        # Generate the raw table structure
         self.table = render_status_table(self.ctx)
 
     def get_renderable(self):
-        table_renderable = getattr(self, "table", "")
-        return Group(table_renderable, *self.get_renderables())
+        raw_table = getattr(self, "table", None)
+        if not raw_table:
+            return Group(*self.get_renderables())
 
-    def start(self) -> None:
-        # Disable hardware autowrap while live display is active
-        self.console.file.write("\x1b[?7l")
-        self.console.file.flush()
-        super().start()
+        protected_table = WrappingSafeTable(raw_table)
 
-    def stop(self) -> None:
-        super().stop()
-        # Restore hardware autowrap when finished
-        self.console.file.write("\x1b[?7h")
-        self.console.file.flush()
+        # NOTE: To keep the progress bar above the table, place it first in the Group
+        return Group(*self.get_renderables(), protected_table)
 
 
 def controller_cleanup_wrapper(
