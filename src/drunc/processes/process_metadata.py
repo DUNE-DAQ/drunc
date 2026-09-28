@@ -4,7 +4,18 @@ Process metadata management for remote processes.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Mapping, Optional, TypedDict
+
+
+
+class ProcessMetadataDict(TypedDict, total=False):
+    pid: Optional[int]
+    hostname: Optional[str]
+    user: Optional[str]
+    started_at: Optional[float]
+    tree_id: Optional[str]
+    role: Optional[str]
+    name: Optional[str]
 
 
 @dataclass
@@ -24,7 +35,7 @@ class ProcessMetadata:
     role: Optional[str] = None
     name: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> ProcessMetadataDict:
         """Convert metadata to dictionary for JSON serialisation."""
         return {
             "pid": self.pid,
@@ -37,25 +48,31 @@ class ProcessMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ProcessMetadata":
-        """
-        Create ProcessMetadata from dictionary.
+    def from_dict(cls, data: Mapping[str, object]) -> "ProcessMetadata":
+        def _get_str(key: str) -> Optional[str]:
+            v = data.get(key)
+            return v if isinstance(v, str) else None
 
-        Args:
-            data: Dictionary containing metadata fields
+        def _get_int(key: str) -> Optional[int]:
+            v = data.get(key)
+            return v if isinstance(v, int) else None
 
-        Returns:
-            ProcessMetadata instance
-        """
+        def _get_float(key: str) -> Optional[float]:
+            v = data.get(key)
+            if isinstance(v, (float, int)):
+                return float(v)
+            return None
+
         return cls(
-            pid=data.get("pid"),
-            hostname=data.get("hostname"),
-            user=data.get("user"),
-            started_at=data.get("started_at"),
-            tree_id=data.get("tree_id"),
-            role=data.get("role"),
-            name=data.get("name"),
+            pid=_get_int("pid"),
+            hostname=_get_str("hostname"),
+            user=_get_str("user"),
+            started_at=_get_float("started_at"),
+            tree_id=_get_str("tree_id"),
+            role=_get_str("role"),
+            name=_get_str("name"),
         )
+
 
     def to_json(self) -> str:
         """

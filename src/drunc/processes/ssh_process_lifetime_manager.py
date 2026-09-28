@@ -7,6 +7,7 @@ including process startup, monitoring, termination, and output capture.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import logging
 from typing import Any, Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
@@ -52,7 +53,7 @@ class ProcessLifetimeManager(ABC):
         self,
         uuid: str,
         timeout: float,
-        logger: Optional[Any] = None,
+        logger: Optional[logging.Logger] = None,
     ) -> bool:
         """
         Wait for a process to terminate within a timeout period.

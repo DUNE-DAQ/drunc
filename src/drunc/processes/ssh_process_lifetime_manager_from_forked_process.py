@@ -12,7 +12,7 @@ import multiprocessing
 import threading
 import types
 import uuid as _uuid_module
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
 
 from druncschema.process_manager_pb2 import BootRequest
 
@@ -25,6 +25,13 @@ from drunc.processes.ssh_process_lifetime_manager_shell import (
     SSHProcessLifetimeManagerShell,
 )
 from drunc.utils.utils import get_logger
+
+# IPC message types
+Request = Tuple[str, str, Tuple[object, ...], Dict[str, object]]
+Response = Tuple[str, object, Union[None, Tuple[str, str]]]
+CallbackMessage = Tuple[str, Optional[ExitStatus], Optional[str]]
+
+R = TypeVar("R")
 
 # ---------------------------------------------------------------------------
 # Worker process entry point (module-level so it is picklable by multiprocessing)
@@ -237,14 +244,14 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         self._on_process_exit = on_process_exit
 
         # Queues for IPC between parent and child.
-        self._request_queue: multiprocessing.Queue = multiprocessing.Queue()
-        self._response_queue: multiprocessing.Queue = multiprocessing.Queue()
-        self._callback_queue: multiprocessing.Queue = multiprocessing.Queue()
+        self._request_queue: multiprocessing.Queue[Request] = multiprocessing.Queue()
+        self._response_queue: multiprocessing.Queue[Response] = multiprocessing.Queue()
+        self._callback_queue: multiprocessing.Queue[CallbackMessage] = multiprocessing.Queue()
 
         # Dedicated queue for log records forwarded from the child process.
         # A QueueListener in the parent drains this queue and dispatches
         # records to drunc hierarchy handlers, with root fallback.
-        self._log_queue: multiprocessing.Queue = multiprocessing.Queue()
+        self._log_queue: multiprocessing.Queue[logging.LogRecord] = multiprocessing.Queue()
         self._log_listener = logging.handlers.QueueListener(
             self._log_queue,
             *_resolve_parent_log_handlers(),

@@ -2,18 +2,26 @@
 
 import signal as _signal
 import threading
-from typing import Optional
-
-import sh
+from typing import Optional, Protocol, Union
 
 from drunc.processes.exit_status import ExitStatus, ExitStatusSource
 from drunc.processes.process_metadata import ProcessMetadata
 
 
+class _RunningCommandLike(Protocol):
+    pid: Optional[int]
+    exit_code: Optional[int]
+    stdout: Optional[Union[bytes, str]]
+    stderr: Optional[Union[bytes, str]]
+    def wait(self) -> None: ...
+    def is_alive(self) -> bool: ...
+    def signal_group(self, sig: int) -> None: ...
+
+    
 class RunningSSHProcess:
     """Holds runtime state for a process launched via SSH shell."""
 
-    def __init__(self, process: sh.RunningCommand, hostname: str, user: str) -> None:
+    def __init__(self, process: _RunningCommandLike, hostname: str, user: str) -> None:
         """Initialise runtime state for a managed SSH-launched process.
 
         Args:
