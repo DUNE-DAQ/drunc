@@ -258,47 +258,41 @@ def render_status_table(
     )
 
 
-def format_updater_table(
-    console: Console,
-    table: Table | Group,
-    fit: bool = True,
-) -> Table | Group:
-    if isinstance(table, Group):
-        for renderable in table.renderables:
-            if isinstance(renderable, (Table, Group)):
-                format_updater_table(console, renderable, fit=fit)
-        return table
-
-    table.expand = False
-
-    # Prevent cells from breaking onto multiple lines
-    for col in table.columns:
-        col.no_wrap = True
-
-    # Reset any explicit width before measuring each update cycle
-    table.width = None
-
-    options = console.options.update(max_width=10000)
-    ideal_width = Measurement.get(console, options, table).maximum
-
-    if fit:
-        # Constrain to terminal boundaries to prevent cursor tracking mismatch
-        table.width = min(ideal_width, console.width)
-    else:
-        table.width = ideal_width
-
-    return table
-
-
 class WrappingSafeTable:
     """
-    Renders a table at its full unconstrained width to prevent ellipses,
-    yielding it line-by-line. Rich folds the overflow at the terminal edge
-    and perfectly tracks the cursor height to prevent cascades.
+    Renders the table that is safe for the updater, with integtest passes.
+
+    When running the StatusTableUpdater, this class ensures that tables are rendered at
+    their full width to prevent ellipses and maintain proper cursor tracking. This is
+    necessary for integration tests to be independent of terminal width limitations.
     """
 
     def __init__(self, renderable: Table | Group):
+        """
+        Initialize the WrappingSafeTable with the given renderable.
+
+        Args:
+            renderable (Table | Group): The table or group to be rendered safely.
+
+        Returns:
+            None: This initializer does not return anything.
+
+        Raises:
+            TypeError: If the provided renderable is not a Table or Group.
+        """
+
         def lock_table(obj):
+            """
+            Lock the table to prevent automatic expansion and enable proper wrapping.
+
+            Args:
+                obj (Table | Group): The table or group to lock.
+
+            Returns:
+                None: This function modifies the object in place.
+            """
+            # If the object is a Group, recursively lock its renderables, otherwise lock
+            # the table itself.
             if isinstance(obj, Group):
                 for item in obj.renderables:
                     lock_table(item)
@@ -314,12 +308,24 @@ class WrappingSafeTable:
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
-        # Measure with unlimited width so Rich doesn't drop columns or add '...'
+        """
+        Render the table safely for the console, with wrapping and cursor tracking.
+
+        Args:
+            console: The Rich console to render to.
+            options: The console options, including width constraints.
+
+        Yields:
+            Text: Lines of the rendered table, with hard wrapping applied.
+        """
+        # Set the table width to a very large value to prevent automatic wrapping
         unconstrained = options.update(max_width=10000)
         lines = console.render_lines(self.renderable, unconstrained)
 
+        # For each line of this table render it with hard wrapping, so no contents are
+        # wrapped automatically by the console's width, or concatenated which introduces
+        # integration test failure
         for line_segments in lines:
-            # overflow="fold" forces hard breaks at the screen edge (replicating terminal wrapping)
             t = Text(overflow="fold")
             for seg in line_segments:
                 t.append(seg.text, style=seg.style)
@@ -331,20 +337,46 @@ class WrappingSafeTable:
     def __rich_measure__(
         self, console: Console, options: ConsoleOptions
     ) -> Measurement:
-        # Tell the layout engine this takes up the full terminal width
+        """
+        Measure the renderable for layout purposes.
+
+        Args:
+            console: The Rich console to measure against.
+            options: The console options, including width constraints.
+
+        Returns:
+            Measurement: The minimum and maximum width of the renderable.
+        """
         return Measurement(console.width, console.width)
 
 
 class StatusTableUpdater(Progress):
     def __init__(
         self,
-        ctx,  # ControllerContext | UnifiedShellContext
+        ctx: ControllerContext | UnifiedShellContext,
         refresh_per_second: float = 2,
         *args: object,
         **kwargs: object,
     ) -> None:
+        """
+        Initialize the status table updater.
+
+        Args:
+            ctx: The controller context or unified shell context.
+            refresh_per_second: How often to refresh the status table.
+            *args: Additional positional arguments for the Progress superclass.
+            **kwargs: Additional keyword arguments for the Progress superclass.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        # Store the controller context for later use.
         self.ctx = ctx
 
+        # Obtain the shared Rich console for consistent output styling.
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
@@ -358,7 +390,10 @@ class StatusTableUpdater(Progress):
         if not self.is_interactive:
             kwargs["disable"] = True
 
+        # Remove default Live parameters so our required implemnentation holds.
         kwargs.pop("vertical_overflow", None)
+
+        # Remove the 'fit' parameter to ensure our custom layout handling is used.
         kwargs.pop("fit", None)
 
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
@@ -370,29 +405,67 @@ class StatusTableUpdater(Progress):
         self.update_table()
 
     def update_table(self) -> None:
+        """
+        Update the status table with the latest information from the controller context.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         self.table = render_status_table(self.ctx)
 
     def get_renderable(self):
+        """
+        Get the renderable object for the status table, wrapped in a Group.
+
+        Args:
+            None.
+
+        Returns:
+            A Rich renderable object representing the status table.
+
+        Raises:
+            None.
+        """
+        # Retrieve the raw status table, if it exists. If not, return a Group containing
+        # only the other renderables.
         raw_table = getattr(self, "table", None)
         if not raw_table:
             return Group(*self.get_renderables())
 
+        # Wrap the raw table in a WrappingSafeTable to ensure it is displayed correctly.
         protected_table = WrappingSafeTable(raw_table)
         return Group(*self.get_renderables(), protected_table)
 
     def stop(self) -> None:
+        """
+        Stop the live display and print the final state if animation was disabled.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         super().stop()
 
-        # If animation was disabled for a file, print the final state exactly once at the end.
+        # If animation was disabled for a file, print the final state once at the end.
         if getattr(self, "disable", False):
             self.update_table()
 
-            # 1. Print the plain-text task description (e.g., "Waiting for conf to complete...")
-            # This retains context in the logs without the blocky progress bar graphics.
+            # Print the task description
             for task in self.tasks:
                 self.console.print(task.description)
 
-            # 2. Print ONLY the protected table, completely bypassing the progress bar renderables
+            # Print the protected table
             raw_table = getattr(self, "table", None)
             if raw_table:
                 self.console.print(WrappingSafeTable(raw_table))
