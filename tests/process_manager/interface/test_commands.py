@@ -6,6 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
+from rich.console import Console
+from rich.table import Table
 
 from drunc.process_manager.interface.commands import (
     InterruptedCommand,
@@ -75,7 +77,7 @@ def mock_tabulate():
     with patch(
         "drunc.process_manager.interface.commands.tabulate_process_instance_list"
     ) as tabulate:
-        tabulate.return_value = "Formatted output"
+        tabulate.return_value = Table()
         yield tabulate
 
 
@@ -129,6 +131,7 @@ class MockContext:
         self.driver = driver or MockDriver()
         self.output = []
         self.session_name = "mock-session"
+        self._console = Console()
 
     def get_driver(self, name):
         return self.driver
@@ -139,8 +142,13 @@ class MockContext:
     def get_shell_id(self):
         return "mock-shell"
 
-    def print(self, msg, justify=None, overflow=None, soft_wrap=None):
-        self.output.append(str(msg))
+    def delete_driver(self, name):
+        pass
+
+    def print(self, *args: object, **kwargs: object) -> None:
+        # Capture all printed objects so we can assert against them in tests
+        self.output.extend(args)
+        self._console.print(*args, **kwargs)
 
 
 class MockBootResult:
@@ -381,7 +389,6 @@ def test_kill_command(mock_tabulate):
     dummy_kill_arguments = ["--name", "process1"]
     result = CliRunner().invoke(kill, dummy_kill_arguments, obj=mock_context)
 
-    assert result.output == ""
     assert result.exit_code == 0
     mock_driver.kill.assert_called_once()
 
