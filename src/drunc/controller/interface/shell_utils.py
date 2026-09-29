@@ -384,10 +384,18 @@ class StatusTableUpdater(Progress):
         super().stop()
 
         # If animation was disabled for a file, print the final state exactly once at the end.
-        # This keeps integration tests happy with a single, clean table and no ANSI spam.
         if getattr(self, "disable", False):
             self.update_table()
-            self.console.print(self.get_renderable())
+
+            # 1. Print the plain-text task description (e.g., "Waiting for conf to complete...")
+            # This retains context in the logs without the blocky progress bar graphics.
+            for task in self.tasks:
+                self.console.print(task.description)
+
+            # 2. Print ONLY the protected table, completely bypassing the progress bar renderables
+            raw_table = getattr(self, "table", None)
+            if raw_table:
+                self.console.print(WrappingSafeTable(raw_table))
 
 
 def controller_cleanup_wrapper(
