@@ -981,7 +981,7 @@ To find the controller address, you can look up \'{top_controller_name}_control\
         self,
         text: str,
         severity: str = "INFO",
-        logger: int = LoggerTarget.ECHO,
+        logger: int = LoggerTarget.MAIN,
         target: str = "",
         execute_along_path: bool = False,
         execute_on_all_subsequent_children_in_path: bool = True,
