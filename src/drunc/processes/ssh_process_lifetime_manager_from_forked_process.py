@@ -6,13 +6,25 @@ running in a dedicated child process via multiprocessing queues, keeping SSH
 activity and threading state fully isolated from the parent process.
 """
 
+from __future__ import annotations
+
 import logging
 import logging.handlers
 import multiprocessing
 import threading
 import types
 import uuid as _uuid_module
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    TypedDict,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from druncschema.process_manager_pb2 import BootRequest
 
@@ -79,7 +91,7 @@ def _resolve_parent_log_handlers() -> List[logging.Handler]:
     return root_handlers if root_handlers else [logging.StreamHandler()]
 
 
-def _configure_child_logging_to_queue(log_queue: multiprocessing.Queue) -> None:
+def _configure_child_logging_to_queue(log_queue: multiprocessing.Queue[logging.LogRecord]) -> None:
     """
     Configure child-process logging to forward all records via QueueHandler.
 
@@ -104,10 +116,10 @@ def _configure_child_logging_to_queue(log_queue: multiprocessing.Queue) -> None:
 
 
 def _worker_process_main(
-    request_queue: multiprocessing.Queue,
-    response_queue: multiprocessing.Queue,
-    callback_queue: multiprocessing.Queue,
-    log_queue: multiprocessing.Queue,
+    request_queue: multiprocessing.Queue[Optional[Request]],
+    response_queue: multiprocessing.Queue[Optional[Response]],
+    callback_queue: multiprocessing.Queue[Optional[CallbackMessage]],
+    log_queue: multiprocessing.Queue[logging.LogRecord],
     disable_host_key_check: bool,
     disable_localhost_host_key_check: bool,
 ) -> None:
@@ -167,9 +179,7 @@ def _worker_process_main(
         boot_request.ParseFromString(boot_request_bytes)
         self_inner.start_process(uuid, boot_request)
 
-    manager._start_process_from_bytes = types.MethodType(
-        _start_process_from_bytes, manager
-    )
+    setattr(manager, "_start_process_from_bytes", types.MethodType(_start_process_from_bytes, manager))
 
     # IPC event loop: receive requests, dispatch, send responses.
     while True:
@@ -192,6 +202,16 @@ def _worker_process_main(
         except Exception as exc:
             # Ship a serialisable representation of the exception to the parent.
             response_queue.put((request_id, None, (type(exc).__name__, str(exc))))
+
+
+class _PendingSlot(TypedDict, total=False):
+    """
+    Pending Slot for an outstanding request in the forked-process manager.
+    Used for mypy type checking to ensure the correct structure of pending slots.
+    """
+    event: threading.Event
+    result: object
+    error: Optional[Tuple[str, str]]
 
 
 class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
@@ -244,9 +264,9 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         self._on_process_exit = on_process_exit
 
         # Queues for IPC between parent and child.
-        self._request_queue: multiprocessing.Queue[Request] = multiprocessing.Queue()
-        self._response_queue: multiprocessing.Queue[Response] = multiprocessing.Queue()
-        self._callback_queue: multiprocessing.Queue[CallbackMessage] = multiprocessing.Queue()
+        self._request_queue: multiprocessing.Queue[Optional[Request]] = multiprocessing.Queue()
+        self._response_queue: multiprocessing.Queue[Optional[Response]] = multiprocessing.Queue()
+        self._callback_queue: multiprocessing.Queue[Optional[CallbackMessage]] = multiprocessing.Queue()
 
         # Dedicated queue for log records forwarded from the child process.
         # A QueueListener in the parent drains this queue and dispatches
@@ -260,7 +280,8 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
 
         # Maps request_id -> dict with event + result storage, used to match
         # asynchronous queue responses back to their blocking callers.
-        self._pending: Dict[str, Dict[str, Any]] = {}
+
+        self._pending: Dict[str, _PendingSlot] = {}
         self._pending_lock = threading.Lock()
 
         # Start the child process.
@@ -303,7 +324,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         )
         self._callback_dispatcher.start()
 
-    def _call(self, method_name: str, *args: Any, **kwargs: Any) -> Any:
+    def _call(self, method_name: str, *args: object, **kwargs: object) -> object:
         """
         Send a method call to the child process and block until the result arrives.
 
@@ -334,11 +355,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         # Register the pending slot *before* enqueuing the request to eliminate
         # the race where a fast response arrives before registration completes.
         with self._pending_lock:
-            self._pending[request_id] = {
-                "event": event,
-                "result": None,
-                "error": None,
-            }
+            self._pending[request_id] = _PendingSlot(event=event, result=None, error=None) 
 
         self._request_queue.put((request_id, method_name, args, kwargs))
 
@@ -478,7 +495,8 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             List of active process UUID strings.
         """
-        return self._call("get_active_process_keys")
+        return cast(List[str], self._call("get_active_process_keys"))
+
 
     def start_process(self, uuid: str, boot_request: BootRequest) -> None:
         """
@@ -508,7 +526,8 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             True if the process is alive, False otherwise.
         """
-        return self._call("is_process_alive", uuid)
+        return cast(bool, self._call("is_process_alive", uuid))
+
 
     def pop_early_exit_status(self, uuid: str) -> Optional[ExitStatus]:
         """
@@ -521,7 +540,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             ExitStatus if the process terminated early without being explicitly killed,
             None if still running or not found.
         """
-        return self._call("pop_early_exit_status", uuid)
+        return cast(Optional[ExitStatus], self._call("pop_early_exit_status", uuid))
 
     def kill_process(
         self,
@@ -538,7 +557,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             ExitStatus of the terminated process, or None if undetermined.
         """
-        return self._call("kill_process", uuid, timeout)
+        return cast(Optional[ExitStatus], self._call("kill_process", uuid, timeout))
 
     def kill_process_without_metadata(
         self,
@@ -560,12 +579,15 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             ExitStatus of the terminated process, or None if undetermined.
         """
-        return self._call(
-            "kill_process_without_metadata",
-            uuid,
-            signal_name,
-            as_manual_pm_kill,
-            timeout,
+        return cast(
+            Optional[ExitStatus],
+            self._call(
+                "kill_process_without_metadata",
+                uuid,
+                signal_name,
+                as_manual_pm_kill,
+                timeout,
+            ),
         )
 
     def crash_process(self, uuid: str, signal: str = "KILL") -> None:
@@ -597,7 +619,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             Dictionary mapping process UUIDs to their exit statuses.
         """
-        return self._call("kill_processes", uuids, process_timeouts)
+        return cast(Dict[str, Optional[ExitStatus]], self._call("kill_processes", uuids, process_timeouts))
 
     def kill_all_processes(
         self,
@@ -612,7 +634,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             Dictionary mapping all process UUIDs to their exit statuses.
         """
-        return self._call("kill_all_processes", process_timeouts)
+        return cast(Dict[str, Optional[ExitStatus]], self._call("kill_all_processes", process_timeouts))
 
     def kill_processes_by_role(
         self,
@@ -631,9 +653,9 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             Dictionary mapping terminated process UUIDs to their exit statuses.
         """
-        return self._call(
+        return cast(Dict[str, Optional[ExitStatus]], self._call(
             "kill_processes_by_role", role, candidate_uuids, process_timeouts
-        )
+        ))
 
     def get_process_stdout(self, uuid: str) -> Optional[str]:
         """
@@ -645,7 +667,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             Stdout content as a string, or None if not available.
         """
-        return self._call("get_process_stdout", uuid)
+        return cast(Optional[str], self._call("get_process_stdout", uuid))
 
     def get_process_stderr(self, uuid: str) -> Optional[str]:
         """
@@ -657,7 +679,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             Stderr content as a string, or None if not available.
         """
-        return self._call("get_process_stderr", uuid)
+        return cast(Optional[str], self._call("get_process_stderr", uuid))
 
     def read_log_file(
         self,
@@ -678,7 +700,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Returns:
             List of log lines.
         """
-        return self._call("read_log_file", hostname, user, log_file, num_lines)
+        return cast(List[str], self._call("read_log_file", hostname, user, log_file, num_lines))
 
     def validate_host_connection(
         self,
@@ -697,7 +719,7 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
         Raises:
             RuntimeError: If the SSH connection validation fails.
         """
-        self._call("validate_host_connection", host, auth_method, user)
+        return cast(None, self._call("validate_host_connection", host, auth_method, user))
 
     def get_remote_pid(self, uuid: str) -> RemotePidResult:
         """
@@ -714,8 +736,8 @@ class SSHProcessLifetimeManagerShellOnForkedProcess(ProcessLifetimeManager):
             RemotePidResult with ``pid`` set on success, or ``reason`` explaining
             why the PID is unavailable (e.g. metadata not yet written).
         """
-        return self._call("get_remote_pid", uuid)
+        return cast(RemotePidResult, self._call("get_remote_pid", uuid))
 
     def get_runtime_pids(self, uuid: str) -> Dict[str, Optional[int]]:
         """Return best-effort runtime PID snapshot from the child manager."""
-        return self._call("get_runtime_pids", uuid)
+        return cast(Dict[str, Optional[int]], self._call("get_runtime_pids", uuid))

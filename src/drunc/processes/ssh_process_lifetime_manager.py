@@ -5,10 +5,10 @@ Defines the common interface for managing remote process lifecycles,
 including process startup, monitoring, termination, and output capture.
 """
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import logging
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from druncschema.process_manager_pb2 import BootRequest
 

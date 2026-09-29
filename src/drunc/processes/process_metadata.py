@@ -4,8 +4,7 @@ Process metadata management for remote processes.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, TypedDict
-
+from typing import Mapping, Optional, TypedDict, cast
 
 
 class ProcessMetadataDict(TypedDict, total=False):
@@ -46,33 +45,21 @@ class ProcessMetadata:
             "role": self.role,
             "name": self.name,
         }
-
+    
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "ProcessMetadata":
-        def _get_str(key: str) -> Optional[str]:
-            v = data.get(key)
-            return v if isinstance(v, str) else None
-
-        def _get_int(key: str) -> Optional[int]:
-            v = data.get(key)
-            return v if isinstance(v, int) else None
-
-        def _get_float(key: str) -> Optional[float]:
-            v = data.get(key)
-            if isinstance(v, (float, int)):
-                return float(v)
-            return None
-
+        """
+        Create ProcessMetadata from dictionary without using Any.
+        """
         return cls(
-            pid=_get_int("pid"),
-            hostname=_get_str("hostname"),
-            user=_get_str("user"),
-            started_at=_get_float("started_at"),
-            tree_id=_get_str("tree_id"),
-            role=_get_str("role"),
-            name=_get_str("name"),
+            pid=cast(Optional[int], data.get("pid")),
+            hostname=cast(Optional[str], data.get("hostname")),
+            user=cast(Optional[str], data.get("user")),
+            started_at=cast(Optional[float], data.get("started_at")),
+            tree_id=cast(Optional[str], data.get("tree_id")),
+            role=cast(Optional[str], data.get("role")),
+            name=cast(Optional[str], data.get("name")),
         )
-
 
     def to_json(self) -> str:
         """
