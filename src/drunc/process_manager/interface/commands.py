@@ -20,6 +20,7 @@ from drunc.unified_shell.context import UnifiedShellContext
 from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
 from drunc.utils.utils import get_logger, log_echo, resolve_context_peer
 
+
 def _pm_driver(
     obj: ProcessManagerContext | UnifiedShellContext,
 ) -> ProcessManagerDriver:
@@ -27,6 +28,7 @@ def _pm_driver(
     if not isinstance(driver, ProcessManagerDriver):
         raise RuntimeError("Process manager driver is not initialized")
     return driver
+
 
 @click.command("boot")
 @click.option(
