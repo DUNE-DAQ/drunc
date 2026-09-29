@@ -384,6 +384,8 @@ class StatusTableUpdater(Progress):
         # Detect if standard output is a real terminal screen. This is most common in
         # integration tests, where the output is typically captured and not displayed on
         # a real terminal. This prevents the cascade of status tables.
+        # Note - "TERM" == "dumb" indicates a non-interactive terminal. See the UNIX
+        # docs: https://invisible-island.net/ncurses/terminfo.src.html#tic-dumb
         self.is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
 
         # Completely disable the animation loop if writing to a file or CI pipe
