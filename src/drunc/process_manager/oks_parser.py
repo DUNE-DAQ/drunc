@@ -1,14 +1,13 @@
+import logging
 import os
 from typing import TYPE_CHECKING, Any, Dict, List
-
-import confmodel_dal
 
 from drunc.exceptions import DruncException, DruncSetupException
 from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
-    from confmodel_dal.dal_protocols import Segment, Session
+    from confmodel_dal.dal_protocols import Application, Segment, Session
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -281,7 +280,7 @@ def collect_apps(
     return apps
 
 
-def get_writer_directory_path(app, log) -> str | None:
+def get_writer_directory_path(app: "Application", log: logging.Logger) -> str | None:
     # Map known OKS types to their specific writer attribute
     APP_TYPE_TO_WRITER_ATTR = {
         "DFApplication": "data_writers",
@@ -310,8 +309,8 @@ def get_writer_directory_path(app, log) -> str | None:
 
     writer = writers[0]
     params = getattr(writer, "data_store_params", None)
-    if params and getattr(params, "directory_path", None):
-        directory_path = params.directory_path
+    directory_path = getattr(params, "directory_path", None)
+    if isinstance(directory_path, str) and directory_path:
         log.debug(f"data path for app {app.id}: {directory_path}")
         return directory_path
 
@@ -370,23 +369,3 @@ def collect_infra_apps(
         )
 
     return apps
-
-
-# Search segment and all contained segments for apps controlled by
-# given controller. Return separate lists of apps and sub-controllers
-def find_controlled_apps(db, session, mycontroller, segment):
-    apps = []
-    controllers = []
-    if segment.controller.id == mycontroller:
-        for app in segment.applications:
-            apps.append(app.id)
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                controllers.append(seg.controller.id)
-    else:
-        for seg in segment.segments:
-            if not confmodel_dal.entity_excluded(db._obj, session.id, seg.id):
-                aps, controllers = find_controlled_apps(db, session, mycontroller, seg)
-                if len(apps) > 0:
-                    break
-    return apps, controllers
