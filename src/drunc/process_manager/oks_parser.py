@@ -8,7 +8,7 @@ from drunc.process_manager.configuration import get_commandline_parameters
 from drunc.utils.utils import file_is_read_only, get_logger
 
 if TYPE_CHECKING:
-    import conffwk
+    from confmodel_dal.dal_protocols import Segment, Session
 
 
 def get_full_db_path(db_path: str) -> str:
@@ -106,7 +106,7 @@ class EnvironmentVariableCannotBeSet(DruncException):
 
 
 def entity_excluded_from_session_dal(
-    session_dal_obj: "conffwk.dal.Session", entity_id: str
+    session_dal_obj: "Session", entity_id: str
 ) -> bool:
     """
     Replaces the following without any db dependence
@@ -147,8 +147,8 @@ def entity_excluded_from_session_dal(
 def collect_apps(
     config_filename: str,
     session_name: str,
-    session_dal_obj: "conffwk.dal.Session",
-    segment_obj: "conffwk.dal.Segment",
+    session_dal_obj: "Session",
+    segment_obj: "Segment",
     env: Dict[str, str],
     tree_prefix: List[int] = [
         0,
@@ -224,8 +224,7 @@ def collect_apps(
         except Exception as e:
             log.exception(e)
             raise e
-        for app in sub_apps:
-            apps.append(app)
+        apps.extend(sub_apps)
 
     # Get all the included applications of this segment
     # Start app_index after sub-segment indices to avoid tree_id collisions
@@ -320,7 +319,7 @@ def get_writer_directory_path(app, log) -> str | None:
 
 
 def collect_infra_apps(
-    session: "conffwk.dal.Session",
+    session: "Session",
     env: Dict[str, str],
     tree_prefix: List[int],
 ) -> List[Dict[str, Any]]:
