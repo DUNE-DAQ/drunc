@@ -310,6 +310,7 @@ class WrappingSafeTable:
     ) -> RenderResult:
         """
         Render the table safely for the console, with wrapping and cursor tracking.
+        This dunder method is automatically called by the Rich module when necessary.
 
         Args:
             console: The Rich console to render to.
@@ -339,6 +340,7 @@ class WrappingSafeTable:
     ) -> Measurement:
         """
         Measure the renderable for layout purposes.
+        This dunder method is automatically called by the Rich module when necessary.
 
         Args:
             console: The Rich console to measure against.
