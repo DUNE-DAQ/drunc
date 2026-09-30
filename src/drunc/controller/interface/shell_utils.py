@@ -28,7 +28,8 @@ from druncschema.description_pb2 import Description
 from druncschema.generic_pb2 import bool_msg, float_msg, int_msg, string_msg
 from druncschema.request_response_pb2 import ResponseFlag
 from google.protobuf import any_pb2
-from rich.console import ConsoleRenderable, Group, RichCast
+from rich.console import Console, ConsoleOptions, Group, RenderResult
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     Progress,
@@ -38,6 +39,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from rich.table import Table
+from rich.text import Text
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.utils import get_all_apps_with_named_substate
@@ -49,6 +51,7 @@ from drunc.utils.grpc_utils import (
     pack_to_any,
     unpack_any,
 )
+from drunc.utils.shell_utils import format_table_width
 from drunc.utils.utils import format_name_for_cli, get_logger, get_shared_rich_console
 
 log = get_logger("controller.iface.shell_utils")
@@ -255,6 +258,100 @@ def render_status_table(
     )
 
 
+class WrappingSafeTable:
+    """
+    Renders the table that is safe for the updater, with integtest passes.
+
+    When running the StatusTableUpdater, this class ensures that tables are rendered at
+    their full width to prevent ellipses and maintain proper cursor tracking. This is
+    necessary for integration tests to be independent of terminal width limitations.
+    """
+
+    def __init__(self, renderable: Table | Group):
+        """
+        Initialize the WrappingSafeTable with the given renderable.
+
+        Args:
+            renderable (Table | Group): The table or group to be rendered safely.
+
+        Returns:
+            None: This initializer does not return anything.
+
+        Raises:
+            TypeError: If the provided renderable is not a Table or Group.
+        """
+
+        def lock_table(obj):
+            """
+            Lock the table to prevent automatic expansion and enable proper wrapping.
+
+            Args:
+                obj (Table | Group): The table or group to lock.
+
+            Returns:
+                None: This function modifies the object in place.
+            """
+            # If the object is a Group, recursively lock its renderables, otherwise lock
+            # the table itself.
+            if isinstance(obj, Group):
+                for item in obj.renderables:
+                    lock_table(item)
+            elif hasattr(obj, "columns"):
+                obj.expand = False
+                obj.width = None
+                for col in obj.columns:
+                    col.no_wrap = True
+
+        lock_table(renderable)
+        self.renderable = renderable
+
+    def __rich_console__(
+        self, console: Console, options: ConsoleOptions
+    ) -> RenderResult:
+        """
+        Render the table safely for the console, with wrapping and cursor tracking.
+        This dunder method is automatically called by the Rich module when necessary.
+
+        Args:
+            console: The Rich console to render to.
+            options: The console options, including width constraints.
+
+        Yields:
+            Text: Lines of the rendered table, with hard wrapping applied.
+        """
+        # Set the table width to a very large value to prevent automatic wrapping
+        unconstrained = options.update(max_width=10000)
+        lines = console.render_lines(self.renderable, unconstrained)
+
+        # For each line of this table render it with hard wrapping, so no contents are
+        # wrapped automatically by the console's width, or concatenated which introduces
+        # integration test failure
+        for line_segments in lines:
+            t = Text(overflow="fold")
+            for seg in line_segments:
+                t.append(seg.text, style=seg.style)
+
+            # Strip trailing padding to prevent phantom blank lines
+            t.rstrip()
+            yield t
+
+    def __rich_measure__(
+        self, console: Console, options: ConsoleOptions
+    ) -> Measurement:
+        """
+        Measure the renderable for layout purposes.
+        This dunder method is automatically called by the Rich module when necessary.
+
+        Args:
+            console: The Rich console to measure against.
+            options: The console options, including width constraints.
+
+        Returns:
+            Measurement: The minimum and maximum width of the renderable.
+        """
+        return Measurement(console.width, console.width)
+
+
 class StatusTableUpdater(Progress):
     def __init__(
         self,
@@ -263,24 +360,119 @@ class StatusTableUpdater(Progress):
         *args: object,
         **kwargs: object,
     ) -> None:
-        self.ctx = ctx
-        self.update_table()
+        """
+        Initialize the status table updater.
 
-        # Get the instance of the console that the logger is using with the rich handler
-        # so that the progress bar can be rendered in the same console, and not mess up
-        # the logs
+        Args:
+            ctx: The controller context or unified shell context.
+            refresh_per_second: How often to refresh the status table.
+            *args: Additional positional arguments for the Progress superclass.
+            **kwargs: Additional keyword arguments for the Progress superclass.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        # Store the controller context for later use.
+        self.ctx = ctx
+
+        # Obtain the shared Rich console for consistent output styling.
         shared_console = get_shared_rich_console(self.ctx.log)
         if shared_console:
             kwargs["console"] = shared_console
 
+        # Detect if standard output is a real terminal screen. This is most common in
+        # integration tests, where the output is typically captured and not displayed on
+        # a real terminal. This prevents the cascade of status tables.
+        # Note - "TERM" == "dumb" indicates a non-interactive terminal. See the UNIX
+        # docs: https://invisible-island.net/ncurses/terminfo.src.html#tic-dumb
+        self.is_interactive = sys.stdout.isatty() and os.environ.get("TERM") != "dumb"
+
+        # Completely disable the animation loop if writing to a file or CI pipe
+        if not self.is_interactive:
+            kwargs["disable"] = True
+
+        # Remove default Live parameters so our required implemnentation holds.
+        kwargs.pop("vertical_overflow", None)
+
+        # Remove the 'fit' parameter to ensure our custom layout handling is used.
+        kwargs.pop("fit", None)
+
         super().__init__(*args, refresh_per_second=refresh_per_second, **kwargs)
 
+        # Only configure Live parameters if we are actually animating
+        if hasattr(self, "live") and self.is_interactive:
+            self.live.vertical_overflow = "visible"
+
+        self.update_table()
+
     def update_table(self) -> None:
+        """
+        Update the status table with the latest information from the controller context.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         self.table = render_status_table(self.ctx)
 
-    def get_renderable(self) -> ConsoleRenderable | RichCast | str:
-        renderable = Group(self.table, *self.get_renderables())
-        return renderable
+    def get_renderable(self):
+        """
+        Get the renderable object for the status table, wrapped in a Group.
+
+        Args:
+            None.
+
+        Returns:
+            A Rich renderable object representing the status table.
+
+        Raises:
+            None.
+        """
+        # Retrieve the raw status table, if it exists. If not, return a Group containing
+        # only the other renderables.
+        raw_table = getattr(self, "table", None)
+        if not raw_table:
+            return Group(*self.get_renderables())
+
+        # Wrap the raw table in a WrappingSafeTable to ensure it is displayed correctly.
+        protected_table = WrappingSafeTable(raw_table)
+        return Group(*self.get_renderables(), protected_table)
+
+    def stop(self) -> None:
+        """
+        Stop the live display and print the final state if animation was disabled.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+        super().stop()
+
+        # If animation was disabled for a file, print the final state once at the end.
+        if getattr(self, "disable", False):
+            self.update_table()
+
+            # Print the task description
+            for task in self.tasks:
+                self.console.print(task.description)
+
+            # Print the protected table
+            raw_table = getattr(self, "table", None)
+            if raw_table:
+                self.console.print(WrappingSafeTable(raw_table))
 
 
 def controller_cleanup_wrapper(
@@ -806,9 +998,13 @@ def run_one_fsm_command(
             add_to_table(table, child_response, "  " + prefix)
 
     add_to_table(t, result)
-    obj.print(t)  # rich tables require console printing
 
-    obj.print(render_status_table(obj))
+    execution_report_table = format_table_width(obj, t, False)
+    obj.print(execution_report_table, soft_wrap=True)
+
+    status_table = format_table_width(obj, render_status_table(obj), False)
+    obj.print(status_table, soft_wrap=True)
+
     obj.print_status_summary()
 
 

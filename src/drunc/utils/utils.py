@@ -585,11 +585,12 @@ def get_control_type_and_uri_from_connectivity_service(
     uris: list[dict[str, object]] = []
     log = get_logger("utils.get_control_type_and_uri_from_connectivity_service")
     shared_console = get_shared_rich_console(log)
+    is_interactive = sys.stdout.isatty()
 
     start = time.time()
     elapsed = 0.0
 
-    if progress_bar:
+    if progress_bar and is_interactive:
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -597,11 +598,8 @@ def get_control_type_and_uri_from_connectivity_service(
             TimeRemainingColumn(),
             TimeElapsedColumn(),
             console=shared_console,
-            # transient=True,  # Clear the progress bar after completion, once we have established a more complete testing framework with the various failure modes, we can enable this to reduce console clutter
         ) as progress:
-            task = progress.add_task(
-                f"[yellow]{title}", total=timeout, visible=progress_bar
-            )
+            task = progress.add_task(f"[yellow]{title}", total=timeout, visible=True)
 
             while elapsed < timeout:
                 progress.update(task, completed=elapsed)
@@ -625,6 +623,10 @@ def get_control_type_and_uri_from_connectivity_service(
             progress.update(task, completed=timeout)
 
     else:
+        # If a bar was requested but we are in a file, print a static log entry instead
+        if progress_bar:
+            shared_console.print(f"[yellow]{title}[/yellow] (Waiting...)")
+
         while elapsed < timeout:
             try:
                 uris = connectivity_service.resolve(

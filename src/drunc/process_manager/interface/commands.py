@@ -16,7 +16,7 @@ from drunc.process_manager.interface.context import ProcessManagerContext
 from drunc.process_manager.process_manager_driver import ProcessManagerDriver
 from drunc.process_manager.utils import tabulate_process_instance_list
 from drunc.unified_shell.context import UnifiedShellContext
-from drunc.utils.shell_utils import InterruptedCommand, log_pm_cmd
+from drunc.utils.shell_utils import InterruptedCommand, format_table_width, log_pm_cmd
 from drunc.utils.utils import get_logger, resolve_context_peer
 
 
@@ -243,8 +243,14 @@ def wait(obj: ProcessManagerContext, sleep_time: int) -> None:
     default=None,
     help="Table width. Default is automatically calculated",
 )
+@click.option(
+    "--fit",
+    is_flag=True,
+    default=False,
+    help="Restrict the table to the available terminal width.",
+)
 @click.pass_obj
-def terminate(obj: ProcessManagerContext, width: int | None) -> None:
+def terminate(obj: ProcessManagerContext, width: int | None, fit: bool) -> None:
     """
     Terminate the process manager and all its managed processes.
 
@@ -253,6 +259,7 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
             information.
         width: The width of the table to display the terminated processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -267,9 +274,11 @@ def terminate(obj: ProcessManagerContext, width: int | None) -> None:
     result = pm_driver.terminate()
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Terminated process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(
+        result, "Terminated process", False, width=width
+    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
     obj.delete_driver("controller")
 
 
@@ -294,6 +303,12 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
         help="Table width. Default is automatically calculated",
     )(f)
     f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
+    f = click.option(
         "--crash",
         is_flag=True,
         default=False,
@@ -306,7 +321,9 @@ def kill_decorators(f: FC) -> Callable[[FC], FC]:
 @add_query_options(at_least_one=True)
 @kill_decorators
 @click.pass_obj
-def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+def kill(
+    obj: ProcessManagerContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     """
     Kill processes matching the given query.
 
@@ -316,6 +333,7 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
         query: The query to match processes to be killed.
         width: The width of the table to display the killed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to expand the table to the available terminal width.
 
     Returns:
         None
@@ -324,13 +342,14 @@ def kill(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> 
         Exception: If any exception occurs during the kill process.
     """
     log_pm_cmd(obj)
-    return kill_impl(obj, query, width)
+    return kill_impl(obj, query, width, fit)
 
 
 def kill_impl(
     obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'kill' command.
@@ -341,6 +360,7 @@ def kill_impl(
         query: The query to match processes to be killed.
         width: The width of the table to display the killed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to expand the table to the available terminal width.
 
     Returns:
         None
@@ -354,9 +374,9 @@ def kill_impl(
     result = pm_driver.kill(query)
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Killed process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(result, "Killed process", False, width=width)
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def flush_decorators(f: FC) -> Callable[[FC], FC]:
@@ -379,6 +399,12 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
         default=None,
         help="Table width. Default is automatically calculated",
     )(f)
+    f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
     return f
 
 
@@ -386,7 +412,9 @@ def flush_decorators(f: FC) -> Callable[[FC], FC]:
 @add_query_options(at_least_one=False, all_processes_by_default=True)
 @flush_decorators
 @click.pass_obj
-def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) -> None:
+def flush(
+    obj: ProcessManagerContext, query: ProcessQuery, width: int | None, fit: bool
+) -> None:
     """
     Flush processes matching the given query.
 
@@ -396,6 +424,7 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) ->
         query: The query to match processes to be flushed.
         width: The width of the table to display the flushed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -404,13 +433,14 @@ def flush(obj: ProcessManagerContext, query: ProcessQuery, width: int | None) ->
         Exception: If any exception occurs during the flush process.
     """
     log_pm_cmd(obj)
-    return flush_impl(obj, query, width)
+    return flush_impl(obj, query, width, fit)
 
 
 def flush_impl(
     obj: ProcessManagerContext | UnifiedShellContext,
     query: ProcessQuery,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'flush' command.
@@ -421,6 +451,7 @@ def flush_impl(
         query: The query to match processes to be flushed.
         width: The width of the table to display the flushed processes. If None, the
             width will be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -434,9 +465,11 @@ def flush_impl(
     result = pm_driver.flush(query)
     if not result:
         return
-    obj.print(
-        tabulate_process_instance_list(result, "Flushed process", False, width=width)
-    )  # rich tables require console printing
+    table = tabulate_process_instance_list(
+        result, "Flushed process", False, width=width
+    )
+    table = format_table_width(obj, table, fit)
+    obj.print(table, soft_wrap=not fit)
 
 
 def logs_decorators(f: FC) -> Callable[[FC], FC]:
@@ -620,10 +653,15 @@ def ps_decorators(f: FC) -> Callable[[FC], FC]:
         help="Table width. Default is automatically calculated",
     )(f)
     f = click.option(
+        "--fit",
+        is_flag=True,
+        default=False,
+        help="Restrict the table to the available terminal width.",
+    )(f)
+    f = click.option(
         "-l",
         "--long-format",
         is_flag=True,
-        type=bool,
         default=False,
         help="Whether to have a long output",
     )(f)
@@ -640,6 +678,7 @@ def ps(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
+    fit: bool,
 ) -> None:
     """
     Display processes matching the given query.
@@ -652,6 +691,7 @@ def ps(
             format.
         width: The width of the table to display the processes. If None, the width will
             be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -660,7 +700,7 @@ def ps(
         Exception: If any exception occurs during the process retrieval or display.
     """
     log_pm_cmd(obj)
-    return ps_impl(obj, query, long_format, width)
+    return ps_impl(obj, query, long_format, width, fit)
 
 
 def ps_impl(
@@ -668,6 +708,7 @@ def ps_impl(
     query: ProcessQuery,
     long_format: bool,
     width: int | None,
+    fit: bool = False,
 ) -> None:
     """
     Implementation of the 'ps' command.
@@ -680,6 +721,7 @@ def ps_impl(
             format.
         width: The width of the table to display the processes. If None, the width will
             be automatically calculated.
+        fit: Whether to restrict the table to the available terminal width.
 
     Returns:
         None
@@ -703,16 +745,15 @@ def ps_impl(
     # If there are processes running, tabulate them, otherwise log that there are no
     # processes running.
     if results.values:
-        obj.print(
-            tabulate_process_instance_list(
-                results,
-                title=title,
-                long=long_format,
-                width=width,
-            ),
-            overflow="fold",
-            soft_wrap=True,
+        table = tabulate_process_instance_list(
+            results,
+            title=title,
+            long=long_format,
+            width=width,
         )
+
+        table = format_table_width(obj, table, fit)
+        obj.print(table, soft_wrap=not fit)
     else:
         if session_name:
             log.info(

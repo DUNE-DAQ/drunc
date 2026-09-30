@@ -79,10 +79,10 @@ confgen_arguments = {"MinimalSystem": conf_dict}
 dunerc_command_list = f"""
 
 echo pre_boot
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 boot
 echo post_boot
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 
 
 echo test_logs
@@ -103,11 +103,11 @@ echo post_restart_mlt
 
 
 echo test_kill_mlt
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 kill -n mlt
 wait 2
 echo test_kill_mlt_post
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 echo test_kill_mlt_done
 
 
@@ -116,19 +116,19 @@ restart -n mlt
 restart -n trg-controller
 wait 5
 echo test_recovery_post
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 echo test_recovery_done
 
 
 echo test_flush
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 kill -n mlt --crash 
 wait 5
 echo after_crash
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 flush
 echo after_flush
-ps -u {getpass.getuser()} -w 180
+ps -u {getpass.getuser()} 
 echo test_flush_done
 
 
