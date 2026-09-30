@@ -1,11 +1,11 @@
 import json
-from time import sleep
 
 import click
 
 from drunc.controller.interface.context import ControllerContext
 from drunc.controller.interface.shell_utils import controller_setup, render_status_table
 from drunc.utils.shell_utils import format_table_width
+from drunc.utils.shell_utils import wait as shell_wait
 from drunc.utils.utils import get_logger
 
 log = get_logger("controller.iface", rich_handler=True)
@@ -47,12 +47,16 @@ def list_transitions(obj: ControllerContext, all: bool, target: str) -> None:
 
 
 @click.command("wait")
-@click.argument("sleep_time", type=int, default=1)
+@click.argument("sleep_time", type=int)
+@click.option(
+    "--progress-steps",
+    type=int,
+    default=None,
+    help="Number of progress updates to print when --progress is set.",
+)
 @click.pass_obj
-def wait(obj: ControllerContext, sleep_time: int) -> None:
-    log.info(f"Command [green]wait[/green] running for {sleep_time} seconds.")
-    sleep(sleep_time)  # seconds
-    log.info(f"Command [green]wait[/green] ran for {sleep_time} seconds.")
+def wait(obj: ControllerContext, sleep_time: int, progress_steps: int | None) -> None:
+    shell_wait(log, sleep_time, progress_steps)
 
 
 @click.command("status")
