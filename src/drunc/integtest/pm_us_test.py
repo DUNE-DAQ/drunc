@@ -119,6 +119,10 @@ dunerc_commands = (
     wait 10
     echo test_wait_done
 
+    echo test_wait_progress
+    wait 5 --progress-steps 10
+    echo test_wait_progress_done
+
     echo pre_restart_mlt
     echo-on-server pre_restart_mlt
     restart -n mlt
@@ -432,6 +436,94 @@ def test_wait_command_duration_from_logs(run_dunerc) -> None:
     assert int(ran_match.group(1)) == expected_seconds, (
         f"Expected wait end log to report {expected_seconds} seconds, got {ran_match.group(1)}."
     )
+
+    start_ts_match = require_pattern_match(
+        lines[running_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait start log line.",
+    )
+    end_ts_match = require_pattern_match(
+        lines[ran_idx],
+        timestamp_pattern,
+        error_message="Could not parse timestamp in wait end log line.",
+    )
+
+    ts_strp_pattern = "%Y/%m/%d %H:%M:%S"
+    start_ts = datetime.strptime(start_ts_match.group(1), ts_strp_pattern)
+    end_ts = datetime.strptime(end_ts_match.group(1), ts_strp_pattern)
+    elapsed_seconds = (end_ts - start_ts).total_seconds()
+
+    tolerance_seconds = 1
+    assert abs(elapsed_seconds - expected_seconds) <= tolerance_seconds, (
+        f"Expected wait log timestamps to differ by {expected_seconds}±{tolerance_seconds} seconds, "
+        f"got {elapsed_seconds} seconds."
+    )
+
+
+def test_wait_progress_steps_from_logs(run_dunerc) -> None:
+    """Checks that wait with --progress-steps logs the expected progress lines and duration."""
+    lines = strip_ansi(run_dunerc.completed_processes["us"].stdout).splitlines()
+
+    echo_idx = require_echo_marker_index(lines, "test_wait_progress")
+
+    running_pattern = re.compile(
+        r"Command wait running for (\d+) seconds with (\d+) steps printed"
+    )
+    ran_pattern = re.compile(r"Command wait ran for (\d+) seconds\.")
+    progress_pattern = re.compile(r"Progress: (\d+(?:\.\d+)?) / (\d+) seconds")
+    timestamp_pattern = re.compile(r"\[(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) UTC\]")
+
+    running_idx, running_match = require_pattern_match_index(
+        lines,
+        running_pattern,
+        error_message=(
+            "Did not find 'Command wait running for ... seconds with ... steps printed' "
+            "after test_wait_progress marker."
+        ),
+        start_idx=echo_idx + 1,
+    )
+
+    ran_idx, ran_match = require_pattern_match_index(
+        lines,
+        ran_pattern,
+        error_message=(
+            "Did not find 'Command wait ran for ... seconds.' after wait start log."
+        ),
+        start_idx=running_idx + 1,
+    )
+
+    expected_seconds = 5
+    expected_steps = 10
+    assert int(running_match.group(1)) == expected_seconds, (
+        f"Expected wait start log to report {expected_seconds} seconds, got {running_match.group(1)}."
+    )
+    assert int(running_match.group(2)) == expected_steps, (
+        f"Expected wait start log to report {expected_steps} steps, got {running_match.group(2)}."
+    )
+    assert int(ran_match.group(1)) == expected_seconds, (
+        f"Expected wait end log to report {expected_seconds} seconds, got {ran_match.group(1)}."
+    )
+
+    progress_lines = lines[running_idx + 1 : ran_idx]
+    assert len(progress_lines) == expected_steps, (
+        f"Expected exactly {expected_steps} progress lines, found {len(progress_lines)}.\nBetween:\n"
+        + "\n".join(progress_lines)
+    )
+
+    step_seconds = expected_seconds / expected_steps
+    for i, line in enumerate(progress_lines, start=1):
+        progress_match = require_pattern_match(
+            line,
+            progress_pattern,
+            error_message=f"Progress line {i} does not match 'Progress: a / b seconds': {line}",
+        )
+        expected_progress = i * step_seconds
+        assert abs(float(progress_match.group(1)) - expected_progress) < 1e-6, (
+            f"Expected progress line {i} to report {expected_progress}, got {progress_match.group(1)}."
+        )
+        assert int(progress_match.group(2)) == expected_seconds, (
+            f"Expected progress line {i} total to be {expected_seconds}, got {progress_match.group(2)}."
+        )
 
     start_ts_match = require_pattern_match(
         lines[running_idx],
